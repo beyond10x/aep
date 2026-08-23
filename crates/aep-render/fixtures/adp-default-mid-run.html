@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Standard development workflow — adp/default/1</title>
+<title>Standard development workflow — adp/default/2</title>
 <style>
 :root { color-scheme: dark; }
 body { margin: 2rem auto; max-width: 78rem; padding: 0 1.5rem;
@@ -30,11 +30,11 @@ ul.reasons { margin: .4rem 0 0; padding-left: 1.2rem; }
 </head>
 <body>
 <h1>Standard development workflow</h1>
-<p class="ref">adp/default/1 · 9 states · 9 transitions</p>
+<p class="ref">adp/default/2 · 10 states · 13 transitions</p>
 <p class="summary">Specification, decomposition, verifier setup, implementation, verification, adversarial verification and review, with an explicit route back to implementation when verification fails.</p>
 <p id="run-line" class="status red">run AUTH-142/3 · in implement · blocked · 7 iteration(s)</p>
 <figure>
-<svg viewBox="0 0 1083 1150" width="1083" height="1150" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="Workflow adp/default/1: 9 states and 9 transitions. A run is in `implement` and is blocked, for 2 stated reason(s).">
+<svg viewBox="0 0 1527 1150" width="1527" height="1150" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="Workflow adp/default/2: 10 states and 13 transitions. A run is in `implement` and is blocked, for 2 stated reason(s).">
   <style>
     .bg { fill: #0f1418; }
     .box { fill: #161d24; stroke: #2b3540; stroke-width: 1; }
@@ -68,72 +68,85 @@ ul.reasons { margin: .4rem 0 0; padding-left: 1.2rem; }
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#d29922"/>
     </marker>
   </defs>
-  <rect class="bg" width="1083" height="1150"/>
+  <rect class="bg" width="1527" height="1150"/>
   <text class="h1" x="28" y="32">Standard development workflow</text>
-  <text class="h2" x="28" y="50">adp/default/1 · 9 states · 9 transitions</text>
+  <text class="h2" x="28" y="50">adp/default/2 · 10 states · 13 transitions</text>
   <text class="red" x="28" y="70">run AUTH-142/3 · in implement · blocked · 7 iteration(s)</text>
-  <polyline class="edge-taken" points="190,152 190,204" marker-end="url(#arrow-taken)"/>
-  <polyline class="edge-taken" points="190,260 190,312" marker-end="url(#arrow-taken)"/>
-  <text class="ok" x="202" y="290">artifact.specification.exists</text>
-  <polyline class="edge-taken" points="190,368 190,420" marker-end="url(#arrow-taken)"/>
-  <polyline class="edge-taken" points="190,476 190,528" marker-end="url(#arrow-taken)"/>
-  <text class="ok" x="202" y="506">test.exists</text>
-  <polyline class="edge-taken" points="190,584 190,636" marker-end="url(#arrow-taken)"/>
-  <text class="ok" x="202" y="614">diff.exists</text>
-  <polyline class="edge" points="190,692 190,744" marker-end="url(#arrow-idle)"/>
-  <text class="guard" x="202" y="722">(tests.unit.failed == 0 and tests.contract.failed == 0 and static_analysis.errors == 0)</text>
-  <polyline class="edge-retreat" points="60,664 36,664 36,556 60,556" marker-end="url(#arrow-retreat)"/>
-  <text class="amber" x="334" y="614">verify → implement · (tests.unit.failed &gt; 0 or tests.contract.failed &gt; 0 or static_analysis.errors &gt; 0)</text>
-  <polyline class="edge" points="190,800 190,852" marker-end="url(#arrow-idle)"/>
-  <text class="guard" x="202" y="830">evidence.missing == 0</text>
-  <polyline class="edge" points="190,908 190,960" marker-end="url(#arrow-idle)"/>
-  <text class="guard" x="202" y="938">review.approved</text>
+  <polyline class="edge-taken" points="218,152 218,204" marker-end="url(#arrow-taken)"/>
+  <polyline class="edge" points="348,232 666,232 666,988 348,988" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="694" y="614">specify → declined · specification.declines_the_request</text>
+  <polyline class="edge-taken" points="218,260 218,312" marker-end="url(#arrow-taken)"/>
+  <text class="ok" x="230" y="290">artifact.specification.exists</text>
+  <polyline class="edge-taken" points="218,368 218,420" marker-end="url(#arrow-taken)"/>
+  <polyline class="edge-taken" points="218,476 218,528" marker-end="url(#arrow-taken)"/>
+  <text class="ok" x="230" y="506">test.exists</text>
+  <polyline class="edge-taken" points="218,584 218,636" marker-end="url(#arrow-taken)"/>
+  <text class="ok" x="230" y="614">diff.exists</text>
+  <polyline class="edge" points="218,692 218,744" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="230" y="722">(tests.unit.failed == 0 and tests.contract.failed == 0 and static_analysis.errors == 0)</text>
+  <polyline class="edge-retreat" points="88,664 64,664 64,556 88,556" marker-end="url(#arrow-retreat)"/>
+  <text class="amber" x="694" y="614">verify → implement · (tests.unit.failed &gt; 0 or tests.contract.failed &gt; 0 or static_analysis.errors &gt; 0)</text>
+  <polyline class="edge edge-back" points="88,772 50,772 50,556 88,556" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="694" y="668">adversarial_verify → implement · (tests.unit.failed &gt; 0 or tests.contract.failed &gt; 0 or static_analysis.errors &gt; 0)</text>
+  <polyline class="edge" points="218,800 218,852" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="230" y="830">evidence.missing == 0</text>
+  <polyline class="edge" points="218,908 218,934 518,934 518,960" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="530" y="928">review.approved</text>
+  <polyline class="edge edge-back" points="88,880 36,880 36,556 88,556" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="694" y="722">review → implement · review.changes_requested</text>
+  <polyline class="edge" points="218,908 218,960" marker-end="url(#arrow-idle)"/>
+  <text class="guard" x="230" y="938">review.rejected</text>
   <g id="state-receive" class="visited">
-    <rect class="box-visited" x="60" y="96" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="120">Receive</text>
-    <text class="dim" x="74" y="138">receive · intake</text>
+    <rect class="box-visited" x="88" y="96" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="120">Receive</text>
+    <text class="dim" x="102" y="138">receive · intake</text>
   </g>
   <g id="state-specify" class="visited">
-    <rect class="box-visited" x="60" y="204" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="228">Specify</text>
-    <text class="dim" x="74" y="246">specify · specification</text>
+    <rect class="box-visited" x="88" y="204" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="228">Specify</text>
+    <text class="dim" x="102" y="246">specify · specification</text>
   </g>
   <g id="state-decompose" class="visited">
-    <rect class="box-visited" x="60" y="312" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="336">Decompose</text>
-    <text class="dim" x="74" y="354">decompose · decomposition, planning</text>
+    <rect class="box-visited" x="88" y="312" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="336">Decompose</text>
+    <text class="dim" x="102" y="354">decompose · decomposition, planning</text>
   </g>
   <g id="state-establish_verifiers" class="visited">
-    <rect class="box-visited" x="60" y="420" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="444">Establish verifiers</text>
-    <text class="dim" x="74" y="462">establish_verifiers · verification-setup</text>
+    <rect class="box-visited" x="88" y="420" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="444">Establish verifiers</text>
+    <text class="dim" x="102" y="462">establish_verifiers · verification-setup</text>
   </g>
   <g id="state-implement">
-    <rect class="box-stopped" x="60" y="528" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="552">Implement</text>
-    <text class="dim" x="74" y="570">implement · implementation</text>
-    <text class="amber" x="308" y="552" text-anchor="end">×2</text>
+    <rect class="box-stopped" x="88" y="528" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="552">Implement</text>
+    <text class="dim" x="102" y="570">implement · implementation</text>
+    <text class="amber" x="336" y="552" text-anchor="end">×2</text>
   </g>
   <g id="state-verify" class="visited">
-    <rect class="box-visited" x="60" y="636" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="660">Verify</text>
-    <text class="dim" x="74" y="678">verify · verification</text>
+    <rect class="box-visited" x="88" y="636" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="660">Verify</text>
+    <text class="dim" x="102" y="678">verify · verification</text>
   </g>
   <g id="state-adversarial_verify">
-    <rect class="box" x="60" y="744" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="768">Adversarial verify</text>
-    <text class="dim" x="74" y="786">adversarial_verify · adversarial-verification</text>
-    <text class="dim" x="334" y="768">requires evidence test_result from test-runner (independent)</text>
+    <rect class="box" x="88" y="744" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="768">Adversarial verify</text>
+    <text class="dim" x="102" y="786">adversarial_verify · adversarial-verification</text>
+    <text class="dim" x="362" y="768">requires evidence test_result from test-runner (independent)</text>
   </g>
   <g id="state-review">
-    <rect class="box" x="60" y="852" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="876">Review</text>
-    <text class="dim" x="74" y="894">review · review</text>
+    <rect class="box" x="88" y="852" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="876">Review</text>
+    <text class="dim" x="102" y="894">review · review</text>
+  </g>
+  <g id="state-declined">
+    <rect class="box" x="88" y="960" width="260" height="56" rx="8"/>
+    <text class="t" x="102" y="984">Declined</text>
+    <text class="dim" x="102" y="1002">declined · completion · terminal</text>
   </g>
   <g id="state-complete">
-    <rect class="box" x="60" y="960" width="260" height="56" rx="8"/>
-    <text class="t" x="74" y="984">Complete</text>
-    <text class="dim" x="74" y="1002">complete · completion · terminal</text>
+    <rect class="box" x="388" y="960" width="260" height="56" rx="8"/>
+    <text class="t" x="402" y="984">Complete</text>
+    <text class="dim" x="402" y="1002">complete · completion · terminal</text>
   </g>
   <text class="dim" x="28" y="1050">evidence  static_analysis ×1 · test_result ×3</text>
   <rect x="28" y="1056" width="4" height="40" fill="#f85149" rx="2"/>
@@ -159,20 +172,25 @@ ul.reasons { margin: .4rem 0 0; padding-left: 1.2rem; }
 <tr><td><code>verify</code></td><td>Verify</td><td class="dim">verification</td><td class="wrap dim"></td><td class="ok">visited · entered ×1</td></tr>
 <tr><td><code>adversarial_verify</code></td><td>Adversarial verify</td><td class="dim">adversarial-verification</td><td class="wrap dim">evidence test_result from test-runner (independent)</td><td class="dim">not reached</td></tr>
 <tr><td><code>review</code></td><td>Review</td><td class="dim">review</td><td class="wrap dim"></td><td class="dim">not reached</td></tr>
+<tr><td><code>declined</code></td><td>Declined</td><td class="dim">completion</td><td class="wrap dim"></td><td class="dim">not reached · terminal</td></tr>
 <tr><td><code>complete</code></td><td>Complete</td><td class="dim">completion</td><td class="wrap dim"></td><td class="dim">not reached · terminal</td></tr>
 </table>
 <h2>Transitions</h2>
 <table>
 <tr><th>from</th><th>to</th><th>guard</th><th>requires</th><th>means</th><th>run</th></tr>
 <tr><td><code>receive</code></td><td><code>specify</code></td><td class="wrap"><code>—</code></td><td class="wrap dim"></td><td class="wrap dim">Intake is done when there is something to specify; nothing else gates it.</td><td class="ok">taken ×1</td></tr>
+<tr><td><code>specify</code></td><td><code>declined</code></td><td class="wrap"><code>specification.declines_the_request</code></td><td class="wrap dim"></td><td class="wrap dim">The specification concluded there is nothing to build — the behaviour already exists, or the request should not be satisfied. Nothing in this repository mints `specification.declines_the_request`, exactly as nothing mints `review.approved`: both are somebody&#39;s judgement, recorded, and the run stops and waits for it rather than a harness deciding it was not worth doing.</td><td class="dim">not taken</td></tr>
 <tr><td><code>specify</code></td><td><code>decompose</code></td><td class="wrap"><code>artifact.specification.exists</code></td><td class="wrap dim"></td><td class="wrap dim">Work is only broken up once there is a specification to break up.</td><td class="ok">taken ×1</td></tr>
 <tr><td><code>decompose</code></td><td><code>establish_verifiers</code></td><td class="wrap"><code>—</code></td><td class="wrap dim"></td><td class="wrap dim">With units identified, each one&#39;s acceptance check can be written.</td><td class="ok">taken ×1</td></tr>
 <tr><td><code>establish_verifiers</code></td><td><code>implement</code></td><td class="wrap"><code>test.exists</code></td><td class="wrap dim"></td><td class="wrap dim">A test must exist before implementation begins. This is the mechanical form of test-driven work: the guard, not the agent&#39;s good intentions, is what enforces the order.</td><td class="ok">taken ×1</td></tr>
 <tr><td><code>implement</code></td><td><code>verify</code></td><td class="wrap"><code>diff.exists</code></td><td class="wrap dim"></td><td class="wrap dim">There is nothing to verify until the working tree has actually changed.</td><td class="ok">taken ×1</td></tr>
 <tr><td><code>verify</code></td><td><code>adversarial_verify</code></td><td class="wrap"><code>(tests.unit.failed == 0 and tests.contract.failed == 0 and static_analysis.errors == 0)</code></td><td class="wrap dim"></td><td class="wrap dim">Unit and contract suites green and static analysis clean. Contracts are in the guard because a change that passes its own tests can still break a consumer.</td><td class="dim">not taken</td></tr>
 <tr><td><code>verify</code></td><td><code>implement</code></td><td class="wrap"><code>(tests.unit.failed &gt; 0 or tests.contract.failed &gt; 0 or static_analysis.errors &gt; 0)</code></td><td class="wrap dim"></td><td class="wrap dim">Verification failed, so the work goes back to implementation. Any failing check sends it back, not just the unit suite — a static-analysis error is a defect that has not been symptomatic yet.</td><td class="amber">went back ×1</td></tr>
+<tr><td><code>adversarial_verify</code></td><td><code>implement</code></td><td class="wrap"><code>(tests.unit.failed &gt; 0 or tests.contract.failed &gt; 0 or static_analysis.errors &gt; 0)</code></td><td class="wrap dim"></td><td class="wrap dim">The adversary broke it. Same shape as `verify -&gt; implement` and for the same reason: a defect found here is a defect, and the alternative to a route back is deleting the case that found it.</td><td class="dim">not taken (retreat)</td></tr>
 <tr><td><code>adversarial_verify</code></td><td><code>review</code></td><td class="wrap"><code>evidence.missing == 0</code></td><td class="wrap dim"></td><td class="wrap dim">No required evidence outstanding. A reviewer reading a change with gaps in its evidence is being asked to guess, and will guess in favour of the author.</td><td class="dim">not taken</td></tr>
 <tr><td><code>review</code></td><td><code>complete</code></td><td class="wrap"><code>review.approved</code></td><td class="wrap dim"></td><td class="wrap dim">Review concluded in approval.</td><td class="dim">not taken</td></tr>
+<tr><td><code>review</code></td><td><code>implement</code></td><td class="wrap"><code>review.changes_requested</code></td><td class="wrap dim"></td><td class="wrap dim">Review asked for changes. The work goes back to implementation with the review&#39;s own record as the reason, rather than the run stopping and the reason living in somebody&#39;s message.</td><td class="dim">not taken (retreat)</td></tr>
+<tr><td><code>review</code></td><td><code>declined</code></td><td class="wrap"><code>review.rejected</code></td><td class="wrap dim"></td><td class="wrap dim">Review rejected the change outright. Not the same as asking for changes and deliberately not routed to `implement`: *make this different* and *do not make this* are different verdicts, and collapsing them would let a rejection be answered with a revision.</td><td class="dim">not taken</td></tr>
 </table>
 <h2>Evidence</h2>
 <table>

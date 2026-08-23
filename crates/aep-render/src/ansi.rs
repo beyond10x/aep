@@ -91,12 +91,18 @@ pub fn frame(scene: &Scene) -> String {
             } else {
                 String::new()
             };
+            // **Hollow heads on edges, filled glyphs on nodes**, and the rule is worth stating
+            // because breaking it was invisible until a workflow branched. `▶` was both *the run
+            // is here* (a node accent) and *this edge leaves sideways* (an edge stem); while
+            // `adp/default` was a chain it had no side edges, so no frame ever carried both and
+            // the ambiguity read as a passing test. `adp/default/2` branches to `declined`, and a
+            // bare workflow with no run at all started printing the current-state marker.
             let stem = if next == Some(&edge.to) {
                 "  │".to_owned()
             } else if edge.back {
-                format!("  ╰─◀ {}", edge.to)
+                format!("  ╰─◁ {}", edge.to)
             } else {
-                format!("  ├─▶ {}", edge.to)
+                format!("  ├─▷ {}", edge.to)
             };
             let mut line = stem;
             if !taken.is_empty() {
@@ -256,19 +262,19 @@ mod tests {
         let workflow = fixture_workflow();
         let coloured = frame(&Scene::build(&workflow, Some(&mid_run())));
         assert!(
-            strip(&coloured).contains("╰─◀ implement (taken 1×)"),
+            strip(&coloured).contains("╰─◁ implement (taken 1×)"),
             "the retreat is drawn where it leaves `verify`:\n{}",
             strip(&coloured)
         );
         // The glyph comes from the geometry and the colour from the overlay, so the glyph alone
         // would pass on a run that never went back. Amber is the claim being tested.
         assert!(
-            coloured.contains(&format!("{}  ╰─◀ implement", theme::ANSI_AMBER)),
+            coloured.contains(&format!("{}  ╰─◁ implement", theme::ANSI_AMBER)),
             "a taken retreat is amber, not the colour of a forward move"
         );
         let bare = frame(&Scene::build(&workflow, None));
         assert!(
-            !bare.contains(&format!("{}  ╰─◀", theme::ANSI_AMBER)),
+            !bare.contains(&format!("{}  ╰─◁", theme::ANSI_AMBER)),
             "an untaken retreat is not amber: nothing has gone back"
         );
     }

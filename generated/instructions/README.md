@@ -13,7 +13,7 @@ Regenerate with:
 protocol workflow instruct --out generated/instructions
 ```
 
-* [`adp/default.md`](adp/default.md) — Standard development workflow (`adp/default/1`)
+* [`adp/default.md`](adp/default.md) — Standard development workflow (`adp/default/2`)
 * [`incident/standard.md`](incident/standard.md) — Standard incident response (`incident/standard/1`)
 * [`migration/forward-only.md`](migration/forward-only.md) — Forward-only migration (`migration/forward-only/1`)
 * [`release/progressive.md`](release/progressive.md) — Progressive release (`release/progressive/1`)

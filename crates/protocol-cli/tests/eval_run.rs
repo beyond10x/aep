@@ -744,7 +744,12 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
     );
     let prompt = words.last().expect("the prompt is the last argument");
     assert!(
-        prompt.starts_with("<!-- Rendered from `adp/default/1` by `protocol workflow instruct`"),
+        // The document, not the version. What this row asserts is *arm a is given the rendered
+        // instructions and not the raw workflow*; spelling the version out made it a second,
+        // unstated assertion that the workflow never changes, which `adp/default/2` then broke
+        // without anything being wrong.
+        prompt.starts_with("<!-- Rendered from `adp/default/")
+            && prompt.contains("` by `protocol workflow instruct`"),
         "arm a's treatment is the committed instruction document, in front of the task: {prompt}"
     );
     assert!(

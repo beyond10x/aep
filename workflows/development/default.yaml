@@ -6,8 +6,33 @@
 # about how engineering works: verification does fail, and if the model has no route back, the only
 # ways out are to weaken the check or to declare victory anyway. Making the retreat an explicit,
 # guarded transition keeps a failing suite from becoming an argument for a smaller suite.
+#
+# # What version 2 changes, and why version 1 was incomplete rather than wrong
+#
+# **The argument above is now applied to the other two places verification can fail.** Version 1
+# made the retreat explicit for `verify` and then left `adversarial_verify` and `review` with one
+# outgoing edge each. So the state whose entire job is to find defects had nowhere to send one, and
+# a reviewer who said *no* left the run with no legal move: both wedged, in the exact way the
+# paragraph above says a workflow must not. `aep_domain::workflow`'s own `DeadEndState` check
+# cannot see it, because *has an outgoing transition* is not *has one for what happened*. Three
+# edges close it — `adversarial_verify → implement`, `review → implement`, `review → declined`.
+#
+# **`declined` is an outcome version 1 could not express at all.** Every path ran through
+# `implement` to a single terminal state, so a run that concluded the request was already satisfied,
+# or should not be built, had no legal move either and had to stop off-workflow. The first live
+# three-arm evaluation is where that showed: one arm found the asked-for capability already
+# shipped, said so with evidence, and the workflow had no state for its answer — which made a
+# correct engineering judgement indistinguishable from an agent that did nothing.
+#
+# **No guard here negates an unobserved fact, and that is a rule rather than an oversight.** A
+# predicate over a fact nobody has observed is `Unknown`, and `not Unknown` is `Unknown`. Writing
+# `specify → decompose` as *a specification exists **and** does not decline the request* would
+# therefore have made the ordinary path undecidable in every run, because nothing observes a
+# decline in the ordinary run. The declining edge is placed **before** it instead: transitions are
+# tried in document order (`aep_engine::engine`), so the rare edge is taken only where something
+# actually observed the rare fact, and the common edge is left exactly as strong as it was.
 id: adp/default
-version: 1
+version: 2
 title: Standard development workflow
 summary: >-
   Specification, decomposition, verifier setup, implementation, verification, adversarial
@@ -77,10 +102,34 @@ states:
     summary: The change is verified, reviewed and accounted for.
     phases: [completion]
 
+  declined:
+    title: Declined
+    terminal: true
+    summary: >-
+      No change was made, and the record says why — the specification found the request already
+      satisfied or not worth building, or review rejected the change outright. A terminal state
+      rather than an abandoned run, because *we decided not to* is a result somebody has to be able
+      to read later, and a run that simply stopped says only that it stopped.
+    phases: [completion]
+
 transitions:
   - from: receive
     to: specify
     description: Intake is done when there is something to specify; nothing else gates it.
+
+  # Ordered before `specify -> decompose` on purpose. Transitions are tried in document order, and
+  # this one is `Unknown` — so not permitted — in every run where nothing observed a decline, which
+  # is nearly all of them. Putting it first costs the ordinary path nothing and is the only way to
+  # make the rare edge win where it applies, since the alternative is a negation this file's header
+  # explains would poison the ordinary guard.
+  - from: specify
+    to: declined
+    description: >-
+      The specification concluded there is nothing to build — the behaviour already exists, or the
+      request should not be satisfied. Nothing in this repository mints `specification.declines_the_request`,
+      exactly as nothing mints `review.approved`: both are somebody's judgement, recorded, and the
+      run stops and waits for it rather than a harness deciding it was not worth doing.
+    when: specification.declines_the_request
 
   - from: specify
     to: decompose
@@ -126,6 +175,22 @@ transitions:
         - tests.contract.failed > 0
         - static_analysis.errors > 0
 
+  # Ordered before `adversarial_verify -> review`, and the order is the whole point: the two are not
+  # mutually exclusive. An adversary that writes a failing case and completes the evidence set
+  # satisfies both guards at once, and the first in document order wins — so success at this state's
+  # actual job sends the work back rather than forward. Version 1 had only the forward edge, which
+  # meant the one state built to find defects was wedged by finding one.
+  - from: adversarial_verify
+    to: implement
+    description: >-
+      The adversary broke it. Same shape as `verify -> implement` and for the same reason: a defect
+      found here is a defect, and the alternative to a route back is deleting the case that found it.
+    when:
+      any:
+        - tests.unit.failed > 0
+        - tests.contract.failed > 0
+        - static_analysis.errors > 0
+
   - from: adversarial_verify
     to: review
     description: >-
@@ -137,3 +202,22 @@ transitions:
     to: complete
     description: Review concluded in approval.
     when: review.approved
+
+  # `ReviewDisposition` has carried three verdicts since the domain was written — `approved`,
+  # `changes_requested`, `rejected` (`aep_domain::review`) — and version 1 of this workflow gave a
+  # transition to exactly one of them. The other two had nowhere to go, so a reviewer's *no* was
+  # unrepresentable in the one document that decides what a run may do next.
+  - from: review
+    to: implement
+    description: >-
+      Review asked for changes. The work goes back to implementation with the review's own record
+      as the reason, rather than the run stopping and the reason living in somebody's message.
+    when: review.changes_requested
+
+  - from: review
+    to: declined
+    description: >-
+      Review rejected the change outright. Not the same as asking for changes and deliberately not
+      routed to `implement`: *make this different* and *do not make this* are different verdicts,
+      and collapsing them would let a rejection be answered with a revision.
+    when: review.rejected

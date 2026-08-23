@@ -1,10 +1,11 @@
 Standard development workflow
-adp/default/1 · 9 states · 9 transitions
+adp/default/2 · 10 states · 13 transitions
 run AUTH-142/3 · in implement · blocked · 7 iteration(s)
 
   ✓ receive              Receive                  intake
   │ (taken 1×)
   ✓ specify              Specify                  specification
+  ├─▷ declined  specification.declines_the_request
   │ (taken 1×)  artifact.specification.exists
   ✓ decompose            Decompose                decomposition, planning
   │ (taken 1×)
@@ -14,11 +15,15 @@ run AUTH-142/3 · in implement · blocked · 7 iteration(s)
   │ (taken 1×)  diff.exists
   ✓ verify               Verify                   verification
   │  (tests.unit.failed == 0 and tests.contract.failed == 0 and static_analysis.errors == 0)
-  ╰─◀ implement (taken 1×)  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
+  ╰─◁ implement (taken 1×)  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
   · adversarial_verify   Adversarial verify       adversarial-verification
+  ╰─◁ implement  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
   │  evidence.missing == 0
   · review               Review                   review
-  │  review.approved
+  ├─▷ complete  review.approved
+  ╰─◁ implement  review.changes_requested
+  │  review.rejected
+  · declined             Declined                 completion · terminal
   · complete             Complete                 completion · terminal
 
 evidence  static_analysis ×1 · test_result ×3

@@ -99,17 +99,21 @@ workflows:
           implementor no longer has to discover what it may use — and a verifier agent would emit
           evidence that looks independent and is not, because `independent: true` is checked
           structurally and nothing signs a record (gap register D-3, proposed and unaccepted). Four
-          of the nine states of the repository's own development workflow are therefore taught by
+          of the ten states of the repository's own development workflow are therefore taught by
           nothing either plugin carries.
 
       - id: no-review-or-completion-surface
-        states: [review, complete]
+        states: [review, complete, declined]
         reason: >-
           `review -> complete` guards on `review.approved`, and an approval is a record the driver
           may not mint at all under invariant 7 — nothing below the driver would stop a harness
           writing its own approval and unlocking a capability with it. A plugin surface that taught
           an agent how to satisfy this guard would be teaching it to forge the one record that has
-          to come from a person.
+          to come from a person. `adp/default/2` added `declined` and the two verdicts that reach
+          it, and the same argument covers them unchanged: `review.rejected` and
+          `specification.declines_the_request` are somebody's judgement recorded, so a surface that
+          taught an agent to satisfy either would be teaching it to decide, on its own authority,
+          that the work was not worth doing.
 
   # --------------------------------------------------------------------------------------------
   - workflow: release/progressive

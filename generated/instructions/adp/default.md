@@ -1,8 +1,8 @@
-<!-- Rendered from `adp/default/1` by `protocol workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
+<!-- Rendered from `adp/default/2` by `protocol workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
 
 # Standard development workflow
 
-`adp/default/1` · 9 states · 9 transitions · 20 principles bind it.
+`adp/default/2` · 10 states · 13 transitions · 20 principles bind it.
 
 Specification, decomposition, verifier setup, implementation, verification, adversarial
 verification and review, with an explicit route back to implementation when verification fails.
@@ -37,6 +37,12 @@ It belongs to phase `specification`.
 
 From here you may move to:
 
+* **`declined`** — only while `specification.declines_the_request`.
+  The specification concluded there is nothing to build — the behaviour already exists, or the
+  request should not be satisfied. Nothing in this repository mints
+  `specification.declines_the_request`, exactly as nothing mints `review.approved`: both are
+  somebody's judgement, recorded, and the run stops and waits for it rather than a harness
+  deciding it was not worth doing.
 * **`decompose`** — only while `artifact.specification.exists`.
   Work is only broken up once there is a specification to break up.
 
@@ -116,6 +122,10 @@ You may not enter it until all of this holds:
 
 From here you may move to:
 
+* **`implement`** — only while `(tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)`.
+  The adversary broke it. Same shape as `verify -> implement` and for the same reason: a defect
+  found here is a defect, and the alternative to a route back is deleting the case that found
+  it.
 * **`review`** — only while `evidence.missing == 0`.
   No required evidence outstanding. A reviewer reading a change with gaps in its evidence is
   being asked to guess, and will guess in favour of the author.
@@ -134,8 +144,45 @@ From here you may move to:
 
 * **`complete`** — only while `review.approved`.
   Review concluded in approval.
+* **`implement`** — only while `review.changes_requested`.
+  Review asked for changes. The work goes back to implementation with the review's own record as
+  the reason, rather than the run stopping and the reason living in somebody's message.
+* **`declined`** — only while `review.rejected`.
+  Review rejected the change outright. Not the same as asking for changes and deliberately not
+  routed to `implement`: *make this different* and *do not make this* are different verdicts,
+  and collapsing them would let a rejection be answered with a revision.
 
-### 9. `complete` — Complete
+### 9. `declined` — Declined
+
+No change was made, and the record says why — the specification found the request already
+satisfied or not worth building, or review rejected the change outright. A terminal state rather
+than an abandoned run, because *we decided not to* is a result somebody has to be able to read
+later, and a run that simply stopped says only that it stopped.
+
+It belongs to phase `completion`.
+
+These obligations fall due before you may enter it:
+
+* `approval-gates/before-completion` — Approval gates
+* `blast-radius-limitation/before-completion` — Blast-radius limitation
+* `clean-room/before-completion` — Clean-room reimplementation
+* `contract-testing/before-completion` — Contract testing
+* `design-by-contract/before-completion` — Design by contract
+* `differential-testing/before-completion` — Differential testing
+* `ess-conformance/before-completion` — Conformance to the specification
+* `invariant-checking/before-completion` — Invariant checking
+* `mutation-testing/before-completion` — Mutation testing
+* `property-based-testing/before-completion` — Property-based testing
+* `provenance-tracking/before-completion` — Provenance tracking
+* `reversible-changes/before-completion` — Reversible changes
+* `spec-driven/before-completion` — Specification before implementation
+* `static-analysis/before-completion` — Static analysis
+* `test-driven/before-completion` — Test-driven development
+* `verify-after-action/before-completion` — Verify after action
+
+The workflow ends here. Nothing leaves this state, and reaching it is what finishing means.
+
+### 10. `complete` — Complete
 
 The change is verified, reviewed and accounted for.
 
@@ -186,7 +233,7 @@ Production mutation and irreversible steps need an approval a person actually gr
 where an auditor can find it. Without it, the record of who agreed to the change is whatever the
 agent wrote in its own summary.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * if defined(deployment.production.status) then: evidence approval from human-approval (independent); approval production-change (by a person)
 
@@ -202,7 +249,7 @@ restart, and the outage ends up bigger than the bug.
 
 Applies when `task.kind in [incident, release, migration]`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * verification.blast-radius.passed
 * (not (defined(evidence.first_seq.deployment_result)) or evidence.first_seq.verification < evidence.first_seq.deployment_result)
@@ -222,7 +269,7 @@ something other than the agent has to state that it wasn't.
 
 Applies when `change.clean_room == true`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * verification.clean-room.passed
 
@@ -246,7 +293,7 @@ a task can complete. Without it, a compatible-looking refactor ships as someone 
 
 Applies when `(task.kind in [feature, bugfix, refactor] and change.code)`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * contracts.checked > 0
 * contracts.failed == 0
@@ -262,7 +309,7 @@ Evidence it requires, which must exist before the work is finished:
 
 Verifiers that must have spoken:
 
-* contract-runner must run — before entering `complete`, the completion phase
+* contract-runner must run — before entering `complete` and `declined`, the completion phase
 
 If one of its requirements is not met: block.
 
@@ -274,7 +321,7 @@ out in production.
 
 Applies when `task.kind in [feature, bugfix, refactor, migration]`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * (verification.precondition.passed or property_test.precondition.result == passed)
 * (verification.postcondition.passed or property_test.postcondition.result == passed)
@@ -295,7 +342,7 @@ party least able to check it.
 
 Applies when `(task.kind == refactor or change.behaviour_preserving)`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * tests.differential.failed == 0
 * verification.differential.passed
@@ -313,13 +360,13 @@ Where an executable system specification governs the work, the implementation mu
 against that specification's own generated suite, by something other than the agent that wrote
 the implementation.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * if artifact.executable-system-specification.exists then: ess_conformance.passed; ess_conformance.scenarios.failed == 0; evidence ess_conformance from conformance-runner (independent); artifact executable-system-specification
 
 Verifiers that must have spoken:
 
-* conformance-runner must run — before entering `complete`, the completion phase
+* conformance-runner must run — before entering `complete` and `declined`, the completion phase
 
 If one of its requirements is not met: block.
 
@@ -344,7 +391,7 @@ An invariant stated in a design document is a comment until something checks it.
 the stated invariants to be machine-checked, and obliges them to have been stated in the first
 place.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * verification.invariant.passed
 * artifact design (approved)
@@ -374,7 +421,7 @@ Tests must be shown to detect defects, not merely to pass. A suite that stays gr
 code under it is broken on purpose is a suite that would not have caught the bug you are about
 to ship.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * tests.mutation.failed == 0
 * verification.mutation.passed
@@ -409,7 +456,7 @@ A suite of examples documents the cases its author imagined and says nothing abo
 
 Applies when `change.code`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * evidence.count.property_test_result >= 1
 
@@ -425,7 +472,7 @@ Every claim a finished run makes points at the thing that produced it. Without i
 later nobody can tell whether a test result came from a test runner or from an agent's summary
 of one, and the only way to find out is to run everything again.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * evidence verification (independent)
 * if task.kind not in [incident] then: evidence diff
@@ -437,7 +484,7 @@ If one of its requirements is not met: block.
 A change either has a known previous revision to go back to, or it is not finished. Without it
 the recovery plan gets invented while the service is down, by whoever happens to be awake.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * if defined(deployment.revision) then: deployment.previous_revision.exists
 
@@ -451,7 +498,7 @@ implementer remembers wanting.
 
 Applies when `task.kind in [feature, bugfix, refactor, migration]`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * specification.satisfied
 
@@ -470,7 +517,7 @@ If one of its requirements is not met: block.
 No task completes with an unresolved static-analysis error. Without it, a defect the compiler or
 the linter already found ships anyway, because nobody was obliged to read the output.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * static_analysis.errors == 0
 
@@ -488,7 +535,7 @@ does.
 
 Applies when `task.kind in [feature, bugfix]`.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * tests.unit.failed == 0
 * regression_suite.result == passed
@@ -506,7 +553,7 @@ Evidence it requires, which must exist before the work is finished:
 
 Verifiers that must have spoken:
 
-* test-runner must run — before entering `complete`, the completion phase
+* test-runner must run — before entering `complete` and `declined`, the completion phase
 
 If one of its requirements is not met: block.
 
@@ -516,7 +563,7 @@ A production change is not finished until something other than the agent that ma
 service is healthy. Without it the run ends green on its own say-so, and the first party to
 discover the service is still down is a customer.
 
-**Before entering `complete`, the completion phase:**
+**Before entering `complete` and `declined`, the completion phase:**
 
 * service.health == healthy
 * verification.recovery.passed

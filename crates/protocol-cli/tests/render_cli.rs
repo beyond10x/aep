@@ -165,7 +165,9 @@ fn a_workflow_renders_to_a_standalone_svg_document_on_standard_output() {
     assert!(figure.starts_with("<svg viewBox="));
     assert!(figure.trim_end().ends_with("</svg>"));
     assert!(
-        figure.contains("adp/default/1"),
+        // The id, not the version: this row says *the figure names the workflow it drew*, and a
+        // pinned number quietly turned it into *and the workflow is still at version 1*.
+        figure.contains("adp/default/"),
         "the figure names the workflow it drew"
     );
     assert!(

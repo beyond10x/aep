@@ -33,10 +33,18 @@
 format: aep.driver-steps/1
 id: development/default
 # Pinned, and the pin is mandatory. A step map names states and orders steps inside them, so an
-# unpinned one is an instruction sheet for whatever happens to be in the tree. When `adp/default`
-# reaches version 2 this map is orphaned at load — refused, naming both versions — rather than
-# silently applied to a state graph it was not written against.
-workflow: adp/default/1
+# unpinned one is an instruction sheet for whatever happens to be in the tree. The refusal this
+# comment used to predict has now happened once and worked exactly as written: `adp/default` went to
+# version 2 and `protocol validate` named both maps and both versions rather than applying either to
+# a state graph it was not written against.
+#
+# **Repinned to version 2, with no new steps.** The bump added a terminal `declined` state and three
+# edges out of failure — `adversarial_verify -> implement`, `review -> implement`,
+# `review -> declined`. A terminal state takes no step, and the two back-edges re-enter `implement`,
+# which this map already covers; the engine's own visit and attempt budgets bound the loop. What a
+# run under this map gains is that an adversary which finds a defect can send the work back instead
+# of wedging on the one forward edge.
+workflow: adp/default/2
 title: Driving adp/default in this repository
 
 states:

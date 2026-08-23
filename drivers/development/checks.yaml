@@ -67,7 +67,13 @@ format: aep.driver-steps/1
 id: development/checks
 # Pinned like its sibling, and for the same reason: a map names states and orders steps inside them,
 # so an unpinned one is an instruction sheet for whatever happens to be in the tree.
-workflow: adp/default/1
+#
+# **Repinned to version 2.** The bump added a terminal `declined` state and three edges out of
+# failure — `adversarial_verify -> implement`, `review -> implement`, `review -> declined`. This map
+# needs no new steps for any of them: `declined` is terminal and takes none, and the back-edges
+# re-enter states this map already covers. What changed for a run under it is that a red adversarial
+# suite and a reviewer's *no* now have somewhere to go.
+workflow: adp/default/2
 title: Driving adp/default for work whose acceptance is written in checks
 
 states:

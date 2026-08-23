@@ -169,7 +169,7 @@ fn step_map(operator: bool) -> String {
     format!(
         "format: aep.driver-steps/1\n\
          id: fixture/drive\n\
-         workflow: adp/default/1\n\
+         workflow: adp/default/2\n\
          states:\n\
         \x20 establish_verifiers:\n\
         \x20   steps:\n\
@@ -432,7 +432,7 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     .expect("the workflow is readable");
     write(
         &tree.join("drivers/broken.yaml"),
-        "format: aep.driver-steps/1\nid: broken/map\nworkflow: adp/default/1\n\
+        "format: aep.driver-steps/1\nid: broken/map\nworkflow: adp/default/2\n\
          states:\n  polishing:\n    steps: []\n",
     );
 
@@ -447,7 +447,7 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     );
 }
 
-/// Two maps fit `adp/default/1`, and the driver refuses to pick one on the caller's behalf.
+/// Two maps fit `adp/default/2`, and the driver refuses to pick one on the caller's behalf.
 ///
 /// This changed when `development/checks` shipped: before it, a run with no `--map` was given the
 /// only map that fitted, and the wave-4 run `W4-1/1` was started that way. The refusal is the

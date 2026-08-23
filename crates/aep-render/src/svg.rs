@@ -454,7 +454,10 @@ mod tests {
             "<svg viewBox=\"0 0 {} {}\"",
             scene.width, scene.height
         )));
-        assert!(svg.contains("aria-label=\"Workflow adp/default/1"));
+        // The reference the workflow states, not a version spelled out here: what this row asserts
+        // is that the alternative text names *which* workflow, and pinning the number turned it
+        // into a second, silent assertion that the workflow never changes.
+        assert!(svg.contains(&format!("aria-label=\"Workflow {}", scene.reference)));
         assert!(
             svg.contains("is blocked"),
             "the alternative text says what the run is doing"

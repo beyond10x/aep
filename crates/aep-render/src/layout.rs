@@ -277,7 +277,7 @@ fn columns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{fixture_workflow, state};
+    use crate::testing::{fixture_workflow, state, workflow_at};
 
     #[test]
     fn the_back_edge_does_not_push_implement_below_verify() {
@@ -304,7 +304,11 @@ mod tests {
 
     #[test]
     fn a_chain_lays_out_one_state_per_layer_in_declaration_order() {
-        let workflow = fixture_workflow();
+        // `migration/forward-only` and not `adp/default`, since `adp/default/2`: the development
+        // workflow gained a second terminal state (`declined`) and stopped being a chain, and a
+        // test that asserts the chain property has to be pointed at a document that is one. The
+        // migration workflow is a chain by its own name and there is no version of it that is not.
+        let workflow = workflow_at("workflows/migrations/forward-only.yaml");
         let layout = Layout::of(&workflow);
         assert_eq!(layout.width(), 1, "the fixture is a chain, so one column");
         assert_eq!(
@@ -316,6 +320,35 @@ mod tests {
         for layer in 0..layout.depth() {
             assert_eq!(layout.row(layer).len(), 1, "one state in layer {layer}");
         }
+    }
+
+    #[test]
+    fn a_branch_to_a_second_terminal_shares_a_layer_rather_than_extending_the_chain() {
+        // The shape `adp/default/2` introduced, and the one the chain test above can no longer
+        // cover: `review` opens onto `complete` and `declined`, so the last layer holds two states
+        // instead of one. What is being pinned is that a branch widens the picture and does not
+        // deepen it — a reader looking for *how long is this workflow* must not be told a number
+        // that counts an alternative ending as another step.
+        let workflow = fixture_workflow();
+        let layout = Layout::of(&workflow);
+        assert!(
+            workflow
+                .transitions
+                .iter()
+                .any(|it| it.from == state("review") && it.to == state("declined")),
+            "the fixture must carry the review -> declined verdict, or this proves nothing"
+        );
+        let complete = layout.layer_of(&state("complete")).expect("laid out");
+        let declined = layout.layer_of(&state("declined")).expect("laid out");
+        assert_eq!(
+            complete, declined,
+            "two endings reached from the same state sit side by side"
+        );
+        assert_eq!(layout.width(), 2, "and the picture is two columns wide");
+        assert!(
+            layout.depth() < workflow.states.len(),
+            "a branching workflow has fewer layers than it has states"
+        );
     }
 
     #[test]
