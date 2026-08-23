@@ -1,10 +1,10 @@
 eval.matrix/1 — 4 run(s), 1 specification(s), 4 cell(s)
 
 workflow                  harness    arm       runs   held   violated   unobservable
-adp/default               claude     raw       1      8      2          0
-adp/default               claude     plugin    1      10     0          0
-adp/default               claude     driven    1      10     0          0
-adp/default               codex      plugin    1      10     0          0
+adp/default               claude     raw       1      9      2          0
+adp/default               claude     plugin    1      11     0          0
+adp/default               claude     driven    1      11     0          0
+adp/default               codex      plugin    1      11     0          0
 
 expectation                   harness    arm       runs   held   violated   unobservable
 no-artifact-file-was-rewritten-whole  claude     raw       1      1      0          0
@@ -27,6 +27,10 @@ the-harness-had-a-writer-to-refuse  claude     raw       1      1      0        
 the-harness-had-a-writer-to-refuse  claude     plugin    1      1      0          0
 the-harness-had-a-writer-to-refuse  claude     driven    1      1      0          0
 the-harness-had-a-writer-to-refuse  codex      plugin    1      1      0          0
+the-implementation-was-changed  claude     raw       1      1      0          0
+the-implementation-was-changed  claude     plugin    1      1      0          0
+the-implementation-was-changed  claude     driven    1      1      0          0
+the-implementation-was-changed  codex      plugin    1      1      0          0
 the-specification-came-before-the-decomposition  claude     raw       1      1      0          0
 the-specification-came-before-the-decomposition  claude     plugin    1      1      0          0
 the-specification-came-before-the-decomposition  claude     driven    1      1      0          0
@@ -55,4 +59,4 @@ adp/default               claude     plugin    $0.521600           116546       
 adp/default               claude     driven    $0.521600           116546              22320 ms
 adp/default               codex      plugin    —                   116546              22320 ms
 
-38 fact(s) held, 2 contradicted, 0 nobody found out, over 4 run(s). No arm is ranked and no score is computed: an expectation nobody could decide is not a failure, and folding it into one would be the only way to get a single number out of this.
+42 fact(s) held, 2 contradicted, 0 nobody found out, over 4 run(s). No arm is ranked and no score is computed: an expectation nobody could decide is not a failure, and folding it into one would be the only way to get a single number out of this.

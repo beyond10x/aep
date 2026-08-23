@@ -217,7 +217,11 @@ fn the_dry_run_reaches_both_harnesses_all_three_arms_and_a_contradiction() {
         );
     }
     assert!(
-        table.contains("38 fact(s) held, 2 contradicted, 0 nobody found out, over 4 run(s)"),
+        // The held total moves whenever the shared expectations document gains a row — it did when
+        // `the-implementation-was-changed` was added — and the part that is the assertion is the
+        // middle number: exactly two contradictions, both from the arm-a run whose case exists to
+        // break the two ordering rows.
+        table.contains("42 fact(s) held, 2 contradicted, 0 nobody found out, over 4 run(s)"),
         "and the arm-a run contradicts the two ordering rows its case declares: {table}"
     );
     // The third column is zero here and that is a property of the *document*, not of the pipeline:
@@ -226,8 +230,8 @@ fn the_dry_run_reaches_both_harnesses_all_three_arms_and_a_contradiction() {
     // runs there carry `thinking_tokens: null`. Written down so a later reader does not take the
     // zero for evidence that nothing can be undecidable.
     assert!(
-        table.contains("adp/default               codex      plugin    1      10     0          0"),
-        "the codex cell decided all ten of its rows: {table}"
+        table.contains("adp/default               codex      plugin    1      11     0          0"),
+        "the codex cell decided every one of its rows: {table}"
     );
 }
 

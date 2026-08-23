@@ -39,7 +39,7 @@ and cannot be wrong.
 
 Before the first write of a session, run `protocol artifact list` and `protocol artifact kinds`.
 
-### Four guardrails
+### Five guardrails
 
 1. **A status changes only through `protocol artifact move`.** Never edit the `status:` field, and
    never write it into a file with a patch or a heredoc. The CLI validates the move against the
@@ -56,6 +56,13 @@ Before the first write of a session, run `protocol artifact list` and `protocol 
    from where the artifact stands. Relay that list. Do not retry with a different spelling, do not
    route around it by editing the file, and do not walk an artifact through an intermediate status
    without saying so.
+5. **A request that is already satisfied gets an artifact, not a question.** Finding that the asked-
+   for behaviour already exists, or should not be built, is a result — write the `specification`
+   that states it with the evidence, say plainly that you did not build the thing, and file the gap
+   you actually found. What this rules out is ending the turn on *which of these would you like?*: a
+   session that stops to ask has produced nothing, and non-interactively there is nobody to answer.
+   `adp/default` has a terminal `declined` state for this outcome. A decline that is written down is
+   a result; a decline that is only said is a run that did nothing.
 
 ### Who decides
 

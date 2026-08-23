@@ -44,6 +44,70 @@ title: A run of `adp/default` put the specification before the decomposition and
 # or `command` there*: design decision D2 keeps boolean combinators out of the matcher language, and
 # the growth path is a second expectation rather than an expression. Closing this properly is a
 # Codex-side case with its own rows, and it is not in this document.
+#
+# ## What a driven run cannot witness here, stated rather than discovered
+#
+# Read off the first live driven run of this case, 2026-08-23 (`docs/reviews/`). Arm `driven` is a
+# different observer from arms `raw` and `plugin`, and three rows answer differently under it for
+# reasons that are about the arm rather than about the run.
+#
+# **A driven transcript is many sessions.** `protocol drive` starts a fresh session per workflow
+# state, so the stream this document is checked against is a concatenation with one terminal record
+# per state visited. `terminal-record-clean` reads **every** one of them and holds only if all hold;
+# a session the account's rate limit cut is `unk` rather than `gap`, because what stopped it is the
+# invoice and not the run. Both rules live in `crates/trace-spec/src/check.rs`, `run_result`.
+#
+# **`the-suite-was-run-before-there-was-code-to-pass-it` cannot decide under `driven`, by
+# construction.** No development profile grants `command.execute`, so the model in a driven run has
+# no shell: `cargo test` is a **command step the driver runs**, and the driver is not in the
+# session's transcript. The row answers `never_occurred` — honestly, because in that session it did
+# not occur. The fact itself is not lost: the driver records it as a `test_result` from
+# `test-runner`, and the workflow's own `evidence.first_seq.test_result < evidence.first_seq.diff`
+# reads it. What is missing is a judge that reads a run's evidence record beside its stream, and
+# that is a change to the instrument rather than to this row. Widening the selector would be worse
+# than useless — there is no call to match.
+#
+# **`the-specification-came-before-the-decomposition` reads a proxy the driven arm does not use.**
+# The case's task text above says *break it into stories*; `drivers/development/default.yaml` tells
+# its `decompose` state to *break the specification into tasks*. Arms `raw` and `plugin` get the
+# prompt and create stories; arm `driven` gets the map and creates **tasks**, after the
+# specification, satisfying what this row says in English. What the row's selector matches in that
+# run is a single `story` the model created at **intake** — which `receive`'s own prompt told it not
+# to do (*"do not decompose, and do not create anything the request does not name"*) and the seam
+# allowed. So the `gap` is not noise and it is not this row's mistake: it names a hole in the
+# driver's surface, and it is filed as one rather than edited away here. The row keeps the prompt's
+# vocabulary because the recorded `raw` and `plugin` streams speak it.
+#
+# **`nothing-was-refused` counts denials the seam made on purpose.** In arms `raw` and `plugin` a
+# denial is the harness refusing the model; in `driven` it is the instrument doing its job, and the
+# first live run recorded 39. The row stays a gate rather than becoming advisory, because *an
+# enforced run in which the model never once reached outside its surface* and *one in which it
+# reached 39 times* are different facts about the model and the matrix should not flatten them. Read
+# the count, not the word: under `driven` the number is the finding.
+#
+# ## What a transcript cannot see here
+#
+# **Whether the change works.** Every row in this document is decided from a recording of what an
+# agent did; whether `protocol artifact board --json` exits 0 afterwards is a property of the tree,
+# and no matcher in this vocabulary reaches one. The nearest decidable thing is
+# `the-implementation-was-changed`, which says bytes reached `*/src/*` and deliberately claims no
+# more. Closing the rest is a build and a run of the result beside the transcript — a second
+# instrument, not a wider selector — and until it exists the matrix reports *how the run worked* and
+# never *whether it shipped*. Saying so here is cheaper than a reader inferring the stronger claim
+# from a table of held rows.
+#
+# ## The outcome this case does not cover, now that the workflow has one
+#
+# `adp/default/2` added a terminal `declined`: a run may legitimately end by finding the request
+# already satisfied, or not worth building, and recording why. **This case is the delivery path and
+# judges every run against it**, so a correct decline is measured against rows about work it was
+# right not to do — which is how the first live evaluation produced a cell reading *four held,
+# nothing contradicted* for the arm that built nothing.
+#
+# The fix is a sibling case for the decline path, not a widening of these rows: an expectation that
+# passed for *shipped it* or *declined it* would assert nothing about either. That case needs a
+# committed transcript of a declining run, and the one live example carries prompts and operator
+# paths that do not go in this repository, so it is named here as owed rather than sketched.
 
 expectations:
   # --- the workflow's first sequencing rule -------------------------------------------------
@@ -156,6 +220,29 @@ expectations:
       tool.called:
         tool: Bash
         args: {command: {contains: "protocol artifact validate"}}
+        count: {at_least: 1}
+
+  - id: the-implementation-was-changed
+    statement: the run wrote to the implementation, so there is something for the ordering rows to be about
+    # **The row whose absence let a run that produced nothing score best in the matrix.** In the
+    # first live three-arm evaluation one arm ended cleanly at 19 turns having written no file at
+    # all, and every ordering row above went `unk` — nothing to order — so its cell read *zero
+    # contradicted*, better than the two arms that did the work. Every row here was a control on
+    # *how* the work was done and none asserted that any was.
+    #
+    # It is scoped to `*/src/*` and not to the whole tree on purpose: `the-editor-was-used-at-all`
+    # already rules out an empty session, and a run that wrote only planning artifacts and docs has
+    # still not touched the thing the task asked to change.
+    #
+    # **What this row is not.** It is not *the deliverable exists*, and no row in this vocabulary
+    # can be: a trace specification reads a transcript, and whether `protocol artifact board --json`
+    # actually works is a property of the tree afterwards. That check belongs to whatever builds and
+    # runs the result, and writing a transcript row that implied it would be the checker claiming to
+    # have seen something it cannot see. See § *What a transcript cannot see here* below.
+    expect:
+      tool.called:
+        tools: [Edit, NotebookEdit, Write]
+        args: {file_path: {glob: "*/src/*"}}
         count: {at_least: 1}
 
   # --- the run's own record ------------------------------------------------------------------

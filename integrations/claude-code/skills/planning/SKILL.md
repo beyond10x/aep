@@ -36,7 +36,7 @@ lifecycle story` costs one command and cannot be wrong.
 When a store is present but you have not looked at it yet in this session, start with `protocol
 artifact list` and `protocol artifact kinds`. Two commands buy you the whole vocabulary.
 
-## 3. Four guardrails
+## 3. Five guardrails
 
 These are inlined because they hold whatever the store's vocabulary is.
 
@@ -76,6 +76,24 @@ $ echo $?
 
 The right response is to tell the operator that the story must be active first, and ask whether to
 walk it there — not to perform two moves nobody sanctioned.
+
+**5. A request that is already satisfied gets an artifact, not a question.** Finding that the asked-
+for behaviour already exists — or should not be built — is a real result and often a better one than
+the change. Record it: write the `specification` that states what you found, cite the code and the
+command output that show it, and say plainly that you did not build the thing and why. Then file the
+gap you actually found, if there is one.
+
+What this rules out is ending the turn on *which of these two would you like?*. A session that stops
+to ask has produced nothing, and there is frequently nobody there to answer — the same work run
+non-interactively ends with an empty tree and a question into a log. `adp/default` has a terminal
+`declined` state for precisely this outcome, and the distinction it draws is the one that matters
+here: **a decline that is written down is a result; a decline that is only said is a run that did
+nothing.**
+
+This is not licence to argue with the request. Build what was asked for unless you have evidence it
+is already there or actively wrong, put that evidence in the artifact, and leave the decision where
+§ 4 leaves every other one — with the operator, who can now read what you found instead of
+answering a question.
 
 ## 4. Who decides
 

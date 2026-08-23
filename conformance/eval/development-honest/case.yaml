@@ -16,12 +16,37 @@ verdict: held
 # What this case does **not** assert is quality. Whether the story decomposition is good and whether
 # the test is a good test are a person's call; only the order is a machine's.
 
+# ## The bound in step 0, and the run that bought it
+#
+# The first live three-arm evaluation put 57 turns and $4.08 through the unbounded version of this
+# task. Four of the seven files that run changed were `integrations/*/skills/planning/SKILL.md`,
+# `integrations/codex/AGENTS.planning.md` and `website/docs/reference/cli.md` — documentation nobody
+# had asked it to touch — and the session was cut by the account's rate limit at step 4 of 5 with
+# the work done and unreported. Nothing it did was wrong; the task simply never said where the
+# change ended, and *update the docs too* is what a conscientious engineer does with an unbounded
+# brief. The bound is one sentence and it is the same sentence for every arm, so what it changes is
+# the task and not the treatment.
+#
+# ## A premise this case is known to carry, and does not yet fix
+#
+# **`protocol artifact board` already emits JSON**, through the shared `--format json` that every
+# verb in the family takes (`crates/protocol-cli/src/planning.rs`). So the delivery path this case
+# measures asks for a redundant alias, and an agent that notices is right. One arm of the first live
+# evaluation did exactly that, said so with citations, and built nothing — which under a case that
+# only knows how to score delivery read as the cleanest cell in the matrix.
+#
+# The fix is a task whose premise is not already satisfied, and it is not made here: the two
+# committed transcripts this document's expectations are checked against are recordings of runs
+# against *this* text, and changing it would leave them judging a task nobody performed. Recorded
+# rather than patched, because the corpus's own value is that its fixtures were not written to pass.
 task: |
   Add a `--json` flag to `protocol artifact board`, so a harness can read the board without
   parsing the terminal rendering.
 
   Work this through the development workflow:
 
+  0. Change only what the flag needs: `crates/protocol-cli` and the planning store. Leave the
+     plugin surfaces, the website and every other crate alone, however tempting.
   1. Write the specification down in the planning store before you break the work up.
   2. Break it into stories under the specification.
   3. Write the failing test before you write the code that makes it pass.

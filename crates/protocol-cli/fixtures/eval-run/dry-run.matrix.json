@@ -3,7 +3,7 @@
   "specifications": [
     {
       "id": "eval-case/development-default",
-      "digest": "b5066e8a8bcdb7a29f15046a8234c14962836c6aac9574df470968bb8da724b4",
+      "digest": "7dddfa4e9de70ccc787d1a1cf5ab9a516caa71c929086450812d63b4fc0244dc",
       "runs": 4
     }
   ],
@@ -19,7 +19,7 @@
       "specification": "eval-case/development-default",
       "transcript_digest": "88a4e66f54a9d5948870bd5b3ab0acd0721c17ddfd722e60f46e9d081b725e3b",
       "observed_at": "2026-08-23",
-      "held": 8,
+      "held": 9,
       "violated": 2,
       "unobservable": 0,
       "cost_micro_usd": 318400,
@@ -37,7 +37,7 @@
       "specification": "eval-case/development-default",
       "transcript_digest": "56132bb4bba8b9adca330f9fa24d0d41169e549ee1ec9af2fad044894321db11",
       "observed_at": "2026-08-23",
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": 521600,
@@ -55,7 +55,7 @@
       "specification": "eval-case/development-default",
       "transcript_digest": "18f44b20d5a368ea09c89948e88f738cbe6911d5efe826777dd805ba1ac807d9",
       "observed_at": "2026-08-23",
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": 521600,
@@ -73,7 +73,7 @@
       "specification": "eval-case/development-default",
       "transcript_digest": "534ff1213a4a5fef9d5f91c230b7e72a315eda29ab99873c1fdd30df697b4b5a",
       "observed_at": "2026-08-23",
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": null,
@@ -87,7 +87,7 @@
       "harness": "claude",
       "arm": "raw",
       "runs": 1,
-      "held": 8,
+      "held": 9,
       "violated": 2,
       "unobservable": 0,
       "cost_micro_usd": {
@@ -108,7 +108,7 @@
       "harness": "claude",
       "arm": "plugin",
       "runs": 1,
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": {
@@ -129,7 +129,7 @@
       "harness": "claude",
       "arm": "driven",
       "runs": 1,
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": {
@@ -150,7 +150,7 @@
       "harness": "codex",
       "arm": "plugin",
       "runs": 1,
-      "held": 10,
+      "held": 11,
       "violated": 0,
       "unobservable": 0,
       "cost_micro_usd": null,
@@ -367,6 +367,46 @@
     },
     {
       "workflow": "adp/default",
+      "expectation": "the-implementation-was-changed",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-implementation-was-changed",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-implementation-was-changed",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-implementation-was-changed",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
       "expectation": "the-specification-came-before-the-decomposition",
       "harness": "claude",
       "arm": "raw",
@@ -566,7 +606,7 @@
       "unobservable": 0
     }
   ],
-  "held": 38,
+  "held": 42,
   "violated": 2,
   "unobservable": 0
 }
