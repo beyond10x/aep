@@ -2106,11 +2106,25 @@ struct Session {
     model: Option<String>,
     /// The plugin that was installed, where one was.
     plugin_digest: Option<String>,
-    /// What the run cost, in millionths of a US dollar, where the terminal event said.
+    /// What the run cost, in millionths of a US dollar, totalled over every session that said.
+    ///
+    /// # Every session, and the run that made that matter
+    ///
+    /// A stream is usually one session and the total is that session's figure. A **driven** run is
+    /// not: `protocol drive` starts a fresh session per workflow state, so its transcript is a
+    /// concatenation carrying one terminal record per state. This reader took the *last* of them
+    /// until 2026-08-23, when the first live driven run reported `$1.135363` for a walk that had
+    /// cost `$15.014604` across six sessions — the sixth session's figure, presented as the run's.
+    ///
+    /// [`accumulate`] holds the absence rule: a session stating nothing adds nothing and never a
+    /// zero, so a total is over the sessions that stated one.
     cost_micro_usd: Option<u64>,
-    /// How many tokens it used, where the terminal event said.
+    /// How many tokens it used, totalled over every session that said.
     tokens: Option<u64>,
-    /// How long it took, where the terminal event said.
+    /// How long it took, totalled over every session that said.
+    ///
+    /// A sum and not a span: the driver runs its sessions one after another, and nothing here reads
+    /// a clock to find out (invariant 9).
     wall_time_ms: Option<u64>,
 }
 
@@ -2131,7 +2145,7 @@ impl Session {
     fn read(events: &[u8], arm: Arm, harness: Harness) -> Result<Self, Vec<StreamRefusal>> {
         let text = String::from_utf8_lossy(events);
         let mut started: Option<serde_json::Value> = None;
-        let mut ended: Option<serde_json::Value> = None;
+        let mut ended: Vec<serde_json::Value> = Vec::new();
         let mut refusals = Vec::new();
 
         for (offset, line) in text.lines().enumerate() {
@@ -2144,7 +2158,7 @@ impl Session {
             };
             match value.get("event").and_then(serde_json::Value::as_str) {
                 Some("session.started") if started.is_none() => started = Some(value),
-                Some("session.ended") => ended = Some(value),
+                Some("session.ended") => ended.push(value),
                 _ => {}
             }
         }
@@ -2192,20 +2206,27 @@ impl Session {
 
         let plugin_digest = plugin_attestation(&mut refusals, &started, arm);
 
-        let Some(ended) = ended else {
+        if ended.is_empty() {
             refusals.push(StreamRefusal::NoTerminalEvent);
             return Err(refusals);
-        };
+        }
 
         // Read before the emptiness check, so an unreadable cost joins the other refusals rather
         // than being discovered after them (invariant 3: validation accumulates).
-        let cost = match cost_of(&ended) {
-            Ok(cost) => cost,
-            Err(reason) => {
-                refusals.push(StreamRefusal::CostUnreadable { reason });
-                None
+        let mut cost = None;
+        let mut tokens = None;
+        let mut wall_time_ms = None;
+        for ended in &ended {
+            match cost_of(ended) {
+                Ok(stated) => accumulate(&mut cost, stated),
+                Err(reason) => refusals.push(StreamRefusal::CostUnreadable { reason }),
             }
-        };
+            accumulate(&mut tokens, tokens_of(ended));
+            accumulate(
+                &mut wall_time_ms,
+                ended.get("duration_ms").and_then(serde_json::Value::as_u64),
+            );
+        }
 
         if !refusals.is_empty() {
             return Err(refusals);
@@ -2223,10 +2244,20 @@ impl Session {
             model,
             plugin_digest,
             cost_micro_usd: cost,
-            tokens: tokens_of(&ended),
-            wall_time_ms: ended.get("duration_ms").and_then(serde_json::Value::as_u64),
+            tokens,
+            wall_time_ms,
         })
     }
+}
+
+/// Adds one session's quantity to a run's total, where the session stated one.
+///
+/// Absent stays absent: a stream whose sessions all say `null` totals `None` and never `0`, which
+/// is the same rule [`add`] applies one level up when a cell totals over its runs.
+fn accumulate(total: &mut Option<u64>, stated: Option<u64>) {
+    let Some(value) = stated else { return };
+    let running = total.get_or_insert(0);
+    *running = running.saturating_add(value);
 }
 
 /// Where the instrument attests what it installed, as against what a vendor happened to echo.
@@ -3587,6 +3618,57 @@ observed_at: 2026-08-23
         assert_eq!(manifest.case, "case:development-honest");
         assert_eq!(manifest.plugin_digest, Some("a".repeat(DIGEST_WIDTH)));
         assert_eq!(manifest.cost_micro_usd, Some(521_600));
+    }
+
+    #[test]
+    fn a_transcript_of_several_sessions_totals_them_rather_than_reporting_the_last_one() {
+        // The driven shape. `protocol drive` starts a fresh session per workflow state, so a driven
+        // run's transcript is a concatenation with one terminal record per state — and this reader
+        // took the last of them until the first live driven run (2026-08-23) reported `$1.135363`
+        // for a walk that had cost `$15.014604` across six sessions.
+        //
+        // Doubling a committed fixture is the whole assertion: whatever one session states, two
+        // copies of it must state twice, on all three columns. A reader that takes the last record
+        // answers the single figure and fails here.
+        let one = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/eval-run/claude-driven-attested.jsonl"),
+        )
+        .expect("the committed driven fixture");
+        let mut two = one.clone();
+        two.extend_from_slice(&one);
+
+        let single = Session::read(&one, Arm::Driven, Harness::Claude).expect("a readable stream");
+        let doubled =
+            Session::read(&two, Arm::Driven, Harness::Claude).expect("two of them, concatenated");
+
+        assert_eq!(
+            doubled.cost_micro_usd,
+            single.cost_micro_usd.map(|cost| cost * 2),
+            "two sessions cost what both of them cost"
+        );
+        assert_eq!(
+            doubled.tokens,
+            single.tokens.map(|tokens| tokens * 2),
+            "and used what both of them used"
+        );
+        assert_eq!(
+            doubled.wall_time_ms,
+            single.wall_time_ms.map(|wall| wall * 2),
+            "and took as long as both of them took: the sessions run one after another"
+        );
+        assert_eq!(
+            (
+                doubled.harness_version.clone(),
+                doubled.model.clone(),
+                doubled.plugin_digest.clone()
+            ),
+            (
+                single.harness_version.clone(),
+                single.model.clone(),
+                single.plugin_digest.clone()
+            ),
+            "and nothing else moved: the opening record is still the first one"
+        );
     }
 
     #[test]

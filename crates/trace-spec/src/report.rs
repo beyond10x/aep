@@ -230,6 +230,27 @@ pub enum UnknownReason {
         /// The model named.
         model: String,
     },
+    /// A session ended in an API error after the account's rate limit rejected it.
+    ///
+    /// **`unk`, and deliberately not `gap`.** The session stopped because the account ran out of
+    /// window, which is a fact about the invoice and not about the run's discipline: nobody found
+    /// out how that session would have ended. It is the same rule as [`Self::NoRunOutcome`] — a
+    /// transcript cut short is not a failed assertion — arriving one event later, where the harness
+    /// managed to write a terminal record saying *the API refused me*.
+    ///
+    /// The window is narrow on purpose. Only a `rejected` rate-limit state **inside the session
+    /// that errored** excuses it; an `allowed_warning` does not, an error with no rate-limit event
+    /// before it does not, and a session that ended dirty for any other reason is a `gap` as it
+    /// always was. Widening any of those would turn this into a machine for explaining failures
+    /// away.
+    RunCutByRateLimit {
+        /// The terminal record that carries the error.
+        outcome_event: usize,
+        /// The rate-limit event that rejected the account.
+        limit_event: usize,
+        /// Which window, where the harness named one.
+        window: Option<String>,
+    },
     /// A ratio has no denominator in this transcript.
     ///
     /// A rate over zero is not zero.
@@ -291,6 +312,21 @@ impl fmt::Display for UnknownReason {
             }
             Self::ModelNotUsed { model } => {
                 write!(f, "this run never used `{model}`")
+            }
+            Self::RunCutByRateLimit {
+                outcome_event,
+                limit_event,
+                window,
+            } => {
+                let named = match window {
+                    Some(window) => format!("the `{window}` window"),
+                    None => "the account's rate limit".to_owned(),
+                };
+                write!(
+                    f,
+                    "the session ending at event {outcome_event} was cut by {named}, rejected at \
+                     event {limit_event} — nobody found out how it would have ended"
+                )
             }
             Self::RatioUndefined { denominator } => {
                 write!(

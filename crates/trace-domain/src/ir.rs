@@ -635,6 +635,25 @@ impl TraceIr {
             .map(|event| event.index)
     }
 
+    /// Every terminal record in the transcript, in the order they were written.
+    ///
+    /// One transcript is usually one session and this answers a list of one. A **driven** run is
+    /// the case it exists for: `protocol drive` starts a fresh session per workflow state, so the
+    /// run's transcript is a concatenation and carries as many terminal records as it visited
+    /// states. [`Self::run_outcome`] answers the last of them, which is the right answer for *how
+    /// did this end* and the wrong one for *did every session end cleanly* — a reader asking the
+    /// second question over a six-session stream and getting the sixth record has looked at one
+    /// sixth of the run.
+    pub fn run_outcomes(&self) -> Vec<(usize, &RunOutcome)> {
+        self.events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                EventKind::RunOutcome(outcome) => Some((event.index, &**outcome)),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The rate-limit state, where the transcript records one.
     pub fn rate_limit(&self) -> Option<(usize, &RateLimitState)> {
         self.events
@@ -644,6 +663,20 @@ impl TraceIr {
                 EventKind::RateLimit(state) => Some((event.index, &**state)),
                 _ => None,
             })
+    }
+
+    /// Every rate-limit state the transcript records, in the order they were written.
+    ///
+    /// [`Self::rate_limit`] answers the last one — the account's standing state — and this answers
+    /// the series, which is what a reader needs to say *where* in a run the account was rejected.
+    pub fn rate_limits(&self) -> Vec<(usize, &RateLimitState)> {
+        self.events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                EventKind::RateLimit(state) => Some((event.index, &**state)),
+                _ => None,
+            })
+            .collect()
     }
 
     /// The last thinking estimate the harness emitted, with the event that carried it.

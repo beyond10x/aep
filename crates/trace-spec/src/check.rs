@@ -1027,7 +1027,26 @@ fn order(ir: &TraceIr, first: &CallSelector, before: &CallSelector) -> Outcome {
 
 // --- the terminal record ------------------------------------------------------------------
 
-/// The terminal record matches, field by declared field.
+/// The terminal record matches, field by declared field — in **every** session the transcript holds.
+///
+/// # Why every session and not the last one
+///
+/// One transcript is usually one session, and then this is the assertion it always was. A driven
+/// run is not: `protocol drive` starts a fresh session per workflow state, so its transcript is a
+/// concatenation with one terminal record per state visited. Reading only the last of them answers
+/// *how did the run end* while the row says *the session ended the way a finished session ends* —
+/// and a six-session run judged on its sixth record has had five sessions go unlooked-at. The first
+/// live driven run (2026-08-23) is where that showed: five clean sessions and one that was not.
+///
+/// So every record is read, the row holds only if all of them do, and the citation names the first
+/// one that disagreed.
+///
+/// # The one excuse, and its width
+///
+/// A session that ends in an API error **after the account's rate limit rejected it** is
+/// [`UnknownReason::RunCutByRateLimit`] and not a gap: what stopped it is the invoice, not the run.
+/// The window is one session wide — the rejection must fall inside the session that errored — and
+/// nothing else is excused. See the variant for why it is not widened.
 fn run_result(
     ir: &TraceIr,
     is_error: Option<bool>,
@@ -1036,10 +1055,79 @@ fn run_result(
     terminal_reason: Option<&str>,
     api_error_status: Option<&ApiErrorStatus>,
 ) -> Outcome {
-    let (at, run) = match terminal(ir) {
-        Ok(found) => found,
-        Err(outcome) => return outcome,
-    };
+    let sessions = ir.run_outcomes();
+    if sessions.is_empty() {
+        return Outcome::Undecidable(UnknownReason::NoRunOutcome);
+    }
+    let rejections = rate_limit_rejections(ir);
+    let mut held = Vec::new();
+    let mut opened = 0;
+
+    for (at, run) in sessions {
+        let outcome = one_run_result(
+            at,
+            run,
+            is_error,
+            subtype,
+            stop_reason,
+            terminal_reason,
+            api_error_status,
+        );
+        // The session's own span, so a rejection recorded in a *later* session cannot excuse this
+        // one. `opened` is the previous session's terminal event, which is where this one began.
+        let cut = rejections
+            .iter()
+            .find(|(limit_at, _)| *limit_at > opened && *limit_at < at);
+        opened = at;
+        match outcome {
+            Outcome::Ok(citation) => held.push(citation),
+            Outcome::Gap(citation) => {
+                return match cut {
+                    Some((limit_at, window)) => {
+                        Outcome::Undecidable(UnknownReason::RunCutByRateLimit {
+                            outcome_event: at,
+                            limit_event: *limit_at,
+                            window: window.clone(),
+                        })
+                    }
+                    None => Outcome::Gap(citation),
+                };
+            }
+            undecidable => return undecidable,
+        }
+    }
+
+    let last = held.last().expect("a non-empty session list holds one");
+    let at = *last.events.last().expect("a citation names its event");
+    if held.len() == 1 {
+        holds(at, last.note.clone())
+    } else {
+        holds(
+            at,
+            format!("{} session(s), each {}", held.len(), last.note),
+        )
+    }
+}
+
+/// Every rate-limit event whose status is a rejection, with the window it named.
+fn rate_limit_rejections(ir: &TraceIr) -> Vec<(usize, Option<String>)> {
+    ir.rate_limits()
+        .into_iter()
+        .filter(|(_, state)| state.status.as_deref() == Some("rejected"))
+        .map(|(at, state)| (at, state.limit_type.clone()))
+        .collect()
+}
+
+/// One terminal record against the declared fields.
+fn one_run_result(
+    at: usize,
+    run: &RunOutcome,
+    is_error: Option<bool>,
+    subtype: Option<&str>,
+    stop_reason: Option<&str>,
+    terminal_reason: Option<&str>,
+    api_error_status: Option<&ApiErrorStatus>,
+) -> Outcome {
     let mut satisfied = Vec::new();
     let mut disagreed = Vec::new();
 
@@ -1471,7 +1559,8 @@ mod tests {
     use std::collections::BTreeSet;
 
     use trace_domain::ir::{
-        AdapterRef, EventKind, McpServer, OpaqueEvent, RunOutcome, RunUsage, ToolResult, TraceEvent,
+        AdapterRef, EventKind, McpServer, OpaqueEvent, RateLimitState, RunOutcome, RunUsage,
+        ToolResult, TraceEvent,
     };
     use trace_domain::matcher::{FieldMatcher, ScalarValue};
 
@@ -2606,6 +2695,120 @@ mod tests {
             ),
         ]);
         assert_eq!(evaluate(&kind, &wrong_way).verdict(), Verdict::Gap);
+    }
+
+    // --- a driven run is many sessions in one transcript ---------------------------------------
+
+    /// The row `conformance/eval` writes as `terminal-record-clean`.
+    fn clean_session() -> ExpectationKind {
+        ExpectationKind::RunResult {
+            is_error: Some(false),
+            subtype: None,
+            stop_reason: None,
+            terminal_reason: Some("completed".to_owned()),
+            api_error_status: None,
+        }
+    }
+
+    /// A terminal record at `line`, clean or ended in an API error.
+    fn ended(line: usize, clean: bool) -> TraceEvent {
+        TraceEvent::new(
+            line,
+            None,
+            EventKind::RunOutcome(Box::new(RunOutcome {
+                is_error: Some(!clean),
+                terminal_reason: Some(
+                    if clean { "completed" } else { "api_error" }.to_owned(),
+                ),
+                ..RunOutcome::default()
+            })),
+        )
+    }
+
+    /// A rate-limit event at `line`, rejecting the account or merely reporting it.
+    fn limit(line: usize, status: &str) -> TraceEvent {
+        TraceEvent::new(
+            line,
+            None,
+            EventKind::RateLimit(Box::new(RateLimitState {
+                status: Some(status.to_owned()),
+                limit_type: Some("five_hour".to_owned()),
+                utilization: None,
+                is_using_overage: None,
+                resets_at: None,
+            })),
+        )
+    }
+
+    #[test]
+    fn every_session_is_read_because_a_driven_run_is_a_concatenation_of_them() {
+        // `protocol drive` starts a session per workflow state, so its transcript carries one
+        // terminal record per state visited. A checker that read the last one would call this run
+        // clean on the strength of its sixth session.
+        let five_clean_one_not = ir(vec![
+            ended(1, true),
+            ended(2, true),
+            ended(3, false),
+            ended(4, true),
+            ended(5, true),
+        ]);
+        assert_eq!(
+            evaluate(&clean_session(), &five_clean_one_not).verdict(),
+            Verdict::Gap,
+            "one dirty session in five is a dirty run, wherever in the walk it sits"
+        );
+        assert_eq!(
+            evaluate(&clean_session(), &ir(vec![ended(1, true), ended(2, true)])).verdict(),
+            Verdict::Ok,
+            "and a run whose every session ended the way a finished session ends holds"
+        );
+    }
+
+    #[test]
+    fn a_session_the_account_cut_is_unknown_rather_than_a_gap() {
+        // The live arm-c run of 2026-08-23: five sessions completed and the sixth was rejected by
+        // the account's five-hour window mid-step. What stopped it is the invoice, so nobody found
+        // out how it would have ended — `unk`, by the same rule that makes a truncated transcript
+        // an unknown rather than a failed assertion.
+        let cut = ir(vec![
+            ended(1, true),
+            ended(2, true),
+            limit(3, "rejected"),
+            ended(4, false),
+        ]);
+        assert_eq!(
+            evaluate(&clean_session(), &cut).verdict(),
+            Verdict::Unknown
+        );
+    }
+
+    #[test]
+    fn only_a_rejection_inside_the_failing_session_excuses_it() {
+        // The three ways this must not become a machine for explaining failures away.
+        let earlier_session = ir(vec![
+            limit(1, "rejected"),
+            ended(2, true),
+            ended(3, false),
+        ]);
+        assert_eq!(
+            evaluate(&clean_session(), &earlier_session).verdict(),
+            Verdict::Gap,
+            "a rejection the previous session absorbed says nothing about this one"
+        );
+
+        let only_warned = ir(vec![limit(1, "allowed_warning"), ended(2, false)]);
+        assert_eq!(
+            evaluate(&clean_session(), &only_warned).verdict(),
+            Verdict::Gap,
+            "a warning is not a rejection: the session was still served"
+        );
+
+        let no_limit_at_all = ir(vec![ended(1, false)]);
+        assert_eq!(
+            evaluate(&clean_session(), &no_limit_at_all).verdict(),
+            Verdict::Gap,
+            "and an error with no rate-limit event before it is the gap it always was"
+        );
     }
 
     /// A terminal record with the usage a resource expectation reads.
