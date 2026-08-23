@@ -168,6 +168,16 @@ passing one.
   over the live execution, every admitted call is rendered as an `ActionRequest` and put to
   `Engine::authorize`, and the engine's deny wins over the policy's allow — so the execution's own
   event record, not only the run's, holds what was refused and what was done.
+  **The one artifact that crosses to metaharness is pinned, and no crate crosses with it.** A step's
+  surface travels as a sealed `metaharness.frame/1` document, and its consumer refuses one by name
+  for four reasons. Since 2026-08-23 a test here transcribes that reader — tag, then shape, then
+  digest, in that order — rather than linking it, and produces the named refusal for a mutation of
+  each class (`crates/protocol-cli/tests/metaharness_frame_contract.rs`). What it reads,
+  `crates/protocol-cli/fixtures/metaharness-frame-canonical.json`, is minted by the driver's own
+  code path and committed as the cross-repository golden; the other half is a metaharness-side wave
+  replaying those exact bytes through the real parser, and until it runs this is one implementation
+  agreeing with a transcription of another. Vocabulary crosses that boundary and a dependency never
+  does, because this repository is public and that one is not.
   The eval machinery and its results migrated to the metaharness repository
   (`evals/engineering-protocols/`). Record:
   `docs/plan/harness-wave-2-driver-decision.md`; design

@@ -46,6 +46,19 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- **The sealed frame document a driven step travels on is now pinned against the rules that refuse
+  it, and one canonical frame is committed for anyone reading the seam from the other side.**
+  `crates/protocol-cli/fixtures/metaharness-frame-canonical.json` is a real
+  `metaharness.frame/1` document as `protocol drive` writes one — deterministic, reproducible, with
+  nothing account-level in it — and its digest is
+  `43a6f845a21f3475569323950a9d276bfed3df11979adc3edf18878da6963a12`. Beside it,
+  `crates/protocol-cli/tests/metaharness_frame_contract.rs` writes out the consumer's reader (tag,
+  then shape, then digest) rather than linking it — no dependency crosses between a public
+  repository and a private one — and refuses that document once per refusal class: untagged,
+  misshapen, and a digest that no longer describes the contents after a single byte moved. What
+  changes for anybody building against this seam: the frame's canonical form is now a committed
+  artifact you can hash and compare, instead of a rule two codebases each believed separately.
+
 - **`protocol drive run` refuses a step map that cannot produce the evidence the plan will ask
   for.** Before the first step, the resolved plan's evidence demands are compared with what the
   map's steps declare, and a kind nothing can produce is a refusal with exit 1 — one line per kind,

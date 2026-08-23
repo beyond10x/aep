@@ -1033,9 +1033,8 @@ impl CliExecutors {
             "{}-{}-{}.frame.json",
             context.state, context.index, context.attempt
         ));
-        let document = serde_json::to_string_pretty(&frame)
-            .map_err(|error| format!("the frame would not serialise: {error}"))?;
-        fs::write(&path, format!("{document}\n"))
+        let document = frame_document(&frame)?;
+        fs::write(&path, document)
             .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
         Ok(path)
     }
@@ -1848,6 +1847,24 @@ fn metaharness_frame(
     frame
 }
 
+/// A minted frame as the bytes that go on disk.
+///
+/// Pretty-printed with a trailing newline, which is exactly what metaharness's own
+/// `Frame::to_document` writes, so the two producers of this file agree byte for byte and a
+/// document minted here can be diffed against one minted there. Split out of the write so the
+/// committed golden under `fixtures/` is *these* bytes and not a second rendering of them: a golden
+/// produced by a path the driver does not take would pin the test and not the driver.
+///
+/// # Errors
+///
+/// When the frame will not serialise, which for a value built by [`metaharness_frame`] would be a
+/// defect here rather than anything a caller did.
+fn frame_document(frame: &serde_json::Value) -> Result<String, String> {
+    let text = serde_json::to_string_pretty(frame)
+        .map_err(|error| format!("the frame would not serialise: {error}"))?;
+    Ok(format!("{text}\n"))
+}
+
 /// The `metaharness run claude` invocation for one step.
 ///
 /// `--cwd` is the metaharness a6 declaration: the session works in the governed tree, and
@@ -2564,6 +2581,113 @@ mod tests {
         assert!(has("-p", "do the thing"));
         assert!(has("--plugin-dir", "/plugins/claude-code"));
         assert!(argv.contains(&"--hermetic".to_owned()));
+    }
+
+    // -------------------------------------------------- the golden the other repository replays
+
+    /// The name of the committed cross-repository golden, under this crate's `fixtures/`.
+    const GOLDEN: &str = "metaharness-frame-canonical.json";
+
+    /// The one frame the golden is minted from, and the reason it can be committed at all.
+    ///
+    /// Nothing here reads a clock, an environment variable or anything off this machine, so the
+    /// document is byte-identical wherever it is minted — a golden that varied with its producer
+    /// would pin the producer and not the format. The `run_directory` a [`StepContext`] carries
+    /// never reaches the frame, which is why the fixture holds no path at all; the workflow id and
+    /// the state are document names this repository publishes, and the two lines are the engine's
+    /// own vocabulary. There is deliberately nothing account-level in it: this file is public and
+    /// is read by a repository that is not.
+    ///
+    /// The capability set is the widest a driven state gets, so the golden carries seven of the ten
+    /// parameterless operations rather than a corner of the vocabulary.
+    fn canonical_frame() -> serde_json::Value {
+        let tools = config(&[
+            Capability::RepositoryRead,
+            Capability::RepositoryWrite,
+            Capability::CommandExecution,
+        ]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let requirements = vec!["the suite is red before the implementation".to_owned()];
+        let reaching = vec!["to verify: the suite is green".to_owned()];
+        let context = StepContext {
+            state: &state,
+            index: 2,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("."),
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+        metaharness_frame(&context, "development/default", "1")
+    }
+
+    /// Compares `produced` against the committed golden, or writes it when there is none.
+    ///
+    /// Written-when-absent and then failing, on `aep-render`'s rule: a regeneration is a reviewable
+    /// diff and never a silent overwrite. There is deliberately **no** environment variable that
+    /// accepts whatever the minter now produces — this file is another repository's input, and a
+    /// golden that rewrites itself pins nothing on either side of the seam.
+    fn golden(produced: &str) {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("fixtures")
+            .join(GOLDEN);
+        let Ok(committed) = fs::read_to_string(&path) else {
+            fs::create_dir_all(path.parent().expect("the golden has a directory"))
+                .expect("the fixture directory is writable");
+            fs::write(&path, produced).expect("the golden is writable");
+            panic!(
+                "no golden at {}; it has been written — review it and run again",
+                path.display()
+            );
+        };
+        if committed == produced {
+            return;
+        }
+        let differs = committed
+            .lines()
+            .zip(produced.lines())
+            .enumerate()
+            .find(|(_, (want, got))| want != got)
+            .map_or_else(
+                || {
+                    (
+                        committed.lines().count().min(produced.lines().count()) + 1,
+                        "<end of file>".to_owned(),
+                        "<more lines>".to_owned(),
+                    )
+                },
+                |(index, (want, got))| (index + 1, want.to_owned(), got.to_owned()),
+            );
+        let (line, want, got) = differs;
+        panic!(
+            "{} differs at line {line}\n  committed: {want}\n  produced:  {got}\n\
+             delete the file and re-run to accept the new document — and say so in the story, \
+             because metaharness replays these bytes",
+            path.display()
+        );
+    }
+
+    /// The golden is the bytes the driver writes, not a hand-typed copy of them.
+    ///
+    /// It is minted through [`metaharness_frame`] and rendered through [`frame_document`], which is
+    /// the path `write_frame_document` takes; only the `fs::write` is missing. A fixture assembled
+    /// any other way would drift from the driver in silence, and the contract test that reads it
+    /// (`tests/metaharness_frame_contract.rs`) would then be certifying a document nothing sends.
+    #[test]
+    fn the_committed_golden_is_the_document_the_driver_would_write() {
+        let document = frame_document(&canonical_frame()).expect("the frame renders");
+        golden(&document);
+    }
+
+    /// Two mints of the same step agree byte for byte, or the golden could not be committed and the
+    /// digest could not be cited across the process boundary it is only ever cited across.
+    #[test]
+    fn two_mints_of_the_same_step_are_the_same_document() {
+        assert_eq!(
+            frame_document(&canonical_frame()).expect("the frame renders"),
+            frame_document(&canonical_frame()).expect("the frame renders")
+        );
     }
 
     // ------------------------------------------------------------ the engine at decision time

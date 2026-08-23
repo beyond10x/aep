@@ -1,0 +1,58 @@
+{
+  "digest": "43a6f845a21f3475569323950a9d276bfed3df11979adc3edf18878da6963a12",
+  "entities": null,
+  "format": "metaharness.frame/1",
+  "handoff": {
+    "handoff": "none"
+  },
+  "next": [],
+  "node": {
+    "id": "implement"
+  },
+  "obligations": [
+    {
+      "asked_by": null,
+      "text": "the suite is red before the implementation"
+    }
+  ],
+  "operations": [
+    {
+      "op": "dir.list"
+    },
+    {
+      "op": "file.edit"
+    },
+    {
+      "op": "file.read"
+    },
+    {
+      "op": "file.write"
+    },
+    {
+      "op": "search"
+    },
+    {
+      "op": "shell"
+    },
+    {
+      "op": "skill.load"
+    }
+  ],
+  "prior": [],
+  "reaching": [
+    {
+      "asked_by": null,
+      "text": "to verify: the suite is green"
+    }
+  ],
+  "step": {
+    "attempt": 1,
+    "index": 2,
+    "state": "implement",
+    "workflow": "development/default"
+  },
+  "workflow": {
+    "id": "development/default",
+    "version": "1"
+  }
+}
