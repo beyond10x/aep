@@ -40,12 +40,16 @@ use std::process::{Command, ExitCode, Stdio};
 use std::time::{Duration, SystemTime};
 
 use aep_domain::ids::StateId;
+use aep_domain::principle::Principle;
 use aep_domain::workflow::Workflow;
 use aep_domain::WorkflowRef;
 use aep_driver::run::RunDirectory;
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus as DriverStatus};
 use aep_engine::execution::Snapshot;
 use aep_engine::project::project_directory;
+use aep_engine::registry::Registry;
+use aep_render::obligations::Obligations;
+use aep_render::prose::{self, Instruction};
 use aep_render::run::{RunStatus, RunView};
 use aep_render::{ansi, html, scene::Scene, svg};
 use anyhow::{bail, Context, Result};
@@ -73,6 +77,21 @@ const POLL: Duration = Duration::from_millis(500);
 pub(crate) enum WorkflowCommand {
     /// Draw a workflow, and optionally a run over it.
     Render(RenderArgs),
+    /// Write a workflow out as instructions, in words.
+    ///
+    /// The same documents `render` draws, rendered for a reader with no canvas: the states as
+    /// things you may not enter yet, the guards as what opens each move, and the principles that
+    /// time obligations against the phases those states declare — joined to the states each lands
+    /// on, which is the sentence neither document contains on its own.
+    ///
+    /// Its own verb rather than a `--format markdown` on `render`, on the reasoning that verb's
+    /// format enum already gives: `--format` there answers *how do I draw this*, and every value it
+    /// takes produces a picture. A rendering that is not a picture is a different question, and a
+    /// verb that answered both would have four values that write an image and one that does not.
+    ///
+    /// Nothing here is evaluated. A principle's `applies_when` is printed as the condition it is,
+    /// never as a verdict about a task this process cannot see.
+    Instruct(InstructArgs),
 }
 
 /// What a rendering is written as.
@@ -121,11 +140,102 @@ pub(crate) struct RenderArgs {
     watch: bool,
 }
 
+/// The inputs of one instruction rendering.
+#[derive(Debug, Args)]
+pub(crate) struct InstructArgs {
+    /// Which workflow, such as `adp/default`. Without it, every workflow the tree declares.
+    #[arg(long)]
+    id: Option<String>,
+    /// The document tree to read the workflow and the principles that bind it from.
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+    /// Where to write: one file with `--id`, a directory of documents without it.
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
+/// The index of a directory of instruction documents.
+const INDEX: &str = "README.md";
+
 /// Runs the `workflow` verb family.
 pub(crate) fn run(command: WorkflowCommand) -> Result<ExitCode> {
     match command {
         WorkflowCommand::Render(args) => render(&args),
+        WorkflowCommand::Instruct(args) => instruct(&args),
     }
+}
+
+/// `protocol workflow instruct`
+///
+/// The principles come from the same tree as the workflow and are never named on the command line:
+/// which rules bind a workflow is a property of the documents, and a flag that let a caller choose
+/// would let a caller render a workflow with the inconvenient half of its rules left out.
+fn instruct(args: &InstructArgs) -> Result<ExitCode> {
+    let registry = crate::load(&args.root)?;
+    let principles: Vec<&Principle> = registry.principles().collect();
+
+    let selected: Vec<&Workflow> = match &args.id {
+        Some(id) => vec![named(&registry, id, &args.root)?],
+        None => registry.workflows().collect(),
+    };
+    if selected.is_empty() {
+        bail!(
+            "no workflow in {}; there is nothing to write instructions from",
+            args.root.display()
+        );
+    }
+
+    // Sorted by the path each document lands at, so a directory written twice holds the same files
+    // in the same order and the index reads the same both times.
+    let mut instructions: Vec<Instruction> = selected
+        .iter()
+        .map(|workflow| {
+            prose::instruction(
+                &Scene::build(workflow, None),
+                &Obligations::of(workflow, principles.iter().copied()),
+            )
+        })
+        .collect();
+    instructions.sort_by(|one, other| one.path.cmp(&other.path));
+
+    if args.id.is_some() {
+        let only = instructions.first().expect("one workflow was selected");
+        return write_text(&only.document, args.out.as_deref());
+    }
+
+    let Some(directory) = args.out.as_deref() else {
+        bail!(
+            "{} workflows would be written, so this needs somewhere to put them: pass \
+             `--out DIR` for a directory of documents, or `--id <workflow>` for one on standard \
+             output",
+            instructions.len()
+        );
+    };
+    write_tree(&instructions, directory)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Writes a directory of instruction documents, and the index over them.
+///
+/// It writes and it does not delete: a document for a workflow the tree no longer declares is a
+/// stale instruction, and finding it is the drift check's job, not this verb's. A verb that pruned
+/// a directory the caller named would be a verb that removes files somebody else put there.
+fn write_tree(instructions: &[Instruction], directory: &Path) -> Result<()> {
+    for instruction in instructions {
+        let path = directory.join(&instruction.path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
+        std::fs::write(&path, &instruction.document)
+            .with_context(|| format!("writing {}", path.display()))?;
+        crate::write_out(&format!("{}\n", path.display()), false);
+    }
+    let index = directory.join(INDEX);
+    std::fs::write(&index, prose::index(instructions))
+        .with_context(|| format!("writing {}", index.display()))?;
+    crate::write_out(&format!("{}\n", index.display()), false);
+    Ok(())
 }
 
 /// `protocol workflow render`
@@ -152,20 +262,26 @@ fn render(args: &RenderArgs) -> Result<ExitCode> {
 
 /// The workflow named by `--id`, from the document tree.
 fn workflow(args: &RenderArgs) -> Result<Workflow> {
-    let reference: WorkflowRef = args
-        .id
-        .parse()
-        .with_context(|| format!("`{}` is not a workflow reference", args.id))?;
     let registry = crate::load(&args.root)?;
-    registry.workflow(&reference).cloned().ok_or_else(|| {
+    named(&registry, &args.id, &args.root).cloned()
+}
+
+/// The workflow `id` names, or a refusal that says what the tree does declare.
+///
+/// Shared by both verbs, because "no workflow `adp/defualt`" is the same mistake whichever of them
+/// was asked, and a reader who mistyped an id needs the list either way.
+fn named<'a>(registry: &'a Registry, id: &str, root: &Path) -> Result<&'a Workflow> {
+    let reference: WorkflowRef = id
+        .parse()
+        .with_context(|| format!("`{id}` is not a workflow reference"))?;
+    registry.workflow(&reference).ok_or_else(|| {
         let known: Vec<String> = registry
             .workflows()
             .map(|workflow| workflow.id.to_string())
             .collect();
         anyhow::anyhow!(
-            "no workflow `{}` in {}; the tree declares: {}",
-            args.id,
-            args.root.display(),
+            "no workflow `{id}` in {}; the tree declares: {}",
+            root.display(),
             if known.is_empty() {
                 "none".to_owned()
             } else {

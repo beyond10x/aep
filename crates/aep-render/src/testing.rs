@@ -14,6 +14,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use aep_domain::ids::StateId;
+use aep_domain::principle::{Principle, RawPrinciple};
 use aep_domain::workflow::{RawWorkflow, Workflow};
 
 use crate::run::{RunStatus, RunView};
@@ -44,6 +45,54 @@ pub fn workflow_at(relative: &str) -> Workflow {
     let raw: RawWorkflow =
         serde_yaml::from_str(&text).unwrap_or_else(|error| panic!("parsing {relative}: {error}"));
     Workflow::try_from(raw).unwrap_or_else(|errors| panic!("validating {relative}: {errors}"))
+}
+
+/// Every principle the repository ships, validated, in path order.
+///
+/// The real documents, for the reason [`fixture_workflow`] reads the real workflow: a rendering
+/// checked against a hand-written copy of `test-driven` is a check on the copy. Read one directory
+/// deep, which is how `principles/` is laid out — the four layers of design §26, one directory
+/// each.
+pub fn fixture_principles() -> Vec<Principle> {
+    let root = repo_root().join("principles");
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for area in read_sorted(&root) {
+        if area.is_dir() {
+            paths.extend(read_sorted(&area));
+        }
+    }
+    paths
+        .iter()
+        .filter(|path| path.extension().is_some_and(|it| it == "yaml"))
+        .map(|path| {
+            let text = std::fs::read_to_string(path)
+                .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
+            principle_from(&text)
+        })
+        .collect()
+}
+
+/// One principle from its document text, validated.
+///
+/// Written as a document and validated rather than assembled as a struct literal, for invariant 2's
+/// reason: a fixture that dodged validation could describe a principle the loader would refuse.
+pub fn principle_from(document: &str) -> Principle {
+    let raw: RawPrinciple =
+        serde_yaml::from_str(document).unwrap_or_else(|error| panic!("parsing: {error}"));
+    Principle::try_from(raw).unwrap_or_else(|errors| panic!("validating: {errors}"))
+}
+
+/// The entries of `directory`, in path order.
+///
+/// Sorted, because `read_dir` yields whatever order the filesystem holds, and a fixture set that
+/// changes order between machines makes a byte-identity test fail for a reason nobody changed.
+fn read_sorted(directory: &Path) -> Vec<PathBuf> {
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("reading {}: {error}", directory.display()))
+        .map(|entry| entry.expect("a readable directory entry").path())
+        .collect();
+    entries.sort();
+    entries
 }
 
 /// A synthetic workflow over `states`, wired by `edges`, ending at `terminal`.

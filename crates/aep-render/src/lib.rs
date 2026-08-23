@@ -23,6 +23,16 @@
 //! out*. PNG is the fourth and it is not here — it is the SVG handed to `rsvg-convert` by the
 //! caller, because rasterising means running another program and this crate runs nothing.
 //!
+//! # And one rendering that is not a picture
+//!
+//! [`prose`] writes the same scene as **instructions**: the states as things you may not enter yet,
+//! the guards as what opens each move, and — this part a picture has no room for — the principles
+//! that time obligations against the phases those states declare, joined to the states they land
+//! on by [`obligations`]. It exists because the alternative to a rendered instruction document is
+//! somebody typing the rules into a prompt, which is a claim about the specification rather than a
+//! projection of it. The documents it produces are committed under `generated/instructions/` and
+//! held byte-identical, so an instruction cannot drift from the workflow it describes.
+//!
 //! What that shape buys is **live mode for free**: watching a driver run advance is rebuilding the
 //! [`RunView`], rebuilding the scene and emitting again. There is no per-backend state to
 //! invalidate, so there is nothing to get out of step.
@@ -60,6 +70,8 @@
 pub mod ansi;
 pub mod html;
 pub mod layout;
+pub mod obligations;
+pub mod prose;
 pub mod run;
 pub mod scene;
 pub mod svg;
@@ -69,5 +81,7 @@ pub mod theme;
 mod testing;
 
 pub use layout::Layout;
+pub use obligations::Obligations;
+pub use prose::Instruction;
 pub use run::{RunStatus, RunView};
 pub use scene::{Edge, EdgeAccent, Node, NodeAccent, Scene};

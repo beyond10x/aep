@@ -164,6 +164,12 @@ pub struct Node {
     pub terminal: bool,
     /// Whether work done here cannot be undone.
     pub irreversible: bool,
+    /// What the document says happens when a requirement here is not met.
+    ///
+    /// Carried even though no picture draws it: a rendering that leaves out *roll back, and only
+    /// while there is a revision to roll back to* has dropped the sentence a reader most needs at
+    /// three in the morning. [`crate::prose`] writes it out.
+    pub on_failure: Option<String>,
     /// What the overlay says about it.
     pub accent: NodeAccent,
     /// How many times the run entered it, when the caller knew.
@@ -192,6 +198,8 @@ pub struct Edge {
     pub description: Option<String>,
     /// Structured requirements on the transition, one line each.
     pub requires: Vec<String>,
+    /// What the document says happens when the guard is not met.
+    pub on_failure: Option<String>,
     /// Whether it runs back up the page.
     pub back: bool,
     /// What the overlay says about it.
@@ -216,10 +224,21 @@ pub struct Edge {
 pub struct Scene {
     /// The workflow's human title.
     pub title: String,
+    /// Its declared id, without the version.
+    ///
+    /// Beside [`Scene::reference`] rather than parsed back out of it: a caller that needs the id —
+    /// [`crate::prose`] names a file after it — must not be the second place in this workspace that
+    /// knows how a reference is spelled.
+    pub id: String,
     /// Its reference, as `<id>/<major>`.
     pub reference: String,
     /// What it is for, when the document says.
     pub summary: Option<String>,
+    /// The state work starts in.
+    ///
+    /// A picture says it by putting the box at the top; prose has to say it in words, and neither
+    /// should be deriving it from a layer number.
+    pub initial: StateId,
     /// Its states, in layer then column order.
     pub nodes: Vec<Node>,
     /// Its transitions, in declaration order.
@@ -276,8 +295,10 @@ impl Scene {
 
         Self {
             title: workflow.title.clone(),
+            id: workflow.id.to_string(),
             reference: format!("{}/{}", workflow.id, workflow.version.get()),
             summary: workflow.summary.clone(),
+            initial: workflow.initial.clone(),
             width: canvas_width(&grid, &gutters, &nodes, &edges, &reasons),
             height,
             footer_y,
@@ -472,6 +493,7 @@ fn laid_out_nodes(
                 requires: requirement_lines(&declared.requires),
                 terminal: declared.is_terminal(),
                 irreversible: declared.irreversible,
+                on_failure: declared.on_failure.as_ref().map(ToString::to_string),
                 accent: accent_of(state, declared.is_terminal(), run),
                 visits: run.and_then(|view| view.visits_of(state)),
                 layer,
@@ -511,6 +533,7 @@ fn laid_out_edges(
             guard,
             description: transition.description.clone(),
             requires: requirement_lines(&transition.requires),
+            on_failure: transition.on_failure.as_ref().map(ToString::to_string),
             back,
             accent: match (taken, back) {
                 (0, _) => EdgeAccent::Idle,
@@ -669,7 +692,11 @@ fn guard_of(transition: &Transition) -> Option<String> {
 /// The order is the declaration order of the fields, not any evaluated ordering: this is a
 /// description of the document, and a renderer that sorted requirements by whether they hold would
 /// be evaluating a workflow it has no engine to evaluate with.
-fn requirement_lines(requires: &RequirementSet) -> Vec<String> {
+///
+/// Shared with [`crate::obligations`], which renders a principle's requirement sets through it: a
+/// requirement reads the same whether a state, a transition or a principle imposes it, and two
+/// spellings of one requirement would be two things for a reader to reconcile.
+pub(crate) fn requirement_lines(requires: &RequirementSet) -> Vec<String> {
     let mut lines = Vec::new();
     for predicate in &requires.predicates {
         lines.push(predicate.to_string());
@@ -687,7 +714,21 @@ fn requirement_lines(requires: &RequirementSet) -> Vec<String> {
         lines.push(approval.to_string());
     }
     for conditional in &requires.conditional {
-        lines.push(format!("if {} then …", conditional.when));
+        // Expanded rather than elided. On a canvas an ellipsis is a reasonable trade — the box is
+        // 260 pixels wide — but these lines are also read as instructions, and *if a production
+        // deployment happened then …* tells a reader to do something and declines to say what. No
+        // committed workflow carries a conditional requirement, so nothing about the figures moves;
+        // four principles do, and their obligations are the ones a person has to act on.
+        let inner = requirement_lines(&conditional.require);
+        if inner.is_empty() {
+            lines.push(format!("if {} then …", conditional.when));
+        } else {
+            lines.push(format!(
+                "if {} then: {}",
+                conditional.when,
+                inner.join("; ")
+            ));
+        }
     }
     lines
 }

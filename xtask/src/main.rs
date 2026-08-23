@@ -250,9 +250,17 @@ const REALIZATIONS: &[(&str, &str)] = &[
 /// The subtrees of `generated/` the projection task does not own.
 ///
 /// Exactly the nested owners' roots, relative to [`PROJECTIONS`] — the ownership test refuses an
-/// entry here that no task owns, because an unowned exclusion is a hole in the drift check that
+/// entry here that nothing owns, because an unowned exclusion is a hole in the drift check that
 /// nobody scans.
-const PROJECTION_EXCLUSIONS: &[&str] = &["go", "rust", "web"];
+///
+/// `instructions` is the one whose owner is **not a task in this file**, and it is written down
+/// here because that is the sort of thing an exclusion list hides. `generated/instructions/` holds
+/// the instruction documents rendered from the workflows and the principles timed against their
+/// phases; it is written by the verb a person runs, `protocol workflow instruct`, and drift-checked
+/// in both directions — orphans included — by `crates/protocol-cli/tests/instructions.rs`, which
+/// the gate's `test` step runs. A task here would be a second writer for a tree that already has
+/// one, which is what the [module documentation](self) forbids.
+const PROJECTION_EXCLUSIONS: &[&str] = &["go", "instructions", "rust", "web"];
 
 /// The example observation bundle, and the IR document committed beside it.
 ///
@@ -3233,7 +3241,13 @@ mod tests {
         // Nesting is therefore only legal when the outer owner's scan *provably* does not enter
         // the inner root — the exclusion list is the mechanism, and this test is what makes an
         // exclusion list safe to have: an uncovered nesting fails, and so does an exclusion that
-        // no task owns, because an unowned exclusion is a subtree nobody checks for drift.
+        // nothing owns, because an unowned exclusion is a subtree nobody checks for drift.
+        //
+        // One entry's owner is not a task in this file. `generated/instructions` is written by
+        // `protocol workflow instruct` and drift-checked by
+        // `crates/protocol-cli/tests/instructions.rs`, both directions; what this list holds is
+        // *committed trees that something checks*, and the reason a tree is in it is that the scan
+        // above must not walk into somebody else's.
         let owners: &[(&str, &[&str])] = &[
             ("schemas/generated", &[]),
             (PROJECTIONS, PROJECTION_EXCLUSIONS),
@@ -3241,6 +3255,7 @@ mod tests {
             (SYNTH, &[]),
             (SYNTH_GO, &[]),
             (SYNTH_WEB, &[]),
+            ("generated/instructions", &[]),
             (OBSERVATION_PROJECTION, &[]),
         ];
 
@@ -3272,7 +3287,7 @@ mod tests {
                 let excluded_root = format!("{root}/{entry}");
                 assert!(
                     owners.iter().any(|(owner, _)| *owner == excluded_root),
-                    "`{root}` excludes `{entry}`, but no task owns `{excluded_root}` — an \
+                    "`{root}` excludes `{entry}`, but nothing owns `{excluded_root}` — an \
                      unowned exclusion is a subtree nothing checks for drift"
                 );
             }
