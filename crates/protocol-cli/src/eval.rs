@@ -103,6 +103,14 @@ enum Arm {
     Plugin,
     /// The run is driven, and every tool call is decided at a seam.
     Driven,
+    /// The loop is ours, and the published toolset **is** the policy.
+    ///
+    /// The fourth treatment, and it is not a fourth flavour of the third. In `plugin` the policy is
+    /// injected into a vendor's loop; in `driven` it is imposed on one from outside, per call, at a
+    /// seam. Here there is no vendor loop: the tools a run may call are computed from what the
+    /// machine can confine and published, so a tool outside the surface is not refused — it does
+    /// not exist. What this arm measures is whether *that* changes what a model does.
+    Native,
 }
 
 impl Arm {
@@ -112,6 +120,7 @@ impl Arm {
             "raw" => Some(Self::Raw),
             "plugin" => Some(Self::Plugin),
             "driven" => Some(Self::Driven),
+            "native" => Some(Self::Native),
             _ => None,
         }
     }
@@ -122,6 +131,7 @@ impl Arm {
             Self::Raw => "raw",
             Self::Plugin => "plugin",
             Self::Driven => "driven",
+            Self::Native => "native",
         }
     }
 
@@ -1523,6 +1533,8 @@ pub(crate) enum Harness {
     Claude,
     /// Codex.
     Codex,
+    /// The b10x harness: our own agent loop, over a model API directly.
+    B10x,
 }
 
 impl Harness {
@@ -1531,6 +1543,7 @@ impl Harness {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::B10x => "b10x",
         }
     }
 
@@ -1539,6 +1552,12 @@ impl Harness {
         match self {
             Self::Claude => "integrations/claude-code",
             Self::Codex => "integrations/codex",
+            // There is no plugin, and there is no arm that would inject one. `b10x` holds its own
+            // loop, so `plugin` - *the shipped plugin is installed and nothing decides the agent's
+            // calls* - has no meaning for it: there is no vendor surface to install into. The path
+            // is named so the type stays total; a run that reached for it is refused by the arm
+            // check before it gets here.
+            Self::B10x => "integrations/b10x",
         }
     }
 }
@@ -1565,6 +1584,8 @@ enum RunRefusal {
     NoBudget,
     /// Arm `driven` is not launched from here.
     DrivenIsNotLaunchedHere,
+    /// Arm `native` is not launched from here either, and for a different reason.
+    NativeIsNotLaunchedHere,
     /// A live spawn was asked for with no tree for the session to work in.
     NoWorkingTree,
     /// The cap would be exceeded by the next run.
@@ -1619,6 +1640,7 @@ impl RunRefusal {
             Self::StreamIsOneRun { .. } => "EVAL-RUN-008",
             Self::InstructionsMissing { .. } => "EVAL-RUN-009",
             Self::SpawnFailed { .. } => "EVAL-RUN-010",
+            Self::NativeIsNotLaunchedHere => "EVAL-RUN-011",
         }
     }
 }
@@ -1652,6 +1674,17 @@ impl fmt::Display for RunRefusal {
                  programme wrote a cap into its plan to avoid — the runner reads each run's cost \
                  out of its own stream and stops launching when the next one would exceed what you \
                  named"
+            ),
+            Self::NativeIsNotLaunchedHere => write!(
+                f,
+                "arm `native` is not launched by this verb — `b10x-harness` is its own loop and \
+                 launches itself. Every other arm is a treatment applied to a vendor harness that \
+                 `metaharness` drives from outside; `native` has no vendor harness in it, so there \
+                 is nothing here to drive. Spawning one from this verb would mean this binary held \
+                 a second launcher for a component that already has one.\n\
+                 \n\
+                 What this verb does with a native run is **read** it: run it with `b10x-harness`, \
+                 then ingest the event stream with `protocol eval run --arm native --stream <file>`."
             ),
             Self::DrivenIsNotLaunchedHere => write!(
                 f,
@@ -2868,6 +2901,12 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             &[RunRefusal::DrivenIsNotLaunchedHere],
         ));
     }
+    if args.arm == Arm::Native {
+        return Err(refused_run(
+            &args.out,
+            &[RunRefusal::NativeIsNotLaunchedHere],
+        ));
+    }
     let Some(budget) = &args.budget_usd else {
         return Err(refused_run(&args.out, &[RunRefusal::NoBudget]));
     };
@@ -3701,5 +3740,57 @@ observed_at: 2026-08-23
             read(&text).is_ok(),
             "and a manifest with two written nulls in it is one the matrix reads: {text}"
         );
+    }
+}
+
+#[cfg(test)]
+mod native_arm_tests {
+    use super::*;
+
+    #[test]
+    fn the_fourth_arm_is_a_word_the_manifest_reads_and_writes() {
+        assert_eq!(Arm::parse("native"), Some(Arm::Native));
+        assert_eq!(Arm::Native.as_str(), "native");
+        assert_eq!(Harness::B10x.as_str(), "b10x");
+    }
+
+    #[test]
+    fn the_arms_still_sort_in_the_order_the_experiment_runs_them() {
+        // `native` last, because it is the arm that removes the vendor loop entirely and every
+        // other arm is a treatment applied to one.
+        let mut arms = vec![Arm::Native, Arm::Driven, Arm::Raw, Arm::Plugin];
+        arms.sort();
+        assert_eq!(
+            arms,
+            vec![Arm::Raw, Arm::Plugin, Arm::Driven, Arm::Native]
+        );
+    }
+
+    #[test]
+    fn a_native_run_is_refused_a_spawn_and_told_what_does_launch_it() {
+        // Same position as `driven` and a different reason, which the message has to carry: a
+        // driven run is launched by `protocol drive run` because there must be one policy; a
+        // native run is launched by `b10x-harness` because it *is* the loop and there is no vendor
+        // harness here to drive.
+        let refusal = RunRefusal::NativeIsNotLaunchedHere.to_string();
+        assert!(refusal.starts_with("EVAL-RUN-011"), "{refusal}");
+        assert!(refusal.contains("b10x-harness"), "{refusal}");
+        assert!(refusal.contains("--arm native --stream"), "{refusal}");
+        assert!(
+            refusal.contains("no vendor harness in it"),
+            "and says why it differs from driven: {refusal}"
+        );
+    }
+
+    #[test]
+    fn every_arm_has_a_code_of_its_own_and_none_is_reused() {
+        let codes = [
+            RunRefusal::NotLive.code(),
+            RunRefusal::NoBudget.code(),
+            RunRefusal::DrivenIsNotLaunchedHere.code(),
+            RunRefusal::NativeIsNotLaunchedHere.code(),
+        ];
+        let unique: std::collections::BTreeSet<&str> = codes.iter().copied().collect();
+        assert_eq!(unique.len(), codes.len(), "{codes:?}");
     }
 }
