@@ -55,9 +55,30 @@
 //! crate's private `json` module exists to hold in one place — and nothing here turns an
 //! unrecorded quantity into a zero.
 //!
-//! What the wire does not carry at all is named where it is read rather than left to be
-//! discovered: `run_usage` for the three usage figures, `model_usage` for per-model cost, and
-//! `tool_result` for the per-tool result fields. Each becomes `unk` in a verdict, never a pass.
+//! # Amendment a9, and why nothing about the rule above changed
+//!
+//! Four expectation kinds used to be undecidable here because the wire had no key for what they
+//! read — `skill.completed`, `tokens.thinking`, `iterations`, `speed`, and a `cost.total` scoped to
+//! one model. That was a gap in this repository's register with *"not this repository's to close:
+//! it is four fields at the seam"* against it, and metaharness closed it from the other side:
+//! protocol amendment a9 (2026-08-23) gives `tool.result` a `tool_use_result` — the vendor's own
+//! per-tool record, verbatim — and gives every `usage` payload `thinking_tokens`, `iterations`,
+//! `speed` and `cost_usd`.
+//!
+//! This reader now lifts all five, and **not one rule above moved**. A key whose value is `null`
+//! reads exactly as a key that was never there, because the vendor answered nothing and a reader
+//! that turned silence into a pass is the failure this whole module is built against. Codex writes
+//! `null` for every one of them but `thinking_tokens`; Claude fills the three usage figures on the
+//! terminal record only and prices the per-model split alone, so a per-request `usage` carrying
+//! four nulls is a healthy Claude run and not a broken capture. So the amendment made those kinds
+//! *decidable where a value arrives* and changed nothing about what happens where none does.
+//!
+//! Two figures the wire carries that the IR still has no home for, named here rather than left to
+//! be discovered: the a9 keys on a **per-request** `usage`, which becomes an [`AssistantRequest`]
+//! with four token fields, and the three non-cost figures on a **per-model** record, which becomes
+//! a [`ModelUsage`] with none of them. Neither is read by any expectation kind. What is *computed*
+//! is nothing at all: the aggregate `usage` carries no cost on this wire by amendment, and the
+//! run's own figure stays `session.ended.total_cost_usd`.
 //!
 //! # What refuses, and what does not
 //!
@@ -87,7 +108,9 @@ use trace_domain::ir::{
     RunOutcome, RunUsage, SessionStart, ToolCall, ToolResult, TraceEvent, TraceIr,
 };
 
-use crate::json::{compact, i64_at, mcp_servers_at, names_at, plugins_at, str_at, text_at, u64_at};
+use crate::json::{
+    compact, i64_at, mcp_servers_at, names_at, plugins_at, result_fields, str_at, text_at, u64_at,
+};
 
 /// The format tag every line of this wire carries.
 pub const EVENT_STREAM_FORMAT: &str = "metaharness.event/1";
@@ -325,6 +348,11 @@ fn read_event(
         // One API request's usage. It is a request record and not an event: the IR's `requests`
         // is what `api_requests`, `events.assistant` and the per-request series read, and an event
         // family for it would be a second copy of numbers the terminal record already totals.
+        //
+        // Amendment a9's four keys ride this payload too and are dropped here, because an
+        // `AssistantRequest` has four token fields and no home for them. Nothing is lost that any
+        // expectation reads: `tokens.thinking`, `iterations` and `speed` are run-wide kinds and
+        // come off the terminal record, which is also the only record Claude fills them on.
         Some("usage") => {
             let usage = value.get("usage");
             requests.push(AssistantRequest {
@@ -451,30 +479,50 @@ fn permission_denials(value: &Value, seam: &Seam) -> Option<u64> {
 
 /// Reads the run's aggregate usage.
 ///
-/// Three of [`RunUsage`]'s fields have no key on this wire and stay [`None`]: `thinking_tokens`
-/// (metaharness carries the vendor's usage figures and not the API's `output_tokens_details`
-/// breakdown), `iterations` and `speed`. So `tokens.thinking`, `iterations` and `speed` read `unk`
-/// against an event stream — the honest verdict for a quantity the record does not carry, and the
-/// thing to fix at the seam rather than here if it is ever wanted.
+/// `thinking_tokens`, `iterations` and `speed` are amendment a9's, and each is read straight off
+/// the payload with no arithmetic and no substitution. Two substitutions this reader could have
+/// made and refuses by name, because both would answer the question with a different question's
+/// evidence:
+///
+/// * `thinking_tokens` is **not** filled from a `thinking.estimate` event. One is the billed figure
+///   the vendor reported and the other is the harness's live guess mid-stream; a specification that
+///   bounds billed thinking is bounding an invoice.
+/// * `iterations` is a **length the vendor read off its own per-iteration list**, never a count of
+///   anything this reader saw go past. Counting `usage` events would produce a number that moves
+///   with how the vendor chose to stream, which is not what the kind asks.
+///
+/// Where the vendor reported none of them the wire carries three explicit `null`s and this yields
+/// three [`None`]s, so `tokens.thinking`, `iterations` and `speed` read `unk` — the pre-a9 verdict,
+/// still correct, and still never a pass.
 fn run_usage(usage: &Value) -> RunUsage {
     RunUsage {
         input_tokens: u64_at(usage, "input_tokens"),
         output_tokens: u64_at(usage, "output_tokens"),
         cache_read_input_tokens: u64_at(usage, "cache_read_input_tokens"),
         cache_creation_input_tokens: u64_at(usage, "cache_creation_input_tokens"),
-        thinking_tokens: None,
-        iterations: None,
-        speed: None,
+        thinking_tokens: u64_at(usage, "thinking_tokens"),
+        // A `u64` on the wire and a `usize` in the IR. A length that does not fit the machine's
+        // pointer width is not a length this run produced, so it reads as *not recorded* rather
+        // than as a truncation nobody would notice.
+        iterations: u64_at(usage, "iterations").and_then(|count| usize::try_from(count).ok()),
+        speed: text_at(usage, "speed"),
         service_tier: text_at(usage, "service_tier"),
     }
 }
 
 /// Reads the terminal record's per-model breakdown, where it has one.
 ///
-/// Snake-cased keys, unlike the `stream-json` adapter's camel-cased ones, and with no per-model
-/// cost at all: the wire's per-model record is the same usage shape as the aggregate, so
-/// [`ModelUsage::cost_usd`] stays [`None`] and a `cost.total` scoped to a model reads `unk`. The
-/// run's own `total_cost_usd` is unaffected.
+/// Snake-cased keys, unlike the `stream-json` adapter's camel-cased ones, and — since amendment a9
+/// — with the per-model cost the vendor priced. `cost_usd` is per-model *only* on this wire: the
+/// aggregate carries it as `null` by the amendment's own rule, because a run total assembled from
+/// token counts and a rate card is a second figure that can disagree with the invoice. So
+/// `cost.total` scoped to a model reads the vendor's number, and `cost.total` for the run keeps
+/// reading `session.ended.total_cost_usd`.
+///
+/// A model whose entry prices nothing stays [`None`] and reads `unk`. The other three a9 figures
+/// ride the per-model record too and have no [`ModelUsage`] field to land in; no expectation kind
+/// asks for them per model, and inventing a field for a question nobody asks is how an IR grows a
+/// surface nothing keeps true.
 fn model_usage(value: &Value) -> Option<BTreeMap<String, ModelUsage>> {
     let models = value.get("model_usage")?.as_object()?;
     Some(
@@ -488,7 +536,7 @@ fn model_usage(value: &Value) -> Option<BTreeMap<String, ModelUsage>> {
                         output_tokens: u64_at(usage, "output_tokens"),
                         cache_read_input_tokens: u64_at(usage, "cache_read_input_tokens"),
                         cache_creation_input_tokens: u64_at(usage, "cache_creation_input_tokens"),
-                        cost_usd: None,
+                        cost_usd: usage.get("cost_usd").and_then(Value::as_f64),
                     },
                 )
             })
@@ -534,11 +582,17 @@ fn tool_call(value: &Value) -> Option<ToolCall> {
 ///   them. metaharness states that an absent payload field is the `unk` verdict, so `tool.failed`
 ///   and `tool.error_rate` report `unk` over results whose flag was not recorded rather than
 ///   reporting success. Acceptance is exactly this: an absent field stays absent, never zero.
-/// * **The per-tool result fields are empty.** Claude Code's `tool_use_result` sibling — where
-///   `Skill` records `commandName` and `success`, `Bash` its `stdout` and `interrupted` — is not
-///   carried on this wire, so `skill.completed` and any `tool.result` matcher naming such a field
-///   read `unk` against an event stream. Where the *content itself* is a JSON object its keys are
-///   addressable, which is the one case this reader can honestly offer.
+/// * **The per-tool result fields are the vendor's own record, and only that.** Amendment a9 gives
+///   this event a `tool_use_result` carrying whatever the vendor wrote beside the content — `Skill`
+///   its `commandName` and `success`, `Bash` its `stdout`, `stderr` and `interrupted` — which is
+///   what makes `skill.completed` decidable about a driven run. Where the vendor wrote none it is
+///   an explicit `null`: Codex writes no such record at all, and a call the seam refused never
+///   reached a vendor to write one. `null` leaves the map empty and every matcher over it `unk`.
+///   The fallback below the vendor's record is the one this reader offered before a9 and still
+///   offers where there is no record: a *content* that is itself a JSON object is addressable key
+///   by key. The vendor's record wins where there is one, because it is the vendor's answer and
+///   the content is a reading of it — merging the two would leave nobody able to say which layer
+///   claimed what.
 fn tool_result(value: &Value) -> ToolResult {
     let recorded = value.get("content");
     let content = match recorded {
@@ -546,13 +600,15 @@ fn tool_result(value: &Value) -> ToolResult {
         Some(Value::Null) | None => None,
         Some(other) => Some(compact(other)),
     };
-    let fields: BTreeMap<String, Recorded> = match recorded {
-        Some(Value::Object(object)) => object
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect(),
-        _ => BTreeMap::new(),
-    };
+    let mut fields: BTreeMap<String, Recorded> = result_fields(value);
+    if fields.is_empty() {
+        if let Some(Value::Object(object)) = recorded {
+            fields = object
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+        }
+    }
     ToolResult {
         call_id: text_at(value, "call_id"),
         is_error: value.get("is_error").and_then(Value::as_bool),
@@ -861,7 +917,65 @@ mod tests {
         assert_eq!(result.content_bytes, 2);
         assert!(
             result.fields.is_empty(),
-            "the vendor's per-tool result sibling is not carried on this wire"
+            "a line from before amendment a9 carries no vendor record, and a reader must not \
+             invent one out of the content"
+        );
+    }
+
+    #[test]
+    fn the_vendors_own_result_record_is_what_a_per_tool_field_is_read_from() {
+        // Amendment a9's first field, and the one that makes `skill.completed` decidable about a
+        // driven run: the vendor's record arrives verbatim, and its keys are the ones the kind
+        // reads.
+        let ir = read(
+            r#"{"event":"tool.result","call_id":"c-1","is_error":false,"content":"loaded","bytes":6,
+                "tool_use_result":{"commandName":"engineering-protocols:planning","success":true}}"#,
+        );
+        let result = ir.events[0].tool_result().expect("a result");
+        assert_eq!(
+            result.field("commandName"),
+            Some(&Value::from("engineering-protocols:planning"))
+        );
+        assert_eq!(result.field("success"), Some(&Value::Bool(true)));
+        assert_eq!(
+            result.content.as_deref(),
+            Some("loaded"),
+            "the vendor's record is read beside the content and never in place of it"
+        );
+    }
+
+    #[test]
+    fn a_vendor_that_recorded_nothing_leaves_the_result_fields_empty_rather_than_passing() {
+        // The fail-closed half of a9, on the wire this reader actually meets it on. Codex writes
+        // `null` here for every tool, and a call the seam refused never reached a vendor to write
+        // one. Reading either as *the skill completed* is the failure this module is built against.
+        let ir = read(
+            r#"{"event":"tool.result","call_id":"c-1","is_error":false,"content":"loaded","bytes":6,"tool_use_result":null}"#,
+        );
+        let result = ir.events[0].tool_result().expect("a result");
+        assert!(result.fields.is_empty());
+        assert_eq!(
+            result.field("success"),
+            None,
+            "no field to match on is the whole point: `skill.completed` reads `unk`, not `ok`"
+        );
+    }
+
+    #[test]
+    fn the_vendors_record_wins_over_a_reading_of_the_content() {
+        // Both are present and they disagree. Merging them would leave nobody able to say which
+        // layer claimed what, so the vendor's own record is the answer and the content's keys are
+        // the fallback for a result that carries no record at all.
+        let ir = read(
+            r#"{"event":"tool.result","call_id":"c-1","is_error":false,
+                "content":{"commandName":"planning","success":false},"bytes":41,
+                "tool_use_result":{"commandName":"engineering-protocols:planning","success":true}}"#,
+        );
+        let result = ir.events[0].tool_result().expect("a result");
+        assert_eq!(result.field("success"), Some(&Value::Bool(true)));
+        assert_eq!(
+            result.field("commandName"),
+            Some(&Value::from("engineering-protocols:planning"))
         );
     }
 
@@ -914,13 +1028,15 @@ mod tests {
     }
 
     #[test]
-    fn the_terminal_record_reads_the_usage_the_wire_carries_and_no_more() {
+    fn the_terminal_record_reads_every_usage_figure_the_wire_carries() {
+        // Shaped as amendment a9 states Claude fills it: the three figures on the terminal
+        // aggregate, the price on the per-model split, and no cost on the aggregate at all.
         let ir = read(
             r#"{"event":"session.ended","is_error":false,"num_turns":7,"duration_ms":4200,
                 "duration_api_ms":3900,"ttft_ms":700,"time_to_request_ms":80,"total_cost_usd":0.0123,
                 "subagents_spawned":0,
-                "usage":{"input_tokens":1200,"output_tokens":48,"cache_read_input_tokens":900,"cache_creation_input_tokens":0,"service_tier":"standard"},
-                "model_usage":{"m":{"input_tokens":1200,"output_tokens":48,"cache_read_input_tokens":900,"cache_creation_input_tokens":0,"service_tier":null}},
+                "usage":{"input_tokens":1200,"output_tokens":48,"cache_read_input_tokens":900,"cache_creation_input_tokens":0,"service_tier":"standard","thinking_tokens":64,"iterations":3,"speed":"standard","cost_usd":null},
+                "model_usage":{"m":{"input_tokens":1200,"output_tokens":48,"cache_read_input_tokens":900,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":0.0123}},
                 "census":{"allowed":2,"denied":0,"replaced":0,"abstained":0,"by_seam":{},"by_decider":{}}}"#,
         );
         let outcome = ir.run_outcome().expect("a terminal record");
@@ -929,17 +1045,102 @@ mod tests {
         assert_eq!(usage.service_tier.as_deref(), Some("standard"));
         assert_eq!(
             (usage.thinking_tokens, usage.iterations, usage.speed.clone()),
-            (None, None, None),
-            "three quantities this wire does not carry: `unk` in a verdict, never a pass"
+            (Some(64), Some(3), Some("standard".to_owned())),
+            "amendment a9's three usage figures, read where the vendor reported them"
         );
         let per_model = outcome.model_usage.as_ref().expect("the per-model record");
         assert_eq!(per_model["m"].input_tokens, Some(1200));
         assert_eq!(
-            per_model["m"].cost_usd, None,
-            "the wire's per-model record carries no cost, so a cost scoped to a model is `unk`"
+            per_model["m"].cost_usd,
+            Some(0.0123),
+            "cost is priced per model on this wire, which is what a `cost.total` with a model \
+             scope reads"
+        );
+        assert_eq!(
+            outcome.total_cost_usd,
+            Some(0.0123),
+            "and the run's own figure stays the vendor's, never a sum of the split"
         );
         assert_eq!(outcome.subagents_spawned, Some(0));
         assert_eq!(outcome.num_turns, Some(7));
+    }
+
+    #[test]
+    fn a_usage_record_that_answers_none_of_the_a9_questions_stays_unknown_on_all_four() {
+        // The polarity the amendment did not change, and the one that matters: a vendor that
+        // reported nothing writes four explicit `null`s, and a reader must produce four `None`s.
+        // A zero here would say *the model thought for no tokens* and *the run made no
+        // iterations*, and a zero cost would say *this model was free*.
+        let ir = read(
+            r#"{"event":"session.ended","is_error":false,"total_cost_usd":null,
+                "usage":{"input_tokens":9,"output_tokens":4,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null},
+                "model_usage":{"m":{"input_tokens":9,"output_tokens":4,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null}}}"#,
+        );
+        let outcome = ir.run_outcome().expect("a terminal record");
+        let usage = outcome.usage.as_ref().expect("the aggregate usage");
+        assert_eq!(usage.thinking_tokens, None);
+        assert_eq!(usage.iterations, None);
+        assert_eq!(usage.speed, None);
+        assert_eq!(
+            outcome.model_usage.as_ref().expect("a per-model record")["m"].cost_usd,
+            None,
+            "a model whose entry prices nothing is `unk`, and not a model that cost nothing"
+        );
+        assert_eq!(
+            usage.input_tokens,
+            Some(9),
+            "the figures the vendor did report are unaffected: absence is per field"
+        );
+    }
+
+    #[test]
+    fn an_iteration_count_is_the_vendors_list_length_and_never_a_tally_of_usage_events() {
+        // The substitution `run_usage` refuses by name. Three `usage` events and a vendor that
+        // read `1` off its own per-iteration list: the kind asks for the vendor's number, and a
+        // reader that counted what went past would report a figure that moves with how the vendor
+        // chose to stream.
+        let ir = stream(&[
+            r#"{"event":"usage","request_id":"r-1","model":"m","usage":{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null}}"#,
+            r#"{"event":"usage","request_id":"r-2","model":"m","usage":{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null}}"#,
+            r#"{"event":"usage","request_id":"r-3","model":"m","usage":{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null}}"#,
+            r#"{"event":"session.ended","is_error":false,"usage":{"input_tokens":3,"output_tokens":3,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":0,"iterations":1,"speed":"standard","cost_usd":null}}"#,
+        ]);
+        let usage = ir
+            .run_outcome()
+            .expect("a terminal record")
+            .usage
+            .clone()
+            .expect("the aggregate usage");
+        assert_eq!(usage.iterations, Some(1));
+        assert_eq!(ir.api_request_count(), 3, "three requests, one iteration");
+        assert_eq!(
+            usage.thinking_tokens,
+            Some(0),
+            "a reported zero is a value the vendor stated, and stays distinguishable from `null`"
+        );
+    }
+
+    #[test]
+    fn a_billed_thinking_figure_is_never_taken_from_the_harnesss_live_estimate() {
+        // The other refused substitution. The estimate is a guess mid-stream and the billed figure
+        // is an invoice; a run that carries the first and not the second must read `unk`.
+        let ir = stream(&[
+            r#"{"event":"thinking.estimate","estimate":96,"delta":96}"#,
+            r#"{"event":"session.ended","is_error":false,"usage":{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"service_tier":null,"thinking_tokens":null,"iterations":null,"speed":null,"cost_usd":null}}"#,
+        ]);
+        assert_eq!(
+            ir.last_thinking_estimate().map(|(_, estimate)| estimate),
+            Some(96)
+        );
+        assert_eq!(
+            ir.run_outcome()
+                .expect("a terminal record")
+                .usage
+                .as_ref()
+                .expect("the aggregate usage")
+                .thinking_tokens,
+            None
+        );
     }
 
     #[test]

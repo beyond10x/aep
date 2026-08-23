@@ -83,7 +83,8 @@ use trace_domain::ir::{
 };
 
 use crate::json::{
-    compact, count_at, i64_at, mcp_servers_at, names_at, plugins_at, str_at, text_at, u64_at,
+    compact, count_at, i64_at, mcp_servers_at, names_at, plugins_at, result_fields, str_at,
+    text_at, u64_at,
 };
 
 /// This adapter, and the harness versions it was written against.
@@ -436,28 +437,6 @@ fn tool_result(block: &Value, fields: &BTreeMap<String, Recorded>) -> ToolResult
         content_bytes: content.as_ref().map_or(0, String::len),
         content,
         fields: fields.clone(),
-    }
-}
-
-/// Flattens the `tool_use_result` sibling of a `user` event into the result's field map.
-///
-/// Open by construction: `Skill` records `commandName` and `success`, `Bash` records `stdout`,
-/// `stderr` and `interrupted`, `Edit` records `filePath` and `userModified`, and a tool this
-/// adapter has never heard of records whatever it records (design § 2.4). A `tool_use_result` that
-/// is not an object is kept under its own key rather than dropped, because a matcher that finds
-/// nothing must mean *the harness recorded nothing*.
-fn result_fields(value: &Value) -> BTreeMap<String, Recorded> {
-    match value.get("tool_use_result") {
-        Some(Value::Object(object)) => object
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect(),
-        Some(Value::Null) | None => BTreeMap::new(),
-        Some(other) => {
-            let mut fields = BTreeMap::new();
-            fields.insert("tool_use_result".to_owned(), other.clone());
-            fields
-        }
     }
 }
 

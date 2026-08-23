@@ -15,8 +15,10 @@
 //! Nothing here refuses anything. A shape these functions cannot read yields [`None`], which
 //! becomes an `unk` verdict rather than a wrong answer.
 
+use std::collections::BTreeMap;
+
 use serde_json::Value;
-use trace_domain::ir::{LoadedPlugin, McpServer};
+use trace_domain::ir::{LoadedPlugin, McpServer, Recorded};
 
 /// A borrowed string field, where the object records one as a string.
 pub(crate) fn str_at<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -113,6 +115,38 @@ pub(crate) fn mcp_servers_at(value: &Value) -> Option<Vec<McpServer>> {
     )
 }
 
+/// The vendor's own per-tool result record, flattened into a result's field map.
+///
+/// Both wires carry it under the same key and mean the same thing by it: Claude Code writes
+/// `tool_use_result` on the `user` event beside the `tool_result` block, and metaharness's
+/// `tool.result` carries the vendor's record verbatim under that name since protocol amendment a9.
+/// One definition rather than one per adapter, for the reason this module exists — a
+/// `skill.completed` that decided differently depending on which reader saw the run would be the
+/// harness-neutral IR failing at the one thing it is for.
+///
+/// Open by construction: `Skill` records `commandName` and `success`, `Bash` records `stdout`,
+/// `stderr` and `interrupted`, `Edit` records `filePath` and `userModified`, and a tool no reader
+/// has heard of records whatever it records (design § 2.4). A record that is not an object is kept
+/// under its own key rather than dropped, because a matcher that finds nothing must mean *the
+/// vendor recorded nothing*.
+///
+/// A recorded `null` yields an empty map, which is the whole fail-closed half of a9: a vendor that
+/// wrote no per-tool record leaves every matcher over one `unk`, and never a pass.
+pub(crate) fn result_fields(value: &Value) -> BTreeMap<String, Recorded> {
+    match value.get("tool_use_result") {
+        Some(Value::Object(object)) => object
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+        Some(Value::Null) | None => BTreeMap::new(),
+        Some(other) => {
+            let mut fields = BTreeMap::new();
+            fields.insert("tool_use_result".to_owned(), other.clone());
+            fields
+        }
+    }
+}
+
 /// Compact JSON of a value, which is what both byte measures are taken over.
 pub(crate) fn compact(value: &Value) -> String {
     serde_json::to_string(value).unwrap_or_default()
@@ -141,6 +175,32 @@ mod tests {
         let silent = serde_json::json!({});
         assert_eq!(mcp_servers_at(&silent), None, "it does not say");
         assert_eq!(count_at(&silent, "permission_denials"), None);
+    }
+
+    #[test]
+    fn a_vendor_record_written_as_null_leaves_nothing_for_a_matcher_to_find() {
+        // The fail-closed half of amendment a9, in the one function both adapters read it through.
+        // A vendor that wrote no per-tool record must not produce a field map somebody's
+        // `skill.completed` can pass on.
+        let silent = serde_json::json!({"tool_use_result": null});
+        assert!(result_fields(&silent).is_empty());
+        assert!(result_fields(&serde_json::json!({})).is_empty());
+
+        let recorded = serde_json::json!({"tool_use_result": {"success": true}});
+        assert_eq!(
+            result_fields(&recorded).get("success"),
+            Some(&Value::Bool(true))
+        );
+    }
+
+    #[test]
+    fn a_vendor_record_that_is_not_an_object_keeps_its_own_key_rather_than_vanishing() {
+        let recorded = serde_json::json!({"tool_use_result": "just a string"});
+        assert_eq!(
+            result_fields(&recorded).get("tool_use_result"),
+            Some(&Value::from("just a string")),
+            "a matcher that finds nothing must mean the vendor recorded nothing"
+        );
     }
 
     #[test]

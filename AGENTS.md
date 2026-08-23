@@ -140,9 +140,15 @@ passing one.
   own first line, so both take the same arguments, and the report names the adapter that judged
   the run. A seam denial (`tool.decided`) is what `permission.denied` counts on that wire, joined
   by call id with the vendor's own list so that one refused call is one denial however many layers
-  wrote it down. What that wire does not carry is named where it is read and reads `unk`, never a
-  pass: the vendor's per-tool result fields (so `skill.completed`), `tokens.thinking`,
-  `iterations`, `speed` and per-model cost. `protocol trace
+  wrote it down. **The reader gains a field the day the seam carries it, and gains no rule with
+  it**: metaharness amendment a9 (2026-08-23) added the vendor's own per-tool result record and
+  four `usage` keys, and `skill.completed`, `tokens.thinking`, `iterations`, `speed` and a
+  `cost.total` scoped to one model decide a driven run as a result — while a key present and `null`
+  still reads `unk` and never a pass, which is what four of those five look like against a
+  Codex-driven run and is committed as a fixture rather than claimed
+  (`crates/trace-spec/tests/fixtures/metaharness-driven-null-a9-step.jsonl`). What that wire still
+  cannot answer is named where it is read: `tool.failed` and `tool.error_rate` over a result that
+  recorded no `is_error`. `protocol trace
   check|inspect|evidence` is the surface, with `ess conform`'s exit codes — `0` conformant, `1`
   contradicted, `3` nobody found out. `evidence` runs the check and writes the AEP record it
   produced, so a verdict about a run enters the engine as a fact rather than as a claim. Nothing

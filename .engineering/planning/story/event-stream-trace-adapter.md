@@ -6,7 +6,7 @@ status: implemented
 title: A trace adapter for the metaharness event stream
 relations:
 - decomposes: epic:metaharness-migration
-revision: 5
+revision: 6
 ---
 # Story: A trace adapter for the metaharness event stream
 
@@ -33,14 +33,15 @@ recorded-fixture reader.
   as the invariant-5 guard — this wire writes every absent field as an explicit `null`, so a reader
   that took a present key for an answer would report fifteen confident zeros.
 - **Met for the two documents that describe a driven step**, and reported for the third.
-  `expectations.driven-step.trace.yaml` is 11 ok / 0 gap / 1 unk and
+  `expectations.driven-step.trace.yaml` is 12 ok / 0 gap / 0 unk and
   `expectations.denial-step.trace.yaml` is 10 ok / 0 gap / 0 unk against the committed fixtures,
   with no word of either changing. `expectations.trace.yaml` is the **interactive** plugin eval's
-  document and a driven step is not its subject: 34 ok, 3 gap, 4 unk, every row named and pinned in
+  document and a driven step is not its subject: 39 ok, 3 gap, 0 unk, every row named and pinned in
   `crates/trace-spec/tests/event_stream.rs`. Its three gaps are facts about the run — a
   metaharness session stays in the vendor's `default` permission posture because decisions arrive
   over the seam, and the driven surface refused one chained command line, which the driven-step
-  document bounds at two rather than forbidding. Its four `unk` rows are the reader's limit, below.
+  document bounds at two rather than forbidding. **The four `unk` rows this story shipped with are
+  gone**, and it is the seam that closed them rather than a rule here — below.
 - **Not this repository's to close.** The migrated eval's § 3.4 lives at metaharness
   `evals/engineering-protocols/run-driven.sh`; the reader it was waiting for exists, and switching
   the join back on is a change there.
@@ -51,12 +52,36 @@ Named rather than worked around. Each reads `unk` in a verdict, never a pass:
 
 | expectation | reason |
 |---|---|
-| `skill.completed` | metaharness's Claude adapter does not carry the vendor's `tool_use_result` sibling, so the `commandName`/`success` pair the kind reads is not on the wire. `skill.invoked` is unaffected. |
-| `tokens.thinking`, `iterations`, `speed` | the seam's `usage` payload carries five figures and none of these. |
-| `cost.total` scoped to one model | the per-model record is the same usage shape as the aggregate and carries no cost. The run's own `total_cost_usd` is unaffected. |
 | `tool.failed` / `tool.error_rate` over a result with no `is_error` | absence is the `unk` verdict on this wire, and collapsing it to *succeeded* is exactly what acceptance 1 forbids. The other adapter's opposite rule is a fact about Claude Code's transcript, not about a seam that may be carrying any vendor. |
 
-Fixing any of them is a change at the seam — in metaharness — and not a second rule here.
+Fixing it is a change at the seam — in metaharness — and not a second rule here.
+
+### The four rows that left this table, 2026-08-23
+
+This table had five rows. Four of them said the same thing in four ways — *the wire has no key for
+what this kind reads* — and the gap register carried them as one row against metaharness rather
+than against this repository: **"not this repository's to close: it is four fields at the seam …
+this reader gains them the day they arrive, with no rule changing here."**
+
+They arrived. metaharness protocol **amendment a9** (2026-08-23) gives `tool.result` a
+`tool_use_result` carrying the vendor's own per-tool record verbatim, and gives every `usage`
+payload `thinking_tokens`, `iterations`, `speed` and `cost_usd`. The row's promise held to the
+letter: `crates/trace-spec/src/event_stream.rs` lifts the five fields and **no rule changed**.
+
+| expectation | what it now reads |
+|---|---|
+| `skill.completed` | the `commandName`/`success` pair out of the `tool_use_result` sibling, through the same `crate::json::result_fields` the `stream-json` adapter reads it with — one definition, so two adapters cannot disagree about one run |
+| `tokens.thinking`, `iterations`, `speed` | the terminal record's aggregate `usage`, which is the only record Claude fills them on |
+| `cost.total` scoped to one model | `model_usage.<model>.cost_usd`, which is where the vendor prices. The aggregate carries no cost by the amendment's own rule, and the run's figure stays `session.ended.total_cost_usd` |
+
+**What did not change is the point of the entry.** A key present and `null` still reads as absence,
+so every one of those kinds is `unk` against a vendor that reported nothing — which is every
+Codex-driven run for four of the five. The polarity is committed as a fixture rather than left as a
+claim: `crates/trace-spec/tests/fixtures/metaharness-driven-null-a9-step.jsonl` carries all five
+keys explicitly `null`, and `a_field_the_vendor_reported_as_null_is_unknown_and_never_ok` requires
+`unk` for each. Two substitutions the reader could have made are refused by name and tested —
+`thinking_tokens` is never taken from a `thinking.estimate`, and `iterations` is never a tally of
+`usage` events.
 
 ## Out of Scope
 

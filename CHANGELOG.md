@@ -96,10 +96,28 @@ belongs in the commit message or in `docs/design/`.
   recorded fixtures. What a driven run gains: **a denial the seam took is counted**, so
   `permission.denied` means something in a run where the vendor's own array is empty because
   enforcement worked first — one refused call is one denial however many layers wrote it down.
-  What a driven run cannot answer, because the seam's wire does not carry it: `skill.completed`
-  (the vendor's per-tool result fields), `tokens.thinking`, `iterations`, `speed`, and a
-  `cost.total` scoped to one model. Each reads `unk`, never a pass. Acceptance:
-  `story:event-stream-trace-adapter`.
+  What a driven run could not answer when this reader was written — `skill.completed`,
+  `tokens.thinking`, `iterations`, `speed`, and a `cost.total` scoped to one model — it can answer
+  now, and the entry below says how. What still reads `unk`: `tool.failed` and `tool.error_rate`
+  over a result that recorded no `is_error`, because absence is not success on a wire that may be
+  carrying any vendor. Acceptance: `story:event-stream-trace-adapter`.
+
+- **Five more expectation kinds now decide a driven run, because the seam started carrying what
+  they read.** `skill.completed`, `tokens.thinking`, `iterations`, `speed` and a `cost.total`
+  scoped to one model reported `unk` against every driven transcript — not a defect in the run, a
+  reader with no field to read. metaharness protocol **amendment a9** adds the fields (a
+  `tool_use_result` on `tool.result` carrying the vendor's own per-tool record verbatim, and
+  `thinking_tokens`, `iterations`, `speed` and `cost_usd` on every `usage` payload) and this reader
+  lifts them. Measured against the committed driven fixture, `conformance/trace/expectations.trace.yaml`
+  goes from 34 ok / 3 gap / 4 unk to **39 ok / 3 gap / 0 unk**, and the driven-step document from
+  11 / 0 / 1 to **12 / 0 / 0** — with no word of any document changing.
+  **A `null` still reads `unk`, and that is the part to rely on.** A vendor that reported nothing
+  writes the key with a `null` value, and every one of these kinds stays undecidable against it —
+  which is what a Codex-driven run looks like for four of the five. A specification that gates on
+  billed thinking will go `unk` (exit 3, *nobody found out*) rather than green when it meets a
+  harness that does not report it. Two things the reader will not do to fill a gap: `tokens.thinking`
+  is never taken from the harness's live `thinking.estimate`, and `iterations` is never a count of
+  the `usage` events that went past.
 
 
 - **`harness: metaharness` — a second executor on the seam that was waiting for one.** An `llm`
