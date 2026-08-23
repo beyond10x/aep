@@ -42,6 +42,28 @@ applies_when:
     - change.code
 
 requires:
+  # Two timings, and the second is not a stricter copy of the first: they read different numbers, at
+  # different moments, for different reasons.
+  #
+  # `before_review` reads `contracts.breaking_changes` and deliberately not `contracts.failed`. The
+  # two counts answer different questions — `failed` is *the contract run is red*, and
+  # `breaking_changes` is *and somebody who already calls this interface was told something that is
+  # no longer true*. A red run is exactly what a review is for: a person can weigh a failure that is
+  # the runner's own machinery, decide it is noise, and say so. A broken consumer is not something a
+  # review can decide, because the people affected are not in the room. So a change that broke a
+  # published interface does not reach a reviewer at all, and one that merely failed its contract run
+  # does.
+  #
+  # It also reads the one fact a `contract_result` alone projects. `tests.contract.failed` — which
+  # the workflow's `verify -> adversarial_verify` guard reads — is an alias any test runner satisfies
+  # with a suite it happened to name `contract`, and `drivers/development/checks.yaml` fills it from
+  # `protocol validate`. `contracts.breaking_changes` has exactly one producer, so this is the first
+  # point in the workflow where a contract *runner* must have spoken. Nothing observing it leaves the
+  # fact Unknown, and Unknown does not permit a transition (invariant 5): a run with no contract
+  # record does not enter review by saying nothing.
+  before_review:
+    predicates:
+      - contracts.breaking_changes == 0
   before_completion:
     predicates:
       # A run that checked nothing also has zero failures, so the number of checks is part of the

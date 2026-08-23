@@ -47,7 +47,20 @@
 //! freshness it did not witness, and evidence horizons exist precisely to catch that (invariant 7:
 //! a caller who has to write down when they looked cannot back-date by omission).
 //!
-//! # Two refusals, and why they are here rather than left to the engine
+//! # What the record now gates
+//!
+//! Until `story:contract-result-gates` the verb made a fact available and nothing asked for it.
+//! `principles/development/contract-testing.yaml` now owes `contracts.breaking_changes == 0`
+//! **before the review phase** as well as before completion, so a record saying the vendor moved
+//! stops a change one state earlier — at `adversarial_verify -> review` in `adp/default` — and a
+//! record saying the run merely went red does not. That is the same split the counts already
+//! carried: `failed` is *the contract run is red*, which is what a review is for, and
+//! `breaking_changes` is *a consumer was told something that is no longer true*, which no reviewer
+//! is in a position to decide. It is also the first guard in that workflow that only a contract
+//! **runner** can answer, because `tests.contract.failed` is an alias any test runner satisfies and
+//! `contracts.breaking_changes` has exactly one producer.
+//!
+//! # Three refusals, and why they are here rather than left to the engine
 //!
 //! `principles/development/contract-testing.yaml` states the discipline: *a run that checked
 //! nothing also has zero failures, so the number of checks is part of the obligation.* It spells it
@@ -73,11 +86,20 @@
 //! set describes no run that could have happened; left alone it would let `contracts.failed == 0`
 //! and `contracts.breaking_changes == 0` contradict each other inside one record.
 //!
+//! The third is a **count the record does not state**. [`ContractResult`] gives `checked`, `failed`
+//! and `breaking_changes` a serde default, so by the time there is a typed value an omitted
+//! `breaking_changes` and a measured zero are the same thing — and zero on that field is the claim
+//! *no consumer was broken*, which is precisely the claim the gate above reads as a pass. A runner
+//! that renamed the field, or stopped emitting it, would go from *green* to *green* while saying
+//! nothing at all. So the counts are read off the document as written, before it becomes a record,
+//! and one that is absent or `null` is refused by name. This is the fail-closed direction: a field
+//! nobody wrote is not an observation.
+//!
 //! What is **not** refused is bad news. A record with `failed: 3` is minted without complaint and
 //! exits `0`, exactly as `protocol trace evidence` writes down a run that gapped: the verdict belongs
-//! in the record, and the engine is what decides on it. The two refusals are about a record that
-//! *asserts nothing* and a record that *cannot describe any run* — never about one that reports a
-//! failure.
+//! in the record, and the engine is what decides on it. The three refusals are about a record that
+//! *asserts nothing*, a record that *cannot describe any run* and a record that *does not say what
+//! it measured* — never about one that reports a failure.
 //!
 //! # What this does not buy
 //!
@@ -138,11 +160,17 @@ pub(crate) enum ContractCommand {
 /// The arguments of `protocol contract evidence`.
 #[derive(Debug, Args)]
 pub(crate) struct EvidenceArgs {
-    /// The record the contract runner emitted: one JSON object in the `contract_result` shape.
+    /// The record the contract runner emitted: one JSON object in the `contract_result` shape, or
+    /// `-` to read it from standard input.
     ///
-    /// A path rather than standard input, so that the bytes the evidence document's provenance
-    /// digests are bytes that exist somewhere a later reader can go and check. Callers redirect:
-    /// `metaharness conformance claude --contract > claude.json`.
+    /// A path is the better form and stays the one to reach for, because the bytes the evidence
+    /// document's provenance digests then exist somewhere a later reader can go and check:
+    /// `metaharness conformance claude --contract > claude.json`. `-` is for the pipe the runner is
+    /// already at the end of — `metaharness conformance claude --contract | protocol contract
+    /// evidence --record - --observed-at 2026-08-23` — and it buys the shorter loop at the cost of
+    /// that check: the digest still describes what this process was handed, but nothing else holds
+    /// those bytes afterwards. The record says which was used, so the two are told apart by reading
+    /// it.
     #[arg(long)]
     record: PathBuf,
     /// Where to write the document. Without it, it goes to standard output.
@@ -185,15 +213,47 @@ pub(crate) fn run(command: ContractCommand) -> Result<ExitCode> {
     }
 }
 
+/// The three counts a `contract_result` has to state, in the order a reader meets them.
+///
+/// Each carries a serde default of zero on [`ContractResult`], which is right for a type a
+/// hand-written document deserialises into and wrong for bytes arriving off a seam — so the
+/// document is asked for them before it becomes a record. See [`read_record`].
+const COUNTS: [&str; 3] = ["checked", "failed", "breaking_changes"];
+
+/// What was wrong with the shape, said in the vocabulary of the document rather than of serde.
+const SHAPE: &str = "expected one JSON object in the `contract_result` shape — \
+                     {kind, checked, failed, breaking_changes, provider, consumer}";
+
 /// The record, read through the rules that decide whether it says anything.
 ///
-/// Three refusals, first one wins, each naming what is wrong rather than reporting *an error*: a
-/// document that is not this shape, a run that checked nothing, and counts that describe no run.
+/// Four refusals, first one wins, each naming what is wrong rather than reporting *an error*: a
+/// document that is not this shape, a record of another kind, a count the document never states, a
+/// run that checked nothing, and counts that describe no run.
 fn read_record(text: &str) -> Result<ContractResult> {
-    let evidence: Evidence = serde_json::from_str(text).context(
-        "expected one JSON object in the `contract_result` shape — \
-         {kind, checked, failed, breaking_changes, provider, consumer}",
-    )?;
+    // Parse, then validate — and the untyped read comes first because one of the rules below is
+    // about what the document does **not** say. Every count on `ContractResult` has a serde
+    // default, so by the time there is a typed value an omitted `breaking_changes` and a measured
+    // zero are one value, and zero on that field is the claim a gate reads as a pass.
+    let stated: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(text).context(SHAPE)?;
+
+    if stated.get("kind").and_then(serde_json::Value::as_str) == Some("contract_result") {
+        for count in COUNTS {
+            if !stated.get(count).is_some_and(serde_json::Value::is_u64) {
+                bail!(
+                    "the record states no count for `{count}`, and this verb will not supply one. \
+                     A missing or `null` count deserialises to zero, and zero on \
+                     `breaking_changes` is the claim *no consumer was broken* — the claim \
+                     `principles/development/contract-testing.yaml` reads as a pass before the \
+                     review phase and before completion. A runner that renamed the field or \
+                     stopped emitting it would go on reading green while saying nothing. State \
+                     what the run measured, or record nothing"
+                );
+            }
+        }
+    }
+
+    let evidence: Evidence = serde_json::from_str(text).context(SHAPE)?;
     let Evidence::ContractResult(result) = evidence else {
         bail!(
             "this is a `{}` record and this verb reads a `contract_result`. The kind is the \
@@ -208,9 +268,9 @@ fn read_record(text: &str) -> Result<ContractResult> {
             "the record states `checked: 0`, so it asserts nothing: a run that checked nothing \
              also has zero failures and zero breaking changes. Minting it would discharge the \
              evidence obligation `principles/development/contract-testing.yaml` places on a task \
-             — an independent `contract_result` from a `contract-runner` — while two of that \
-             principle's three predicates passed vacuously. Run the contract vectors, or record \
-             nothing"
+             — an independent `contract_result` from a `contract-runner` — while every one of that \
+             principle's predicates over `failed` and `breaking_changes` passed vacuously, at the \
+             review gate and at completion alike. Run the contract vectors, or record nothing"
         );
     }
 
@@ -228,18 +288,53 @@ fn read_record(text: &str) -> Result<ContractResult> {
     Ok(result)
 }
 
+/// The argument that means *the record is on the pipe*, spelled the way every other tool spells it.
+const STDIN: &str = "-";
+
+/// `true` when `--record` asked for standard input rather than for a file.
+fn is_stdin(record: &Path) -> bool {
+    record == Path::new(STDIN)
+}
+
+/// What the record's provenance calls the thing it was read from.
+///
+/// A path when there is one. `standard input` when there is not — and it is written out rather than
+/// left as `-` because the sentence a later reader needs is *these bytes were on a pipe and are
+/// gone*, which a single hyphen in an `inputs` list does not say.
+fn source(record: &Path) -> String {
+    if is_stdin(record) {
+        "standard input".to_owned()
+    } else {
+        record.display().to_string()
+    }
+}
+
+/// The record's bytes, from the file named or from the pipe.
+///
+/// Read whole before anything is decided about it, because the digest in the provenance is over the
+/// bytes as they arrived and a stream read twice is not the same stream.
+fn read_input(record: &Path) -> Result<String> {
+    if is_stdin(record) {
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut text)
+            .context("reading the record from standard input")?;
+        return Ok(text);
+    }
+    std::fs::read_to_string(record)
+        .with_context(|| format!("reading the record at {}", record.display()))
+}
+
 /// `protocol contract evidence`
 fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
-    let text = std::fs::read_to_string(&args.record)
-        .with_context(|| format!("reading the record at {}", args.record.display()))?;
+    let text = read_input(&args.record)?;
     let result = read_record(&text)
-        .with_context(|| format!("{} is not a usable contract record", args.record.display()))?;
+        .with_context(|| format!("{} is not a usable contract record", source(&args.record)))?;
 
     let record = ContractEvidence {
         provenance: Provenance {
             command: Some(invocation(args)),
             digest: Some(digest(text.as_bytes())),
-            inputs: vec![args.record.display().to_string()],
+            inputs: vec![source(&args.record)],
             ..Provenance::default()
         },
         evidence: Evidence::ContractResult(result),
@@ -332,14 +427,14 @@ mod tests {
     #[test]
     fn the_providers_own_bytes_are_the_payload_this_repository_defines() {
         let claude = read_record(CLAUDE).expect("the captured claude record is read");
-        assert_eq!(claude.checked, 20);
+        assert_eq!(claude.checked, 24);
         assert_eq!(claude.failed, 0);
         assert_eq!(claude.breaking_changes, 0);
-        assert_eq!(claude.provider.as_deref(), Some("claude 2.1.239"));
+        assert_eq!(claude.provider.as_deref(), Some("claude 2.1.240"));
         assert_eq!(claude.consumer.as_deref(), Some("metaharness.event/1"));
 
         let codex = read_record(CODEX).expect("the captured codex record is read");
-        assert_eq!(codex.checked, 10);
+        assert_eq!(codex.checked, 17);
         assert_eq!(codex.provider.as_deref(), Some("codex 0.145.0"));
     }
 
@@ -349,7 +444,7 @@ mod tests {
     /// count zeroed, everything else the provider's.
     #[test]
     fn a_record_that_checked_nothing_is_refused_with_the_reason_named() {
-        let empty = CLAUDE.replace("\"checked\":20", "\"checked\":0");
+        let empty = CLAUDE.replace("\"checked\":24", "\"checked\":0");
         assert_ne!(empty, CLAUDE, "the mutation reached the document");
 
         let refusal = read_record(&empty)
@@ -417,6 +512,67 @@ mod tests {
             refusal.contains("`static_analysis`"),
             "the refusal names what it was handed: {refusal}"
         );
+    }
+
+    /// A count the document never states is refused, and it is refused *because* the default is
+    /// zero rather than despite it.
+    ///
+    /// One case per count, and `breaking_changes` is the one that matters: dropped, it deserialises
+    /// to zero, and zero is what `contracts.breaking_changes == 0` reads as a pass at the review
+    /// gate. The mutation is the whole field, so a runner that renamed or removed it produces
+    /// exactly this document.
+    #[test]
+    fn a_count_the_record_never_states_is_refused_rather_than_defaulted_to_zero() {
+        for (count, written) in [
+            ("checked", "\"checked\":24,"),
+            ("failed", "\"failed\":0,"),
+            ("breaking_changes", "\"breaking_changes\":0,"),
+        ] {
+            let silent = CLAUDE.replace(written, "");
+            assert_ne!(
+                silent, CLAUDE,
+                "the mutation removed `{count}` from the document"
+            );
+
+            let refusal = read_record(&silent)
+                .expect_err("a count nobody wrote down is not an observation")
+                .to_string();
+            assert!(
+                refusal.contains(&format!("no count for `{count}`")),
+                "the refusal names the count that is missing: {refusal}"
+            );
+        }
+    }
+
+    /// `null` takes the same road as absent, and says the same thing.
+    ///
+    /// Worth its own case because the two fail at different depths — an absent count is caught by
+    /// the rule above, a `null` one would otherwise surface as serde's *invalid type* against a
+    /// field name it does not print. Both are refused here by the same sentence.
+    #[test]
+    fn a_count_stated_as_null_is_refused_by_the_name_of_the_count() {
+        let nulled = CLAUDE.replace("\"breaking_changes\":0", "\"breaking_changes\":null");
+        assert_ne!(nulled, CLAUDE, "the mutation reached the document");
+
+        let refusal = read_record(&nulled)
+            .expect_err("`null` is not a count")
+            .to_string();
+        assert!(
+            refusal.contains("no count for `breaking_changes`"),
+            "the refusal names the count, not the serde type: {refusal}"
+        );
+    }
+
+    /// `-` is standard input and any other argument is a path, said once so both readers agree.
+    #[test]
+    fn a_lone_hyphen_is_the_pipe_and_everything_else_is_a_file() {
+        assert!(is_stdin(Path::new("-")));
+        assert_eq!(source(Path::new("-")), "standard input");
+        assert!(
+            !is_stdin(Path::new("./-")),
+            "a file whose name ends in a hyphen is still a file"
+        );
+        assert_eq!(source(Path::new("claude.json")), "claude.json");
     }
 
     /// The digest is over the bytes as read, so the provenance names the runner's output and not a

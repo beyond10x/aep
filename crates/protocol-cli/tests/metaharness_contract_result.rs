@@ -26,12 +26,18 @@
 //! # What is asserted here and not in the unit tests
 //!
 //! `crates/protocol-cli/src/contract.rs` tests the reading rules directly. What only a test through
-//! the binary can show is the loop closing: the runner's bytes become a file, and
-//! `protocol evaluate --evidence` reads that file and moves a principle's predicates. The two halves
-//! run in different processes and the only thing joining them is a document.
+//! the binary can show is the loop closing: the runner's bytes become a document, and
+//! `protocol evaluate --evidence` reads that document and moves a principle's predicates. The two
+//! halves run in different processes and the only thing joining them is a file.
+//!
+//! Both ways in are exercised here, because they are different code paths and only one of them can
+//! be checked afterwards. `--record <file>` is the form to reach for; `--record -` is the pipe the
+//! runner is already at the end of, and the two must produce the same record — asserted by minting
+//! the same bytes both ways and comparing everything except the lines that say where they came from.
 
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -48,6 +54,29 @@ fn protocol(args: &[&str]) -> Output {
         .current_dir(root())
         .output()
         .expect("the protocol binary runs")
+}
+
+/// The same, with `input` on standard input — the pipe the runner is at the end of.
+///
+/// Spawned rather than run, because the bytes have to be written after the child exists and its
+/// standard input closed after they are: a verb reading to end of file on a pipe nobody closes waits
+/// forever, and that failure would show up as a hung gate rather than as a red test.
+fn protocol_with_stdin(args: &[&str], input: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(args)
+        .current_dir(root())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the protocol binary runs");
+    child
+        .stdin
+        .take()
+        .expect("standard input is a pipe")
+        .write_all(input.as_bytes())
+        .expect("the record is written to the pipe");
+    child.wait_with_output().expect("the process is waited on")
 }
 
 /// Standard output as a string.
@@ -144,8 +173,8 @@ fn both_captured_records_become_evidence_the_engine_reads() {
     let directory = scratch("aep-contract-evidence-roundtrip");
 
     for (name, record, format, suffix, checked) in [
-        ("claude", CLAUDE_RECORD, "yaml", "yaml", "20 checked"),
-        ("codex", CODEX_RECORD, "json", "json", "10 checked"),
+        ("claude", CLAUDE_RECORD, "yaml", "yaml", "24 checked"),
+        ("codex", CODEX_RECORD, "json", "json", "17 checked"),
     ] {
         let out = directory.join(format!("{name}.{suffix}"));
         let minted = mint(record, &out, format);
@@ -242,6 +271,80 @@ fn a_breaking_change_is_the_number_the_evaluation_turns_on() {
 }
 
 #[test]
+fn the_record_can_arrive_on_a_pipe_and_the_loop_still_closes() {
+    // `--record -`, the whole way through: the runner's bytes never touch a file on the way in, and
+    // what comes back is still a document `protocol evaluate --evidence` reads. This is the form
+    // `metaharness conformance claude --contract | protocol contract evidence --record -` takes,
+    // and it is the one thing the file form could not be made to prove.
+    let directory = scratch("aep-contract-evidence-stdin");
+    let out = directory.join("piped.yaml");
+
+    let minted = protocol_with_stdin(
+        &[
+            "contract",
+            "evidence",
+            "--record",
+            "-",
+            "--observed-at",
+            CAPTURED,
+            "--out",
+            printable(&out),
+        ],
+        CLAUDE_BYTES,
+    );
+    assert_eq!(code(&minted), 0, "{}", stderr(&minted));
+    assert!(
+        stdout(&minted).contains("24 checked"),
+        "the verb reports the counts it was piped: {}",
+        stdout(&minted)
+    );
+
+    let document = std::fs::read_to_string(&out).expect("the record was written");
+    assert!(
+        document.contains("standard input"),
+        "the provenance says where the bytes came from, because nothing else holds them now: \
+         {document}"
+    );
+    let piped = evaluate_with(&out);
+    assert!(
+        piped.contains("✓ evidence contract_result from contract-runner (independent)"),
+        "a piped record discharges the same obligation a file one does: {piped}"
+    );
+
+    // The two input forms differ in provenance and in nothing else. Minting the committed file is
+    // the comparison: same bytes, same record, same digest — a pipe that dropped a byte would
+    // otherwise read as a success, because a shorter record is still a valid one.
+    let from_file = directory.join("file.yaml");
+    assert_eq!(code(&mint(CLAUDE_RECORD, &from_file, "yaml")), 0);
+    let filed = std::fs::read_to_string(&from_file).expect("the record was written");
+    assert_eq!(
+        without_source(&document),
+        without_source(&filed),
+        "the same bytes must produce the same record whichever way they arrived"
+    );
+    assert!(
+        filed.contains(CLAUDE_RECORD),
+        "and the file form still names the file, which is the check the pipe form gives up: {filed}"
+    );
+}
+
+/// A minted document with the two lines that name where the bytes came from removed.
+///
+/// Everything else — the counts, the producer, the observation time and the digest — is what the
+/// two input forms have to agree on exactly.
+fn without_source(document: &str) -> Vec<&str> {
+    document
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with("command:")
+                && !line.starts_with("- crates/")
+                && line != "- standard input"
+        })
+        .collect()
+}
+
+#[test]
 fn a_record_that_checked_nothing_is_refused_before_a_document_exists() {
     // The discipline `principles/development/contract-testing.yaml` states, enforced where the
     // record enters rather than one layer later. Measured, a `checked: 0` record submitted to the
@@ -252,7 +355,7 @@ fn a_record_that_checked_nothing_is_refused_before_a_document_exists() {
     let empty = directory.join("empty.json");
     std::fs::write(
         &empty,
-        CLAUDE_BYTES.replace("\"checked\":20", "\"checked\":0"),
+        CLAUDE_BYTES.replace("\"checked\":24", "\"checked\":0"),
     )
     .expect("the scratch tree is writable");
     let out = directory.join("never-written.yaml");
