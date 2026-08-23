@@ -1,0 +1,97 @@
+{
+  "format": "trace-report/1",
+  "spec_id": "eval/development-story",
+  "spec_title": "A run of the story workflow, judged by the same five expectations in every arm",
+  "spec_digest": "fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
+  "transcript_digest": "6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
+  "adapter": {
+    "name": "claude-code/stream-json",
+    "written_against": [
+      "2.1.238"
+    ]
+  },
+  "redacted": true,
+  "advisory_overrides": [],
+  "summary": {
+    "total": 5,
+    "ok": 5,
+    "gap": 0,
+    "unknown": 0,
+    "advisory_gap": 0,
+    "advisory_unknown": 0
+  },
+  "verdict": "ok",
+  "expectations": [
+    {
+      "id": "created-through-the-cli",
+      "statement": "the artifact was created with the CLI, not with hand-written frontmatter",
+      "kind": "tool.called",
+      "severity": "gate",
+      "outcome": {
+        "outcome": "ok",
+        "events": [
+          13,
+          15
+        ],
+        "note": "sha256:4504c7a920c7"
+      },
+      "verdict": "ok"
+    },
+    {
+      "id": "validated-its-own-work",
+      "statement": "the run put the store's own validator in front of its work before reporting",
+      "kind": "tool.called",
+      "severity": "gate",
+      "outcome": {
+        "outcome": "ok",
+        "events": [
+          32
+        ],
+        "note": "sha256:fd4a7ed85347"
+      },
+      "verdict": "ok"
+    },
+    {
+      "id": "nothing-was-refused",
+      "statement": "nothing the run attempted had to be refused by a layer below it",
+      "kind": "permission.denied",
+      "severity": "gate",
+      "outcome": {
+        "outcome": "ok",
+        "events": [
+          35
+        ],
+        "note": "sha256:3108ffb5ccad"
+      },
+      "verdict": "ok"
+    },
+    {
+      "id": "terminal-record-clean",
+      "statement": "the session ended the way a finished session ends",
+      "kind": "result",
+      "severity": "gate",
+      "outcome": {
+        "outcome": "ok",
+        "events": [
+          35
+        ],
+        "note": "sha256:9520e6672807"
+      },
+      "verdict": "ok"
+    },
+    {
+      "id": "thinking-estimate-recorded",
+      "statement": "the run recorded how much of its output was thinking",
+      "kind": "tokens.thinking",
+      "severity": "gate",
+      "outcome": {
+        "outcome": "ok",
+        "events": [
+          35
+        ],
+        "note": "sha256:6b8894d8dba8"
+      },
+      "verdict": "ok"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+format: eval.run-manifest/1
+arm: driven
+harness: claude
+workflow: adp/default
+case: case:create-a-story
+plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332
+model: claude-sonnet-5
+harness_version: claude 2.1.239
+transcript_digest: 4730e11b5bc692a9115f0c00c333a7c630698669d9d97d9421cf46649aed6b47
+observed_at: 2026-08-23
+cost_micro_usd: 413700
+tokens: 105523
+wall_time_ms: 8420

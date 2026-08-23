@@ -1,0 +1,53 @@
+format: trace-spec/1
+id: eval/development-story
+title: A run of the story workflow, judged by the same five expectations in every arm
+
+# The fixture specification the committed matrix pairs are checked against. One document for all
+# three arms and both harnesses, deliberately: a matrix's rows join on the expectation id, so an
+# arm judged by its own document would produce rows nothing else can be compared with — which is
+# the failure mode a per-arm specification has and a per-arm score hides.
+#
+# Five expectations, chosen so that each of the three answers is reachable by a real transcript:
+# the first two can be contradicted by a run that hand-wrote the file, the third by a run something
+# refused, and the fifth is undecidable against any harness that does not report a thinking
+# estimate — which is what the second harness's transcripts look like today.
+
+expectations:
+  - id: created-through-the-cli
+    statement: the artifact was created with the CLI, not with hand-written frontmatter
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact new"}}
+        count: {at_least: 1}
+
+  - id: validated-its-own-work
+    statement: the run put the store's own validator in front of its work before reporting
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact validate"}}
+        count: {at_least: 1}
+
+  - id: nothing-was-refused
+    statement: nothing the run attempted had to be refused by a layer below it
+    # A gap here is not a defect in the run alone: under the driven arm it is enforcement doing its
+    # job, and the matrix reports the count rather than deciding which of the two it was.
+    expect:
+      permission.denied:
+        count: {at_most: 0}
+
+  - id: terminal-record-clean
+    statement: the session ended the way a finished session ends
+    expect:
+      result:
+        is_error: false
+
+  - id: thinking-estimate-recorded
+    statement: the run recorded how much of its output was thinking
+    # The row that is undecidable rather than false on a harness whose wire carries the key and
+    # writes `null` into it. `unk` is the whole reason the matrix has a third column: nobody found
+    # out is not the same finding as the run did the wrong thing.
+    expect:
+      tokens.thinking:
+        count: {at_most: 20000}

@@ -1764,7 +1764,11 @@ fn metaharness_preflight(map: &StepMap) -> Option<String> {
 /// A lookup and never a spawn: running the binary to find out whether it exists is a side effect in
 /// a pre-flight, and a binary that exists and then fails is a different finding — that one is a
 /// step with no verdict, which is what the retry budget is for.
-fn on_path(program: &str) -> bool {
+///
+/// `pub(crate)` because [`crate::eval`] drives the same binary as a tool and asks the same question
+/// before spending anything. One lookup, so the two verbs cannot disagree about whether it is
+/// installed.
+pub(crate) fn on_path(program: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|paths| {
         std::env::split_paths(&paths).any(|directory| directory.join(program).is_file())
     })

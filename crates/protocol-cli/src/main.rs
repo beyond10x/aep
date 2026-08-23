@@ -334,6 +334,27 @@ enum Command {
         #[command(subcommand)]
         command: contract::ContractCommand,
     },
+    /// Assemble what many checked runs said into one table of facts.
+    ///
+    /// The evaluation programme's deliverable. Its runs come in three arms — raw instructions, the
+    /// shipped plugin, a driven run whose calls an enforcer decides — against more than one
+    /// harness, and each leaves a run manifest beside the record `protocol trace check` wrote about
+    /// its transcript. This verb counts, per harness × arm × workflow and per expectation, how many
+    /// facts held, how many were contradicted and how many nobody could find out.
+    ///
+    /// **It computes no score**, and refuses to: the only ways to fold three columns into one
+    /// number are to count an unobservable expectation as a pass, which is the collapse invariant 5
+    /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
+    /// recording.
+    ///
+    /// Not to be confused with `protocol evaluate`, which asks the engine what one task owes and
+    /// what it is permitted. This verb decides nothing and reads no protocol document; the only
+    /// thing the two share is a stem.
+    Eval {
+        /// What to do with a set of runs.
+        #[command(subcommand)]
+        command: eval::EvalCommand,
+    },
     /// Walk a workflow: run the steps a step map declares, and do only what the engine permits.
     ///
     /// The reference driver. It makes the engine's calls in order, executes the three kinds of step
@@ -632,6 +653,12 @@ mod render;
 // work before the module existed.
 mod contract;
 
+// The sixth. Its input is a pair of documents per run — a manifest this repository defines and the
+// check report `protocol trace check` writes — its vocabulary is the three arms of the evaluation
+// programme, and it shares nothing with the rest. It is also where the one rule that programme has
+// about its own output lives: counts of facts, never a score.
+mod eval;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -664,6 +691,7 @@ fn run() -> Result<ExitCode> {
         Command::Artifact { command } => planning::run(command),
         Command::Trace { command } => trace::run(command),
         Command::Contract { command } => contract::run(command),
+        Command::Eval { command } => eval::run(command),
         Command::Drive { command } => drive::run(command),
         Command::Workflow { command } => render::run(command),
         Command::Entity { command } => entity(&command),

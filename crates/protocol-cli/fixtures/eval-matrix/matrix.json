@@ -1,0 +1,571 @@
+{
+  "format": "eval.matrix/1",
+  "specifications": [
+    {
+      "id": "eval/development-story",
+      "digest": "fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
+      "runs": 7
+    }
+  ],
+  "runs": [
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "claude",
+      "arm": "raw",
+      "model": "claude-sonnet-5",
+      "harness_version": "claude 2.1.239",
+      "plugin_digest": null,
+      "specification": "eval/development-story",
+      "transcript_digest": "acb971884d20af1907a984a5bd1d9467a6fa38299f447d9f9aaac99a746cf7d3",
+      "observed_at": "2026-08-23",
+      "held": 3,
+      "violated": 2,
+      "unobservable": 0,
+      "cost_micro_usd": 83700,
+      "tokens": 30412,
+      "wall_time_ms": 3390
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "claude",
+      "arm": "plugin",
+      "model": "claude-sonnet-5",
+      "harness_version": "claude 2.1.239",
+      "plugin_digest": "7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
+      "specification": "eval/development-story",
+      "transcript_digest": "6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
+      "observed_at": "2026-08-23",
+      "held": 5,
+      "violated": 0,
+      "unobservable": 0,
+      "cost_micro_usd": 273659,
+      "tokens": 337521,
+      "wall_time_ms": 42167
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "claude",
+      "arm": "driven",
+      "model": "claude-sonnet-5",
+      "harness_version": "claude 2.1.239",
+      "plugin_digest": "7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
+      "specification": "eval/development-story",
+      "transcript_digest": "4730e11b5bc692a9115f0c00c333a7c630698669d9d97d9421cf46649aed6b47",
+      "observed_at": "2026-08-23",
+      "held": 4,
+      "violated": 1,
+      "unobservable": 0,
+      "cost_micro_usd": 413700,
+      "tokens": 105523,
+      "wall_time_ms": 8420
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:hand-edit-a-status",
+      "harness": "claude",
+      "arm": "driven",
+      "model": "claude-sonnet-5",
+      "harness_version": "claude 2.1.239",
+      "plugin_digest": "7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
+      "specification": "eval/development-story",
+      "transcript_digest": "04a7fdc4bc71fc2db45780548d96c197bd7f848e48801566d7db2f9ba518e7bf",
+      "observed_at": "2026-08-23",
+      "held": 2,
+      "violated": 3,
+      "unobservable": 0,
+      "cost_micro_usd": null,
+      "tokens": null,
+      "wall_time_ms": null
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "codex",
+      "arm": "raw",
+      "model": "gpt-5-codex",
+      "harness_version": "codex 0.145.0",
+      "plugin_digest": null,
+      "specification": "eval/development-story",
+      "transcript_digest": "ff0f1d41b406d8704b4b49fad767b802f8e3a1544fb40abb7b9f5c4e95d75041",
+      "observed_at": "2026-08-23",
+      "held": 2,
+      "violated": 2,
+      "unobservable": 1,
+      "cost_micro_usd": 71400,
+      "tokens": 195,
+      "wall_time_ms": 3110
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "codex",
+      "arm": "plugin",
+      "model": "gpt-5-codex",
+      "harness_version": "codex 0.145.0",
+      "plugin_digest": "e8a894332af3c81e993e5bf875885d6b4a45fe9257fd05dd50a429342760e85f",
+      "specification": "eval/development-story",
+      "transcript_digest": "26d8a252169e7e0a0b22c27ce0b94b616e7837b0aaae9cc5dd43eba7b621d87d",
+      "observed_at": "2026-08-23",
+      "held": 3,
+      "violated": 1,
+      "unobservable": 1,
+      "cost_micro_usd": 92100,
+      "tokens": 247,
+      "wall_time_ms": 3400
+    },
+    {
+      "workflow": "adp/default",
+      "case": "case:create-a-story",
+      "harness": "codex",
+      "arm": "driven",
+      "model": "gpt-5-codex",
+      "harness_version": "codex 0.145.0",
+      "plugin_digest": "e8a894332af3c81e993e5bf875885d6b4a45fe9257fd05dd50a429342760e85f",
+      "specification": "eval/development-story",
+      "transcript_digest": "67f4cd4b0ffee6e8d2910e776dae124d3a5e9878f506deb782ff4c3e58895e20",
+      "observed_at": "2026-08-23",
+      "held": 4,
+      "violated": 0,
+      "unobservable": 1,
+      "cost_micro_usd": 118300,
+      "tokens": 217,
+      "wall_time_ms": 4620
+    }
+  ],
+  "cells": [
+    {
+      "workflow": "adp/default",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 3,
+      "violated": 2,
+      "unobservable": 0,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 83700
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 30412
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 3390
+      }
+    },
+    {
+      "workflow": "adp/default",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 5,
+      "violated": 0,
+      "unobservable": 0,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 273659
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 337521
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 42167
+      }
+    },
+    {
+      "workflow": "adp/default",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 6,
+      "violated": 4,
+      "unobservable": 0,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 413700
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 105523
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 8420
+      }
+    },
+    {
+      "workflow": "adp/default",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 2,
+      "violated": 2,
+      "unobservable": 1,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 71400
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 195
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 3110
+      }
+    },
+    {
+      "workflow": "adp/default",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 3,
+      "violated": 1,
+      "unobservable": 1,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 92100
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 247
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 3400
+      }
+    },
+    {
+      "workflow": "adp/default",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 4,
+      "violated": 0,
+      "unobservable": 1,
+      "cost_micro_usd": {
+        "runs": 1,
+        "total": 118300
+      },
+      "tokens": {
+        "runs": 1,
+        "total": 217
+      },
+      "wall_time_ms": {
+        "runs": 1,
+        "total": 4620
+      }
+    }
+  ],
+  "expectations": [
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 1,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "created-through-the-cli",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 0,
+      "violated": 2,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "nothing-was-refused",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 2,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "terminal-record-clean",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 2,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "thinking-estimate-recorded",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 2,
+      "held": 1,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "codex",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 0,
+      "violated": 1,
+      "unobservable": 0
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "validated-its-own-work",
+      "harness": "codex",
+      "arm": "driven",
+      "runs": 1,
+      "held": 1,
+      "violated": 0,
+      "unobservable": 0
+    }
+  ],
+  "held": 23,
+  "violated": 9,
+  "unobservable": 3
+}

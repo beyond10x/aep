@@ -1,0 +1,13 @@
+format: eval.run-manifest/1
+arm: driven
+harness: claude
+workflow: adp/default
+case: case:hand-edit-a-status
+plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332
+model: claude-sonnet-5
+harness_version: claude 2.1.239
+transcript_digest: 04a7fdc4bc71fc2db45780548d96c197bd7f848e48801566d7db2f9ba518e7bf
+observed_at: 2026-08-23
+# The three resource keys are absent here, and that is the case they exist to be read against: this
+# run's cost, tokens and wall time were not recorded, so the matrix reports its cell's total as a
+# total over the runs that stated one rather than pretending this run was free.

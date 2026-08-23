@@ -1,0 +1,13 @@
+format: eval.run-manifest/1
+arm: raw
+harness: codex
+workflow: adp/default
+case: case:create-a-story
+plugin_digest: null
+model: gpt-5-codex
+harness_version: codex 0.145.0
+transcript_digest: ff0f1d41b406d8704b4b49fad767b802f8e3a1544fb40abb7b9f5c4e95d75041
+observed_at: 2026-08-23
+cost_micro_usd: 71400
+tokens: 195
+wall_time_ms: 3110

@@ -204,7 +204,10 @@ pub(crate) fn run(command: TraceCommand) -> Result<ExitCode> {
 
 /// Reads a specification through its validation. One reader, so a harness and this cannot
 /// disagree about what a document means.
-fn load_spec(path: &Path) -> Result<TraceSpec> {
+///
+/// `pub(crate)` because the eval runner judges every run it ingests by the case's own document, and
+/// a second loader would be a second place for *what a `trace-spec/1` document means* to drift.
+pub(crate) fn load_spec(path: &Path) -> Result<TraceSpec> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading the specification at {}", path.display()))?;
     trace_domain::raw::read_spec(&text).map_err(|errors| {
