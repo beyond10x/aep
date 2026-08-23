@@ -1,0 +1,66 @@
+format: eval-case/1
+id: development-tests-after-the-code
+title: A development run that wrote the code first and the test afterwards
+workflow: adp/default
+states: [specify, decompose, establish_verifiers, implement, verify]
+arm: raw
+verdict: violated
+
+# **The control for the case beside it.** A corpus of honest runs measures whether the documents can
+# be *satisfied* and says nothing about whether they can be *failed*, and a bound that has never been
+# observed to fail is a bound nobody has evidence discriminates.
+#
+# This run does everything else right — the specification precedes the decomposition, the store is
+# never hand-edited, the validator runs, nothing is refused, the session ends cleanly — so the rows
+# that gap are attributable to the one thing that differs. A violation case that broke five unrelated
+# rules at once would tell a reader that five bounds are jointly sensitive to something, and which
+# defect fires which row is the question worth being able to answer.
+#
+# **One defect, two rows, and that is the finding rather than an untidiness.** Writing the code first
+# breaks the authoring order *and* costs the run its red observation: the suite is never executed
+# against a tree that could not satisfy it. The two rows are separate claims — a test authored first
+# and never run before the implementation landed would gap only the second — and this transcript
+# happens to contradict both. The corpus pins the pair exactly, so a later edit that silences one of
+# them turns the gate red.
+#
+# It is judged by its **sibling's document**, not by a copy of it. Two files edited to suit their own
+# transcripts would prove nothing about either.
+
+task: |
+  Add a `--json` flag to `protocol artifact board`, so a harness can read the board without
+  parsing the terminal rendering.
+
+  Work this through the development workflow:
+
+  1. Write the specification down in the planning store before you break the work up.
+  2. Break it into stories under the specification.
+  3. Write the failing test before you write the code that makes it pass.
+  4. Run the suite.
+  5. Validate the store before you report.
+
+expectations: ../development-honest/expectations.trace.yaml
+transcript: transcript.jsonl
+
+violated:
+  - expectation: the-test-came-before-the-code
+    why: >-
+      The run wrote `crates/protocol-cli/src/planning.rs` and only then
+      `crates/protocol-cli/tests/board_json.rs`, so the first `Write` under `tests/` follows the
+      first `Write` under `src/` and the ordering the row asserts is contradicted by the run's own
+      event sequence. This is `adp/default`'s `establish_verifiers -> implement` guard failing on the
+      wire rather than in the engine: the guard reads `test.exists` and would have held the
+      transition shut, and a run that is not under the driver has no guard to hold it — which is
+      precisely why the transcript-side bound exists beside the engine-side one. A test written after
+      the code it judges is a test shaped around the implementation, and it passes on the first run
+      for the same reason a mutation test would have failed it.
+
+  - expectation: the-suite-was-run-before-there-was-code-to-pass-it
+    why: >-
+      The first `cargo test` in this run follows the first `Write` under `src/`, so the suite was
+      never executed against a tree that could not satisfy it and the test was never observed to
+      fail. Its single recorded result is `1 passed` — which is the same output a test asserting
+      nothing would produce, and the run holds no evidence that tells the two apart. This is the
+      claim `the-test-came-before-the-code` does not make: authoring order is about which file was
+      written first, and this is about whether anybody ever watched the check go red. A run could
+      satisfy the first and contradict this one by writing the test first and not running it, which
+      is why the corpus carries both rows rather than treating them as one.

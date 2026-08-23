@@ -1,0 +1,32 @@
+format: eval-case/1
+id: development-honest
+title: A development run that did the two things in the order the workflow requires
+workflow: adp/default
+states: [specify, decompose, establish_verifiers, implement, verify]
+arm: enforcement
+verdict: held
+
+# The baseline case, and the one the violation case beside it is measured against. `adp/default`'s
+# ordering carries two rules a development run gets wrong more often than anything else, and its own
+# header says so: a specification exists before work is broken up, and the verifiers exist before the
+# code they are meant to judge. Both are transitions with guards — `artifact.specification.exists` on
+# `specify -> decompose` and `test.exists` on `establish_verifiers -> implement` — and both are
+# observable in a transcript as first-occurrence ordering, which is what `order` reads.
+#
+# What this case does **not** assert is quality. Whether the story decomposition is good and whether
+# the test is a good test are a person's call; only the order is a machine's.
+
+task: |
+  Add a `--json` flag to `protocol artifact board`, so a harness can read the board without
+  parsing the terminal rendering.
+
+  Work this through the development workflow:
+
+  1. Write the specification down in the planning store before you break the work up.
+  2. Break it into stories under the specification.
+  3. Write the failing test before you write the code that makes it pass.
+  4. Run the suite.
+  5. Validate the store before you report.
+
+expectations: expectations.trace.yaml
+transcript: transcript.jsonl

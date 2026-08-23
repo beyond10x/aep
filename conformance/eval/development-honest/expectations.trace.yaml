@@ -1,0 +1,183 @@
+format: trace-spec/1
+id: eval-case/development-default
+title: A run of `adp/default` put the specification before the decomposition and the test before the code
+
+# **Two cases are judged by this one document**, and that is deliberate rather than economical.
+# `development-honest` and `development-tests-after-the-code` differ in exactly one thing — what the
+# agent did — so a bound that passes one and fails the other is a bound that discriminates. Two
+# copies of these rows, each edited to suit its own transcript, would prove nothing about either.
+#
+# Every row below reads first-occurrence ordering or a call count. Nothing here reads a clock, a
+# model or a file: an eval case that could only be decided by re-running it is not a case, it is an
+# invoice.
+#
+# ## What counts as a write
+#
+# `tools: [Edit, NotebookEdit, Write]` wherever this document asserts that bytes reached a file.
+# The list is not invented here: `crates/protocol-cli/src/drive.rs` renders exactly those three to
+# the `repository.write` capability, so this repository's own driver is the authority on what a
+# write is, and a fourth verb is added in one place.
+#
+# It is a widening of **what can witness a claim**, never of the claim. `Edit` before `Edit` is the
+# same ordering assertion `Write` before `Write` was. The alternative — dropping the tool scope and
+# matching `file_path` alone — would have been a real weakening, because `Read` carries a
+# `file_path` too and *read the test first* is not *wrote the test first*. Both directions are
+# mutation-tested in `crates/trace-spec/tests/write_selectors.rs`.
+#
+# `NotebookEdit` is in the set and matches nothing in practice here: it carries `notebook_path`
+# rather than `file_path`, so a path-scoped row never selects one. It is named anyway so the set is
+# the capability's set rather than a subset somebody has to re-derive; a store of markdown is not a
+# live notebook-write vector, and stating that is cheaper than a reader wondering.
+#
+# ## What a Codex run cannot witness here, stated rather than discovered
+#
+# **These rows are decidable against Claude Code and are not decidable against Codex today.** On the
+# seam a Codex write travels as `apply_patch`, whose input is a patch envelope under `command` — the
+# path lives *inside* the patch text (`*** Add File: <path>`) and there is no `file_path` argument
+# at all. Its shell calls arrive as `exec` with an empty `input`, so they carry nothing to match on.
+# Both facts are read off the first live Codex pilot, 2026-08-23.
+#
+# So a Codex transcript answers these rows `unk`, and that is the honest verdict rather than a
+# failure of the run: nobody found out. It is deliberately **not** patched over by adding
+# `apply_patch` to the set — the tool would match and the `file_path` matcher would not, so the row
+# would still not decide while now *looking* cross-harness. A selector cannot say *`file_path` here
+# or `command` there*: design decision D2 keeps boolean combinators out of the matcher language, and
+# the growth path is a second expectation rather than an expression. Closing this properly is a
+# Codex-side case with its own rows, and it is not in this document.
+
+expectations:
+  # --- the workflow's first sequencing rule -------------------------------------------------
+
+  - id: the-specification-came-before-the-decomposition
+    statement: the specification artifact existed before the work was broken into stories
+    # `specify -> decompose` guards on `artifact.specification.exists`. That is the engine's form of
+    # the rule; this is the transcript's. They are not the same assertion and neither replaces the
+    # other — the guard says the fact was true at the transition, this says the run is the reason it
+    # was.
+    expect:
+      order:
+        first: {tool: Bash, args: {command: {contains: "protocol artifact new specification"}}}
+        before: {tool: Bash, args: {command: {contains: "protocol artifact new story"}}}
+
+  # --- the workflow's second sequencing rule, and the one the violation case breaks ---------
+
+  - id: the-test-came-before-the-code
+    statement: the failing test was written before the source it judges
+    # **The row the sibling case exists to violate.** `establish_verifiers -> implement` guards on
+    # `test.exists`, and the workflow's own comment calls this the mechanical form of test-driven
+    # work: the guard, not the agent's good intentions, is what enforces the order.
+    #
+    # Globs rather than exact paths, because which file a change lands in is the task's business and
+    # not this document's. What is being asserted is which of the two came first.
+    #
+    # **`tools:` and not `tool:`, and the first live run is why.** On 2026-08-23 a real Claude Code
+    # session did exactly what this row asks — test first, then the source — using `Edit`, because
+    # both files already existed. Against `tool: Write` this row reported `never_occurred`: the
+    # checker shrugging at work that had visibly happened. The set is the vocabulary in
+    # § *What counts as a write* below; the ordering claim is unchanged.
+    expect:
+      order:
+        first: {tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/tests/*"}}}
+        before: {tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
+
+  - id: the-suite-was-run-before-there-was-code-to-pass-it
+    statement: the verifiers were executed once against a tree that could not yet satisfy them
+    # **Red before green**, and the same fact AEP already models: the `order` kind's own
+    # documentation names `evidence.first_seq.test_result < evidence.first_seq.diff` as the
+    # protocol's form of this, which is first-occurrence ordering over a submission sequence. This is
+    # first-occurrence ordering over an event sequence, spelled the same way on purpose.
+    #
+    # It is a **different claim** from the row above and both are needed. `the-test-came-before-the-code`
+    # says the file was authored first; a test written first and never run before the implementation
+    # landed has still never been observed to fail, and a test that has never failed is a test nobody
+    # has evidence discriminates. Note that `order` reads **first** occurrences, which is what makes
+    # the honest red-green shape — run, implement, run again — satisfy this rather than contradict it.
+    expect:
+      order:
+        first: {tool: Bash, args: {command: {contains: "cargo test"}}}
+        before: {tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
+
+  # --- the store guardrail, with the control that stops it being vacuous -------------------
+
+  - id: no-artifact-file-was-rewritten-whole
+    statement: no artifact file was replaced wholesale; the CLI owns the frontmatter
+    # `tool.absent` and not `count: {exactly: 0}`, because *this must never happen* is the assertion
+    # people get wrong when they have to spell it as a bound.
+    #
+    # **`Edit` is deliberately not in this set, and the first live run is why it nearly was.** The
+    # widened row initially read `[Edit, NotebookEdit, Write]` and immediately contradicted a run
+    # that had done nothing wrong: it edited artifact **bodies**, which is what the skill's second
+    # guardrail tells it to do. The store's real rule is `store_integrity` in
+    # `crates/protocol-cli/src/drive.rs`: `Write` and `NotebookEdit` replace whole files and are
+    # denied under the store outright, while an `Edit` is denied only when a string crosses the
+    # `---` fence or touches a machine-owned key.
+    #
+    # That second half is **not transcript-decidable from a path**: it is a judgement about
+    # `old_string` and `new_string`, and no matcher in this vocabulary expresses *does this text
+    # cross a fence*. So this row asserts the half a transcript can carry — the whole-file rewrite —
+    # and the other half stays where `AGENTS.md` already puts it: `protocol artifact validate`,
+    # which catches an illegal frontmatter whether or not any guard fired. A row that claimed the
+    # fence rule from a file path would be asserting something it cannot see.
+    expect:
+      tool.absent:
+        tools: [NotebookEdit, Write]
+        args: {file_path: {glob: "*/.engineering/planning/*"}}
+
+  - id: the-harness-had-a-writer-to-refuse
+    statement: the harness's inventory contains `Write`, so the absence above is a refusal and not a missing tool
+    # The attribution control, in the idiom `conformance/trace/expectations.driven-step.trace.yaml`
+    # already uses: a `Write` that never happened in a session with no `Write` says nothing about
+    # anybody's discipline. This is the inventory, not the session's allow rules — that caveat is
+    # argued at length in the driven-step document and holds here unchanged.
+    expect:
+      env.tool_available:
+        tool: Write
+
+  - id: the-editor-was-used-at-all
+    statement: the run wrote files, so the transcript is a record of work and not an empty session
+    # The non-vacuity control. It is over the **whole** write set rather than the absence's two
+    # names on purpose: what it rules out is a transcript in which nothing happened at all, and an
+    # `Edit`-only run is a run that did work.
+    #
+    # This row and the absence above are deliberately asymmetric about an event the adapter could
+    # not read, and the first live run is where that showed: an **absence** stays `unk` past an
+    # unread event, because the forbidden call could be hiding in it, while this **existence** claim
+    # is decided by one readable match — an unread event can only add calls, never remove one. Both
+    # are correct and they are not the same rule; `crates/trace-spec/tests/write_selectors.rs` pins
+    # each polarity so neither can be "simplified" into the other.
+    expect:
+      tool.called:
+        tools: [Edit, NotebookEdit, Write]
+        count: {at_least: 1}
+
+  - id: the-store-was-validated
+    statement: the agent ran the store's own validator before reporting
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact validate"}}
+        count: {at_least: 1}
+
+  # --- the run's own record ------------------------------------------------------------------
+
+  - id: nothing-was-refused
+    statement: the run stayed inside the surface it was granted
+    expect:
+      permission.denied:
+        count: {at_most: 0}
+
+  - id: terminal-record-clean
+    statement: the session ended the way a finished session ends
+    expect:
+      result:
+        is_error: false
+        terminal_reason: completed
+
+  # --- advisory: shape, which no guard fixes -------------------------------------------------
+
+  - id: turns-within-reason
+    statement: the run did not loop
+    severity: advisory
+    expect:
+      turns:
+        count: {at_most: 40}

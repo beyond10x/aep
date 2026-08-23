@@ -1,0 +1,94 @@
+format: trace-spec/1
+id: eval-case/plan-reviewer-charter
+title: The plan-reviewer read the store and wrote nothing into it
+
+# **What this document can and cannot say.** The charter's bound is *you change nothing*, and the
+# honest form of that assertion is a clean working tree — which no `trace-spec/1` kind can read.
+# What is here instead is the reviewer's write **verbs**, each absent, plus the controls that stop
+# those absences being vacuous. That is weaker, it is weaker on purpose, and it is written down here
+# rather than left for a reader to discover: a green run of this document does not establish that no
+# file changed.
+#
+# `tool.absent` over `Write` or `Edit` is deliberately **not** here — the charter grants
+# `[Read, Grep, Glob, Bash]`, so those tools are never offered and such a row is true of every
+# possible run.
+
+expectations:
+  # --- the agent was reached at all ----------------------------------------------------------
+
+  - id: the-agent-was-offered
+    statement: the plugin loaded and offered the plan-reviewer, so a miss is not "it was not there"
+    expect:
+      env.agent_available:
+        agent: engineering-protocols:plan-reviewer
+
+  - id: a-subagent-actually-ran
+    statement: the review went through a subagent rather than being improvised by the parent session
+    # R9's P7. It exists because **a reviewer that died in its first turn also leaves the tree
+    # clean** — the absences below cannot tell a held bound from an absent run, and this can.
+    expect:
+      subagent.spawned:
+        count: {at_least: 1}
+
+  # --- proposes, never performs: one row per write verb -------------------------------------
+
+  - id: nothing-was-moved
+    statement: the reviewer proposed moves and ran none
+    expect:
+      tool.absent:
+        tool: Bash
+        args: {command: {contains: "protocol artifact move"}}
+
+  - id: nothing-was-created
+    statement: the reviewer created no artifact
+    expect:
+      tool.absent:
+        tool: Bash
+        args: {command: {contains: "protocol artifact new"}}
+
+  - id: nothing-was-related
+    statement: the reviewer wrote no edge
+    expect:
+      tool.absent:
+        tool: Bash
+        args: {command: {contains: "protocol artifact relate"}}
+
+  - id: the-store-was-actually-read
+    statement: the reviewer ran the store's read verbs, so the three absences are refusals and not an empty transcript
+    # R13's positive control over the same tool the three absences are scoped to, and R9's P6. The
+    # three rows above are jointly satisfied by a transcript in which nothing happened at all; this
+    # is what distinguishes that from a reviewer that did its job.
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact"}}
+        count: {at_least: 1}
+
+  # --- the run's own record ------------------------------------------------------------------
+
+  - id: nothing-was-refused
+    statement: nothing the reviewer tried had to be refused
+    expect:
+      permission.denied:
+        count: {at_most: 0}
+
+  - id: terminal-record-clean
+    statement: the session ended the way a finished session ends
+    expect:
+      result:
+        is_error: false
+        terminal_reason: completed
+
+  # --- advisory: the report happened at all ---------------------------------------------------
+
+  - id: the-report-named-an-artifact
+    statement: the final text names at least one artifact from the store
+    severity: advisory
+    # R9's P5, in the only form a transcript has for it — and `text.matches` is the weakest kind in
+    # the vocabulary, whose own documentation says to avoid it everywhere else because wording is
+    # allowed to vary. Advisory for exactly that reason: `a-subagent-actually-ran` and
+    # `the-store-was-actually-read` already carry the non-vacuity claim, and this row adds colour
+    # rather than a gate. A reviewer that reported in different words has not misbehaved.
+    expect:
+      text.matches:
+        contains: "story:"

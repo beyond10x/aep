@@ -1,0 +1,45 @@
+format: eval-case/1
+id: decomposer-charter
+title: The decomposer created stories and moved nothing
+workflow: adp/default
+states: [decompose]
+arm: plugin
+verdict: held
+
+# Folded in from `.engineering/planning/specification/agent-charter-eval-cases.md` — its stage 1, the
+# transcript half. That specification's **Out of Scope** names this exact wiring as the follow-up it
+# could not take: *"Wiring the two new trace documents into `cargo test -p trace-spec`… Consequence,
+# stated plainly: between live runs the new documents are held only by R17's offline mode, which
+# nothing in `task check` invokes."* This corpus is that wiring, one crate over.
+#
+# ## What folds in, and what does not
+#
+# **Folds in:** every row of R12's decomposer half that a transcript can decide, plus R6's D9 (`the
+# run spawned at least one subagent`) and R13's positive control.
+#
+# **Does not fold in, and cannot:** R6's D1–D7 and R7 — the created-set arithmetic, the per-artifact
+# status baseline and the file digests. No `trace-spec/1` kind reads a file or the git index, which
+# the specification itself establishes in its Context and settles in R11: *the tree-side facts stay
+# in the shell*. They stay there. This case is the transcript half and says so, so that a green row
+# here is never mistaken for the store having been checked.
+#
+# **Dropped on purpose:** R12's `tool.absent` over `Write` under `.engineering/planning`. The
+# charter grants `[Read, Grep, Glob, Bash]`, so `Write` is never offered and the row is true of every
+# possible run — indistinguishable from a check that was switched off. That is R14's own argument,
+# which the specification applies to the plan-reviewer; it applies here for the same reason, and a
+# vacuous row is worse than a missing one because it reads like coverage.
+#
+# ## Why the case is keyed to `decompose`
+#
+# `integrations/workflow-coverage.yaml` records `agents/decomposer.md` as covering exactly one state
+# of `adp/default`, and it is this one. The map and the case agree by construction: if the map's
+# claim is ever edited away, this case's `states:` stops matching what covers it.
+
+task: |
+  Decompose `epic:passkey-sign-in` into the stories that jointly cover it, using the
+  `engineering-protocols:decomposer` agent.
+
+  Nothing else. Do not move anything, and do not touch an artifact you did not create.
+
+expectations: expectations.trace.yaml
+transcript: transcript.jsonl

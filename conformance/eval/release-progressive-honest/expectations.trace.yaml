@@ -1,0 +1,98 @@
+format: trace-spec/1
+id: eval-case/release-progressive
+title: A run of `release/progressive` observed the canary before promoting it
+
+# What `release/progressive` is *for*, read off a transcript. Every row here is ordering or a count,
+# because those are the two things the workflow's guards actually constrain and the two things a
+# transcript can decide. Nothing here reads a service's health: whether the canary was healthy is a
+# telemetry question, and this document asserts only that somebody went and asked it — twice, before
+# promoting.
+
+expectations:
+  # --- the ladder, in the order the transitions require it ----------------------------------
+
+  - id: staging-came-before-the-canary
+    statement: the release reached staging before it reached real traffic
+    # `stage -> canary` guards on `deployment.staging.status == succeeded`. A run that went straight
+    # to the canary skipped the deployment where a broken deployment costs nothing but time.
+    expect:
+      order:
+        first: {tool: Bash, args: {command: {contains: "deploy --target staging"}}}
+        before: {tool: Bash, args: {command: {contains: "deploy --target canary"}}}
+
+  - id: the-canary-came-before-the-promotion
+    statement: a slice of real traffic saw the build before all of it did
+    expect:
+      order:
+        first: {tool: Bash, args: {command: {contains: "deploy --target canary"}}}
+        before: {tool: Bash, args: {command: {contains: "deploy --target production"}}}
+
+  # --- the row this workflow exists for -----------------------------------------------------
+
+  - id: the-canary-was-measured-before-the-promotion
+    statement: telemetry was queried before production was promoted, not after
+    # **`observe` is a state, not a pause.** This is that sentence as an assertion over an event
+    # sequence: a promotion whose first telemetry query follows it has measured the thing it already
+    # decided about.
+    expect:
+      order:
+        first: {tool: Bash, args: {command: {contains: "telemetry query"}}}
+        before: {tool: Bash, args: {command: {contains: "deploy --target production"}}}
+
+  - id: the-canary-was-sampled-more-than-once
+    statement: the observation is a series rather than a single scrape
+    # `observe -> promote` requires `at_least: 2` independent `metric_observation` records, and the
+    # workflow says why in a comment beside them: one sample cannot distinguish a healthy canary from
+    # a lucky scrape, and a self-reported metric cannot distinguish either from wishful thinking.
+    # The second half of that — independence — is an evidence property the engine checks and a
+    # transcript cannot see; only the count is here, and the limit is named rather than implied.
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "telemetry query"}}
+        count: {at_least: 2}
+
+  # --- what a bad release would have looked like, with its control -------------------------
+
+  - id: nothing-was-rolled-back
+    statement: no rollback route was taken, so this is a run of the happy path
+    # Not a quality claim. It is what makes the case's subject unambiguous: `observe` and `promote`
+    # both declare `on_failure: rollback`, so a run that rolled back is a run of a different story
+    # and its ordering rows would be about a different sequence of events.
+    expect:
+      tool.absent:
+        tool: Bash
+        args: {command: {contains: "--rollback"}}
+
+  - id: the-shell-was-used-at-all
+    statement: the run made shell calls, so the absence above is a refusal and not an empty transcript
+    # The positive control over the same tool. Without it, `nothing-was-rolled-back` is green against
+    # a transcript in which the agent did nothing whatsoever.
+    expect:
+      tool.called:
+        tool: Bash
+        count: {at_least: 1}
+
+  # --- the run's own record ------------------------------------------------------------------
+
+  - id: nothing-was-refused
+    statement: the run stayed inside the surface it was granted
+    expect:
+      permission.denied:
+        count: {at_most: 0}
+
+  - id: terminal-record-clean
+    statement: the session ended the way a finished session ends
+    expect:
+      result:
+        is_error: false
+        terminal_reason: completed
+
+  # --- advisory ------------------------------------------------------------------------------
+
+  - id: turns-within-reason
+    statement: the run did not loop
+    severity: advisory
+    expect:
+      turns:
+        count: {at_most: 40}

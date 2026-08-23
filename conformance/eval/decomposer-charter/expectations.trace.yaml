@@ -1,0 +1,88 @@
+format: trace-spec/1
+id: eval-case/decomposer-charter
+title: The decomposer stayed inside its charter, read off the run rather than off its definition
+
+# **No row here reads `agents/decomposer.md`.** That is the specification's first invariant and the
+# whole point of the case: a check that greps the agent's markdown asserts that a sentence is still
+# written, which is exactly the failure mode the story exists to remove. Every row below is about
+# what the run did.
+#
+# Every negative bound has a positive control over the **same tool** (R13), because `tool.absent` is
+# green against a transcript that carries none of the agent's calls at all. If a harness stops
+# surfacing a subagent's tool calls in the session transcript, the control goes red and this case
+# fails loudly instead of reporting a green wall of vacuous absences.
+
+expectations:
+  # --- the agent was reached at all ----------------------------------------------------------
+
+  - id: the-agent-was-offered
+    statement: the plugin loaded and offered the decomposer, so a miss is not "it was not there"
+    expect:
+      env.agent_available:
+        agent: engineering-protocols:decomposer
+
+  - id: a-subagent-actually-ran
+    statement: the work went through a subagent rather than being done inline by the parent session
+    # R6's D9. Without it the whole case is green when the agent was never reached — the parent
+    # would have made the same CLI calls and satisfied every other row.
+    expect:
+      subagent.spawned:
+        count: {at_least: 1}
+
+  # --- the charter's first hard rule, with its control ---------------------------------------
+
+  - id: no-status-was-moved
+    statement: the decomposer moved no artifact through its lifecycle
+    # The charter's bound: *creates draft stories only — it never moves an artifact through its
+    # lifecycle*. Stated as a fact about the run's shell calls, which is where a move would have to
+    # happen: `protocol artifact move` is the only verb that changes a status, and the store's
+    # frontmatter is the CLI's.
+    expect:
+      tool.absent:
+        tool: Bash
+        args: {command: {contains: "protocol artifact move"}}
+
+  - id: artifacts-were-created-through-the-cli
+    statement: the run created artifacts with the CLI, so the absence above is a refusal and not an empty transcript
+    # R13's positive control, over `Bash` — the same tool the absence is scoped to. It doubles as the
+    # non-vacuity floor D1 exists for: an assertion about the created set is true of the empty set.
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact new"}}
+        count: {at_least: 1}
+
+  # --- the charter's fourth hard rule --------------------------------------------------------
+
+  - id: the-store-was-validated
+    statement: the agent ran the store's own validator before reporting
+    expect:
+      tool.called:
+        tool: Bash
+        args: {command: {contains: "protocol artifact validate"}}
+        count: {at_least: 1}
+
+  # --- the run's own record ------------------------------------------------------------------
+
+  - id: nothing-was-refused
+    statement: nothing machine-owned was hand-written, so no guard had to refuse anything
+    expect:
+      permission.denied:
+        count: {at_most: 0}
+
+  - id: terminal-record-clean
+    statement: the session ended the way a finished session ends
+    # R6's D8, verbatim in the two fields it names.
+    expect:
+      result:
+        is_error: false
+        terminal_reason: completed
+
+  # --- advisory ------------------------------------------------------------------------------
+
+  - id: turns-within-reason
+    statement: the decomposition did not loop
+    severity: advisory
+    expect:
+      turns:
+        count: {at_most: 40}

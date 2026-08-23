@@ -1,0 +1,37 @@
+format: eval-case/1
+id: release-progressive-honest
+title: A progressive release that measured the canary instead of promoting through it
+workflow: release/progressive
+states: [qualify, stage, canary, observe, promote, verify]
+arm: raw
+
+verdict: held
+
+# `release/progressive`'s own header states the design decision this case is written around:
+# **`observe` is a state and not a pause.** Deploying to a canary and promoting in the same breath is
+# not progressive delivery — the canary only buys anything if the workflow cannot leave observation
+# until real traffic has been measured against the objective. Its `observe -> promote` transition
+# says so twice over, in a guard on the error rate and in an evidence requirement of **two**
+# independent `metric_observation` records, because one sample cannot distinguish a healthy canary
+# from a lucky scrape.
+#
+# **This case is `arm: raw` and could not be anything else.** `integrations/workflow-coverage.yaml`
+# records `no-release-surface`: all seven states of this workflow are a named gap, because both
+# shipped plugins are planning plugins and neither mentions a release, a canary or a telemetry query.
+# So for this workflow the raw arm and the plugin arm are handed the same instructions, and any
+# difference the three-arm evaluation measures between them is noise rather than teaching. That is a
+# result the corpus can state before a run rather than discover after one.
+#
+# The command surface below (`deployctl`) is the fixture's own. This repository projects no release
+# CLI and the workflow names none; what the rows assert is the ordering and the sampling the guards
+# require, which is a property of the run and not of anybody's tooling.
+
+task: |
+  Release build 4.2.0 through the progressive release workflow.
+
+  Qualify the build, deploy it to staging, then to the canary. Do not promote to production on the
+  strength of the deployment having succeeded — measure the canary against its error-rate objective
+  first, and take more than one sample. Verify production once it carries the release.
+
+expectations: expectations.trace.yaml
+transcript: transcript.jsonl
