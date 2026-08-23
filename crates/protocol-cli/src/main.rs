@@ -659,6 +659,12 @@ mod contract;
 // about its own output lives: counts of facts, never a score.
 mod eval;
 
+// The seventh, and the only one whose output is another component's input. It reads the same
+// workflow `render` draws and writes the document `b10x-harness-flow` plans, which is a projection
+// and deliberately not an equivalence - see the module for what it drops and why. It answers, for
+// free, whether a workflow fits a notation before anything is paid to run one under it.
+mod flow;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,

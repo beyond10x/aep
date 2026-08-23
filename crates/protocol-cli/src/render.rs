@@ -92,6 +92,13 @@ pub(crate) enum WorkflowCommand {
     /// Nothing here is evaluated. A principle's `applies_when` is printed as the condition it is,
     /// never as a verdict about a task this process cannot see.
     Instruct(InstructArgs),
+    /// Project a workflow into the document format the b10x harness runs natively.
+    ///
+    /// An honest projection and not an equivalence: the harness's notation is a DAG of sub-trees
+    /// and this graph goes backwards, so a retreat becomes a group that repeats, terminal states
+    /// are dropped because nothing runs in them, and no guard travels at all. What it answers, for
+    /// free and before anything is paid to run, is whether the shape fits.
+    Flow(crate::flow::FlowArgs),
 }
 
 /// What a rendering is written as.
@@ -162,6 +169,18 @@ pub(crate) fn run(command: WorkflowCommand) -> Result<ExitCode> {
     match command {
         WorkflowCommand::Render(args) => render(&args),
         WorkflowCommand::Instruct(args) => instruct(&args),
+        WorkflowCommand::Flow(args) => {
+            let document = crate::flow::flow(&args)?;
+            match &args.out {
+                Some(path) => {
+                    std::fs::write(path, &document)
+                        .with_context(|| format!("writing {}", path.display()))?;
+                    println!("{}", path.display());
+                }
+                None => print!("{document}"),
+            }
+            Ok(ExitCode::SUCCESS)
+        }
     }
 }
 
@@ -270,7 +289,7 @@ fn workflow(args: &RenderArgs) -> Result<Workflow> {
 ///
 /// Shared by both verbs, because "no workflow `adp/defualt`" is the same mistake whichever of them
 /// was asked, and a reader who mistyped an id needs the list either way.
-fn named<'a>(registry: &'a Registry, id: &str, root: &Path) -> Result<&'a Workflow> {
+pub(crate) fn named<'a>(registry: &'a Registry, id: &str, root: &Path) -> Result<&'a Workflow> {
     let reference: WorkflowRef = id
         .parse()
         .with_context(|| format!("`{id}` is not a workflow reference"))?;
