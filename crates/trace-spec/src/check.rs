@@ -569,6 +569,19 @@ fn env_tool_available(ir: &TraceIr, availability: &ToolAvailability) -> Outcome 
         ToolAvailability::NotOffered { tool } => {
             env_withholds(ir, "tools", "tool", tool, |start| start.tools.as_deref())
         }
+        // Any one of them satisfies it. The citation names which, because *a writer was offered*
+        // is only useful to a reader who can see which writer it was.
+        ToolAvailability::OfferedAny { tools } => {
+            let mut last = Outcome::Undecidable(UnknownReason::NoSessionStart);
+            for tool in tools {
+                let outcome = env_offers(ir, "tools", "tool", tool, |start| start.tools.as_deref());
+                if matches!(outcome, Outcome::Ok(_)) {
+                    return outcome;
+                }
+                last = outcome;
+            }
+            last
+        }
         ToolAvailability::Only { tools } => env_tools_only(ir, tools),
     }
 }

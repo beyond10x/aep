@@ -138,6 +138,22 @@ pub enum ToolAvailability {
         /// The tool's name, as the harness lists it.
         tool: String,
     },
+    /// **Any one** of these is among those offered.
+    ///
+    /// The cross-harness form of [`Offered`](Self::Offered), and the first live evaluation of a
+    /// second harness is why it exists. `the-harness-had-a-writer-to-refuse` is an attribution
+    /// control: a `Write` that never happened in a session with no `Write` says nothing about
+    /// anybody's discipline. Written as `tool: Write` it asserts *Claude Code's* writer, so a
+    /// harness whose writer is called something else was reported as having none — which reads as
+    /// a defect and is a vocabulary mismatch.
+    ///
+    /// It is a widening of **what can witness a claim**, never of the claim: *this session had a
+    /// writer* is the same assertion whichever verb the harness spells it with. The narrow form
+    /// stays for a row that genuinely means one named tool.
+    OfferedAny {
+        /// The names, any one of which satisfies the claim.
+        tools: BTreeSet<String>,
+    },
     /// The offered tools are **exactly** this set — nothing else was on the table.
     Only {
         /// Every tool that may be offered, and no others.

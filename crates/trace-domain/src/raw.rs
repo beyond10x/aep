@@ -342,8 +342,9 @@ pub enum RawExpectationKind {
     /// `{env.agent_available: {agent: …}}`
     #[serde(rename = "env.agent_available")]
     EnvAgentAvailable(RawAgent),
-    /// `{env.tool_available: {tool: Bash}}`, `{env.tool_available: {tool: Task, available:
-    /// false}}`, or `{env.tool_available: {only: [Read, Glob, Grep]}}`.
+    /// `{env.tool_available: {tool: Bash}}`, `{env.tool_available: {tools: [Write,
+    /// workspace_write]}}`, `{env.tool_available: {tool: Task, available: false}}`, or
+    /// `{env.tool_available: {only: [Read, Glob, Grep]}}`.
     #[serde(rename = "env.tool_available")]
     EnvToolAvailable(RawToolAvailable),
     /// `{env.mcp_servers: {count: {at_most: 0}}}`
@@ -561,6 +562,9 @@ pub struct RawToolAvailable {
     /// One tool's name, as the harness lists it.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several names, any one of which satisfies the claim — the cross-harness form of `tool`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Whether that tool must have been offered. `true` when the document omits it.
     #[serde(default)]
     pub available: Option<bool>,
@@ -1190,6 +1194,38 @@ fn tool_available(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "env.tool_available";
+    if written.tools.is_some() && (written.tool.is_some() || written.only.is_some()) {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            at_kind(location, kind),
+            "`tools` is the any-of form of `tool` and cannot be combined with `tool` or `only`: \
+             one row makes one claim about the offered list",
+        );
+        return None;
+    }
+    if let Some(any) = written.tools.clone() {
+        if written.available.is_some() {
+            errors.refuse(
+                TraceCode::SpecInvalidExpectation,
+                at(location, kind, "available"),
+                "`available: false` asks whether one named tool was withheld, and `tools` names \
+                 several; *none of these was offered* is a different claim and has no form here yet",
+            );
+            return None;
+        }
+        return Some(ExpectationKind::EnvToolAvailable {
+            availability: ToolAvailability::OfferedAny {
+                tools: names_of(
+                    any,
+                    &at(location, kind, "tools"),
+                    "tool",
+                    "an `env.tool_available` listing no tool under `tools` names none, so it can \
+                     only report a gap",
+                    errors,
+                )?,
+            },
+        });
+    }
     let availability = match (written.tool, written.only) {
         (Some(_), Some(_)) => {
             errors.refuse(
