@@ -317,6 +317,23 @@ enum Command {
         #[command(subcommand)]
         command: trace::TraceCommand,
     },
+    /// Turn a contract runner's own record into evidence the engine reads.
+    ///
+    /// The consumer/provider contract — *does the published interface still behave as its consumers
+    /// were told?* — and specifically the record an outside runner prints about it. metaharness
+    /// contract-tests each `metaharness ⇄ vendor` adapter and emits the outcome in the
+    /// `contract_result` shape this repository defines, which is a shared vocabulary rather than a
+    /// dependency: no crate crosses that boundary, because this repository is public and that one is
+    /// not.
+    ///
+    /// Not to be confused with `protocol conformance`, which asks whether a **backend** implements
+    /// `aep-contract` — storage, commands, queries, audit. Neither subsumes the other and the only
+    /// thing they share is the word.
+    Contract {
+        /// What to do with a record.
+        #[command(subcommand)]
+        command: contract::ContractCommand,
+    },
     /// Walk a workflow: run the steps a step map declares, and do only what the engine permits.
     ///
     /// The reference driver. It makes the engine's calls in order, executes the three kinds of step
@@ -609,6 +626,12 @@ mod drive;
 // because that crate is scanned for exactly those things.
 mod render;
 
+// The fifth. Its input is one JSON object an outside contract runner printed, its vocabulary is the
+// `contract_result` payload `aep-domain` already defines, and it shares nothing with the rest — the
+// smallest a verb family in this binary has ever been, because the shared vocabulary did most of the
+// work before the module existed.
+mod contract;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -640,6 +663,7 @@ fn run() -> Result<ExitCode> {
         Command::Explain { execution, action } => evaluate(&execution, action.as_deref()),
         Command::Artifact { command } => planning::run(command),
         Command::Trace { command } => trace::run(command),
+        Command::Contract { command } => contract::run(command),
         Command::Drive { command } => drive::run(command),
         Command::Workflow { command } => render::run(command),
         Command::Entity { command } => entity(&command),

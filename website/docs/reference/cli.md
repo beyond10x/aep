@@ -13,7 +13,7 @@ map.
 Most verbs take `--format text|yaml|json`, with `text` the default: refusals, decisions and
 evaluations all serialise. The exceptions are named in their own sections, and they are exceptions
 because the thing being rendered is not a report — a graph has `dot` and `mermaid`, a drawing has
-`svg` and `png`, and the two verbs that mint evidence default to `yaml` because that is what
+`svg` and `png`, and the three verbs that mint evidence default to `yaml` because that is what
 `protocol evaluate --evidence` reads back.
 
 General conventions: exit `0` is success, exit `1` is a refusal or invalid input, and errors
@@ -229,6 +229,40 @@ gating nothing, and every downgraded id named in the report. An id the specifica
 declare is a usage error, not a silent no-op. In an evidence record, `trace_conformance.passed`
 ignores the downgrade, because a flag the caller passed must not satisfy a requirement the protocol
 asked for.
+
+## Contract surface
+
+The consumer/provider contract — *does the published interface still behave as its consumers were
+told?* — and specifically a record an outside contract runner printed about one. Not
+`protocol conformance`, which asks whether a storage backend implements `aep-contract`; the two
+share the word and nothing else.
+
+| Command | Does |
+|---|---|
+| `protocol contract evidence --record <file> --observed-at <date> [--out <file>]` | reads a `contract_result` record a contract runner emitted and writes the AEP evidence document it implies (producer `contract-runner`, the record's bytes digested into the provenance) that `protocol evaluate --evidence` accepts |
+
+The record is one JSON object in the shape `aep-domain` defines —
+`{kind, checked, failed, breaking_changes, provider, consumer}` — which is what
+`metaharness conformance <kind> --contract` prints. Redirect it to a file and hand the file over;
+`--record` takes a path rather than standard input so that the bytes the provenance digest names
+exist somewhere a later reader can go and check.
+
+`--observed-at` is required, unlike `protocol trace evidence`'s. That verb runs its check in its own
+process and may stamp its own clock; this one is handed a record made elsewhere, possibly last week,
+and the record carries no time of its own — so a default of *now* would claim a freshness nobody
+observed.
+
+Two records are refused, each naming why, and both refusals are about a record that says nothing
+rather than a record that says something bad:
+
+* `checked: 0` — a run that checked nothing also has zero failures. Minting it would discharge the
+  `contract_result` obligation the `contract-testing` principle places on a task while two of that
+  principle's three predicates passed vacuously.
+* `breaking_changes` greater than `failed` — a breaking change is one of the failures, so the pair
+  describes no run.
+
+A record reporting failures is written down and exits `0`. The verdict belongs in the record, and
+`protocol evaluate` is what decides on it.
 
 ## Repository automation (`cargo xtask`)
 

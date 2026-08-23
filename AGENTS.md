@@ -184,12 +184,24 @@ passing one.
   replaying those exact bytes through the real parser, and until it runs this is one implementation
   agreeing with a transcription of another. Vocabulary crosses that boundary and a dependency never
   does, because this repository is public and that one is not.
+  **And one artifact crosses the other way.** metaharness contract-tests each of its vendor adapters
+  and prints the outcome in the `contract_result` shape `aep-domain` defines — which parses directly
+  as the payload, because `protocols/aep/1.yaml` has declared that kind, the `contract-runner`
+  verifier and `contracts.**` since the base protocol. What it lacks is the envelope an evidence
+  document needs, so `protocol contract evidence` supplies `observed_at` — required, because this
+  process did not watch the run — and a constant `producer`, and nothing else. Two records are
+  refused where they enter rather than left to the engine: `checked: 0`, which would discharge
+  `contract-testing`'s evidence obligation on a run that checked nothing, and `breaking_changes >
+  failed`, which describes no run. A record reporting failures is written down, because the verdict
+  belongs in the record. The captured bytes are committed
+  (`crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex}.json`) and the other side
+  pins the same ones.
   The eval machinery and its results migrated to the metaharness repository
   (`evals/engineering-protocols/`). Record:
   `docs/plan/harness-wave-2-driver-decision.md`; design
   `docs/design/harness-planning-and-driver-design-v0.1.md` §§ 4.1–4.9.
-  The store this repository runs on is `.engineering/planning/`: **59 artifacts** — one initiative,
-  seven epics, forty stories, ten tasks and one specification — and `protocol artifact validate`
+  The store this repository runs on is `.engineering/planning/`: **64 artifacts** — one initiative,
+  eight epics, forty-four stories, ten tasks and one specification — and `protocol artifact validate`
   exits 0 on it. **It has been driven once.** `W4-1/1`, 2026-08-21, walked a real story from that
   store under `development.driven` and **blocked in `establish_verifiers`**, because the
   specification it wrote was still `draft` and the suite it ran passed where the rule wants a

@@ -186,6 +186,34 @@ belongs in the commit message or in `docs/design/`.
   README. `task codex-eval` checks the surface itself: free, no API call, no model — nine checks
   against the files, so drift in the instructions fails a command instead of a reader.
 
+- **`protocol contract evidence` — an outside contract runner's own record becomes a fact the
+  engine reads.** metaharness contract-tests each of its vendor adapters and prints the outcome as
+  one JSON object in the `contract_result` shape this repository defines; until now nothing here
+  read one, so the two repositories shared a vocabulary that no bytes had ever crossed. Hand the
+  runner's output to this verb with the day it was made
+  (`protocol contract evidence --record claude.json --observed-at 2026-08-23`) and what comes back
+  is a document `protocol evaluate --evidence` reads directly — the runner's counts untouched,
+  `producer: verifier / contract-runner`, and the SHA-256 of the bytes it was handed in the record's
+  provenance. No new evidence kind, no schema change and no document change: `contract_result`,
+  the `contract-runner` verifier and `contracts.**` have been in `protocols/aep/1.yaml` since the
+  base protocol, which is what the shared vocabulary was for. The two captured records are
+  committed at `crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex}.json`
+  (20 and 10 vectors, both green) and a metaharness-side wave pins the same bytes, so the two sides
+  disagree loudly or not at all.
+  **Two records are refused rather than minted, and the refusal names why.** A record stating
+  `checked: 0` asserts nothing — measured against `examples/billing-conformance` it would discharge
+  the `contract_result` obligation the `contract-testing` principle places on a task, and pass two of
+  that principle's three predicates vacuously, on the strength of a run that checked nothing. A
+  record whose `breaking_changes` exceed its `failed` describes no run, since a breaking change is
+  one of the failures. Bad news is not refused: a record reporting failures is written down and
+  exits `0`, because the verdict belongs in the record and the engine is what decides on it — and
+  `contracts.breaking_changes` is the line that moves, so a red run that is the runner's own
+  machinery reads differently from one where the vendor moved.
+  **`--observed-at` is required**, unlike `protocol trace evidence`'s: that verb runs the check
+  itself and may stamp its own clock, this one is handed a record from another process on another
+  day, and a default of *now* would be a freshness claim nobody made.
+  Acceptance: `story:contract-result-ingestion`.
+
 ## [0.11.0-ground-truth-and-docs] — 2026-08-22
 
 ### Fixed
