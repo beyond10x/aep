@@ -1287,6 +1287,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1309,6 +1320,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope: `tools: [Write, Edit]`.\n\nThe plural spelling exists because a harness has more than one verb for *put these bytes in this file*, and an ordering claim is about the writing rather than about the verb. Never written beside `tool:` — one scope, one spelling, and the validator refuses both at once rather than picking a winner.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1400,6 +1422,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1467,6 +1500,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1500,6 +1544,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1532,6 +1587,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1573,6 +1639,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several tool names, any of which is in scope. Never written beside `tool:`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

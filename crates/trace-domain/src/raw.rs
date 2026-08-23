@@ -296,6 +296,14 @@ pub struct RawSelector {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope: `tools: [Write, Edit]`.
+    ///
+    /// The plural spelling exists because a harness has more than one verb for *put these bytes in
+    /// this file*, and an ordering claim is about the writing rather than about the verb. Never
+    /// written beside `tool:` — one scope, one spelling, and the validator refuses both at once
+    /// rather than picking a winner.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -579,6 +587,9 @@ pub struct RawToolCalled {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -594,6 +605,9 @@ pub struct RawScopedCount {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -608,6 +622,9 @@ pub struct RawToolResult {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -622,6 +639,9 @@ pub struct RawToolResultBytes {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -639,6 +659,9 @@ pub struct RawToolErrorRate {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -738,6 +761,9 @@ pub struct RawStepMs {
     /// The tool's name. Absent selects every tool.
     #[serde(default)]
     pub tool: Option<String>,
+    /// Several tool names, any of which is in scope. Never written beside `tool:`.
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -1255,7 +1281,13 @@ fn tool_called(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "tool.called";
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let count = default_count(written.count, &at(location, kind, "count"), errors);
     Some(ExpectationKind::ToolCalled {
         selector: selector?,
@@ -1274,7 +1306,13 @@ fn tool_absent(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "tool.absent";
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors)?;
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    )?;
     if selector.is_unscoped() {
         errors.refuse(
             TraceCode::SpecInvalidExpectation,
@@ -1295,7 +1333,13 @@ fn tool_result(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "tool.result";
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let result = result_of(written.result, &at(location, kind, "result"), errors);
     Some(ExpectationKind::ToolResultMatches {
         selector: selector?,
@@ -1310,7 +1354,13 @@ fn tool_result_bytes(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "tool.result_bytes";
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let bytes = count_of(written.bytes, &at(location, kind, "bytes"), errors);
     Some(ExpectationKind::ToolResultBytes {
         selector: selector?,
@@ -1326,7 +1376,13 @@ fn tool_error_rate(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "tool.error_rate";
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let rate = range_of(written.rate, &at(location, kind, "rate"), errors);
     Some(ExpectationKind::ToolErrorRate {
         selector: selector?,
@@ -1341,7 +1397,13 @@ fn scoped_count(
     location: &str,
     errors: &mut ValidationErrors,
 ) -> Option<(CallSelector, CountBound)> {
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let count = count_of(written.count, &at(location, kind, "count"), errors);
     Some((selector?, count?))
 }
@@ -1353,7 +1415,13 @@ fn step_ms(
     location: &str,
     errors: &mut ValidationErrors,
 ) -> Option<(CallSelector, CountBound)> {
-    let selector = selector_of(written.tool, written.args, &at_kind(location, kind), errors);
+    let selector = selector_of(
+        written.tool,
+        written.tools,
+        written.args,
+        &at_kind(location, kind),
+        errors,
+    );
     let ms = count_of(written.ms, &at(location, kind, "ms"), errors);
     Some((selector?, ms?))
 }
@@ -1417,12 +1485,14 @@ fn order(
     let kind = "order";
     let first = selector_of(
         written.first.tool,
+        written.first.tools,
         written.first.args,
         &at(location, kind, "first"),
         errors,
     );
     let before = selector_of(
         written.before.tool,
+        written.before.tools,
         written.before.args,
         &at(location, kind, "before"),
         errors,
@@ -1540,13 +1610,29 @@ fn text_matches(
 /// Validates a call selector. Every argument matcher is checked before any refusal is propagated.
 fn selector_of(
     tool: Option<String>,
+    tools: Option<Vec<String>>,
     args: BTreeMap<String, RawFieldMatcher>,
     location: &str,
     errors: &mut ValidationErrors,
 ) -> Option<CallSelector> {
     let mut usable = true;
-    let tool = match tool {
-        Some(name) if name.trim().is_empty() => {
+
+    // One scope, one spelling. Reading `tool` and ignoring `tools` — or merging them — would make
+    // a document that says two things mean one of them silently, and which one is exactly the
+    // question a reader would have to run the checker to answer.
+    if tool.is_some() && tools.is_some() {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            location.to_owned(),
+            "`tool:` and `tools:` are two spellings of one scope and this selector writes both. \
+             Use `tools: [...]` for a set and `tool: X` for one name.",
+        );
+        usable = false;
+    }
+
+    let mut names: BTreeSet<String> = BTreeSet::new();
+    if let Some(name) = tool {
+        if name.trim().is_empty() {
             errors.refuse(
                 TraceCode::SpecInvalidExpectation,
                 format!("{location}.tool"),
@@ -1554,10 +1640,42 @@ fn selector_of(
                  matched every one",
             );
             usable = false;
-            None
+        } else {
+            names.insert(name);
         }
-        other => other,
-    };
+    }
+    if let Some(written) = tools {
+        if written.is_empty() {
+            errors.refuse(
+                TraceCode::SpecInvalidExpectation,
+                format!("{location}.tools"),
+                "an empty `tools:` selects no call at all, and reads like the omission that would \
+                 have selected every one. Name the tools, or leave the key out.",
+            );
+            usable = false;
+        }
+        for name in written {
+            if name.trim().is_empty() {
+                errors.refuse(
+                    TraceCode::SpecInvalidExpectation,
+                    format!("{location}.tools"),
+                    "a blank tool name in `tools:` matches no call, and widens nothing",
+                );
+                usable = false;
+            } else if !names.insert(name.clone()) {
+                errors.refuse(
+                    TraceCode::SpecInvalidExpectation,
+                    format!("{location}.tools"),
+                    format!(
+                        "`{name}` is named twice in `tools:`; a set that repeats a name is a set \
+                         somebody edited without reading"
+                    ),
+                );
+                usable = false;
+            }
+        }
+    }
+    let tools = names;
     let mut matchers = BTreeMap::new();
     for (field, written) in args {
         let at = format!("{location}.args.{field}");
@@ -1578,7 +1696,7 @@ fn selector_of(
         }
     }
     usable.then_some(CallSelector {
-        tool,
+        tools,
         args: matchers,
     })
 }
@@ -2428,6 +2546,62 @@ expectations:
             "no call precedes itself: {refused}"
         );
         accepted(&one("{order: {first: {tool: Bash}, before: {tool: Edit}}}"));
+    }
+
+    #[test]
+    fn a_tool_set_is_read_as_a_scope_and_the_ways_one_is_written_wrong_are_refused() {
+        // The plural spelling exists because a harness has several verbs for *put these bytes in
+        // this file*. It is a scope, so every way of writing one that selects nothing, or that
+        // says the scope twice, is refused rather than resolved.
+        let spec = accepted(&one(
+            "{tool.called: {tools: [Write, Edit, NotebookEdit], count: {at_least: 1}}}",
+        ));
+        let ExpectationKind::ToolCalled { selector, .. } = &spec.expectations[0].kind else {
+            panic!("the document declares `tool.called`");
+        };
+        assert_eq!(
+            selector.tools,
+            BTreeSet::from([
+                "Edit".to_owned(),
+                "NotebookEdit".to_owned(),
+                "Write".to_owned()
+            ]),
+            "every name in the set is in scope"
+        );
+
+        // A single name still parses, and still renders as itself — every report written before
+        // the scope became a set says exactly what it always said.
+        let single = accepted(&one("{tool.called: {tool: Bash, count: {at_least: 1}}}"));
+        let ExpectationKind::ToolCalled { selector, .. } = &single.expectations[0].kind else {
+            panic!("the document declares `tool.called`");
+        };
+        assert_eq!(selector.to_string(), "Bash");
+
+        for (body, why) in [
+            (
+                "{tool.called: {tool: Write, tools: [Edit], count: {at_least: 1}}}",
+                "two spellings of one scope",
+            ),
+            (
+                "{tool.called: {tools: [], count: {at_least: 1}}}",
+                "an empty set selects nothing and reads like the omission that selects everything",
+            ),
+            (
+                "{tool.called: {tools: [Write, \"\"], count: {at_least: 1}}}",
+                "a blank name in a set widens nothing",
+            ),
+            (
+                "{tool.called: {tools: [Write, Write], count: {at_least: 1}}}",
+                "a set that repeats a name is one somebody edited without reading",
+            ),
+        ] {
+            let refused = refusals(&one(body));
+            assert_eq!(
+                refused.count(TraceCode::SpecInvalidExpectation),
+                1,
+                "{why}: {refused}"
+            );
+        }
     }
 
     #[test]

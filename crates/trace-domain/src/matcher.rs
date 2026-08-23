@@ -32,7 +32,7 @@
 //! made structural: a cost expectation exists to catch a run that looped for forty minutes, not
 //! to detect a 12% regression, and an equality over a float is a CI job people learn to ignore.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::Serialize;
@@ -343,10 +343,27 @@ pub fn glob_matches(pattern: &str, subject: &str) -> bool {
 /// refusal and relayed it behaved exactly right — and contains a failed tool call. A blanket
 /// `tool.error_rate: 0` would forbid the plugin's own intended behaviour; a selector lets a
 /// specification say *no failed `Read`* and leave the deliberate refusal alone.
+/// # One claim, several tool names
+///
+/// The scope is a **set** of tool names rather than one, because a harness spells *put these bytes
+/// in this file* several ways and an ordering claim is about the writing, not about which verb the
+/// model reached for. The first live pilot is the evidence: a run asked to write a test before the
+/// code did exactly that with Claude Code's `Edit`, and a selector naming `Write` alone reported
+/// `never_occurred` — the checker saying *it did not happen* about work that visibly had.
+///
+/// A set widens **what can witness a claim** and never the claim. `Edit` before `Edit` is the same
+/// ordering assertion as `Write` before `Write`; what changes is that the assertion is now
+/// decidable against a run that used the other verb. The alternative — dropping the tool scope and
+/// matching on `file_path` alone — would have been a genuine weakening, because `Read` carries a
+/// `file_path` too and *read the test first* is not *wrote the test first*.
+///
+/// There is deliberately no way to say *this tool **or** that argument*: design decision **D2**
+/// keeps the matcher language free of boolean combinators, and the growth path when one set of
+/// names is not enough is a second expectation, not an expression language.
 #[derive(Debug, Clone, PartialEq, Default, Serialize)]
 pub struct CallSelector {
-    /// The tool's name. Absent selects every tool.
-    pub tool: Option<String>,
+    /// The tools whose calls are in scope. Empty selects every tool.
+    pub tools: BTreeSet<String>,
     /// Matchers over named arguments, all of which must hold.
     pub args: BTreeMap<String, FieldMatcher>,
 }
@@ -355,7 +372,19 @@ impl CallSelector {
     /// A selector for one tool and nothing else.
     pub fn tool(name: impl Into<String>) -> Self {
         Self {
-            tool: Some(name.into()),
+            tools: BTreeSet::from([name.into()]),
+            args: BTreeMap::new(),
+        }
+    }
+
+    /// A selector for any of several tools.
+    pub fn tools<I, S>(names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        Self {
+            tools: names.into_iter().map(Into::into).collect(),
             args: BTreeMap::new(),
         }
     }
@@ -366,10 +395,8 @@ impl CallSelector {
     /// that has no `command` is a claim about a field that is not there, and reading absence as a
     /// match would let a selector widen silently when a harness renames a field.
     pub fn matches(&self, call: &ToolCall) -> bool {
-        if let Some(name) = &self.tool {
-            if call.name != *name {
-                return false;
-            }
+        if !self.tools.is_empty() && !self.tools.contains(&call.name) {
+            return false;
         }
         self.args.iter().all(|(field, matcher)| {
             call.argument(field)
@@ -379,25 +406,31 @@ impl CallSelector {
 
     /// `true` when it selects everything — no tool name and no argument matcher.
     pub fn is_unscoped(&self) -> bool {
-        self.tool.is_none() && self.args.is_empty()
+        self.tools.is_empty() && self.args.is_empty()
     }
 }
 
 impl fmt::Display for CallSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.tool.as_deref().unwrap_or("any tool"))
-            .and_then(|()| {
-                if self.args.is_empty() {
-                    Ok(())
-                } else {
-                    let rendered: Vec<String> = self
-                        .args
-                        .iter()
-                        .map(|(field, matcher)| format!("{field} {matcher}"))
-                        .collect();
-                    write!(f, "({})", rendered.join(", "))
-                }
-            })
+        // One name reads as itself, so every report written before the scope became a set says
+        // what it always said. Several read as an alternation, which is what they are.
+        let scope = match self.tools.len() {
+            0 => "any tool".to_owned(),
+            1 => self.tools.iter().next().cloned().unwrap_or_default(),
+            _ => self.tools.iter().cloned().collect::<Vec<_>>().join("|"),
+        };
+        f.write_str(&scope).and_then(|()| {
+            if self.args.is_empty() {
+                Ok(())
+            } else {
+                let rendered: Vec<String> = self
+                    .args
+                    .iter()
+                    .map(|(field, matcher)| format!("{field} {matcher}"))
+                    .collect();
+                write!(f, "({})", rendered.join(", "))
+            }
+        })
     }
 }
 
