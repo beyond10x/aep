@@ -155,14 +155,63 @@ passing one.
   here calls a model or reads a clock: every duration and every cost comes out of the transcript,
   which is what lets a report be committed and diffed. Plan page:
   `docs/plan/trace-wave-1-transcript-checker.md`.
+  **Many checked runs have a second surface, and it produces no score.** `protocol eval matrix`
+  reads pairs — an `eval.run-manifest/1` saying which arm a run belongs to (`raw`, `plugin`,
+  `driven`), which harness, workflow, case, model, harness version and plugin digest, beside the
+  check report about its transcript — and counts, per expectation and per harness × arm × workflow,
+  what held, what was contradicted and what nobody could find out, with cost, tokens and wall time
+  as totals that say how many of a cell's runs recorded one. A row whose verdict is `null` or absent
+  counts **unobservable, never held**, and the verb exits `0` whatever the table says: a matrix is a
+  report, and an exit code that moved with the counts would be the scalar this programme refuses to
+  compute. Sixteen refusals sit where the documents enter, each with a code
+  (`EVAL-MANIFEST-*`, `EVAL-RECORD-*`, `EVAL-PAIR-*`); `plugin_digest` must be *written*, as a
+  digest or an explicit `null`, because a key somebody forgot must not be able to claim a run had no
+  plugin. Seven constructed pairs and the committed golden matrix are in
+  `crates/protocol-cli/fixtures/eval-matrix/`; **no three-arm run has been made yet**, and the
+  records in them are this checker's own output over committed transcripts.
+  **And the pairs now have a producer.** `protocol eval run` drives `metaharness` as a *tool*, the
+  way this repository drives `git` — found on `PATH` or via `METAHARNESS_BIN`, and absent it refuses
+  by name with **exit 2**, its own code, so a machine without it skips rather than reddening. Nothing
+  spawns without `METAHARNESS_LIVE=1` **and** `--budget-usd`, and the cap is checked before each
+  launch against `--assume-usd-per-run`, because a cap enforced afterwards is a receipt; a run the
+  wire prices `null` counts at the assumed rate *and* states no cost in its manifest. **The manifest
+  is assembled runner-side and the seam gained nothing for it** — `harness_version`, `model` and
+  `plugin_digest` are read out of `session.started`, `transcript_digest` is what the runner's own
+  check said about the bytes it judged, and `arm`, `workflow`, `case` and `observed_at` are the
+  runner's because nothing in a stream could know them. **The first live pilot run corrected two of
+  those reads, and the correction is the shape of this boundary working**: the digest comes from
+  `session.started.hermetic.installed_plugins` — the *instrument's* record of what it injected,
+  written on every adapter — and not from the top-level `plugins` echo, which is the vendor's own
+  list and is `null` on Codex because metaharness will not mint a field it did not receive; and
+  `model` is a *written* field like `plugin_digest`, so a wire that names no model at session start
+  writes `model: null` rather than being handed one somebody assumed. Both refusals were right and
+  both fields were wrong, which is the difference between a boundary that guesses and one that has
+  to be taught. A `session.started` missing a field the
+  manifest needs is refused by name (`EVAL-RUN-*`, `EVAL-CASE-*`, `EVAL-STREAM-*`) and no manifest is
+  written; three of those refusals are about the experiment rather than a document — the treated arm
+  without its treatment, the control arm with one, and a plugin attested without the digest that says
+  which bytes it was. Arm `raw` gets the committed instruction document in front of the task and arm
+  `plugin` gets the task alone, because the plugin *is* arm b's treatment; **arm `driven` is a named
+  refusal** pointing at `protocol drive run`, which the runner then *reads* through `--stream`. The
+  whole pipeline is green in the gate for nothing: four committed streams, two harnesses, three arms,
+  a matrix asserted byte for byte (`crates/protocol-cli/tests/eval_dry_run.rs`,
+  `fixtures/eval-run/`). Those streams are structurally faithful and **not observed**.
 * **Harness — the planning store, and the reference driver that walks a workflow.** Wave 1 built
   `aep-backend-markdown` and `protocol artifact`; wave 3 built the driver. Three crates:
   `aep-driver-spec` (the leaf — step maps raw→validated, the mandatory workflow pin, the run cursor,
   `ToolConfig`), `aep-driver` (the deterministic three-valued router, the executor traits and
   `tool_config`, both clock-free and randomness-free under invariant 9) and `aep-render` (a workflow
   and a run over it as SVG, HTML, PNG or a terminal frame, byte-stable, depending on `aep-domain`
-  alone so a renderer cannot become a second protocol implementation). `protocol drive
-  run|status|resume` and `protocol workflow render` are the surfaces; step maps are the fifth
+  alone so a renderer cannot become a second protocol implementation). **A fifth rendering is not a
+  picture**: `prose` writes a workflow as instructions — the states, what opens each move, and the
+  principles that time obligations against the phases those states declare, each joined to the
+  states it lands on, which is the sentence neither document contains on its own. `protocol
+  workflow instruct` is the verb, the four documents it produces are committed under
+  `generated/instructions/`, and `crates/protocol-cli/tests/instructions.rs` owns that tree —
+  byte-identity both ways, orphans included, with the projection task's orphan scan carved out
+  around it. It exists so that *hand an agent the rules* is a diffable artifact rendered from the
+  specification rather than a prompt somebody typed once. `protocol drive
+  run|status|resume`, `protocol workflow render` and `protocol workflow instruct` are the surfaces; step maps are the fifth
   document kind, under `drivers/`, and `development.driven` is the sixth profile — the only one that
   grants a shell, held to the `protocol` CLI by the driver's own per-call policy. **Gates are
   evaluated only by the engine**: the driver asks and does what it is told, and enforcement is one
@@ -189,19 +238,34 @@ passing one.
   as the payload, because `protocols/aep/1.yaml` has declared that kind, the `contract-runner`
   verifier and `contracts.**` since the base protocol. What it lacks is the envelope an evidence
   document needs, so `protocol contract evidence` supplies `observed_at` — required, because this
-  process did not watch the run — and a constant `producer`, and nothing else. Two records are
-  refused where they enter rather than left to the engine: `checked: 0`, which would discharge
-  `contract-testing`'s evidence obligation on a run that checked nothing, and `breaking_changes >
-  failed`, which describes no run. A record reporting failures is written down, because the verdict
-  belongs in the record. The captured bytes are committed
+  process did not watch the run — and a constant `producer`, and nothing else. `--record -` reads the
+  record off the pipe the runner is already at the end of; the path form stays the one to reach for,
+  and the record says which was used, because bytes on a pipe exist nowhere a later reader can compare
+  against the digest. Three records are refused where they enter rather than left to the engine:
+  `checked: 0`, which would discharge `contract-testing`'s evidence obligation on a run that checked
+  nothing; `breaking_changes > failed`, which describes no run; and a record that states no count at
+  all for `checked`, `failed` or `breaking_changes`, because each defaults to zero and zero on
+  `breaking_changes` is the claim a gate reads as a pass. A record reporting failures is written down,
+  because the verdict belongs in the record. The captured bytes are committed
   (`crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex}.json`) and the other side
   pins the same ones.
+  **And the record decides something, since 2026-08-23.** `contract-testing` owes
+  `contracts.breaking_changes == 0` *before the review phase* as well as before completion, so a
+  breaking record refuses `adversarial_verify -> review` in `adp/default` and a record whose run was
+  merely red does not — `failed` is *the contract run is red*, which is what a review is for, and
+  `breaking_changes` is *a consumer was told something that is no longer true*, which no reviewer can
+  decide. It is the first guard in that workflow only a contract runner can answer, because
+  `tests.contract.failed` is an alias any test runner satisfies and `contracts.breaking_changes` has
+  one producer; a run that never heard from one leaves the count Unknown and does not pass. The rule
+  is in the principle and not the workflow so `applies_when` still scopes it — `W4-2/1` is what an
+  unscoped version costs. `story:contract-result-gates`;
+  `crates/aep-engine/tests/contract_gate.rs`. `trace_conformance` still gates nothing.
   The eval machinery and its results migrated to the metaharness repository
   (`evals/engineering-protocols/`). Record:
   `docs/plan/harness-wave-2-driver-decision.md`; design
   `docs/design/harness-planning-and-driver-design-v0.1.md` §§ 4.1–4.9.
-  The store this repository runs on is `.engineering/planning/`: **64 artifacts** — one initiative,
-  eight epics, forty-four stories, ten tasks and one specification — and `protocol artifact validate`
+  The store this repository runs on is `.engineering/planning/`: **71 artifacts** — one initiative,
+  eight epics, fifty-one stories, ten tasks and one specification — and `protocol artifact validate`
   exits 0 on it. **It has been driven once.** `W4-1/1`, 2026-08-21, walked a real story from that
   store under `development.driven` and **blocked in `establish_verifiers`**, because the
   specification it wrote was still `draft` and the suite it ran passed where the rule wants a

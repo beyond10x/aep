@@ -9,7 +9,201 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An expectation about writing a file no longer misses the write.** A `trace-spec/1` call selector
+  took one tool name, so `tool: Write` was blind to a run that used `Edit` — and the first live pilot
+  of the evaluation programme did exactly that, editing files that already existed. The rows that
+  assert *the test was written before the code* came back `never_occurred`: the checker reporting
+  that nothing happened about work visible in the run's own working tree. A selector now takes a
+  **set** — `tools: [Edit, NotebookEdit, Write]`, the same three verbs `protocol drive` renders to
+  `repository.write` — and `tool:` beside `tools:` is refused rather than resolved, as are an empty
+  set, a blank name and a repeated one. Re-ingesting the recorded run: **3 ok / 2 gap / 4 unknown
+  becomes 7 ok / 2 gap / 1 unknown**, with both ordering rows now deciding.
+
+  The claims did not get weaker. Widening names what may *witness* an assertion, never what it
+  asserts, and the tool scope is kept rather than dropped because `Read` carries a `file_path` too —
+  *read the test first* is not *wrote the test first*. What a run must never do keeps a **narrower**
+  set than what may witness it: the store guardrail forbids `Write` and `NotebookEdit` under
+  `.engineering/planning/` and deliberately permits `Edit`, because a targeted body edit is what the
+  planning skill asks for and a whole-file rewrite is what the CLI owns.
+
+  For a Codex run these path-scoped rows answer `unk` and say so out loud: a Codex write crosses the
+  seam as `apply_patch`, whose path lives inside a patch envelope under `command` rather than in a
+  `file_path` argument. That is nobody-found-out rather than a failure, and it is not papered over by
+  widening the set — which would make the row look cross-harness while still not deciding.
+
+- **A run that priced itself is charged what it cost, not the estimate.** A live Claude run stated
+  `total_cost_usd: 0.7977854999999999` and the eval runner's ledger printed
+  `1 run(s), $0.250000 spent` — the `--assume-usd-per-run` rate — while its manifest carried no cost
+  at all. What you hit: a paid sweep under-reporting what it spent, in the ledger *and* in the
+  matrix's cost column, with the runs looking as though their wire had simply not priced them.
+  Neither the ledger nor the field it read was at fault. `0.7977854999999999` is the shortest text
+  that round-trips the `f64` sum of that run's per-turn costs, and the cost reader — written for
+  amounts a **person** types, where refusing anything not exactly convertible is right — refused it
+  for having more than six decimal places. That refusal was then thrown away with `.ok()`, which
+  collapsed *there is a number here I cannot convert* into *there is no number*; only the second may
+  be charged an estimate. Three things changed: a number a **wire** stated is now rounded half-up to
+  the nearest millionth by integer arithmetic (never `value * 1_000_000.0`), so `0.7977854999999999`
+  reads as `$0.797785`; a stated cost that still cannot be converted is **refused by name**
+  (`EVAL-STREAM-011`) instead of becoming an assumption, and no manifest is written for it; and the
+  runner now prints `charged:  $0.797785 (stated)` per run, because a ledger that does not say which
+  of its two numbers it used is one nobody can audit. `--budget-usd` and `--assume-usd-per-run` are
+  unchanged and still refuse anything inexact — a person typing `1e-7` has made a mistake worth
+  naming. No committed bytes move: every fixture cost has six decimal places or fewer.
+
+- **A run manifest can now say "the harness never named a model", and the plugin digest comes from
+  the instrument rather than from the vendor.** The first live pilot run — Codex, arm a — refused
+  twice, and both refusals were correct while both fields were wrong. That distinction is the entry:
+  the boundary did its job and stopped a guess reaching the one document the matrix trusts; what it
+  had been told to read was mistaken, and a recorded stream is what corrected it.
+  - **`plugin_digest` is read from `session.started.hermetic.installed_plugins`**, not from the
+    top-level `plugins` beside it. The two answer different questions: `plugins` is the **vendor's**
+    own init list, echoed — Claude Code writes one and Codex writes `null`, because metaharness will
+    not mint a vendor field it did not receive — and `installed_plugins` is the **instrument's**
+    record of what it injected, written on every adapter. What changes for you: a Codex run with the
+    plugin injected now assembles instead of being refused for attesting nothing, and a Claude run
+    whose vendor echo is missing or edited assembles identically, because nothing reads that row any
+    more. The refusal for a stream with no instrument row names `hermetic.installed_plugins`, so the
+    next reader is told which of the two lists matters.
+  - **`model` may be written as an explicit `null`.** Codex's wire names no model at
+    `session.started` at all — a 62-event pilot run never states one — so `model` is now a written
+    field on exactly `plugin_digest`'s terms: the key is **required**, an explicit `null` is legal
+    and means *the harness did not say*, and a key nobody wrote is still refused, because a runner
+    that dropped it would otherwise produce the same document. Inventing `gpt-5-codex` there because
+    it is the likely answer would be writing down a model nobody observed. `protocol eval matrix`
+    renders it as `"model": null` in JSON; its text rendering has no model column, and
+    `protocol eval run` tells a person `model:    (unstated)`.
+  - **Committed bytes moved, deliberately.** `crates/protocol-cli/fixtures/eval-run/dry-run.matrix.json`
+    changes in five places and no others: four `transcript_digest` values, because all four ingested
+    streams gained `hermetic.installed_plugins` (and `hermetic.decisions`, now that the live run has
+    shown its spelling), and the Codex run's `"model"` going from `"gpt-5-codex"` to `null`. Every
+    count in the matrix is unchanged. The two eval-corpus transcripts under `conformance/eval/` gained
+    the instrument's row as well — an empty one for the run that had no plugin, and one without a
+    digest for the run that predates the attestation, which is the honest fixture for *a plugin whose
+    bytes nobody can name*.
+
+### Added
+
+- **One verb now runs an arm of an eval case, and it will not spend your money by accident.**
+  `protocol eval run --case <dir> --arm raw|plugin|driven --harness claude|codex --out <dir>` drives
+  `metaharness` as a **tool** — the way this repository drives `git` — and leaves the three documents
+  a later reader needs: the raw event stream, the `trace-report/1` record its own checker produced,
+  and the `eval.run-manifest/1` document `protocol eval matrix` pairs it with. What you hit if the
+  binary is not installed: a refusal naming it and **exit 2**, its own code, so *install something*
+  and *fix what you wrote* are distinguishable without reading prose off stderr. What you hit if you
+  meant to spend money and did not say so: nothing spawns without `METAHARNESS_LIVE=1` **and**
+  `--budget-usd`, and the cap is checked *before* each launch against `--assume-usd-per-run`
+  (default `$0.25`) rather than after it, because a cap enforced afterwards is a receipt. A run whose
+  wire prices it `null` — which is what a Codex stream does today — counts against the budget at the
+  assumed rate **and** states no cost in its manifest: writing `0` would make it look free, and
+  ignoring it would let an unpriced wire spend without limit. Amounts never go through a float:
+  `0.0714 × 1_000_000.0` is `71399`, so the number's own decimal text is parsed digit by digit or the
+  amount is refused. The three arms differ in exactly what the experiment says they differ in — arm
+  `raw` gets the workflow's committed instruction document from `generated/instructions/` in front of
+  the task, arm `plugin` gets the **task alone** plus `--plugin-dir integrations/<harness>` because
+  the plugin *is* its treatment, and both are spawned `--decisions observe` into the same hermetic
+  scratch home. **Arm `driven` is refused by name**: `protocol drive run` launches one, and this verb
+  reads the stream it wrote (`--arm driven --stream <file>`), because a second way to launch a driven
+  session would be a second policy to forget. `--stream` in general is the runner minus the spawn and
+  spends nothing — it is also how a paid run is re-ingested after the manifest's rules change.
+  `--observed-at` is **required** and deliberately not defaulted to now, unlike
+  `protocol trace evidence`: a manifest is a committed document that has to assemble to the same
+  bytes twice.
+
+- **The run manifest is assembled from what the session already said, and metaharness gained no
+  field for it.** The plan proposed emitting the manifest across the seam; it is refused, and the
+  split is why. `harness_version` (as `claude 2.1.239` — two harnesses at `0.145.0` are not one pin),
+  `model` and `plugin_digest` are read out of `session.started` — the digest from its
+  `hermetic.installed_plugins` row, the instrument's rather than the vendor's — and
+  `transcript_digest` is what the runner's own check states about the bytes it judged. `arm`, `workflow`, `case` and `observed_at`
+  are the runner's, because nothing in a stream could know them — metaharness runs a *session*, and
+  *this is arm b of case X* is a claim about an experiment. What changes for anybody handing the
+  runner a stream: a `session.started` that does not state a field the manifest needs is **refused by
+  name** and no manifest is written at all — `EVAL-STREAM-003` … `EVAL-STREAM-012`, twelve codes
+  beside the sixteen the matrix already had. Three of them are about the experiment rather than the
+  document: arm `plugin` over a stream attesting **no** plugin is the treated arm without its
+  treatment (`-006`), arm `raw` over a stream attesting one is the control arm with it (`-007`), and
+  a plugin attested with no `digest` cannot say which bytes were measured (`-008`). The digest the
+  manifest carries is the attested string **verbatim** — never a hash of the plugin directory on
+  disk, which would attest bytes the session never saw. `model` is read from the stream rather than
+  from what the runner asked for, which is a narrowing to the plan's field list: a runner writing
+  down the model it *requested* would record one the run may not have used.
+
+- **The whole three-arm pipeline now runs in `task check`, for nothing.** Four committed streams —
+  two harnesses, all three arms, one of them the eval corpus's own declared violation — go through
+  the runner's ingest path and `protocol eval matrix`, and the matrix is asserted **byte for byte**
+  against `crates/protocol-cli/fixtures/eval-run/dry-run.matrix.{json,txt}`: 34 facts held, 2
+  contradicted, 4 runs. No vendor binary, no credential, no network and no spend, so a machine
+  without `metaharness` runs the same green gate — the one test that would need it **skips by name**
+  and says so. What this catches that nothing caught before: an edit to a case's expectations, its
+  transcript, the manifest's field list or the runner's layout convention now fails with the row that
+  moved. The streams are structurally faithful and **not observed** — a failure there is a change in
+  this repository, never a finding about a model — and `crates/protocol-cli/fixtures/eval-run/README.md`
+  states their derivation line by line, names the metaharness `c1-plugin-injection` vector this side
+  corresponds to, and says plainly that until that side replays these exact bytes it is one
+  implementation agreeing with a transcription of another.
+
+- **Which plugin surface teaches which workflow is now a checked document, and the states nothing
+  teaches are named rather than absent.** `integrations/workflow-coverage.yaml` maps every workflow
+  under `workflows/` — keyed by the id the document declares, not by its filename — onto the skills
+  and agents in `integrations/claude-code/` and `integrations/codex/` that teach each of its states,
+  or onto a gap that says why none does. What changes for anybody reading it: **four of the nine
+  states of the development workflow are taught by nothing either plugin carries**
+  (`establish_verifiers`, `implement`, `verify`, `adversarial_verify`), `review` and `complete` are a
+  second gap for a different reason, and `release/progressive`, `incident/standard` and
+  `migration/forward-only` are uncovered end to end. All of that was true before and was written down
+  nowhere. Coverage is **total** — `crates/protocol-cli/tests/workflow_coverage.rs` refuses a state
+  that is neither covered nor gapped, a state claimed as both, a workflow with no entry, an entry for
+  a workflow no document declares, a `document:` path that no longer holds the id beside it, a state
+  name no workflow declares, and a `surface:` that is not a file under `integrations/` — each by
+  name. Adding a workflow file without a map entry now fails the gate and names the workflow.
+
+- **An eval case is three committed files, and the gate replays every one of them.**
+  `conformance/eval/` holds one directory per case: a task statement, a `trace-spec/1` expectation
+  document and a committed transcript. `crates/protocol-cli/tests/eval_corpus.rs` enumerates the
+  directory rather than listing cases, so adding one costs three files and no code. Each case
+  declares the verdict it must reach — `held`, or `violated` with the expectation ids it expects to
+  be contradicted — and the check is pinned in **both** directions: a row that stops gapping is as
+  red as a row that starts. `unk` is refused in every case of both kinds, because an undecidable row
+  reads exactly like a passing one. Five cases ship: two over `workflows/development/default.yaml`
+  (one honest, one that wrote the code before the test and contradicts two named rows), one over
+  `workflows/releases/progressive.yaml`, and the two agent-charter cases from
+  `specification:agent-charter-eval-cases`, whose transcript half this closes — that specification's
+  own Out of Scope had left the documents held only by an offline mode nothing in `task check`
+  invokes. Nothing is scored and nothing is model-judged: a case's output is a verdict per row with
+  the events that produced it.
+
 ### Changed
+
+- **A contract run that reports a breaking change now stops a change entering review, and one that
+  merely went red does not.** `principles/development/contract-testing.yaml` owes
+  `contracts.breaking_changes == 0` **before the review phase** as well as before completion, so in
+  `adp/default` the move `adversarial_verify -> review` is refused — by name, quoting the line — when
+  the submitted `contract_result` reports a breaking change. The two counts are deliberately not
+  interchangeable here: `failed` is *the contract run is red*, which is what a review is for, and
+  `breaking_changes` is *a consumer was told something that is no longer true*, which nobody in a
+  review is in a position to decide. It is also the first guard in that workflow that only a contract
+  **runner** can answer — `tests.contract.failed` is an alias any test runner satisfies with a suite
+  it happened to name `contract`, and `contracts.breaking_changes` has exactly one producer — so a run
+  that never heard from one does not pass it by saying nothing: the count is unobserved, and
+  unobserved is not zero. What is unchanged: the rule is scoped by the principle's `applies_when`, so
+  a task declaring `change.code: false` owes nothing here, and no profile, workflow or step map moved.
+  Until now nothing anywhere gated on a `contract_result`, which
+  `story:contract-result-ingestion` said in its own *Out of Scope*.
+  Acceptance: `story:contract-result-gates`.
+
+- **`protocol contract evidence` refuses a record that does not state `checked`, `failed` or
+  `breaking_changes`, instead of reading the omission as zero.** The payload gives each count a
+  default, so a runner that renamed the field or stopped emitting it used to go on reading green while
+  saying nothing at all — and zero on `breaking_changes` is exactly the claim the gate above reads as
+  a pass. Both spellings of *nothing* are refused by the name of the count: absent and `null`. A
+  record that states its counts, whatever they say, is minted as before.
+- **`conformance/README.md` now lists all five of its tenants.** `trace/` had been an undocumented
+  directory there since the migration, and `eval/` joins it. The table also says what the two have in
+  common with `fixtures/`, `scenarios/` and `expected/` and what they do not: the first three judge a
+  backend against the command and query contract, the last two judge an agent run against an authored
+  expectation document.
 
 - **`protocol drive run` and `protocol drive resume` refuse at launch when `metaharness` is not
   installed, instead of finding out at the first model step.** A map with an `llm` step needs the
@@ -45,6 +239,51 @@ belongs in the commit message or in `docs/design/`.
   driving Codex is its `metaharness-codex` adapter.
 
 ### Added
+
+- **`protocol contract evidence --record -` reads the record from standard input.** The runner is
+  already at the end of a pipe, so the loop is now one line —
+  `metaharness conformance claude --contract | protocol contract evidence --record - --observed-at
+  2026-08-23` — and what comes back is the same document the file form produces, byte for byte apart
+  from the lines naming where the bytes came from. `--record <file>` stays the form to reach for and
+  the record says which was used (`inputs: [standard input]` against `inputs: [claude.json]`), because
+  the point of a path was never convenience: bytes on a pipe exist nowhere a later reader can go and
+  compare against the digest in the provenance.
+- **A workflow can now be handed to somebody as instructions, and the instructions are a committed
+  artifact rather than a prompt somebody typed.** `protocol workflow instruct --id adp/default`
+  writes the workflow as prose — the states work moves through, what opens each move between them,
+  and the principles that time obligations against the phases those states declare, joined to the
+  states each one lands on. That last part is the sentence neither document contains on its own:
+  `test-driven` times an obligation against the `implementation` phase, `adp/default` says
+  `implement` is the state in that phase, and the rendering says *before entering `implement`, the
+  implementation phase: `test.exists`, `test.first_result == failed`*. Without `--id` it writes one
+  document per workflow into `--out DIR`, with an index. Everything in the output is the documents'
+  own text; nothing is evaluated, so a principle's `applies_when` is printed as the condition it is
+  and never as a verdict about a task. The four documents this tree produces are committed under
+  [`generated/instructions/`](generated/instructions/) and held byte-identical, so an instruction
+  that no longer matches its workflow turns the gate red instead of quietly misinforming whoever was
+  handed it.
+- **`protocol eval matrix` turns a directory of checked runs into one table of facts — and refuses
+  to turn them into a score.** An evaluation run now writes a versioned `eval.run-manifest/1`
+  document beside the report `protocol trace check --format json` produced about its transcript
+  (which arm it was — `raw`, `plugin` or `driven` — which harness, workflow, case, model, harness
+  version pin and plugin digest, and optionally what it cost, in tokens, micro-dollars and
+  milliseconds). The verb reads those pairs and prints, per expectation and per harness × arm ×
+  workflow, **how many expectations held, how many the run contradicted and how many nobody could
+  find out**, in a sorted, deterministic rendering as JSON or as three tables.
+  What you cannot get out of it is a single number: an expectation nobody could decide is not a
+  failure and is not a pass, and folding the third column into either is the only way to produce
+  one. The verb exits `0` whatever the counts say, for the same reason — a matrix is a report, not
+  a gate.
+  Refused where the documents enter, each by a code: an arm that is not one of the three
+  (`EVAL-MANIFEST-002`), a field that is missing — with every other missing field named in the same
+  message rather than one per run (`EVAL-MANIFEST-003`), a `plugin_digest` on arm `raw` or a `null`
+  one on arm `plugin` (`EVAL-MANIFEST-005/006`; the key must always be *written*, because a key
+  somebody forgot must not be able to claim a run had no plugin), a manifest and a record that
+  describe different transcripts (`EVAL-PAIR-003`), one transcript arriving twice
+  (`EVAL-PAIR-004`), one specification arriving at two digests (`EVAL-PAIR-005`), and a directory
+  with no runs in it (`EVAL-PAIR-006`) — an empty matrix renders as a table with no failures in it,
+  which reads exactly like a clean sheet. A row whose verdict is `null` or absent counts as
+  **unobservable**, never as held.
 
 - **The sealed frame document a driven step travels on is now pinned against the rules that refuse
   it, and one canonical frame is committed for anyone reading the seam from the other side.**
