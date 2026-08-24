@@ -229,6 +229,130 @@ pub enum RawStep {
     Operator(RawOperatorStep),
 }
 
+/// How much of a file an operation class may change, where a scope rule admits it at all.
+///
+/// **Granularity, not identity.** A step map is a document about work; naming an operation here —
+/// `file.write`, `file.edit` — would couple it to another protocol's vocabulary at its most
+/// volatile point, and every operation added later would need a key in every map or silently fall
+/// outside every scope. Which of a harness's operations replace a whole file is that harness's
+/// fact, and it is the one place that knows.
+///
+/// Three words, and `PartialOnly` is not invented for the planning store: it is a property the tool
+/// catalogues already document — *write one file, whole* against *change part of one*.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum WriteScope {
+    /// Anything in the class may act on these paths.
+    Allowed,
+    /// Part of a file may be changed; a whole file may never be replaced.
+    ///
+    /// The planning store's rule: the CLI owns the frontmatter, so a body edit is legitimate and a
+    /// whole-file rewrite re-types the frontmatter by hand.
+    PartialOnly,
+    /// Nothing in the class may act here.
+    Denied,
+}
+
+/// One rule of a step's write scope, as written.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawScopeRule {
+    /// The paths this rule is about, as globs relative to the working tree.
+    pub paths: Vec<String>,
+    /// What writing is allowed on them.
+    pub write: WriteScope,
+}
+
+/// One validated rule of a step's write scope.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+pub struct ScopeRule {
+    /// The paths this rule is about.
+    pub paths: Vec<String>,
+    /// What writing is allowed on them.
+    pub write: WriteScope,
+}
+
+/// Checks a step's declared context list.
+///
+/// A blank entry names no file, and a glob is refused by name rather than expanded: a step map is
+/// pinned, so a glob is a promise about what a directory will contain later.
+fn validated_context(
+    context: &[String],
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Vec<String> {
+    let mut kept = Vec::new();
+    for entry in context {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                format!("{location}.context"),
+                "a blank context entry names no file",
+            ));
+            continue;
+        }
+        if trimmed.contains('*') || trimmed.contains('?') {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                format!("{location}.context"),
+                format!(
+                    "`{trimmed}` is a glob, and context is a list of files: a step map is pinned, \
+                     so a glob is a promise about what a directory will hold later. Name the files."
+                ),
+            ));
+            continue;
+        }
+        kept.push(trimmed.to_owned());
+    }
+    kept
+}
+
+/// Checks a step's write scope.
+///
+/// Two rules, and the second is the one that matters: the **last rule must be a catch-all**. A path
+/// nobody mentioned has to have an answer, and leaving it to a default is how a scope silently
+/// stops covering the tree it was written for.
+fn validated_scope(
+    scope: &[RawScopeRule],
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<Vec<ScopeRule>> {
+    if scope.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut kept = Vec::new();
+    let mut usable = true;
+    for rule in scope {
+        if rule.paths.is_empty() || rule.paths.iter().any(|path| path.trim().is_empty()) {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                format!("{location}.scope"),
+                "a scope rule with no paths is about nothing",
+            ));
+            usable = false;
+            continue;
+        }
+        kept.push(ScopeRule {
+            paths: rule.paths.iter().map(|path| path.trim().to_owned()).collect(),
+            write: rule.write,
+        });
+    }
+    if usable && !kept.iter().last().is_some_and(|rule| rule.paths.iter().any(|path| path == "**")) {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            format!("{location}.scope"),
+            "the last scope rule must name `**`, so every path has an answer. A scope whose tail \
+             is silent leaves whatever nobody thought of to a default, which is how one stops \
+             covering the tree it was written for.",
+        ));
+        usable = false;
+    }
+    usable.then_some(kept)
+}
+
 /// A `command` step, as written.
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -254,6 +378,20 @@ pub struct RawCommandStep {
 pub struct RawLlmStep {
     /// What the model is asked to do.
     pub prompt: String,
+    /// Files the run is given before it starts, instead of discovering them.
+    ///
+    /// A list and never a glob: a glob is a promise about a directory's future size, and a step map
+    /// is pinned. A named file that is absent at run time refuses the run — a run given a smaller
+    /// context than its map declares is one nobody can reproduce from the map.
+    ///
+    /// Not free. A stateless harness replays its conversation every turn, so a preloaded file is
+    /// paid for on every turn rather than once. It is still usually a saving, because what it
+    /// replaces — a discovery read — is a call, a turn, *and* a result that joins the same replay.
+    #[serde(default)]
+    pub context: Vec<String>,
+    /// Where this step may write, in order. First match wins.
+    #[serde(default)]
+    pub scope: Vec<RawScopeRule>,
     /// Skills the harness should make available, by name.
     #[serde(default)]
     pub skills: Vec<String>,
@@ -461,6 +599,15 @@ pub fn placeholders_in(word: &str) -> Vec<&str> {
 pub struct LlmStep {
     /// What the model is asked to do.
     pub prompt: String,
+    /// Files the run is given before it starts. See [`RawLlmStep::context`].
+    pub context: Vec<String>,
+    /// Where this step may write, in order. **First match wins**, and the last rule is a
+    /// catch-all — validation refuses a scope without one, because a path nobody mentioned must
+    /// have an answer and leaving it to a default is how a scope stops covering its own tree.
+    ///
+    /// Empty means no scope was declared, which is not the same as a scope that allows
+    /// everything: nothing is enforced and nothing claims to be.
+    pub scope: Vec<ScopeRule>,
     /// Skills the harness makes available, by name.
     pub skills: Vec<String>,
     /// Which harness runs it.
@@ -922,8 +1069,12 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
                 ));
                 return None;
             }
+            let context = validated_context(&step.context, location, errors);
+            let scope = validated_scope(&step.scope, location, errors)?;
             Some(Step::Llm(LlmStep {
                 prompt: step.prompt,
+                context,
+                scope,
                 skills: step.skills,
                 harness: step
                     .harness
@@ -1258,5 +1409,86 @@ mod tests {
         )
         .expect("the fixture deserializes");
         Workflow::try_from(raw).expect("the fixture validates")
+    }
+
+    // --- declared context and write scope ---------------------------------------------------
+
+    fn llm_step(extra: &str) -> String {
+        format!(
+            r#"{{"specify":{{"steps":[{{"kind":"llm","prompt":"write it down"{extra}}}]}}}}"#
+        )
+    }
+
+    fn only_llm_step(extra: &str) -> Result<StepMap, ValidationErrors> {
+        read(&map_json("adp/default/1", &llm_step(extra)))
+    }
+
+    #[test]
+    fn a_step_may_declare_the_files_it_is_given_and_where_it_may_write() {
+        let map = only_llm_step(
+            r#","context":["docs/skill.md"],
+                "scope":[{"paths":[".engineering/planning/**"],"write":"partial-only"},
+                         {"paths":["**"],"write":"denied"}]"#,
+        )
+        .expect("valid");
+        let Some(Step::Llm(step)) = map
+            .states
+            .values()
+            .next()
+            .expect("one state")
+            .steps
+            .first()
+        else {
+            panic!("one llm step");
+        };
+        assert_eq!(step.context, vec!["docs/skill.md".to_owned()]);
+        assert_eq!(step.scope.len(), 2);
+        assert_eq!(step.scope[0].write, WriteScope::PartialOnly);
+        assert_eq!(step.scope[1].write, WriteScope::Denied);
+    }
+
+    #[test]
+    fn a_step_that_declares_neither_is_unchanged_and_claims_nothing() {
+        // Empty is not "allows everything": nothing is enforced and nothing says it is. Every map
+        // written before this existed keeps meaning exactly what it meant.
+        let map = only_llm_step("").expect("valid");
+        let Some(Step::Llm(step)) = map
+            .states
+            .values()
+            .next()
+            .expect("one state")
+            .steps
+            .first()
+        else {
+            panic!("one llm step");
+        };
+        assert!(step.context.is_empty() && step.scope.is_empty());
+    }
+
+    #[test]
+    fn context_is_a_list_of_files_and_a_glob_is_refused_by_name() {
+        // A step map is pinned, so a glob is a promise about what a directory will hold later.
+        let errors = only_llm_step(r#","context":["crates/**/*.rs"]"#).expect_err("refused");
+        assert!(format!("{errors}").contains("glob"), "{errors}");
+        assert!(only_llm_step(r#","context":[" "]"#).is_err(), "and a blank names no file");
+    }
+
+    #[test]
+    fn a_scope_whose_last_rule_is_not_a_catch_all_is_refused() {
+        // A path nobody mentioned must have an answer. Leaving it to a default is how a scope
+        // silently stops covering the tree it was written for.
+        let errors = only_llm_step(
+            r#","scope":[{"paths":["crates/**"],"write":"allowed"}]"#,
+        )
+        .expect_err("refused");
+        assert!(format!("{errors}").contains("`**`"), "{errors}");
+    }
+
+    #[test]
+    fn a_scope_rule_about_no_path_is_refused() {
+        assert!(
+            only_llm_step(r#","scope":[{"paths":[],"write":"denied"}]"#).is_err(),
+            "a rule with no paths is about nothing"
+        );
     }
 }

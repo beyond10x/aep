@@ -55,6 +55,19 @@ states:
       - kind: llm
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Read the task under `.engineering/` and the artifacts it references. Record what is being
           asked for in the planning store, in the requester's own terms. Do not design, do not
@@ -65,6 +78,19 @@ states:
       - kind: llm
         description: State the required behaviour as a specification artifact.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Write the specification for this task as a planning artifact of kind `specification`,
           through `protocol artifact new`. State the required behaviour so that a verifier could
@@ -77,6 +103,19 @@ states:
       - kind: llm
         description: Break the specification into units that can each be verified alone.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Break the specification into tasks that can each be implemented and verified on their own,
           through `protocol artifact new` and `protocol artifact relate`. Every task states its own
@@ -88,6 +127,19 @@ states:
       - kind: llm
         description: Write the tests before there is an implementation to shape them around.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Write the failing tests, contracts and checks that will decide whether each decomposed
           unit is done. Write no implementation in this state. The next transition is guarded on
@@ -107,6 +159,19 @@ states:
       - kind: llm
         description: Make the smallest change that satisfies the unit and its verifiers.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Make the smallest change that satisfies the decomposed unit and the verifiers written for
           it. Do not weaken a check to make it pass; the workflow has an explicit route back here
@@ -152,6 +217,19 @@ states:
       - kind: llm
         description: Try to break what the previous state just declared working.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. `partial-only` is the planning
+        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
+        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
+        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
+        # every arm but one walked past it.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: partial-only
+          - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
+            write: allowed
+          - paths: ["**"]
+            write: denied
         prompt: >-
           Try to break what `verify` just declared working: edge cases, property violations,
           contract drift, a mutant the suite would not catch. Write the cases that fail. You are not

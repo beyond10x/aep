@@ -2082,6 +2082,8 @@ mod tests {
     /// The prompt the driver would build for one `llm` step.
     fn prompt_with_skills(skills: &[&str]) -> String {
         let step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
             description: None,
             harness: LlmStep::DEFAULT_HARNESS.to_owned(),
             skills: skills.iter().map(ToString::to_string).collect(),
@@ -2115,6 +2117,8 @@ mod tests {
     #[test]
     fn an_unmet_outgoing_guard_is_named_in_the_prompt_under_the_reaching_heading() {
         let step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
             description: None,
             harness: LlmStep::DEFAULT_HARNESS.to_owned(),
             skills: Vec::new(),

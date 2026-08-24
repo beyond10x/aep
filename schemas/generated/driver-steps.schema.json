@@ -151,6 +151,32 @@
       },
       "additionalProperties": false
     },
+    "RawScopeRule": {
+      "description": "One rule of a step's write scope, as written.",
+      "type": "object",
+      "required": [
+        "paths",
+        "write"
+      ],
+      "properties": {
+        "paths": {
+          "description": "The paths this rule is about, as globs relative to the working tree.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "write": {
+          "description": "What writing is allowed on them.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/WriteScope"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "RawStateSteps": {
       "description": "One state's steps, as written.",
       "type": "object",
@@ -239,6 +265,14 @@
             "prompt"
           ],
           "properties": {
+            "context": {
+              "description": "Files the run is given before it starts, instead of discovering them.\n\nA list and never a glob: a glob is a promise about a directory's future size, and a step map is pinned. A named file that is absent at run time refuses the run — a run given a smaller context than its map declares is one nobody can reproduce from the map.\n\nNot free. A stateless harness replays its conversation every turn, so a preloaded file is paid for on every turn rather than once. It is still usually a saving, because what it replaces — a discovery read — is a call, a turn, *and* a result that joins the same replay.",
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "description": {
               "description": "What this step is for, in one line.",
               "default": null,
@@ -264,6 +298,13 @@
             "prompt": {
               "description": "What the model is asked to do.",
               "type": "string"
+            },
+            "scope": {
+              "description": "Where this step may write, in order. First match wins.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RawScopeRule"
+              }
             },
             "skills": {
               "description": "Skills the harness should make available, by name.",
@@ -358,6 +399,32 @@
       ],
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+    },
+    "WriteScope": {
+      "description": "How much of a file an operation class may change, where a scope rule admits it at all.\n\n**Granularity, not identity.** A step map is a document about work; naming an operation here — `file.write`, `file.edit` — would couple it to another protocol's vocabulary at its most volatile point, and every operation added later would need a key in every map or silently fall outside every scope. Which of a harness's operations replace a whole file is that harness's fact, and it is the one place that knows.\n\nThree words, and `PartialOnly` is not invented for the planning store: it is a property the tool catalogues already document — *write one file, whole* against *change part of one*.",
+      "oneOf": [
+        {
+          "description": "Anything in the class may act on these paths.",
+          "type": "string",
+          "enum": [
+            "allowed"
+          ]
+        },
+        {
+          "description": "Part of a file may be changed; a whole file may never be replaced.\n\nThe planning store's rule: the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite re-types the frontmatter by hand.",
+          "type": "string",
+          "enum": [
+            "partial-only"
+          ]
+        },
+        {
+          "description": "Nothing in the class may act here.",
+          "type": "string",
+          "enum": [
+            "denied"
+          ]
+        }
+      ]
     }
   }
 }
