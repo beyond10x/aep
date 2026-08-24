@@ -9,7 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-24
+
 ### Fixed
+
+- **A validation error about a selector's subject no longer reads as "no subject was written".** A
+  `subject:` that was written and could not be read left the selector usable, so a specification
+  with a malformed subject was accepted and then decided nothing.
 
 - **An expectation about writing a file no longer misses the write.** A `trace-spec/1` call selector
   took one tool name, so `tool: Write` was blind to a run that used `Edit` — and the first live pilot
@@ -84,6 +90,28 @@ belongs in the commit message or in `docs/design/`.
     bytes nobody can name*.
 
 ### Added
+
+- **A workflow step now declares the files it is given and the paths it may write, and the toolset
+  refuses the rest.** Two keys on an `llm` step in `aep.driver-steps/1`. `context:` names files the
+  run is handed rather than has to find; `scope:` is an ordered list of `paths:`/`write:` rules
+  where `write:` is `allowed`, `partial-only` or `denied`, first match wins, and the last rule must
+  name `**` so a path nobody thought of has an answer rather than a default.
+
+  `partial-only` is the word that earns the shape, and it is the planning store's own rule: the CLI
+  owns the frontmatter, so a body edit is legitimate and a whole-file rewrite re-types the
+  frontmatter by hand. No set of operations can say that — `file.write` and `file.edit` are both
+  writes — so the document speaks **granularity, not identity**, and which of an adapter's
+  operations replace a file whole stays the adapter's own fact. A step-map author never writes an
+  operation name.
+
+  The rule existed already, in `crates/protocol-cli/src/drive.rs`'s `store_integrity`, written in
+  one vendor's tool names — `Write`, `NotebookEdit`, `file_path` — so every arm but one walked past
+  it for a year. Measured on `eval-case/development-default`, arm `native`, 2026-08-24: **10 of 11
+  expectations held and one was contradicted before; 11 held after**, with discovery calls falling
+  from ten of fifty-two to three of forty-nine. With the same scope bound but **unstated**, five
+  calls were refused and the rule still held — the toolset stopped the run, rather than the prose
+  warning it. `docs/reviews/2026-08-24-scope-cache-and-the-native-arm.md` records all four runs with
+  their transcript digests. The operation is refused; the run continues.
 
 - **One verb now runs an arm of an eval case, and it will not spend your money by accident.**
   `protocol eval run --case <dir> --arm raw|plugin|driven --harness claude|codex --out <dir>` drives
@@ -175,6 +203,13 @@ belongs in the commit message or in `docs/design/`.
   the events that produced it.
 
 ### Changed
+
+- **The `development` workflow now carries that declaration.** Every `llm` step in
+  `drivers/development/default.yaml` names `integrations/claude-code/skills/planning/SKILL.md` as
+  context and the store scope as `scope:`. A preloaded file is replayed on every turn of a stateless
+  loop, so it is not free — measured at about **$0.02 a run**, almost all of it cache-read, against
+  the six discovery calls it replaces, each of which is a call, a turn *and* a result that then
+  joins the same replay.
 
 - **A contract run that reports a breaking change now stops a change entering review, and one that
   merely went red does not.** `principles/development/contract-testing.yaml` owes
@@ -357,7 +392,6 @@ belongs in the commit message or in `docs/design/`.
   harness that does not report it. Two things the reader will not do to fill a gap: `tokens.thinking`
   is never taken from the harness's live `thinking.estimate`, and `iterations` is never a count of
   the `usage` events that went past.
-
 
 - **`harness: metaharness` — a second executor on the seam that was waiting for one.** An `llm`
   step naming it is spawned through `metaharness run claude` instead of a bare `claude` argv: the
@@ -1065,7 +1099,6 @@ belongs in the commit message or in `docs/design/`.
   The browser target refuses this transport out loud rather than emitting one: a page holds the
   system in one tab and binds no socket, so a network surface is one a page would call rather than
   contain. `task check` gains no step — `synth-check` grew a fifth reason to fail.
-
 
 - **`protocol ess synthesize --target web` — the billing system in a browser, and the third
   emitter behind one plan (ESS wave 7, W7.3b).** The same specification now synthesises a

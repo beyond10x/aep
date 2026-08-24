@@ -604,9 +604,14 @@ of version 3 no longer satisfies a review requirement for version 7", not "added
 
 ## Tags
 
-Each delivered wave gets an annotated tag named after its `CHANGELOG.md` heading — `0.1.0`,
-`0.2.0-wave-1`, `0.2.0-wave-2` — pointing at the commit that delivered the work, not at the
-changelog housekeeping that follows it. The tag message states what the wave delivered and the
+Each delivered wave gets an annotated tag whose name is the version and **nothing else** —
+`0.12.0`, not `0.12.0-scope-and-the-fourth-arm`. A slug in a tag name is a second copy of what the
+tag message and the changelog heading already say, and it is the copy that has to be retyped
+correctly in every `git checkout`, comparison URL and release note. Tags before `0.12.0` carry the
+older slugged form and are left as they are; nothing new gets one.
+
+The tag points at the commit that delivered the work, not at the changelog housekeeping that
+follows it. Its `CHANGELOG.md` heading matches the version. The tag message states what the wave delivered and the
 implementation percentage after it, so `git tag -n99` reads as a project history without opening a
 browser.
 
