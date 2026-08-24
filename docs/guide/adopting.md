@@ -101,8 +101,15 @@ You can point at somebody else's tree instead of owning one. A project does that
 ```yaml
 protocol: adp/1
 profile: acme.service
-protocols: ../engineering-protocols   # the tree, relative to .engineering/
+protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
 ```
+
+The suffix is the full commit id, not a branch or tag. On first use the engine fetches that immutable
+revision into `AEP_CACHE_DIR`, then `XDG_CACHE_HOME/engineering-protocols`, or the conventional user
+cache. Later commands verify and read the cached checkout, so the project file contains no
+machine-local or cross-repository path and an already materialized source works offline. A local path
+is still valid when a repository owns its tree or a fixture supplies one; relative paths are resolved
+from `.engineering/`.
 
 (The directory is called `.engineering` by default. If that name is taken, or your team calls it
 something else, set `AEP_PROJECT_DIR=.workflow` and discovery looks for that instead — read once per
@@ -131,9 +138,9 @@ The file is right there in `.engineering/workflows/`. It was never read.
 | A lifecycle for an artifact kind of your own | No. Own a tree |
 | A protocol declaring facts, capabilities or evidence kinds nobody upstream declared | No. Own a tree |
 
-So: **a new state machine means owning a tree.** Vendor the upstream documents into it, put yours
-beside them, and point the project at it. The shortest form of that is `protocols: .`, which makes
-the project directory itself the tree:
+So: **a new state machine means owning a tree.** Assemble the upstream documents and local additions
+as one governed tree, and point the project at it. The shortest local form is `protocols: .`, which
+makes the project directory itself the tree:
 
 ```yaml
 protocol: adp/1

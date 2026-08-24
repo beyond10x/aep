@@ -28,13 +28,24 @@
 //! everything below finds it — see [`project_directory`]. The name is read here, at the edge that
 //! touches the filesystem, and not in `aep-domain`: the domain crate reads no environment, no clock
 //! and no filesystem, so that what a document means never depends on where it is being read.
+//!
+//! # Repository sources become ordinary trees
+//!
+//! A project's `protocols` value may be a filesystem tree or a pinned `git+ssh://`, `git+https://`,
+//! or `git+file://` repository. Repository sources are materialized under the operator's cache and
+//! verified against their full commit id before the document loader sees them. The registry still
+//! consumes one local immutable tree; network and cache behavior remain at this filesystem edge.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::OnceLock;
 
 use aep_domain::artifact::ArtifactGraph;
-use aep_domain::project::{ProjectConfig, ProjectPaths, PROJECT_DIRECTORY, PROJECT_FILE};
+use aep_domain::project::{
+    GitProtocolSource, ProjectConfig, ProjectPaths, ProtocolSource, PROJECT_DIRECTORY, PROJECT_FILE,
+};
 use aep_domain::task::Task;
+use sha2::{Digest, Sha256};
 
 use crate::load::{load_tree_report, LoadErrors, LoadFailure, LoadOutcome};
 use crate::registry::Registry;
@@ -47,6 +58,9 @@ const MAX_ASCENT: usize = 12;
 
 /// The environment variable that renames the project directory.
 pub const PROJECT_DIRECTORY_ENV: &str = "AEP_PROJECT_DIR";
+
+/// Overrides the directory where immutable protocol repositories are materialized.
+pub const CACHE_DIRECTORY_ENV: &str = "AEP_CACHE_DIR";
 
 /// The directory a project keeps its metadata in: `.engineering`, or whatever `AEP_PROJECT_DIR`
 /// says.
@@ -139,36 +153,25 @@ pub fn load(root: &Path) -> Result<Project, LoadErrors> {
     }
 }
 
+/// Loads only the paths declared by a project's configuration.
+///
+/// Use this when a caller needs to find one project-owned input before it can do its own work. It
+/// deliberately does not load the protocol tree, local documents, artifact manifest, or task: a
+/// command asking where those things are must not first require all of them to be valid. A declared
+/// Git protocol source may be materialized into the cache as part of resolving its path.
+pub fn load_paths(root: &Path) -> Result<ProjectPaths, LoadErrors> {
+    config_and_paths(root)
+        .map(|(_, paths)| paths)
+        .map_err(|failure| LoadErrors::from_failures(vec![failure]))
+}
+
 /// Loads a project, or returns every failure found.
 // One pass over one directory. Splitting it would thread the failure list through five helpers to
 // hide the fact that loading a project is, in order: read the config, load the tree, merge the
 // project's own documents, check the pairing, read the manifest, read the task.
 #[allow(clippy::too_many_lines)]
 fn load_report(root: &Path) -> Result<Project, Vec<LoadFailure>> {
-    let engineering = root.join(project_directory());
-    let config_path = engineering.join(PROJECT_FILE);
-
-    let text = match std::fs::read_to_string(&config_path) {
-        Ok(text) => text,
-        Err(error) => {
-            return Err(vec![LoadFailure {
-                path: Some(config_path),
-                detail: format!("cannot be read: {error}"),
-            }])
-        }
-    };
-
-    let config = match aep_schema::parse::project(&text, Some(&config_path.display().to_string())) {
-        Ok(config) => config,
-        Err(error) => {
-            return Err(vec![LoadFailure {
-                path: Some(config_path),
-                detail: error.to_string(),
-            }])
-        }
-    };
-
-    let paths = config.paths.resolved(&engineering);
+    let (config, paths) = config_and_paths(root).map_err(|failure| vec![failure])?;
     let mut failures: Vec<LoadFailure> = Vec::new();
 
     // The protocol tree first, then the project's own documents over it.
@@ -265,6 +268,196 @@ fn load_report(root: &Path) -> Result<Project, Vec<LoadFailure>> {
         artifacts,
         task,
     })
+}
+
+/// Reads the one document that says where every other project input lives.
+fn config_and_paths(root: &Path) -> Result<(ProjectConfig, ProjectPaths), LoadFailure> {
+    let engineering = root.join(project_directory());
+    let config_path = engineering.join(PROJECT_FILE);
+    let text = std::fs::read_to_string(&config_path).map_err(|error| LoadFailure {
+        path: Some(config_path.clone()),
+        detail: format!("cannot be read: {error}"),
+    })?;
+    let config = aep_schema::parse::project(&text, Some(&config_path.display().to_string()))
+        .map_err(|error| LoadFailure {
+            path: Some(config_path.clone()),
+            detail: error.to_string(),
+        })?;
+    let protocols =
+        resolve_protocol_source(&config.protocols, &engineering).map_err(|detail| LoadFailure {
+            path: Some(config_path),
+            detail,
+        })?;
+    let paths = config.paths.resolved(&engineering, protocols);
+    Ok((config, paths))
+}
+
+/// Resolves a local tree immediately or materializes an immutable repository source in the cache.
+fn resolve_protocol_source(source: &ProtocolSource, engineering: &Path) -> Result<PathBuf, String> {
+    match source {
+        ProtocolSource::Path(path) if path.is_absolute() => Ok(path.clone()),
+        ProtocolSource::Path(path) => Ok(engineering.join(path)),
+        ProtocolSource::Git(source) => materialize_git_source(source),
+    }
+}
+
+/// Returns a cached checkout of exactly the source's declared commit.
+fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String> {
+    let destination = git_cache_path(source)?;
+    if destination.exists() {
+        verify_cached_revision(&destination, source.revision())?;
+        return Ok(destination);
+    }
+
+    let parent = destination.parent().ok_or_else(|| {
+        format!(
+            "the protocol cache path {} has no parent",
+            destination.display()
+        )
+    })?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "creating protocol source cache {}: {error}",
+            parent.display()
+        )
+    })?;
+    let temporary = create_temporary_checkout(parent, source.revision())?;
+
+    let materialized = (|| {
+        git_at(
+            &temporary,
+            &["init", "--quiet"],
+            "initializing the source cache",
+        )?;
+        git_at(
+            &temporary,
+            &["remote", "add", "origin", source.git_url()],
+            "recording the protocol repository",
+        )?;
+        git_at(
+            &temporary,
+            &[
+                "fetch",
+                "--quiet",
+                "--depth",
+                "1",
+                "origin",
+                source.revision(),
+            ],
+            "fetching the pinned protocol revision",
+        )?;
+        git_at(
+            &temporary,
+            &["checkout", "--quiet", "--detach", "FETCH_HEAD"],
+            "checking out the pinned protocol revision",
+        )?;
+        verify_cached_revision(&temporary, source.revision())
+    })();
+
+    if let Err(error) = materialized {
+        std::fs::remove_dir_all(&temporary).ok();
+        return Err(error);
+    }
+
+    if let Err(error) = std::fs::rename(&temporary, &destination) {
+        // Another process may have completed the same immutable source while this one fetched it.
+        if destination.exists() {
+            std::fs::remove_dir_all(&temporary).ok();
+            verify_cached_revision(&destination, source.revision())?;
+            return Ok(destination);
+        }
+        std::fs::remove_dir_all(&temporary).ok();
+        return Err(format!(
+            "installing protocol source cache at {}: {error}",
+            destination.display()
+        ));
+    }
+
+    Ok(destination)
+}
+
+/// A source-and-revision-specific cache path that contains no repository credentials or URL text.
+fn git_cache_path(source: &GitProtocolSource) -> Result<PathBuf, String> {
+    let root = cache_root()?;
+    let repository = format!("{:x}", Sha256::digest(source.repository().as_bytes()));
+    Ok(root
+        .join("protocol-sources")
+        .join(repository)
+        .join(source.revision()))
+}
+
+/// The operator-selected cache root, then the platform cache, then the conventional user cache.
+fn cache_root() -> Result<PathBuf, String> {
+    if let Some(path) = nonempty_environment_path(CACHE_DIRECTORY_ENV) {
+        return Ok(path);
+    }
+    if let Some(path) = nonempty_environment_path("XDG_CACHE_HOME") {
+        return Ok(path.join("engineering-protocols"));
+    }
+    if let Some(path) = nonempty_environment_path("HOME") {
+        return Ok(path.join(".cache/engineering-protocols"));
+    }
+    Err(format!(
+        "a Git protocol source needs a cache; set `{CACHE_DIRECTORY_ENV}` or `XDG_CACHE_HOME`"
+    ))
+}
+
+fn nonempty_environment_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Creates one process-owned empty directory without reusing a crashed process's partial checkout.
+fn create_temporary_checkout(parent: &Path, revision: &str) -> Result<PathBuf, String> {
+    for attempt in 0..100_u8 {
+        let candidate = parent.join(format!(".{revision}-{}-{attempt}.tmp", std::process::id()));
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(format!(
+                    "creating temporary protocol checkout {}: {error}",
+                    candidate.display()
+                ))
+            }
+        }
+    }
+    Err(format!(
+        "could not reserve a temporary protocol checkout under {}",
+        parent.display()
+    ))
+}
+
+fn verify_cached_revision(directory: &Path, expected: &str) -> Result<(), String> {
+    let actual = git_at(
+        directory,
+        &["rev-parse", "HEAD"],
+        "reading the cached protocol revision",
+    )?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "protocol source cache {} is at `{actual}`, not declared revision `{expected}`",
+            directory.display()
+        ))
+    }
+}
+
+fn git_at(directory: &Path, arguments: &[&str], operation: &str) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(arguments)
+        .current_dir(directory)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
+        .output()
+        .map_err(|error| format!("{operation}: could not run Git: {error}"))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("{operation}: {}", detail.trim()));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 /// Merges a directory of project-local documents into `registry`.

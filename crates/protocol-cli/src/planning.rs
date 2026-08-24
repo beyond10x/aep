@@ -58,9 +58,10 @@ pub(crate) struct StoreLocation {
     /// The planning store. Defaults to `<project>/.engineering/planning`.
     #[arg(long)]
     store: Option<PathBuf>,
-    /// The document tree the lifecycles and templates come from.
-    #[arg(long, default_value = ".")]
-    root: PathBuf,
+    /// The document tree the lifecycles and templates come from. Defaults to the project's
+    /// configured `protocols` source, or `.` when there is no project.
+    #[arg(long)]
+    root: Option<PathBuf>,
 }
 
 /// Where the plan is, which documents govern it, and how to print the answer.
@@ -106,13 +107,32 @@ impl StoreLocation {
         ))
     }
 
+    /// The document tree, from `--root`, the discovered project, or the historical `.` fallback.
+    fn document_root(&self) -> Result<PathBuf> {
+        if let Some(path) = &self.root {
+            return Ok(path.clone());
+        }
+        let here = std::env::current_dir().context("reading the working directory")?;
+        let Some(project) = aep_engine::project::discover(&here) else {
+            return Ok(PathBuf::from("."));
+        };
+        aep_engine::project::load_paths(&project)
+            .map(|paths| paths.protocols)
+            .with_context(|| {
+                format!(
+                    "reading the protocol document source from {}/project.yaml",
+                    project.join(project_directory()).display()
+                )
+            })
+    }
+
     /// The lifecycles in force, loaded exactly as `protocol validate` loads them.
     ///
     /// A tree with no `artifacts/lifecycles/` is not an error — it yields an empty registry, and
     /// every kind then gets [`ArtifactLifecycle::permissive`]. That is what makes the store usable
     /// in a repository that has not adopted the document tree yet.
     fn lifecycles(&self) -> Result<aep_engine::Registry> {
-        crate::load(&self.root)
+        crate::load(&self.document_root()?)
     }
 }
 
@@ -302,7 +322,8 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     let id = ArtifactId::new(format!("{}:{}", kind.as_str(), args.name))
         .map_err(|error| anyhow::anyhow!("{error}"))?;
 
-    let registry = args.store.lifecycles()?;
+    let document_root = args.store.location.document_root()?;
+    let registry = crate::load(&document_root)?;
     let status = registry
         .lifecycles()
         .for_kind(&kind)
@@ -322,8 +343,7 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
             ));
     }
 
-    let body =
-        template(&args.store.location.root, &kind).unwrap_or_else(|| format!("# {}\n", args.title));
+    let body = template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title));
     let document = PlanningDocument::new(frontmatter, body);
 
     let store = args.store.store()?;

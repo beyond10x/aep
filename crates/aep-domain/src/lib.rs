@@ -108,7 +108,9 @@ pub use principle::{
     VerificationRequirement,
 };
 pub use profile::Profile;
-pub use project::{ProjectConfig, ProjectPaths};
+pub use project::{
+    GitProtocolSource, ProjectConfig, ProjectLocalPaths, ProjectPaths, ProtocolSource,
+};
 pub use protocol::Protocol;
 pub use requirement::{
     ApprovalRequirement, ArtifactRequirement, ConditionalRequirement, EvidenceRequirement,

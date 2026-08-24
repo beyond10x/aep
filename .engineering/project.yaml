@@ -3,8 +3,8 @@ version: aep.project/1
 # The protocol tree is this repository itself. Every path here is resolved against the `.engineering`
 # directory (`crates/aep-domain/src/project.rs`, `ProjectPaths::resolved`), so the repository root —
 # the directory holding `protocols/`, `principles/`, `workflows/`, `profiles/` and
-# `artifacts/lifecycles/` — is `..`, one level up. An adopting project points this at a sibling
-# checkout or a vendored copy; here it points at the tree the project is.
+# `artifacts/lifecycles/` — is `..`, one level up. An adopting project normally names a pinned Git
+# repository source; this repository uses the local form because it is the tree being loaded.
 protocol: adp/1
 profile: development.standard
 protocols: ..

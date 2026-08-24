@@ -1,14 +1,14 @@
 //! What a project says about itself.
 //!
 //! A project adopting AEP keeps one small file — `.engineering/project.yaml` — that names the
-//! protocol it runs under, the profile it uses, and where the protocol documents live. Everything
-//! else is discovered from it.
+//! protocol it runs under, the profile it uses, and which protocol source supplies its documents.
+//! Everything else is discovered from it.
 //!
 //! ```yaml
 //! version: aep.project/1
 //! protocol: adp/1
 //! profile: development.standard
-//! protocols: ../engineering-protocols   # where the protocol tree is
+//! protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
 //! artifacts: artifacts.yaml
 //! task: task.yaml
 //! ```
@@ -34,10 +34,126 @@ pub const PROJECT_FILE: &str = "project.yaml";
 /// The format version this build reads.
 pub const PROJECT_VERSION: &str = "aep.project/1";
 
-/// Where a project keeps each thing.
+/// The protocol documents a project adopts, before the engine resolves them to a directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtocolSource {
+    /// A filesystem tree. Relative paths are resolved from the project directory.
+    Path(PathBuf),
+    /// An immutable revision of a Git repository.
+    Git(GitProtocolSource),
+}
+
+impl ProtocolSource {
+    /// Parses a project file's scalar source locator.
+    pub fn parse(value: impl Into<String>) -> Result<Self, ValidationError> {
+        let value = value.into();
+        if !value.starts_with("git+") {
+            if value.contains("://") {
+                return Err(ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    "project.protocols",
+                    format!("`{value}` uses an unsupported source scheme"),
+                )
+                .with_hint(
+                    "use a filesystem path or a pinned git+ssh://, git+https://, or git+file:// locator",
+                ));
+            }
+            return Ok(Self::Path(PathBuf::from(value)));
+        }
+
+        let (repository, revision) = value.rsplit_once('#').ok_or_else(|| {
+            ValidationError::new(
+                ValidationCode::TypeMismatch,
+                "project.protocols",
+                "a Git protocol source has no revision after `#`",
+            )
+            .with_hint(
+                "pin the repository to its full 40-character commit id so one project file always means one document tree",
+            )
+        })?;
+        if !(repository.starts_with("git+ssh://")
+            || repository.starts_with("git+https://")
+            || repository.starts_with("git+file://"))
+        {
+            return Err(ValidationError::new(
+                ValidationCode::TypeMismatch,
+                "project.protocols",
+                format!("`{repository}` is not a supported Git repository locator"),
+            )
+            .with_hint("use git+ssh://, git+https://, or git+file://"));
+        }
+        if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ValidationError::new(
+                ValidationCode::TypeMismatch,
+                "project.protocols",
+                format!("`{revision}` is not a full Git commit id"),
+            )
+            .with_hint(
+                "use the full 40 hexadecimal characters, not a branch, tag, or abbreviated id",
+            ));
+        }
+
+        Ok(Self::Git(GitProtocolSource {
+            repository: repository.to_owned(),
+            revision: revision.to_ascii_lowercase(),
+        }))
+    }
+}
+
+impl Default for ProtocolSource {
+    fn default() -> Self {
+        Self::Path(PathBuf::from(".."))
+    }
+}
+
+impl fmt::Display for ProtocolSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Path(path) => write!(f, "{}", path.display()),
+            Self::Git(source) => write!(f, "{}#{}", source.repository, source.revision),
+        }
+    }
+}
+
+impl serde::Serialize for ProtocolSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+/// A Git repository and the exact commit whose tree is adopted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitProtocolSource {
+    repository: String,
+    revision: String,
+}
+
+impl GitProtocolSource {
+    /// The configured repository locator, including the `git+` source marker.
+    pub fn repository(&self) -> &str {
+        &self.repository
+    }
+
+    /// The repository URL understood by Git itself.
+    pub fn git_url(&self) -> &str {
+        self.repository
+            .strip_prefix("git+")
+            .expect("Git protocol sources are constructed only from git+ locators")
+    }
+
+    /// The full immutable commit id.
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+}
+
+/// Resolved filesystem locations for everything a loaded project uses.
 ///
-/// Paths are relative to the `.engineering` directory, so a project can be moved or vendored without
-/// editing them.
+/// The protocol source is materialized before this value is built, so a consumer never has to treat
+/// a repository locator as if it were a path.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ProjectPaths {
     /// The protocol document tree.
@@ -54,10 +170,24 @@ pub struct ProjectPaths {
     pub profiles: PathBuf,
 }
 
-impl Default for ProjectPaths {
+/// Project-owned paths before they are resolved from `.engineering/`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ProjectLocalPaths {
+    /// The artifact manifest.
+    pub artifacts: PathBuf,
+    /// The task being worked on.
+    pub task: PathBuf,
+    /// Where an execution's state is kept between runs.
+    pub state: PathBuf,
+    /// Project-local principles, merged over the protocol tree's.
+    pub principles: PathBuf,
+    /// Project-local profiles.
+    pub profiles: PathBuf,
+}
+
+impl Default for ProjectLocalPaths {
     fn default() -> Self {
         Self {
-            protocols: PathBuf::from(".."),
             artifacts: PathBuf::from("artifacts.yaml"),
             task: PathBuf::from("task.yaml"),
             state: PathBuf::from("state.yaml"),
@@ -67,12 +197,12 @@ impl Default for ProjectPaths {
     }
 }
 
-impl ProjectPaths {
-    /// Resolves every path against the `.engineering` directory.
+impl ProjectLocalPaths {
+    /// Resolves the project-owned paths and combines them with a materialized protocol tree.
     #[must_use]
-    pub fn resolved(&self, engineering: &Path) -> Self {
-        Self {
-            protocols: engineering.join(&self.protocols),
+    pub fn resolved(&self, engineering: &Path, protocols: PathBuf) -> ProjectPaths {
+        ProjectPaths {
+            protocols,
             artifacts: engineering.join(&self.artifacts),
             task: engineering.join(&self.task),
             state: engineering.join(&self.state),
@@ -92,8 +222,10 @@ pub struct ProjectConfig {
     /// A one-line description, for a report.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    /// Where each thing lives.
-    pub paths: ProjectPaths,
+    /// The source of the governing protocol documents.
+    pub protocols: ProtocolSource,
+    /// Where project-owned inputs live.
+    pub paths: ProjectLocalPaths,
 }
 
 impl fmt::Display for ProjectConfig {
@@ -116,9 +248,9 @@ pub struct RawProjectConfig {
     /// A one-line description.
     #[serde(default)]
     pub summary: Option<String>,
-    /// Where the protocol document tree is, relative to `.engineering`.
+    /// A local tree path or a pinned `git+ssh://`, `git+https://`, or `git+file://` repository.
     #[serde(default)]
-    pub protocols: Option<PathBuf>,
+    pub protocols: Option<String>,
     /// Where the artifact manifest is.
     #[serde(default)]
     pub artifacts: Option<PathBuf>,
@@ -161,9 +293,18 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             );
         }
 
-        let defaults = ProjectPaths::default();
-        let paths = ProjectPaths {
-            protocols: raw.protocols.unwrap_or(defaults.protocols),
+        let protocols = match raw.protocols {
+            Some(value) => match ProtocolSource::parse(value) {
+                Ok(source) => source,
+                Err(error) => {
+                    errors.push(error);
+                    ProtocolSource::default()
+                }
+            },
+            None => ProtocolSource::default(),
+        };
+        let defaults = ProjectLocalPaths::default();
+        let paths = ProjectLocalPaths {
             artifacts: raw.artifacts.unwrap_or(defaults.artifacts),
             task: raw.task.unwrap_or(defaults.task),
             state: raw.state.unwrap_or(defaults.state),
@@ -171,9 +312,8 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             profiles: raw.profiles.unwrap_or(defaults.profiles),
         };
 
-        // Only paths *inside* the project must be relative. `protocols` may point anywhere: the
-        // protocol tree is often a sibling checkout or a vendored copy under a machine-specific
-        // path, and forbidding that would force a symlink for no gain.
+        // Paths *inside* the project must be relative. The separately typed protocol source may be
+        // a path outside it or a repository locator.
         for (label, path) in [
             ("artifacts", &paths.artifacts),
             ("task", &paths.task),
@@ -190,8 +330,8 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
                     )
                     .with_hint(
                         "paths inside the project are relative to `.engineering`, so the repository \
-                         can be cloned anywhere without editing them; only `protocols` may be \
-                         absolute, because the protocol tree often lives outside the project",
+                         can be cloned anywhere without editing them; `protocols` is a separate \
+                         source and may identify an external tree",
                     ),
                 );
             }
@@ -201,6 +341,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             protocol: raw.protocol,
             profile: raw.profile,
             summary: raw.summary,
+            protocols,
             paths,
         };
         errors.into_result(config)
@@ -229,11 +370,7 @@ profile: development.standard
         assert_eq!(parsed.protocol.to_string(), "adp/1");
         assert_eq!(parsed.profile.to_string(), "development.standard");
         assert_eq!(parsed.paths.artifacts, PathBuf::from("artifacts.yaml"));
-        assert_eq!(
-            parsed.paths.protocols,
-            PathBuf::from(".."),
-            "a project vendoring the protocol tree beside itself is the common case"
-        );
+        assert_eq!(parsed.protocols, ProtocolSource::Path(PathBuf::from("..")));
     }
 
     #[test]
@@ -248,9 +385,14 @@ artifacts: graph.yaml
         )
         .expect("validates");
 
-        let resolved = parsed
-            .paths
-            .resolved(Path::new("/work/payments/.engineering"));
+        assert_eq!(
+            parsed.protocols,
+            ProtocolSource::Path(PathBuf::from("../../protocols"))
+        );
+        let resolved = parsed.paths.resolved(
+            Path::new("/work/payments/.engineering"),
+            PathBuf::from("/work/payments/.engineering/../../protocols"),
+        );
         assert_eq!(
             resolved.artifacts,
             PathBuf::from("/work/payments/.engineering/graph.yaml")
@@ -272,9 +414,46 @@ protocols: /opt/engineering-protocols
         )
         .expect("an absolute protocol tree is allowed");
         assert_eq!(
-            parsed.paths.protocols,
-            PathBuf::from("/opt/engineering-protocols")
+            parsed.protocols,
+            ProtocolSource::Path(PathBuf::from("/opt/engineering-protocols"))
         );
+    }
+
+    #[test]
+    fn a_git_protocol_source_is_a_repository_pinned_to_one_full_commit() {
+        let revision = "0123456789abcdef0123456789abcdef01234567";
+        let parsed = config(&format!(
+            "protocol: adp/1\nprofile: development.standard\n\
+             protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#{revision}\n"
+        ))
+        .expect("the pinned repository source validates");
+
+        let ProtocolSource::Git(source) = parsed.protocols else {
+            panic!("the repository locator was not reinterpreted as a path");
+        };
+        assert_eq!(
+            source.repository(),
+            "git+ssh://git@github.com/beyond10x/engineering-protocols.git"
+        );
+        assert_eq!(
+            source.git_url(),
+            "ssh://git@github.com/beyond10x/engineering-protocols.git"
+        );
+        assert_eq!(source.revision(), revision);
+    }
+
+    #[test]
+    fn a_git_protocol_source_without_an_immutable_revision_is_refused() {
+        for protocols in [
+            "git+ssh://git@github.com/beyond10x/engineering-protocols.git",
+            "git+ssh://git@github.com/beyond10x/engineering-protocols.git#main",
+        ] {
+            let errors = config(&format!(
+                "protocol: adp/1\nprofile: development.standard\nprotocols: {protocols}\n"
+            ))
+            .expect_err("a moving or absent Git revision is not a reproducible source");
+            assert!(errors.to_string().contains("commit"), "{errors}");
+        }
     }
 
     #[test]

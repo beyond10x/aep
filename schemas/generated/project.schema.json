@@ -49,7 +49,7 @@
       ]
     },
     "protocols": {
-      "description": "Where the protocol document tree is, relative to `.engineering`.",
+      "description": "A local tree path or a pinned `git+ssh://`, `git+https://`, or `git+file://` repository.",
       "default": null,
       "type": [
         "string",

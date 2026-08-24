@@ -29,6 +29,27 @@ fn protocol_in(directory: &Path, args: &[&str]) -> Output {
         .expect("the protocol binary runs")
 }
 
+/// Runs `protocol` with an isolated source cache.
+fn protocol_in_with_cache(directory: &Path, cache: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(args)
+        .current_dir(directory)
+        .env("AEP_CACHE_DIR", cache)
+        .output()
+        .expect("the protocol binary runs")
+}
+
+/// Runs Git for a source fixture and returns its standard output.
+fn git(directory: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(directory)
+        .output()
+        .expect("git runs");
+    assert!(output.status.success(), "{}", stderr(&output));
+    stdout(&output).trim().to_owned()
+}
+
 /// Standard output as a string.
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
@@ -516,6 +537,164 @@ fn the_store_defaults_to_the_planning_directory_of_the_project_it_is_run_in() {
         FIXTURE_ARTIFACTS,
         "{}",
         stdout(&output)
+    );
+}
+
+#[test]
+fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
+    // The store and its governing documents are one project configuration. Before this regression,
+    // store discovery honored `project.yaml` while lifecycle and template discovery silently used
+    // the working directory instead.
+    let fixture = scratch("aep-planning-configured-tree");
+    let project = fixture.join("project");
+    let nested = project.join("crates/example");
+    let configured = fixture.join("tree");
+    let explicit = fixture.join("explicit-tree");
+    std::fs::create_dir_all(&nested).expect("the nested project directory is writable");
+
+    write(
+        &project.join(".engineering/project.yaml"),
+        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+         protocols: ../../tree\n",
+    );
+    // Resolving one configured path must not couple planning to unrelated project inputs.
+    write(
+        &project.join(".engineering/artifacts.yaml"),
+        "not: [a manifest\n",
+    );
+    write(&project.join(".engineering/task.yaml"), "not: [a task\n");
+    write(
+        &configured.join("artifacts/lifecycles/story.yaml"),
+        "kind: story\ninitial: proposed\ntransitions:\n  proposed: [active]\n  active: []\n",
+    );
+    write(
+        &configured.join("artifacts/templates/story.md"),
+        "# From the configured project tree\n",
+    );
+
+    let lifecycle = protocol_in(&nested, &["artifact", "lifecycle", "story"]);
+    assert_eq!(code(&lifecycle), 0, "{}", stderr(&lifecycle));
+    assert!(
+        stdout(&lifecycle).contains("story starts at proposed"),
+        "{}",
+        stdout(&lifecycle)
+    );
+
+    let created = protocol_in(
+        &nested,
+        &[
+            "artifact",
+            "new",
+            "story",
+            "configured",
+            "--title",
+            "Configured",
+        ],
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert!(
+        stdout(&created).contains("(proposed)"),
+        "{}",
+        stdout(&created)
+    );
+    let document =
+        std::fs::read_to_string(project.join(".engineering/planning/story/configured.md"))
+            .expect("the story was created in the discovered store");
+    assert!(
+        document.contains("# From the configured project tree"),
+        "{document}"
+    );
+
+    // An explicit command-line root remains authoritative.
+    write(
+        &explicit.join("artifacts/lifecycles/story.yaml"),
+        "kind: story\ninitial: draft\ntransitions:\n  draft: [archived]\n  archived: []\n",
+    );
+    let explicit_lifecycle = protocol_in(
+        &nested,
+        &[
+            "artifact",
+            "lifecycle",
+            "--root",
+            printable(&explicit),
+            "story",
+        ],
+    );
+    assert_eq!(
+        code(&explicit_lifecycle),
+        0,
+        "{}",
+        stderr(&explicit_lifecycle)
+    );
+    assert!(
+        stdout(&explicit_lifecycle).contains("story starts at draft"),
+        "{}",
+        stdout(&explicit_lifecycle)
+    );
+}
+
+#[test]
+fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() {
+    let fixture = scratch("aep-planning-git-source");
+    let remote = fixture.join("remote");
+    let project = fixture.join("project");
+    let cache = fixture.join("cache");
+    std::fs::create_dir_all(&remote).expect("the source repository is writable");
+    std::fs::create_dir_all(&project).expect("the project is writable");
+
+    git(&remote, &["init", "--quiet"]);
+    git(&remote, &["config", "user.name", "Protocol Test"]);
+    git(
+        &remote,
+        &["config", "user.email", "protocol-test@example.invalid"],
+    );
+    write(
+        &remote.join("artifacts/lifecycles/story.yaml"),
+        "kind: story\ninitial: proposed\ntransitions:\n  proposed: [active]\n  active: []\n",
+    );
+    write(
+        &remote.join("artifacts/templates/story.md"),
+        "# From the pinned Git source\n",
+    );
+    git(&remote, &["add", "."]);
+    git(&remote, &["commit", "--quiet", "-m", "protocol tree"]);
+    let revision = git(&remote, &["rev-parse", "HEAD"]);
+    let source = format!("git+file://{}#{revision}", remote.display());
+    write(
+        &project.join(".engineering/project.yaml"),
+        &format!(
+            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+             protocols: '{source}'\n"
+        ),
+    );
+
+    let lifecycle = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    assert_eq!(code(&lifecycle), 0, "{}", stderr(&lifecycle));
+    assert!(
+        stdout(&lifecycle).contains("story starts at proposed"),
+        "{}",
+        stdout(&lifecycle)
+    );
+
+    // The second command must need neither the repository nor the network: the immutable revision
+    // was materialized by the first command and is now an ordinary document tree in the cache.
+    std::fs::remove_dir_all(&remote).expect("the source fixture can be removed");
+    let created = protocol_in_with_cache(
+        &project,
+        &cache,
+        &["artifact", "new", "story", "cached", "--title", "Cached"],
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert!(
+        stdout(&created).contains("(proposed)"),
+        "{}",
+        stdout(&created)
+    );
+    let document = std::fs::read_to_string(project.join(".engineering/planning/story/cached.md"))
+        .expect("the cached template seeded the story");
+    assert!(
+        document.contains("# From the pinned Git source"),
+        "{document}"
     );
 }
 
