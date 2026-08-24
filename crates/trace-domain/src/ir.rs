@@ -316,6 +316,12 @@ pub struct ToolCall {
     pub input: BTreeMap<String, Recorded>,
     /// How many bytes the arguments took — model *output*, spent at output prices.
     pub input_bytes: usize,
+    /// The call's `argv`, joined, for a harness that records one instead of a `command`.
+    ///
+    /// Held rather than computed on each lookup because [`Self::argument`] returns a borrow. See
+    /// that method for why the fallback exists at all.
+    #[serde(skip)]
+    pub joined_argv: Option<Recorded>,
     /// The IR index of the correlated result, where one came back.
     ///
     /// Filled by [`TraceIr::new`] from [`Self::call_id`], so correlation has one owner and is not
@@ -346,6 +352,25 @@ const PATH_ARGUMENTS: [&str; 3] = ["file_path", "notebook_path", "path"];
 /// The path is taken **as the caller wrote it**, never canonicalised: a reader asking where a call
 /// was going has to see `../../etc/passwd` as the model sent it.
 #[must_use]
+/// A call's `argv` as one command line, or [`None`] where it records no argv.
+///
+/// A harness that refuses to compose a shell records the words it will execute; a reader asking
+/// *was the suite run* should not have to know which of the two spellings it is looking at. See
+/// [`ToolCall::argument`].
+pub fn joined_argv(input: &BTreeMap<String, Recorded>) -> Option<Recorded> {
+    // Two places, because a three-verb surface nests the entry's own arguments one level down:
+    // the call is `tool_invoke` and the argv lives under `arguments`. Looking only at the top
+    // level found nothing on exactly the harness this fallback exists for.
+    let argv = input
+        .get("argv")
+        .or_else(|| input.get("arguments").and_then(|nested| nested.get("argv")))?
+        .as_array()?;
+    let words: Vec<&str> = argv.iter().filter_map(Value::as_str).collect();
+    (!words.is_empty()).then(|| Value::String(words.join(" ")))
+}
+
+/// The subjects a call's own arguments name, for a record that states none.
+#[must_use]
 pub fn subjects_from_input(input: &BTreeMap<String, Recorded>) -> Vec<String> {
     PATH_ARGUMENTS
         .iter()
@@ -356,8 +381,29 @@ pub fn subjects_from_input(input: &BTreeMap<String, Recorded>) -> Vec<String> {
 
 impl ToolCall {
     /// The value of one named argument, where the call carries it.
+    ///
+    /// # `command` is derived where a harness records an argv instead
+    ///
+    /// A shell call is `command: "cargo test"` on Claude Code and `argv: ["/usr/bin/cargo",
+    /// "test"]` on a harness that refuses to compose one. They are the same fact written twice, and
+    /// a row asking whether the suite was run should not have to know which spelling it is reading:
+    /// against the argv form, `args: {command: {contains: "cargo test"}}` selected nothing at all.
+    ///
+    /// So an absent `command` falls back to the argv, joined by spaces. This is the same
+    /// normalisation [`subjects_from_input`] makes for paths and it is justified the same way: it
+    /// asks *which key holds the command line*, which is a reader's question, where *which tool is
+    /// a shell* is the harness's to answer and is answered by `operations`.
+    ///
+    /// It widens nothing. A `contains` over the joined argv matches exactly the text that was going
+    /// to be executed, and an argv that never held those words still does not match.
     pub fn argument(&self, field: &str) -> Option<&Recorded> {
-        self.input.get(field)
+        if let Some(value) = self.input.get(field) {
+            return Some(value);
+        }
+        if field == "command" {
+            return self.joined_argv.as_ref();
+        }
+        None
     }
 
     /// The call's identity for repetition counting: its name and its canonical arguments.
@@ -1050,6 +1096,7 @@ mod tests {
                 name: name.to_owned(),
                 operations: Vec::new(),
                 subjects: Vec::new(),
+                joined_argv: None,
                 input: map,
                 input_bytes: input.len(),
                 result_event: None,

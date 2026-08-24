@@ -600,6 +600,7 @@ fn tool_call(value: &Value) -> Option<ToolCall> {
             // fallback does not pretend otherwise.
             .filter(|found: &Vec<String>| !found.is_empty())
             .unwrap_or_else(|| trace_domain::ir::subjects_from_input(&input)),
+        joined_argv: trace_domain::ir::joined_argv(&input),
         input,
         input_bytes,
         result_event: None,

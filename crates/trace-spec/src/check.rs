@@ -1617,6 +1617,7 @@ mod tests {
                 name: name.to_owned(),
                 operations: Vec::new(),
                 subjects: Vec::new(),
+                joined_argv: None,
                 input: map,
                 input_bytes: input.len(),
                 result_event: None,

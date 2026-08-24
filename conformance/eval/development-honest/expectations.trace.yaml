@@ -184,8 +184,8 @@ expectations:
     # was.
     expect:
       order:
-        first: {tool: Bash, args: {command: {contains: "protocol artifact new specification"}}}
-        before: {tool: Bash, args: {command: {contains: "protocol artifact new story"}}}
+        first: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new specification"}}}
+        before: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new story"}}}
 
   # --- the workflow's second sequencing rule, and the one the violation case breaks ---------
 
@@ -205,8 +205,8 @@ expectations:
     # § *What counts as a write* below; the ordering claim is unchanged.
     expect:
       order:
-        first: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/tests/*"}, args: {file_path: {glob: "*/tests/*"}}}
-        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}, args: {file_path: {glob: "*/src/*"}}}
+        first: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/tests/*"}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}}
 
   - id: the-suite-was-run-before-there-was-code-to-pass-it
     statement: the verifiers were executed once against a tree that could not yet satisfy them
@@ -222,8 +222,8 @@ expectations:
     # the honest red-green shape — run, implement, run again — satisfy this rather than contradict it.
     expect:
       order:
-        first: {tool: Bash, args: {command: {contains: "cargo test"}}}
-        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}, args: {file_path: {glob: "*/src/*"}}}
+        first: {operations: [shell], tools: [Bash], args: {command: {contains: "cargo test"}}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}}
 
   # --- the store guardrail, with the control that stops it being vacuous -------------------
 
@@ -250,7 +250,7 @@ expectations:
       tool.absent:
         operations: [file.write]
         tools: [NotebookEdit, Write]
-        args: {file_path: {glob: "*/.engineering/planning/*"}}
+        subject: {glob: "file:*.engineering/planning/*"}
 
   - id: the-harness-had-a-writer-to-refuse
     statement: the harness's inventory contains `Write`, so the absence above is a refusal and not a missing tool
@@ -306,7 +306,8 @@ expectations:
     statement: the agent ran the store's own validator before reporting
     expect:
       tool.called:
-        tool: Bash
+        operations: [shell]
+        tools: [Bash]
         args: {command: {contains: "protocol artifact validate"}}
         count: {at_least: 1}
 
@@ -331,7 +332,7 @@ expectations:
       tool.called:
         operations: [file.write, file.edit]
         tools: [Edit, NotebookEdit, Write]
-        args: {file_path: {glob: "*/src/*"}}
+        subject: {glob: "file:*/src/*"}
         count: {at_least: 1}
 
   # --- the run's own record ------------------------------------------------------------------

@@ -375,6 +375,7 @@ fn tool_call(block: &Value) -> Option<ToolCall> {
         // records one, so a raw transcript that states a path can be read into the neutral form
         // without guessing at anything.
         subjects: trace_domain::ir::subjects_from_input(&input),
+        joined_argv: trace_domain::ir::joined_argv(&input),
         input,
         input_bytes,
         result_event: None,

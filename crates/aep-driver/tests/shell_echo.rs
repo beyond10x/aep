@@ -528,6 +528,7 @@ fn read_shell_echo(bytes: &[u8]) -> Result<TraceIr, ValidationErrors> {
                 name: field(line, "tool").unwrap_or_default().to_owned(),
                 operations: Vec::new(),
                 subjects: Vec::new(),
+                joined_argv: None,
                 input: field(line, "prompt_bytes")
                     .map(|bytes| ("prompt_bytes".to_owned(), Value::from(bytes)))
                     .into_iter()
