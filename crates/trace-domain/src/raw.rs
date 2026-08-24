@@ -1245,6 +1245,59 @@ fn plugin_loaded(
 /// The three refusals here are the whole reason this kind is not two lines like the two beside
 /// it. Each one is a document somebody meant to finish, and each message names the line to
 /// delete rather than the rule that was broken.
+/// The any-of form of `env.tool_available`: a name the run was offered, or an operation it could
+/// perform.
+///
+/// Its own function because it is its own claim. `tool`/`only` ask about one named tool and about
+/// the whole offered list; this asks whether *any* of several witnesses is present, and a reader
+/// following one of the two should not have to step over the other.
+fn offered_any(
+    tools: Option<Vec<String>>,
+    operations: Option<Vec<String>>,
+    available: Option<bool>,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<ExpectationKind> {
+    let kind = "env.tool_available";
+    if available.is_some() {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            at(location, kind, "available"),
+            "`available: false` asks whether one named tool was withheld, and the any-of form \
+             names several; *none of these was offered* is a different claim and has no form \
+             here yet",
+        );
+        return None;
+    }
+    let tools = match tools {
+        Some(any) => names_of(
+            any,
+            &at(location, kind, "tools"),
+            "tool",
+            "an `env.tool_available` listing no tool under `tools` names none, so it can \
+             only report a gap",
+            errors,
+        )?,
+        None => BTreeSet::new(),
+    };
+    let operations = match operations {
+        Some(any) => names_of(
+            any,
+            &at(location, kind, "operations"),
+            "operation",
+            "an `env.tool_available` listing no operation names none, so it can only report \
+             a gap",
+            errors,
+        )?,
+        None => BTreeSet::new(),
+    };
+    // One claim, two witnesses: a name the run was offered, or an operation it could perform.
+    // A record answers with whichever it carries.
+    Some(ExpectationKind::EnvToolAvailable {
+        availability: ToolAvailability::OfferedAny { tools, operations },
+    })
+}
+
 fn tool_available(
     written: RawToolAvailable,
     location: &str,
@@ -1272,43 +1325,13 @@ fn tool_available(
         return None;
     }
     if written.tools.is_some() || written.operations.is_some() {
-        if written.available.is_some() {
-            errors.refuse(
-                TraceCode::SpecInvalidExpectation,
-                at(location, kind, "available"),
-                "`available: false` asks whether one named tool was withheld, and the any-of form \
-                 names several; *none of these was offered* is a different claim and has no form \
-                 here yet",
-            );
-            return None;
-        }
-        let tools = match written.tools {
-            Some(any) => names_of(
-                any,
-                &at(location, kind, "tools"),
-                "tool",
-                "an `env.tool_available` listing no tool under `tools` names none, so it can \
-                 only report a gap",
-                errors,
-            )?,
-            None => BTreeSet::new(),
-        };
-        let operations = match written.operations {
-            Some(any) => names_of(
-                any,
-                &at(location, kind, "operations"),
-                "operation",
-                "an `env.tool_available` listing no operation names none, so it can only report \
-                 a gap",
-                errors,
-            )?,
-            None => BTreeSet::new(),
-        };
-        // One claim, two witnesses: a name the run was offered, or an operation it could perform.
-        // A record answers with whichever it carries.
-        return Some(ExpectationKind::EnvToolAvailable {
-            availability: ToolAvailability::OfferedAny { tools, operations },
-        });
+        return offered_any(
+            written.tools,
+            written.operations,
+            written.available,
+            location,
+            errors,
+        );
     }
     let availability = match (written.tool, written.only) {
         (Some(_), Some(_)) => {
@@ -1856,16 +1879,13 @@ fn selector_of(
             None => usable = false,
         }
     }
-    let subject_matcher = match subject {
-        Some(written) => match matcher_of(written, &format!("{location}.subject"), errors) {
-            Some(matcher) => Some(matcher),
-            None => {
-                usable = false;
-                None
-            }
-        },
-        None => None,
-    };
+    let subject_matcher = subject.and_then(|written| {
+        let matcher = matcher_of(written, &format!("{location}.subject"), errors);
+        // A subject that was written and could not be read is a selector nobody can trust, not a
+        // selector without a subject.
+        usable &= matcher.is_some();
+        matcher
+    });
 
     // The same three rules the tool scope gets, and for the same reasons.
     let mut operation_names = BTreeSet::new();

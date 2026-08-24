@@ -583,10 +583,13 @@ fn env_tool_available(ir: &TraceIr, availability: &ToolAvailability) -> Outcome 
             // The same claim, witnessed by what the run could *do* rather than by what it was
             // offered. A record answers with whichever it carries.
             for operation in operations {
-                let outcome =
-                    env_offers(ir, "available_operations", "operation", operation, |start| {
-                        start.available_operations.as_deref()
-                    });
+                let outcome = env_offers(
+                    ir,
+                    "available_operations",
+                    "operation",
+                    operation,
+                    |start| start.available_operations.as_deref(),
+                );
                 if matches!(outcome, Outcome::Ok(_)) {
                     return outcome;
                 }
@@ -1129,10 +1132,7 @@ fn run_result(
     if held.len() == 1 {
         holds(at, last.note.clone())
     } else {
-        holds(
-            at,
-            format!("{} session(s), each {}", held.len(), last.note),
-        )
+        holds(at, format!("{} session(s), each {}", held.len(), last.note))
     }
 }
 
@@ -2747,9 +2747,7 @@ mod tests {
             None,
             EventKind::RunOutcome(Box::new(RunOutcome {
                 is_error: Some(!clean),
-                terminal_reason: Some(
-                    if clean { "completed" } else { "api_error" }.to_owned(),
-                ),
+                terminal_reason: Some(if clean { "completed" } else { "api_error" }.to_owned()),
                 ..RunOutcome::default()
             })),
         )
@@ -2806,20 +2804,13 @@ mod tests {
             limit(3, "rejected"),
             ended(4, false),
         ]);
-        assert_eq!(
-            evaluate(&clean_session(), &cut).verdict(),
-            Verdict::Unknown
-        );
+        assert_eq!(evaluate(&clean_session(), &cut).verdict(), Verdict::Unknown);
     }
 
     #[test]
     fn only_a_rejection_inside_the_failing_session_excuses_it() {
         // The three ways this must not become a machine for explaining failures away.
-        let earlier_session = ir(vec![
-            limit(1, "rejected"),
-            ended(2, true),
-            ended(3, false),
-        ]);
+        let earlier_session = ir(vec![limit(1, "rejected"), ended(2, true), ended(3, false)]);
         assert_eq!(
             evaluate(&clean_session(), &earlier_session).verdict(),
             Verdict::Gap,

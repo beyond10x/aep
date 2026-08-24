@@ -32,9 +32,10 @@
 //! paid to run one.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use clap::Args;
 
 use aep_domain::ids::StateId;
@@ -123,7 +124,8 @@ fn project(workflow: &Workflow, max_attempts: u32) -> Result<String> {
     // same stretch of work are not two sections.
     let mut spans: Vec<(usize, usize, Vec<String>)> = Vec::new();
     for transition in &workflow.transitions {
-        let (Some(&from), Some(&to)) = (position.get(&transition.from), position.get(&transition.to))
+        let (Some(&from), Some(&to)) =
+            (position.get(&transition.from), position.get(&transition.to))
         else {
             continue;
         };
@@ -232,7 +234,7 @@ fn render(workflow: &Workflow, nodes: &[Emitted], layout: &Layout) -> String {
         .filter(|transition| !matches!(transition.when, aep_domain::predicate::Predicate::Always))
         .count();
 
-    out.push_str(&format!(
+    let _ = write!(out,
         "# Projected from `{}/{}` by `protocol workflow flow`. Do not edit.\n\
          #\n\
          # **An ordering, not a government.** {guards} guard(s) in the source decide whether a run\n\
@@ -255,15 +257,16 @@ fn render(workflow: &Workflow, nodes: &[Emitted], layout: &Layout) -> String {
         } else {
             dropped.join(", ")
         },
-    ));
-    out.push_str(&format!(
+    );
+    let _ = write!(
+        out,
         "#\n# {} state(s) in {} layer(s) of the source; {} node(s) here.\n",
         workflow.states.len(),
         layout.depth(),
         nodes.len()
-    ));
+    );
 
-    out.push_str(&format!("id: {}\n", workflow.id));
+    let _ = writeln!(out, "id: {}", workflow.id);
     out.push_str("root:\n  id: root\n  nodes:\n");
     for node in nodes {
         write_node(&mut out, node, 4);
@@ -275,13 +278,13 @@ fn write_node(out: &mut String, node: &Emitted, indent: usize) {
     let pad = " ".repeat(indent);
     match node {
         Emitted::Step { id, needs, summary } => {
-            out.push_str(&format!("{pad}- id: {id}\n"));
+            let _ = writeln!(out, "{pad}- id: {id}");
             if !needs.is_empty() {
-                out.push_str(&format!("{pad}  needs: [{}]\n", needs.join(", ")));
+                let _ = writeln!(out, "{pad}  needs: [{}]", needs.join(", "));
             }
             if !summary.is_empty() {
-                out.push_str(&format!("{pad}  run:\n{pad}    state: {id}\n"));
-                out.push_str(&format!("{pad}    summary: {}\n", quote(summary)));
+                let _ = writeln!(out, "{pad}  run:\n{pad}    state: {id}");
+                let _ = writeln!(out, "{pad}    summary: {}", quote(summary));
             }
         }
         Emitted::Group {
@@ -291,13 +294,13 @@ fn write_node(out: &mut String, node: &Emitted, indent: usize) {
             because,
             nodes,
         } => {
-            out.push_str(&format!("{pad}# the retreat: {because}\n"));
-            out.push_str(&format!("{pad}- id: {id}\n"));
+            let _ = writeln!(out, "{pad}# the retreat: {because}");
+            let _ = writeln!(out, "{pad}- id: {id}");
             if !needs.is_empty() {
-                out.push_str(&format!("{pad}  needs: [{}]\n", needs.join(", ")));
+                let _ = writeln!(out, "{pad}  needs: [{}]", needs.join(", "));
             }
-            out.push_str(&format!("{pad}  repeat: {{max: {repeat}}}\n"));
-            out.push_str(&format!("{pad}  nodes:\n"));
+            let _ = writeln!(out, "{pad}  repeat: {{max: {repeat}}}");
+            let _ = writeln!(out, "{pad}  nodes:");
             for inner in nodes {
                 write_node(out, inner, indent + 4);
             }
@@ -361,9 +364,18 @@ mod tests {
     #[test]
     fn the_document_says_what_it_dropped_rather_than_dropping_it_quietly() {
         let document = project(&workflow(), 3).expect("projects");
-        assert!(document.contains("An ordering, not a government"), "{document}");
-        assert!(document.contains("declined"), "the early exit is named: {document}");
-        assert!(document.contains("complete"), "the terminals are named: {document}");
+        assert!(
+            document.contains("An ordering, not a government"),
+            "{document}"
+        );
+        assert!(
+            document.contains("declined"),
+            "the early exit is named: {document}"
+        );
+        assert!(
+            document.contains("complete"),
+            "the terminals are named: {document}"
+        );
     }
 
     #[test]

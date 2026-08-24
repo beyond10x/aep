@@ -1646,6 +1646,10 @@ impl RunRefusal {
 }
 
 impl fmt::Display for RunRefusal {
+    // One arm per refusal, each carrying the whole sentence a person reads when a run will not
+    // start. Splitting it would put half the sentences somewhere else without making any of them
+    // shorter, and this is the one place where reading them all together is the point.
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ", self.code())?;
         match self {
@@ -2251,7 +2255,7 @@ impl Session {
         let mut wall_time_ms = None;
         for ended in &ended {
             match cost_of(ended) {
-                Ok(stated) => accumulate(&mut cost, stated),
+                Ok(figure) => accumulate(&mut cost, figure),
                 Err(reason) => refusals.push(StreamRefusal::CostUnreadable { reason }),
             }
             accumulate(&mut tokens, tokens_of(ended));
@@ -3670,7 +3674,8 @@ observed_at: 2026-08-23
         // copies of it must state twice, on all three columns. A reader that takes the last record
         // answers the single figure and fails here.
         let one = std::fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/eval-run/claude-driven-attested.jsonl"),
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/eval-run/claude-driven-attested.jsonl"),
         )
         .expect("the committed driven fixture");
         let mut two = one.clone();
@@ -3760,10 +3765,7 @@ mod native_arm_tests {
         // other arm is a treatment applied to one.
         let mut arms = vec![Arm::Native, Arm::Driven, Arm::Raw, Arm::Plugin];
         arms.sort();
-        assert_eq!(
-            arms,
-            vec![Arm::Raw, Arm::Plugin, Arm::Driven, Arm::Native]
-        );
+        assert_eq!(arms, vec![Arm::Raw, Arm::Plugin, Arm::Driven, Arm::Native]);
     }
 
     #[test]

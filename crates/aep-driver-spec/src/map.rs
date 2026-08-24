@@ -336,11 +336,20 @@ fn validated_scope(
             continue;
         }
         kept.push(ScopeRule {
-            paths: rule.paths.iter().map(|path| path.trim().to_owned()).collect(),
+            paths: rule
+                .paths
+                .iter()
+                .map(|path| path.trim().to_owned())
+                .collect(),
             write: rule.write,
         });
     }
-    if usable && !kept.iter().last().is_some_and(|rule| rule.paths.iter().any(|path| path == "**")) {
+    if usable
+        && !kept
+            .iter()
+            .last()
+            .is_some_and(|rule| rule.paths.iter().any(|path| path == "**"))
+    {
         errors.push(ValidationError::new(
             ValidationCode::EmptyDeclaration,
             format!("{location}.scope"),
@@ -1414,9 +1423,7 @@ mod tests {
     // --- declared context and write scope ---------------------------------------------------
 
     fn llm_step(extra: &str) -> String {
-        format!(
-            r#"{{"specify":{{"steps":[{{"kind":"llm","prompt":"write it down"{extra}}}]}}}}"#
-        )
+        format!(r#"{{"specify":{{"steps":[{{"kind":"llm","prompt":"write it down"{extra}}}]}}}}"#)
     }
 
     fn only_llm_step(extra: &str) -> Result<StepMap, ValidationErrors> {
@@ -1431,13 +1438,7 @@ mod tests {
                          {"paths":["**"],"write":"denied"}]"#,
         )
         .expect("valid");
-        let Some(Step::Llm(step)) = map
-            .states
-            .values()
-            .next()
-            .expect("one state")
-            .steps
-            .first()
+        let Some(Step::Llm(step)) = map.states.values().next().expect("one state").steps.first()
         else {
             panic!("one llm step");
         };
@@ -1452,13 +1453,7 @@ mod tests {
         // Empty is not "allows everything": nothing is enforced and nothing says it is. Every map
         // written before this existed keeps meaning exactly what it meant.
         let map = only_llm_step("").expect("valid");
-        let Some(Step::Llm(step)) = map
-            .states
-            .values()
-            .next()
-            .expect("one state")
-            .steps
-            .first()
+        let Some(Step::Llm(step)) = map.states.values().next().expect("one state").steps.first()
         else {
             panic!("one llm step");
         };
@@ -1470,17 +1465,18 @@ mod tests {
         // A step map is pinned, so a glob is a promise about what a directory will hold later.
         let errors = only_llm_step(r#","context":["crates/**/*.rs"]"#).expect_err("refused");
         assert!(format!("{errors}").contains("glob"), "{errors}");
-        assert!(only_llm_step(r#","context":[" "]"#).is_err(), "and a blank names no file");
+        assert!(
+            only_llm_step(r#","context":[" "]"#).is_err(),
+            "and a blank names no file"
+        );
     }
 
     #[test]
     fn a_scope_whose_last_rule_is_not_a_catch_all_is_refused() {
         // A path nobody mentioned must have an answer. Leaving it to a default is how a scope
         // silently stops covering the tree it was written for.
-        let errors = only_llm_step(
-            r#","scope":[{"paths":["crates/**"],"write":"allowed"}]"#,
-        )
-        .expect_err("refused");
+        let errors = only_llm_step(r#","scope":[{"paths":["crates/**"],"write":"allowed"}]"#)
+            .expect_err("refused");
         assert!(format!("{errors}").contains("`**`"), "{errors}");
     }
 
