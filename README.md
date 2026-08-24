@@ -86,7 +86,25 @@ It is not a tool for making an agent ship features faster — and deliberately n
 framework, a CI system or a deployment platform: nothing here calls a cloud API or holds a
 credential. External systems do the work; this project decides what the results permit.
 
-## What works, and what does not
+## Where it sits
+
+Nothing here spawns a harness, holds a credential or reaches a cluster. Those jobs belong to the
+repositories beside it.
+
+| repo | relationship |
+|---|---|
+| [metaharness](https://github.com/beyond10x/metaharness) | drives a vendor harness and decides each tool call at a seam. The driver's enforcement policy answers that seam per call; the evals that judge this repository's own runs live there, under `evals/engineering-protocols/` |
+| [infra-scout](https://github.com/beyond10x/infra-scout) | the actor that holds a kubeconfig and produces the `infra-observation/1` bundles the `infra-*` crates here check three-valued against a desired state |
+| [atlas](https://github.com/beyond10x/atlas) | the map of the wider `beyond10x` estate this sits in |
+
+The split with `infra-scout` is the boundary [`docs/VISION.md`](docs/VISION.md) states under "What
+this is deliberately not", and it is why that repository exists separately.
+
+## Status
+
+**Shipped and tagged, adopted by nobody. Latest release `0.12.0` (2026-08-24).** Releases are cut
+per delivered wave; `docs/status.md` derives its delivered-waves table from the annotated tags, and
+`task status-check` fails the gate if the two disagree.
 
 Working today, all gated by `task check`: the AEP document tree, resolution, evidence-guarded
 workflows and the `protocol` CLI; evidence that carries an observation date and decays past a
@@ -96,9 +114,9 @@ realization — with one specification run as two applications and compared in e
 Kubernetes observation checked three-valued against a desired state, with gaps projected back as
 reviewable patches; a durable markdown planning store, which is the store this repository plans
 itself in; an agent transcript judged against a typed specification; a
-[Claude Code plugin](integrations/claude-code/) that plans through it and carries the driver's two
-enforcement hooks; and the **reference driver** that walks a workflow rather than being steered
-along one.
+[Claude Code plugin](integrations/claude-code/) that plans through it; and the **reference driver**
+that walks a workflow rather than being steered along one, deciding each tool call in Rust
+(`decide_tool` in `crates/protocol-cli/src/drive.rs`) rather than in a hook script.
 
 Not working yet, stated plainly: no durable backend implements the storage contract — the markdown
 store holds files but writes through its own functions, so the contract still has one implementor
@@ -134,6 +152,11 @@ The gate is the measurement — run `task check` rather than trusting a number w
 | [`integrations/codex/`](integrations/codex/) | the same instructions in the form Codex reads them — a skill, an `AGENTS.md` fragment and an instruction-surface check. The product for Codex users; driving Codex is metaharness's `metaharness-codex` adapter |
 | `.engineering/` | this repository's own project: the planning store it plans itself in, the task under work, and the driver's run records |
 | [`examples/`](examples/) | the worked example, the normative specification, the two synthesised applications, and the evidence-horizon corpus a first adopter contributed |
+| [`artifacts/`](artifacts/) | the artifact graph as data: kinds, relations, lifecycles and templates. The authoritative model is Rust; these carry the parts that are data |
+| [`conformance/`](conformance/) | language-neutral fixtures, scenarios and expected results, plus the shipped `trace-spec/1` documents and the replayed eval-case corpus |
+| [`schemas/`](schemas/), [`suites/`](suites/), [`generated/`](generated/) | outputs, each with exactly one owning `xtask` and a drift check in the gate. Do not hand-edit |
+| [`xtask/`](xtask/) | the tasks behind every `--check` step: generate, suite, synth, infra, schema, status |
+| [`website/`](website/) | the public documentation site |
 | [`CHANGELOG.md`](CHANGELOG.md) | what changed, per release |
 
 ## Build
@@ -144,8 +167,19 @@ rather than skipping — a check that quietly passes without its toolchain reads
 that passed.
 
 ```console
-task check     # the ten-step gate: format, status, lint, tests, rustdoc, and five more drift checks
+task check     # the ten-step gate. Run this; it is the measurement.
 ```
+
+`task check` runs, in order: `fmt-check`, `status-check`, `clippy`, `test`, `doc-check`,
+`schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`. The six `*-check`
+drift steps each assert that a committed tree still equals what its inputs produce — a generated
+file edited by hand fails the gate rather than surviving in the repository.
+
+The gate is **hermetic**: it calls no API and spends no money. The evals that do are separate tasks
+and are never steps of `check` — `task codex-eval` checks the Codex instruction surface for free,
+with no model call.
+
+Published documentation: <https://beyond10x.github.io/engineering-protocols/>
 
 ## Licence
 

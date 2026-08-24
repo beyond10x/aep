@@ -21,7 +21,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/former organization/engineering-protocols"
+repository = "https://github.com/beyond10x/engineering-protocols"
 authors = ["Beyond10x contributor <1379383+beyond10x@users.noreply.github.com>"]
 publish = false
 

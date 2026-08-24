@@ -58,7 +58,7 @@ Every item verified against the file as it stands.
 | `AGENTS.md` § Gate | four steps | five since wave 3 added `generate-check` |
 | `Taskfile.yml:10` | "Format check, lint, test and schema check" | the body runs five tasks |
 | `docs/plan/ess-roadmap.md:3` | "Waves 1 and 2 delivered; 3 to 5 proposed" | wave 3 is delivered and tagged |
-| `Cargo.toml:24` | `repository = "https://github.com/beyond10x/engineering-protocols"` | the remote is `former organization/engineering-protocols` |
+| `Cargo.toml:24` | `repository = "https://github.com/beyond10x/engineering-protocols"` | the remote is `beyond10x/engineering-protocols` |
 | wave 4 design § 2 | `ess-gen` is local and unpushed; ESS is `ess-domain` + `ess-compiler` | `ess-gen` is on `main` |
 
 The metadata one is worth a second look rather than a blind fix: a published crate's `repository`

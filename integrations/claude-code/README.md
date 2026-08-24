@@ -47,7 +47,7 @@ $ claude --plugin-dir ./integrations/claude-code
 **From GitHub** — add the marketplace defined at the repository root, then install from it:
 
 ```
-/plugin marketplace add former organization/engineering-protocols
+/plugin marketplace add beyond10x/engineering-protocols
 /plugin install engineering-protocols@engineering-protocols
 ```
 

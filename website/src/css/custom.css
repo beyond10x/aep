@@ -1301,7 +1301,7 @@ html {
 
 /* A link that leaves the site says so before it is clicked. Internal links are relative, so the
    protocol test is enough to tell them apart. */
-.markdown a[href^='http']:not([href*='former organization.github.io'])::after {
+.markdown a[href^='http']:not([href*='beyond10x.github.io'])::after {
   content: '↗';
   display: inline-block;
   margin-left: 0.18em;

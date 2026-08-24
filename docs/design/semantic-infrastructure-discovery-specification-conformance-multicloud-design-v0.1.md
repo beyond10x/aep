@@ -1,6 +1,6 @@
 # Semantic Infrastructure Discovery, Specification, Conformance & Multi-Cloud Realization - Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`  
+> **Repository:** `beyond10x/engineering-protocols`  
 > **Status:** Proposed follow-on / cross-cutting design  
 > **Audience:** Implementors extending the repository from software-system semantics into infrastructure discovery, infrastructure specification, conformance, portability, and governed infrastructure evolution  
 > **Relationship to existing work:** Additive, but it refines the planned ESS topology-synthesis boundary. It must not disrupt the current Wave 4/5 gating sequence.  
@@ -3950,28 +3950,28 @@ EV1-EV6
 ### Repository sources
 
 - `docs/VISION.md` - AEP/ESS division, evidence boundary, semantic source-of-truth thesis, and non-goals.  
-  https://github.com/former organization/engineering-protocols/blob/main/docs/VISION.md
+  https://github.com/beyond10x/engineering-protocols/blob/main/docs/VISION.md
 
 - `docs/design/ess-implementor-design-v0.1.md` - ESS domain/component/interaction/topology layers; topology as semantic runtime requirements; deployment formats as compilation targets.  
-  https://github.com/former organization/engineering-protocols/blob/main/docs/design/ess-implementor-design-v0.1.md
+  https://github.com/beyond10x/engineering-protocols/blob/main/docs/design/ess-implementor-design-v0.1.md
 
 - `docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md` - `Generated | Obligation | Refused`, `Realization`, multiple physical realizations, release bridge, and deferred topology synthesis.  
-  https://github.com/former organization/engineering-protocols/blob/main/docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md
+  https://github.com/beyond10x/engineering-protocols/blob/main/docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md
 
 - `docs/design/consolidated-design-v0.2.md` - AEP support for infrastructure changes, migrations, compliance, DR and capacity as profiles over common primitives; artifact and operations model.  
-  https://github.com/former organization/engineering-protocols/blob/main/docs/design/consolidated-design-v0.2.md
+  https://github.com/beyond10x/engineering-protocols/blob/main/docs/design/consolidated-design-v0.2.md
 
 - `protocols/adp/1.yaml` - independent ESS conformance evidence and development semantics.  
-  https://github.com/former organization/engineering-protocols/blob/main/protocols/adp/1.yaml
+  https://github.com/beyond10x/engineering-protocols/blob/main/protocols/adp/1.yaml
 
 - `protocols/aop/1.yaml` - telemetry, blast radius, reversible change, health verification, rollback, preparation and migration phases.  
-  https://github.com/former organization/engineering-protocols/blob/main/protocols/aop/1.yaml
+  https://github.com/beyond10x/engineering-protocols/blob/main/protocols/aop/1.yaml
 
 - `workflows/releases/progressive.yaml` - staged/canary/observation/promotion workflow with independent telemetry and rollback preconditions.  
-  https://github.com/former organization/engineering-protocols/blob/main/workflows/releases/progressive.yaml
+  https://github.com/beyond10x/engineering-protocols/blob/main/workflows/releases/progressive.yaml
 
 - `workflows/migrations/forward-only.yaml` - explicit irreversible migration semantics and independent dry-run/verification evidence.  
-  https://github.com/former organization/engineering-protocols/blob/main/workflows/migrations/forward-only.yaml
+  https://github.com/beyond10x/engineering-protocols/blob/main/workflows/migrations/forward-only.yaml
 
 ### External feasibility references - non-normative
 

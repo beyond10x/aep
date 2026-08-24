@@ -231,6 +231,6 @@ the command's to predict. The gate behind all of it: 8 steps, 69 suites, 1397 te
 
 The full record for the wave — the decisions taken, what was rejected by name, and what is
 deliberately not in it — is in the repository under
-[`docs/plan/ess-wave-6-structural-synthesis.md`](https://github.com/former organization/engineering-protocols/blob/main/docs/plan/ess-wave-6-structural-synthesis.md).
-Tags: [`0.6.0-ess-wave-6`](https://github.com/former organization/engineering-protocols/releases/tag/0.6.0-ess-wave-6),
-[`0.6.1-ess-wave-6.5`](https://github.com/former organization/engineering-protocols/releases/tag/0.6.1-ess-wave-6.5).
+[`docs/plan/ess-wave-6-structural-synthesis.md`](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/ess-wave-6-structural-synthesis.md).
+Tags: [`0.6.0-ess-wave-6`](https://github.com/beyond10x/engineering-protocols/releases/tag/0.6.0-ess-wave-6),
+[`0.6.1-ess-wave-6.5`](https://github.com/beyond10x/engineering-protocols/releases/tag/0.6.1-ess-wave-6.5).

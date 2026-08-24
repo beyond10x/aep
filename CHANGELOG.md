@@ -2137,19 +2137,19 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/former organization/engineering-protocols/compare/0.7.1-infra-waves-1-4...HEAD
-[0.7.1-infra-waves-1-4]: https://github.com/former organization/engineering-protocols/compare/0.7.0-ess-wave-7...0.7.1-infra-waves-1-4
-[0.7.0-ess-wave-7]: https://github.com/former organization/engineering-protocols/compare/0.6.1-ess-wave-6.5...0.7.0-ess-wave-7
-[0.6.1-ess-wave-6.5]: https://github.com/former organization/engineering-protocols/compare/0.6.0-ess-wave-6...0.6.1-ess-wave-6.5
-[0.6.0-ess-wave-6]: https://github.com/former organization/engineering-protocols/compare/0.5.0-ess-wave-5...0.6.0-ess-wave-6
-[0.5.0-ess-wave-5]: https://github.com/former organization/engineering-protocols/compare/0.4.0-ess-wave-4...0.5.0-ess-wave-5
-[0.4.0-ess-wave-4]: https://github.com/former organization/engineering-protocols/compare/0.3.3-ess-wave-3.5...0.4.0-ess-wave-4
-[0.3.3-ess-wave-3.5]: https://github.com/former organization/engineering-protocols/compare/0.3.2-ess-wave-3...0.3.3-ess-wave-3.5
-[0.3.2-ess-wave-3]: https://github.com/former organization/engineering-protocols/compare/0.3.1-ess-wave-2...0.3.2-ess-wave-3
-[0.3.1-ess-wave-2]: https://github.com/former organization/engineering-protocols/compare/0.3.0-ess-wave-1...0.3.1-ess-wave-2
-[0.3.0-ess-wave-1]: https://github.com/former organization/engineering-protocols/compare/0.2.1...0.3.0-ess-wave-1
-[0.2.1]: https://github.com/former organization/engineering-protocols/compare/0.2.0-wave-3...0.2.1
-[0.2.0-wave-3]: https://github.com/former organization/engineering-protocols/compare/0.2.0-wave-2...0.2.0-wave-3
-[0.2.0-wave-2]: https://github.com/former organization/engineering-protocols/compare/0.2.0-wave-1...0.2.0-wave-2
-[0.2.0-wave-1]: https://github.com/former organization/engineering-protocols/compare/0.1.0...0.2.0-wave-1
-[0.1.0]: https://github.com/former organization/engineering-protocols/releases/tag/0.1.0
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.7.1-infra-waves-1-4...HEAD
+[0.7.1-infra-waves-1-4]: https://github.com/beyond10x/engineering-protocols/compare/0.7.0-ess-wave-7...0.7.1-infra-waves-1-4
+[0.7.0-ess-wave-7]: https://github.com/beyond10x/engineering-protocols/compare/0.6.1-ess-wave-6.5...0.7.0-ess-wave-7
+[0.6.1-ess-wave-6.5]: https://github.com/beyond10x/engineering-protocols/compare/0.6.0-ess-wave-6...0.6.1-ess-wave-6.5
+[0.6.0-ess-wave-6]: https://github.com/beyond10x/engineering-protocols/compare/0.5.0-ess-wave-5...0.6.0-ess-wave-6
+[0.5.0-ess-wave-5]: https://github.com/beyond10x/engineering-protocols/compare/0.4.0-ess-wave-4...0.5.0-ess-wave-5
+[0.4.0-ess-wave-4]: https://github.com/beyond10x/engineering-protocols/compare/0.3.3-ess-wave-3.5...0.4.0-ess-wave-4
+[0.3.3-ess-wave-3.5]: https://github.com/beyond10x/engineering-protocols/compare/0.3.2-ess-wave-3...0.3.3-ess-wave-3.5
+[0.3.2-ess-wave-3]: https://github.com/beyond10x/engineering-protocols/compare/0.3.1-ess-wave-2...0.3.2-ess-wave-3
+[0.3.1-ess-wave-2]: https://github.com/beyond10x/engineering-protocols/compare/0.3.0-ess-wave-1...0.3.1-ess-wave-2
+[0.3.0-ess-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.2.1...0.3.0-ess-wave-1
+[0.2.1]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-3...0.2.1
+[0.2.0-wave-3]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-2...0.2.0-wave-3
+[0.2.0-wave-2]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-1...0.2.0-wave-2
+[0.2.0-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.1.0...0.2.0-wave-1
+[0.1.0]: https://github.com/beyond10x/engineering-protocols/releases/tag/0.1.0

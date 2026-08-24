@@ -66,7 +66,7 @@ re-run after every change is indistinguishable from never having checked anythin
 
 ## What the semantic diff says
 
-The fixture is [`examples/revision-pair/`](https://github.com/former organization/engineering-protocols/tree/main/examples/revision-pair)
+The fixture is [`examples/revision-pair/`](https://github.com/beyond10x/engineering-protocols/tree/main/examples/revision-pair)
 — two revisions of a small pricing system, built so the diff has something to be *right about*:
 
 ```console
@@ -220,5 +220,5 @@ itself:
 
 The full record for the wave — what was accepted, what was rejected by name, and the two decisions
 it forced — is in the repository under
-[`docs/plan/ess-wave-5-semantic-diff.md`](https://github.com/former organization/engineering-protocols/blob/main/docs/plan/ess-wave-5-semantic-diff.md).
-Tag: [`0.5.0-ess-wave-5`](https://github.com/former organization/engineering-protocols/releases/tag/0.5.0-ess-wave-5).
+[`docs/plan/ess-wave-5-semantic-diff.md`](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/ess-wave-5-semantic-diff.md).
+Tag: [`0.5.0-ess-wave-5`](https://github.com/beyond10x/engineering-protocols/releases/tag/0.5.0-ess-wave-5).

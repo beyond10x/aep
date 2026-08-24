@@ -148,7 +148,7 @@ references against the module's own export table, and drives one round trip thro
 
 ## One specification, two applications, one surface
 
-Then the demonstration, W7.5. [`examples/gatepass/`](https://github.com/former organization/engineering-protocols/tree/main/examples/gatepass)
+Then the demonstration, W7.5. [`examples/gatepass/`](https://github.com/beyond10x/engineering-protocols/tree/main/examples/gatepass)
 is a new application specification — visitor passes for a building: one domain, one component,
 three commands each with a declared refusal, two views, a three-state lifecycle, and every
 primitive the model has reaching the wire. Its plan: 29 capabilities — 22 generated, 5
@@ -197,7 +197,7 @@ in `runtime` alone — `{"address": "127.0.0.1:43559", "language": "go", "port":
 has none, so a member the record gains tomorrow is compared without anyone editing the comparison.
 
 Then both applications are driven through the same seven exchanges. The table is the gate's own
-list ([`xtask/src/main.rs`](https://github.com/former organization/engineering-protocols/blob/main/xtask/src/main.rs),
+list ([`xtask/src/main.rs`](https://github.com/beyond10x/engineering-protocols/blob/main/xtask/src/main.rs),
 `DEMONSTRATIONS`); the statuses and the body equalities were re-verified for this post by starting
 both binaries and comparing every answer as a value, because a JSON object is unordered and the two
 languages build one through two writers:
@@ -255,5 +255,5 @@ missing rather than skipping.
 
 The full record for the wave — the two re-scopings, the encoding decisions row by row, and what
 is deliberately not in it — is in the repository under
-[`docs/plan/ess-wave-7-closing-the-loop.md`](https://github.com/former organization/engineering-protocols/blob/main/docs/plan/ess-wave-7-closing-the-loop.md).
-Tag: [`0.7.0-ess-wave-7`](https://github.com/former organization/engineering-protocols/releases/tag/0.7.0-ess-wave-7).
+[`docs/plan/ess-wave-7-closing-the-loop.md`](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/ess-wave-7-closing-the-loop.md).
+Tag: [`0.7.0-ess-wave-7`](https://github.com/beyond10x/engineering-protocols/releases/tag/0.7.0-ess-wave-7).

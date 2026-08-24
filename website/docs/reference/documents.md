@@ -7,7 +7,7 @@ description: The syntax of principle, workflow, profile and lifecycle documents,
 # AEP document reference
 
 The authoritative version of this reference lives in the repository as
-[`docs/plan/document-authoring-brief.md`](https://github.com/former organization/engineering-protocols/blob/main/docs/plan/document-authoring-brief.md);
+[`docs/plan/document-authoring-brief.md`](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/document-authoring-brief.md);
 the declared vocabulary (capabilities, evidence kinds, fact families) is in the
 [vocabulary reference](./vocabulary.md). Documents are YAML, validated against generated JSON
 Schemas plus cross-document checks, and indexed by the `id` declared inside the file — never by

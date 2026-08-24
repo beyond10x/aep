@@ -1,6 +1,6 @@
 # Engineering Protocols Repository Review — Pre-Wave-4 Readiness
 
-**Review target:** `former organization/engineering-protocols`, public `main` at `3647f80`  
+**Review target:** `beyond10x/engineering-protocols`, public `main` at `3647f80`  
 **Review date:** 20 August 2026  
 **Purpose:** Determine whether the repository is structurally and semantically ready to begin ESS Wave 4: closed-loop execution and conformance.
 
@@ -542,7 +542,7 @@ This is not a Wave 4 blocker, but it is cheap and aligned with the project's qua
 
 ### Fix repository package metadata
 
-The root package/workspace metadata still points at an older/different GitHub owner path rather than the authoritative `former organization/engineering-protocols` remote.
+The root package/workspace metadata still points at an older/different GitHub owner path rather than the authoritative `beyond10x/engineering-protocols` remote.
 
 This is trivial to correct and belongs in the reconciliation change.
 

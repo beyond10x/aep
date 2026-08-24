@@ -5,8 +5,8 @@
   "author": {
     "name": "Beyond10x contributor"
   },
-  "homepage": "https://github.com/former organization/engineering-protocols",
-  "repository": "https://github.com/former organization/engineering-protocols",
+  "homepage": "https://github.com/beyond10x/engineering-protocols",
+  "repository": "https://github.com/beyond10x/engineering-protocols",
   "license": "Apache-2.0",
   "keywords": [
     "planning",
@@ -22,7 +22,7 @@
     "displayName": "Engineering Protocols — Planning",
     "shortDescription": "Plan work as governed markdown artifacts",
     "longDescription": "Epics, stories, tasks and initiatives as files under `.engineering/planning/`, with kinds, statuses and legal moves supplied by validated documents read from the `protocol` CLI rather than copied into a prompt.",
-    "developerName": "former organization",
+    "developerName": "beyond10x",
     "category": "Developer Tools",
     "capabilities": [
       "Interactive",

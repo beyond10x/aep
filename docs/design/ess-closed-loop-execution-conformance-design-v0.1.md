@@ -1,6 +1,6 @@
 # ESS Closed-Loop Execution & Conformance — Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`  
+> **Repository:** `beyond10x/engineering-protocols`  
 > **Status:** **Reviewed and reconciled 2026-08-20 — frozen for implementation**, except the open decisions listed in §2 under *Open decisions this freeze does not close*.  
 > **Milestone:** ESS wave 4 in [`docs/plan/ess-roadmap.md`](../plan/ess-roadmap.md).  
 > **Audience:** Implementor continuing the existing ESS work after `ess-domain`, `ess-compiler`, and `ess-gen`  

@@ -1,6 +1,6 @@
 # ESS Semantic Diff, Impact Analysis & Evolution Planning - Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`  
+> **Repository:** `beyond10x/engineering-protocols`  
 > **Status:** Proposed follow-on / cross-cutting design  
 > **Audience:** Implementors extending ESS from single-revision specification and realization into semantic change analysis, proposal evaluation, and governed system evolution  
 > **Relationship to existing work:** Additive. Semantic diff can be introduced as soon as `EssIr` is stable. Realization-aware evolution planning depends on later synthesis/realization work, but does not require waiting for every advanced verification wave.

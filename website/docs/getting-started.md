@@ -22,7 +22,7 @@ task against evidence, and asking how old that evidence is.
 ## Build
 
 ```console
-$ git clone https://github.com/former organization/engineering-protocols
+$ git clone https://github.com/beyond10x/engineering-protocols
 $ cd engineering-protocols
 $ cargo build -p protocol-cli
 $ B=target/debug/protocol

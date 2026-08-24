@@ -1,6 +1,12 @@
-# Working agreement
+# AGENTS.md — engineering-protocols
 
-For humans and agents working in this repository. Read this before changing anything.
+The contract for changing **this** repository. Read it before changing anything.
+
+Org-wide rules — the naming convention, the former-brand rule (atlas ADR 0001) and its four
+exemption categories, and the rule that renaming anything another repo verifies is a coordinated
+migration with an ADR — live in `atlas/AGENTS.md` and are not restated here.
+
+`README.md` and `website/` orient a reader. This file says what must not break.
 
 ## What this repository is
 
@@ -22,289 +28,137 @@ in the reconciliation register §5. Add to that list rather than diverging silen
 
 **Everything else in `docs/design/` is proposed until a plan page in `docs/plan/` — or a story in
 `.engineering/planning/` — accepts it.** A proposal is not a work order, however long and however
-recent it is. `ess-implementor-design-v0.1.md` and `ess-review-v0.1.md` show what acceptance looks
-like: [`docs/plan/ess-roadmap.md`](docs/plan/ess-roadmap.md) and the wave 1–3 plan pages took them
-up, and waves 1 to 3 shipped from them.
+recent it is. **There are two acceptance surfaces and you must check both**: a plan page, and the
+store — `story:evidence-horizons` took up `evidence-horizons-design-v0.1.md` and shipped it without a
+plan page ever existing, which is what the store is for. A design accepted either way is accepted.
 
-The store is the second acceptance surface, and it is new: `story:evidence-horizons` took up
-`evidence-horizons-design-v0.1.md` and shipped it without a plan page ever existing, which is what
-the store is for — a triaged item is a story with a status, not a page somebody has to remember to
-write. A design accepted that way is accepted; check both surfaces before calling one proposed.
+**Do not implement from an unreviewed design, and do not treat one as evidence of what this
+repository is.** [`docs/VISION.md`](docs/VISION.md) § *Proposed, not accepted* says what each would
+add, and [`docs/plan/gap-register.md`](docs/plan/gap-register.md) holds every open gap with what
+closes it. A design's own header can be stale — the accepting surface is what decides, not the
+header.
 
-Nine further proposals now sit in `docs/design/`. Their acceptance state is:
+### Refusals and partial acceptances that are still binding
 
-| proposed design | status |
+A design accepted *in part* leaves named refusals behind. These are prohibitions, not backlog:
+
+| design | what is refused, and by what |
 |---|---|
-| [`ess-closed-loop-execution-conformance-design-v0.1.md`](docs/design/ess-closed-loop-execution-conformance-design-v0.1.md) | **implemented** as ESS wave 4 (`0.4.0-ess-wave-4`); its four open decisions D1–D4 were taken at their stated defaults |
-| [`ess-semantic-diff-impact-evolution-design-v0.1.md`](docs/design/ess-semantic-diff-impact-evolution-design-v0.1.md) | **core implemented** as ESS wave 5 (`0.5.0-ess-wave-5`). Two of its seventy-eight sections are rejected outright (the proposal-evaluation loop and architecture search); the rest past §31 stays proposed |
-| [`ess-structural-synthesis-obligations-realizations-design-v0.1.md`](docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md) | **accepted in part** by [`docs/plan/ess-wave-6-structural-synthesis.md`](docs/plan/ess-wave-6-structural-synthesis.md), which is wave 6, in progress. Its obligation/`Realization` programme stays proposed (W7.4 takes a slice), and its §28 is refused by invariant 6 |
-| [`semantic-infrastructure-discovery-specification-conformance-multicloud-design-v0.1.md`](docs/design/semantic-infrastructure-discovery-specification-conformance-multicloud-design-v0.1.md) | reviewed and **deferred whole**; two ideas harvested |
-| [`harness-planning-and-driver-design-v0.1.md`](docs/design/harness-planning-and-driver-design-v0.1.md) | **Phase 1 accepted** by [`docs/plan/harness-wave-1-planning-plugin.md`](docs/plan/harness-wave-1-planning-plugin.md), which is harness wave 1: the markdown planning store, `protocol artifact`, and the Claude Code plugin. Its Phase 2 **reference driver** is decided by the operator (`docs/VISION.md` § *What this is deliberately not*, narrowed 2026-08-21), reviewed against the code by harness wave 2, and **built as harness wave 3** — `aep-driver-spec`, `aep-driver`, `drivers/`, `protocol drive`, the plugin's enforcement hooks and a second harness with no model in it. Both halves are recorded in [`docs/plan/harness-wave-2-driver-decision.md`](docs/plan/harness-wave-2-driver-decision.md), which carries wave 2's decisions and wave 3's acceptance. Harness wave 4 — [`docs/plan/harness-wave-4-governed-dogfood.md`](docs/plan/harness-wave-4-governed-dogfood.md) — stays **proposed**, and its W4.1 has been run once: `W4-1/1`, 2026-08-21, **blocked in `establish_verifiers`** for two reasons the engine printed. The run is the finding, and it is on that page rather than repaired into a pass |
-| [`evidence-horizons-design-v0.1.md`](docs/design/evidence-horizons-design-v0.1.md) | **implemented**, 2026-08-21, accepted by `story:evidence-horizons` in `.engineering/planning/` rather than by a plan page. Its own header still reads *proposed* and is stale; the gap register's *Closed by code — evidence horizons* section is the record. Follow-ups it left are open rows there: F26, and decisions D-6 and D-7 |
-| [`story-completion-evidence-design-v0.1.md`](docs/design/story-completion-evidence-design-v0.1.md) | **proposed, not accepted.** Proposed by [`docs/plan/harness-wave-4-governed-dogfood.md`](docs/plan/harness-wave-4-governed-dogfood.md) § W4.3, whose acceptance criterion is a verdict on it — accepted, accepted in part or refused — and not a build. Both shapes it could take are domain changes |
-| [`transcript-conformance-design-v0.1.md`](docs/design/transcript-conformance-design-v0.1.md) | **accepted, in implementation** as trace wave 1 by [`docs/plan/trace-wave-1-transcript-checker.md`](docs/plan/trace-wave-1-transcript-checker.md), which takes up its milestones T1–T3, sequences them and sets their acceptance criteria. Its open decisions D1–D6 are taken at their stated defaults, with one narrowing: the `regex` matcher of § 3.4 is **refused by name** rather than implemented, because the workspace carries no regular-expression engine. What stays proposed is named on the plan page: assertions over the per-request usage *series* (§ 2.7), an expectation kind for the skill's own text entering context (§ 2.8), and a streaming checker (**D5**) |
-| [`fact-scoped-applicability-design-v0.1.md`](docs/design/fact-scoped-applicability-design-v0.1.md) | **accepted in part**, 2026-08-22, by [`docs/plan/harness-wave-4-governed-dogfood.md`](docs/plan/harness-wave-4-governed-dogfood.md) § W4.2. The two `applies_when:` clauses it proposes are shipped: a task declaring `change.code: false` no longer owes a `contract_result` or a `property_test_result`, and a task declaring nothing still owes both. What is **refused** is its first draft's claim that this finishes the governed run — measured, `evidence.missing` goes 4 → 2, not 0. Its § 8 lists the five remaining blockers and its § 9 the six follow-ups, of which **F-W4.2-4**, the step map never being checked against the plan it will drive, is the expensive one |
-
-Do not implement from an unreviewed design, and do not treat one as evidence of what this repository
-is. [`docs/VISION.md`](docs/VISION.md) § *Proposed, not accepted* says what each would add, and
-[`docs/plan/gap-register.md`](docs/plan/gap-register.md) holds every open gap with what closes it.
+| `ess-semantic-diff-impact-evolution-design-v0.1.md` | the proposal-evaluation loop and architecture search are **rejected outright**; everything past § 31 stays proposed |
+| `ess-structural-synthesis-obligations-realizations-design-v0.1.md` | § 28 is **refused by invariant 6**; the obligation/`Realization` programme stays proposed (W7.4 takes a slice) |
+| `transcript-conformance-design-v0.1.md` | the `regex` matcher of § 3.4 is **refused by name** — the workspace carries no regular-expression engine. Still proposed: assertions over the per-request usage series (§ 2.7), an expectation kind for the skill's own text entering context (§ 2.8), and a streaming checker (D5) |
+| `fact-scoped-applicability-design-v0.1.md` | its first draft's claim that this finishes the governed run is **refused** — measured, `evidence.missing` goes 4 → 2, not 0. Its § 8 lists the five remaining blockers, § 9 the six follow-ups |
+| `semantic-infrastructure-discovery-…-multicloud-design-v0.1.md` | reviewed and **deferred whole**; two ideas harvested |
+| `story-completion-evidence-design-v0.1.md` | **proposed, not accepted.** `harness-wave-4-governed-dogfood.md` § W4.3's acceptance criterion is a *verdict* on it — accepted, in part, or refused — and not a build |
+| `harness-wave-4-governed-dogfood.md` | the plan page itself stays **proposed**. Its W4.1 has been run once and **blocked in `establish_verifiers`**; the run is the finding and stays on that page rather than being repaired into a pass |
 
 ## Current state
 
-The status report is [`docs/status.md`](docs/status.md); keep it accurate when you land work. Its
-delivered-waves table is generated from the annotated tags (`cargo xtask status`) and drift-checked
-in the gate, and prose here states **no count of the gate's own suites or tests** — four hand-written
-ones drifted apart in the repository's first 48 hours, so that number lives in exactly one place, the
-gate's output. Counts of things a command prints on demand — documents in the tree, artifacts in the
-store, records in a corpus — are written down with the command that produces them, so a reader can
-re-run it. `git tag -n99` is the per-wave record of what actually shipped, and `task check` is the
-measurement; read those before believing any prose about progress.
+**Do not write the current state here.** It drifted in this file's own first paragraphs and is
+carried by surfaces that cannot:
 
-**Every crate in the workspace is implemented and gated. There are no skeletons left.** Twenty-nine
-workspace members: **twenty-six crates** under `crates/`, two realization examples and `xtask`. The
-latest wave is `0.10.0-horizons-dogfood-lab`; `git tag -n99` says what each one delivered.
-`protocol validate` reads the document tree and reports what it holds — at that tag, **44 files:
-3 protocols, 22 principles, 4 workflows, 6 profiles, 8 lifecycles and 1 step map** — so run it
-rather than copying that line forward. The gate
-(`task check`, ten steps) needs three toolchains beside
-Rust's own: the **Go toolchain**, the **`wasm32-unknown-unknown` target** and **Node**. Two of the
-ten steps build the second and third emitters' committed trees, and none of those checks skips
-when its toolchain is absent — it fails and names it, because a skipped check reads exactly like a
-passing one.
+| question | the surface that answers it |
+|---|---|
+| what is delivered, wave by wave | [`docs/status.md`](docs/status.md) — generated by `cargo xtask status` from the annotated tags and drift-checked in the gate |
+| what each wave actually delivered | `git tag -n99` |
+| whether it works | `task check` |
+| what the document tree holds | `protocol validate` |
+| what is open and what closes it | [`docs/plan/gap-register.md`](docs/plan/gap-register.md) |
+| what is proposed and unaccepted | [`docs/VISION.md`](docs/VISION.md) § *Proposed, not accepted* |
+| the work order | `docs/design/reconciliation-v0.2.md` § 4 (AEP), `docs/plan/ess-roadmap.md` (ESS), the gap register (everything outside a wave) |
 
-* **AEP — the protocol; the v0.2 scope is implemented.** `aep-domain`, `aep-schema`, `aep-engine`,
-  `aep-contract`, `aep-backend-memory`, `aep-conformance`, `adp-domain`, `aop-domain`,
-  `protocol-cli` and `xtask`, plus the document tree (`protocols/`, `principles/`, `workflows/`,
-  `profiles/`, `artifacts/lifecycles/`). `aep-conformance`, `adp-domain` and `aop-domain` all
-  shipped in `0.2.0-wave-3`: sixteen black-box suites over the command and query surfaces, three
-  conformance levels, and a `FaultyBackend` whose injected defects the suites are checked against,
-  beside the development and operations typed vocabularies. `0.2.1` added project discovery.
-  **Evidence carries a clock as of `0.10.0`:** a record states `observed_at`, a requirement may
-  declare a `horizon`, and past it the fact reads `Unknown` — see invariants 5, 7 and 17.
-* **ESS — executable system specifications.** Six delivered, gated crates: `ess-domain` (the typed
-  model, `0.3.0-ess-wave-1`), `ess-compiler` (resolution, `EssIr`, source-aware diagnostics,
-  `0.3.1-ess-wave-2`), `ess-gen` (four projections behind one `Generator` trait,
-  `0.3.2-ess-wave-3`), `ess-conformance` (the specification as oracle: synthesis, runner, evidence,
-  `0.4.0-ess-wave-4`), `ess-diff` (semantic delta and impact closure, `0.5.0-ess-wave-5`) and
-  `ess-synth` (language-neutral synthesis plan, **three** emitters behind one seam: wave 6's Rust
-  workspace — whose linkage with the hand-written realization in `examples/billing-realization`
-  passes the committed billing suite unchanged, and fails the deliberately corrupted linkage at
-  the one scenario that exists to catch it — wave 7's Go module, W7.3, which is the test of
-  the neutrality claim, and wave 7's browser realization, W7.3b, which is the harder test of it
-  because it is not a language at all: a `WebAssembly` bridge over the Rust target's system, JSON
-  over linear memory with three exports and no build tool, beside a page whose command forms,
-  event log, view tables and lifecycles are built at load time from an emitted `catalog.json` —
-  nothing about any system is typed into its HTML. The plan's two renderings are byte-identical in
-  all three trees, and what a target holds more weakly or cannot represent at all is stated in a
-  `TARGET.md` beside the plan, never folded into it). W7.5 is the demonstration those three
-  emitters existed for: **one specification, two running applications, one surface** —
-  `examples/gatepass/` synthesised to Rust and to Go, both serving the routes the committed
-  `OpenAPI` document declares plus `/openapi.json` and `/docs`, both writing the same startup
-  record outside a declared `runtime` member, and the gate starting both on ephemeral ports to
-  compare records, statuses, bodies and published bytes. Its transport is **derived**, as wave 6
-  requires: a component may say `reached_by: network`, which states where its callers are and
-  names no protocol, and HTTP follows because the one contract this repository projects for a
-  command surface is an `OpenAPI` document. `generated/` holds the committed projections and all
-  three synthesised trees, `suites/generated/` the committed conformance suites; all drift-checked
-  in the gate.
-* **Infra — observed infrastructure as a second instance of the ESS pattern.** Five crates:
-  `infra-domain` (the k8s observation subset, raw→validated, eleven `INFRA-*` refusal codes,
-  secrets only ever as digests — IW1), `infra-compiler` (the content-addressed `infra-ir/1`
-  with unresolved references as typed facts, plus the validating read-back of a persisted
-  document — IW1/IW2), `infra-analyze` (the typed dependency graph with exact pod ownership,
-  twenty `INFRA-DIAG-*` diagnosis rules with registered severities, workload properties,
-  invariant candidates and directions — IW2) and `infra-spec` (the authored desired state:
-  twelve expectation kinds evaluated three-valued against a snapshot, where a False without a
-  gap or an Unknown without a reason is unrepresentable — IW3) and `infra-project` (a gap
-  becomes a reviewable patch tree where a patch is mechanically safe, an obligation where a
-  value is a human's to choose, and a refusal where the gap is not a field — with the
-  round-trip asserted: applying the tree closes what it claims and moves nothing else — IW4).
-  `protocol infra validate|compile|inspect|graph|diagnose|view|simulate|diff|project` is the
-  surface;
-  the scanner (`infra-scout`) is a separate repository holding the credentials, and nothing
-  here reaches a network. Plan pages: `docs/plan/infra-wave-1-observe.md`,
-  `docs/plan/infra-wave-2-analyze.md`.
-* **Trace — an agent run as a third observation domain.** Two crates: `trace-domain` (the
-  harness-neutral event IR `trace-ir/1`, content-addressed by a digest over the transcript's raw
-  bytes, with an event the adapter cannot read kept opaque rather than dropped; and the
-  `trace-spec/1` expectation vocabulary, **fifty-one kinds** — `env.tool_available` was the
-  fiftieth, built first in harness wave 3 because the hooks lean on it; `env.mcp_servers` the
-  fifty-first, because a scratch config home isolates a directory and an account's MCP servers
-  arrive with the login — raw→validated with ten `TRACE-*`
-  refusal codes) and `trace-spec` (**two adapters** and the checker, whose
-  `ok`/`gap`/`unk` verdicts each cite the event indices that produced them). The adapters are the
-  Claude Code `stream-json` reader, which the recorded fixtures are in, and the
-  `metaharness.event/1` event-stream reader, which is what a **driven** run's transcript has been
-  since `epic:metaharness-migration` — one reader for every harness metaharness ever drives,
-  because it reads the seam rather than a vendor. Which one runs is decided from the transcript's
-  own first line, so both take the same arguments, and the report names the adapter that judged
-  the run. A seam denial (`tool.decided`) is what `permission.denied` counts on that wire, joined
-  by call id with the vendor's own list so that one refused call is one denial however many layers
-  wrote it down. **The reader gains a field the day the seam carries it, and gains no rule with
-  it**: metaharness amendment a9 (2026-08-23) added the vendor's own per-tool result record and
-  four `usage` keys, and `skill.completed`, `tokens.thinking`, `iterations`, `speed` and a
-  `cost.total` scoped to one model decide a driven run as a result — while a key present and `null`
-  still reads `unk` and never a pass, which is what four of those five look like against a
-  Codex-driven run and is committed as a fixture rather than claimed
-  (`crates/trace-spec/tests/fixtures/metaharness-driven-null-a9-step.jsonl`). What that wire still
-  cannot answer is named where it is read: `tool.failed` and `tool.error_rate` over a result that
-  recorded no `is_error`. `protocol trace
-  check|inspect|evidence` is the surface, with `ess conform`'s exit codes — `0` conformant, `1`
-  contradicted, `3` nobody found out. `evidence` runs the check and writes the AEP record it
-  produced, so a verdict about a run enters the engine as a fact rather than as a claim. Nothing
-  here calls a model or reads a clock: every duration and every cost comes out of the transcript,
-  which is what lets a report be committed and diffed. Plan page:
-  `docs/plan/trace-wave-1-transcript-checker.md`.
-  **Many checked runs have a second surface, and it produces no score.** `protocol eval matrix`
-  reads pairs — an `eval.run-manifest/1` saying which arm a run belongs to (`raw`, `plugin`,
-  `driven`), which harness, workflow, case, model, harness version and plugin digest, beside the
-  check report about its transcript — and counts, per expectation and per harness × arm × workflow,
-  what held, what was contradicted and what nobody could find out, with cost, tokens and wall time
-  as totals that say how many of a cell's runs recorded one. A row whose verdict is `null` or absent
-  counts **unobservable, never held**, and the verb exits `0` whatever the table says: a matrix is a
-  report, and an exit code that moved with the counts would be the scalar this programme refuses to
-  compute. Sixteen refusals sit where the documents enter, each with a code
-  (`EVAL-MANIFEST-*`, `EVAL-RECORD-*`, `EVAL-PAIR-*`); `plugin_digest` must be *written*, as a
-  digest or an explicit `null`, because a key somebody forgot must not be able to claim a run had no
-  plugin. Seven constructed pairs and the committed golden matrix are in
-  `crates/protocol-cli/fixtures/eval-matrix/`; **no three-arm run has been made yet**, and the
-  records in them are this checker's own output over committed transcripts.
-  **And the pairs now have a producer.** `protocol eval run` drives `metaharness` as a *tool*, the
-  way this repository drives `git` — found on `PATH` or via `METAHARNESS_BIN`, and absent it refuses
-  by name with **exit 2**, its own code, so a machine without it skips rather than reddening. Nothing
-  spawns without `METAHARNESS_LIVE=1` **and** `--budget-usd`, and the cap is checked before each
-  launch against `--assume-usd-per-run`, because a cap enforced afterwards is a receipt; a run the
-  wire prices `null` counts at the assumed rate *and* states no cost in its manifest. **The manifest
-  is assembled runner-side and the seam gained nothing for it** — `harness_version`, `model` and
-  `plugin_digest` are read out of `session.started`, `transcript_digest` is what the runner's own
-  check said about the bytes it judged, and `arm`, `workflow`, `case` and `observed_at` are the
-  runner's because nothing in a stream could know them. **The first live pilot run corrected two of
-  those reads, and the correction is the shape of this boundary working**: the digest comes from
-  `session.started.hermetic.installed_plugins` — the *instrument's* record of what it injected,
-  written on every adapter — and not from the top-level `plugins` echo, which is the vendor's own
-  list and is `null` on Codex because metaharness will not mint a field it did not receive; and
-  `model` is a *written* field like `plugin_digest`, so a wire that names no model at session start
-  writes `model: null` rather than being handed one somebody assumed. Both refusals were right and
-  both fields were wrong, which is the difference between a boundary that guesses and one that has
-  to be taught. A `session.started` missing a field the
-  manifest needs is refused by name (`EVAL-RUN-*`, `EVAL-CASE-*`, `EVAL-STREAM-*`) and no manifest is
-  written; three of those refusals are about the experiment rather than a document — the treated arm
-  without its treatment, the control arm with one, and a plugin attested without the digest that says
-  which bytes it was. Arm `raw` gets the committed instruction document in front of the task and arm
-  `plugin` gets the task alone, because the plugin *is* arm b's treatment; **arm `driven` is a named
-  refusal** pointing at `protocol drive run`, which the runner then *reads* through `--stream`. The
-  whole pipeline is green in the gate for nothing: four committed streams, two harnesses, three arms,
-  a matrix asserted byte for byte (`crates/protocol-cli/tests/eval_dry_run.rs`,
-  `fixtures/eval-run/`). Those streams are structurally faithful and **not observed**.
-* **Harness — the planning store, and the reference driver that walks a workflow.** Wave 1 built
-  `aep-backend-markdown` and `protocol artifact`; wave 3 built the driver. Three crates:
-  `aep-driver-spec` (the leaf — step maps raw→validated, the mandatory workflow pin, the run cursor,
-  `ToolConfig`), `aep-driver` (the deterministic three-valued router, the executor traits and
-  `tool_config`, both clock-free and randomness-free under invariant 9) and `aep-render` (a workflow
-  and a run over it as SVG, HTML, PNG or a terminal frame, byte-stable, depending on `aep-domain`
-  alone so a renderer cannot become a second protocol implementation). **A fifth rendering is not a
-  picture**: `prose` writes a workflow as instructions — the states, what opens each move, and the
-  principles that time obligations against the phases those states declare, each joined to the
-  states it lands on, which is the sentence neither document contains on its own. `protocol
-  workflow instruct` is the verb, the four documents it produces are committed under
-  `generated/instructions/`, and `crates/protocol-cli/tests/instructions.rs` owns that tree —
-  byte-identity both ways, orphans included, with the projection task's orphan scan carved out
-  around it. It exists so that *hand an agent the rules* is a diffable artifact rendered from the
-  specification rather than a prompt somebody typed once. `protocol drive
-  run|status|resume`, `protocol workflow render` and `protocol workflow instruct` are the surfaces; step maps are the fifth
-  document kind, under `drivers/`, and `development.driven` is the sixth profile — the only one that
-  grants a shell, held to the `protocol` CLI by the driver's own per-call policy. **Gates are
-  evaluated only by the engine**: the driver asks and does what it is told, and enforcement is one
-  policy with one enforcer since `epic:metaharness-migration` — every `llm` step spawns through
-  `metaharness run claude` in ask mode, and `decide_tool` in `crates/protocol-cli/src/drive.rs`
-  (the retired `store-integrity`/`driven-surface` hooks, ported, plus the per-state allowlist)
-  answers each call with the decision recorded as a `tool.decided` event in the run's own stream.
-  **The engine is asked as well, since 2026-08-22**: the loop lends the `llm` step an authorizer
-  over the live execution, every admitted call is rendered as an `ActionRequest` and put to
-  `Engine::authorize`, and the engine's deny wins over the policy's allow — so the execution's own
-  event record, not only the run's, holds what was refused and what was done.
-  **The one artifact that crosses to metaharness is pinned, and no crate crosses with it.** A step's
-  surface travels as a sealed `metaharness.frame/1` document, and its consumer refuses one by name
-  for four reasons. Since 2026-08-23 a test here transcribes that reader — tag, then shape, then
-  digest, in that order — rather than linking it, and produces the named refusal for a mutation of
-  each class (`crates/protocol-cli/tests/metaharness_frame_contract.rs`). What it reads,
-  `crates/protocol-cli/fixtures/metaharness-frame-canonical.json`, is minted by the driver's own
-  code path and committed as the cross-repository golden; the other half is a metaharness-side wave
-  replaying those exact bytes through the real parser, and until it runs this is one implementation
-  agreeing with a transcription of another. Vocabulary crosses that boundary and a dependency never
-  does, because this repository is public and that one is not.
-  **And one artifact crosses the other way.** metaharness contract-tests each of its vendor adapters
-  and prints the outcome in the `contract_result` shape `aep-domain` defines — which parses directly
-  as the payload, because `protocols/aep/1.yaml` has declared that kind, the `contract-runner`
-  verifier and `contracts.**` since the base protocol. What it lacks is the envelope an evidence
-  document needs, so `protocol contract evidence` supplies `observed_at` — required, because this
-  process did not watch the run — and a constant `producer`, and nothing else. `--record -` reads the
-  record off the pipe the runner is already at the end of; the path form stays the one to reach for,
-  and the record says which was used, because bytes on a pipe exist nowhere a later reader can compare
-  against the digest. Three records are refused where they enter rather than left to the engine:
-  `checked: 0`, which would discharge `contract-testing`'s evidence obligation on a run that checked
-  nothing; `breaking_changes > failed`, which describes no run; and a record that states no count at
-  all for `checked`, `failed` or `breaking_changes`, because each defaults to zero and zero on
-  `breaking_changes` is the claim a gate reads as a pass. A record reporting failures is written down,
-  because the verdict belongs in the record. The captured bytes are committed
-  (`crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex}.json`) and the other side
-  pins the same ones.
-  **And the record decides something, since 2026-08-23.** `contract-testing` owes
-  `contracts.breaking_changes == 0` *before the review phase* as well as before completion, so a
-  breaking record refuses `adversarial_verify -> review` in `adp/default` and a record whose run was
-  merely red does not — `failed` is *the contract run is red*, which is what a review is for, and
-  `breaking_changes` is *a consumer was told something that is no longer true*, which no reviewer can
-  decide. It is the first guard in that workflow only a contract runner can answer, because
-  `tests.contract.failed` is an alias any test runner satisfies and `contracts.breaking_changes` has
-  one producer; a run that never heard from one leaves the count Unknown and does not pass. The rule
-  is in the principle and not the workflow so `applies_when` still scopes it — `W4-2/1` is what an
-  unscoped version costs. `story:contract-result-gates`;
-  `crates/aep-engine/tests/contract_gate.rs`. `trace_conformance` still gates nothing.
-  The eval machinery and its results migrated to the metaharness repository
-  (`evals/engineering-protocols/`). Record:
-  `docs/plan/harness-wave-2-driver-decision.md`; design
-  `docs/design/harness-planning-and-driver-design-v0.1.md` §§ 4.1–4.9.
-  The store this repository runs on is `.engineering/planning/`: **71 artifacts** — one initiative,
-  eight epics, fifty-one stories, ten tasks and one specification — and `protocol artifact validate`
-  exits 0 on it. **It has been driven once.** `W4-1/1`, 2026-08-21, walked a real story from that
-  store under `development.driven` and **blocked in `establish_verifiers`**, because the
-  specification it wrote was still `draft` and the suite it ran passed where the rule wants a
-  failing one. Four sessions, 80 hook decisions of which 11 were denials, no tracked file touched.
-  The record is `docs/plan/harness-wave-4-governed-dogfood.md` § W4.1, and it stands as run: a
-  dogfood wave that reports only its successes measures nothing. *Built* is not *adopted* — one
-  story driven once says the mechanism holds on real work, and does not say driven runs are how
-  work happens here.
-* **Evidence horizons — a fact knows when somebody looked.** An evidence record carries a required
-  `observed_at`; a requirement may carry a `horizon` in whole days; past it the fact decays to
-  `Unknown` and never to `False`, and the lapsed record's facts are withheld, so a guard reading
-  them refuses too. `evidence.lapsed` sits beside `evidence.missing` because *nobody produced it*
-  and *somebody did and nobody has looked since* want different responses. `protocol evidence
-  scan|inspect` is the observation half — `scan` reads the annotation convention out of
-  human-written markdown and reports coverage beside the classification, `inspect` reads an
-  evidence file. Neither writes anything and neither decides a gate. Ground truth is
-  `examples/evidence-horizons-corpus/`, vendored from an outside adopter: **43 occurrences, 43
-  records, 0 unparsed** at its reference date. Design:
-  `docs/design/evidence-horizons-design-v0.1.md`.
-* **Adopted by one tree that is not ours.** On 2026-08-21 somebody who did not write this
-  specification wrote a document tree against it — a protocol extending `aep/1`, four workflows,
-  six principles, four profiles, four lifecycles, 26 files — and it validates: `resolve`, `explain`
-  and `evaluate` all work on it. Their ranked-first finding, evidence horizons, is closed by code.
-  The rest of their review is triaged as `epic:adopter-feedback-round-1` in the store and as the
-  gap register's *first adopter's report* section. The review itself is held by the operator and is
-  **not in this tree** — nothing adopter-internal is written into a file here.
-* **Not built yet:** W7.4 — obligations as artifacts a task can own — deferred by decision;
-  attested evidence (gap register D-3, proposed and unaccepted); a **contract implementation that
-  survives a process exit**. That last one is now half true and worth stating as two facts rather
-  than one: a durable markdown **store** exists (`aep-backend-markdown`, harness wave 1) and holds
-  planning artifacts as files, but it is a store and not a `CommandService`/`QueryService`
-  implementation — it writes through its own two functions, which is deviation D-P1 against
-  invariant 14 — so the **contract** still has exactly one implementor, `aep-backend-memory`, and the
-  sixteen conformance suites run against that and nothing else. The journal-backed milestone (P3)
-  is what makes the store answer as a backend; until then, "there is a durable backend" is a claim
-  the suites do not support.
-* Work order: [`docs/design/reconciliation-v0.2.md`](docs/design/reconciliation-v0.2.md) §4 for AEP,
-  [`docs/plan/ess-roadmap.md`](docs/plan/ess-roadmap.md) for ESS, and
-  [`docs/plan/gap-register.md`](docs/plan/gap-register.md) for what is owed outside any wave.
+Two counting rules follow from that, and both are prohibitions:
+
+* **Prose states no count of the gate's own suites or tests.** Four hand-written ones drifted apart
+  in this repository's first 48 hours. That number lives in exactly one place: the gate's output.
+* **A count of something a command prints on demand is written down with the command that produces
+  it** — documents in the tree, artifacts in the store, records in a corpus — so a reader can re-run
+  it rather than believe it.
+
+Keep `docs/status.md` accurate when you land work; `cargo xtask status` regenerates it.
+
+## Rules the components carry
+
+Each of these was learned by building the thing it names. They are enforced where they are stated.
+
+### Boundaries between this repository and its neighbours
+
+* **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
+  that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
+  appears in one here.
+* **The one artifact that crosses is pinned.** A step's surface travels as a sealed
+  `metaharness.frame/1` document. The reader is **transcribed, not linked** —
+  `crates/protocol-cli/tests/metaharness_frame_contract.rs` checks tag, then shape, then digest, **in
+  that order**, and produces the named refusal for a mutation of each class. The golden bytes are
+  `crates/protocol-cli/fixtures/metaharness-frame-canonical.json`, minted by the driver's own code
+  path; the other side pins the same bytes. Changing the format is a coordinated migration under the
+  atlas rule, not an edit.
+* **The scanner is a separate repository because it holds the credentials.** `infra-scout` reaches a
+  cluster; **nothing here reaches a network** (see the gate's network rule). Secrets appear in
+  `infra-domain` only ever as digests (IW1).
+* **Nothing adopter-internal is written into a file here.** The first adopter's review is held by the
+  operator and is not in this tree; only the triage of it is (`epic:adopter-feedback-round-1`, and
+  the gap register's *first adopter's report* section).
+
+### Evidence and labelling
+
+* **`provider_emulated` is never promoted, and neither is a constructed stream.** Committed eval
+  streams are structurally faithful and **not observed**; say so wherever they are used.
+* **A verdict of `null` or absent counts *unobservable*, never *held*.** `protocol eval matrix`
+  exits `0` whatever the table says: a matrix is a report, and an exit code that moved with the
+  counts would be the scalar this programme refuses to compute.
+* **A field somebody forgot must not be able to claim a fact.** `plugin_digest` and `model` must be
+  *written* — a digest, or an explicit `null`. A missing key is refused by name
+  (`EVAL-MANIFEST-*`, `EVAL-RECORD-*`, `EVAL-PAIR-*`, `EVAL-RUN-*`, `EVAL-CASE-*`, `EVAL-STREAM-*`),
+  not defaulted.
+* **The plugin digest comes from the instrument's own record**
+  (`session.started.hermetic.installed_plugins`), never from the vendor's top-level `plugins` echo.
+* **Three contract records are refused where they enter**, not left to the engine: `checked: 0`,
+  which would discharge `contract-testing`'s evidence obligation on a run that checked nothing;
+  `breaking_changes > failed`, which describes no run; and a record stating no count at all, because
+  each defaults to zero and zero on `breaking_changes` is the claim a gate reads as a pass. A record
+  reporting failures **is still written down** — the verdict belongs in the record.
+* **`failed` and `breaking_changes` are different questions.** `failed` is *the contract run is red*,
+  which is what a review is for; `breaking_changes` is *a consumer was told something that is no
+  longer true*, which no reviewer can decide. A run that never heard from a contract runner leaves
+  the count `Unknown` and does not pass.
+* **A dogfood wave that reports only its successes measures nothing.** A blocked run stays recorded
+  as blocked. **Built is not adopted**: one story driven once says the mechanism holds on real work;
+  it does not say driven runs are how work happens here.
+* **`trace_conformance` still gates nothing.** Do not describe it as if it does.
+* **A claim the suites do not support is not made.** `aep-backend-markdown` is a durable *store*, not
+  a `CommandService`/`QueryService` implementation — it writes through its own two functions, which
+  is deviation D-P1 against invariant 14 — so the contract still has exactly one implementor,
+  `aep-backend-memory`, and the sixteen conformance suites run against that and nothing else.
+
+### The driver and the engine
+
+* **Gates are evaluated only by the engine.** The driver asks and does what it is told.
+* **The engine's deny wins over the policy's allow.** Every admitted call is rendered as an
+  `ActionRequest` and put to `Engine::authorize`, so the execution's own event record holds what was
+  refused and what was done.
+* **There is one policy and one enforcer.** Every `llm` step spawns through `metaharness run claude`
+  in ask mode; `decide_tool` in `crates/protocol-cli/src/drive.rs` answers each call and the decision
+  is recorded as a `tool.decided` event in the run's own stream. Do not add a second enforcement
+  path.
+* **Nothing in the trace crates calls a model or reads a clock.** Every duration and every cost comes
+  out of the transcript, which is what lets a report be committed and diffed.
+* **A key present and `null` reads `unk` and never a pass**, and what a wire cannot answer is named
+  where it is read.
+
+### Paid runs
+
+* **Nothing spawns without `METAHARNESS_LIVE=1` *and* `--budget-usd`**, and the cap is checked
+  **before each launch** against `--assume-usd-per-run` — a cap enforced afterwards is a receipt. A
+  run the wire prices `null` counts at the assumed rate *and* states no cost in its manifest.
+* **`metaharness` is used as a tool, the way `git` is** — found on `PATH` or via `METAHARNESS_BIN`.
+  Absent, `protocol eval run` refuses by name with **exit 2**, its own code, so a machine without it
+  skips rather than reddening.
+* **Arm `raw` gets the committed instruction document in front of the task; arm `plugin` gets the
+  task alone** — the plugin *is* arm b's treatment. **Arm `driven` is a named refusal** pointing at
+  `protocol drive run`. Three refusals guard the experiment itself: the treated arm without its
+  treatment, the control arm with one, and a plugin attested without the digest saying which bytes it
+  was.
 
 ## Invariants
 
@@ -516,7 +370,7 @@ turned `main` red on a commit whose gate was green. Run `rustup update` before p
 will not get a second chance at — and when CI fails on a lint that did not exist locally, that is the
 cause, not a flaky gate.
 
-**A release is the procedure in § *Tags*, and nothing mechanical enforces it.** A wave ships,
+**A release is the procedure in § *Releases*, and nothing mechanical enforces it.** A wave ships,
 `CHANGELOG.md` is cut under its heading, `cargo xtask status` regenerates the delivered-waves record
 and the annotated tag is written at the commit that delivered the work. The full gate comes first —
 component gates are not enough — and no hook, task or CI job checks that it did, which makes it a
@@ -524,6 +378,56 @@ discipline rather than a guarantee. It has already slipped once, and the mechani
 knowing: `task check 2>&1 | tail` reports **`tail`'s** exit status, not the gate's, so two runs that
 aborted at the first step read as green and two commits were pushed claiming a gate that had never
 run past `fmt-check`. Read the gate's own status, not a pipeline's.
+
+## Safety envelope
+
+This repository publishes a **public** specification and drives real agent runs. Both are exposed
+surfaces.
+
+* **The published API is the document tree and the generated schemas.** A changed fact spelling, a
+  new document kind, or a rule that now refuses what it used to allow is visible to every adopter —
+  including the one outside this org. It gets a `CHANGELOG.md` line in the same commit (see
+  *Changelog*), and a wire-visible identifier change is a coordinated migration with an ADR in
+  `atlas`, not an edit.
+* **The engine never manufactures evidence** (invariant 7), and the driver may not manufacture an
+  approval: `crates/aep-driver/tests/evidence_scan.rs` refuses any construction of an
+  `Evidence::Approval` or a `Producer::Human` in shipped driver code, because nothing below the
+  driver would stop a harness writing its own approval and unlocking a capability with it.
+* **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
+  grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
+  a profile's grant is a specification change with a design page, never a convenience.
+* **A horizon cannot be extended, only re-observed** (invariant 17). There is deliberately no
+  `extend`: if extending were as easy to call as re-checking, it is the one that gets called by
+  whoever is trying to get a gate green.
+* **Nothing in `task check` reaches the network**, and no gate step spends money. Paid runs are
+  governed by the rules in *Rules the components carry* § *Paid runs* and are not part of any gate.
+* **Never commit a credential, a token, a real transcript that carries one, or anything
+  adopter-internal.**
+
+## Out of scope
+
+This is a library and a specification. It is not an agent, a CI system or a deployment platform.
+
+| Belongs elsewhere | Where |
+|---|---|
+| Driving a vendor harness — hermetic runs, per-call tool decisions, the event wire | `metaharness` (used here as a tool, never as a dependency) |
+| Scanning a cluster; anything holding a kubeconfig | `infra-scout` |
+| The b10x agent loop | `harness` |
+| Sandboxed execution | `substrate` |
+| The paid evaluation machinery and its recorded results | `metaharness`, under `evals/engineering-protocols/` |
+| Cross-repo decisions and the map | `atlas` |
+
+## Where work is tracked
+
+| What | Where |
+|---|---|
+| The store this repository runs on — initiatives, epics, stories, tasks, specifications | `.engineering/planning/`, validated by `protocol artifact validate` |
+| Plan pages, which are the first acceptance surface | `docs/plan/` |
+| Every open gap and what closes it | `docs/plan/gap-register.md` |
+| Designs, normative and proposed | `docs/design/` — see *Which documents are normative* |
+| Step maps, the fifth document kind | `drivers/` |
+| Delivered waves | `docs/status.md` (generated), and `git tag -n99` |
+| What a user of the protocol sees change | `CHANGELOG.md` |
 
 ## Conventions
 
@@ -602,7 +506,10 @@ makes the change. Internal refactors that change nothing observable do not.
 Write the entry for the person hitting the behaviour, not for the person who wrote it: "an approval
 of version 3 no longer satisfies a review requirement for version 7", not "added freshness check".
 
-## Tags
+## Releases
+
+The bare-version tag is an org-wide convention (atlas § *Naming*); what follows is this
+repository's procedure around it.
 
 Each delivered wave gets an annotated tag whose name is the version and **nothing else** —
 `0.12.0`, not `0.12.0-scope-and-the-fourth-arm`. A slug in a tag name is a second copy of what the

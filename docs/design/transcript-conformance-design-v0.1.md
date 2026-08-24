@@ -1,6 +1,6 @@
 # Transcript conformance — a typed specification over an agent run — Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`
+> **Repository:** `beyond10x/engineering-protocols`
 > **Status:** **proposed, not accepted.** Nothing here is a work order. No plan page has taken it up,
 > and per [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative* a proposal is not a work
 > order however recent it is. The milestones in § 9 are unsequenced on purpose.

@@ -1,6 +1,6 @@
 # Harness — a planning store, and a reference driver — Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`
+> **Repository:** `beyond10x/engineering-protocols`
 > **Status:** **Phase 1 accepted for implementation** by
 > [`docs/plan/harness-wave-1-planning-plugin.md`](../plan/harness-wave-1-planning-plugin.md), 2026-08-21.
 > **Phase 2 is decided and designed, and is not accepted for build** by that page or by any other:

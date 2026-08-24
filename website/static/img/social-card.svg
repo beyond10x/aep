@@ -70,5 +70,5 @@
   <!-- two elements, not one: SVG collapses runs of whitespace, so a gap must be a coordinate. -->
   <text class="foot" x="72" y="546">AEP · how the work is performed</text>
   <text class="foot" x="402" y="546">ESS · what the software must be</text>
-  <text class="url" x="1128" y="546" text-anchor="end">former organization.github.io/engineering-protocols</text>
+  <text class="url" x="1128" y="546" text-anchor="end">beyond10x.github.io/engineering-protocols</text>
 </svg>

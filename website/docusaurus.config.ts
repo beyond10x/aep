@@ -82,12 +82,12 @@ const config: Config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // Published at https://former organization.github.io/engineering-protocols/
-  url: 'https://former organization.github.io',
+  // Published at https://beyond10x.github.io/engineering-protocols/
+  url: 'https://beyond10x.github.io',
   baseUrl: '/engineering-protocols/',
 
   // GitHub Pages deployment: `npm run build` here, publish `website/build/` to `gh-pages`.
-  organizationName: 'former organization',
+  organizationName: 'beyond10x',
   projectName: 'engineering-protocols',
   deploymentBranch: 'gh-pages',
   trailingSlash: false,
@@ -120,7 +120,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: 'docs',
           editUrl:
-            'https://github.com/former organization/engineering-protocols/tree/main/website/',
+            'https://github.com/beyond10x/engineering-protocols/tree/main/website/',
         },
         // The blog is the release record for a reader: one post per release, each a worked
         // tutorial on what the release adds, with real command output rather than claims about it.
@@ -136,7 +136,7 @@ const config: Config = {
           // Same policy as links: a post that leaks its full body onto the index page is a defect.
           onUntruncatedBlogPosts: 'throw',
           editUrl:
-            'https://github.com/former organization/engineering-protocols/tree/main/website/',
+            'https://github.com/beyond10x/engineering-protocols/tree/main/website/',
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -187,7 +187,7 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://github.com/former organization/engineering-protocols',
+          href: 'https://github.com/beyond10x/engineering-protocols',
           label: 'GitHub',
           position: 'right',
           // Icon and word: `custom.css` masks the GitHub mark in front of the label with
@@ -229,7 +229,7 @@ const config: Config = {
             {label: 'Releases, in practice', to: '/releases'},
             {
               label: 'Source',
-              href: 'https://github.com/former organization/engineering-protocols',
+              href: 'https://github.com/beyond10x/engineering-protocols',
             },
           ],
         },

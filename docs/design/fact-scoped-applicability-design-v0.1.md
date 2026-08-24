@@ -1,6 +1,6 @@
 # Fact-scoped applicability — Design v0.1
 
-> **Repository:** `former organization/engineering-protocols`
+> **Repository:** `beyond10x/engineering-protocols`
 > **Status:** **proposed, not accepted.** Per [`AGENTS.md`](../../AGENTS.md) § *Which documents are
 > normative*, a proposal is not a work order. Its acceptance surface is
 > [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md) § W4.2, which
