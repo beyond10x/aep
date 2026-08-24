@@ -26,6 +26,7 @@ gated by `task check`.
 | [`harness.md`](harness.md) | You are building an agent harness and want the protocol to decide what it may do |
 | [`backend.md`](backend.md) | You are storing engineering entities — designs, reviews, approvals — and want them to survive an audit |
 | [`specification.md`](specification.md) | You want a system's contracts, tests and documentation derived from one document instead of maintained beside it |
+| [`open-vocabulary.md`](open-vocabulary.md) | You are about to declare something of your own and want to know, before you write it, whether the vocabulary is open or fixed in the engine |
 
 For the full document vocabulary — every capability, evidence kind, fact path and predicate operator —
 see the [document authoring brief](../plan/document-authoring-brief.md). This guide is the narrative

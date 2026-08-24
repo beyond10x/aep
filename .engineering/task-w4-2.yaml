@@ -1,0 +1,37 @@
+# The second governed run — W4.2's proof that the checks map drives a real story to completion.
+#
+# `story:open-vocabulary-audit` is chosen because its product is a document and its acceptance is
+# checkable without a compiler: exactly the work `development/checks` exists for, and exactly the
+# shape `development/default` (the Rust map) could never drive.
+id: W4-2
+kind: feature
+objective: open-vocabulary-audit
+
+protocol: adp/1
+profile: development.driven
+
+derived_from:
+  - story:open-vocabulary-audit
+
+constraints:
+  facts:
+    change.public_contract: false
+    change.architectural: false
+    # Declared, and true: this task's product is a document plus the checks that decide it. Nothing
+    # under `crates/` moves, which the notes below already forbid — this is the same statement in
+    # the form a principle can read.
+    #
+    # It is what makes the run finishable. `contract-testing` and `property-based-testing` pin
+    # `contract-runner` and `property-tester`, and neither verifier can observe prose: with this
+    # fact absent the plan owed two `independent: true` records nobody could honestly produce, and
+    # `W4-2/1` blocked in `adversarial_verify` on `evidence.missing == 0` with 119 checks green.
+    # See `docs/design/fact-scoped-applicability-design-v0.1.md`.
+    change.code: false
+  notes:
+    - The story is `story:open-vocabulary-audit` in `.engineering/planning/story/`; its Acceptance
+      section is the specification this run is measured against.
+    - The product is a document (the audit table) plus the story's checks. Write the checks as
+      `.engineering/checks/run.sh` plus whatever files it needs beside it — the map's verifier runs
+      exactly that file, red before implementation, green at the end.
+    - Do not modify anything under `crates/`, `website/`, `integrations/`, `drivers/`, or the
+      workspace `Cargo.toml`. The audit document belongs under `docs/`.

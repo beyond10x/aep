@@ -1,0 +1,22 @@
+# The decomposition, as data: one line per unit `run.sh` must decide.
+#
+#   <unit>  <planning artifact id that owns it>  <what a green row means>
+#
+# Tab-separated. Order is dependency order, so a reader of a red table meets the root cause first.
+#
+# It is a file rather than an array inside `run.sh` for one reason: `check-checks-runner.sh` has to
+# run the runner against a synthetic decomposition to show N2-N5 without recursing into this one.
+# A list the runner reads is a list a test can substitute; a list compiled into it is not.
+checks-runner	task:ova-checks-runner	the runner names every unit, fails a missing check, prints its table on every path
+scan-declarations	task:ova-scan-declarations	scan-declarations.sh emits the tree's document-declared surfaces, sorted and byte-stable
+audit-corpus	task:ova-audit-corpus	the audit exists at the guide path, the guide routes to it, and its corpus list equals the globs
+table-shape	task:ova-table-shape	exactly one table, the seven columns in order, every verdict open or closed, a non-vacuous floor
+open-cells	task:ova-open-cells	every open row's three trailing cells hold an em dash, never a blank or a hedge
+closed-cells	task:ova-closed-cells	every closed row states a guarantee and an anchor an adopter can follow somewhere other than here
+followups	task:ova-followups	every unsettled closed row names a planning artifact that resolves in the store
+citations	task:ova-citations	every Invited at fragment is at the line it cites, and every Decided by line settles its verdict
+layered-rows	task:ova-layered-rows	the artifact-status vocabulary gets one row per layer, never one averaged verdict
+scan-loop	task:ova-scan-loop	every scan candidate has a row, every non-scanned row has a resolving citation, and the limit is stated
+repeatability	task:ova-repeatability	the audit states how it was produced, and every command it names runs
+surface-hygiene	task:ova-surface-hygiene	writes stay under docs/ and .engineering/, and no check reads a planning body
+mutation-proof	task:ova-mutation-proof	nine deliberate mutations each turn a named check red, on a copy, with the tree untouched
