@@ -357,6 +357,14 @@ fn tool_call(block: &Value) -> Option<ToolCall> {
     Some(ToolCall {
         call_id: text_at(block, "id"),
         name,
+        // **Empty, always, on this wire.** Claude Code's own transcript carries a tool name and no
+        // neutral vocabulary beside it, and inferring one here from the name would be this adapter
+        // inventing a rendering table — the exact drift the `operations` field exists to end, since
+        // the table would then live in two places and disagree in one of them. A run read through
+        // this adapter is decidable by `tools:` and reports `unk` for a row scoped to operations;
+        // the same run read through `metaharness.event/1` carries them, because metaharness holds
+        // the adapter's published rendering and resolves there.
+        operations: Vec::new(),
         input,
         input_bytes,
         result_event: None,

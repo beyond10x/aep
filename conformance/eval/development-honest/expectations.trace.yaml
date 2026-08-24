@@ -13,28 +13,64 @@ title: A run of `adp/default` put the specification before the decomposition and
 #
 # ## What counts as a write
 #
-# `tools: [Edit, NotebookEdit, Write, workspace_write, workspace_edit]` wherever this document
-# asserts that bytes reached a file. The first three are not invented here:
-# `crates/protocol-cli/src/drive.rs` renders exactly those to the `repository.write` capability, so
-# this repository's own driver is the authority on what a write is.
+# `operations: [file.write, file.edit]` wherever this document asserts that bytes reached a file —
+# **the neutral vocabulary, not any harness's verbs.** The harness resolves what a call was and says
+# so in `tool.requested.operations`; this document reads that answer instead of keeping its own
+# list of every vendor's spelling.
 #
-# **The last two are arm `native`'s, and leaving them out made every write row blind to it.** The
-# b10x harness publishes `workspace_write` and `workspace_edit`; a document that only knew Claude
-# Code's verbs reported `never_occurred` for a run that had written files, which is the checker
-# shrugging at work that visibly happened — the same failure `the-test-came-before-the-code` records
-# below for `Edit`, one harness later. A vocabulary that only names one vendor's tools is a
-# vocabulary that can only measure one vendor.
+# ### Why the list of verbs had to go
+#
+# It was edited twice, each time after a live run had already been mismeasured, and each edit
+# widened it by exactly the one name that run happened to need:
+#
+# * `tool: Write` reported `never_occurred` for a Claude Code session that did the work with
+#   `Edit`, because both files already existed.
+# * `tools: [Edit, NotebookEdit, Write]` reported `never_occurred` for a b10x run that had visibly
+#   written files, because that harness spelled a write `workspace_write`.
+#
+# Both times the checker shrugged at work that had happened, and both times the fix was a longer
+# list — which is the same defect waiting for the next harness. A vocabulary that names one vendor's
+# tools can only measure one vendor, and the b10x loop has since stopped publishing
+# `workspace_write` at all: the names those edits added no longer exist.
+#
+# The operation is the claim. `file.write` is a write on every harness that resolves one, including
+# the ones nobody had thought of when this row was written.
+#
+# ### `tools:` is still here beside it, and the two **union**
+#
+# A call is in scope if its tool is named **or** its operation is. Both spellings, because the two
+# streams this corpus reads carry one each: Claude Code's own `stream-json` records tool names and
+# no operations, while `metaharness.event/1` records both. An intersection would have turned every
+# write row `unk` against the whole Claude arm while looking like a widening.
+#
+# So the tool names that remain — `Edit`, `NotebookEdit`, `Write` — are there to keep the
+# `stream-json` road decidable, and they are exactly the three
+# `crates/protocol-cli/src/drive.rs` renders to the `repository.write` capability. They are not the
+# claim. When that adapter resolves operations too, they come out and nothing about what these rows
+# assert changes.
 #
 # It is a widening of **what can witness a claim**, never of the claim. `Edit` before `Edit` is the
-# same ordering assertion `Write` before `Write` was. The alternative — dropping the tool scope and
-# matching `file_path` alone — would have been a real weakening, because `Read` carries a
-# `file_path` too and *read the test first* is not *wrote the test first*. Both directions are
-# mutation-tested in `crates/trace-spec/tests/write_selectors.rs`.
+# same ordering assertion `Write` before `Write` was. The alternative — dropping the scope and
+# matching `file_path` alone — would be a real weakening, because `Read` carries a `file_path` too
+# and *read the test first* is not *wrote the test first*. Both directions are mutation-tested in
+# `crates/trace-spec/tests/write_selectors.rs`.
 #
-# `NotebookEdit` is in the set and matches nothing in practice here: it carries `notebook_path`
-# rather than `file_path`, so a path-scoped row never selects one. It is named anyway so the set is
-# the capability's set rather than a subset somebody has to re-derive; a store of markdown is not a
-# live notebook-write vector, and stating that is cheaper than a reader wondering.
+# `NotebookEdit` matches nothing in practice here: it carries `notebook_path` rather than
+# `file_path`, so a path-scoped row never selects one. It is named anyway so the set is the
+# capability's set rather than a subset somebody has to re-derive.
+#
+# ### The half a path-scoped row still cannot see
+#
+# `args: {file_path: ...}` is a **vendor** field name, and the operation vocabulary does not
+# normalise argument names. A b10x write arrives as `tool_invoke` with the path at
+# `input.arguments.path`, so a row that scopes by operation *and* by `file_path` selects the write
+# on the operation and then drops it on the argument. Those rows therefore decide on the arm whose
+# stream carries `file_path` and report `unk` elsewhere — which is the honest verdict, and it is
+# narrower than the operation alone can be.
+#
+# Closing it needs a normalised subject on the event beside the operation — *which file* in the same
+# neutral vocabulary as *what act* — and that is a change to the wire, not to this document. It is
+# named here as owed.
 #
 # ## What a Codex run cannot witness here, stated rather than discovered
 #
@@ -148,8 +184,8 @@ expectations:
     # § *What counts as a write* below; the ordering claim is unchanged.
     expect:
       order:
-        first: {tools: [Edit, NotebookEdit, Write, workspace_write, workspace_edit], args: {file_path: {glob: "*/tests/*"}}}
-        before: {tools: [Edit, NotebookEdit, Write, workspace_write, workspace_edit], args: {file_path: {glob: "*/src/*"}}}
+        first: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/tests/*"}}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
 
   - id: the-suite-was-run-before-there-was-code-to-pass-it
     statement: the verifiers were executed once against a tree that could not yet satisfy them
@@ -166,7 +202,7 @@ expectations:
     expect:
       order:
         first: {tool: Bash, args: {command: {contains: "cargo test"}}}
-        before: {tools: [Edit, NotebookEdit, Write, workspace_write, workspace_edit], args: {file_path: {glob: "*/src/*"}}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
 
   # --- the store guardrail, with the control that stops it being vacuous -------------------
 
@@ -191,7 +227,8 @@ expectations:
     # fence rule from a file path would be asserting something it cannot see.
     expect:
       tool.absent:
-        tools: [NotebookEdit, Write, workspace_write]
+        operations: [file.write]
+        tools: [NotebookEdit, Write]
         args: {file_path: {glob: "*/.engineering/planning/*"}}
 
   - id: the-harness-had-a-writer-to-refuse
@@ -202,11 +239,21 @@ expectations:
     # argued at length in the driven-step document and holds here unchanged.
     expect:
       env.tool_available:
-        # Any one of them. `Write` is Claude Code's writer and `workspace_write` is the b10x
-        # harness's; a row that named only the first reported a harness with a different verb as
-        # having no writer at all, which reads as a defect and is a vocabulary mismatch. What the
+        # **Tool names and not operations, because an inventory is a list of tools.** What the
         # control asserts is unchanged: *this session had a writer, so an absence of writes is a
         # refusal and not a missing tool*.
+        #
+        # This row cannot decide against a three-verb surface, and that is a gap rather than a
+        # wording problem. `session.started.offered_tools` on the b10x loop and on
+        # `--tool-surface owned` lists `tool_search`, `tool_describe`, `tool_invoke` — and none of
+        # those is a writer or isn't one; what the run could write is the **catalogue** behind them,
+        # which the opening record does not carry. Naming `tool_invoke` here would be worse than the
+        # gap: the row would hold for every such run, including one whose catalogue was read-only,
+        # and the attribution control would assert nothing while looking satisfied.
+        #
+        # So it answers `unk` there, honestly, and closing it means putting the catalogue in
+        # `session.started` and reading it with an operation-scoped availability kind. Owed, and not
+        # patched over here.
         tools: [Write, workspace_write]
 
   - id: the-editor-was-used-at-all
@@ -223,7 +270,8 @@ expectations:
     # each polarity so neither can be "simplified" into the other.
     expect:
       tool.called:
-        tools: [Edit, NotebookEdit, Write, workspace_write, workspace_edit]
+        operations: [file.write, file.edit]
+        tools: [Edit, NotebookEdit, Write]
         count: {at_least: 1}
 
   - id: the-store-was-validated
@@ -253,6 +301,7 @@ expectations:
     # have seen something it cannot see. See § *What a transcript cannot see here* below.
     expect:
       tool.called:
+        operations: [file.write, file.edit]
         tools: [Edit, NotebookEdit, Write]
         args: {file_path: {glob: "*/src/*"}}
         count: {at_least: 1}

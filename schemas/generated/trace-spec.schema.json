@@ -341,7 +341,7 @@
           "additionalProperties": false
         },
         {
-          "description": "`{env.tool_available: {tool: Bash}}`, `{env.tool_available: {tool: Task, available: false}}`, or `{env.tool_available: {only: [Read, Glob, Grep]}}`.",
+          "description": "`{env.tool_available: {tool: Bash}}`, `{env.tool_available: {tools: [Write, workspace_write]}}`, `{env.tool_available: {tool: Task, available: false}}`, or `{env.tool_available: {only: [Read, Glob, Grep]}}`.",
           "type": "object",
           "required": [
             "env.tool_available"
@@ -1280,6 +1280,17 @@
             }
           ]
         },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
           "default": null,
@@ -1311,6 +1322,17 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/RawFieldMatcher"
+          }
+        },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.\n\n**The spelling that made the plural above unnecessary.** `tools:` exists because a harness has more than one verb for *put these bytes in this file*; naming the operation says the same thing without having to know any harness's verbs at all — including the ones nobody had thought of when the row was written.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
           }
         },
         "tool": {
@@ -1415,6 +1437,17 @@
             }
           ]
         },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
           "default": null,
@@ -1467,6 +1500,17 @@
             "string",
             "null"
           ]
+        },
+        "tools": {
+          "description": "Several names, any one of which satisfies the claim — the cross-harness form of `tool`.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -1492,6 +1536,17 @@
               "type": "null"
             }
           ]
+        },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
@@ -1527,6 +1582,17 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/RawFieldMatcher"
+          }
+        },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
           }
         },
         "rate": {
@@ -1571,6 +1637,17 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/RawFieldMatcher"
+          }
+        },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
           }
         },
         "result": {
@@ -1623,6 +1700,17 @@
               "$ref": "#/definitions/RawCountBound"
             }
           ]
+        },
+        "operations": {
+          "description": "Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "per": {
           "description": "Whether the bound is over the sum or over each call. `total` when the document omits it.",

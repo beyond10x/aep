@@ -225,3 +225,118 @@ fn an_unread_event_leaves_an_existence_claim_undecided_when_nothing_matched() {
         "an absence cannot be proved past an event the adapter could not read"
     );
 }
+
+// --- the operation, which is the claim the verbs were standing in for -----------------------
+
+/// One `tool.requested` from a three-verb surface: one tool name, the entry inside the call, and
+/// the operation the harness resolved it to.
+fn invocation(seq: usize, entry: &str, operation: &str, file: &str) -> String {
+    format!(
+        r#"{{"format":"metaharness.event/1","seq":{seq},"run":"T/1","event":"tool.requested","call_id":"c-{seq}","name":"tool_invoke","operations":["{operation}"],"input":{{"name":"{entry}","file_path":"{file}"}},"decision_required":false,"seam":"none"}}"#
+    )
+}
+
+/// A one-row existence document over a scope written however the caller spells it.
+fn existence_scoped(scope: &str) -> TraceSpec {
+    document(&format!(
+        "  - id: the-editor-was-used-at-all\n    \
+             statement: the run wrote files\n    \
+             expect:\n      \
+             tool.called:\n        \
+             {scope}\n        \
+             count: {{at_least: 1}}\n"
+    ))
+}
+
+#[test]
+fn an_operation_witnesses_a_write_under_a_tool_name_no_document_lists() {
+    // The failure this replaces, twice over: `tool: Write` shrugged at a run that used `Edit`, and
+    // the widened `tools:` set then shrugged at a harness that spelled a write `workspace_write`.
+    // Every fix was one more name. The operation is the claim, and it needs none of them.
+    let ir = stream(&[invocation(1, "file_write", "file.write", "a/src/lib.rs")]);
+
+    assert_eq!(
+        verdict(
+            &existence_scoped("operations: [file.write, file.edit]"),
+            &ir
+        ),
+        Verdict::Ok,
+        "the harness said what the call was"
+    );
+    let set = WRITE_TOOLS.join(", ");
+    assert_eq!(
+        verdict(&existence_scoped(&format!("tools: [{set}]")), &ir),
+        Verdict::Gap,
+        "and a document that knew only Claude Code's verbs reports that the run wrote nothing"
+    );
+}
+
+#[test]
+fn a_call_the_harness_did_not_resolve_never_witnesses_an_operation() {
+    // Silence is not a match. Widening the vocabulary must not turn *this harness did not say* into
+    // *this harness wrote a file*, or the row reports a verdict nobody earned.
+    let ir = stream(&[call(1, "Write", "a/src/lib.rs")]);
+    assert_eq!(
+        verdict(
+            &existence_scoped("operations: [file.write, file.edit]"),
+            &ir
+        ),
+        Verdict::Gap,
+        "nothing matched, and the stream has no unread event that could have been the write"
+    );
+}
+
+#[test]
+fn naming_both_vocabularies_decides_against_either_stream() {
+    // The union, and the reason the corpus writes both keys: `stream-json` carries tool names and
+    // no operations, `metaharness.event/1` carries both. Written as an intersection this row would
+    // go `unk` against the entire Claude arm while reading like a widening.
+    let set = WRITE_TOOLS.join(", ");
+    let both = format!("operations: [file.write, file.edit]\n        tools: [{set}]");
+
+    let named_only = stream(&[call(1, "Edit", "a/src/lib.rs")]);
+    let resolved_only = stream(&[invocation(1, "file_write", "file.write", "a/src/lib.rs")]);
+    for ir in [&named_only, &resolved_only] {
+        assert_eq!(verdict(&existence_scoped(&both), ir), Verdict::Ok);
+    }
+
+    // And it did not become "any call at all": a read is neither verb nor operation.
+    let read = stream(&[invocation(1, "file_read", "file.read", "a/src/lib.rs")]);
+    assert_eq!(verdict(&existence_scoped(&both), &read), Verdict::Gap);
+}
+
+#[test]
+fn an_operation_scoped_ordering_still_contradicts_the_wrong_order() {
+    // The mutation this file exists for, carried onto the new spelling. A scope that reported `ok`
+    // for both orderings would have widened the claim into nothing.
+    let set = WRITE_TOOLS.join(", ");
+    let scoped = |glob: &str| {
+        format!("{{operations: [file.write, file.edit], tools: [{set}], args: {{file_path: {{glob: \"{glob}\"}}}}}}")
+    };
+    let spec = document(&format!(
+        "  - id: the-test-came-before-the-code\n    \
+             statement: the failing test was written before the source it judges\n    \
+             expect:\n      \
+             order:\n        \
+             first: {}\n        \
+             before: {}\n",
+        scoped("*/tests/*"),
+        scoped("*/src/*")
+    ));
+
+    let right_way = stream(&[
+        invocation(1, "file_write", "file.write", "a/tests/t.rs"),
+        invocation(2, "file_edit", "file.edit", "a/src/lib.rs"),
+    ]);
+    assert_eq!(verdict(&spec, &right_way), Verdict::Ok);
+
+    let wrong_way = stream(&[
+        invocation(1, "file_edit", "file.edit", "a/src/lib.rs"),
+        invocation(2, "file_write", "file.write", "a/tests/t.rs"),
+    ]);
+    assert_eq!(
+        verdict(&spec, &wrong_way),
+        Verdict::Gap,
+        "the code came first and the row says so"
+    );
+}

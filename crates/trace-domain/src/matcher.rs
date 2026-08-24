@@ -364,6 +364,39 @@ pub fn glob_matches(pattern: &str, subject: &str) -> bool {
 pub struct CallSelector {
     /// The tools whose calls are in scope. Empty selects every tool.
     pub tools: BTreeSet<String>,
+    /// The neutral operations whose calls are in scope. Empty selects every operation.
+    ///
+    /// The cross-harness way to say what a selector is about. `operations: [file.write]` selects a
+    /// write on every harness that resolves one, where `tools: [Edit, NotebookEdit, Write,
+    /// workspace_write, workspace_edit]` selected a write on the harnesses somebody had remembered
+    /// to list — and silently selected nothing on the rest.
+    ///
+    /// # Written beside `tools:`, the two **union**
+    ///
+    /// They are two vocabularies for one scope, not two conditions on it. A row that means *this
+    /// call is a write* is satisfied by a record that spells a write `Write` and by one that
+    /// resolves it to `file.write`, and it has to be, because the two streams this repository reads
+    /// do exactly one each: Claude Code's own `stream-json` carries tool names and no operations,
+    /// and `metaharness.event/1` carries both. An intersection would make every such row
+    /// undecidable against the first — which is how this was first written, and it would have
+    /// turned the whole Claude arm `unk` while looking like a widening.
+    ///
+    /// This is not the boolean combinator design decision D2 refuses. D2 is about **matchers over
+    /// field values** — no `and`, no `or`, no nesting inside `args:`. Enumerating a scope is what
+    /// `tools:` has always done; this enumerates the same scope in a second vocabulary. `args:`
+    /// still intersects with whatever the scope selected, unchanged.
+    ///
+    /// The cost is real and worth stating: a selector naming both keys cannot express *a write, and
+    /// specifically Claude Code's*. Nothing in the corpus wants that, and a row that did would name
+    /// the tools alone.
+    ///
+    /// **Skipped when empty**, and that is about identity rather than about bytes: a specification's
+    /// digest is what a committed matrix names it by, and a selector that says nothing new must
+    /// digest to what it always did. A field added to this struct that serialized as `[]` would
+    /// silently re-identify every specification in the repository — the eval matrix's own
+    /// `specifications[].digest` moved the moment this was added without the skip.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub operations: BTreeSet<String>,
     /// Matchers over named arguments, all of which must hold.
     pub args: BTreeMap<String, FieldMatcher>,
 }
@@ -373,6 +406,7 @@ impl CallSelector {
     pub fn tool(name: impl Into<String>) -> Self {
         Self {
             tools: BTreeSet::from([name.into()]),
+            operations: BTreeSet::new(),
             args: BTreeMap::new(),
         }
     }
@@ -385,6 +419,22 @@ impl CallSelector {
     {
         Self {
             tools: names.into_iter().map(Into::into).collect(),
+            operations: BTreeSet::new(),
+            args: BTreeMap::new(),
+        }
+    }
+
+    /// A selector for any call the harness resolved to one of these operations.
+    ///
+    /// The cross-harness spelling. See [`CallSelector::operations`].
+    pub fn of_operations<I, S>(operations: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        Self {
+            tools: BTreeSet::new(),
+            operations: operations.into_iter().map(Into::into).collect(),
             args: BTreeMap::new(),
         }
     }
@@ -395,7 +445,22 @@ impl CallSelector {
     /// that has no `command` is a claim about a field that is not there, and reading absence as a
     /// match would let a selector widen silently when a harness renames a field.
     pub fn matches(&self, call: &ToolCall) -> bool {
-        if !self.tools.is_empty() && !self.tools.contains(&call.name) {
+        let named = self.tools.contains(&call.name);
+        // A call whose record names no operation never satisfies an operation scope. The harness
+        // did not say what the call was, and reading silence as a match would let one harness's
+        // unresolved calls satisfy a claim about writes.
+        let resolved = call
+            .operations
+            .iter()
+            .any(|operation| self.operations.contains(operation));
+        let in_scope = match (self.tools.is_empty(), self.operations.is_empty()) {
+            (true, true) => true,
+            (false, true) => named,
+            (true, false) => resolved,
+            // The union. See the field's own documentation for why it is not an intersection.
+            (false, false) => named || resolved,
+        };
+        if !in_scope {
             return false;
         }
         self.args.iter().all(|(field, matcher)| {
@@ -404,9 +469,13 @@ impl CallSelector {
         })
     }
 
-    /// `true` when it selects everything — no tool name and no argument matcher.
+    /// `true` when it selects everything — no tool name, no operation and no argument matcher.
+    ///
+    /// What `tool.absent` refuses. **An operation alone is a scope**, and leaving it out of this
+    /// check refused `operations: [file.write]` as *forbids every tool call* — the one spelling of
+    /// that row a reader would reach for on a harness whose write verb this document does not know.
     pub fn is_unscoped(&self) -> bool {
-        self.tools.is_empty() && self.args.is_empty()
+        self.tools.is_empty() && self.operations.is_empty() && self.args.is_empty()
     }
 }
 
@@ -414,10 +483,20 @@ impl fmt::Display for CallSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // One name reads as itself, so every report written before the scope became a set says
         // what it always said. Several read as an alternation, which is what they are.
-        let scope = match self.tools.len() {
-            0 => "any tool".to_owned(),
-            1 => self.tools.iter().next().cloned().unwrap_or_default(),
-            _ => self.tools.iter().cloned().collect::<Vec<_>>().join("|"),
+        let alternation =
+            |names: &BTreeSet<String>| names.iter().cloned().collect::<Vec<_>>().join("|");
+        // The operation is what a reader wants to see first when a selector has one: it is the
+        // claim, where the tool names are the harnesses it happened to be spelled for.
+        let scope = match (self.operations.len(), self.tools.len()) {
+            (0, 0) => "any tool".to_owned(),
+            (0, 1) => self.tools.iter().next().cloned().unwrap_or_default(),
+            (0, _) => alternation(&self.tools),
+            (_, 0) => alternation(&self.operations),
+            (_, _) => format!(
+                "{} or {}",
+                alternation(&self.operations),
+                alternation(&self.tools)
+            ),
         };
         f.write_str(&scope).and_then(|()| {
             if self.args.is_empty() {
@@ -558,6 +637,7 @@ mod tests {
         let call = ToolCall {
             call_id: None,
             name: "Bash".to_owned(),
+            operations: Vec::new(),
             input: BTreeMap::new(),
             input_bytes: 0,
             result_event: None,
@@ -572,6 +652,87 @@ mod tests {
             CallSelector::tool("Bash").matches(&call),
             "the tool name alone still selects it"
         );
+    }
+
+    fn call(name: &str, operations: &[&str]) -> ToolCall {
+        ToolCall {
+            call_id: None,
+            name: name.to_owned(),
+            operations: operations.iter().map(|op| (*op).to_owned()).collect(),
+            input: BTreeMap::new(),
+            input_bytes: 0,
+            result_event: None,
+        }
+    }
+
+    #[test]
+    fn an_operation_scope_selects_a_write_whatever_the_harness_calls_the_tool() {
+        // The whole point. Two harnesses, two tool names, one selector — and neither name appears
+        // in it, so a third harness needs no edit here.
+        let selector = CallSelector::of_operations(["file.write"]);
+        assert!(selector.matches(&call("Write", &["file.write"])));
+        assert!(selector.matches(&call("tool_invoke", &["file.write"])));
+        assert!(!selector.matches(&call("Read", &["file.read"])));
+    }
+
+    #[test]
+    fn a_call_the_record_left_unresolved_never_satisfies_an_operation_scope() {
+        // Silence is not a match. A harness that says nothing about what a call was must not have
+        // its calls counted as writes, or the row would report a verdict nobody earned.
+        assert!(!CallSelector::of_operations(["file.write"]).matches(&call("Write", &[])));
+    }
+
+    #[test]
+    fn naming_both_vocabularies_selects_a_call_that_answers_to_either() {
+        // The union, and the regression it exists for: written as an intersection, this row went
+        // undecidable against every Claude Code transcript — which carries tool names and no
+        // operations — while reading like a widening.
+        let mut selector = CallSelector::of_operations(["file.write", "file.edit"]);
+        selector.tools = BTreeSet::from(["Edit".to_owned(), "Write".to_owned()]);
+
+        assert!(
+            selector.matches(&call("Write", &[])),
+            "a name-only stream still decides it"
+        );
+        assert!(
+            selector.matches(&call("tool_invoke", &["file.write"])),
+            "and so does a stream that resolves operations under a name nobody listed"
+        );
+        assert!(!selector.matches(&call("Read", &["file.read"])));
+        assert!(!selector.matches(&call("apply_patch", &[])), "neither road");
+    }
+
+    #[test]
+    fn an_argument_matcher_still_narrows_whatever_the_scope_selected() {
+        // `args:` intersects, unchanged. The union is between the two spellings of the scope, not
+        // between the scope and the arguments.
+        let mut selector = CallSelector::of_operations(["file.write"]);
+        selector
+            .args
+            .insert("path".to_owned(), FieldMatcher::Glob("*/src/*".to_owned()));
+
+        let mut inside = call("tool_invoke", &["file.write"]);
+        inside
+            .input
+            .insert("path".to_owned(), serde_json::json!("a/src/b.rs"));
+        assert!(selector.matches(&inside));
+
+        let mut outside = call("tool_invoke", &["file.write"]);
+        outside
+            .input
+            .insert("path".to_owned(), serde_json::json!("a/docs/b.md"));
+        assert!(!selector.matches(&outside));
+    }
+
+    #[test]
+    fn a_selector_reads_back_naming_the_claim_before_the_harnesses_it_was_spelled_for() {
+        assert_eq!(
+            CallSelector::of_operations(["file.write"]).to_string(),
+            "file.write"
+        );
+        let mut both = CallSelector::of_operations(["file.write"]);
+        both.tools = BTreeSet::from(["Write".to_owned()]);
+        assert_eq!(both.to_string(), "file.write or Write");
     }
 
     #[test]

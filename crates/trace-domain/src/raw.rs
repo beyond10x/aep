@@ -304,6 +304,14 @@ pub struct RawSelector {
     /// rather than picking a winner.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    ///
+    /// **The spelling that made the plural above unnecessary.** `tools:` exists because a harness
+    /// has more than one verb for *put these bytes in this file*; naming the operation says the
+    /// same thing without having to know any harness's verbs at all — including the ones nobody
+    /// had thought of when the row was written.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -594,6 +602,9 @@ pub struct RawToolCalled {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -612,6 +623,9 @@ pub struct RawScopedCount {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -629,6 +643,9 @@ pub struct RawToolResult {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -646,6 +663,9 @@ pub struct RawToolResultBytes {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -666,6 +686,9 @@ pub struct RawToolErrorRate {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -768,6 +791,9 @@ pub struct RawStepMs {
     /// Several tool names, any of which is in scope. Never written beside `tool:`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -1320,6 +1346,7 @@ fn tool_called(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1345,6 +1372,7 @@ fn tool_absent(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1372,6 +1400,7 @@ fn tool_result(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1393,6 +1422,7 @@ fn tool_result_bytes(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1415,6 +1445,7 @@ fn tool_error_rate(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1436,6 +1467,7 @@ fn scoped_count(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1454,6 +1486,7 @@ fn step_ms(
     let selector = selector_of(
         written.tool,
         written.tools,
+        written.operations,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1522,6 +1555,7 @@ fn order(
     let first = selector_of(
         written.first.tool,
         written.first.tools,
+        written.first.operations,
         written.first.args,
         &at(location, kind, "first"),
         errors,
@@ -1529,6 +1563,7 @@ fn order(
     let before = selector_of(
         written.before.tool,
         written.before.tools,
+        written.before.operations,
         written.before.args,
         &at(location, kind, "before"),
         errors,
@@ -1644,9 +1679,59 @@ fn text_matches(
 }
 
 /// Validates a call selector. Every argument matcher is checked before any refusal is propagated.
+/// Validates one scope list — `tools:` or `operations:` — into a set, and says `false` if it broke a
+/// rule.
+///
+/// The three rules are the same for both keys and are worth keeping in one place: an **empty** list
+/// selects nothing while reading like the omission that would have selected everything, a **blank**
+/// name matches nothing and widens nothing, and a **repeated** name is a set somebody edited without
+/// reading.
+fn scope_names(
+    written: Vec<String>,
+    key: &str,
+    location: &str,
+    into: &mut BTreeSet<String>,
+    errors: &mut ValidationErrors,
+) -> bool {
+    let mut usable = true;
+    if written.is_empty() {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            format!("{location}.{key}"),
+            format!(
+                "an empty `{key}:` selects no call at all, and reads like the omission that would \
+                 have selected every one. Name them, or leave the key out."
+            ),
+        );
+        usable = false;
+    }
+    for name in written {
+        if name.trim().is_empty() {
+            errors.refuse(
+                TraceCode::SpecInvalidExpectation,
+                format!("{location}.{key}"),
+                format!("a blank name in `{key}:` matches no call, and widens nothing"),
+            );
+            usable = false;
+        } else if !into.insert(name.clone()) {
+            errors.refuse(
+                TraceCode::SpecInvalidExpectation,
+                format!("{location}.{key}"),
+                format!(
+                    "`{name}` is named twice in `{key}:`; a set that repeats a name is a set \
+                     somebody edited without reading"
+                ),
+            );
+            usable = false;
+        }
+    }
+    usable
+}
+
 fn selector_of(
     tool: Option<String>,
     tools: Option<Vec<String>>,
+    operations: Option<Vec<String>>,
     args: BTreeMap<String, RawFieldMatcher>,
     location: &str,
     errors: &mut ValidationErrors,
@@ -1681,35 +1766,7 @@ fn selector_of(
         }
     }
     if let Some(written) = tools {
-        if written.is_empty() {
-            errors.refuse(
-                TraceCode::SpecInvalidExpectation,
-                format!("{location}.tools"),
-                "an empty `tools:` selects no call at all, and reads like the omission that would \
-                 have selected every one. Name the tools, or leave the key out.",
-            );
-            usable = false;
-        }
-        for name in written {
-            if name.trim().is_empty() {
-                errors.refuse(
-                    TraceCode::SpecInvalidExpectation,
-                    format!("{location}.tools"),
-                    "a blank tool name in `tools:` matches no call, and widens nothing",
-                );
-                usable = false;
-            } else if !names.insert(name.clone()) {
-                errors.refuse(
-                    TraceCode::SpecInvalidExpectation,
-                    format!("{location}.tools"),
-                    format!(
-                        "`{name}` is named twice in `tools:`; a set that repeats a name is a set \
-                         somebody edited without reading"
-                    ),
-                );
-                usable = false;
-            }
-        }
+        usable &= scope_names(written, "tools", location, &mut names, errors);
     }
     let tools = names;
     let mut matchers = BTreeMap::new();
@@ -1731,8 +1788,21 @@ fn selector_of(
             None => usable = false,
         }
     }
+    // The same three rules the tool scope gets, and for the same reasons.
+    let mut operation_names = BTreeSet::new();
+    if let Some(written) = operations {
+        usable &= scope_names(
+            written,
+            "operations",
+            location,
+            &mut operation_names,
+            errors,
+        );
+    }
+
     usable.then_some(CallSelector {
         tools,
+        operations: operation_names,
         args: matchers,
     })
 }

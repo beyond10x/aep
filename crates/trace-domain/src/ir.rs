@@ -261,6 +261,27 @@ pub struct ToolCall {
     pub call_id: Option<String>,
     /// The tool's name, such as `Bash` or `Skill`.
     pub name: String,
+    /// What the call **was**, in the neutral operations vocabulary, where the record says.
+    ///
+    /// # The vocabulary problem this ends
+    ///
+    /// A tool name is one vendor's word for an act. Claude Code writes a file with `Write`, the
+    /// b10x loop with `tool_invoke` naming `file_write`, codex with `apply_patch`. A specification
+    /// that asserts *bytes reached a file* therefore had to list every vendor's verbs, and a
+    /// vocabulary that only names one vendor's tools can only measure one vendor: the write rows in
+    /// this repository's own eval corpus reported `never_occurred` for a run that had visibly
+    /// written files, twice, one harness apart.
+    ///
+    /// The harness answers the question instead. `metaharness.event/1`'s `tool.requested` carries
+    /// `operations`, resolved by whoever holds the rendering — which for a three-verb surface is
+    /// the only place it *can* be resolved, because every act travels through one tool name and the
+    /// entry is inside the call.
+    ///
+    /// **Empty means the record did not say**, not that the call was nothing. A selector scoped to
+    /// operations therefore cannot decide against a transcript whose harness does not publish them,
+    /// and reports `unk` rather than a verdict nobody earned.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operations: Vec<String>,
     /// The call's arguments, field by field, exactly as recorded.
     pub input: BTreeMap<String, Recorded>,
     /// How many bytes the arguments took — model *output*, spent at output prices.
@@ -967,6 +988,7 @@ mod tests {
             EventKind::ToolCall(Box::new(ToolCall {
                 call_id: Some(id.to_owned()),
                 name: name.to_owned(),
+                operations: Vec::new(),
                 input: map,
                 input_bytes: input.len(),
                 result_event: None,

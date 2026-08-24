@@ -566,6 +566,19 @@ fn tool_call(value: &Value) -> Option<ToolCall> {
     Some(ToolCall {
         call_id: text_at(value, "call_id"),
         name,
+        // What the harness said the call **was**. Absent on a record whose harness resolves none,
+        // and empty is carried as empty: a selector scoped to operations then matches nothing and
+        // the row reports `unk`, which is the honest verdict when nobody said.
+        operations: value
+            .get("operations")
+            .and_then(Value::as_array)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| name.as_str().map(ToOwned::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default(),
         input,
         input_bytes,
         result_event: None,
