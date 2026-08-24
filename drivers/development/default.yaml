@@ -55,6 +55,12 @@ states:
       - kind: llm
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
+        # What this step is given rather than has to find. Paid on every turn of a stateless loop,
+        # and still cheaper than the reads it replaces: a discovery read is a call, a turn *and* a
+        # result that then joins the same replay. Named files only — a glob is a promise about a
+        # directory's future size, and a step map is pinned.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. `partial-only` is the planning
         # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
@@ -84,6 +90,8 @@ states:
         # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
         # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
         # every arm but one walked past it.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: partial-only
@@ -109,6 +117,8 @@ states:
         # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
         # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
         # every arm but one walked past it.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: partial-only
@@ -133,6 +143,8 @@ states:
         # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
         # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
         # every arm but one walked past it.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: partial-only
@@ -165,6 +177,8 @@ states:
         # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
         # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
         # every arm but one walked past it.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: partial-only
@@ -223,6 +237,8 @@ states:
         # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
         # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
         # every arm but one walked past it.
+        context:
+          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: partial-only
