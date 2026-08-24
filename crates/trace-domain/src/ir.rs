@@ -238,6 +238,19 @@ pub struct SessionStart {
     pub cwd: Option<String>,
     /// The tools offered, by name.
     pub tools: Option<Vec<String>>,
+    /// **What the run could do**, in the neutral operation vocabulary.
+    ///
+    /// A different question from [`Self::tools`], and the two stop agreeing the moment a surface
+    /// publishes fewer tools than it has reach. Behind three verbs they come apart completely:
+    /// every such run offers `tool_search`, `tool_describe`, `tool_invoke`, and what varies is the
+    /// catalogue behind them.
+    ///
+    /// That is what an attribution control actually asks. *An absence of writes is a refusal only
+    /// if there was a writer to refuse* — and read off the tool list, such a run has no writer at
+    /// all, so the control **contradicted** a run that had six entries including two writers.
+    ///
+    /// [`None`] means the harness did not say, never that the run could do nothing.
+    pub available_operations: Option<Vec<String>>,
     /// The slash commands offered, by name.
     pub slash_commands: Option<Vec<String>>,
     /// The skills offered, by name. Available is not invoked.

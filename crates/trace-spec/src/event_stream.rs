@@ -384,6 +384,7 @@ fn read_event(
 /// case that stays opaque, because that one could have been a tool call.
 fn session_start(value: &Value) -> SessionStart {
     SessionStart {
+        available_operations: names_at(value, "available_operations"),
         model: text_at(value, "model"),
         permission_mode: text_at(value, "permission_mode"),
         // The seam's `credential_source` is the IR's `api_key_source`: same question — who paid —

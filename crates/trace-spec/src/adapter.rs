@@ -248,6 +248,10 @@ fn read_event(
 /// mode, and `apiKeySource`, which has already billed the wrong account once.
 fn session_start(value: &Value) -> SessionStart {
     SessionStart {
+        // Not stated on this wire. The run loop fills it for a vendor harness from the adapter's
+        // published rendering, so a stream that came through metaharness carries it; a raw vendor
+        // transcript read here does not, and a row scoped to operations reports `unk`.
+        available_operations: None,
         model: text_at(value, "model"),
         permission_mode: text_at(value, "permissionMode"),
         api_key_source: text_at(value, "apiKeySource"),

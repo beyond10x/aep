@@ -1526,6 +1526,17 @@
             "type": "string"
           }
         },
+        "operations": {
+          "description": "Several **operations**, any one of which the run could perform.\n\nThe form that survives a surface publishing fewer tools than it has reach: behind three verbs there is no writer's *name* to list, because the writer is a catalogue entry the tool list never mentions. Reads `available_operations` rather than the offered tools.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "tool": {
           "description": "One tool's name, as the harness lists it.",
           "default": null,

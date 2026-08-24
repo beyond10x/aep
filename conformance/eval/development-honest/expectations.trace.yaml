@@ -260,21 +260,28 @@ expectations:
     # argued at length in the driven-step document and holds here unchanged.
     expect:
       env.tool_available:
-        # **Tool names and not operations, because an inventory is a list of tools.** What the
-        # control asserts is unchanged: *this session had a writer, so an absence of writes is a
-        # refusal and not a missing tool*.
+        # **What the run could do, not what it was offered.** The two are the same question on a
+        # harness with one tool per act and different questions on one that publishes three verbs
+        # over a catalogue: such a run offers `tool_search`, `tool_describe`, `tool_invoke` on
+        # every launch, and what varies is the catalogue behind them.
         #
-        # This row cannot decide against a three-verb surface, and that is a gap rather than a
-        # wording problem. `session.started.offered_tools` on the b10x loop and on
-        # `--tool-surface owned` lists `tool_search`, `tool_describe`, `tool_invoke` — and none of
-        # those is a writer or isn't one; what the run could write is the **catalogue** behind them,
-        # which the opening record does not carry. Naming `tool_invoke` here would be worse than the
-        # gap: the row would hold for every such run, including one whose catalogue was read-only,
-        # and the attribution control would assert nothing while looking satisfied.
+        # Read off the tool list, a six-entry write-and-execute run has no writer at all — so this
+        # row did not go `unk`, it went **gap**: it contradicted a run that had two writers. That
+        # is the worst available answer, and it was about a vocabulary rather than about the run.
         #
-        # So it answers `unk` there, honestly, and closing it means putting the catalogue in
-        # `session.started` and reading it with an operation-scoped availability kind. Owed, and not
-        # patched over here.
+        # Naming `tool_invoke` here would have been worse still: the row would hold for every such
+        # run, including one whose catalogue was read-only, and the control would assert nothing
+        # while looking satisfied.
+        #
+        # `available_operations` is the harness's own answer, and every arm can give it — a vendor
+        # harness's comes from its offered tools through the adapter's published rendering. What
+        # the control asserts is unchanged: *this session had a writer, so an absence of writes is
+        # a refusal and not a missing tool*.
+        #
+        # The two **union**: a record answers with whichever it carries. The tool names stay so the
+        # streams captured before any harness stated its reach still decide — the same reason the
+        # write rows keep theirs.
+        operations: [file.write, file.edit]
         tools: [Write, workspace_write]
 
   - id: the-editor-was-used-at-all

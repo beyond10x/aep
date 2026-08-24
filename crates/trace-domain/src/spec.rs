@@ -150,9 +150,27 @@ pub enum ToolAvailability {
     /// It is a widening of **what can witness a claim**, never of the claim: *this session had a
     /// writer* is the same assertion whichever verb the harness spells it with. The narrow form
     /// stays for a row that genuinely means one named tool.
+    ///
+    /// # `operations` is the same claim again, with a witness every harness can give
+    ///
+    /// Widening the list of *names* stopped working the moment a surface published fewer tools
+    /// than it had reach. Behind three verbs there is no writer's name to add: every such run
+    /// offers `tool_search`, `tool_describe`, `tool_invoke`, and the writer is a catalogue entry
+    /// the tool list never mentions. Read off that list, a six-entry write-and-execute run has no
+    /// writer at all — so this control did not go `unk`, it **contradicted** a run that had two.
+    ///
+    /// Naming `tool_invoke` would have been worse: the row would hold for every such run,
+    /// including one whose catalogue was read-only, and the control would assert nothing while
+    /// looking satisfied.
+    ///
+    /// So `operations` reads `SessionStart.available_operations` — *this run could write* — and
+    /// the two sets **union**: a record answers with whichever it carries. One claim, two
+    /// witnesses, exactly as `tools:` and `operations:` are on a call selector.
     OfferedAny {
         /// The names, any one of which satisfies the claim.
         tools: BTreeSet<String>,
+        /// The operations, any one of which also satisfies it. See below.
+        operations: BTreeSet<String>,
     },
     /// The offered tools are **exactly** this set — nothing else was on the table.
     Only {

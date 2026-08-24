@@ -579,6 +579,13 @@ pub struct RawToolAvailable {
     /// Several names, any one of which satisfies the claim — the cross-harness form of `tool`.
     #[serde(default)]
     pub tools: Option<Vec<String>>,
+    /// Several **operations**, any one of which the run could perform.
+    ///
+    /// The form that survives a surface publishing fewer tools than it has reach: behind three
+    /// verbs there is no writer's *name* to list, because the writer is a catalogue entry the tool
+    /// list never mentions. Reads `available_operations` rather than the offered tools.
+    #[serde(default)]
+    pub operations: Option<Vec<String>>,
     /// Whether that tool must have been offered. `true` when the document omits it.
     #[serde(default)]
     pub available: Option<bool>,
@@ -1244,6 +1251,17 @@ fn tool_available(
     errors: &mut ValidationErrors,
 ) -> Option<ExpectationKind> {
     let kind = "env.tool_available";
+    // `tool:`/`only:` make narrower claims than the any-of form and cannot be combined with it.
+    if written.operations.is_some() && (written.tool.is_some() || written.only.is_some()) {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            at_kind(location, kind),
+            "`operations` is an any-of witness, like `tools`, and cannot be combined with `tool` \
+             or `only`: those make narrower claims and a row holding both reports one verdict for \
+             two",
+        );
+        return None;
+    }
     if written.tools.is_some() && (written.tool.is_some() || written.only.is_some()) {
         errors.refuse(
             TraceCode::SpecInvalidExpectation,
@@ -1253,27 +1271,43 @@ fn tool_available(
         );
         return None;
     }
-    if let Some(any) = written.tools.clone() {
+    if written.tools.is_some() || written.operations.is_some() {
         if written.available.is_some() {
             errors.refuse(
                 TraceCode::SpecInvalidExpectation,
                 at(location, kind, "available"),
-                "`available: false` asks whether one named tool was withheld, and `tools` names \
-                 several; *none of these was offered* is a different claim and has no form here yet",
+                "`available: false` asks whether one named tool was withheld, and the any-of form \
+                 names several; *none of these was offered* is a different claim and has no form \
+                 here yet",
             );
             return None;
         }
+        let tools = match written.tools {
+            Some(any) => names_of(
+                any,
+                &at(location, kind, "tools"),
+                "tool",
+                "an `env.tool_available` listing no tool under `tools` names none, so it can \
+                 only report a gap",
+                errors,
+            )?,
+            None => BTreeSet::new(),
+        };
+        let operations = match written.operations {
+            Some(any) => names_of(
+                any,
+                &at(location, kind, "operations"),
+                "operation",
+                "an `env.tool_available` listing no operation names none, so it can only report \
+                 a gap",
+                errors,
+            )?,
+            None => BTreeSet::new(),
+        };
+        // One claim, two witnesses: a name the run was offered, or an operation it could perform.
+        // A record answers with whichever it carries.
         return Some(ExpectationKind::EnvToolAvailable {
-            availability: ToolAvailability::OfferedAny {
-                tools: names_of(
-                    any,
-                    &at(location, kind, "tools"),
-                    "tool",
-                    "an `env.tool_available` listing no tool under `tools` names none, so it can \
-                     only report a gap",
-                    errors,
-                )?,
-            },
+            availability: ToolAvailability::OfferedAny { tools, operations },
         });
     }
     let availability = match (written.tool, written.only) {

@@ -571,7 +571,7 @@ fn env_tool_available(ir: &TraceIr, availability: &ToolAvailability) -> Outcome 
         }
         // Any one of them satisfies it. The citation names which, because *a writer was offered*
         // is only useful to a reader who can see which writer it was.
-        ToolAvailability::OfferedAny { tools } => {
+        ToolAvailability::OfferedAny { tools, operations } => {
             let mut last = Outcome::Undecidable(UnknownReason::NoSessionStart);
             for tool in tools {
                 let outcome = env_offers(ir, "tools", "tool", tool, |start| start.tools.as_deref());
@@ -579,6 +579,20 @@ fn env_tool_available(ir: &TraceIr, availability: &ToolAvailability) -> Outcome 
                     return outcome;
                 }
                 last = outcome;
+            }
+            // The same claim, witnessed by what the run could *do* rather than by what it was
+            // offered. A record answers with whichever it carries.
+            for operation in operations {
+                let outcome =
+                    env_offers(ir, "available_operations", "operation", operation, |start| {
+                        start.available_operations.as_deref()
+                    });
+                if matches!(outcome, Outcome::Ok(_)) {
+                    return outcome;
+                }
+                if matches!(last, Outcome::Undecidable(_)) {
+                    last = outcome;
+                }
             }
             last
         }
