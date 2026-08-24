@@ -397,6 +397,22 @@ pub struct CallSelector {
     /// `specifications[].digest` moved the moment this was added without the skip.
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub operations: BTreeSet<String>,
+    /// A matcher over what the call touched. Holds when **any** subject matches.
+    ///
+    /// The cross-harness way to say *which file*. `subject: {glob: "file:*/tests/*"}` selects a
+    /// call against `src/tests/x.rs` on every harness that records a subject, where
+    /// `args: {file_path: {glob: "*/tests/*"}}` reads one vendor's argument name and finds nothing
+    /// on a wire that nests the path a level down under another.
+    ///
+    /// Any and not all, because a call may touch several things and the claim is about one of
+    /// them: an ordering row asking *was a test written first* is satisfied by the call that wrote
+    /// the test, whatever else the same call touched.
+    ///
+    /// The scheme prefix is part of the value, so a glob says which kind it means: `file:*` is a
+    /// path and `proc:*` is a program. A matcher that dropped it would let a row about a file
+    /// select a program with a similar name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<FieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     pub args: BTreeMap<String, FieldMatcher>,
 }
@@ -407,6 +423,7 @@ impl CallSelector {
         Self {
             tools: BTreeSet::from([name.into()]),
             operations: BTreeSet::new(),
+            subject: None,
             args: BTreeMap::new(),
         }
     }
@@ -420,6 +437,7 @@ impl CallSelector {
         Self {
             tools: names.into_iter().map(Into::into).collect(),
             operations: BTreeSet::new(),
+            subject: None,
             args: BTreeMap::new(),
         }
     }
@@ -435,6 +453,7 @@ impl CallSelector {
         Self {
             tools: BTreeSet::new(),
             operations: operations.into_iter().map(Into::into).collect(),
+            subject: None,
             args: BTreeMap::new(),
         }
     }
@@ -463,6 +482,18 @@ impl CallSelector {
         if !in_scope {
             return false;
         }
+        // A call whose record names no subject never satisfies a subject matcher, on the same rule
+        // an absent argument does not match: the harness did not say what was touched, and reading
+        // silence as a match would let a row about `*/tests/*` select a call about anything.
+        if let Some(matcher) = &self.subject {
+            let any = call
+                .subjects
+                .iter()
+                .any(|subject| matcher.matches(&Recorded::String(subject.clone())));
+            if !any {
+                return false;
+            }
+        }
         self.args.iter().all(|(field, matcher)| {
             call.argument(field)
                 .is_some_and(|value| matcher.matches(value))
@@ -475,7 +506,10 @@ impl CallSelector {
     /// check refused `operations: [file.write]` as *forbids every tool call* — the one spelling of
     /// that row a reader would reach for on a harness whose write verb this document does not know.
     pub fn is_unscoped(&self) -> bool {
-        self.tools.is_empty() && self.operations.is_empty() && self.args.is_empty()
+        self.tools.is_empty()
+            && self.operations.is_empty()
+            && self.subject.is_none()
+            && self.args.is_empty()
     }
 }
 
@@ -638,6 +672,7 @@ mod tests {
             call_id: None,
             name: "Bash".to_owned(),
             operations: Vec::new(),
+            subjects: Vec::new(),
             input: BTreeMap::new(),
             input_bytes: 0,
             result_event: None,
@@ -659,6 +694,7 @@ mod tests {
             call_id: None,
             name: name.to_owned(),
             operations: operations.iter().map(|op| (*op).to_owned()).collect(),
+            subjects: Vec::new(),
             input: BTreeMap::new(),
             input_bytes: 0,
             result_event: None,

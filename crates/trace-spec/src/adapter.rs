@@ -365,6 +365,12 @@ fn tool_call(block: &Value) -> Option<ToolCall> {
         // the same run read through `metaharness.event/1` carries them, because metaharness holds
         // the adapter's published rendering and resolves there.
         operations: Vec::new(),
+        // Derived here, unlike `operations`, and the difference is which question is being asked.
+        // *Which tool is a write* needs the harness's own rendering and this adapter must not
+        // invent one. *Which argument holds a path* is the same three names on every harness that
+        // records one, so a raw transcript that states a path can be read into the neutral form
+        // without guessing at anything.
+        subjects: trace_domain::ir::subjects_from_input(&input),
         input,
         input_bytes,
         result_event: None,

@@ -282,6 +282,23 @@ pub struct ToolCall {
     /// and reports `unk` rather than a verdict nobody earned.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<String>,
+    /// **What** the call would touch, scheme-prefixed: `file:src/lib.rs`, `proc:/usr/bin/python3`.
+    ///
+    /// [`Self::operations`] says a write happened; this says which file, and neither implies the
+    /// other. Without both, a specification can assert *this run wrote something* and never *this
+    /// run wrote the test before the source* — which is the whole of the ordering rows the eval
+    /// corpus is built on.
+    ///
+    /// Why the harness answers rather than the checker reading an argument: the path lives under a
+    /// different key on every wire, and a level down inside the call on a three-verb surface, where
+    /// the tool's own name is `tool_invoke` for all six entries. A row scoped by `args.file_path`
+    /// therefore decided on Claude Code and reported `unk` everywhere else.
+    ///
+    /// The path is **as the caller wrote it**, never canonicalised.
+    ///
+    /// Empty means the record does not say, never that the call touched nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subjects: Vec<String>,
     /// The call's arguments, field by field, exactly as recorded.
     pub input: BTreeMap<String, Recorded>,
     /// How many bytes the arguments took — model *output*, spent at output prices.
@@ -292,6 +309,36 @@ pub struct ToolCall {
     /// a thing each adapter re-derives. [`None`] means no result was correlated — a truncated
     /// transcript, which is not the same as a bad result.
     pub result_event: Option<usize>,
+}
+
+/// The argument names a recorded path lives under.
+///
+/// Three names and no vendor table. This asks *which key holds a path* — the same question on every
+/// harness that records one — where *which tool is a write* is the rendering's question and belongs
+/// to whoever publishes the tools.
+///
+/// `command` is deliberately absent. A shell string is not a program, and pulling an argv[0] out of
+/// one is parsing a language this crate does not speak; a subject guessed that way would be a claim
+/// about what ran. An expectation about a command reads `args.command`, as decidable as ever.
+const PATH_ARGUMENTS: [&str; 3] = ["file_path", "notebook_path", "path"];
+
+/// The subjects a call's own arguments name, for a record that states none.
+///
+/// **The wire's answer wins where there is one.** `metaharness.event/1` carries `subjects` because
+/// the harness resolved them — on a three-verb surface the path is nested inside the call and only
+/// the catalogue knows which entry was invoked — and an adapter reading that wire passes them
+/// through. This is the fallback for a raw vendor transcript, which states a path and never says
+/// so in a neutral form.
+///
+/// The path is taken **as the caller wrote it**, never canonicalised: a reader asking where a call
+/// was going has to see `../../etc/passwd` as the model sent it.
+#[must_use]
+pub fn subjects_from_input(input: &BTreeMap<String, Recorded>) -> Vec<String> {
+    PATH_ARGUMENTS
+        .iter()
+        .filter_map(|key| input.get(*key).and_then(Value::as_str))
+        .map(|path| format!("file:{path}"))
+        .collect()
 }
 
 impl ToolCall {
@@ -989,6 +1036,7 @@ mod tests {
                 call_id: Some(id.to_owned()),
                 name: name.to_owned(),
                 operations: Vec::new(),
+                subjects: Vec::new(),
                 input: map,
                 input_bytes: input.len(),
                 result_event: None,

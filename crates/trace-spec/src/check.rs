@@ -1602,6 +1602,7 @@ mod tests {
                 call_id: Some(id.to_owned()),
                 name: name.to_owned(),
                 operations: Vec::new(),
+                subjects: Vec::new(),
                 input: map,
                 input_bytes: input.len(),
                 result_event: None,

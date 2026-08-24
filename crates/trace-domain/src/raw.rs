@@ -312,6 +312,12 @@ pub struct RawSelector {
     /// had thought of when the row was written.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    ///
+    /// The cross-harness spelling of a path scope. `args: {file_path: ...}` reads **one vendor's**
+    /// argument name, and finds nothing on a wire that nests the path a level down inside the call.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -605,6 +611,9 @@ pub struct RawToolCalled {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -626,6 +635,9 @@ pub struct RawScopedCount {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -646,6 +658,9 @@ pub struct RawToolResult {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -666,6 +681,9 @@ pub struct RawToolResultBytes {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -689,6 +707,9 @@ pub struct RawToolErrorRate {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -794,6 +815,9 @@ pub struct RawStepMs {
     /// Neutral operations, any of which is in scope. Written beside `tool:`/`tools:` or alone.
     #[serde(default)]
     pub operations: Option<Vec<String>>,
+    /// A matcher over what the call touched: `subject: {glob: "file:*/tests/*"}`.
+    #[serde(default)]
+    pub subject: Option<RawFieldMatcher>,
     /// Matchers over named arguments, all of which must hold.
     #[serde(default)]
     pub args: BTreeMap<String, RawFieldMatcher>,
@@ -1347,6 +1371,7 @@ fn tool_called(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1373,6 +1398,7 @@ fn tool_absent(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1401,6 +1427,7 @@ fn tool_result(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1423,6 +1450,7 @@ fn tool_result_bytes(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1446,6 +1474,7 @@ fn tool_error_rate(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1468,6 +1497,7 @@ fn scoped_count(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1487,6 +1517,7 @@ fn step_ms(
         written.tool,
         written.tools,
         written.operations,
+        written.subject,
         written.args,
         &at_kind(location, kind),
         errors,
@@ -1556,6 +1587,7 @@ fn order(
         written.first.tool,
         written.first.tools,
         written.first.operations,
+        written.first.subject,
         written.first.args,
         &at(location, kind, "first"),
         errors,
@@ -1564,6 +1596,7 @@ fn order(
         written.before.tool,
         written.before.tools,
         written.before.operations,
+        written.before.subject,
         written.before.args,
         &at(location, kind, "before"),
         errors,
@@ -1732,6 +1765,7 @@ fn selector_of(
     tool: Option<String>,
     tools: Option<Vec<String>>,
     operations: Option<Vec<String>>,
+    subject: Option<RawFieldMatcher>,
     args: BTreeMap<String, RawFieldMatcher>,
     location: &str,
     errors: &mut ValidationErrors,
@@ -1788,6 +1822,17 @@ fn selector_of(
             None => usable = false,
         }
     }
+    let subject_matcher = match subject {
+        Some(written) => match matcher_of(written, &format!("{location}.subject"), errors) {
+            Some(matcher) => Some(matcher),
+            None => {
+                usable = false;
+                None
+            }
+        },
+        None => None,
+    };
+
     // The same three rules the tool scope gets, and for the same reasons.
     let mut operation_names = BTreeSet::new();
     if let Some(written) = operations {
@@ -1803,6 +1848,7 @@ fn selector_of(
     usable.then_some(CallSelector {
         tools,
         operations: operation_names,
+        subject: subject_matcher,
         args: matchers,
     })
 }

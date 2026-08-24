@@ -59,18 +59,39 @@ title: A run of `adp/default` put the specification before the decomposition and
 # `file_path`, so a path-scoped row never selects one. It is named anyway so the set is the
 # capability's set rather than a subset somebody has to re-derive.
 #
-# ### The half a path-scoped row still cannot see
+# ### The other half: `subject:`, which says *which file*
 #
-# `args: {file_path: ...}` is a **vendor** field name, and the operation vocabulary does not
-# normalise argument names. A b10x write arrives as `tool_invoke` with the path at
-# `input.arguments.path`, so a row that scopes by operation *and* by `file_path` selects the write
-# on the operation and then drops it on the argument. Those rows therefore decide on the arm whose
-# stream carries `file_path` and report `unk` elsewhere — which is the honest verdict, and it is
-# narrower than the operation alone can be.
+# `operations` says a write happened. `subject:` says which file, and both are needed: without the
+# second, a row can assert that a run wrote something and never that it wrote the test before the
+# source, which is the whole of the ordering rules above.
 #
-# Closing it needs a normalised subject on the event beside the operation — *which file* in the same
-# neutral vocabulary as *what act* — and that is a change to the wire, not to this document. It is
-# named here as owed.
+# `args: {file_path: ...}` cannot do it across harnesses. That is a **vendor** field name, and a
+# b10x write arrives as `tool_invoke` with the path at `input.arguments.path` — a level down, under
+# an entry name only the catalogue can resolve. A row scoped by operation *and* by `file_path`
+# selected the write on the operation and then dropped it on the argument, so every path-scoped
+# ordering row decided on one arm and answered `unk` for the rest.
+#
+# So `tool.requested` carries `subjects` in the neutral scheme-prefixed form — `file:src/lib.rs`,
+# `proc:/usr/bin/python3` — resolved by whoever holds the catalogue, and a row scopes on it:
+#
+#     subject: {glob: "file:*/tests/*"}
+#
+# The scheme is part of the value, so a glob says which kind it means; without it a row about a file
+# could select a program with a similar name. The path is **as the caller wrote it**, never
+# canonicalised: a reader asking where a call was going has to see `../../etc/passwd` as the model
+# sent it, and the tidy answer is exactly wrong for the one call whose whole problem is where it
+# pointed.
+#
+# `args: {file_path: ...}` stays beside it here, unlike the tool names, for a different reason: it
+# is a **narrower** claim, not an older spelling of the same one, and both are cheap to keep. A
+# transcript that states a path and never says so neutrally — a raw vendor transcript, or a stream
+# captured before the seam resolved subjects — has the path read into the same form from the
+# argument that holds it. That fallback asks *which key holds a path*, which is the same three names
+# on every harness; *which tool is a write* is the rendering's question and is never guessed at.
+#
+# **A shell command is still not a subject.** A command string is not a program, and pulling an
+# argv[0] out of one is parsing a language the reader does not speak. Rows about commands read
+# `args.command`, exactly as decidable as before.
 #
 # ## What a Codex run cannot witness here, stated rather than discovered
 #
@@ -184,8 +205,8 @@ expectations:
     # § *What counts as a write* below; the ordering claim is unchanged.
     expect:
       order:
-        first: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/tests/*"}}}
-        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
+        first: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/tests/*"}, args: {file_path: {glob: "*/tests/*"}}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}, args: {file_path: {glob: "*/src/*"}}}
 
   - id: the-suite-was-run-before-there-was-code-to-pass-it
     statement: the verifiers were executed once against a tree that could not yet satisfy them
@@ -202,7 +223,7 @@ expectations:
     expect:
       order:
         first: {tool: Bash, args: {command: {contains: "cargo test"}}}
-        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
+        before: {operations: [file.write, file.edit], tools: [Edit, NotebookEdit, Write], subject: {glob: "file:*/src/*"}, args: {file_path: {glob: "*/src/*"}}}
 
   # --- the store guardrail, with the control that stops it being vacuous -------------------
 

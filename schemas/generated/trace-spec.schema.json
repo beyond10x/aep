@@ -1291,6 +1291,17 @@
             "type": "string"
           }
         },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
           "default": null,
@@ -1334,6 +1345,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.\n\nThe cross-harness spelling of a path scope. `args: {file_path: ...}` reads **one vendor's** argument name, and finds nothing on a wire that nests the path a level down inside the call.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
@@ -1448,6 +1470,17 @@
             "type": "string"
           }
         },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
           "default": null,
@@ -1548,6 +1581,17 @@
             "type": "string"
           }
         },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
           "default": null,
@@ -1600,6 +1644,17 @@
           "allOf": [
             {
               "$ref": "#/definitions/RawRangeBound"
+            }
+          ]
+        },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
             }
           ]
         },
@@ -1656,6 +1711,17 @@
           "additionalProperties": {
             "$ref": "#/definitions/RawFieldMatcher"
           }
+        },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tool": {
           "description": "The tool's name. Absent selects every tool.",
@@ -1717,6 +1783,17 @@
           "allOf": [
             {
               "$ref": "#/definitions/RawAggregate"
+            }
+          ]
+        },
+        "subject": {
+          "description": "A matcher over what the call touched: `subject: {glob: \"file:*/tests/*\"}`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawFieldMatcher"
+            },
+            {
+              "type": "null"
             }
           ]
         },

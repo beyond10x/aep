@@ -236,6 +236,13 @@ fn invocation(seq: usize, entry: &str, operation: &str, file: &str) -> String {
     )
 }
 
+/// One `tool.requested` that started a program, as the seam resolves one.
+fn started_program(seq: usize, program: &str) -> String {
+    format!(
+        r#"{{"format":"metaharness.event/1","seq":{seq},"run":"T/1","event":"tool.requested","call_id":"c-{seq}","name":"tool_invoke","operations":["shell"],"subjects":["proc:{program}"],"input":{{"name":"run","arguments":{{"argv":["{program}"]}}}},"decision_required":false,"seam":"none"}}"#
+    )
+}
+
 /// A one-row existence document over a scope written however the caller spells it.
 fn existence_scoped(scope: &str) -> TraceSpec {
     document(&format!(
@@ -339,4 +346,78 @@ fn an_operation_scoped_ordering_still_contradicts_the_wrong_order() {
         Verdict::Gap,
         "the code came first and the row says so"
     );
+}
+
+// --- which file, which is the other half of the claim -------------------------------------------
+
+#[test]
+fn a_subject_scope_decides_a_path_row_on_a_harness_that_names_every_call_tool_invoke() {
+    // `operations` says a write happened; this says which file. Without both, an ordering row
+    // reading `args.file_path` finds nothing on a three-verb surface — the path is nested a level
+    // down inside the call — and every such row reported `unk` for the whole arm.
+    let ir = stream(&[
+        invocation(1, "file_write", "file.write", "a/tests/t.rs"),
+        invocation(2, "file_edit", "file.edit", "a/src/lib.rs"),
+    ]);
+    let scoped = |glob: &str| {
+        format!("{{operations: [file.write, file.edit], subject: {{glob: \"file:{glob}\"}}}}")
+    };
+    let spec = document(&format!(
+        "  - id: the-test-came-before-the-code\n    \
+             statement: the failing test was written before the source it judges\n    \
+             expect:\n      \
+             order:\n        \
+             first: {}\n        \
+             before: {}\n",
+        scoped("*/tests/*"),
+        scoped("*/src/*")
+    ));
+    assert_eq!(verdict(&spec, &ir), Verdict::Ok);
+}
+
+#[test]
+fn a_subject_matcher_reads_the_scheme_so_a_file_row_cannot_select_a_program() {
+    // The prefix is part of the value on purpose. Dropping it would let a row about a file select
+    // a program with a similar name, which is a widening nobody wrote.
+    let ir = stream(&[started_program(1, "/usr/bin/python3")]);
+    let program = document(
+        "  - id: it-started-a-program\n    statement: a program was started\n    \
+             expect:\n      tool.called:\n        subject: {glob: \"proc:*\"}\n        \
+             count: {at_least: 1}\n",
+    );
+    let file = document(
+        "  - id: it-touched-a-file\n    statement: a file was touched\n    \
+             expect:\n      tool.called:\n        subject: {glob: \"file:*\"}\n        \
+             count: {at_least: 1}\n",
+    );
+    assert_eq!(verdict(&program, &ir), Verdict::Ok);
+    assert_eq!(verdict(&file, &ir), Verdict::Gap, "a program is not a file");
+}
+
+#[test]
+fn a_vendor_transcripts_own_path_argument_is_read_into_the_same_form() {
+    // `subject:` has to decide on a record that states a path and never says so neutrally, or the
+    // corpus would need two spellings of every path row for the rest of time. *Which key holds a
+    // path* is the same three names everywhere; *which tool is a write* is not, and stays the
+    // harness's to answer.
+    let ir = stream(&[call(1, "Write", "a/src/lib.rs")]);
+    let spec = document(
+        "  - id: it-wrote-the-source\n    statement: the source was written\n    \
+             expect:\n      tool.called:\n        tools: [Edit, NotebookEdit, Write]\n        \
+             subject: {glob: \"file:*/src/*\"}\n        count: {at_least: 1}\n",
+    );
+    assert_eq!(verdict(&spec, &ir), Verdict::Ok);
+}
+
+#[test]
+fn a_call_whose_record_names_no_subject_never_satisfies_a_subject_row() {
+    // Silence is not a match, on the same rule an absent argument carries: reading it as one would
+    // let a row about `*/tests/*` select a call about anything at all.
+    let ir = stream(&[started_program(1, "/usr/bin/python3")]);
+    let spec = document(
+        "  - id: it-touched-the-tests\n    statement: a test file was touched\n    \
+             expect:\n      tool.called:\n        subject: {glob: \"file:*/tests/*\"}\n        \
+             count: {at_least: 1}\n",
+    );
+    assert_eq!(verdict(&spec, &ir), Verdict::Gap);
 }

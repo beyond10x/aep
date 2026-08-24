@@ -579,6 +579,26 @@ fn tool_call(value: &Value) -> Option<ToolCall> {
                     .collect()
             })
             .unwrap_or_default(),
+        // Which file or program, in the same neutral form. See `ToolCall::subjects`: the path is
+        // under a different argument name on every wire, and a level down inside the call on a
+        // three-verb surface, so the harness answers rather than the checker digging.
+        subjects: value
+            .get("subjects")
+            .and_then(Value::as_array)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| name.as_str().map(ToOwned::to_owned))
+                    .collect()
+            })
+            // **The wire's answer where there is one, and this rule where there is not.** A stream
+            // captured before the seam resolved subjects carries none, and the argument it named
+            // is still right there in the record; deriving it is the same normalisation the raw
+            // vendor adapter does, not a guess. A three-verb call keeps its empty answer, because
+            // its path is nested under an entry name only the catalogue can resolve — and the
+            // fallback does not pretend otherwise.
+            .filter(|found: &Vec<String>| !found.is_empty())
+            .unwrap_or_else(|| trace_domain::ir::subjects_from_input(&input)),
         input,
         input_bytes,
         result_event: None,
