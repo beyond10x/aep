@@ -9,7 +9,102 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`protocol reverse` — the verbs for a repository that already exists.** Every other verb starts
+  from a document somebody wrote; these three start from a codebase, which is the state an adopter is
+  actually in.
+
+  - **`reverse init`** writes `.engineering/project.yaml`. It refuses an unpinned `git+` source
+    before writing anything, resolves the tree so the failure surfaces at adoption rather than at the
+    first command that needed it, and leaves no file behind when it does not resolve. `--no-verify`
+    skips the resolution for an offline machine. This replaces hand-authoring the file from
+    `docs/guide/adopting.md`.
+  - **`reverse scan`** reads a repository and emits `aep.reverse-scan/1`: README headings, marked
+    lines, CI jobs and the variables on them, task-runner targets, packages by language, published
+    interface documents, and loose root markdown — each entry carrying the `path:line` it was read
+    from. It writes nothing, interprets nothing, and has no clock, no network and no `read_dir`
+    order dependence, so **two runs over one tree produce identical bytes**. Interpreting the bundle
+    is judgement and stays with whoever is planning; producing it is not, and is now a program.
+  - **`reverse openapi`** drafts an `ess/1` domain from an OpenAPI document — types, errors, commands
+    and their inputs. Everything it can see and cannot decide (entities, lifecycles, invariants,
+    actors) is emitted as an `UNMAPPED:` comment naming the choice, because a reader cannot tell an
+    absent lifecycle from an absent decision about one.
+
+- **`protocol reverse history` — the axis a working tree does not have.** `reverse scan` reads the
+  tree as it stands, so it can report that a suite is switched off and never that it has been off
+  since February 2024. Only one of those is a finding somebody acts on.
+
+  It reports, all derived from the commits reachable at `HEAD`: **`line_ages`** — every marked line
+  and every disabled test, dated from the commit that wrote it and ordered oldest first, keyed by
+  `path:line` so it joins straight onto a scan bundle; **`stated_expiry`** — commits whose message
+  said *for now*, *until we*, *temporarily* or *workaround*, each a decision with an implied expiry
+  and nothing enforcing it; **`reverted`** — what somebody already tried to undo; **`churn`** and
+  **`dormant`** — where the work keeps landing and where nothing recent has; **`tickets`** — the
+  `ABC-123` keys the messages carry, which is how a repository tells you it changed tracker two years
+  ago; plus the commit-type mix, the span, and the tags.
+
+  **Nothing reads a clock.** Dates are quoted from the commits that carry them and never compared
+  against today, so a fixed `HEAD` gives fixed bytes and a committed bundle stays true. Author counts
+  are counts: a bundle meant to be committed and pasted into a ticket does not carry names. A tree
+  that is not a Git working tree gets one sentence saying so rather than nine empty sections that
+  read like nine findings, and a shallow clone is warned about on stderr because its oldest dates are
+  wrong.
+
+- **`disabled_tests` in a scan.** Tests that declare they will not run — `t.Skip`, `#[ignore]`,
+  `it.skip`, `@pytest.mark.skip`, `@Disabled` and the rest — with the reason they state and, the part
+  that matters, **whether anything can still turn them on**. A guarded skip is an opt-in and appears
+  in every healthy repository; an unguarded one is a test that runs on no machine, and a green
+  pipeline reports the two identically. Found by reading the tree, not the history — the history is
+  what pointed at the gap.
+
+- **`artifacts/lifecycles/vision.yaml`.** `vision` was a declared kind with no ladder, so it resolved
+  to the permissive fallback and `protocol artifact move vision:… --to implemented` succeeded — the
+  first artifact an adopting repository writes was the one nothing validated. The ladder is
+  `specification`'s with `implemented` removed: a vision is never implemented, the work under it is,
+  and `superseded` is the only terminal a standing statement has.
+
+  `product-requirements` has the same hole and deliberately does **not** get a ladder here, because
+  opening the status vocabulary in 0.13.0 made declaring one a larger act than it was the week
+  before. While every kind fell back to the permissive ladder, a missing lifecycle document shrugged
+  at whatever an adopter's externally-tracked artifact said. Now that a status is accepted for a
+  write only if the kind's lifecycle declares it, **writing that document decides what an adopter's
+  `prd:*` is allowed to say** — and two example manifests already carry one at `status: active` from
+  an external provider (`examples/billing-conformance/artifacts.yaml:12`,
+  `examples/development-passkeys/artifacts.yaml:12`). `vision` has no such adopter surface, which is
+  why it ships and this does not. The ladder is owed a decision, not a gap-fill.
+
+- **`integrations/claude-code/agents/reverse-engineer.md`.** Drafts the first plan for a repository
+  that has none: reads it through `reverse scan`, creates draft artifacts that each cite the
+  `path:line` they rest on, and reports what it could *not* cite as questions rather than filing them
+  as work. Creates drafts only; never moves an artifact.
+
+### Changed
+
+- **An absolute path in `.engineering/project.yaml` is refused.** `protocols:` was the one field
+  exempt from a rule every other path in the file already followed, on the reading that where a tree
+  sits is the adopter's business. It is — and that is not what the value decides. A project file is
+  committed, so `protocols: /opt/engineering-protocols` means a different thing on every machine that
+  clones the repository and nothing at all in CI, where the failure arrives as a missing directory
+  naming a path nobody on that machine wrote.
+
+  **This is a breaking change** for a project file carrying one. Replace it with a path relative to
+  `.engineering/`, or with a pinned `git+ssh://`, `git+https://` or `git+file://` locator — the
+  locator is the right answer for anything other people clone. A `git+file:///srv/mirror.git#<sha>`
+  is unaffected: it is absolute inside a URL, and it names a repository and a commit, so it resolves
+  to the same tree wherever that repository is reachable.
+
+  The check is in `ProtocolSource::parse` — the one reader every command goes through — so a file
+  hand-edited past `reverse init` fails identically. It covers a leading `/`, `~`, a drive letter and
+  a UNC path, and is decided by spelling rather than by `Path::is_absolute`, which answers for the
+  platform it runs on: a Linux build used to accept `schemas: C:\registry` and a Windows one
+  `schemas: /registry`. The sibling check for `artifacts`, `task`, `principles`, `profiles` and
+  `schemas` now shares that one rule.
+
+- `kernel_equivalence.rs` derives its pair count from the ladders it found instead of asserting
+  `800`. The number was arithmetic about how many ladders shipped, so adding one failed the gate on
+  the wrong thing; coverage is still held by
+  `every_ladder_this_repository_ships_is_named_by_the_fixture`.
 
 ## [0.13.0] — 2026-08-25
 

@@ -105,12 +105,50 @@ protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#01234567
 schemas: schemas
 ```
 
+Write it with `protocol reverse init` rather than by hand:
+
+```console
+$ $B reverse init \
+    --protocols git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567 \
+    --profile acme.service
+.engineering/project.yaml written
+  protocol source resolves to /home/you/.cache/engineering-protocols/0123456789ab…
+  profile acme.service
+```
+
+It refuses an unpinned source before writing anything, resolves the tree so the failure surfaces
+here rather than at the first command that needed it, and leaves no file behind when it does not
+resolve — a half-adopted repository whose every later command fails on the same unreadable tree is
+worse than one that was never adopted, because it looks adopted. `--no-verify` writes the file
+without the resolution step, for an offline machine or a source that is not reachable yet.
+
 The suffix is the full commit id, not a branch or tag. On first use the engine fetches that immutable
 revision into `AEP_CACHE_DIR`, then `XDG_CACHE_HOME/engineering-protocols`, or the conventional user
 cache. Later commands verify and read the cached checkout, so the project file contains no
 machine-local or cross-repository path and an already materialized source works offline. A local path
 is still valid when a repository owns its tree or a fixture supplies one; relative paths are resolved
 from `.engineering/`.
+
+**An absolute path is refused, and this is the one rule about the project file worth knowing before
+you write it.** `protocols: /opt/engineering-protocols` names a place on one machine. The file is
+committed, so every other machine that clones the repository reads a path that is not there, and CI
+reads one that has never been there:
+
+```console
+$ $B resolve
+error: [type_mismatch] project.protocols: `/opt/engineering-protocols` is an absolute path (it is
+  rooted at the filesystem root) (hint: use a path relative to the .engineering directory, or a
+  pinned git+ssh://, git+https://, or git+file:// locator …)
+```
+
+The refusal is in the reader rather than in `reverse init`, so a file hand-edited afterwards fails
+the same way, and it covers `~`, a drive letter and a UNC path as well as a leading `/`. It is
+checked by spelling and not by the platform's own notion of absolute, so one project file gets one
+verdict everywhere. Every other path in the file — `artifacts`, `task`, `principles`, `profiles`,
+`schemas` — was already held to this rule; as of 2026-08-25 `protocols` is too.
+
+Two ways to name a tree that is not inside your repository: a relative path that climbs out of it,
+or a pinned locator. Prefer the locator for anything other people will clone.
 
 `schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
 defaults to `schemas`, so `.engineering/schemas/` needs no explicit entry. The path locates the
@@ -177,6 +215,58 @@ error: 6 document problem(s):
 
 Point the two merge paths at directories the tree does not contain — they need not exist — and the
 project-local merge stays out of the way, because with your own tree you no longer need it.
+
+## The plan the repository already has
+
+A repository that is old enough to want rules is old enough to have a plan nobody wrote down: a
+roadmap in the README, a suite switched off in CI two quarters ago, a `FIXME` that is really a story.
+`protocol reverse scan` finds those and reports them with the `path:line` each was read from. It
+interprets nothing and writes nothing.
+
+```console
+$ $B reverse scan --format json > bundle.json
+```
+
+The split is deliberate. Deciding whether four roadmap stages are one initiative or four is
+judgement, and judgement belongs to whoever — or whatever — is doing the planning. What belongs to a
+program is finding the evidence and saying it the same way twice: the scan has no clock, no network
+and no `read_dir` order dependence, so two runs over one tree produce identical bytes and a bundle
+can be committed, diffed and cited by an artifact that outlives the session that wrote it.
+
+An artifact drafted from a bundle entry should carry that entry's `path:line` in its body. A plan
+invented from a plausible reading of a codebase is indistinguishable, later, from one somebody
+agreed to, and it is the worse of the two because nobody can check it.
+
+What a scan cannot find is what nobody wrote down — a convention that lives in review comments, the
+reason a module exists. Those are the questions to take to a person, not gaps to fill in.
+
+### And what the history says
+
+```console
+$ $B reverse history
+```
+
+A scan reads the tree as it stands, so it can report that a suite is switched off and never that it
+has been off for two and a half years. The second is what anybody acts on, and it is the one thing a
+working tree cannot tell you:
+
+```text
+stated expiry: 4
+  2025-12-12 443d9034  fix: skip TestDial for sip driver for now until we found why it constantly fails
+
+line ages: 168
+  2023-06-30  <path>:62  feat(test): extend tests
+```
+
+Every marked line and every disabled test, dated from the commit that wrote it and reported oldest
+first — so a flat list of 156 equal items becomes a ranked one. Beside it: the commits that undid
+something, the commits whose message hedged, the files the work keeps returning to, the files nothing
+recent has touched, and the tracker keys the messages mention (which is often how you discover the
+team migrated tracker two years ago and half the code still cites the old one).
+
+Dates are quoted from commits and never compared against today, so a fixed `HEAD` gives fixed bytes
+and a bundle stays true after it is committed. The verb needs a Git working tree and says so in one
+sentence when there is none — `reverse scan` needs none and still works.
 
 ## Choosing a profile
 
