@@ -66,19 +66,36 @@ Two declarations in this table are open in a document and closed in the value th
 carry, and each of them gets **two rows** rather than one qualified verdict. A single averaged
 verdict would be the sentence you believed right up until the validation error.
 
-The worked case is artifact status, and its two rows read:
+The worked case **was** artifact status, and it is now the worked case for something else: what
+happens when a table like this one is acted on. Its two rows read:
 
 - **A status ladder under `artifacts/lifecycles/`** — open. You declare which rungs a kind of yours
   may hold, in a document, in your own tree.
-- **Artifact status values a lifecycle document may name** — closed. Every rung you name has to be a
-  variant of `ArtifactStatus`, and there is no `statuses:` key anywhere under `protocols/` to add one
-  from.
+- **Artifact status values a lifecycle document may name** — **open since 2026-08-25**. It was
+  closed: every rung had to be a variant of `ArtifactStatus`, and there was no `statuses:` key
+  anywhere under `protocols/` to add one from. An adopter needed `correction-owed` — sent, known
+  wrong, audience not yet told — and a ten-variant enum decided that their process could not say it.
 
-The store layer is open and the value layer is not, and you need both sentences to plan a migration.
-One averaged verdict would have given you neither.
+  What the closure bought was *a status name means the same rung to every tool*. That guarantee is
+  still bought, by the **ladder** instead of by the type: a status you name is accepted only if the
+  lifecycle document for that kind declares it, so the vocabulary is open to authors and still
+  closed to typos. `protocol artifact move --to correction-owed` refuses with *"its lifecycle
+  declares draft, proposed, rejected, active, implemented, archived"* until the rung is in the
+  document, and works the moment it is.
+
+  Two things it deliberately does **not** buy. An invented rung is never `approved` and never
+  `retired` — this repository cannot know what a rung it has never seen means, and reading an
+  unknown name as *agreed and relied on* is the one mistake an open vocabulary must not make. And a
+  descriptor document under `adp-`/`aop-domain` still takes named statuses only, because it has no
+  ladder in scope to check an invented one against.
+
+Both layers are open now. The pair is kept as two rows anyway, because the *reason* they are open
+differs — one is a document you write, the other is a value that document may carry, and a single
+averaged verdict would tell you neither.
 
 The rows **A relation document under `artifacts/relations/`** and **Relation names a relations
-document may use** are the same shape, and that pair is the one still owed an explanation.
+document may use** are the same shape and remain split the old way, and that pair is the one still
+owed an explanation.
 
 ## The table
 
@@ -96,7 +113,7 @@ document may use** are the same shape, and that pair is the one still owed an ex
 | A status ladder under `artifacts/lifecycles/` | `docs/guide/adopting.md:94` — "what statuses each artifact kind may hold" | open | `artifacts/lifecycles/story.yaml:transitions` | — | — | — |
 | A relation document under `artifacts/relations/` | `website/docs/reference/documents.md:211` — "`artifacts/relations/` and" | open | `artifacts/relations/relations.yaml:relations` | — | — | — |
 | An artifact template under `artifacts/templates/` | `website/docs/reference/documents.md:211` — "and `artifacts/templates/`" | open | `artifacts/templates/story.md:1` | — | — | — |
-| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | closed | `crates/aep-domain/src/artifact.rs:707` | a status name means the same rung to every tool that reads the artifact graph, so a lifecycle written elsewhere can be compared with one written here | website/docs/status/limitations.md | — |
+| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:729` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
 | Relation names a relations document may use | `website/docs/reference/documents.md:224` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:987` | none | none | story:ova-relation-vocabulary |
 | Capability value names the engine accepts | `docs/plan/document-authoring-brief.md:13` — "nothing else may be mentioned in any" | closed | `crates/aep-domain/src/capability.rs:144` | a capability name resolves to the same authorisation decision in every harness, which is what lets a profile be read by one and enforced by another | website/docs/reference/vocabulary.md#capabilities | — |
 | Evidence kind names the engine accepts | `docs/plan/document-authoring-brief.md:29` — "**Evidence kinds**:" | closed | `crates/aep-domain/src/evidence.rs:1181` | an evidence kind carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one cannot be satisfied by a record that means something else | website/docs/reference/vocabulary.md#evidence-kinds | — |

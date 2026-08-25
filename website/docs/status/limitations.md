@@ -147,13 +147,13 @@ worth its space here: none of it was visible to the people who built the thing.
 
 | Still open | Why it matters to an adopter |
 |---|---|
-| Nothing models a claim leaving the boundary | An assertion handed to a customer is near-irreversible and has no lifecycle here. `ArtifactStatus` is a closed ten-variant enum, so *sent, known wrong, audience not yet told* has no rung to stand on |
+| Nothing models a claim leaving the boundary | An assertion handed to a customer is near-irreversible and has no lifecycle here. **The half of this that was a closed enum is fixed**: since 2026-08-25 a lifecycle document may declare any rung, so *sent, known wrong, audience not yet told* has somewhere to stand — write `correction-owed` into the ladder for the kind that needs it and `protocol artifact move --to correction-owed` works, with no release of ours. What is still open is the *outbound claim* itself: nothing here models the thing that left the boundary, only the artifact that describes it |
 | One enforcement level | A check blocks or it is deleted. There is no state for *not ready to block yet* — invented independently three times in the adopter's stack. This repository has that tier in exactly one place, the transcript checker's `advisory` severity |
 | Evidence does not name its subject | See above |
 | Four lifecycle concepts the protocol cannot express | A decision with a declared default and an expiry; time-based transitions of any kind; a blocker typed by what clears it, without which *parked on a credential* is indistinguishable from *parked on a person* |
 | A commitment on a clock nobody controls | It fires on a date the repository does not set, is satisfied by a person, and must never block a commit — blocking a commit cannot close one |
 | `release.progressive`'s `promote` is one step | A real fleet is a set. A release live in some targets and deliberately held in others cannot be said, and the adopter's hold-back was implemented as a revert that a downstream force-push silently undid |
-| Vocabularies that look open and are not | Three instances in one afternoon: a closed status enum, a project directory name that was a compile-time constant, and a kind ladder defined over built-in variants only. The last two are now fixed; what is owed is the audit that says which of the rest are open |
+| Vocabularies that look open and are not | Three instances in one afternoon: a closed status enum, a project directory name that was a compile-time constant, and a kind ladder defined over built-in variants only. **All three are fixed, and the audit that was owed exists**: [Open vocabulary](../../../docs/guide/open-vocabulary.md) is one row per adopter-facing declaration, saying open or closed and — for each closed one — what the closure buys and where to read the argument. A closure with neither names the story that owes you one. The table is checked against the tree on every run in both directions, and it says plainly that the check cannot *discover* a closed surface, because a closed surface is one with no document key to find |
 
 ## Scope limits that are boundaries, not gaps
 
