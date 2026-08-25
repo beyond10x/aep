@@ -46,6 +46,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.17.0` | 0.17.0 — obligation, and the open vocabulary spent |
 | `0.18.0` | 0.18.0 — the typed blocker, and a vocabulary that says why it is closed |
 | `0.19.0` | 0.19.0 — the plan has a history |
+| `0.20.0` | 0.20.0 — evidence names what it is about |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs

@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.20.0] — 2026-08-26
+
 ### Added
 
 - **Evidence names what it is about, so `implemented` stops being a number somebody typed.**
