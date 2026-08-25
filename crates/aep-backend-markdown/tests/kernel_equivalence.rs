@@ -22,7 +22,7 @@ use std::str::FromStr;
 use aep_backend_markdown::kernel;
 use aep_domain::artifact::{ArtifactKind, ArtifactLifecycle, ArtifactStatus, LifecycleRegistry};
 
-/// The eight ladders this repository ships, which govern both stores.
+/// The ladders this repository ships, which govern both stores.
 fn lifecycles_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/lifecycles")
 }
@@ -211,7 +211,30 @@ fn the_ladders_refuse_most_moves_so_agreement_is_not_vacuous() {
             }
         }
     }
-    assert_eq!(total, 800, "eight kinds, a hundred pairs each");
+    // Derived rather than written down. The number was `800` while eight ladders shipped, and the
+    // day a ninth was added the gate failed on arithmetic instead of on the property this test is
+    // about. What must not drift is the *coverage*, and
+    // `every_ladder_this_repository_ships_is_named_by_the_fixture` is what holds that.
+    let kinds = covered_kinds().len();
+    let pairs = every_pair().len();
+    assert_eq!(total, kinds * pairs, "{kinds} kinds, {pairs} pairs each");
+
+    // The tripwire the old literal `800` was by accident, kept on purpose and put where it bites.
+    //
+    // `every_pair` is `ArtifactStatus::ALL` squared, and `ALL` is no longer the whole vocabulary — a
+    // status is now whatever a lifecycle document declares. So `ALL` is a list somebody could
+    // shorten, and the derived `kinds * pairs` above cannot notice: both sides move together and
+    // the comparison still passes over a smaller world.
+    //
+    // The floor is on `pairs`, deliberately not on `total`. A floor on the product is leaky in
+    // exactly the case worth catching — `ALL` dropping 10 -> 9 while a tenth ladder is added gives
+    // 810, which clears any 800 floor while the status vocabulary quietly shrank. Adding a ladder
+    // never touches this line; removing a status does.
+    assert!(
+        pairs >= 100,
+        "ArtifactStatus::ALL shrank: {pairs} ordered pairs, so this compares a smaller vocabulary \
+         than the one it was written against"
+    );
     assert!(
         legal * 4 < total,
         "{legal} of {total} moves are legal, which is too many for this to be a real comparison"
