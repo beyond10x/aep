@@ -93,12 +93,15 @@ fn every_pair() -> Vec<(ArtifactStatus, ArtifactStatus)> {
 /// The comparison here is about **which moves the ladder has**, and evidence is a second axis
 /// (`tests/evidence.rs`). Feeding each pair exactly what its rung asks for holds the first axis
 /// still, so a disagreement here means the translation moved — not that a rung costs something.
-fn enough_for(lifecycle: &ArtifactLifecycle, to: &ArtifactStatus) -> kernel::EvidenceOnHand {
-    lifecycle
-        .requirements_for(to)
-        .iter()
-        .map(|requirement| (requirement.evidence, requirement.at_least))
-        .collect()
+fn enough_for(lifecycle: &ArtifactLifecycle, to: &ArtifactStatus) -> kernel::OnHand {
+    kernel::OnHand {
+        evidence: lifecycle
+            .requirements_for(to)
+            .iter()
+            .map(|requirement| (requirement.evidence, requirement.at_least))
+            .collect(),
+        ..kernel::OnHand::default()
+    }
 }
 
 fn agree_on_every_pair(kind: Option<&ArtifactKind>, lifecycle: &ArtifactLifecycle, label: &str) {
@@ -182,13 +185,8 @@ fn the_permissive_fallback_still_permits_every_move() {
             "the ladder's own reading changed"
         );
         assert!(
-            kernel::decide(
-                None,
-                &permissive,
-                &from,
-                &to,
-                &kernel::EvidenceOnHand::new()
-            ) == kernel::Verdict::Permitted,
+            kernel::decide(None, &permissive, &from, &to, &kernel::OnHand::default())
+                == kernel::Verdict::Permitted,
             "permissive refused {} -> {}",
             from.as_str(),
             to.as_str()

@@ -9,7 +9,51 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A lifecycle document may declare when a rung opens.** `when:` beside `requires:` names a date
+  the *artifact itself* records, and the rung is shut until it has passed:
+
+  ```yaml
+  when:
+    superseded:
+      after: expires_at
+  ```
+
+  Gap-register `:73`'s second concept — *time-based transitions of any kind, which today live in
+  scripts `explain` cannot see*. One now lives in the document that governs the rung.
+
+  ```console
+  $ protocol artifact move --to superseded adr:dated --at 2026-08-25
+  adr:dated is accepted; superseded is on the ladder and not yet earned: superseded is not
+  reachable until this artifact's expires_at has passed
+
+  $ protocol artifact move --to superseded adr:dated --at 2026-09-02
+  adr:dated moved accepted -> superseded (revision 2)
+  ```
+
+  **The clock is read at the edge and nowhere else.** `--at` defaults to the system clock, read in
+  `protocol-cli`; `aep-domain` has a banned-token scan that would refuse one, and a decision that
+  read the clock itself could not be replayed. The instant is an *argument* to the move.
+
+  **Three refusals, not two.** *Nobody said when* is unobservable and names `$args.now`; an artifact
+  that records no such date names `$fields.<key>`; an instant nobody can read — `yesterday`, or one
+  carrying a `+02:00` offset — is unobservable too. Only *the date has not passed* is a plain
+  refusal. `after` is strict, so the instant itself does not open the rung.
+
+  The date comes from the artifact's own frontmatter, not from the caller: an `expires_at` is a fact
+  the artifact records, and letting a mover supply one would make the guard something they choose.
+  Frontmatter keys this format does not name are already preserved verbatim, so no schema change was
+  needed to carry one.
+
+### Changed
+
+- `Verdict` and `MoveRefusal`'s `RefusalReason` rename `EvidenceUnobserved`/`EvidenceInsufficient`
+  to `Unobservable`/`NotEarned`. Evidence is no longer the only thing a rung can cost, and a name
+  that says *evidence* for a refusal about a date would be a name that lies. Breaking for library
+  callers; `move_status` also takes the instant to judge a dated rung against.
+- `entity-core` moves to release tag **0.5.0**, which is where `before`/`after` live. Nothing above
+  is possible without them.
 
 ## [0.15.0] — 2026-08-25
 

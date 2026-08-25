@@ -56,6 +56,22 @@ use serde_json::json;
 /// from inside a decision.
 pub type EvidenceOnHand = BTreeMap<EvidenceKind, usize>;
 
+/// What the shell knows that the ladder's rules read: how much evidence is on hand, the instant to
+/// judge a date against, and the dated keys the artifact's own frontmatter carries.
+///
+/// One struct rather than three arguments, because the list grows: a rung may cost evidence, or a
+/// date, or both, and a signature that changed for each would make every caller a merge conflict.
+#[derive(Debug, Clone, Default)]
+pub struct OnHand {
+    /// Records presented, counted by kind.
+    pub evidence: EvidenceOnHand,
+    /// The instant to judge a dated rung against, ISO-8601. Read at the edge — `aep-domain` has no
+    /// clock and this crate does not read one either.
+    pub now: Option<String>,
+    /// Dates the artifact records, by frontmatter key, as the ladder's `when:` names them.
+    pub dates: BTreeMap<String, String>,
+}
+
 /// What the kernel said about a move.
 ///
 /// Three outcomes and not two, which is the whole of gap-register `:39`. *Nobody presented any
@@ -68,16 +84,18 @@ pub enum Verdict {
     Permitted,
     /// The ladder declares no such move from here.
     NotOnTheLadder,
-    /// The ladder requires evidence and none was presented for it. Carries the addresses nobody
-    /// looked at, verbatim from the kernel.
-    EvidenceUnobserved {
+    /// The rung costs something the rule could not read — no evidence of that kind was presented,
+    /// or no instant was supplied to compare a date against. Carries the addresses nobody looked
+    /// at, verbatim from the kernel.
+    Unobservable {
         /// What the rule needed and could not read, such as `$args.evidence.test_result`.
         unobserved: Vec<String>,
         /// What the requirement said, for a person.
         message: String,
     },
-    /// Evidence was presented and the requirement is not met.
-    EvidenceInsufficient {
+    /// Everything the rule reads was there, and the rung is not earned: too few records, or a date
+    /// that has not passed.
+    NotEarned {
         /// What the requirement said, for a person.
         message: String,
     },
@@ -131,10 +149,19 @@ pub fn definition_for(
             // a run-time question rather than a registration-time one, which is what lets a
             // requirement name a kind without this definition enumerating every kind that exists.
             let mut operation = json!({
-                "arguments": { "fields": { "evidence": { "type": "json" } } },
+                "arguments": {
+                    "fields": {
+                        "evidence": { "type": "json" },
+                        // The instant to judge a dated rung against. Optional, so a ladder with no
+                        // `when:` never asks for one — and *unsupplied* reads as unobservable
+                        // rather than as a date that has not passed, which is the difference
+                        // between "nobody said when" and "not yet".
+                        "now": { "type": "string" }
+                    }
+                },
                 "transitions": [ { "from": from, "to": to } ],
             });
-            let requirements: Vec<serde_json::Value> = lifecycle
+            let mut requirements: Vec<serde_json::Value> = lifecycle
                 .requirements_for(status)
                 .iter()
                 .map(|requirement| {
@@ -147,6 +174,22 @@ pub fn definition_for(
                     })
                 })
                 .collect();
+            if let Some(guard) = lifecycle.timing_for(status) {
+                if let Some(key) = &guard.after {
+                    requirements.push(json!({
+                        "name": format!("after: {key}"),
+                        "message": format!("{to} is not reachable until this artifact's {key} has passed"),
+                        "assert": { "after": ["$args.now", format!("$fields.{key}")] },
+                    }));
+                }
+                if let Some(key) = &guard.before {
+                    requirements.push(json!({
+                        "name": format!("before: {key}"),
+                        "message": format!("{to} is no longer reachable once this artifact's {key} has passed"),
+                        "assert": { "before": ["$args.now", format!("$fields.{key}")] },
+                    }));
+                }
+            }
             if !requirements.is_empty() {
                 operation["preconditions"] = serde_json::Value::Array(requirements);
             }
@@ -161,10 +204,20 @@ pub fn definition_for(
         .filter(|name| !name.trim().is_empty())
         .unwrap_or(FALLBACK_ENTITY);
 
+    // Every frontmatter key any `when:` names, declared as a field. A rule reading `$fields.x`
+    // against a schema that does not declare `x` is refused when the definition is registered — so
+    // the ladder's own vocabulary decides what the definition may read, and nothing else can.
+    let dated: serde_json::Map<String, serde_json::Value> = lifecycle
+        .when
+        .values()
+        .flat_map(aep_domain::artifact::TimeGuard::keys)
+        .map(|key| (key.to_owned(), json!({ "type": "json" })))
+        .collect();
+
     let document = json!({
         "entity": entity,
         "version": 1,
-        "schema": {},
+        "schema": { "fields": dated },
         "lifecycle": { "initial": lifecycle.initial.as_str(), "states": states },
         "operations": operations,
     });
@@ -190,7 +243,7 @@ pub fn permits_transition(
     from: &ArtifactStatus,
     to: &ArtifactStatus,
 ) -> bool {
-    decide(kind, lifecycle, from, to, &EvidenceOnHand::new()) == Verdict::Permitted
+    decide(kind, lifecycle, from, to, &OnHand::default()) == Verdict::Permitted
 }
 
 /// Whether the kernel permits the move, and if not, which of the three reasons.
@@ -208,7 +261,7 @@ pub fn decide(
     lifecycle: &ArtifactLifecycle,
     from: &ArtifactStatus,
     to: &ArtifactStatus,
-    evidence: &EvidenceOnHand,
+    on_hand: &OnHand,
 ) -> Verdict {
     let definition = definition_for(kind, lifecycle);
     let entity = definition.entity.clone();
@@ -225,15 +278,30 @@ pub fn decide(
         revision: 1,
         fields: serde_json::Map::new(),
     };
-    let counted: serde_json::Map<String, serde_json::Value> = evidence
+    let counted: serde_json::Map<String, serde_json::Value> = on_hand
+        .evidence
         .iter()
         .map(|(kind, count)| (kind.as_str().to_owned(), json!(count)))
         .collect();
+    let mut arguments = serde_json::Map::new();
+    arguments.insert("evidence".to_owned(), serde_json::Value::Object(counted));
+    if let Some(now) = &on_hand.now {
+        arguments.insert("now".to_owned(), json!(now));
+    }
+
+    let instance = EntityInstance {
+        fields: on_hand
+            .dates
+            .iter()
+            .map(|(key, value)| (key.clone(), json!(value)))
+            .collect(),
+        ..instance
+    };
 
     match Runtime::new(&registry).execute(
         &instance,
         to.as_str(),
-        json!({ "evidence": serde_json::Value::Object(counted) }),
+        serde_json::Value::Object(arguments),
     ) {
         Ok(_) => Verdict::Permitted,
         // The two the whole of gap-register :39 turns on. `Unobservable` means the rule read an
@@ -243,13 +311,11 @@ pub fn decide(
             message,
             unresolved,
             ..
-        }) => Verdict::EvidenceUnobserved {
+        }) => Verdict::Unobservable {
             unobserved: unresolved,
             message,
         },
-        Err(CoreError::PreconditionFailed { message, .. }) => {
-            Verdict::EvidenceInsufficient { message }
-        }
+        Err(CoreError::PreconditionFailed { message, .. }) => Verdict::NotEarned { message },
         Err(_) => Verdict::NotOnTheLadder,
     }
 }

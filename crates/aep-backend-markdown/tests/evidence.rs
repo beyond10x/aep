@@ -9,9 +9,7 @@
 //! store that reported both as "refused" would send an author to argue about a test result that was
 //! never produced.
 
-use std::collections::BTreeMap;
-
-use aep_backend_markdown::kernel::{self, EvidenceOnHand, Verdict};
+use aep_backend_markdown::kernel::{self, OnHand, Verdict};
 use aep_domain::artifact::{ArtifactKind, ArtifactLifecycle, ArtifactStatus};
 use aep_domain::evidence::EvidenceKind;
 
@@ -33,11 +31,14 @@ fn guarded() -> ArtifactLifecycle {
     .expect("the fixture ladder parses")
 }
 
-fn on_hand(pairs: &[(EvidenceKind, usize)]) -> EvidenceOnHand {
-    pairs.iter().map(|(kind, count)| (*kind, *count)).collect()
+fn on_hand(pairs: &[(EvidenceKind, usize)]) -> OnHand {
+    OnHand {
+        evidence: pairs.iter().map(|(kind, count)| (*kind, *count)).collect(),
+        ..OnHand::default()
+    }
 }
 
-fn verdict(lifecycle: &ArtifactLifecycle, to: &str, evidence: &EvidenceOnHand) -> Verdict {
+fn verdict(lifecycle: &ArtifactLifecycle, to: &str, evidence: &OnHand) -> Verdict {
     kernel::decide(
         Some(&ArtifactKind::Story),
         lifecycle,
@@ -55,7 +56,7 @@ fn a_guarded_rung_tells_nobody_looked_from_it_does_not_hold() {
     // 1. Nobody presented evidence of that kind. The rule could not be evaluated, and the refusal
     //    names the address nothing supplied rather than claiming the requirement failed.
     match verdict(&ladder, "implemented", &on_hand(&[])) {
-        Verdict::EvidenceUnobserved {
+        Verdict::Unobservable {
             unobserved,
             message,
         } => {
@@ -75,7 +76,7 @@ fn a_guarded_rung_tells_nobody_looked_from_it_does_not_hold() {
                 "implemented",
                 &on_hand(&[(EvidenceKind::TestResult, 0)])
             ),
-            Verdict::EvidenceInsufficient { .. }
+            Verdict::NotEarned { .. }
         ),
         "zero records presented is an observation, not an absence"
     );
@@ -106,8 +107,7 @@ fn a_requirement_guards_only_the_rung_it_is_declared_on() {
 /// the rung first, the cost second.
 #[test]
 fn evidence_does_not_buy_a_move_the_ladder_does_not_declare() {
-    let mut plenty = BTreeMap::new();
-    plenty.insert(EvidenceKind::TestResult, 99);
+    let plenty = on_hand(&[(EvidenceKind::TestResult, 99)]);
     assert_eq!(
         kernel::decide(
             Some(&ArtifactKind::Story),
@@ -186,4 +186,113 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
         "a rung gaining or losing a cost is a change to what everybody's `move` costs, and it \
          should be seen here first"
     );
+}
+
+// --- Time --------------------------------------------------------------------------------------
+
+/// A rung that opens on a date the artifact itself records. Gap-register `:73`: time-based
+/// transitions lived in scripts `explain` could not see, and this is one in the document that
+/// governs the rung.
+fn dated() -> ArtifactLifecycle {
+    serde_yaml::from_str(
+        "kind: architecture-decision-record\n\
+         initial: proposed\n\
+         transitions:\n  \
+           proposed: [accepted]\n  \
+           accepted: [superseded]\n  \
+           superseded: []\n\
+         when:\n  \
+           superseded:\n    \
+             after: expires_at\n",
+    )
+    .expect("the fixture ladder parses")
+}
+
+fn at(now: &str, expires: &str) -> kernel::OnHand {
+    kernel::OnHand {
+        now: Some(now.to_owned()),
+        dates: [("expires_at".to_owned(), expires.to_owned())]
+            .into_iter()
+            .collect(),
+        ..kernel::OnHand::default()
+    }
+}
+
+fn dated_verdict(on_hand: &kernel::OnHand) -> Verdict {
+    kernel::decide(
+        Some(&ArtifactKind::ArchitectureDecisionRecord),
+        &dated(),
+        &ArtifactStatus::Accepted,
+        &ArtifactStatus::Superseded,
+        on_hand,
+    )
+}
+
+#[test]
+fn a_dated_rung_opens_when_the_date_the_artifact_records_has_passed() {
+    assert!(
+        matches!(
+            dated_verdict(&at("2026-08-25", "2026-09-01")),
+            Verdict::NotEarned { .. }
+        ),
+        "before the date the rung is shut"
+    );
+    assert_eq!(
+        dated_verdict(&at("2026-09-02", "2026-09-01")),
+        Verdict::Permitted,
+        "after it, open"
+    );
+    // The boundary: `after` is strict, so the instant itself does not open it.
+    assert!(matches!(
+        dated_verdict(&at("2026-09-01", "2026-09-01")),
+        Verdict::NotEarned { .. }
+    ));
+}
+
+/// *Nobody said when* is not *not yet*. Supplying no instant leaves the rule unable to read
+/// `$args.now`, and the refusal says so rather than reporting a date that has not passed.
+#[test]
+fn no_instant_supplied_is_unobservable_and_names_the_argument() {
+    let no_clock = kernel::OnHand {
+        dates: [("expires_at".to_owned(), "2026-09-01".to_owned())]
+            .into_iter()
+            .collect(),
+        ..kernel::OnHand::default()
+    };
+    match dated_verdict(&no_clock) {
+        Verdict::Unobservable { unobserved, .. } => {
+            assert_eq!(unobserved, vec!["$args.now".to_owned()]);
+        }
+        other => panic!("expected unobservable, got {other:?}"),
+    }
+}
+
+/// And an artifact that records no such date at all: the rung is shut, and the refusal names the
+/// field rather than claiming the date has not passed.
+#[test]
+fn an_artifact_with_no_such_date_cannot_pass_a_dated_rung() {
+    let no_date = kernel::OnHand {
+        now: Some("2026-09-02".to_owned()),
+        ..kernel::OnHand::default()
+    };
+    match dated_verdict(&no_date) {
+        Verdict::Unobservable { unobserved, .. } => {
+            assert_eq!(unobserved, vec!["$fields.expires_at".to_owned()]);
+        }
+        other => panic!("expected unobservable, got {other:?}"),
+    }
+}
+
+/// An instant nobody can read is unobservable too — the kernel's own rule, arriving here intact.
+#[test]
+fn an_unreadable_instant_is_unobservable_rather_than_a_date_that_has_not_passed() {
+    for unreadable in ["yesterday", "2026-09-02T00:00:00+02:00", "1756108800"] {
+        assert!(
+            matches!(
+                dated_verdict(&at(unreadable, "2026-09-01")),
+                Verdict::Unobservable { .. }
+            ),
+            "{unreadable}"
+        );
+    }
 }

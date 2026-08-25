@@ -167,6 +167,13 @@ pub(crate) enum ArtifactCommand {
         /// judgements, and wiring them is `story:completion-needs-evidence`.
         #[arg(long = "evidence", value_name = "KIND=COUNT")]
         evidence: Vec<String>,
+        /// The instant to judge a dated rung against, ISO-8601. Defaults to now.
+        ///
+        /// Needed only for a rung whose lifecycle document declares a `when:` entry. The clock is
+        /// read **here**, at the edge, and never inside a decision — which is what lets the same
+        /// move be replayed a year later and give the same answer.
+        #[arg(long = "at", value_name = "INSTANT")]
+        at: Option<String>,
     },
     /// Add an edge from one plan item to another.
     Relate {
@@ -307,7 +314,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             id,
             to,
             evidence,
-        } => move_status(&store, &id, &to, &evidence),
+            at,
+        } => move_status(&store, &id, &to, &evidence, at.as_deref()),
         ArtifactCommand::Relate {
             store,
             id,
@@ -395,8 +403,21 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
 }
 
 /// `protocol artifact move`
-fn move_status(args: &StoreArgs, id: &str, to: &str, evidence: &[String]) -> Result<ExitCode> {
+fn move_status(
+    args: &StoreArgs,
+    id: &str,
+    to: &str,
+    evidence: &[String],
+    at: Option<&str>,
+) -> Result<ExitCode> {
     let evidence = parse_evidence(evidence)?;
+    // The clock, read once, here. `aep-domain` has no clock and neither does the backend; this is
+    // the edge, and the instant it read is printed with any dated refusal so a reader can see which
+    // moment decided.
+    let now = match at {
+        Some(given) => given.to_owned(),
+        None => now_at_the_edge(),
+    };
     let id = artifact_id(id)?;
     let registry = args.lifecycles()?;
 
@@ -416,9 +437,10 @@ fn move_status(args: &StoreArgs, id: &str, to: &str, evidence: &[String]) -> Res
     let kind = stored.document.frontmatter.kind.clone();
     let to = parse_status_in(to, &kind, registry.lifecycles())?;
 
-    if let Err(refusal) = stored
-        .document
-        .move_status(to.clone(), registry.lifecycles(), &evidence)
+    if let Err(refusal) =
+        stored
+            .document
+            .move_status(to.clone(), registry.lifecycles(), &evidence, Some(&now))
     {
         outln!("{id} is {from}; {refusal}");
         return Ok(crate::exit_code(false));
@@ -867,6 +889,44 @@ fn missing(store: &MarkdownStore, id: &ArtifactId) -> String {
 /// Parses an artifact id, or says what one looks like.
 fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// The instant this invocation ran, ISO-8601, read from the system clock.
+///
+/// The only clock in the planning path, and it is in the shell by construction: `aep-domain` has a
+/// banned-token scan that would refuse one, and a decision that read the clock itself could not be
+/// replayed. Its answer is an *argument* to the move, printed with any dated refusal.
+fn now_at_the_edge() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    // Civil date from a Unix second, without a date library: days since the epoch, then the
+    // proleptic Gregorian calendar. `aep-domain` cannot take one and neither should this path.
+    let (days, rest) = (
+        i64::try_from(seconds / 86_400).unwrap_or(0),
+        seconds % 86_400,
+    );
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        rest / 3600,
+        (rest % 3600) / 60,
+        rest % 60
+    )
+}
+
+/// Howard Hinnant's `civil_from_days`, which is the standard way to do this in integer arithmetic.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = u64::try_from(z - era * 146_097).unwrap_or(0);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = i64::try_from(yoe).unwrap_or(0) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = u32::try_from(doy - (153 * mp + 2) / 5 + 1).unwrap_or(1);
+    let m = u32::try_from(if mp < 10 { mp + 3 } else { mp - 9 }).unwrap_or(1);
+    (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
 /// Parses `<kind>=<count>` pairs into the counts a requirement is checked against.

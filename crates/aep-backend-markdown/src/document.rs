@@ -123,6 +123,7 @@ impl PlanningDocument {
         to: ArtifactStatus,
         lifecycles: &LifecycleRegistry,
         evidence: &crate::kernel::EvidenceOnHand,
+        now: Option<&str>,
     ) -> Result<(), Box<MoveRefusal>> {
         let permissive = ArtifactLifecycle::permissive();
         let lifecycle = lifecycles
@@ -130,24 +131,42 @@ impl PlanningDocument {
             .unwrap_or(&permissive);
         let from = self.frontmatter.status.clone();
 
+        // The dated keys come from this document's own frontmatter, not from the caller: an
+        // artifact's `expires_at` is a fact it records, and letting a caller supply one would make
+        // the guard something the mover chooses.
+        let dates = lifecycle
+            .when
+            .values()
+            .flat_map(aep_domain::artifact::TimeGuard::keys)
+            .filter_map(|key| {
+                let value = self.frontmatter.extra.get(key)?.as_text()?;
+                Some((key.to_owned(), value.to_owned()))
+            })
+            .collect();
+        let on_hand = crate::kernel::OnHand {
+            evidence: evidence.clone(),
+            now: now.map(str::to_owned),
+            dates,
+        };
+
         let reason = match crate::kernel::decide(
             Some(&self.frontmatter.kind),
             lifecycle,
             &from,
             &to,
-            evidence,
+            &on_hand,
         ) {
             crate::kernel::Verdict::Permitted => None,
             crate::kernel::Verdict::NotOnTheLadder => Some(RefusalReason::NotOnTheLadder),
-            crate::kernel::Verdict::EvidenceUnobserved {
+            crate::kernel::Verdict::Unobservable {
                 unobserved,
                 message,
-            } => Some(RefusalReason::EvidenceUnobserved {
+            } => Some(RefusalReason::Unobservable {
                 unobserved,
                 message,
             }),
-            crate::kernel::Verdict::EvidenceInsufficient { message } => {
-                Some(RefusalReason::EvidenceInsufficient { message })
+            crate::kernel::Verdict::NotEarned { message } => {
+                Some(RefusalReason::NotEarned { message })
             }
         };
 
@@ -323,15 +342,16 @@ pub enum RefusalReason {
     /// The ladder declares no such move from here. What every refusal was before requirements
     /// existed, and still the only one a ladder without `requires` can produce.
     NotOnTheLadder,
-    /// The rung costs evidence and none of that kind was presented.
-    EvidenceUnobserved {
+    /// The rung costs something the rule could not read: no evidence of that kind was presented, or
+    /// no instant was supplied to judge a date against.
+    Unobservable {
         /// What the requirement needed and could not read.
         unobserved: Vec<String>,
         /// What the requirement said.
         message: String,
     },
-    /// Evidence was presented and the requirement is not met.
-    EvidenceInsufficient {
+    /// Everything the rule reads was there, and the rung is not earned.
+    NotEarned {
         /// What the requirement said.
         message: String,
     },
@@ -366,7 +386,7 @@ impl fmt::Display for MoveRefusal {
             }
             // Names what to go and produce, rather than reporting a requirement as failed when
             // nobody has been asked for it yet.
-            RefusalReason::EvidenceUnobserved {
+            RefusalReason::Unobservable {
                 unobserved,
                 message,
             } => write!(
@@ -375,7 +395,7 @@ impl fmt::Display for MoveRefusal {
                 self.to,
                 unobserved.join(", ")
             ),
-            RefusalReason::EvidenceInsufficient { message } => {
+            RefusalReason::NotEarned { message } => {
                 write!(
                     f,
                     "{} is on the ladder and not yet earned: {message}",
@@ -441,6 +461,7 @@ mod tests {
                 ArtifactStatus::Proposed,
                 &story_lifecycle(),
                 &std::collections::BTreeMap::default(),
+                None,
             )
             .expect("draft to proposed is a legal story move");
         let rendered = parsed.render();
@@ -515,6 +536,7 @@ mod tests {
                 ArtifactStatus::Implemented,
                 &story_lifecycle(),
                 &std::collections::BTreeMap::default(),
+                None,
             )
             .expect_err("a draft story cannot jump to implemented");
 
@@ -550,6 +572,7 @@ mod tests {
                 ArtifactStatus::Draft,
                 &story_lifecycle(),
                 &std::collections::BTreeMap::default(),
+                None,
             )
             .expect_err("archived is the end of the story ladder");
         assert!(refusal.legal.is_empty());
@@ -578,6 +601,7 @@ mod tests {
                 ArtifactStatus::Implemented,
                 &LifecycleRegistry::new(),
                 &std::collections::BTreeMap::default(),
+                None,
             )
             .expect("a kind nobody wrote a ladder for is not blocked by one");
         assert_eq!(parsed.frontmatter.revision, 2);

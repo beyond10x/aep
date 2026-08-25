@@ -1574,6 +1574,52 @@ pub struct ArtifactLifecycle {
     /// the thing explaining a rung should sit next to it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub requires: BTreeMap<ArtifactStatus, Vec<StatusRequirement>>,
+
+    /// For each status, a date that must have passed — or not yet — before it can be reached.
+    ///
+    /// Gap-register `:73`: *time-based transitions of any kind, which today live in scripts
+    /// `explain` cannot see*. A rung that opens on a date is now a line in this document rather
+    /// than a cron job nobody can read.
+    ///
+    /// The clock is **not** here. This names a key in the artifact's own frontmatter; the instant
+    /// to compare it against is read at the edge and handed in, which is what keeps `aep-domain`
+    /// clock-free and its banned-token scan passing.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub when: BTreeMap<ArtifactStatus, TimeGuard>,
+}
+
+/// When a status may be reached, relative to a date the artifact itself records.
+///
+/// Both fields name a **frontmatter key**, not a date: `after: expires_at` means *not until now is
+/// past whatever this artifact's `expires_at` says*. Putting a literal date here would make the
+/// ladder a document about one artifact.
+///
+/// An empty guard constrains nothing, which is what a `when:` entry someone started and did not
+/// finish should do — refusing every move because a document is half-written is a worse failure
+/// than permitting them.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct TimeGuard {
+    /// Reachable only once the supplied instant is **after** the date this key records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Reachable only while the supplied instant is **before** the date this key records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+}
+
+impl TimeGuard {
+    /// Every frontmatter key this guard reads.
+    #[must_use]
+    pub fn keys(&self) -> Vec<&str> {
+        self.after
+            .iter()
+            .chain(self.before.iter())
+            .map(String::as_str)
+            .collect()
+    }
 }
 
 /// What reaching a status costs: evidence of a kind, at least so many times.
@@ -1620,6 +1666,7 @@ impl ArtifactLifecycle {
                 })
                 .collect(),
             requires: BTreeMap::new(),
+            when: BTreeMap::new(),
         }
     }
 
@@ -1627,6 +1674,12 @@ impl ArtifactLifecycle {
     #[must_use]
     pub fn requirements_for(&self, status: &ArtifactStatus) -> &[StatusRequirement] {
         self.requires.get(status).map_or(&[], Vec::as_slice)
+    }
+
+    /// When `status` may be reached, which is always unless the ladder says otherwise.
+    #[must_use]
+    pub fn timing_for(&self, status: &ArtifactStatus) -> Option<&TimeGuard> {
+        self.when.get(status)
     }
 
     /// Every status this lifecycle mentions.
@@ -2265,6 +2318,7 @@ mod tests {
                 initial: ArtifactStatus::Draft,
                 transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
                 requires: BTreeMap::new(),
+                when: BTreeMap::new(),
             },
         );
 
@@ -2293,12 +2347,14 @@ mod tests {
             initial: ArtifactStatus::Draft,
             transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
             requires: BTreeMap::new(),
+            when: BTreeMap::new(),
         };
         let fallback = ArtifactLifecycle {
             kind: None,
             initial: ArtifactStatus::Proposed,
             transitions: [(ArtifactStatus::Proposed, [ArtifactStatus::Accepted].into())].into(),
             requires: BTreeMap::new(),
+            when: BTreeMap::new(),
         };
         registry.insert(ArtifactKind::Other("log".to_owned()), logs.clone());
         registry.set_fallback(fallback.clone());
@@ -2540,6 +2596,7 @@ mod tests {
                 ]
                 .into(),
                 requires: BTreeMap::new(),
+                when: BTreeMap::new(),
             },
         );
 

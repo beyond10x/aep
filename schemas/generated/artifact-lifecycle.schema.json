@@ -47,6 +47,13 @@
         },
         "uniqueItems": true
       }
+    },
+    "when": {
+      "description": "For each status, a date that must have passed — or not yet — before it can be reached.\n\nGap-register `:73`: *time-based transitions of any kind, which today live in scripts `explain` cannot see*. A rung that opens on a date is now a line in this document rather than a cron job nobody can read.\n\nThe clock is **not** here. This names a key in the artifact's own frontmatter; the instant to compare it against is read at the edge and handed in, which is what keeps `aep-domain` clock-free and its banned-token scan passing.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/TimeGuard"
+      }
     }
   },
   "additionalProperties": false,
@@ -149,6 +156,27 @@
             {
               "$ref": "#/definitions/EvidenceKind"
             }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeGuard": {
+      "description": "When a status may be reached, relative to a date the artifact itself records.\n\nBoth fields name a **frontmatter key**, not a date: `after: expires_at` means *not until now is past whatever this artifact's `expires_at` says*. Putting a literal date here would make the ladder a document about one artifact.\n\nAn empty guard constrains nothing, which is what a `when:` entry someone started and did not finish should do — refusing every move because a document is half-written is a worse failure than permitting them.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "Reachable only once the supplied instant is **after** the date this key records.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before": {
+          "description": "Reachable only while the supplied instant is **before** the date this key records.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
