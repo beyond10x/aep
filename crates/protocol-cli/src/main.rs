@@ -301,6 +301,18 @@ enum Command {
         #[command(subcommand)]
         command: planning::ArtifactCommand,
     },
+    /// Read a repository that already exists into the protocol's own terms.
+    ///
+    /// Every other verb here starts from a document somebody wrote; these start from a repository
+    /// somebody built, which is the state an adopter is actually in. `scan` reads and interprets
+    /// nothing — it emits located facts for an agent to judge, and writes nothing. `init` writes the
+    /// project file. `openapi` drafts a domain from a contract that already exists, and names every
+    /// decision it could not take rather than omitting it.
+    Reverse {
+        /// What to read.
+        #[command(subcommand)]
+        command: reverse::ReverseCommand,
+    },
     /// Judge an agent run against a typed specification, or report what is in one.
     ///
     /// The transcript comes from a harness that has already finished — these verbs never start an
@@ -670,6 +682,13 @@ mod flow;
 // only discovers their project registry, validates instances and writes deterministic projections.
 mod schema;
 
+// The eighth, and the first whose input is a repository rather than a document. It shares the
+// criterion the others were split on — its own vocabulary, its own output shape, no shared state —
+// and adds one of its own: it is the only module here that reads a tree it does not govern, so the
+// rules that keep it honest (fixed enumeration order, no clock, no network, stdout is data) are
+// stated in it rather than assumed from the rest.
+mod reverse;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -749,6 +768,7 @@ fn run() -> Result<ExitCode> {
                 format,
             ),
         },
+        Command::Reverse { command } => reverse::run(command),
         Command::Schema { command } => schema::run(command),
         Command::Conformance {
             level,
