@@ -39,6 +39,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.10.0-horizons-dogfood-lab` | 0.10.0-horizons-dogfood-lab |
 | `0.11.0-ground-truth-and-docs` | 0.11.0-ground-truth-and-docs |
 | `0.12.0` | 0.12.0 — a workflow declares where a run may write, and a fourth arm proves the toolset holds it |
+| `0.13.0` | 0.13.0 — the ladder is data, and the status vocabulary is open |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs

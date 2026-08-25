@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.13.0] — 2026-08-25
+
 ### Changed
 
 - **The artifact status vocabulary is open.** A lifecycle document may declare any rung — a status
