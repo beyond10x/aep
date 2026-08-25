@@ -7,7 +7,7 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
-## [Unreleased]
+## [0.14.0] — 2026-08-25
 
 ### Added
 
