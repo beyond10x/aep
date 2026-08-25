@@ -9,7 +9,41 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`obligation` — a commitment on a clock nobody here controls.** Gap-register `:74`. A filing due
+  on a date this repository does not set, satisfied by a person, which must never block a commit
+  because blocking a commit cannot close one.
+
+  `artifacts/lifecycles/obligation.yaml`: `open → met | slipped`, `slipped → met`, `met` terminal.
+  `slipped` is dated (`when: { slipped: { after: due } }`), so *overdue* is a fact about the calendar
+  rather than somebody's opinion on a Monday. **A slipped obligation can still be met** — escalation
+  is not an ending, and that is the shape `:74` asked for.
+
+  ```console
+  $ protocol artifact move --to slipped obligation:annual-filing --at 2026-09-01
+  obligation:annual-filing is open; slipped is on the ladder and not yet earned: slipped is not
+  reachable until this artifact's due has passed
+
+  $ protocol artifact move --to slipped obligation:annual-filing --at 2026-10-01
+  obligation:annual-filing moved open -> slipped (revision 2)
+  ```
+
+  **No Rust changed.** `obligation`, `open`, `met` and `slipped` are all names no enum holds — the
+  kind vocabulary has been open since it was written and the status vocabulary since 0.13.0. A whole
+  artifact kind, its ladder and a dated rung, in two documents. That is what the open-vocabulary
+  work was for, and this is the first time it has been spent.
+
+  It is a **kind of its own and not a rung on somebody else's**. Widening `story` to hold `slipped`
+  would have put a date nobody controls in the path of work everybody does. A test asserts that no
+  ladder can wait on an obligation — structurally true, because a requirement names an evidence kind
+  and a guard names a frontmatter key, and neither can name another artifact. If a future field
+  makes it expressible, that test fails and the argument gets made again on purpose.
+
+### Fixed
+
+- A refusal about a kind beginning with a vowel read "a obligation". The kind vocabulary is open, so
+  a refusal a person reads should not be where they notice it was widened.
 
 ## [0.16.0] — 2026-08-25
 

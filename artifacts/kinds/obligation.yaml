@@ -1,0 +1,18 @@
+# Advisory until the artifact validator reads these files, as the others here say. Written anyway,
+# because a kind whose expectations live only in a reviewer's head is a kind two people will fill in
+# two ways.
+kind: obligation
+title: Obligation
+summary: >-
+  Something this organisation has committed to doing by a date it does not control, satisfied by a
+  person rather than by a build.
+
+# `due` is not in this list because it is not a section: it is a frontmatter key, and
+# `artifacts/lifecycles/obligation.yaml` reads it to decide when `slipped` opens. An obligation with
+# no `due` can never slip, and the refusal says so by naming `$fields.due` rather than claiming the
+# date has not passed.
+required_sections:
+  - What Was Committed
+  - To Whom
+  - What Satisfies It
+  - What Happens If It Slips

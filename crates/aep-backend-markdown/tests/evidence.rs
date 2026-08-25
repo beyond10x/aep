@@ -10,6 +10,8 @@
 //! never produced.
 
 use aep_backend_markdown::kernel::{self, OnHand, Verdict};
+use std::collections::BTreeSet;
+
 use aep_domain::artifact::{ArtifactKind, ArtifactLifecycle, ArtifactStatus};
 use aep_domain::evidence::EvidenceKind;
 
@@ -295,4 +297,97 @@ fn an_unreadable_instant_is_unobservable_rather_than_a_date_that_has_not_passed(
             "{unreadable}"
         );
     }
+}
+
+/// Gap-register `:74`'s hard constraint, asserted rather than trusted: an obligation must **never**
+/// gate a transition.
+///
+/// It is structurally true and worth pinning anyway. A ladder can require two things — evidence of
+/// a kind, and a date in the artifact's own frontmatter — and neither can name another artifact.
+/// There is no shape in `ArtifactLifecycle` that could say *not until obligation:x is met*, which
+/// is why the answer to "a commitment on a clock nobody controls" was a kind of its own rather than
+/// a rung on somebody else's ladder. If a future field makes it expressible, this fails and the
+/// argument gets made again on purpose.
+#[test]
+fn nothing_a_ladder_can_declare_lets_an_obligation_block_a_commit() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/lifecycles");
+    let mut obligations = 0;
+    for entry in std::fs::read_dir(&dir).expect("readable") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_none_or(|kind| kind != "yaml") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("readable");
+        let lifecycle: ArtifactLifecycle =
+            serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+
+        if lifecycle
+            .kind
+            .as_ref()
+            .is_some_and(|k| k.as_str() == "obligation")
+        {
+            obligations += 1;
+            continue;
+        }
+        // Every requirement is an evidence kind; every guard is a frontmatter key of the artifact
+        // being moved. Neither is an artifact reference, so no ladder can wait on one.
+        for requirements in lifecycle.requires.values() {
+            for requirement in requirements {
+                assert!(
+                    !requirement.evidence.as_str().contains("obligation"),
+                    "{}: a rung waits on an obligation",
+                    path.display()
+                );
+            }
+        }
+        for guard in lifecycle.when.values() {
+            for key in guard.keys() {
+                assert!(
+                    !key.contains("obligation"),
+                    "{}: a rung waits on an obligation",
+                    path.display()
+                );
+            }
+        }
+    }
+    assert_eq!(
+        obligations, 1,
+        "the obligation ladder is one of the ones read"
+    );
+}
+
+/// The ladder says what `:74` asked for: escalation is not an ending.
+#[test]
+fn a_slipped_obligation_can_still_be_met_and_met_is_the_end() {
+    let text = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../artifacts/lifecycles/obligation.yaml"),
+    )
+    .expect("readable");
+    let ladder: ArtifactLifecycle = serde_yaml::from_str(&text).expect("parses");
+
+    let met = ArtifactStatus::parse("met").expect("a status");
+    let slipped = ArtifactStatus::parse("slipped").expect("a status");
+    let open = ArtifactStatus::parse("open").expect("a status");
+
+    assert!(
+        ladder.permits_transition(&slipped, &met),
+        "escalation is not an ending"
+    );
+    assert!(
+        ladder.permits_transition(&open, &met),
+        "and it never had to slip first"
+    );
+    assert!(
+        ladder.transitions.get(&met).is_some_and(BTreeSet::is_empty),
+        "met is terminal"
+    );
+    assert!(
+        ladder.timing_for(&slipped).is_some(),
+        "slipped is dated: overdue is a fact about the calendar"
+    );
+    assert!(
+        ladder.timing_for(&met).is_none(),
+        "met is not — an obligation may be met early"
+    );
 }

@@ -370,18 +370,37 @@ impl MoveRefusal {
 
 impl std::error::Error for MoveRefusal {}
 
+/// `a` or `an`, by first letter.
+///
+/// A rule about English rather than about lifecycles, and it is here because the kind vocabulary is
+/// open: "a obligation" was the first sentence a custom kind produced, and a refusal a person reads
+/// should not be the place they notice the vocabulary was widened. Sound, not spelling — this is
+/// wrong for `an hour` and for `a unicorn`, and no artifact kind is either.
+fn article_for(kind: &str) -> &'static str {
+    match kind.chars().next() {
+        Some('a' | 'e' | 'i' | 'o' | 'u' | 'A' | 'E' | 'I' | 'O' | 'U') => "an",
+        _ => "a",
+    }
+}
+
 impl fmt::Display for MoveRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.reason {
             RefusalReason::NotOnTheLadder => {
+                let article = article_for(self.kind.as_str());
                 if self.legal.is_empty() {
                     write!(
                         f,
-                        "a {} in {} is at the end of its lifecycle and may not move",
+                        "{article} {} in {} is at the end of its lifecycle and may not move",
                         self.kind, self.from
                     )
                 } else {
-                    write!(f, "a {} may move to: {}", self.kind, self.legal_targets())
+                    write!(
+                        f,
+                        "{article} {} may move to: {}",
+                        self.kind,
+                        self.legal_targets()
+                    )
                 }
             }
             // Names what to go and produce, rather than reporting a requirement as failed when

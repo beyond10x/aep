@@ -30,6 +30,7 @@ architecture-decision-record
 design
 epic
 initiative
+obligation
 review-result
 specification
 story

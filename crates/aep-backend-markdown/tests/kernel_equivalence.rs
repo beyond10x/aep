@@ -88,26 +88,63 @@ fn every_pair() -> Vec<(ArtifactStatus, ArtifactStatus)> {
 
 /// Asserts the two readings agree, and reports what they disagreed about rather than that they
 /// disagreed.
-/// Enough evidence to satisfy every requirement the ladder puts on `to`.
+/// Everything a rung asks for: enough evidence, and an instant that satisfies any date guard.
 ///
-/// The comparison here is about **which moves the ladder has**, and evidence is a second axis
-/// (`tests/evidence.rs`). Feeding each pair exactly what its rung asks for holds the first axis
-/// still, so a disagreement here means the translation moved — not that a rung costs something.
+/// The comparison here is about **which moves the ladder has**. What a rung *costs* — evidence,
+/// a date — is a second axis with its own tests (`tests/evidence.rs`). Feeding each pair exactly
+/// what its rung asks for holds the first axis still, so a disagreement here means the translation
+/// moved rather than that a rung costs something.
+///
+/// The dates are chosen to satisfy the guard rather than read from anywhere: `after` gets a date
+/// already past, `before` one still ahead. A rung guarded both ways on one key would be a ladder
+/// that can never open, and this would say so by failing.
 fn enough_for(lifecycle: &ArtifactLifecycle, to: &ArtifactStatus) -> kernel::OnHand {
+    const NOW: &str = "2026-06-15";
+    let mut dates = std::collections::BTreeMap::new();
+    if let Some(guard) = lifecycle.timing_for(to) {
+        if let Some(key) = &guard.after {
+            dates.insert(key.clone(), "2026-01-01".to_owned());
+        }
+        if let Some(key) = &guard.before {
+            dates.insert(key.clone(), "2026-12-31".to_owned());
+        }
+    }
     kernel::OnHand {
         evidence: lifecycle
             .requirements_for(to)
             .iter()
             .map(|requirement| (requirement.evidence, requirement.at_least))
             .collect(),
-        ..kernel::OnHand::default()
+        now: Some(NOW.to_owned()),
+        dates,
     }
+}
+
+/// Every ordered pair over the named vocabulary **and** the rungs this ladder invents.
+///
+/// `every_pair` alone covers only `ArtifactStatus::ALL`, which was every status there was until the
+/// vocabulary opened. `obligation`'s rungs — `open`, `met`, `slipped` — are names no enum holds, so
+/// comparing over `ALL` covered none of its moves and the vacuity guard said so. Union, not
+/// replacement: the named statuses are still worth iterating, because most of the illegal moves a
+/// ladder must refuse are named ones.
+fn pairs_for(lifecycle: &ArtifactLifecycle) -> Vec<(ArtifactStatus, ArtifactStatus)> {
+    let mut statuses: BTreeSet<ArtifactStatus> = ArtifactStatus::ALL.iter().cloned().collect();
+    statuses.extend(lifecycle.statuses());
+    statuses
+        .iter()
+        .flat_map(|from| {
+            statuses
+                .iter()
+                .map(move |to| (from.clone(), to.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn agree_on_every_pair(kind: Option<&ArtifactKind>, lifecycle: &ArtifactLifecycle, label: &str) {
     let mut permitted = 0;
     let mut disagreements = Vec::new();
-    for (from, to) in every_pair() {
+    for (from, to) in pairs_for(lifecycle) {
         let store = lifecycle.permits_transition(&from, &to);
         let kernel = kernel::decide(kind, lifecycle, &from, &to, &enough_for(lifecycle, &to))
             == kernel::Verdict::Permitted;
@@ -222,7 +259,7 @@ fn the_ladders_refuse_most_moves_so_agreement_is_not_vacuous() {
     let mut total = 0;
     for kind in covered_kinds() {
         let lifecycle = registry.for_kind(&kind).expect("a ladder");
-        for (from, to) in every_pair() {
+        for (from, to) in pairs_for(lifecycle) {
             total += 1;
             if lifecycle.permits_transition(&from, &to) {
                 legal += 1;
@@ -233,9 +270,13 @@ fn the_ladders_refuse_most_moves_so_agreement_is_not_vacuous() {
     // day a ninth was added the gate failed on arithmetic instead of on the property this test is
     // about. What must not drift is the *coverage*, and
     // `every_ladder_this_repository_ships_is_named_by_the_fixture` is what holds that.
-    let kinds = covered_kinds().len();
-    let pairs = every_pair().len();
-    assert_eq!(total, kinds * pairs, "{kinds} kinds, {pairs} pairs each");
+    // Derived, and no longer one number times another: a ladder that invents rungs has more pairs
+    // than one that does not, which is what an open status vocabulary means for arithmetic.
+    let expected: usize = covered_kinds()
+        .iter()
+        .map(|kind| pairs_for(registry.for_kind(kind).expect("a ladder")).len())
+        .sum();
+    assert_eq!(total, expected, "{} kinds", covered_kinds().len());
 
     // The tripwire the old literal `800` was by accident, kept on purpose and put where it bites.
     //
@@ -249,9 +290,10 @@ fn the_ladders_refuse_most_moves_so_agreement_is_not_vacuous() {
     // 810, which clears any 800 floor while the status vocabulary quietly shrank. Adding a ladder
     // never touches this line; removing a status does.
     assert!(
-        pairs >= 100,
-        "ArtifactStatus::ALL shrank: {pairs} ordered pairs, so this compares a smaller vocabulary \
-         than the one it was written against"
+        every_pair().len() >= 100,
+        "ArtifactStatus::ALL shrank: {} ordered pairs, so this compares a smaller vocabulary \
+         than the one it was written against",
+        every_pair().len()
     );
     assert!(
         legal * 4 < total,
