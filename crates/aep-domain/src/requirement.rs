@@ -118,6 +118,23 @@ pub struct RequirementOutcome {
     /// What was observed, or what is missing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// Who is on the hook and what ends it, when this row is advisory.
+    ///
+    /// `Some` is exactly what makes a row advisory, so a row cannot be advisory without saying who
+    /// owns it — the property is carried by the type rather than by a convention two layers apart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisory: Option<AdvisoryNote>,
+}
+
+/// Who owns an advisory row and what would end it.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+pub struct AdvisoryNote {
+    /// Who is on the hook.
+    pub owner: String,
+    /// What has to become true for this to block.
+    pub exit_criterion: String,
 }
 
 impl RequirementOutcome {
@@ -127,6 +144,7 @@ impl RequirementOutcome {
             requirement,
             truth,
             detail: None,
+            advisory: None,
         }
     }
 
@@ -151,6 +169,15 @@ impl fmt::Display for RequirementOutcome {
         write!(f, "{mark} {}", self.requirement)?;
         if let Some(detail) = &self.detail {
             write!(f, " — {detail}")?;
+        }
+        // Named, never merely marked. `advisory` alone would let a reader treat the row as scenery;
+        // an owner and an exit criterion in the same line is the whole point of the tier.
+        if let Some(note) = &self.advisory {
+            write!(
+                f,
+                " [advisory — {} until {}]",
+                note.owner, note.exit_criterion
+            )?;
         }
         Ok(())
     }
@@ -179,9 +206,26 @@ impl RequirementReport {
         self.truth.is_satisfied()
     }
 
-    /// The requirements that are not met.
+    /// The **blocking** requirements that are not met.
+    ///
+    /// Advisory rows are excluded here and reachable through [`Self::advisory_gaps`]. Folding them
+    /// in would make an advisory tier indistinguishable from a blocking one at every call site that
+    /// asks what is outstanding, which is the failure the tier is supposed to prevent.
     pub fn unmet(&self) -> impl Iterator<Item = &RequirementOutcome> {
-        self.items.iter().filter(|item| !item.is_satisfied())
+        self.items
+            .iter()
+            .filter(|item| item.advisory.is_none() && !item.is_satisfied())
+    }
+
+    /// The advisory requirements that are not met — reported and counted, never blocking.
+    ///
+    /// The third property the trace checker's `--advisory` already has and the reason this is a
+    /// tier rather than a deletion: the record names every downgraded row, so an advisory gate is
+    /// visibly a gate that is not firing rather than an absence.
+    pub fn advisory_gaps(&self) -> impl Iterator<Item = &RequirementOutcome> {
+        self.items
+            .iter()
+            .filter(|item| item.advisory.is_some() && !item.is_satisfied())
     }
 
     /// Absorbs another report.
@@ -1049,12 +1093,105 @@ impl ConditionalRequirement {
     }
 }
 
+/// A requirement that is checked and reported and does not block.
+///
+/// # Why the tier exists
+///
+/// Gap register `:71`. There was one enforcement level: a check blocks or it is deleted, with no
+/// state for *not ready to block yet*. That tier was independently invented three times in the
+/// adopter's stack, and each time its advisory checks accumulated standing findings — findings that
+/// would have been switched off within a day if they had blocked. A check that cannot be introduced
+/// gently is a check that does not get introduced.
+///
+/// # Why it cannot be declared without an owner and an exit criterion
+///
+/// **An advisory gate with no route back to blocking is a muted gate with better manners.** The
+/// failure mode is not hypothetical and is not "the check is too weak": it is that nobody is on the
+/// hook for it and nothing says when it stops being advisory, so it stays advisory forever and the
+/// team reads a permanent warning as scenery. So both are required at *parse* time, and a
+/// declaration missing either is refused rather than defaulted — a default owner is nobody and a
+/// default exit criterion is never.
+///
+/// This generalises the trace checker's `--advisory`, which is the same tier in one place: the
+/// downgrade moves the exit code, the record names every downgraded id, and the underlying
+/// `trace_conformance.passed` fact ignores the flag. Same three properties here.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+pub struct AdvisoryRequirement {
+    /// Who is on the hook for making this blocking, or for deleting it.
+    ///
+    /// Free text — a team, a rota, a person — because this crate cannot verify an identity and a
+    /// field that looks verified and is not is worse than one that plainly is not. What it *can*
+    /// enforce is that somebody was named.
+    pub owner: String,
+    /// What has to become true for this to block, in the declarer's own words.
+    ///
+    /// Deliberately prose and not a date. A date is one kind of exit criterion and usually the
+    /// wrong one — *"when the flaky runner is replaced"* is honest and *"2026-12-01"* is a guess
+    /// that expires into an argument. A rule that reads this is not the point; a human who can tell
+    /// whether the exit has happened is.
+    pub exit_criterion: String,
+    /// What is actually checked.
+    pub require: Box<RequirementSet>,
+}
+
+impl AdvisoryRequirement {
+    /// Parses the document form, refusing a declaration that names nobody or has no way out.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        let Node::Map(entries) = node else {
+            return Err(ParseError::shape(
+                "advisory",
+                "a mapping with `owner`, `exit_criterion` and `require`",
+                node.type_name(),
+            ));
+        };
+        let text = |key: &str| -> Result<String, ParseError> {
+            let value = entries
+                .get(key)
+                .and_then(Node::as_text)
+                .map(str::trim)
+                .unwrap_or_default();
+            if value.is_empty() {
+                return Err(ParseError::shape(
+                    format!("advisory.{key}"),
+                    match key {
+                        "owner" => "somebody on the hook for making this blocking or deleting it",
+                        _ => "what has to become true for this to block",
+                    },
+                    "nothing — an advisory gate with no route back to blocking is a muted gate \
+                     with better manners",
+                ));
+            }
+            Ok(value.to_owned())
+        };
+        let owner = text("owner")?;
+        let exit_criterion = text("exit_criterion")?;
+        let require = entries.get("require").ok_or_else(|| {
+            ParseError::shape("advisory.require", "a requirement set", "no `require`")
+        })?;
+        Ok(Self {
+            owner,
+            exit_criterion,
+            require: Box::new(RequirementSet::from_node(require)?),
+        })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for AdvisoryRequirement {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
 /// Everything that must hold at one point in a workflow.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 pub struct RequirementSet {
     /// Conditions over facts.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub predicates: Vec<Predicate>,
+    /// Requirements that are checked, reported and counted, and do **not** block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub advisory: Vec<AdvisoryRequirement>,
     /// Evidence that must exist.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence: Vec<EvidenceRequirement>,
@@ -1075,6 +1212,7 @@ pub struct RequirementSet {
 /// Keys that introduce a structured requirement rather than a fact predicate.
 const STRUCTURED_KEYS: &[&str] = &[
     "predicates",
+    "advisory",
     "evidence",
     "artifacts",
     "reviews",
@@ -1093,6 +1231,7 @@ impl RequirementSet {
     /// `true` when nothing is required.
     pub fn is_empty(&self) -> bool {
         self.predicates.is_empty()
+            && self.advisory.is_empty()
             && self.evidence.is_empty()
             && self.artifacts.is_empty()
             && self.reviews.is_empty()
@@ -1103,6 +1242,7 @@ impl RequirementSet {
     /// The number of requirements.
     pub fn len(&self) -> usize {
         self.predicates.len()
+            + self.advisory.len()
             + self.evidence.len()
             + self.artifacts.len()
             + self.reviews.len()
@@ -1113,6 +1253,7 @@ impl RequirementSet {
     /// Absorbs another set.
     pub fn extend(&mut self, other: Self) {
         self.predicates.extend(other.predicates);
+        self.advisory.extend(other.advisory);
         self.evidence.extend(other.evidence);
         self.artifacts.extend(other.artifacts);
         self.reviews.extend(other.reviews);
@@ -1175,9 +1316,25 @@ impl RequirementSet {
         for requirement in &self.conditional {
             items.extend(requirement.evaluate(context));
         }
+        // Checked exactly as a blocking requirement is, and then kept out of the conjunction. The
+        // check must be real or the tier is a comment: an advisory row that is never evaluated
+        // cannot tell anybody when its exit criterion has been met.
+        for requirement in &self.advisory {
+            let note = AdvisoryNote {
+                owner: requirement.owner.clone(),
+                exit_criterion: requirement.exit_criterion.clone(),
+            };
+            for mut item in requirement.require.evaluate(context).items {
+                // The innermost note wins: an advisory set nested inside another is owned by
+                // whoever declared the inner one, and overwriting that would misattribute it.
+                item.advisory.get_or_insert(note.clone());
+                items.push(item);
+            }
+        }
 
         let truth = items
             .iter()
+            .filter(|item| item.advisory.is_none())
             .fold(Truth::True, |accumulated, item| accumulated.and(item.truth));
         RequirementReport { truth, items }
     }
@@ -1227,6 +1384,11 @@ impl RequirementSet {
                         "approvals" | "approval" => {
                             for item in value.as_seq_or_single() {
                                 set.approvals.push(ApprovalRequirement::from_node(item)?);
+                            }
+                        }
+                        "advisory" => {
+                            for item in value.as_seq_or_single() {
+                                set.advisory.push(AdvisoryRequirement::from_node(item)?);
                             }
                         }
                         "conditional" | "conditional_requirements" => {
@@ -1699,6 +1861,120 @@ pub fn structured_requirement_keys() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
+    /// Gap register `:71`. An advisory row is checked, reported, counted — and does not block.
+    #[test]
+    fn an_advisory_requirement_is_checked_and_reported_and_does_not_block() {
+        let set: RequirementSet = serde_yaml::from_str(
+            r"
+predicates:
+  - tests.unit.failed == 0
+advisory:
+  - owner: platform-team
+    exit_criterion: when the flaky runner is replaced
+    require:
+      predicates:
+        - coverage.line >= 90
+",
+        )
+        .expect("parses");
+
+        let context = Context::new()
+            .with_fact("tests.unit.failed", FactValue::count(0))
+            .with_fact("coverage.line", FactValue::count(40));
+        let report = set.evaluate(&context);
+
+        assert!(
+            report.is_satisfied(),
+            "the advisory row fails and must not move the verdict: {report:?}"
+        );
+        assert_eq!(report.unmet().count(), 0, "nothing blocking is outstanding");
+        assert_eq!(
+            report.advisory_gaps().count(),
+            1,
+            "and the failure is counted rather than dropped"
+        );
+
+        // Named, not merely marked: a row a reader cannot chase is scenery.
+        let rendered = report.advisory_gaps().next().expect("one gap").to_string();
+        assert!(rendered.contains("platform-team"), "{rendered}");
+        assert!(
+            rendered.contains("when the flaky runner is replaced"),
+            "{rendered}"
+        );
+    }
+
+    /// The same predicate blocks when it is not declared advisory — so the tier is doing the work,
+    /// not the predicate being unsatisfiable.
+    #[test]
+    fn the_same_requirement_blocks_when_it_is_not_advisory() {
+        let set: RequirementSet =
+            serde_yaml::from_str("predicates:\n  - coverage.line >= 90\n").expect("parses");
+        let context = Context::new().with_fact("coverage.line", FactValue::count(40));
+        let report = set.evaluate(&context);
+        assert!(!report.is_satisfied());
+        assert_eq!(report.unmet().count(), 1);
+        assert_eq!(report.advisory_gaps().count(), 0);
+    }
+
+    /// An advisory gate with no route back to blocking is a muted gate with better manners, so it
+    /// cannot be written down at all.
+    #[test]
+    fn an_advisory_tier_cannot_be_declared_without_an_owner_or_an_exit_criterion() {
+        for (missing, document) in [
+            (
+                "owner",
+                "advisory:\n  - exit_criterion: soon\n    require:\n      predicates: [a == 1]\n",
+            ),
+            (
+                "exit_criterion",
+                "advisory:\n  - owner: platform-team\n    require:\n      predicates: [a == 1]\n",
+            ),
+            (
+                "owner",
+                "advisory:\n  - owner: '   '\n    exit_criterion: soon\n    require:\n      predicates: [a == 1]\n",
+            ),
+        ] {
+            let error = serde_yaml::from_str::<RequirementSet>(document)
+                .expect_err("a muted gate must not be writable");
+            assert!(
+                error.to_string().contains(missing),
+                "the refusal must name what is missing ({missing}): {error}"
+            );
+        }
+    }
+
+    /// A nested advisory set keeps its own owner rather than acquiring the outer one's.
+    #[test]
+    fn a_nested_advisory_row_is_owned_by_whoever_declared_it() {
+        let set: RequirementSet = serde_yaml::from_str(
+            r"
+advisory:
+  - owner: outer-team
+    exit_criterion: outer exit
+    require:
+      advisory:
+        - owner: inner-team
+          exit_criterion: inner exit
+          require:
+            predicates:
+              - a == 1
+",
+        )
+        .expect("parses");
+        let report = set.evaluate(&Context::new());
+        let note = report
+            .items
+            .first()
+            .expect("one row")
+            .advisory
+            .as_ref()
+            .expect("advisory");
+        assert_eq!(
+            note.owner, "inner-team",
+            "misattributing it names the wrong people"
+        );
+    }
+
     use super::*;
     use crate::artifact::{ArtifactId, ArtifactLocation};
     use crate::evidence::{EssConformanceResult, Producer, SpecDigest, TestResult, TestSuite};
@@ -1763,6 +2039,11 @@ mod tests {
                     .expect("a valid date")
                     .to_timestamp(),
             );
+            self
+        }
+
+        fn with_fact(mut self, path: &str, value: FactValue) -> Self {
+            self.facts.set_path(path, value);
             self
         }
 

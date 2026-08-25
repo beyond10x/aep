@@ -51,6 +51,41 @@ belongs in the commit message or in `docs/design/`.
   verifiers) and C5 (a verifier's own coverage is not a fact) are the same family and are **not**
   taken here. They stay named in the register rather than quietly folded into this.
 
+- **A check can now be introduced gently instead of not at all.** Gap-register `:71`, closed.
+
+  There was one enforcement level: a check blocks or it is deleted. No state for *not ready to block
+  yet* — so a check that would be noisy on day one simply never got written.
+
+  ```yaml
+  requires:
+    predicates:
+      - tests.unit.failed == 0     # blocks
+    advisory:
+      - owner: platform-team
+        exit_criterion: when the flaky runner is replaced
+        require:
+          predicates:
+            - coverage.line >= 90  # checked, reported, counted — does not block
+  ```
+
+  ```text
+  ✗ coverage.line >= 90 [advisory — platform-team until when the flaky runner is replaced]
+  ```
+
+  **`owner` and `exit_criterion` are required to write one down at all**, refused at parse time.
+  An advisory gate with no route back to blocking is a muted gate with better manners: nobody is on
+  the hook, nothing says when it stops being advisory, and a permanent warning becomes scenery. A
+  default owner is nobody and a default exit criterion is never, so neither is defaulted.
+
+  The row is **evaluated for real**, not skipped — a check that never runs cannot tell anybody its
+  exit criterion has been met. `RequirementReport::advisory_gaps()` counts the failures;
+  `unmet()` deliberately excludes them, because folding them in would make the tier
+  indistinguishable from blocking at every call site that asks what is outstanding.
+
+  This generalises the trace checker's `--advisory`, which had the same three properties in one
+  place: the downgrade moves the exit code, the record names every downgraded id, and the underlying
+  fact ignores the flag.
+
 ## [0.20.0] — 2026-08-26
 
 ### Added

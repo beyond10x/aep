@@ -425,6 +425,9 @@ fn principle_verification(execution: &Execution, principle: &Principle) -> Vec<R
                         requirement.verifier
                     ))
                 },
+                // Blocking. A protocol-level obligation reaches here; the advisory tier is declared
+                // in the requirement set and carries its note from there.
+                advisory: None,
             };
             Requirement {
                 source: RequirementSource::Principle {
