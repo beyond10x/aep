@@ -147,6 +147,18 @@
         }
       ]
     },
+    "subject": {
+      "description": "What it is about — the thing evidence must be observed of.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SubjectRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "type": {
       "description": "An accepted spelling of `kind`; give one or the other, not both.",
       "allOf": [
@@ -348,6 +360,11 @@
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
       "pattern": "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$"
+    },
+    "SubjectRef": {
+      "description": "Subject of evidence, written `<kind>:<id>`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$"
     },
     "TaskId": {
       "description": "task identifier.",

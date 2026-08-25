@@ -9,7 +9,47 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A task can say what it is about, and evidence about anything else is refused.** Gap-register
+  `:72`, closed.
+
+  **The failure this is named after:** an end-to-end job held a legacy service while a deployment
+  rolled its successor, and produced *weeks of green* about a component nobody was shipping. Every
+  record was true. Every record was about the wrong thing, and nothing in the loop could say so.
+
+  ```yaml
+  # a task document
+  id: T-1
+  kind: feature
+  subject: service:auth-api      # new: what this task is about
+  ```
+
+  ```text
+  this evidence is about `service:auth-api-legacy`, and T-1 is about `service:auth-api`;
+  a fact observed of one thing does not move another
+  ```
+
+  Both names are printed, because the difference between them is the entire content of the finding
+  and a message naming one of them is one the reader has to go and complete.
+
+  Refused **before the record is built**, not filtered afterwards: a fact about the wrong thing that
+  is stored and later filtered is still a fact that anything forgetting to filter will read.
+
+  Declaring a subject turns the guard on **fully** — evidence naming *no* subject is refused too.
+  There is deliberately no half state, because admitting unsubjected evidence would leave omitting
+  the subject as the way around a guard that looked mandatory.
+
+  **A task that declares no subject is unchanged**, and that is asserted rather than assumed
+  (`a_task_that_declares_no_subject_is_unchanged`): a task that has not said what it is about cannot
+  be the judge of whether a fact is about it.
+
+  `task.subject` is a readable fact, so a rule may condition on it without the engine hard-coding
+  what any particular subject means.
+
+  C3 (a test naming no revision of the environment it observed), C4 (no determinism model for
+  verifiers) and C5 (a verifier's own coverage is not a fact) are the same family and are **not**
+  taken here. They stay named in the register rather than quietly folded into this.
 
 ## [0.20.0] — 2026-08-26
 

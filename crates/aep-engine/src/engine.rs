@@ -365,6 +365,26 @@ impl<C: Clock> ProtocolEngine for Engine<C> {
             });
         }
 
+        // Gap register `:72`. The guard is *before* the record is built, because the point is that
+        // this observation never enters the log: a fact about the wrong thing, stored and later
+        // filtered, is still a fact anything that forgets to filter will read.
+        if let Some(declared) = execution.plan().task.subject.clone() {
+            let task = execution.plan().task.id.clone();
+            match &submission.subject {
+                None => {
+                    return Err(ProtocolError::EvidenceSubjectMissing { declared, task });
+                }
+                Some(observed) if *observed != declared => {
+                    return Err(ProtocolError::EvidenceSubjectMismatch {
+                        observed: observed.clone(),
+                        declared,
+                        task,
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
         let ordinal = execution.recorded_evidence().len() + 1;
         let id = EvidenceId::new(format!("{}.evidence.{ordinal}", execution.id()))
             .unwrap_or_else(|_| EvidenceId::new(format!("evidence.{ordinal}")).expect("valid id"));
@@ -850,6 +870,109 @@ transitions:
             0,
             "every completion requirement is met once the evidence exists: {explanation}"
         );
+    }
+
+    /// A task that says what it is about, for the subject tests below.
+    fn task_about(subject: &str) -> aep_domain::task::Task {
+        let mut task = fixtures::standard_task();
+        task.subject = Some(subject.parse().expect("a well-formed subject"));
+        task
+    }
+
+    /// Gap register `:72`, and the failure it is named after.
+    ///
+    /// An end-to-end job held `service:auth-api-legacy` while the deployment rolled
+    /// `service:auth-api`, and produced weeks of green about a component nobody was shipping. Every
+    /// record was true and every record was about the wrong thing. The refusal has to name **both**
+    /// subjects, because the difference between them is the entire content of the finding.
+    #[test]
+    fn a_fact_observed_of_one_thing_does_not_move_another() {
+        let engine = engine();
+        let mut execution = engine
+            .initialize(task_about("service:auth-api"))
+            .expect("initialises");
+
+        let error = engine
+            .submit_evidence(
+                &mut execution,
+                passing_tests().with_subject("service:auth-api-legacy".parse().expect("subject")),
+            )
+            .expect_err("evidence about the legacy service is not evidence about this task");
+
+        let ProtocolError::EvidenceSubjectMismatch { .. } = &error else {
+            panic!("expected a subject mismatch, got {error:?}");
+        };
+        let said = error.to_string();
+        assert!(said.contains("service:auth-api-legacy"), "{said}");
+        // The closing backtick matters: `service:auth-api` is a prefix of the legacy name, so a
+        // bare substring check would pass on the wrong half of the message.
+        assert!(said.contains("service:auth-api`"), "{said}");
+        assert!(said.contains("T-1"), "{said}");
+
+        assert!(
+            execution.recorded_evidence().is_empty(),
+            "the refused observation must not be in the log at all; a fact about the wrong thing \
+             that is stored and later filtered is still a fact anything forgetting to filter reads"
+        );
+    }
+
+    /// Matching evidence passes, so the guard is a filter and not a wall.
+    #[test]
+    fn evidence_about_the_declared_subject_is_admitted() {
+        let engine = engine();
+        let mut execution = engine
+            .initialize(task_about("service:auth-api"))
+            .expect("initialises");
+        engine
+            .submit_evidence(
+                &mut execution,
+                passing_tests().with_subject("service:auth-api".parse().expect("subject")),
+            )
+            .expect("evidence about the declared subject counts");
+        assert_eq!(execution.recorded_evidence().len(), 1);
+    }
+
+    /// The deliberate half: no route around the guard once a task has declared its subject.
+    ///
+    /// Admitting unsubjected evidence would leave exactly the hole this closes — omitting the
+    /// subject would become the way to move a task whose subject you cannot match, and the guard
+    /// would be optional in practice while looking mandatory.
+    #[test]
+    fn once_a_task_says_what_it_is_about_evidence_may_not_stay_silent() {
+        let engine = engine();
+        let mut execution = engine
+            .initialize(task_about("service:auth-api"))
+            .expect("initialises");
+        let error = engine
+            .submit_evidence(&mut execution, passing_tests())
+            .expect_err("unsubjected evidence is not a way around the guard");
+        assert!(
+            matches!(error, ProtocolError::EvidenceSubjectMissing { .. }),
+            "{error:?}"
+        );
+    }
+
+    /// A task that has not said what it is about admits what it always did.
+    ///
+    /// The compatibility half, asserted rather than assumed: every task document written before
+    /// this field existed keeps working, because a task that has not said what it is about cannot
+    /// be the judge of whether a fact is about it.
+    #[test]
+    fn a_task_that_declares_no_subject_is_unchanged() {
+        let engine = engine();
+        let mut execution = engine
+            .initialize(fixtures::standard_task())
+            .expect("initialises");
+        engine
+            .submit_evidence(&mut execution, passing_tests())
+            .expect("unsubjected evidence, as before");
+        engine
+            .submit_evidence(
+                &mut execution,
+                diff().with_subject("service:anything-at-all".parse().expect("subject")),
+            )
+            .expect("and a subject nobody asked about is not an error");
+        assert_eq!(execution.recorded_evidence().len(), 2);
     }
 
     #[test]

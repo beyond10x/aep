@@ -6,7 +6,7 @@
 
 use aep_domain::error::ValidationErrors;
 use aep_domain::evidence::EvidenceKind;
-use aep_domain::ids::StateId;
+use aep_domain::ids::{StateId, SubjectRef, TaskId};
 
 /// Why the engine refused.
 #[derive(Debug, thiserror::Error)]
@@ -39,6 +39,49 @@ pub enum ProtocolError {
         kind: EvidenceKind,
         /// What the protocol does declare.
         declared: String,
+    },
+
+    /// Evidence was submitted about something other than what the task is about.
+    ///
+    /// # The failure this is named after
+    ///
+    /// An end-to-end job held a legacy service while a deployment rolled its successor, and produced
+    /// weeks of green about a component nobody was shipping. Every record was true. Every record was
+    /// about the wrong thing, and nothing in the loop could say so — the approvals rule already
+    /// refuses a record bound to the wrong *revision*, and there was no analogue for the wrong
+    /// *subject*.
+    ///
+    /// Both names are printed, because the whole content of the refusal is the difference between
+    /// them and a message naming one of them is a message the reader has to go and complete.
+    #[error(
+        "this evidence is about `{observed}`, and {task} is about `{declared}`; \
+         a fact observed of one thing does not move another"
+    )]
+    EvidenceSubjectMismatch {
+        /// What the evidence was observed of.
+        observed: SubjectRef,
+        /// What the task declared it is about.
+        declared: SubjectRef,
+        /// Which task.
+        task: TaskId,
+    },
+
+    /// A task declared what it is about, and evidence arrived naming nothing.
+    ///
+    /// Refused rather than admitted, and that is the deliberate half. Admitting it would leave the
+    /// exact hole this pair of errors exists to close: unsubjected evidence would remain the way to
+    /// move a task whose subject you cannot match, so the guard would be optional in practice while
+    /// looking mandatory. A task that declares no subject is unaffected — see
+    /// [`aep_domain::task::Task::subject`].
+    #[error(
+        "{task} is about `{declared}` and this evidence names no subject; \
+         say what it was observed of"
+    )]
+    EvidenceSubjectMissing {
+        /// What the task declared it is about.
+        declared: SubjectRef,
+        /// Which task.
+        task: TaskId,
     },
 
     /// Evidence was submitted claiming an observation that has not happened yet.
@@ -80,6 +123,8 @@ impl ProtocolError {
             Self::Resolution(_) => "resolution_failed",
             Self::UnknownState { .. } => "unknown_state",
             Self::EvidenceRejected { .. } => "evidence_rejected",
+            Self::EvidenceSubjectMismatch { .. } => "evidence_subject_mismatch",
+            Self::EvidenceSubjectMissing { .. } => "evidence_subject_missing",
             Self::ObservationInFuture { .. } => "observation_in_future",
             Self::NoTransitionPermitted { .. } => "no_transition_permitted",
             Self::AlreadyComplete { .. } => "already_complete",

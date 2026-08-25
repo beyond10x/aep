@@ -33,7 +33,7 @@ use crate::artifact::ArtifactRef;
 use crate::capability::CapabilityPolicy;
 use crate::error::ParseError;
 use crate::facts::{FactPath, FactStore, FactValue};
-use crate::ids::TaskId;
+use crate::ids::{SubjectRef, TaskId};
 use crate::node::Node;
 use crate::principle::PrincipleOverrides;
 use crate::version::{ProfileVersionedRef, ProtocolRef};
@@ -334,6 +334,18 @@ pub struct Task {
     pub kind: TaskKind,
     /// What it is for.
     pub objective: Objective,
+    /// **What it is about** — the thing evidence must be observed of.
+    ///
+    /// Distinct from `objective`, which says what the work is *for*. This says which component,
+    /// service or capability an observation has to concern before it can count towards this task.
+    ///
+    /// `None` keeps the behaviour that shipped: any subject is admitted, because a task that has not
+    /// said what it is about cannot be the judge of whether a fact is about it. Declaring it turns
+    /// the guard on **fully** — see [`crate::evidence`] and the engine's submission path. There is
+    /// deliberately no half state where a subject is declared and unsubjected evidence still counts:
+    /// that would admit exactly the fact this exists to refuse.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<SubjectRef>,
     /// Which protocol version governs it.
     pub protocol: ProtocolRef,
     /// Which profile it uses.
@@ -363,6 +375,11 @@ impl Task {
             FactValue::text(self.objective.summary.clone()),
         );
         store.set_path("task.profile", FactValue::text(self.profile.to_string()));
+        // Readable by a condition, so a rule may say "this task is about a production service"
+        // without the engine hard-coding what production means.
+        if let Some(subject) = &self.subject {
+            store.set_path("task.subject", FactValue::text(subject.to_string()));
+        }
         for (path, value) in &self.constraints.facts {
             store.set(path.clone(), value.clone());
         }
@@ -381,6 +398,9 @@ pub struct RawTask {
     pub kind: TaskKind,
     /// What it is for.
     pub objective: Objective,
+    /// What it is about — the thing evidence must be observed of.
+    #[serde(default)]
+    pub subject: Option<SubjectRef>,
     /// Which protocol version governs it.
     pub protocol: ProtocolRef,
     /// Which profile it uses.
@@ -457,6 +477,7 @@ impl TryFrom<RawTask> for Task {
             id: raw.id,
             kind: raw.kind,
             objective: raw.objective,
+            subject: raw.subject,
             protocol: raw.protocol,
             profile: raw.profile,
             constraints: raw.constraints,
