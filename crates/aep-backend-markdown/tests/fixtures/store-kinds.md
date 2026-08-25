@@ -27,6 +27,7 @@ holds one yet.
 
 ```
 architecture-decision-record
+blocker
 design
 epic
 initiative

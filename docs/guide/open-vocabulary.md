@@ -94,8 +94,29 @@ differs — one is a document you write, the other is a value that document may 
 averaged verdict would tell you neither.
 
 The rows **A relation document under `artifacts/relations/`** and **Relation names a relations
-document may use** are the same shape and remain split the old way, and that pair is the one still
-owed an explanation.
+document may use** are the same shape, and the pair was the one still owed an explanation. It has
+one now, and the answer is **not** the same as artifact status:
+
+- The store layer is open: you write `artifacts/relations/relations.yaml` in your own tree.
+- The value layer stays **closed, deliberately**, and this is the guarantee. A relation name is
+  something the engine *acts on*. `supersedes` gates a status — an artifact marked `superseded` must
+  have a successor declaring it. `reviews` is mandatory on a `review-result`. Cycles are checked once
+  per relation kind. None of that can move into a document, because a document can declare what an
+  edge *means* and not what the engine *does* about it.
+
+That is the difference from artifact status, where the guarantee — *a status name means the same
+rung to every tool* — could move to the ladder, and did. There is nowhere for a relation's semantics
+to go. An open relation vocabulary would let you write an edge that looks like it should mean
+something and that no rule will ever read, which is a worse failure than being told `frobnicates` is
+not a relation.
+
+What was actually wrong here was smaller and is fixed: the type had **thirteen** relations and the
+document **twelve**. `delivers` was in the binary and in no row, so the engine accepted an edge this
+file said did not exist. It has a row now.
+
+What remains genuinely advisory is the `source`/`target` pairings — the file says so in its own
+header, and nothing in `crates/` reads them. That is a different gap from this one and is not closed
+by this decision.
 
 ## The table
 
@@ -114,7 +135,7 @@ owed an explanation.
 | A relation document under `artifacts/relations/` | `website/docs/reference/documents.md:211` — "`artifacts/relations/` and" | open | `artifacts/relations/relations.yaml:relations` | — | — | — |
 | An artifact template under `artifacts/templates/` | `website/docs/reference/documents.md:211` — "and `artifacts/templates/`" | open | `artifacts/templates/story.md:1` | — | — | — |
 | Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:729` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
-| Relation names a relations document may use | `website/docs/reference/documents.md:224` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:987` | none | none | story:ova-relation-vocabulary |
+| Relation names a relations document may use | `website/docs/reference/documents.md:224` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:1095` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | this table's row below | — |
 | Capability value names the engine accepts | `docs/plan/document-authoring-brief.md:13` — "nothing else may be mentioned in any" | closed | `crates/aep-domain/src/capability.rs:144` | a capability name resolves to the same authorisation decision in every harness, which is what lets a profile be read by one and enforced by another | website/docs/reference/vocabulary.md#capabilities | — |
 | Evidence kind names the engine accepts | `docs/plan/document-authoring-brief.md:29` — "**Evidence kinds**:" | closed | `crates/aep-domain/src/evidence.rs:1181` | an evidence kind carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one cannot be satisfied by a record that means something else | website/docs/reference/vocabulary.md#evidence-kinds | — |
 | Predicate operators in mapping form | `website/docs/reference/vocabulary.md:172` — "Operators in mapping form" | closed | `crates/aep-domain/src/predicate.rs:132` | none | none | story:ova-predicate-operator-vocabulary |

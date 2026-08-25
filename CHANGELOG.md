@@ -9,7 +9,40 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`blocker` — what is stopping something, typed by what would clear it.** Gap-register `:73`'s
+  third and last mechanism. The `blocks` edge already existed; the *type* did not, and the type is
+  what turns five stuck items into one conversation: *parked on a credential* and *parked on a
+  person* look identical in a backlog and are not the same problem.
+
+  **The type is the kind, not a field.** `credential-blocker`, `person-blocker` and
+  `decision-blocker` all resolve to one ladder through `ArtifactKind::parent`, which reads the last
+  hyphen segment — so a team's own category of blocker costs a name and nothing else. No document
+  per type, no enum, no release. That machinery is what gap-register `:77` was about, and this is
+  the first thing to spend it.
+
+  `cleared` is terminal on purpose: something blocked again is a new blocker with its own date, not
+  the old one reopened, or *how long were we stuck* has no answer.
+
+### Changed
+
+- **The relation vocabulary stays closed, and now says why.** `story:ova-relation-vocabulary` was
+  opened because the audit found a closed row whose guarantee cell read `none`. The decision is to
+  keep it closed, and the guarantee is real: a relation name is something the engine *acts on*, not
+  only records. `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles
+  are checked once per relation kind. None of that can move into a document — which is exactly the
+  difference from artifact status, where the guarantee could move to the ladder and did. An open
+  relation vocabulary would let you write an edge that looks like it should mean something and that
+  no rule will ever read.
+
+### Fixed
+
+- **`delivers` was in the binary and in no row of `artifacts/relations/relations.yaml`.** Thirteen
+  relations in the type, twelve in the document, so the engine accepted an edge that file said did
+  not exist. It has a row now. What remains genuinely advisory is the `source`/`target` pairings —
+  the file says so in its own header, nothing in `crates/` reads them, and that is a different gap
+  this decision does not close.
 
 ## [0.17.0] — 2026-08-25
 

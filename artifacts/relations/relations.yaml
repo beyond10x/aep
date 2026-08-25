@@ -80,3 +80,15 @@ relations:
       The only relation with a lifecycle consequence attached: an artifact marked `superseded` must
       have a successor declaring `supersedes:` it, so the replacement is always discoverable from the
       thing it replaced. Same kind on both ends in practice — an ADR supersedes an ADR.
+
+  - relation: delivers
+    meaning: >-
+      Produces the outcome another artifact asked for — the edge from work to the thing that wanted
+      it done.
+    source: [epic, story, task]
+    target: [initiative, epic, product-requirements, obligation]
+    note: >-
+      Added to this document on 2026-08-25. It had been in the binary since the vocabulary was
+      written and in no row here, so the engine accepted an edge this file said did not exist. Found
+      by an audit of what is open and what is closed; the file and the type agree now, which is the
+      minimum a vocabulary owes anybody reading it.

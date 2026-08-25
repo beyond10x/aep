@@ -1,0 +1,14 @@
+# Advisory until the artifact validator reads these files, as the others here say.
+kind: blocker
+title: Blocker
+summary: >-
+  Something stopping work, named by what would clear it rather than by what it is stopping.
+
+# `Cleared By` is the section the kind exists for. A blocker whose type is in its kind —
+# `credential-blocker` — still has to say *which* credential, and a blocker that cannot answer this
+# section is a complaint rather than a blocker.
+required_sections:
+  - What Is Blocked
+  - What Would Clear It
+  - Who Can Clear It
+  - What We Are Doing Meanwhile
