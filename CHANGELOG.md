@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.18.0] — 2026-08-25
+
 ### Added
 
 - **`blocker` — what is stopping something, typed by what would clear it.** Gap-register `:73`'s
