@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.23.1] — 2026-08-26
+
 ### Changed
 
 - `aep-backend-markdown` pins **entity-core 0.5.2** instead of 0.5.0. `entity-core`'s source is
