@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.23.0] — 2026-08-26
+
 ### Added
 
 - **A claim that left the boundary is now a thing this repository can model.** Gap-register `:70`,
