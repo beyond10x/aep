@@ -102,6 +102,7 @@ You can point at somebody else's tree instead of owning one. A project does that
 protocol: adp/1
 profile: acme.service
 protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
+schemas: schemas
 ```
 
 The suffix is the full commit id, not a branch or tag. On first use the engine fetches that immutable
@@ -110,6 +111,11 @@ cache. Later commands verify and read the cached checkout, so the project file c
 machine-local or cross-repository path and an already materialized source works offline. A local path
 is still valid when a repository owns its tree or a fixture supplies one; relative paths are resolved
 from `.engineering/`.
+
+`schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
+defaults to `schemas`, so `.engineering/schemas/` needs no explicit entry. The path locates the
+registry while each schema's absolute `$id` identifies its contract. `protocol schema validate`
+and `protocol schema typescript` discover this same registry from the project file.
 
 (The directory is called `.engineering` by default. If that name is taken, or your team calls it
 something else, set `AEP_PROJECT_DIR=.workflow` and discovery looks for that instead — read once per

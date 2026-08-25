@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does the Codex variant's instruction surface reach the model, and is it well-formed?
 #
-# Three checks, none of which calls an API, spends a token or reaches the network. That is the whole
+# Four checks, none of which calls an API, spends a token or reaches the network. That is the whole
 # claim: this is not the Claude Code plugin's `eval/run.sh` — there is no live run here, no agent
 # behaviour is observed and nothing is judged about how well the instructions work. What is checked
 # is the part that is checkable for free, and the boundary is stated rather than blurred:
@@ -11,6 +11,7 @@
 #      model-visible prompt — `codex debug prompt-input` builds that prompt locally and prints it;
 #   3. the fixture is isolated from the operator's own Codex home, so (2) is a fact about the files
 #      under test rather than about this machine.
+#   4. no shipped instruction preserves the retired direct-edit path into the planning store.
 #
 # Dependencies are named and are never skipped past. A machine without `codex` fails this script
 # with a row saying so, because a check that quietly passes without its subject reads exactly like a
@@ -63,6 +64,24 @@ else
   check "plugin validation passes (skipped: dependency missing)" 1
 fi
 
+# ---- 1b. the planning store has one documented writer ------------------------------------------
+if grep -R -n -E \
+  'body is edited directly|write each story.s body directly|targeted edit below the closing' \
+  "$VARIANT/skills" "$VARIANT/AGENTS.planning.md" \
+  "$VARIANT/../claude-code/skills" "$VARIANT/../claude-code/agents" \
+  >/dev/null 2>&1; then
+  R=1
+else
+  R=0
+fi
+check "no instruction tells an agent to edit a planning-store file directly" "$R"
+
+grep -R -q 'protocol artifact body' \
+  "$VARIANT/skills/planning" "$VARIANT/AGENTS.planning.md" \
+  "$VARIANT/../claude-code/skills/planning" "$VARIANT/../claude-code/agents/decomposer.md" \
+  && R=0 || R=1
+check "every planning instruction surface names the body mutation command" "$R"
+
 # ---- 2. the instruction surface, rendered into a prompt ------------------------------------------
 if [ "$CODEX_PRESENT" -eq 0 ]; then
   # Never /tmp: this machine's tmpfs drops writes under pressure; TMPDIR points at a safe cache.
@@ -77,6 +96,7 @@ if [ "$CODEX_PRESENT" -eq 0 ]; then
   git -C "$PROJECT" init -q .
 
   cp -R "$VARIANT/skills/planning" "$PROJECT/.agents/skills/planning"
+  cp -R "$VARIANT/skills/schema-contracts" "$PROJECT/.agents/skills/schema-contracts"
   cp "$VARIANT/AGENTS.planning.md" "$PROJECT/AGENTS.md"
 
   # A scratch `CODEX_HOME` is the analogue of the Claude eval's scratch `CLAUDE_CONFIG_DIR`: without
@@ -92,11 +112,17 @@ if [ "$CODEX_PRESENT" -eq 0 ]; then
     grep -q "planning: Plan engineering work in a governed markdown artifact store" "$PROMPT_INPUT" && R=0 || R=1
     check "the planning skill is offered to the model, by name and description" "$R"
 
+    grep -q "schema-contracts: Manage project-owned JSON Schema contracts" "$PROMPT_INPUT" && R=0 || R=1
+    check "the schema-contracts skill is offered to the model, by name and description" "$R"
+
     grep -q "AGENTS.md instructions for $PROJECT" "$PROMPT_INPUT" && R=0 || R=1
     check "the project's AGENTS.md is injected as instructions" "$R"
 
     grep -q "A status changes only through .protocol artifact move" "$PROMPT_INPUT" && R=0 || R=1
     check "guardrail 1 is in the model-visible prompt without anything being invoked" "$R"
+
+    grep -q "Never edit a planning-store file directly" "$PROMPT_INPUT" && R=0 || R=1
+    check "the sole-writer guardrail is in the model-visible prompt" "$R"
 
     # ---- 3. isolation: every offered skill comes from the fixture or the scratch home -----------
     FOREIGN=0

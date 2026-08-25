@@ -111,6 +111,7 @@ version: aep.project/1
 protocol: adp/1
 profile: development.standard
 protocols: ..          # where the document tree is, relative to `.engineering/`
+schemas: schemas       # project JSON Schema registry; this is also the default
 ```
 
 With `.engineering/project.yaml` and `.engineering/task.yaml` in place, the flags become optional:
@@ -130,6 +131,10 @@ obligations 10
 The first line says which it used, and carries the project's absolute path — abbreviated here.
 `inputs project` means it discovered one; `inputs . and <task>` means you passed the paths
 yourself.
+
+Project-owned JSON contracts live under the configured schema registry and identify themselves by
+absolute `$id`; the path is location, not identity. `protocol schema validate <paths>…` discovers
+the registry from this file, while `--schemas` exists for fixtures and non-project invocations.
 
 ## Seeing the workflow the profile puts you on
 

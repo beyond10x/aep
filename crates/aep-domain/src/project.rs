@@ -11,15 +11,16 @@
 //! protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
 //! artifacts: artifacts.yaml
 //! task: task.yaml
+//! schemas: schemas
 //! ```
 //!
 //! # Why this file is deliberately thin
 //!
 //! It points; it does not duplicate. A project that restated its principles here would have two
-//! copies of its rules and no way to tell which one was in force. The one thing it *may* add is
-//! documents of its own, under `.engineering/principles/` and `.engineering/profiles/`, because no
-//! organisation's rules are entirely somebody else's — and those are documents in the same format,
-//! validated the same way, not a second mechanism.
+//! copies of its rules and no way to tell which one was in force. It may add governing documents of
+//! its own under `.engineering/principles/` and `.engineering/profiles/`, and product or research
+//! contracts under the JSON Schema registry named by `schemas`. Each remains in its own validated
+//! format; the project file only locates them.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -168,6 +169,8 @@ pub struct ProjectPaths {
     pub principles: PathBuf,
     /// Project-local profiles.
     pub profiles: PathBuf,
+    /// Project-owned JSON Schema contracts.
+    pub schemas: PathBuf,
 }
 
 /// Project-owned paths before they are resolved from `.engineering/`.
@@ -183,6 +186,8 @@ pub struct ProjectLocalPaths {
     pub principles: PathBuf,
     /// Project-local profiles.
     pub profiles: PathBuf,
+    /// Project-owned JSON Schema contracts.
+    pub schemas: PathBuf,
 }
 
 impl Default for ProjectLocalPaths {
@@ -193,6 +198,7 @@ impl Default for ProjectLocalPaths {
             state: PathBuf::from("state.yaml"),
             principles: PathBuf::from("principles"),
             profiles: PathBuf::from("profiles"),
+            schemas: PathBuf::from("schemas"),
         }
     }
 }
@@ -208,6 +214,7 @@ impl ProjectLocalPaths {
             state: engineering.join(&self.state),
             principles: engineering.join(&self.principles),
             profiles: engineering.join(&self.profiles),
+            schemas: engineering.join(&self.schemas),
         }
     }
 }
@@ -266,6 +273,9 @@ pub struct RawProjectConfig {
     /// Where project-local profiles are.
     #[serde(default)]
     pub profiles: Option<PathBuf>,
+    /// Where project-owned JSON Schema contracts are.
+    #[serde(default)]
+    pub schemas: Option<PathBuf>,
 }
 
 /// Serde default for the format version.
@@ -310,6 +320,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             state: raw.state.unwrap_or(defaults.state),
             principles: raw.principles.unwrap_or(defaults.principles),
             profiles: raw.profiles.unwrap_or(defaults.profiles),
+            schemas: raw.schemas.unwrap_or(defaults.schemas),
         };
 
         // Paths *inside* the project must be relative. The separately typed protocol source may be
@@ -320,6 +331,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             ("state", &paths.state),
             ("principles", &paths.principles),
             ("profiles", &paths.profiles),
+            ("schemas", &paths.schemas),
         ] {
             if path.is_absolute() {
                 errors.push(
@@ -370,6 +382,7 @@ profile: development.standard
         assert_eq!(parsed.protocol.to_string(), "adp/1");
         assert_eq!(parsed.profile.to_string(), "development.standard");
         assert_eq!(parsed.paths.artifacts, PathBuf::from("artifacts.yaml"));
+        assert_eq!(parsed.paths.schemas, PathBuf::from("schemas"));
         assert_eq!(parsed.protocols, ProtocolSource::Path(PathBuf::from("..")));
     }
 
@@ -400,6 +413,10 @@ artifacts: graph.yaml
         assert_eq!(
             resolved.protocols,
             PathBuf::from("/work/payments/.engineering/../../protocols")
+        );
+        assert_eq!(
+            resolved.schemas,
+            PathBuf::from("/work/payments/.engineering/schemas")
         );
     }
 
@@ -470,6 +487,19 @@ artifacts: /etc/engineering/artifacts.yaml
             errors.to_string().contains("cloned anywhere"),
             "the refusal must say why relative paths matter: {errors}"
         );
+    }
+
+    #[test]
+    fn an_absolute_schema_registry_is_refused() {
+        let errors = config(
+            r"
+protocol: adp/1
+profile: development.standard
+schemas: /etc/engineering/schemas
+",
+        )
+        .expect_err("absolute schema registry");
+        assert!(errors.to_string().contains("project.schemas"), "{errors}");
     }
 
     #[test]

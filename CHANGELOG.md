@@ -9,6 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- **Projects now declare one custom JSON Schema registry, and `protocol` supplies the reusable
+  contract tooling.** The relative `schemas` path in `.engineering/project.yaml` defaults to
+  `.engineering/schemas`. `protocol schema validate` discovers that registry and validates JSON
+  instances offline by matching their `schema` selector to a schema's absolute `$id`; `protocol
+  schema typescript` selects by the same identity and produces a deterministic, drift-checkable
+  TypeScript projection. Adopters no longer need repository-local validators or handwritten type
+  copies around their JSON Schemas.
+
+- **Planning bodies now have a store-aware mutation command.** `protocol artifact body <id> --from
+  <path|->` replaces only the markdown body, preserves CLI-owned frontmatter, increments one
+  revision on changed bytes, and does nothing for identical input.
+
+### Changed
+
+- **The planning store is now single-writer.** Plugin instructions and driven-run enforcement deny
+  every direct `Edit`, `Write`, or `NotebookEdit` under `.engineering/planning/**`; creation,
+  relations, lifecycle moves, and prose all cross the `protocol artifact` surface. Both Codex and
+  Claude integrations also ship a `schema-contracts` skill for registry discovery, validation,
+  projection, and drift checks.
+
 ## [0.12.0] — 2026-08-24
 
 ### Fixed

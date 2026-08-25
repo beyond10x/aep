@@ -424,10 +424,11 @@ enum Command {
         #[command(subcommand)]
         command: EvidenceCommand,
     },
-    /// Print the generated JSON Schemas.
+    /// Inspect built-in schemas or work with project-owned JSON Schema contracts.
     Schema {
-        /// Which schema, by file stem, such as `workflow`. Omitted lists them all.
-        name: Option<String>,
+        /// What to do. A built-in schema name such as `workflow` remains accepted.
+        #[command(subcommand)]
+        command: Option<schema::SchemaCommand>,
     },
     /// Check a storage backend against the AEP contract suites.
     ///
@@ -665,6 +666,10 @@ mod eval;
 // free, whether a workflow fits a notation before anything is paid to run one under it.
 mod flow;
 
+// Project-owned JSON Schema contracts. The schema documents are the source of truth; this module
+// only discovers their project registry, validates instances and writes deterministic projections.
+mod schema;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -744,7 +749,7 @@ fn run() -> Result<ExitCode> {
                 format,
             ),
         },
-        Command::Schema { name } => schema(name.as_deref()),
+        Command::Schema { command } => schema::run(command),
         Command::Conformance {
             level,
             suite,
@@ -3560,27 +3565,6 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
     // Exit 0: the report was produced. Whether the execution is blocked is in the report, and a
     // harness that wants to branch on it reads `blocked` or `is_complete` from the JSON — a blocked
     // execution is the normal case, not an error.
-    Ok(ExitCode::SUCCESS)
-}
-
-/// `protocol schema`
-fn schema(name: Option<&str>) -> Result<ExitCode> {
-    let schemas = aep_schema::generated_schemas();
-    match name {
-        None => {
-            for entry in schemas {
-                outln!("{:<24} {}", entry.filename, entry.describes);
-            }
-        }
-        Some(name) => {
-            let wanted = format!("{name}.schema.json");
-            let entry = schemas
-                .into_iter()
-                .find(|entry| entry.filename == wanted || entry.name == name)
-                .with_context(|| format!("no schema is called `{name}`"))?;
-            out!("{}", entry.to_json().context("serialising the schema")?);
-        }
-    }
     Ok(ExitCode::SUCCESS)
 }
 

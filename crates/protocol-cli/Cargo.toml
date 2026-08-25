@@ -41,6 +41,7 @@ aep-render.workspace = true
 
 aep-engine.workspace = true
 aep-schema.workspace = true
+schema-contract.workspace = true
 ess-compiler.workspace = true
 
 # `protocol ess conform`. The suite a specification obliges, the runner that executes one, and the

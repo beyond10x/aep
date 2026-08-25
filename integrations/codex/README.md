@@ -23,6 +23,7 @@ it.
 | Component | What it does |
 |---|---|
 | [`skills/planning/SKILL.md`](./skills/planning/SKILL.md) | the port of the Claude Code skill: the model, the four guardrails, the discovery rule and a worked decomposition. Loaded on demand |
+| [`skills/schema-contracts/SKILL.md`](./skills/schema-contracts/SKILL.md) | project schema-registry discovery, offline validation, deterministic TypeScript projection, and drift checks from one JSON Schema source |
 | [`AGENTS.planning.md`](./AGENTS.planning.md) | the same guardrails and the same discovery rule as an `AGENTS.md` fragment, which Codex reads on every turn without anything being invoked |
 | [`.codex-plugin/plugin.json`](./.codex-plugin/plugin.json) | the plugin manifest, for the marketplace install route |
 | [`eval/`](./eval/) | one check that costs nothing: the manifest and the skill are well-formed, and the instructions reach the model. No live run — see below |
@@ -53,6 +54,7 @@ root:
 ```console
 $ mkdir -p .agents/skills
 $ cp -R <checkout>/integrations/codex/skills/planning .agents/skills/planning
+$ cp -R <checkout>/integrations/codex/skills/schema-contracts .agents/skills/schema-contracts
 $ cp <checkout>/integrations/claude-code/skills/planning/references/store-conventions.md \
      .agents/skills/planning/references/store-conventions.md
 $ cat <checkout>/integrations/codex/AGENTS.planning.md >> AGENTS.md

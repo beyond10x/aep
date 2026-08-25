@@ -49,8 +49,9 @@ $ protocol artifact new story credential-store \
     --relate derived_from:epic:passkey-login
 ```
 
-Then write each story's body directly in its file: the context, and **one acceptance statement** —
-a single sentence naming an observable outcome, under an `## Acceptance` heading. A story without
+Then write each story's complete body through
+`protocol artifact body <story-id> --from <path|->`: the context, and **one acceptance statement**
+— a single sentence naming an observable outcome, under an `## Acceptance` heading. A story without
 one is not a story, it is a title.
 
 ## Hard rules
@@ -61,11 +62,9 @@ one is not a story, it is a title.
 2. **Never touch an artifact you did not create.** Not the epic, not a pre-existing sibling story,
    not their frontmatter and not their bodies. If the epic's text is wrong or a sibling overlaps with
    what you drafted, say so in your report and leave the file alone.
-3. **Never hand-edit frontmatter.** Relations are set with `--relate` at creation or with
-   `protocol artifact relate` afterwards. `status`, `id`, `kind` and `revision` are the CLI's.
-   That includes whole-file rewrites: fill a story's body with a targeted edit below the closing
-   `---`, never by reading the file and writing all of it back — re-typing the frontmatter is
-   hand-editing it, however faithful the copy.
+3. **Never edit a planning-store file directly.** Relations are set with `--relate` at creation or
+   `protocol artifact relate`; bodies use `protocol artifact body`; status uses `protocol artifact
+   move`. `id`, `kind`, and `revision` are maintained by the CLI.
 4. **Finish with `protocol artifact validate`.** Always, even when you believe nothing can be wrong.
 
 ## Report

@@ -50,12 +50,15 @@ $ protocol artifact move story:credential-store --to proposed
 story:credential-store moved draft -> proposed (revision 2)
 ```
 
-**2. The body is edited directly — and only the body.** The CLI owns frontmatter; it does not own
-content. Open the file and write the markdown — context, acceptance, notes, open questions — with
-the ordinary editing tools. There is no CLI verb for prose, and there should not be one. Use a
-**targeted edit below the closing `---`**, never a whole-file rewrite: reading a file and writing
-it back re-types the frontmatter by hand, and a faithfully-copied frontmatter is
-indistinguishable from a silently-altered one until something downstream breaks.
+**2. Every store mutation uses `protocol artifact`; never edit a store file directly.** Creation,
+relations, status, and prose use `new`, `relate`, `move`, and `body` respectively. Supply the complete
+body from a file or standard input; the CLI preserves frontmatter, validates the store, and bumps the
+revision once when bytes change.
+
+```console
+$ protocol artifact body story:credential-store --from story-body.md
+story:credential-store body replaced (revision 2) at .engineering/planning/story/credential-store.md
+```
 
 **3. After a batch of edits, run `protocol artifact validate`, and relay its output verbatim.** It
 accumulates every problem rather than stopping at the first, and exits 1 if any remain. Do not
@@ -133,8 +136,8 @@ $ protocol artifact new story registration-ceremony \
 created story:registration-ceremony (draft) at .engineering/planning/story/registration-ceremony.md
 ```
 
-Then write each story's body — one acceptance statement per story, in the file itself, because
-guardrail 2 says prose is not the CLI's business.
+Then write each story's complete body through `protocol artifact body <id> --from <path|->` — one
+acceptance statement per story, because guardrail 2 makes the CLI the store's sole writer.
 
 Then the one move the operator asked for, and the check:
 
@@ -153,5 +156,5 @@ Had `validate` found something, its output would have gone to the operator unedi
 
 The on-disk format — directory layout, filename and id rules, which frontmatter fields are
 machine-owned, and a complete example file — is in
-[references/store-conventions.md](references/store-conventions.md). Read it before hand-editing a
-file. Everything else is a question for the CLI.
+[references/store-conventions.md](references/store-conventions.md). Read it before changing a store
+document. Everything else is a question for the CLI.

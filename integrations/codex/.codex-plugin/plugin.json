@@ -1,7 +1,7 @@
 {
   "name": "engineering-protocols",
   "version": "0.1.0",
-  "description": "Plan engineering work as governed markdown artifacts. Teaches Codex to create, relate, move and validate epics, stories and tasks in a `.engineering/planning/` store through the `protocol` CLI, which owns the vocabulary and the lifecycle.",
+  "description": "Govern planning artifacts and project JSON Schema contracts through the `protocol` CLI: one writer for the planning store, one authored source for runtime schemas, and deterministic validation and projections.",
   "author": {
     "name": "Beyond10x contributor"
   },
@@ -15,13 +15,15 @@
     "stories",
     "artifacts",
     "lifecycle",
+    "json-schema",
+    "contracts",
     "engineering-protocols"
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Engineering Protocols — Planning",
-    "shortDescription": "Plan work as governed markdown artifacts",
-    "longDescription": "Epics, stories, tasks and initiatives as files under `.engineering/planning/`, with kinds, statuses and legal moves supplied by validated documents read from the `protocol` CLI rather than copied into a prompt.",
+    "displayName": "Engineering Protocols",
+    "shortDescription": "Govern plans and project schema contracts",
+    "longDescription": "Epics, stories and tasks in a CLI-owned planning store, plus project JSON Schema registries with offline validation and deterministic TypeScript projections from one authored source.",
     "developerName": "beyond10x",
     "category": "Developer Tools",
     "capabilities": [
@@ -31,7 +33,8 @@
     "defaultPrompt": [
       "Decompose this epic into stories.",
       "What is still in draft in the planning store?",
-      "Validate the planning store and report what it found."
+      "Validate the planning store and report what it found.",
+      "Validate this project's JSON contracts and check generated TypeScript for drift."
     ]
   }
 }

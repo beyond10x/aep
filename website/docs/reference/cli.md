@@ -32,7 +32,9 @@ and `trace check`.
 | `protocol inspect [reference]` | shows what a protocol, principle, workflow or profile declares — `aep/1`, `test-driven`, `development.standard` |
 | `protocol evaluate --task … [--artifacts …] [--evidence e.yaml]… [--advance]` | evaluates an execution: what is owed, what is permitted, what is missing; `--advance` also attempts transitions |
 | `protocol explain --task … --action production.write` | explains one decision — allowed or denied, by which rule, and what would unlock it |
-| `protocol schema [name]` | prints the generated JSON Schemas, or one by file stem; no `--format`, because the output is already JSON |
+| `protocol schema [name]` | prints engineering-protocols' generated JSON Schemas, or one by file stem |
+| `protocol schema validate <paths>… [--schemas dir] [--format text\|yaml\|json]` | discovers the project registry from `project.yaml`, selects each JSON instance's contract by `schema` → `$id`, and validates offline; `--schemas` is the fixture/non-project override |
+| `protocol schema typescript <schema-id> --root Name [--out file] [--check] [--schemas dir]` | deterministically projects structural TypeScript from one registry schema selected by `$id`; `--check` detects drift without writing |
 | `protocol conformance [--level core\|audited\|full] [--suite name] [--inject fault]` | checks a storage backend against the AEP contract suites (16 suites at `full`, 14 at `audited`, 7 at `core`); `--inject` breaks one property on purpose to show the responsible suite fails |
 
 Inside a project — a directory holding `.engineering/` — `resolve`, `evaluate` and `explain` take
@@ -55,6 +57,7 @@ from, default `.`).
 | `protocol artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--relate rel:id]` | writes one file, at the path the id determines; refuses to overwrite an existing one |
 | `protocol artifact move <id> --to <status>` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead |
 | `protocol artifact relate <id> <relation> <target>` | adds one edge |
+| `protocol artifact body <id> --from <path\|->` | replaces the complete markdown body while preserving CLI-owned frontmatter; changed bytes bump one revision, identical bytes do nothing |
 | `protocol artifact list [--kind …] [--status …]` | the plan, one line per artifact |
 | `protocol artifact board [--kind …]` | the same plan as status columns |
 | `protocol artifact graph [--format dot\|json]` | the plan's graph — `dot` for `dot -Tsvg`, `json` for a consumer that would otherwise parse a diagram |
@@ -63,7 +66,7 @@ from, default `.`).
 | `protocol artifact relations` | the 13 relations, with what each edge means |
 | `protocol artifact lifecycle <kind>` | where a kind starts, and what may follow what |
 
-`new`, `move` and `relate` write without an `--out`, unlike `ess generate` and `ess synthesize`.
+`new`, `move`, `relate` and `body` write without an `--out`, unlike `ess generate` and `ess synthesize`.
 The difference is that they write exactly one file, at a path the id determines, inside a directory
 somebody opted into — and an item you did not want is removed with `rm`.
 

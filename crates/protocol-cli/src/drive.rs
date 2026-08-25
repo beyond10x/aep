@@ -1577,8 +1577,8 @@ fn answer_events(
 /// 2. **the per-state allowlist**: the tool must render from a capability this state admits,
 ///    which is what `--allowedTools` used to carry (and can no longer, because a bare
 ///    `--allowedTools` entry auto-approves the whole tool before any seam is consulted);
-/// 3. **store integrity** (`Edit`/`Write`/`NotebookEdit`): the planning store's frontmatter is
-///    the `protocol` CLI's, in every state of every workflow.
+/// 3. **store integrity** (`Edit`/`Write`/`NotebookEdit`): every planning-store mutation crosses
+///    the `protocol artifact` surface, in every state of every workflow.
 fn decide_tool(
     context: &StepContext<'_>,
     tool: &str,
@@ -1601,12 +1601,11 @@ fn decide_tool(
     }
 }
 
-/// Guardrail 1, made mechanical: the planning store's frontmatter is the CLI's.
+/// The planning store has one writer: `protocol artifact`.
 ///
-/// `Write` and `NotebookEdit` replace whole files and are denied under the store outright; an
-/// `Edit` is allowed only when neither string touches the `---` fence or a machine-owned key —
-/// decidable from the payload alone, which is exactly what the retired `store-integrity.sh`
-/// decided. The audit that does not depend on this firing is `protocol artifact validate`.
+/// All native file-writing tools are denied under the store. Bodies move through `artifact body`,
+/// just as status and relations move through their own verbs; otherwise the same document still
+/// has two writers and only one of them validates the store before committing its change.
 fn store_integrity(tool: &str, input: &serde_json::Value) -> Result<(), String> {
     let target = match tool {
         "NotebookEdit" => input["notebook_path"].as_str().unwrap_or_default(),
@@ -1615,51 +1614,11 @@ fn store_integrity(tool: &str, input: &serde_json::Value) -> Result<(), String> 
     if !target.contains(".engineering/planning/") {
         return Ok(());
     }
-    if tool == "Write" || tool == "NotebookEdit" {
-        return Err(format!(
-            "`{tool}` replaces the whole of {target}, and the planning store's frontmatter is \
-             owned by the `protocol` CLI. Write the body with a targeted `Edit` below the \
-             closing `---`, and change frontmatter through `protocol artifact` — `new`, `move`, \
-             `relate`. A hand-retyped frontmatter is indistinguishable from a silently-altered \
-             one."
-        ));
-    }
-    for field in ["old_string", "new_string"] {
-        let Some(value) = input[field].as_str() else {
-            continue;
-        };
-        for line in value.lines() {
-            let trimmed = line.trim();
-            if trimmed == "---" {
-                return Err(format!(
-                    "the edit's `{field}` crosses the `---` frontmatter fence of {target}. Edit \
-                     only below the closing fence; the frontmatter is the CLI's."
-                ));
-            }
-            if let Some(key) = machine_owned_key(trimmed) {
-                return Err(format!(
-                    "the edit's `{field}` writes the machine-owned field `{key}` of {target}. \
-                     `status` moves only through `protocol artifact move`, which validates the \
-                     move against the kind's lifecycle; `id`, `kind`, `revision`, `relations` \
-                     and `format` are written by `protocol artifact new` and `protocol artifact \
-                     relate`. A hand-edited status is an unvalidated one."
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// The machine-owned frontmatter key a line writes, if it writes one.
-fn machine_owned_key(line: &str) -> Option<&'static str> {
-    for key in ["id", "kind", "status", "revision", "relations", "format"] {
-        if let Some(rest) = line.strip_prefix(key) {
-            if rest.trim_start().starts_with(':') {
-                return Some(key);
-            }
-        }
-    }
-    None
+    Err(format!(
+        "`{tool}` cannot write {target}: planning-store files are mutated only through `protocol \
+         artifact`. Use `artifact body <id> --from <path|->` for prose, `artifact move` for \
+         status, `artifact relate` for relations, and `artifact new` for creation."
+    ))
 }
 
 /// The per-state shell surface: one simple invocation of `protocol artifact …` or
@@ -2394,9 +2353,7 @@ mod tests {
         );
     }
 
-    /// The retired `store-integrity.sh`, case for case: whole-file writes under the store are
-    /// denied, an `Edit` is denied when it touches the fence or a machine-owned key, and a body
-    /// edit below the fence passes.
+    /// Every native file writer is refused under the planning store; the CLI is its sole writer.
     #[test]
     fn the_planning_stores_frontmatter_is_the_clis() {
         let state: StateId = "implement".parse().expect("a state id");
@@ -2416,18 +2373,11 @@ mod tests {
                 &serde_json::json!({ "file_path": store_file, "old_string": old, "new_string": new }),
             )
         };
-        assert!(edit("a body sentence", "a better body sentence").is_ok());
-        assert!(edit("---", "-- -").is_err(), "the fence");
-        assert!(edit("  ---  ", "x").is_err(), "the fence, padded");
-        assert!(
-            edit("a line", "status: done").is_err(),
-            "a machine-owned key"
-        );
-        assert!(edit("revision: 1", "x").is_err(), "owned key in old_string");
-        assert!(
-            edit("the status: of things", "x").is_ok(),
-            "mid-line mention of a key name is not a frontmatter write"
-        );
+        let refusal = edit("a body sentence", "a better body sentence")
+            .expect_err("even body edits cross the CLI surface");
+        assert!(refusal.contains("artifact body"), "{refusal}");
+        assert!(edit("---", "-- -").is_err());
+        assert!(edit("a line", "status: done").is_err());
 
         let elsewhere = serde_json::json!({ "file_path": "/repo/src/lib.rs", "content": "x" });
         assert!(decide_tool(&context, "Write", &elsewhere).is_ok());

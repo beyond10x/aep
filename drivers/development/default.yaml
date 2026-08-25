@@ -62,14 +62,11 @@ states:
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]
@@ -85,16 +82,13 @@ states:
         description: State the required behaviour as a specification artifact.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]
@@ -112,16 +106,13 @@ states:
         description: Break the specification into units that can each be verified alone.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]
@@ -138,16 +129,13 @@ states:
         description: Write the tests before there is an implementation to shape them around.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]
@@ -172,16 +160,13 @@ states:
         description: Make the smallest change that satisfies the unit and its verifiers.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]
@@ -232,16 +217,13 @@ states:
         description: Try to break what the previous state just declared working.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. `partial-only` is the planning
-        # store's own rule, lifted here from `crates/protocol-cli/src/drive.rs`'s `store_integrity`:
-        # the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite
-        # re-types the frontmatter by hand. It was written in one vendor's tool names there, so
-        # every arm but one walked past it.
+        # nobody thought of has an answer rather than a default. The planning store is denied to
+        # native file writers because `protocol artifact` owns every mutation, including bodies.
         context:
           - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
-            write: partial-only
+            write: denied
           - paths: ["crates/**", "docs/**", "conformance/**", "drivers/**"]
             write: allowed
           - paths: ["**"]

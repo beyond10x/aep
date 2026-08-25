@@ -158,6 +158,21 @@ impl PlanningDocument {
         true
     }
 
+    /// Replaces the markdown body, and says whether anything changed.
+    ///
+    /// The body is opaque UTF-8: no markdown parsing, reflow, heading policy or newline policy is
+    /// applied. `false` means the supplied bytes already are the body, so writing them would create
+    /// a revision with no corresponding change.
+    pub fn replace_body(&mut self, body: impl Into<String>) -> bool {
+        let body = body.into();
+        if self.body == body {
+            return false;
+        }
+        self.body = body;
+        self.bump();
+        true
+    }
+
     /// Records that this document has been written again.
     fn bump(&mut self) {
         self.frontmatter.revision = self.frontmatter.revision.saturating_add(1);
@@ -350,6 +365,28 @@ mod tests {
         assert!(rendered.contains("sprint: 42"), "{rendered}");
         assert!(rendered.contains("status: proposed"), "{rendered}");
         assert!(rendered.contains("revision: 2"), "{rendered}");
+    }
+
+    #[test]
+    fn replacing_the_body_preserves_frontmatter_and_bumps_one_revision() {
+        let mut parsed = document(STORY);
+        let before = parsed.frontmatter.clone();
+
+        assert!(parsed.replace_body("# Reframed\n\nNew evidence.\n"));
+        assert_eq!(parsed.body, "# Reframed\n\nNew evidence.\n");
+        assert_eq!(parsed.frontmatter.id, before.id);
+        assert_eq!(parsed.frontmatter.kind, before.kind);
+        assert_eq!(parsed.frontmatter.status, before.status);
+        assert_eq!(parsed.frontmatter.relations, before.relations);
+        assert_eq!(parsed.frontmatter.revision, before.revision + 1);
+    }
+
+    #[test]
+    fn replacing_a_body_with_the_same_bytes_changes_nothing() {
+        let mut parsed = document(STORY);
+        let before = parsed.clone();
+        assert!(!parsed.replace_body(before.body.clone()));
+        assert_eq!(parsed, before);
     }
 
     #[test]

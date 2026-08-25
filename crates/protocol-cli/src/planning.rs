@@ -22,6 +22,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -168,6 +169,17 @@ pub(crate) enum ArtifactCommand {
         /// The artifact the edge points at.
         target: String,
     },
+    /// Replace a plan item's markdown body while preserving CLI-owned frontmatter.
+    Body {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+        /// Read the complete replacement body from this UTF-8 file; `-` reads standard input.
+        #[arg(long, value_name = "PATH")]
+        from: PathBuf,
+    },
     /// List the plan, one line per artifact.
     List {
         /// Where the plan is and how to render.
@@ -286,6 +298,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             relation,
             target,
         } => relate(&store, &id, &relation, &target),
+        ArtifactCommand::Body { store, id, from } => replace_body(&store, &id, &from),
         ArtifactCommand::List {
             store,
             kind,
@@ -460,6 +473,53 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<Ex
                 relation: relation.as_str(),
                 target: target.to_string(),
                 revision: document.frontmatter.revision,
+            },
+            args.format,
+        )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `protocol artifact body`
+fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let body = if from == Path::new("-") {
+        let mut body = String::new();
+        std::io::stdin()
+            .read_to_string(&mut body)
+            .context("reading the replacement body from standard input")?;
+        body
+    } else {
+        std::fs::read_to_string(from)
+            .with_context(|| format!("reading the replacement body from {}", from.display()))?
+    };
+
+    let store = args.store()?;
+    let mut report = store.load();
+    require_clean(&store, &report)?;
+    let stored = report
+        .documents
+        .get_mut(&id)
+        .with_context(|| missing(&store, &id))?;
+    if !stored.document.replace_body(body) {
+        outln!("{id} already has those body bytes; nothing to do");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let relative = stored.relative_path.clone();
+    let document = stored.document.clone();
+    let path = store.update(&relative, &document)?;
+    match args.format {
+        Format::Text => outln!(
+            "{id} body replaced (revision {}) at {}",
+            document.frontmatter.revision,
+            path.display()
+        ),
+        Format::Yaml | Format::Json => crate::print_serialised(
+            &BodyReplaced {
+                id: id.to_string(),
+                revision: document.frontmatter.revision,
+                path: relative,
             },
             args.format,
         )?,
@@ -957,6 +1017,14 @@ struct Related {
     relation: &'static str,
     target: String,
     revision: u64,
+}
+
+/// What `body` replaced.
+#[derive(Debug, serde::Serialize)]
+struct BodyReplaced {
+    id: String,
+    revision: u64,
+    path: String,
 }
 
 /// What `validate` found.

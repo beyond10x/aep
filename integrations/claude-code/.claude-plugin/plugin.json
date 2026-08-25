@@ -1,7 +1,7 @@
 {
   "name": "engineering-protocols",
-  "displayName": "Engineering Protocols — Planning",
-  "description": "Plan engineering work as governed markdown artifacts. Teaches Claude Code to create, relate, move and validate epics, stories and tasks in a `.engineering/planning/` store through the `protocol` CLI, which owns the vocabulary and the lifecycle.",
+  "displayName": "Engineering Protocols",
+  "description": "Govern planning artifacts and project JSON Schema contracts through the `protocol` CLI: one writer for the planning store, one authored source for runtime schemas, and deterministic validation and projections.",
   "version": "0.1.0",
   "author": {
     "name": "Beyond10x contributor"
@@ -15,6 +15,8 @@
     "stories",
     "artifacts",
     "lifecycle",
+    "json-schema",
+    "contracts",
     "engineering-protocols"
   ]
 }

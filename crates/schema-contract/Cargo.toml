@@ -1,0 +1,21 @@
+[package]
+name = "schema-contract"
+description = "Offline validation and deterministic projections for adopter-owned JSON Schema contracts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+thiserror.workspace = true
+
+# The same validator and version aep-schema and ess-gen test their published contracts with. It is
+# runtime here because adopter documents are inputs to `protocol schema validate`; default features
+# stay off so a reference cannot turn a local gate into network I/O.
+jsonschema = { version = "0.49.9", default-features = false }
+
+[lints]
+workspace = true

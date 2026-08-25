@@ -14,7 +14,8 @@ a copy that goes stale, and drift is the thing this project exists to refuse.
 
 | Component | What it does |
 |---|---|
-| `skills/planning/` | the model, the four guardrails, and how to discover the store's vocabulary. Auto-triggers on planning talk or a `.engineering/planning/` directory; also invocable as `/engineering-protocols:planning` |
+| `skills/planning/` | the model, the planning-store guardrails, and how to discover the store's vocabulary. Auto-triggers on planning talk or a `.engineering/planning/` directory; also invocable as `/engineering-protocols:planning` |
+| `skills/schema-contracts/` | project schema-registry discovery, offline validation, deterministic TypeScript projection, and drift checks from one JSON Schema source |
 | `agents/decomposer.md` | takes one epic id, drafts the stories that jointly cover it, each with an acceptance statement. Creates drafts only — never moves an artifact, never touches one it did not create |
 | `agents/plan-reviewer.md` | read-only semantic audit: stories that no longer cover their epic, finished epics still open, stale work, missing acceptance statements. Proposes moves, performs none |
 
@@ -74,7 +75,7 @@ The same rules hold today, one level down and in one place:
 
 | rule | where it lives now | active when |
 |---|---|---|
-| the planning store's frontmatter is the CLI's: `Write`/`NotebookEdit` denied under `.engineering/planning/**`, an `Edit` denied when it crosses the `---` fence or writes a machine-owned field | `store_integrity` in `crates/protocol-cli/src/drive.rs`, answering the metaharness seam at decision time | every driven `llm` step |
+| the planning store has one writer: `Edit`, `Write`, and `NotebookEdit` are denied under `.engineering/planning/**`; prose goes through `protocol artifact body` | `store_integrity` in `crates/protocol-cli/src/drive.rs`, answering the metaharness seam at decision time | every driven `llm` step |
 | a driven shell is one simple invocation of `protocol artifact …` or `protocol trace …` — no pipes, no redirection, no substitution | `driven_surface`, same place | every driven `llm` step |
 | a tool no admitted capability renders to is refused naming the state's surface | `decide_tool`, same place — the allowlist that used to ride on `--allowedTools` | every driven `llm` step |
 

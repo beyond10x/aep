@@ -247,9 +247,6 @@ pub enum WriteScope {
     /// Anything in the class may act on these paths.
     Allowed,
     /// Part of a file may be changed; a whole file may never be replaced.
-    ///
-    /// The planning store's rule: the CLI owns the frontmatter, so a body edit is legitimate and a
-    /// whole-file rewrite re-types the frontmatter by hand.
     PartialOnly,
     /// Nothing in the class may act here.
     Denied,

@@ -10,6 +10,7 @@
 //!     ├── project.yaml           protocol, profile, where the tree is
 //!     ├── artifacts.yaml         what exists and how it relates
 //!     ├── task.yaml              what is being worked on
+//!     ├── schemas/               project-owned JSON Schema contracts
 //!     ├── principles/            the team's own rules, if any
 //!     └── profiles/
 //! ```
@@ -42,7 +43,8 @@ use std::sync::OnceLock;
 
 use aep_domain::artifact::ArtifactGraph;
 use aep_domain::project::{
-    GitProtocolSource, ProjectConfig, ProjectPaths, ProtocolSource, PROJECT_DIRECTORY, PROJECT_FILE,
+    GitProtocolSource, ProjectConfig, ProjectLocalPaths, ProjectPaths, ProtocolSource,
+    PROJECT_DIRECTORY, PROJECT_FILE,
 };
 use aep_domain::task::Task;
 use sha2::{Digest, Sha256};
@@ -165,6 +167,17 @@ pub fn load_paths(root: &Path) -> Result<ProjectPaths, LoadErrors> {
         .map_err(|failure| LoadErrors::from_failures(vec![failure]))
 }
 
+/// Loads only the project-owned relative paths from configuration.
+///
+/// Unlike [`load_paths`], this does not resolve or materialize the protocol source. Use it for a
+/// command that needs only a local input such as the project's schema registry: discovering a
+/// directory inside the current repository must not fetch an unrelated governing repository.
+pub fn load_local_paths(root: &Path) -> Result<ProjectLocalPaths, LoadErrors> {
+    read_config(root)
+        .map(|(_, _, config)| config.paths)
+        .map_err(|failure| LoadErrors::from_failures(vec![failure]))
+}
+
 /// Loads a project, or returns every failure found.
 // One pass over one directory. Splitting it would thread the failure list through five helpers to
 // hide the fact that loading a project is, in order: read the config, load the tree, merge the
@@ -272,6 +285,18 @@ fn load_report(root: &Path) -> Result<Project, Vec<LoadFailure>> {
 
 /// Reads the one document that says where every other project input lives.
 fn config_and_paths(root: &Path) -> Result<(ProjectConfig, ProjectPaths), LoadFailure> {
+    let (engineering, config_path, config) = read_config(root)?;
+    let protocols =
+        resolve_protocol_source(&config.protocols, &engineering).map_err(|detail| LoadFailure {
+            path: Some(config_path),
+            detail,
+        })?;
+    let paths = config.paths.resolved(&engineering, protocols);
+    Ok((config, paths))
+}
+
+/// Reads and validates project configuration without resolving any source it names.
+fn read_config(root: &Path) -> Result<(PathBuf, PathBuf, ProjectConfig), LoadFailure> {
     let engineering = root.join(project_directory());
     let config_path = engineering.join(PROJECT_FILE);
     let text = std::fs::read_to_string(&config_path).map_err(|error| LoadFailure {
@@ -283,13 +308,7 @@ fn config_and_paths(root: &Path) -> Result<(ProjectConfig, ProjectPaths), LoadFa
             path: Some(config_path.clone()),
             detail: error.to_string(),
         })?;
-    let protocols =
-        resolve_protocol_source(&config.protocols, &engineering).map_err(|detail| LoadFailure {
-            path: Some(config_path),
-            detail,
-        })?;
-    let paths = config.paths.resolved(&engineering, protocols);
-    Ok((config, paths))
+    Ok((engineering, config_path, config))
 }
 
 /// Resolves a local tree immediately or materializes an immutable repository source in the cache.

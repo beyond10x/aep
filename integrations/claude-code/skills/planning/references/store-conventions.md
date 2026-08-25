@@ -1,6 +1,6 @@
 # Store conventions
 
-What the on-disk store looks like, and which parts of a file you may touch. This file carries only
+What the on-disk store looks like, and which CLI operation changes each part. This file carries only
 what the CLI cannot answer at runtime — the vocabulary questions (kinds, statuses, legal moves,
 relations) all have commands, and those commands are the authority. See `SKILL.md` §2.
 
@@ -36,6 +36,20 @@ Renaming therefore is not a `mv`. Moving a file by hand breaks every relation th
 and leaves `validate` to find the wreckage. Create the new artifact, re-point the relations, and
 archive the old one through its lifecycle.
 
+## Mutation ownership
+
+No planning-store file is edited directly. One command surface owns every change:
+
+| Change | Command |
+|---|---|
+| create an artifact | `protocol artifact new` |
+| replace its complete markdown body | `protocol artifact body <id> --from <path|->` |
+| add a relation | `protocol artifact relate` |
+| move lifecycle status | `protocol artifact move` |
+
+This makes the store a single-writer system: every mutation loads and validates it before writing,
+and every changed document receives the same revision semantics.
+
 ## Frontmatter
 
 Everything above the `---` is structured. Ownership is what decides whether you may edit it:
@@ -57,10 +71,10 @@ legal one afterwards, which is what makes it expensive.
 
 ## Body
 
-Everything below the closing `---` is yours and the operator's. There is no required section list at
-this layer; a kind may declare expected sections in `artifacts/kinds/<kind>.yaml`, and
-`protocol artifact kinds` reports what a kind is for. Write plainly: what this is, why now, what
-counts as done.
+Everything below the closing `---` is authored by you and the operator, but written through
+`protocol artifact body`. There is no required section list at this layer; a kind may declare
+expected sections in `artifacts/kinds/<kind>.yaml`, and `protocol artifact kinds` reports what a
+kind is for. Write plainly: what this is, why now, what counts as done.
 
 One convention worth keeping: **a story or task carries a single acceptance statement**, one
 sentence, in the form of an observable outcome. It is what a reviewer checks against and what the

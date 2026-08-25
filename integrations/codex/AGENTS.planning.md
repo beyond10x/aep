@@ -45,10 +45,9 @@ Before the first write of a session, run `protocol artifact list` and `protocol 
    never write it into a file with a patch or a heredoc. The CLI validates the move against the
    kind's lifecycle; a hand-edited status is an unvalidated one, indistinguishable in the file from
    a legal one.
-2. **The body is edited directly — and only the body.** Patch below the closing `---` and touch no
-   line above it. There is no CLI verb for prose and there should not be one; equally, a whole-file
-   rewrite re-types machine-owned frontmatter by hand, and a faithful copy is indistinguishable from
-   a silently-altered one until something downstream breaks.
+2. **Never edit a planning-store file directly.** Every mutation crosses `protocol artifact`:
+   `new` creates, `relate` changes relations, `move` changes status, and
+   `body <id> --from <path|->` replaces prose while preserving frontmatter and revision rules.
 3. **After a batch of edits, run `protocol artifact validate` and relay its output verbatim.** It
    accumulates every problem rather than stopping at the first and exits 1 if any remain. "Validation
    failed" throws away the only part the operator can act on.

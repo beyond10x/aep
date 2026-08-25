@@ -411,7 +411,7 @@
           ]
         },
         {
-          "description": "Part of a file may be changed; a whole file may never be replaced.\n\nThe planning store's rule: the CLI owns the frontmatter, so a body edit is legitimate and a whole-file rewrite re-types the frontmatter by hand.",
+          "description": "Part of a file may be changed; a whole file may never be replaced.",
           "type": "string",
           "enum": [
             "partial-only"

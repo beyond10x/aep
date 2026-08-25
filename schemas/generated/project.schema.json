@@ -56,6 +56,14 @@
         "null"
       ]
     },
+    "schemas": {
+      "description": "Where project-owned JSON Schema contracts are.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "state": {
       "description": "Where execution state is kept.",
       "default": null,

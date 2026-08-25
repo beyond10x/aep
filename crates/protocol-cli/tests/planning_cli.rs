@@ -97,6 +97,7 @@ const VERBS: &[&str] = &[
     "new",
     "move",
     "relate",
+    "body",
     "list",
     "board",
     "graph",
@@ -240,6 +241,101 @@ fn a_legal_move_rewrites_the_document_and_bumps_the_revision() {
         text.contains("revision: 2"),
         "a write that changed the file did not move the revision: {text}"
     );
+}
+
+#[test]
+fn a_body_replacement_preserves_machine_owned_frontmatter() {
+    let store = scratch("aep-planning-body");
+    let body = store
+        .parent()
+        .expect("scratch has a parent")
+        .join("aep-planning-body.md");
+    write(&body, "# Deliberate body\n\nExact bytes.\n");
+    assert_eq!(
+        code(&protocol(&[
+            "artifact",
+            "new",
+            "story",
+            "demo",
+            "--title",
+            "Demo",
+            "--store",
+            printable(&store),
+        ])),
+        0
+    );
+
+    let replaced = protocol(&[
+        "artifact",
+        "body",
+        "story:demo",
+        "--from",
+        printable(&body),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&replaced), 0, "{}", stderr(&replaced));
+
+    let text = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
+    assert!(text.contains("id: story:demo"), "{text}");
+    assert!(text.contains("kind: story"), "{text}");
+    assert!(text.contains("status: draft"), "{text}");
+    assert!(text.contains("revision: 2"), "{text}");
+    assert!(
+        text.ends_with("# Deliberate body\n\nExact bytes.\n"),
+        "{text}"
+    );
+
+    std::fs::remove_file(body).ok();
+}
+
+#[test]
+fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
+    let store = scratch("aep-planning-body-identical");
+    assert_eq!(
+        code(&protocol(&[
+            "artifact",
+            "new",
+            "story",
+            "demo",
+            "--title",
+            "Demo",
+            "--store",
+            printable(&store),
+        ])),
+        0
+    );
+    let document = store.join("story/demo.md");
+    let text = std::fs::read_to_string(&document).expect("readable");
+    let body = text
+        .split_once("\n---\n")
+        .map(|(_, body)| body)
+        .expect("the document has a closing fence");
+    let source = store
+        .parent()
+        .expect("scratch has a parent")
+        .join("aep-planning-same-body.md");
+    write(&source, body);
+
+    let replaced = protocol(&[
+        "artifact",
+        "body",
+        "story:demo",
+        "--from",
+        printable(&source),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&replaced), 0, "{}", stderr(&replaced));
+    assert!(
+        stdout(&replaced).contains("nothing to do"),
+        "{}",
+        stdout(&replaced)
+    );
+    let after = std::fs::read_to_string(document).expect("readable");
+    assert_eq!(after, text, "an identical body changed the document");
+
+    std::fs::remove_file(source).ok();
 }
 
 #[test]
