@@ -184,7 +184,14 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
     assert!(read >= 9, "{read} ladders read");
     assert_eq!(
         guarded,
-        vec!["story: implemented needs 1 test_result".to_owned()],
+        vec![
+            // Nothing leaves the boundary unapproved.
+            "outbound-claim: cleared needs 1 approval".to_owned(),
+            // Two: one to send it, one to correct it. See the ladder's own note — at one, the
+            // approval that cleared the original claim still satisfies this rung.
+            "outbound-claim: corrected needs 2 approval".to_owned(),
+            "story: implemented needs 1 test_result".to_owned(),
+        ],
         "a rung gaining or losing a cost is a change to what everybody's `move` costs, and it \
          should be seen here first"
     );
@@ -389,5 +396,81 @@ fn a_slipped_obligation_can_still_be_met_and_met_is_the_end() {
     assert!(
         ladder.timing_for(&met).is_none(),
         "met is not — an obligation may be met early"
+    );
+}
+
+/// Gap register `:70`, the outbound half — and the whole programme's proof.
+///
+/// An outbound claim is a governed concept this repository did not have, added as **a YAML file and
+/// no Rust change at all**: an open `ArtifactKind`, an open `ArtifactStatus`, a ladder read as data,
+/// and `requires:` decided through `entity-core`. That composition is what phases 0-2 were for.
+///
+/// The property under test is the one the row names: *an assertion handed to a customer is
+/// near-irreversible*. A ladder that let `sent` move back to `drafted` would model retraction as an
+/// edit — the claim would simply stop having been made — and the customer would still have the
+/// email. So a wrong claim only moves forward, and leaving `correction-owed` costs a second
+/// outbound act.
+#[test]
+fn a_sent_claim_cannot_be_unsent_and_a_wrong_one_only_moves_forward() {
+    let text = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../artifacts/lifecycles/outbound-claim.yaml"),
+    )
+    .expect("readable");
+    let ladder: ArtifactLifecycle = serde_yaml::from_str(&text).expect("parses");
+
+    let status = |name: &str| ArtifactStatus::parse(name).expect("a status");
+    let (drafted, cleared, sent) = (status("drafted"), status("cleared"), status("sent"));
+    let (standing, owed, corrected) = (
+        status("standing"),
+        status("correction-owed"),
+        status("corrected"),
+    );
+
+    // The irreversibility, asserted from every rung that has left the boundary.
+    for from in [&sent, &standing, &owed, &corrected] {
+        assert!(
+            !ladder.permits_transition(from, &drafted),
+            "nothing that has been sent may return to `drafted`: a retraction is not an edit"
+        );
+        assert!(
+            !ladder.permits_transition(from, &cleared),
+            "nor to `cleared`, which would let a claim be re-approved into never having been made"
+        );
+    }
+
+    assert!(ladder.permits_transition(&sent, &owed));
+    assert!(ladder.permits_transition(&standing, &owed));
+    assert!(
+        ladder.permits_transition(&owed, &corrected),
+        "the only way out of a wrong claim is a second outbound act"
+    );
+    assert!(
+        !ladder.permits_transition(&owed, &standing),
+        "a claim known wrong cannot become true again by being left alone"
+    );
+    assert!(
+        ladder.transitions.get(&owed).is_some_and(|to| !to.is_empty()),
+        "`correction-owed` is a live obligation, not a terminal state: anything that treated it as \
+         finished would let the most expensive case disappear from a report"
+    );
+
+    // Nothing leaves the boundary unapproved, and a correction owes its own clearance.
+    assert!(
+        !ladder.requirements_for(&cleared).is_empty(),
+        "`cleared` is an approval gate"
+    );
+    let correcting = ladder.requirements_for(&corrected);
+    assert!(
+        !correcting.is_empty(),
+        "a correction is an outbound act and owes a record"
+    );
+    assert!(
+        correcting
+            .iter()
+            .any(|requirement| requirement.at_least >= 2),
+        "two approvals: one to send it, one to correct it. At one, the approval that cleared the \
+         *original* claim still satisfies this rung — evidence is append-only — so the claim would \
+         be corrected on the strength of somebody approving the thing that was wrong"
     );
 }

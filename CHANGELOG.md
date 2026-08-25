@@ -9,7 +9,64 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A claim that left the boundary is now a thing this repository can model.** Gap-register `:70`,
+  closed — and it is the proof the whole entity-runtime programme was for: **a YAML file, and no
+  Rust change at all.**
+
+  Every other ladder here models evidence flowing *inward*. An outbound claim runs the other way: a
+  number in a customer's inbox, a status page saying "resolved", an availability figure in a renewal
+  deck.
+
+  ```console
+  $ protocol artifact new outbound-claim q3-uptime --title "Q3 uptime figure to Acme"
+  created outbound-claim:q3-uptime (drafted)
+
+  $ protocol artifact move outbound-claim:q3-uptime --to cleared
+  cleared is on the ladder and not yet earned: reaching cleared needs at least 1 approval record(s)
+  ```
+
+  **The property the ladder exists to enforce: sending is not undoable.**
+
+  ```console
+  $ protocol artifact move outbound-claim:q3-uptime --to drafted
+  outbound-claim:q3-uptime is sent; an outbound-claim may move to: correction-owed, standing
+  ```
+
+  A ladder that let `sent` return to `drafted` would model retraction as an **edit** — the claim
+  would simply stop having been made — and the customer would still have the email. So a wrong claim
+  moves forward only. `correction-owed` (*sent, known wrong, audience not yet told* — the most
+  expensive state an organisation can be in and the easiest to leave undocumented) is a **rung**,
+  non-terminal and never `is_approved`, so it shows up in a `board` column instead of a thread.
+
+  **`corrected` requires two approvals, and that number is a finding.** Written as one, it passed
+  instantly: the approval that cleared the *original* claim was still on the record, because evidence
+  is append-only. The claim would have been corrected on the strength of somebody approving the thing
+  that was wrong.
+
+  Two is the exact cumulative count — one to send it, one to correct it — not a safety margin. The
+  general limitation is written into the ladder where somebody will meet it: `requires:` counts every
+  matching record ever made, and there is no way today to say *an approval recorded since this claim
+  entered `correction-owed`*.
+
+  Every mechanism from this programme composing at once — journal, provenance, evidence, open
+  vocabularies, ladder-as-data:
+
+  ```console
+  $ protocol artifact history outbound-claim:uptime
+  … created as drafted (revision 1)
+  … approval recorded from Priya, VP Eng (revision 1)
+  … moved drafted -> cleared (revision 2)
+  … moved cleared -> sent (revision 3)
+  … moved sent -> correction-owed (revision 4)
+  … approval recorded from Priya, VP Eng — correction text (revision 4)
+  … moved correction-owed -> corrected (revision 5)
+  ```
+
+  No `retracted` rung: a retraction is itself an outbound claim, because you have to tell somebody.
+  No `expired`: a claim does not become false by ageing — the world moves and a person notices, which
+  is `correction-owed`.
 
 ## [0.22.0] — 2026-08-26
 

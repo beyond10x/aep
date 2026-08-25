@@ -32,6 +32,7 @@ design
 epic
 initiative
 obligation
+outbound-claim
 review-result
 specification
 story
