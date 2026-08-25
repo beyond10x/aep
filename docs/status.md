@@ -42,6 +42,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.13.0` | 0.13.0 — the ladder is data, and the status vocabulary is open |
 | `0.14.0` | 0.14.0 — the protocol reads a repository that already exists |
 | `0.15.0` | 0.15.0 — a rung may cost evidence |
+| `0.16.0` | 0.16.0 — a rung may open on a date |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs

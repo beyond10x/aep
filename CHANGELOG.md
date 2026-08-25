@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.16.0] — 2026-08-25
+
 ### Added
 
 - **A lifecycle document may declare when a rung opens.** `when:` beside `requires:` names a date
