@@ -47,6 +47,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.18.0` | 0.18.0 — the typed blocker, and a vocabulary that says why it is closed |
 | `0.19.0` | 0.19.0 — the plan has a history |
 | `0.20.0` | 0.20.0 — evidence names what it is about |
+| `0.21.0` | 0.21.0 — W5: the engine's mechanisms |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs

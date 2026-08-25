@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.21.0] — 2026-08-26
+
 ### Added
 
 - **A task can say what it is about, and evidence about anything else is refused.** Gap-register
