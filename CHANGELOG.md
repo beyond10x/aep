@@ -9,7 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- `aep-backend-markdown` pins **entity-core 0.5.2** instead of 0.5.0. `entity-core`'s source is
+  byte-identical between the two tags — 0.5.1 and 0.5.2 carried an examples-only change — so nothing
+  this crate links moves. The pin recorded a tag two releases behind what exists, and a pin that is
+  stale by label is a pin nobody trusts to be current by content either.
+
+### Fixed
+
+- `outbound-claim` starts at `draft`, not `drafted`. Every other shipped ladder starts at the
+  built-in `draft`, and an invented rung one letter from a built-in is a typo wearing a vocabulary's
+  clothes. The vocabulary is open to authors, not to near-misses.
 
 ## [0.23.0] — 2026-08-26
 

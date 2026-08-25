@@ -420,7 +420,7 @@ fn a_sent_claim_cannot_be_unsent_and_a_wrong_one_only_moves_forward() {
     let ladder: ArtifactLifecycle = serde_yaml::from_str(&text).expect("parses");
 
     let status = |name: &str| ArtifactStatus::parse(name).expect("a status");
-    let (drafted, cleared, sent) = (status("drafted"), status("cleared"), status("sent"));
+    let (drafted, cleared, sent) = (status("draft"), status("cleared"), status("sent"));
     let (standing, owed, corrected) = (
         status("standing"),
         status("correction-owed"),

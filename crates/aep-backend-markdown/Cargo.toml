@@ -19,7 +19,7 @@ aep-domain.workspace = true
 # pin is the reversible half of `atlas/architecture/adr/0002`. Default features: it has none, and it
 # declares exactly one dependency of its own (`serde_json`, already in this workspace).
 # `cargo tree -p aep-backend-markdown` is the check.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.5.0", default-features = false }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.5.2", default-features = false }
 serde_json.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true

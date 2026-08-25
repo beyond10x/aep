@@ -8,8 +8,12 @@
 #
 # # The property the ladder exists to enforce: sending is not undoable
 #
-# There is no path from `sent` back to `drafted`, and that is the whole design. An assertion handed
-# to a customer cannot be unhanded. A ladder that let `sent` move back to `drafted` would model
+# There is no path from `sent` back to `draft`, and that is the whole design.
+#
+# `draft` and not `drafted`, which is what this said first: every other ladder here starts at the
+# built-in `draft`, and an invented rung one letter away from a built-in is a typo wearing a
+# vocabulary's clothes. The vocabulary is open to authors, not to near-misses. An assertion handed
+# to a customer cannot be unhanded. A ladder that let `sent` move back to `draft` would model
 # retraction as an edit — the claim would simply stop having been made — and the customer would still
 # have the email.
 #
@@ -37,11 +41,11 @@
 # No `expired`. A claim does not become false by ageing; the world moves and somebody notices, which
 # is `correction-owed` and needs a person in it.
 kind: outbound-claim
-initial: drafted
+initial: draft
 
 transitions:
   # Nothing leaves the boundary without a human approving it.
-  drafted: [cleared]
+  draft: [cleared]
   cleared: [sent]
   # Still true, as far as anybody knows.
   sent: [standing, correction-owed]
