@@ -120,6 +120,44 @@ belongs in the commit message or in `docs/design/`.
   specification, so a workflow touching a third party has an offline form — is a real build and is
   **not** done here.
 
+- **A run that did something its state was not allowed to do now fails a check.** Gap-register
+  `:40`, by the weaker of the two routes the register named — and it says so.
+
+  `protocol drive` writes, per `llm` step, a `trace-spec/1` document beside the step's frame with one
+  `tool.absent` row for every operation the state's tool set did **not** admit:
+
+  ```json
+  { "id": "refused-file-write",
+    "severity": "gate", "on_unknown": "gap",
+    "expect": { "tool.absent": { "operations": ["file.write"] } } }
+  ```
+
+  Keyed by the **neutral operations** vocabulary, never by a vendor's tool names: a row saying
+  `tools: [Edit, Write]` selects nothing at all on a harness that spells a write `workspace_write`,
+  and reports green for it.
+
+  The refused set is the **complement computed from the one existing table**, not a second
+  hand-written list. A hand-written vocabulary missing `file.edit` would emit a specification that
+  never checks for an edit and reports green — so a test asserts admitted and refused partition the
+  vocabulary exactly.
+
+  `on_unknown: gap`, because a transcript that cannot say whether a refused operation happened is not
+  evidence that it did not. The point is to stop reading silence as compliance.
+
+  A test reads the emitted document back through `trace_domain::raw::read_spec` — the same door the
+  CLI uses — so this cannot become a file nobody consumes that looks like an audit. It caught three
+  real shape errors while being written.
+
+  A state that refuses nothing writes **no** document, which is `trace-spec/1`'s own rule: *a report
+  with no content reads exactly like a report with no gaps*. Absence stays readable because the frame
+  is written unconditionally — a frame with no refusal file means everything was admitted; no frame
+  means the step never ran.
+
+  **This is strictly weaker than the audit `:40` originally promised, and the register said so before
+  it was built.** It catches a tool that was offered *and used*; it cannot see one offered and never
+  reached for. The stronger route — a harness-side record of the effective allowlist — is still not
+  this repository's to build.
+
 ## [0.20.0] — 2026-08-26
 
 ### Added

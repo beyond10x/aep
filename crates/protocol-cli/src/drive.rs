@@ -65,6 +65,7 @@ use aep_driver::executor::{
 };
 use aep_driver::lock::{Liveness, LockState};
 use aep_driver::run::{DriveError, DriverOptions, RunDirectory, RunReport};
+use aep_driver::tool::TOOL_CANDIDATES;
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus, StolenLock};
 use aep_driver_spec::map::{
     placeholders_in, CommandStep, EvidenceMapping, LlmStep, OperatorStep, Step, StepMap,
@@ -1036,6 +1037,19 @@ impl CliExecutors {
         let document = frame_document(&frame)?;
         fs::write(&path, document)
             .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+
+        // Beside the frame, when this state refused anything. `protocol trace check` reads it as
+        // it reads any specification.
+        if let Some(refusals) = refusal_specification(context.state, context.index, context.tools) {
+            let refusals_path = transcripts.join(format!(
+                "{}-{}-{}.refused.json",
+                context.state, context.index, context.attempt
+            ));
+            let rendered = serde_json::to_string_pretty(&refusals)
+                .map_err(|error| format!("cannot render the refusal specification: {error}"))?;
+            fs::write(&refusals_path, rendered)
+                .map_err(|error| format!("cannot write {}: {error}", refusals_path.display()))?;
+        }
         Ok(path)
     }
 
@@ -1763,6 +1777,89 @@ fn metaharness_operations(config: &ToolConfig) -> Vec<&'static str> {
     operations
 }
 
+/// Every operation the table can render, whatever a policy admits.
+///
+/// Computed by asking [`metaharness_operations`] about a configuration that admits everything,
+/// rather than written out again. Two lists would drift, and the one that drifts is the one nobody
+/// looks at: a hand-written vocabulary missing `file.edit` would emit a specification that never
+/// checks for an edit and reports green.
+fn every_operation() -> Vec<&'static str> {
+    metaharness_operations(&ToolConfig::new(TOOL_CANDIDATES.iter().cloned().collect()))
+}
+
+/// The operations this step's policy did **not** admit.
+///
+/// # What this is for, and what it is not
+///
+/// Gap register `:40`. Design § 4.8 row 3 promised the per-state tool set would be *audited*: the
+/// allowlist at session launch, the hook over the same derived set, and an expectation kind reading
+/// back what the session was actually given. `env.tool_available` shipped and then showed it reads
+/// the harness's tool **inventory**, not the session's allow rules — the committed fixture was
+/// launched with nine allowed tools and lists thirty-two.
+///
+/// The record that would settle it is the harness's to write and does not exist. This is the other
+/// route the register names, and it is **strictly weaker**, which is why it says so out loud: it
+/// catches a tool that was offered *and used*, and cannot see one that was offered and never
+/// reached for. A refused operation that never appears in the transcript is the same evidence as an
+/// operation nobody wanted. What it does close is the case that matters — a run that did something
+/// its state was not allowed to do now fails a check instead of passing unexamined.
+fn refused_operations(config: &ToolConfig) -> Vec<&'static str> {
+    let admitted = metaharness_operations(config);
+    every_operation()
+        .into_iter()
+        .filter(|operation| !admitted.contains(operation))
+        .collect()
+}
+
+/// The step's refused operations as a `trace.spec/1` document.
+///
+/// One `tool.absent` row per refused operation, keyed by the **neutral operations** vocabulary and
+/// never by a vendor's tool names. Naming tools here would make the specification decidable against
+/// one harness and silently vacuous against every other — a row saying `tools: [Edit, Write]` selects
+/// nothing at all on a harness that spells a write `workspace_write`, and reports green for it.
+///
+/// `severity: gate` and `on_unknown: gap`: a transcript that cannot say whether a refused
+/// operation happened is not evidence that it did not. The whole point is to stop reading silence
+/// as compliance.
+fn refusal_specification(
+    state: &aep_domain::ids::StateId,
+    index: usize,
+    config: &ToolConfig,
+) -> Option<serde_json::Value> {
+    let expectations: Vec<serde_json::Value> = refused_operations(config)
+        .into_iter()
+        .map(|operation| {
+            serde_json::json!({
+                // Dashes, not the dots the operation is spelled with: an expectation id is
+                // lowercase letters, digits and dashes, and the checker refuses anything else.
+                "id": format!("refused-{}", operation.replace('.', "-")),
+                "statement": format!(
+                    "step {index} of `{state}` was not admitted `{operation}`, \
+                     so the run must not contain one"
+                ),
+                "severity": "gate",
+                "on_unknown": "gap",
+                "expect": { "tool.absent": { "operations": [operation] } },
+            })
+        })
+        .collect();
+    // `None` when nothing was refused, because `trace-spec/1` refuses a specification with no
+    // expectations — *"a report with no content reads exactly like a report with no gaps"* — and
+    // that rule is right and older than this. Absence is still readable: the frame document for the
+    // same step is written unconditionally, so a frame with no refusal file beside it means this
+    // state was admitted everything, and no frame at all means the step never ran.
+    if expectations.is_empty() {
+        return None;
+    }
+    Some(serde_json::json!({
+        "format": "trace-spec/1",
+        // One `/`, between a namespace and a name: `driver/<state>-<index>`.
+        "id": format!("driver/{}-{index}", state.to_string().replace('.', "-")),
+        "title": format!("what step {index} of `{state}` was not allowed to do"),
+        "expectations": expectations,
+    }))
+}
+
 /// The step as a sealed `metaharness.frame/1` document.
 ///
 /// Built as plain JSON and sealed by the document's own rule — SHA-256, hex, over the compact
@@ -2447,6 +2544,94 @@ mod tests {
         assert!(
             !metaharness_operations(&everything).contains(&"subagent.spawn"),
             "a subagent's tool set is derived by nothing in these decisions"
+        );
+    }
+
+    /// Gap register `:40`. The document the driver writes has to be one `protocol trace check`
+    /// can actually read, or it is a file nobody consumes that looks like an audit.
+    ///
+    /// Read back through `trace_domain::raw::read_spec` — the same door the CLI uses — rather than
+    /// eyeballed as JSON.
+    #[test]
+    fn the_refusal_specification_is_a_specification_the_checker_reads() {
+        let state: aep_domain::ids::StateId = "implement".parse().expect("a state id");
+        let read_only = ToolConfig::new([Capability::RepositoryRead].into_iter().collect());
+        let document =
+            refusal_specification(&state, 0, &read_only).expect("a read-only state refuses things");
+        let text = serde_json::to_string(&document).expect("renders");
+
+        let spec = trace_domain::raw::read_spec(&text)
+            .expect("the driver must write a specification the checker can read");
+
+        let refused: Vec<&str> = spec
+            .expectations
+            .iter()
+            .map(|expectation| expectation.id.as_str())
+            .collect();
+        assert!(
+            refused.contains(&"refused-file-write"),
+            "a read-only state must refuse writing: {refused:?}"
+        );
+        assert!(
+            refused.contains(&"refused-shell"),
+            "and a shell: {refused:?}"
+        );
+        assert!(
+            !refused.iter().any(|id| id.ends_with("file-read")),
+            "and must not refuse what it admitted: {refused:?}"
+        );
+        assert!(
+            !refused.iter().any(|id| id.ends_with("skill-load")),
+            "skills are always offered, so refusing them would be a row that can only fail: \
+             {refused:?}"
+        );
+    }
+
+    /// The complement is computed from the one table, so the two cannot drift.
+    #[test]
+    fn admitted_and_refused_operations_partition_the_vocabulary() {
+        for config in [
+            ToolConfig::default(),
+            ToolConfig::new([Capability::RepositoryRead].into_iter().collect()),
+            ToolConfig::new(TOOL_CANDIDATES.iter().cloned().collect()),
+        ] {
+            let admitted = metaharness_operations(&config);
+            let refused = refused_operations(&config);
+            let mut together: Vec<&str> = admitted.iter().chain(refused.iter()).copied().collect();
+            together.sort_unstable();
+            let mut all = every_operation();
+            all.sort_unstable();
+            assert_eq!(
+                together, all,
+                "every operation is either admitted or refused, and never both or neither"
+            );
+        }
+    }
+
+    /// A fully permissive state writes no specification, and that is `trace-spec/1`'s rule rather
+    /// than a shortcut.
+    ///
+    /// The format refuses a specification with no expectations — *"a report with no content reads
+    /// exactly like a report with no gaps"* — which is the same argument for not writing one. What
+    /// keeps absence readable is the **frame**: it is written unconditionally, so a frame with no
+    /// refusal file beside it means this state was admitted everything, and no frame at all means
+    /// the step never ran.
+    #[test]
+    fn a_state_that_admits_everything_writes_no_specification() {
+        let state: aep_domain::ids::StateId = "implement".parse().expect("a state id");
+        let everything = ToolConfig::new(TOOL_CANDIDATES.iter().cloned().collect());
+        assert!(refusal_specification(&state, 0, &everything).is_none());
+
+        // And the empty document would indeed have been refused, so this is the format's rule and
+        // not a preference.
+        let empty = serde_json::json!({
+            "format": "trace-spec/1",
+            "id": "driver/implement-0",
+            "expectations": [],
+        });
+        assert!(
+            trace_domain::raw::read_spec(&empty.to_string()).is_err(),
+            "an empty specification judges nothing and must not be writable"
         );
     }
 
