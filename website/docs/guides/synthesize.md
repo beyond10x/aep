@@ -95,7 +95,8 @@ argument on every commit — `cargo xtask synth --check`, one of the ten steps o
   regenerated and compared byte-for-byte, then built: `cargo check`, `gofmt`/`go build`/`go vet`,
   and `cargo build --target wasm32-unknown-unknown` plus a Node-driven boundary test that loads the
   committed module outside a browser and drives it through the page's own glue. Its last line is
-  `browser boundary: 17 claims held — catalogue, dispatch, transport, view, refusal, redelivery`.
+  `browser boundary: 21 claims held — catalogue, dispatch, transport, view, refusal, redelivery`
+  — the count is derived from the checks the script actually makes, not written down beside them.
   None of those three checks skips when its toolchain is missing: it fails and names it, because a
   skipped check reads exactly like a passing one.
 * The **dual-target demonstration**: `examples/gatepass/` is synthesized to Rust *and* Go, both

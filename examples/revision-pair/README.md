@@ -62,7 +62,7 @@ byte-for-byte identical in meaning across the two revisions, so neither reaches 
 
 | what | why it is here |
 |---|---|
-| `CreatePriceList`, the one outcome that `creates:` a price list | without it the specification obliges **no conformance suite at all** — every other scenario needs an instance to act on, and the synthesiser refuses each one for want of one. With it, the pair obliges nine scenarios, which is what makes "which scenarios does this change invalidate" a question with an answer |
+| `CreatePriceList`, the one outcome that `creates:` a price list | without it the specification obliges **no conformance suite at all** — every other scenario needs an instance to act on, and the synthesiser refuses each one for want of one. With it, the pair obliges ten scenarios, which is what makes "which scenarios does this change invalidate" a question with an answer |
 | `Headline`, a newtype wrapping the `Money` struct | it keeps `Currency` out of everything the entity names directly, so a scenario that never mentions `Currency` is reached transitively — and the path, not the answer, is what a reader checks. Since the `floor` field arrived the *shortest* such path runs `Currency ← Money ← PriceList`, two hops, and that is the one the report explains |
 
 ```console

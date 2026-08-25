@@ -2040,7 +2040,7 @@ fn smoke_the_boundary(tree: &Path, host: &Path, module: &Path) -> Result<()> {
 
 /// Runs one realization package's tests: the committed suite against the linked system.
 ///
-/// Both halves of the criterion live in those tests — the honest linkage passes 27 of 27, the
+/// Both halves of the criterion live in those tests — the honest linkage passes 29 of 29, the
 /// corrupted one fails exactly the scenario that exists to catch it — so a failure here means
 /// the committed workspace, the committed suite and the hand-written realization no longer
 /// agree, which no byte-diff can see.
@@ -2443,7 +2443,7 @@ const SYNTH_INDEX_PREAMBLE: &[&str] = &[
     "implementations into a runnable system without ever choosing — zero implementations for an",
     "obligation is an unsatisfied obligation, two is an ambiguity error naming both (gap register",
     "D-2). `cargo xtask synth` then executes the committed conformance suite, unchanged, against",
-    "that linked system: 27 of 27 scenarios must pass, and the deliberately corrupted variant",
+    "that linked system: 29 of 29 scenarios must pass, and the deliberately corrupted variant",
     "beside the honest one must fail exactly the scenario that exists to catch it.",
     "",
     "## The second transport, and the record two applications write",
@@ -3530,5 +3530,53 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&out).ok();
+    }
+}
+
+#[cfg(test)]
+mod drift_tests {
+    /// Gap register `:47`. The prose figure and the number the suite actually asserts are two
+    /// copies of one fact, and this makes them fail together instead of drifting apart.
+    ///
+    /// They drifted: the prose said *27 of 27* while `tests/conformance.rs` asserted 29, for long
+    /// enough that a second copy of the wrong number had been written into a doc comment. Correcting
+    /// them without tying them together would only reset the clock.
+    ///
+    /// Read from source text rather than by calling anything, because the assertion lives in another
+    /// workspace's test file that this crate does not link.
+    #[test]
+    fn the_prose_scenario_count_is_the_count_the_suite_asserts() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("the workspace root");
+        let suite =
+            std::fs::read_to_string(root.join("examples/billing-realization/tests/conformance.rs"))
+                .expect("the conformance suite is committed");
+
+        // `assert_eq!(report.scenarios.len(), N);` — the one place the number is checked.
+        let marker = "report.scenarios.len(), ";
+        let at = suite
+            .find(marker)
+            .expect("the suite asserts a scenario count")
+            + marker.len();
+        let asserted: String = suite[at..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        assert!(!asserted.is_empty(), "no number followed {marker}");
+
+        let prose = include_str!("main.rs");
+        let expected = format!("{asserted} of {asserted} scenarios");
+        assert!(
+            prose.contains(&expected),
+            "the generated document says something other than `{expected}`, which is what \
+             `tests/conformance.rs` asserts"
+        );
+        // Assembled rather than written, so this test's own text does not count as an occurrence.
+        let drifted = format!("{0} of {0} scenarios", 27);
+        assert!(
+            !prose.contains(&drifted),
+            "the figure that drifted must not come back"
+        );
     }
 }

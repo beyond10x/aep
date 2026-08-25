@@ -109,6 +109,17 @@ pub fn impact(report: &EssImpact) -> String {
         "{} of {} generated artifact(s) owed regeneration",
         report.churn.generated_artifacts_owed, report.churn.generated_artifacts_total
     );
+    // Its own line, outside the pair. An unfollowed file is not an artifact the model derives, so
+    // it is neither owed nor safe — it is a file this analysis cannot speak about, and saying so is
+    // a finding about the analysis rather than about the file.
+    if report.churn.generated_artifacts_unfollowed > 0 {
+        let _ = writeln!(
+            out,
+            "{} committed file(s) the `--from` model derives nothing for, and this analysis \
+             cannot follow",
+            report.churn.generated_artifacts_unfollowed
+        );
+    }
     out.push('\n');
 
     match &report.invalidation {

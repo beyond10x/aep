@@ -399,9 +399,7 @@
               "minimum": 0.0
             },
             "horizon": {
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
+              "$ref": "#/definitions/Horizon"
             },
             "independent": {
               "type": "boolean"
@@ -431,6 +429,20 @@
         },
         {
           "type": "string"
+        }
+      ]
+    },
+    "Horizon": {
+      "description": "An age in whole days, written as `7d` or as a bare `7`.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "maximum": 3650.0,
+          "minimum": 1.0
+        },
+        {
+          "type": "string",
+          "pattern": "^\\s*0*[1-9][0-9]*\\s*[dD]?\\s*$"
         }
       ]
     },

@@ -294,14 +294,61 @@ impl<'de> serde::Deserialize<'de> for CivilDate {
 /// Days, not milliseconds, because that is the unit the convention is written in
 /// (`(horizon: 7d)`) and a horizon expressed more precisely than the observation would be false
 /// precision.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, schemars::JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct Horizon {
     /// The number of whole days.
     days: u32,
 }
+
+/// The schema publishes both spellings the parser accepts.
+///
+/// # Why this is written by hand
+///
+/// Gap register `:45`. The derived schema followed `#[serde(transparent)]` down to `u32` and
+/// published `"type": "integer"`, while [`Horizon::parse`] accepts `7d` — and the error message a
+/// wrong value earns *recommends* `7d`. An editor validating against the published schema therefore
+/// false-flagged the spelling the tool itself tells you to write, which is worse than an absent
+/// schema: it makes the correct document look wrong.
+///
+/// Both forms, not one. Publishing only the string would false-flag the bare `7` the corpus also
+/// uses (`examples/evidence-horizons-corpus/corpus/01-forms.md`), and the parser accepts both
+/// deliberately.
+///
+/// The pattern is the parser's own tolerance, spelled as a regex: optional surrounding space, digits,
+/// optional space, an optional `d` in either case. `horizon_schema_admits_exactly_what_the_parser_does`
+/// holds the two together over the corpus's spellings, because a pattern written once beside a parser
+/// is a pattern that drifts from it.
+impl schemars::JsonSchema for Horizon {
+    fn schema_name() -> String {
+        "Horizon".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        serde_json::from_value(serde_json::json!({
+            "description": "An age in whole days, written as `7d` or as a bare `7`.",
+            "oneOf": [
+                { "type": "integer", "minimum": 1, "maximum": Self::MAX_DAYS },
+                { "type": "string", "pattern": HORIZON_PATTERN },
+            ],
+        }))
+        .expect("a literal schema")
+    }
+}
+
+/// The written form the parser accepts, as a regex, published in the schema.
+///
+/// `0*[1-9][0-9]*` rather than `[0-9]+`: a horizon of zero days admits no observation at all and
+/// [`Horizon::days`] refuses it, so a pattern that matched `0` would publish a value the parser then
+/// rejects — the same defect as `:45` itself, in the other direction. `007` still matches, because
+/// the parser reads it as seven.
+///
+/// **The upper bound is not in the pattern.** A regex cannot bound a magnitude without enumerating
+/// digits, so the string branch admits `9999d` where the parser refuses anything over
+/// [`Horizon::MAX_DAYS`]. The integer branch carries the bound exactly. Said here rather than left
+/// for somebody to find: this schema is loose at the top of the string form and tight everywhere
+/// else.
+pub(crate) const HORIZON_PATTERN: &str = r"^\s*0*[1-9][0-9]*\s*[dD]?\s*$";
 
 impl Horizon {
     /// The longest horizon accepted: ten years.
@@ -601,6 +648,63 @@ mod tests {
     fn a_date_without_zero_padding_is_refused_rather_than_guessed() {
         let error = CivilDate::parse("2026-8-30").expect_err("the form is fixed");
         assert!(error.to_string().contains("zero-padded"), "{error}");
+    }
+
+    /// Gap register `:45`. The parser accepts every spelling the schema's pattern describes.
+    ///
+    /// The failure this replaces: the schema said `"type": "integer"` while the parser accepted
+    /// `7d` and the error message *recommended* `7d`, so an editor validating against the schema
+    /// false-flagged the spelling the tool itself tells you to write. Worse than no schema — it
+    /// makes a correct document look wrong.
+    ///
+    /// **What this test does not do**, said rather than implied: it does not run the published
+    /// regex. There is no regex engine in this workspace and adding one for a test is a dependency
+    /// decision, not a test decision — every other published `pattern` here is in the same position.
+    /// What it holds is the half that can be held without one: the corpus spellings the pattern was
+    /// written to describe all parse, and the phrases it was written to exclude all fail.
+    ///
+    /// One known looseness, stated rather than hidden: the string branch cannot bound a magnitude,
+    /// so it admits `9999d` where the parser refuses anything over `MAX_DAYS`. The integer branch
+    /// carries that bound exactly.
+    #[test]
+    fn the_parser_accepts_every_spelling_the_published_pattern_describes() {
+        for written in ["7d", "7D", " 7 d ", "7", "007", "3650"] {
+            assert!(
+                Horizon::parse(written).is_ok(),
+                "the published pattern describes {written:?}, so the parser must accept it"
+            );
+        }
+        // `0` is here because the first version of the published pattern admitted it while the
+        // parser refuses it — the same defect as `:45` itself, in the other direction. The test
+        // caught it.
+        for rejected in [
+            "7 days",
+            "seven",
+            "",
+            "5d — but see below",
+            "-1",
+            "7dd",
+            "0",
+            "00d",
+        ] {
+            assert!(
+                Horizon::parse(rejected).is_err(),
+                "the published pattern excludes {rejected:?}, so the parser must refuse it"
+            );
+        }
+    }
+
+    /// The schema itself publishes both forms rather than one.
+    #[test]
+    fn the_schema_publishes_the_string_form_and_not_only_the_integer() {
+        let schema = schemars::schema_for!(Horizon);
+        let rendered = serde_json::to_string(&schema).expect("renders");
+        assert!(
+            rendered.contains("oneOf"),
+            "both spellings, not one: {rendered}"
+        );
+        assert!(rendered.contains("string"), "{rendered}");
+        assert!(rendered.contains("integer"), "{rendered}");
     }
 
     #[test]

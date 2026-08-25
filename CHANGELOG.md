@@ -9,7 +9,59 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`ess impact` no longer reports more owed artifacts than exist.** Gap-register `:46`.
+
+  ```console
+  $ protocol ess impact --from ... --to ... --generated generated/
+  -105 of 23 generated artifact(s) owed regeneration
+  +23 of 23 generated artifact(s) owed regeneration
+  +82 committed file(s) the `--from` model derives nothing for, and this analysis cannot follow
+  ```
+
+  105 = 23 + 82, exactly. Files the `--from` model derives nothing for were going into the
+  numerator and never into the denominator. **An unfollowed file is not an artifact that owes
+  regeneration** — it is a file the analysis cannot speak about — so it belongs to neither side.
+
+  They are still counted and printed, on their own line. Trading an impossible number for a missing
+  one is not a fix: *82 files this cannot follow* is a real finding about the analysis.
+
+  The row recorded `56 of 38`; against the committed tree today it was `105 of 23`. Reproducing
+  before fixing was what showed it had grown.
+
+- **The `horizon` schema publishes what the parser accepts.** Gap-register `:45`.
+
+  The generated schemas said `"type": "integer"` while the parser accepts `7d` — and the error
+  message a wrong value earns *recommends* `7d`. **An editor validating against the schema
+  false-flagged the spelling the tool itself tells you to write**, which is worse than no schema: it
+  makes a correct document look wrong.
+
+  Now a two-type union — an integer in `1..=3650`, or a string matching the parser's own tolerance.
+
+  Writing the pattern found a second defect **in the other direction**: the first version admitted
+  `0`, which the parser refuses. The schema would have published a value the tool then rejects — the
+  same failure, reversed. The test caught it before it shipped.
+
+  One looseness, stated rather than hidden: a regex cannot bound a magnitude, so the string branch
+  admits `9999d` where the parser refuses anything over 3650 days. The integer branch carries the
+  bound exactly.
+
+- **Three prose literals now match the counts their own gates print.** Gap-register `:47`.
+
+  | said | actually | how it is held now |
+  |---|---|---|
+  | `27 of 27 scenarios` | **29** | a test reads the count out of the suite's own assertion |
+  | `17 claims held` | **21** | counted at run time; the literal is gone |
+  | `nine scenarios` | **ten** | re-derived from the command the README quotes |
+
+  The `27` had been copied into a second place — a doc comment the gap row did not name — which is
+  what a wrong number does if you leave it alone. Correcting both copies without tying them together
+  would only have reset the clock, so the scenario figure is now derived from
+  `tests/conformance.rs`'s assertion and fails with it.
+
+  The smoke test's count cannot drift again at all: `check()` increments a counter and the summary
+  prints what was actually checked.
 
 ## [0.21.0] — 2026-08-26
 

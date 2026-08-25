@@ -22,9 +22,11 @@ if (!glue || !wasm) {
 }
 
 const failures = [];
+let checked = 0;
 
 /** Records a failure rather than throwing, so one run reports everything wrong (invariant 3). */
 function check(claim, held, detail) {
+  checked += 1;
   if (!held) failures.push(`${claim}${detail === undefined ? "" : ` — ${detail}`}`);
 }
 
@@ -157,4 +159,9 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log("browser boundary: 17 claims held — catalogue, dispatch, transport, view, refusal, redelivery");
+// Counted, never written down. The literal that stood here said 17 while the file made 21 claims,
+// and a summary that undercounts its own checks is worse than no summary: it reads as a smaller
+// suite passing rather than as a number nobody maintained.
+console.log(
+  `browser boundary: ${checked} claims held — catalogue, dispatch, transport, view, refusal, redelivery`,
+);

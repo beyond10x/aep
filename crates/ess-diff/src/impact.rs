@@ -556,11 +556,40 @@ pub enum ArtifactAnswer {
 }
 
 impl ArtifactAnswer {
-    /// How many artifacts are owed, out of `total` the model derives.
+    /// How many artifacts are **owed regeneration**, out of `total` the model derives.
+    ///
+    /// [`ArtifactObligation::Unfollowed`] is deliberately not counted here, and that omission is the
+    /// whole of gap register `:46`. An unfollowed file is one the `--from` model derives nothing
+    /// for; it is not an artifact that owes regeneration, it is a file this analysis cannot speak
+    /// about. Counting it as owed produced `105 of 23` against the committed tree — a numerator
+    /// larger than its own denominator, which is wrong on its face and was reported for four days
+    /// before anybody could say why.
+    ///
+    /// They are still *reported*, under [`Self::unfollowed_count`] and their own heading: a file the
+    /// analysis cannot account for is a real finding about the analysis, and dropping it silently
+    /// would trade an impossible number for a missing one.
     fn owed_count(&self, total: usize) -> usize {
         match self {
             Self::Whole { .. } => total,
-            Self::Narrowed { owed } => owed.len(),
+            Self::Narrowed { owed } => owed
+                .values()
+                .filter(|obligation| !matches!(obligation, ArtifactObligation::Unfollowed))
+                .count(),
+        }
+    }
+
+    /// How many committed files the `--from` model derives nothing for.
+    ///
+    /// Zero for [`Whole`](Self::Whole): a whole-tree answer did not follow anything in particular,
+    /// so it has nothing to say about what it failed to follow.
+    #[must_use]
+    pub fn unfollowed_count(&self) -> usize {
+        match self {
+            Self::Whole { .. } => 0,
+            Self::Narrowed { owed } => owed
+                .values()
+                .filter(|obligation| matches!(obligation, ArtifactObligation::Unfollowed))
+                .count(),
         }
     }
 
@@ -663,6 +692,12 @@ pub struct Churn {
     pub generated_artifacts_total: usize,
     /// How many of them are owed regeneration.
     pub generated_artifacts_owed: usize,
+    /// How many committed files the `--from` model derives nothing for.
+    ///
+    /// Beside the pair rather than inside it: these are not artifacts the model derives, so they
+    /// belong to neither the numerator nor the denominator. See
+    /// [`ArtifactAnswer::unfollowed_count`].
+    pub generated_artifacts_unfollowed: usize,
 }
 
 /// What a delta invalidates, with the paths that explain it.
@@ -1224,11 +1259,57 @@ fn churn(
             .map(|(suite, invalidation)| invalidation.owed(suite).len()),
         generated_artifacts_total: artifacts_total,
         generated_artifacts_owed: artifacts.owed_count(artifacts_total),
+        generated_artifacts_unfollowed: artifacts.unfollowed_count(),
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    /// Gap register `:46`. The owed count can never exceed the total the model derives.
+    ///
+    /// The failure: `56 of 38` when the row was written and `105 of 23` against the committed tree
+    /// by the time it was fixed. A count larger than its own denominator is wrong on its face, and
+    /// it was published for days because the two numbers were computed from different sets —
+    /// unfollowed files went into the numerator and never into the denominator.
+    ///
+    /// Held over a mixture on purpose: an answer with only real obligations, or only unfollowed
+    /// rows, would pass a weaker version of this test without exercising the split.
+    #[test]
+    fn an_unfollowed_file_is_not_an_artifact_that_owes_regeneration() {
+        let mut owed = BTreeMap::new();
+        owed.insert(
+            ArtifactId::Projection {
+                path: "openapi/billing.yaml".to_owned(),
+            },
+            ArtifactObligation::Missing,
+        );
+        for path in ["README.md", "NOTES.md", "scratch.txt"] {
+            owed.insert(
+                ArtifactId::Projection {
+                    path: path.to_owned(),
+                },
+                ArtifactObligation::Unfollowed,
+            );
+        }
+        let answer = ArtifactAnswer::Narrowed { owed };
+
+        assert_eq!(
+            answer.owed_count(1),
+            1,
+            "one artifact owes regeneration; the three unfollowed files do not"
+        );
+        assert_eq!(
+            answer.unfollowed_count(),
+            3,
+            "and they are counted rather than dropped — a missing number is not better than an \
+             impossible one"
+        );
+        assert!(
+            answer.owed_count(1) <= 1,
+            "a numerator larger than its denominator is wrong on its face"
+        );
+    }
     use aep_domain::evidence::SpecDigest;
     use ess_conformance::scenario::{DeclaredTypeRef, ScenarioPurpose, SuiteFormat, ViewRef};
     use ess_domain::name::Version;

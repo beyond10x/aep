@@ -20,7 +20,7 @@ implements each obligation against its contract, and its linker assembles compon
 implementations into a runnable system without ever choosing — zero implementations for an
 obligation is an unsatisfied obligation, two is an ambiguity error naming both (gap register
 D-2). `cargo xtask synth` then executes the committed conformance suite, unchanged, against
-that linked system: 27 of 27 scenarios must pass, and the deliberately corrupted variant
+that linked system: 29 of 29 scenarios must pass, and the deliberately corrupted variant
 beside the honest one must fail exactly the scenario that exists to catch it.
 
 ## The second transport, and the record two applications write
