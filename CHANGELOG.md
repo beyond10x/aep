@@ -12,11 +12,11 @@ belongs in the commit message or in `docs/design/`.
 ### Added
 
 - **`protocol reverse` — the verbs for a repository that already exists.** Every other verb starts
-  from a document somebody wrote; these three start from a codebase, which is the state an adopter is
+  from a document somebody wrote; these start from a codebase, which is the state an adopter is
   actually in.
 
-  - **`reverse init`** writes `.engineering/project.yaml`. It refuses an unpinned `git+` source
-    before writing anything, resolves the tree so the failure surfaces at adoption rather than at the
+  - **`reverse init`** writes `.engineering/project.yaml`. It refuses an unpinned `git+` source and
+    an absolute path before writing anything, resolves the tree so the failure surfaces at adoption rather than at the
     first command that needed it, and leaves no file behind when it does not resolve. `--no-verify`
     skips the resolution for an offline machine. This replaces hand-authoring the file from
     `docs/guide/adopting.md`.
