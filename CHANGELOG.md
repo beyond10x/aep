@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.15.0] — 2026-08-25
+
 ### Added
 
 - **A lifecycle document may declare what a rung costs, and `protocol artifact move` checks it.**

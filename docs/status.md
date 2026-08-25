@@ -41,6 +41,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.12.0` | 0.12.0 — a workflow declares where a run may write, and a fourth arm proves the toolset holds it |
 | `0.13.0` | 0.13.0 — the ladder is data, and the status vocabulary is open |
 | `0.14.0` | 0.14.0 — the protocol reads a repository that already exists |
+| `0.15.0` | 0.15.0 — a rung may cost evidence |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
