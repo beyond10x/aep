@@ -577,6 +577,31 @@ mod tests {
             .expect("the workspace root exists")
     }
 
+    /// The protocol tree as a path relative to `<root>/.engineering`.
+    ///
+    /// A project file may not name a path absolutely — `ProtocolSource::parse` refuses one, because
+    /// the file is committed and an absolute path is true on one machine. These fixtures used to
+    /// write `protocol_tree()` straight in; they now write the climb to it, which is also what a
+    /// real adopter with a sibling checkout writes.
+    fn relative_tree(root: &Path) -> String {
+        let base = root.join(".engineering");
+        let base: Vec<_> = base.components().collect();
+        let tree = protocol_tree();
+        let tree: Vec<_> = tree.components().collect();
+        let shared = base
+            .iter()
+            .zip(&tree)
+            .take_while(|(left, right)| left == right)
+            .count();
+        let mut parts = vec![".."; base.len() - shared];
+        parts.extend(
+            tree[shared..]
+                .iter()
+                .map(|component| component.as_os_str().to_str().expect("a printable path")),
+        );
+        parts.join("/")
+    }
+
     fn write(path: &Path, contents: &str) {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("the directory is writable");
@@ -590,7 +615,7 @@ mod tests {
             &root.join(".engineering/project.yaml"),
             &format!(
                 "protocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
-                protocol_tree().display()
+                relative_tree(&root)
             ),
         );
         root
@@ -650,7 +675,7 @@ mod tests {
             &root.join(".engineering/project.yaml"),
             &format!(
                 "protocol: adp/1\nprofile: house.standard\nprotocols: {}\n",
-                protocol_tree().display()
+                relative_tree(&root)
             ),
         );
 
@@ -706,7 +731,7 @@ mod tests {
             &root.join(".engineering/project.yaml"),
             &format!(
                 "protocol: adp/1\nprofile: house.reckless\nprotocols: {}\n",
-                protocol_tree().display()
+                relative_tree(&root)
             ),
         );
 

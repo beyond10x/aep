@@ -372,11 +372,29 @@ fn a_project_is_discovered_so_no_arguments_are_needed() {
     let project = std::env::temp_dir().join("aep-cli-project");
     std::fs::remove_dir_all(&project).ok();
     std::fs::create_dir_all(project.join(".engineering")).expect("writable");
+    // The tree is named by the climb to it and not absolutely: a project file is committed, so
+    // `ProtocolSource::parse` refuses an absolute path. This is also what a real adopter with a
+    // sibling checkout writes.
+    let engineering = project.join(".engineering");
+    let base: Vec<_> = engineering.components().collect();
+    let tree = root();
+    let tree: Vec<_> = tree.components().collect();
+    let shared = base
+        .iter()
+        .zip(&tree)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let mut parts = vec![".."; base.len() - shared];
+    parts.extend(
+        tree[shared..]
+            .iter()
+            .map(|component| component.as_os_str().to_str().expect("a printable path")),
+    );
     std::fs::write(
         project.join(".engineering/project.yaml"),
         format!(
             "protocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
-            root().display()
+            parts.join("/")
         ),
     )
     .expect("writable");

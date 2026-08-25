@@ -56,7 +56,20 @@ impl ProtocolSource {
                     format!("`{value}` uses an unsupported source scheme"),
                 )
                 .with_hint(
-                    "use a filesystem path or a pinned git+ssh://, git+https://, or git+file:// locator",
+                    "use a relative filesystem path or a pinned git+ssh://, git+https://, or git+file:// locator",
+                ));
+            }
+            if let Some(reason) = absolute_path_reason(&value) {
+                return Err(ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    "project.protocols",
+                    format!("`{value}` is an absolute path ({reason})"),
+                )
+                .with_hint(
+                    "use a path relative to the .engineering directory, or a pinned git+ssh://, \
+                     git+https://, or git+file:// locator — an absolute path names a place on one \
+                     machine, so the project file says something different on every other one and \
+                     nothing at all in CI",
                 ));
             }
             return Ok(Self::Path(PathBuf::from(value)));
@@ -99,6 +112,39 @@ impl ProtocolSource {
             revision: revision.to_ascii_lowercase(),
         }))
     }
+}
+
+/// Why a protocol source path is absolute, if it is.
+///
+/// A project file is read on every machine that checks the repository out, and a path rooted at `/`
+/// or at a drive letter is true on exactly one of them. The refusal is here, in the one reader every
+/// command goes through, rather than in the verb that writes the file — a file hand-edited past
+/// `protocol reverse init` has to fail the same way, and it is `resolve`, `evaluate` and `artifact`
+/// that would otherwise carry a machine-local path into a CI run.
+///
+/// `~` is refused with the others and for a sharper reason: nothing here expands it, so `~/tree` is
+/// a directory literally named `~`, and the failure it produces otherwise names a path nobody wrote.
+///
+/// Checked by spelling rather than by [`std::path::Path::is_absolute`], which answers for the
+/// platform the check happens to run on: a Unix build would accept `C:\\tree` and a Windows build
+/// would accept `/tree`, so the same project file would validate on one machine and not the other —
+/// which is the failure this refusal exists to prevent, one level up.
+fn absolute_path_reason(value: &str) -> Option<&'static str> {
+    if value.starts_with('/') || value.starts_with('\\') {
+        return Some("it is rooted at the filesystem root");
+    }
+    if value.starts_with('~') {
+        return Some("nothing here expands `~`, so it names a directory called `~`");
+    }
+    let mut characters = value.chars();
+    if let (Some(drive), Some(':'), Some(separator)) =
+        (characters.next(), characters.next(), characters.next())
+    {
+        if drive.is_ascii_alphabetic() && (separator == '/' || separator == '\\') {
+            return Some("it is rooted at a drive letter");
+        }
+    }
+    None
 }
 
 impl Default for ProtocolSource {
@@ -333,17 +379,23 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             ("profiles", &paths.profiles),
             ("schemas", &paths.schemas),
         ] {
-            if path.is_absolute() {
+            // The same spelling-based rule `protocols` is held to, and deliberately not
+            // `Path::is_absolute` — that answers for the platform the check runs on, so a Linux
+            // build accepted `schemas: C:\registry` and a Windows one accepted `schemas:
+            // /registry`. One project file, two verdicts, which is the failure the rule exists to
+            // prevent.
+            if let Some(reason) = absolute_path_reason(&path.to_string_lossy()) {
                 errors.push(
                     ValidationError::new(
                         ValidationCode::TypeMismatch,
                         format!("project.{label}"),
-                        format!("`{}` is absolute", path.display()),
+                        format!("`{}` is an absolute path ({reason})", path.display()),
                     )
                     .with_hint(
-                        "paths inside the project are relative to `.engineering`, so the repository \
-                         can be cloned anywhere without editing them; `protocols` is a separate \
-                         source and may identify an external tree",
+                        "every path in a project file is relative to `.engineering`, so the \
+                         repository can be cloned anywhere without editing them; `protocols` is \
+                         held to the same rule and names an external tree with a pinned \
+                         git+ssh://, git+https:// or git+file:// locator",
                     ),
                 );
             }
@@ -387,6 +439,57 @@ profile: development.standard
     }
 
     #[test]
+    fn an_absolute_protocol_source_is_refused_however_it_is_spelt() {
+        // A project file is read on every machine that checks the repository out. An absolute path
+        // is true on exactly one of them, and in CI it is true on none — so this is refused at the
+        // reader rather than left to fail later as a missing directory, where the message names a
+        // path nobody on that machine wrote.
+        for spelling in [
+            "/srv/trees/engineering-protocols",
+            "~/trees/engineering-protocols",
+            "~",
+            r"C:\trees\engineering-protocols",
+            r"D:/trees/engineering-protocols",
+            r"\\fileserver\trees",
+        ] {
+            let error = ProtocolSource::parse(spelling)
+                .expect_err(&format!("`{spelling}` must be refused"));
+            assert_eq!(error.code, ValidationCode::TypeMismatch, "{spelling}");
+            assert!(
+                error.message.contains("absolute path"),
+                "`{spelling}` must be refused as absolute, not as something else: {}",
+                error.message
+            );
+        }
+    }
+
+    #[test]
+    fn a_relative_protocol_source_is_still_accepted() {
+        // The rule is about a path being rooted somewhere only one machine has, not about paths.
+        // `..` is what this repository's own project file uses.
+        for spelling in ["..", ".", "../..", "vendor/protocols", "./tree"] {
+            assert_eq!(
+                ProtocolSource::parse(spelling).expect("a relative path is accepted"),
+                ProtocolSource::Path(PathBuf::from(spelling)),
+                "{spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_pinned_git_source_may_carry_an_absolute_path_inside_its_locator() {
+        // `git+file:///srv/mirror.git#<sha>` is absolute *inside a URL* and is not the thing being
+        // refused: it names a repository and a commit, so what it resolves to is the same tree
+        // everywhere the repository is reachable. Asserted because the check runs before the `git+`
+        // branch is taken, and a careless tightening would break every file-backed fixture.
+        let source = ProtocolSource::parse(
+            "git+file:///srv/mirror/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567",
+        )
+        .expect("a pinned file-backed source is accepted");
+        assert!(matches!(source, ProtocolSource::Git(_)));
+    }
+
+    #[test]
     fn paths_resolve_against_the_engineering_directory() {
         let parsed = config(
             r"
@@ -420,20 +523,52 @@ artifacts: graph.yaml
         );
     }
 
+    /// The tree may still live outside the project — by a relative path, or by a pinned locator.
+    ///
+    /// This test asserted the opposite until 2026-08-25: `protocols: /opt/engineering-protocols`
+    /// validated, on the reading that where a tree sits is the adopter's business. It is, and that
+    /// is not what the value decides. A project file is committed and read on every machine that
+    /// checks the repository out, so an absolute path makes the file mean a different thing on each
+    /// one and nothing at all in CI — the failure arriving as a missing directory naming a path
+    /// nobody on that machine wrote. **This is a breaking change** for a project file that carries
+    /// one; the two forms below are what it becomes.
     #[test]
-    fn the_protocol_tree_may_live_outside_the_project() {
-        let parsed = config(
+    fn the_protocol_tree_may_live_outside_the_project_without_being_named_absolutely() {
+        let by_relative_path = config(
+            r"
+protocol: adp/1
+profile: development.standard
+protocols: ../../engineering-protocols
+",
+        )
+        .expect("a relative path out of the project is allowed");
+        assert_eq!(
+            by_relative_path.protocols,
+            ProtocolSource::Path(PathBuf::from("../../engineering-protocols"))
+        );
+
+        let by_pinned_locator = config(
+            r"
+protocol: adp/1
+profile: development.standard
+protocols: git+https://example.com/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
+",
+        )
+        .expect("a pinned locator is allowed");
+        assert!(matches!(
+            by_pinned_locator.protocols,
+            ProtocolSource::Git(_)
+        ));
+
+        let refused = config(
             r"
 protocol: adp/1
 profile: development.standard
 protocols: /opt/engineering-protocols
 ",
         )
-        .expect("an absolute protocol tree is allowed");
-        assert_eq!(
-            parsed.protocols,
-            ProtocolSource::Path(PathBuf::from("/opt/engineering-protocols"))
-        );
+        .expect_err("an absolute path is refused");
+        assert!(format!("{refused:?}").contains("absolute path"));
     }
 
     #[test]
