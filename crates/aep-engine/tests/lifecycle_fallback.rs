@@ -90,9 +90,9 @@ fn a_kind_less_document_governs_every_kind_nothing_nearer_names() {
         .for_kind(&digest)
         .expect("an unregistered kind is governed by the fallback");
     assert_eq!(governing.initial, ArtifactStatus::Draft);
-    assert!(governing.permits_transition(ArtifactStatus::Draft, ArtifactStatus::Proposed));
+    assert!(governing.permits_transition(&ArtifactStatus::Draft, &ArtifactStatus::Proposed));
     assert!(
-        !governing.permits(ArtifactStatus::Active),
+        !governing.permits(&ArtifactStatus::Active),
         "the fallback is a lifecycle somebody wrote, not a permissive one"
     );
 

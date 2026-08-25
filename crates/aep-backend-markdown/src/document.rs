@@ -112,6 +112,12 @@ impl PlanningDocument {
     /// store unusable for the kinds it has no opinion about.
     ///
     /// On success the revision is bumped, because the file on disk is about to change.
+    ///
+    /// The verdict itself comes from [`crate::kernel`], which evaluates the ladder as data through
+    /// `entity-core` rather than by a lookup written here. The answer is the same one
+    /// [`ArtifactLifecycle::permits_transition`] gives — `tests/kernel_equivalence.rs` holds that
+    /// over every kind in the store and every pair of statuses — and the refusal below is
+    /// unchanged, because what an author needs is where they may go instead.
     pub fn move_status(
         &mut self,
         to: ArtifactStatus,
@@ -121,18 +127,19 @@ impl PlanningDocument {
         let lifecycle = lifecycles
             .for_kind(&self.frontmatter.kind)
             .unwrap_or(&permissive);
-        let from = self.frontmatter.status;
+        let from = self.frontmatter.status.clone();
 
-        if !lifecycle.permits_transition(from, to) {
+        if !crate::kernel::permits_transition(Some(&self.frontmatter.kind), lifecycle, &from, &to) {
+            let legal = lifecycle
+                .transitions
+                .get(&from)
+                .cloned()
+                .unwrap_or_default();
             return Err(MoveRefusal {
                 kind: self.frontmatter.kind.clone(),
                 from,
                 to,
-                legal: lifecycle
-                    .transitions
-                    .get(&from)
-                    .cloned()
-                    .unwrap_or_default(),
+                legal,
             });
         }
 
@@ -286,7 +293,7 @@ impl MoveRefusal {
     pub fn legal_targets(&self) -> String {
         self.legal
             .iter()
-            .map(|status| status.as_str())
+            .map(aep_domain::ArtifactStatus::as_str)
             .collect::<Vec<_>>()
             .join(", ")
     }

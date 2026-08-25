@@ -18,8 +18,10 @@ name = "aep-backend-markdown"
 version = "0.1.0"
 dependencies = [
  "aep-domain",
+ "entity-core",
  "schemars",
  "serde",
+ "serde_json",
  "serde_yaml",
  "thiserror",
 ]
@@ -431,6 +433,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "entity-core"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.3.0#96439427ecee6dab35534513f5d32e8e8ee8cb64"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

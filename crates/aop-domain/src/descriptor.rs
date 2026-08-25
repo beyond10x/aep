@@ -322,7 +322,7 @@ mod tests {
             .transitions
             .iter()
             .filter(|(_, to)| to.is_empty())
-            .map(|(from, _)| *from)
+            .map(|(from, _)| from.clone())
             .collect::<Vec<_>>();
         assert_eq!(
             terminal,

@@ -9,6 +9,55 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The artifact status vocabulary is open.** A lifecycle document may declare any rung — a status
+  is no longer required to be a variant of `ArtifactStatus`. The rung an adopter asked for and could
+  not have, `correction-owed` (sent, known wrong, audience not yet told), is now one line in
+  `artifacts/lifecycles/<kind>.yaml` and no release of ours.
+
+  **It is open to authors, not to typos.** A status is accepted for a *write* only if the kind's
+  lifecycle declares it, so `protocol artifact move --to correction-owed` refuses with *"its
+  lifecycle declares draft, proposed, rejected, active, implemented, archived"* until the rung is in
+  the document, and works the moment it is. The guarantee the old closure bought — *a status name
+  means the same rung to every tool* — is now bought by the ladder instead of by the type. Reading a
+  status for a *filter* (`artifact list --status`) accepts any well-formed name, because asking for
+  a status nothing holds is an empty answer rather than an error.
+
+  Two things it deliberately does not do. An invented rung is never `is_approved` and never
+  `is_retired`: this repository cannot know what a rung it has never seen means, and reading an
+  unknown name as *agreed and relied on* is the one mistake an open vocabulary must not make. And a
+  descriptor document under `adp-`/`aop-domain` still takes named statuses only, because it has no
+  ladder in scope to check an invented one against — a deliberate closure, with its reason written
+  beside it.
+
+  **Breaking for library callers**: `ArtifactStatus` is no longer `Copy` (it carries a `String`, as
+  `ArtifactKind` already did), `as_str` borrows, and `ArtifactLifecycle::permits`/`permits_transition`
+  take references. The three generated schemas publish a string with a pattern and examples instead
+  of a closed `oneOf`. Closes the vocabulary half of gap-register `:70` and the last instance of
+  `:76`; `docs/guide/open-vocabulary.md` and `website/docs/status/limitations.md` carry the new
+  verdict.
+
+- **The status ladder is now decided as data, by `entity-core`, instead of by a lookup written
+  here.** `protocol artifact move` refuses exactly what it refused before — every legal and illegal
+  move of every artifact kind produces the same verdict, and
+  `crates/aep-backend-markdown/tests/kernel_equivalence.rs` holds that over all 800 ordered pairs of
+  the ten statuses, the permissive fallback and a custom kind resolving its ladder through its
+  lineage. Nothing about the vocabulary opened, no message changed, and the refusal still names
+  where an artifact may go instead.
+
+  Why it matters even though nothing moved: `ArtifactStatus` is a ten-variant Rust enum, so every
+  rung this protocol can express is fixed at compile time and an adopter who needs `correction-owed`
+  cannot have it without a release of ours. That is the meta-defect `story:open-vocabulary-audit`
+  opened, and gap register `:70` is it in the register. With the ladder evaluated as data, adding a
+  rung becomes a line in a YAML file. This change takes none of that — it moves the decision so the
+  later change is possible — and it is reversible by deleting one module and one manifest line.
+
+  `crates/aep-backend-markdown` takes `entity-core` (`github.com/beyond10x/entity-runtime`) by git
+  revision, the first dependency here pinned that way and the only one crossing to another
+  beyond10x repository. The direction is fixed by `atlas/architecture/adr/0002`: nothing of ours
+  enters a manifest of theirs, at any version, ever.
+
 ### Added
 
 - **Projects now declare one custom JSON Schema registry, and `protocol` supplies the reusable

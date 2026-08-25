@@ -165,7 +165,7 @@ impl EntityBody for Specification {
                 "requirements".to_owned(),
                 Node::Seq(self.requirements.iter().map(Requirement::to_node).collect()),
             ),
-            ("status".to_owned(), status_node(self.status)),
+            ("status".to_owned(), status_node(&self.status)),
         ]))
     }
 
@@ -250,7 +250,7 @@ impl EntityBody for TestPlan {
             ),
             ("claims".to_owned(), text_node(&self.claims)),
             ("exit_criteria".to_owned(), text_node(&self.exit_criteria)),
-            ("status".to_owned(), status_node(self.status)),
+            ("status".to_owned(), status_node(&self.status)),
         ]))
     }
 
@@ -317,7 +317,7 @@ impl EntityBody for AcceptanceCriteria {
         Node::Map(BTreeMap::from([
             ("story".to_owned(), reference_node(&self.story)),
             ("criteria".to_owned(), text_node(&self.criteria)),
-            ("status".to_owned(), status_node(self.status)),
+            ("status".to_owned(), status_node(&self.status)),
         ]))
     }
 
@@ -506,10 +506,14 @@ fn status(entries: &BTreeMap<String, Node>, type_name: &str) -> Result<ArtifactS
     let Some(text) = entries.get("status").and_then(Node::as_text) else {
         return Err(ParseError::shape(location, "a status", "nothing"));
     };
+    // Restricted to the named vocabulary on purpose, and it is not the same closure the artifact
+    // status vocabulary used to have. A planning document's status is checked against the ladder
+    // its kind declares; a descriptor here has no ladder in scope, so there is nothing to check an
+    // invented rung against, and an unchecked open vocabulary is a typo that reads as a process.
     ArtifactStatus::ALL
         .iter()
-        .copied()
         .find(|status| status.as_str() == text)
+        .cloned()
         .ok_or_else(|| {
             ParseError::shape(
                 location,
@@ -548,7 +552,7 @@ fn count(
 }
 
 /// A status, as written in documents.
-fn status_node(status: ArtifactStatus) -> Node {
+fn status_node(status: &ArtifactStatus) -> Node {
     Node::from(status.as_str())
 }
 

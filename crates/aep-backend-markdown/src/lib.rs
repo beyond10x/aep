@@ -80,6 +80,7 @@
 pub mod claim;
 pub mod document;
 pub mod frontmatter;
+pub mod kernel;
 pub mod store;
 
 pub use claim::{

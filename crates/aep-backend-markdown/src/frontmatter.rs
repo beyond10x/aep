@@ -194,7 +194,7 @@ impl PlanningFrontmatter {
         let mut artifact = Artifact::new(
             self.id.clone(),
             self.kind.clone(),
-            self.status,
+            self.status.clone(),
             ArtifactLocation::RepositoryPath {
                 repository: None,
                 path: relative_path.to_owned(),

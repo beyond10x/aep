@@ -86,6 +86,13 @@ Each of these was learned by building the thing it names. They are enforced wher
 * **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
   that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
   appears in one here.
+* **`entity-core` is a dependency, and the arrow only points this way.** `crates/aep-backend-markdown`
+  takes it by git revision so the status ladder is decided as data rather than by a lookup written
+  here (`src/kernel.rs`). Nothing of ours appears in a manifest of `entity-runtime`'s, at any
+  version, ever — that is `atlas/architecture/adr/0002`, and it is the reason the arrow is safe: a
+  kernel that never depends on its adopter cannot be shaped by one. The verdicts are held identical
+  by `tests/kernel_equivalence.rs`, which is what makes the dependency reversible: delete the module
+  and the lookup it replaced still stands behind it.
 * **The one artifact that crosses is pinned.** A step's surface travels as a sealed
   `metaharness.frame/1` document. The reader is **transcribed, not linked** —
   `crates/protocol-cli/tests/metaharness_frame_contract.rs` checks tag, then shape, then digest, **in
@@ -467,14 +474,17 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 Written down because it is already practised, and an unwritten standard is one the next agent meets
 only by violating it.
 
-* **The workspace has ten direct third-party crates.** Seven are declared once in
+* **The workspace has eleven direct third-party crates.** Seven are declared once in
   `[workspace.dependencies]` — `serde`, `serde_json`, `serde_yaml`, `schemars`, `thiserror`, `clap`,
   `anyhow` — and three are crate-local: `sha2` wherever a document is content-addressed
   (`ess-gen`, `trace-domain`, `infra-domain`, `infra-compiler`, `aep-driver-spec`), `jsonschema` as
   a dev-dependency of `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a
   dev-dependency of `ess-compiler` (`default-features = false`, and every property runs under a
   fixed seed so the gate cannot be flaky — the seed and the way to widen locally are documented
-  where each is used). Reach for the workspace list before adding to it.
+  where each is used). The eleventh is `entity-core` in `aep-backend-markdown`, the only dependency
+  taken by **git revision** rather than by version: it is not on crates.io yet, and a ladder's
+  verdicts are a published surface that must not move under us. Reach for the workspace list before
+  adding to it.
 * **A non-workspace dependency carries its justification in the manifest**, beside the line that adds
   it: what it buys, which features are dropped and why that is safe here, and why the version matches
   the other crate that uses it. `crates/ess-gen/Cargo.toml` is the model.

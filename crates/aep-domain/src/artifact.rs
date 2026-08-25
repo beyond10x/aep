@@ -690,20 +690,18 @@ impl schemars::JsonSchema for ArtifactKind {
 ///
 /// This is independent of workflow state: a design can be `approved` while the task that
 /// consumes it is still in `implement`.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-    schemars::JsonSchema,
-)]
-#[serde(rename_all = "snake_case")]
+/// The vocabulary is **open**: [`ArtifactStatus::Other`] carries a rung this repository does not
+/// name, so a lifecycle document can declare one without a release here. That is deliberate and it
+/// was expensive to learn — an adopter needed `correction-owed` (sent, known wrong, audience not
+/// yet told) and there was no rung and no near neighbour, because a ten-variant enum decided what
+/// their process was allowed to say. See `docs/guide/open-vocabulary.md`.
+///
+/// What the closure used to buy — *a status name means the same rung to every tool that reads the
+/// artifact graph* — is now bought by the **ladder** instead: a status is only reachable if some
+/// `artifacts/lifecycles/*.yaml` declares it, so the vocabulary is open to authors and still closed
+/// to typos. Opening the type without that check would have traded a rigid process for a silent one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum ArtifactStatus {
     /// Being written.
     Draft,
@@ -725,10 +723,15 @@ pub enum ArtifactStatus {
     Superseded,
     /// Kept for the record only.
     Archived,
+    /// A rung this vocabulary does not name, carried verbatim.
+    ///
+    /// Reachable only when a lifecycle document declares it — see the type's own note.
+    Other(String),
 }
 
 impl ArtifactStatus {
-    /// Every status.
+    /// Every status this vocabulary names. An [`ArtifactStatus::Other`] is not in it, by
+    /// definition: a list of the rungs anyone might invent is not a list.
     pub const ALL: &'static [Self] = &[
         Self::Draft,
         Self::Proposed,
@@ -742,8 +745,14 @@ impl ArtifactStatus {
         Self::Archived,
     ];
 
+    /// The pattern a status name must match: lower-case, starting with a letter, with `_` or `-`
+    /// between words. Both separators are accepted because the named rungs use `in_review` and the
+    /// first rung an adopter asked for was `correction-owed`; refusing one of those spellings would
+    /// be a rule about their punctuation, not about their process.
+    pub const PATTERN: &'static str = "^[a-z][a-z0-9_-]*$";
+
     /// The status as written in documents.
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Draft => "draft",
             Self::Proposed => "proposed",
@@ -755,14 +764,64 @@ impl ArtifactStatus {
             Self::Implemented => "implemented",
             Self::Superseded => "superseded",
             Self::Archived => "archived",
+            Self::Other(name) => name,
         }
+    }
+
+    /// Reads a status name, naming what is wrong when it is not one.
+    ///
+    /// A name this vocabulary knows becomes that variant, so `draft` is always `Draft` and never an
+    /// `Other` that merely prints the same — two values that render identically and compare unequal
+    /// are the defect an open vocabulary invites, and this is where it is refused.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the name is empty or does not match [`ArtifactStatus::PATTERN`].
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        if let Some(known) = Self::ALL.iter().find(|status| status.as_str() == value) {
+            return Ok(known.clone());
+        }
+        if value.is_empty() {
+            return Err(ParseError::identifier(
+                "status",
+                value,
+                "a status name is not empty".to_owned(),
+            ));
+        }
+        let mut characters = value.chars();
+        let first_is_letter = characters
+            .next()
+            .is_some_and(|first| first.is_ascii_lowercase());
+        let rest_is_name = value.chars().all(|character| {
+            character.is_ascii_lowercase()
+                || character.is_ascii_digit()
+                || character == '_'
+                || character == '-'
+        });
+        if !first_is_letter || !rest_is_name {
+            return Err(ParseError::identifier(
+                "status",
+                value,
+                "expected lower-case letters, digits, `_` or `-`, starting with a letter"
+                    .to_owned(),
+            ));
+        }
+        Ok(Self::Other(value.to_owned()))
+    }
+
+    /// `true` when this vocabulary names the status, rather than carrying it verbatim.
+    pub fn is_named(&self) -> bool {
+        !matches!(self, Self::Other(_))
     }
 
     /// `true` when the artifact has been agreed and may be relied on.
     ///
     /// Requirements written as `status: approved` accept any of these, because
-    /// `accepted`/`active`/`implemented` are all downstream of approval.
-    pub fn is_approved(self) -> bool {
+    /// `accepted`/`active`/`implemented` are all downstream of approval. An
+    /// [`ArtifactStatus::Other`] is **never** approved: this repository cannot know what a rung it
+    /// has never seen means, and reading an unknown name as *agreed and relied on* is the one
+    /// mistake an open vocabulary must not make.
+    pub fn is_approved(&self) -> bool {
         matches!(
             self,
             Self::Approved | Self::Accepted | Self::Active | Self::Implemented
@@ -770,22 +829,71 @@ impl ArtifactStatus {
     }
 
     /// `true` when the artifact no longer describes the current state of the world.
-    pub fn is_retired(self) -> bool {
+    ///
+    /// An [`ArtifactStatus::Other`] is not retired either, for the same reason and with the
+    /// opposite consequence: an unknown rung keeps an artifact live rather than quietly retiring it.
+    pub fn is_retired(&self) -> bool {
         matches!(self, Self::Superseded | Self::Archived | Self::Rejected)
     }
 
     /// `true` when an artifact in this status satisfies a requirement for `required`.
-    pub fn satisfies(self, required: Self) -> bool {
+    pub fn satisfies(&self, required: &Self) -> bool {
         if self == required {
             return true;
         }
-        required == Self::Approved && self.is_approved()
+        required == &Self::Approved && self.is_approved()
     }
 }
 
 impl fmt::Display for ArtifactStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ArtifactStatus {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ArtifactStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactStatus {
+    fn schema_name() -> String {
+        "ArtifactStatus".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        schema.string().pattern = Some(Self::PATTERN.to_owned());
+        schema.metadata().description = Some(
+            "Artifact status. The named vocabulary is listed in `examples`; any other name a \
+             lifecycle document declares is carried verbatim, so a rung is a line in a YAML file \
+             rather than a release of the engine."
+                .to_owned(),
+        );
+        schema.metadata().examples = Self::ALL
+            .iter()
+            .map(|status| serde_json::Value::String(status.as_str().to_owned()))
+            .collect();
+        schemars::schema::Schema::Object(schema)
     }
 }
 
@@ -1463,31 +1571,36 @@ impl ArtifactLifecycle {
             initial: ArtifactStatus::Draft,
             transitions: ArtifactStatus::ALL
                 .iter()
-                .map(|status| (*status, ArtifactStatus::ALL.iter().copied().collect()))
+                .map(|status| {
+                    (
+                        status.clone(),
+                        ArtifactStatus::ALL.iter().cloned().collect(),
+                    )
+                })
                 .collect(),
         }
     }
 
     /// Every status this lifecycle mentions.
     pub fn statuses(&self) -> BTreeSet<ArtifactStatus> {
-        let mut statuses: BTreeSet<ArtifactStatus> = [self.initial].into();
+        let mut statuses: BTreeSet<ArtifactStatus> = [self.initial.clone()].into();
         for (from, to) in &self.transitions {
-            statuses.insert(*from);
-            statuses.extend(to.iter().copied());
+            statuses.insert(from.clone());
+            statuses.extend(to.iter().cloned());
         }
         statuses
     }
 
     /// `true` when `status` is legal for this kind.
-    pub fn permits(&self, status: ArtifactStatus) -> bool {
-        self.statuses().contains(&status)
+    pub fn permits(&self, status: &ArtifactStatus) -> bool {
+        self.statuses().contains(status)
     }
 
     /// `true` when an artifact may move from `from` to `to`.
-    pub fn permits_transition(&self, from: ArtifactStatus, to: ArtifactStatus) -> bool {
+    pub fn permits_transition(&self, from: &ArtifactStatus, to: &ArtifactStatus) -> bool {
         self.transitions
-            .get(&from)
-            .is_some_and(|targets| targets.contains(&to))
+            .get(from)
+            .is_some_and(|targets| targets.contains(to))
     }
 }
 
@@ -1847,7 +1960,7 @@ impl ArtifactGraph {
 
         for artifact in self.artifacts.values() {
             if let Some(lifecycle) = lifecycles.for_kind(&artifact.kind) {
-                if !lifecycle.permits(artifact.status) {
+                if !lifecycle.permits(&artifact.status) {
                     errors.push(
                         ValidationError::new(
                             ValidationCode::UnknownState,
@@ -1859,7 +1972,7 @@ impl ArtifactGraph {
                                 lifecycle
                                     .statuses()
                                     .iter()
-                                    .map(|status| status.as_str())
+                                    .map(ArtifactStatus::as_str)
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             ),
@@ -1929,7 +2042,9 @@ impl ArtifactGraph {
             for kind in artifact.kind.lineage() {
                 let key = kind.as_str().to_owned();
                 *counts.entry(key.clone()).or_default() += 1;
-                *by_status.entry((key.clone(), artifact.status)).or_default() += 1;
+                *by_status
+                    .entry((key.clone(), artifact.status.clone()))
+                    .or_default() += 1;
                 if artifact.status.is_approved() {
                     *approved.entry(key).or_default() += 1;
                 }
@@ -2112,8 +2227,8 @@ mod tests {
         let governing = registry
             .for_kind(&observation_log)
             .expect("the parent kind's lifecycle governs it");
-        assert!(governing.permits_transition(ArtifactStatus::Draft, ArtifactStatus::Active));
-        assert!(!governing.permits(ArtifactStatus::Rejected));
+        assert!(governing.permits_transition(&ArtifactStatus::Draft, &ArtifactStatus::Active));
+        assert!(!governing.permits(&ArtifactStatus::Rejected));
 
         // A kind outside the family is untouched, so the ladder is shared and not global.
         assert!(registry
@@ -2384,7 +2499,7 @@ mod tests {
         assert!(registry
             .for_kind(&ArtifactKind::ArchitectureDecisionRecord)
             .expect("registered")
-            .permits_transition(ArtifactStatus::Proposed, ArtifactStatus::Accepted));
+            .permits_transition(&ArtifactStatus::Proposed, &ArtifactStatus::Accepted));
     }
 
     #[test]

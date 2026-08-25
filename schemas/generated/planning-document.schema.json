@@ -174,79 +174,21 @@
       "minProperties": 1
     },
     "ArtifactStatus": {
-      "description": "Where an artifact's lifecycle has got to.\n\nThis is independent of workflow state: a design can be `approved` while the task that consumes it is still in `implement`.",
-      "oneOf": [
-        {
-          "description": "Being written.",
-          "type": "string",
-          "enum": [
-            "draft"
-          ]
-        },
-        {
-          "description": "Put forward for a decision.",
-          "type": "string",
-          "enum": [
-            "proposed"
-          ]
-        },
-        {
-          "description": "Under review.",
-          "type": "string",
-          "enum": [
-            "in_review"
-          ]
-        },
-        {
-          "description": "Reviewed and agreed.",
-          "type": "string",
-          "enum": [
-            "approved"
-          ]
-        },
-        {
-          "description": "Decided and in force; the ADR spelling of `approved`.",
-          "type": "string",
-          "enum": [
-            "accepted"
-          ]
-        },
-        {
-          "description": "Reviewed and turned down.",
-          "type": "string",
-          "enum": [
-            "rejected"
-          ]
-        },
-        {
-          "description": "Current and in use.",
-          "type": "string",
-          "enum": [
-            "active"
-          ]
-        },
-        {
-          "description": "Realised in the system.",
-          "type": "string",
-          "enum": [
-            "implemented"
-          ]
-        },
-        {
-          "description": "Replaced by a later artifact.",
-          "type": "string",
-          "enum": [
-            "superseded"
-          ]
-        },
-        {
-          "description": "Kept for the record only.",
-          "type": "string",
-          "enum": [
-            "archived"
-          ]
-        }
-      ]
+      "description": "Artifact status. The named vocabulary is listed in `examples`; any other name a lifecycle document declares is carried verbatim, so a rung is a line in a YAML file rather than a release of the engine.",
+      "examples": [
+        "draft",
+        "proposed",
+        "in_review",
+        "approved",
+        "accepted",
+        "rejected",
+        "active",
+        "implemented",
+        "superseded",
+        "archived"
+      ],
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
     },
     "Node": {
       "description": "Any JSON/YAML value: null, boolean, number, string, array or object."

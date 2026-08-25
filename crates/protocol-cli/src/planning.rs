@@ -340,9 +340,9 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     let status = registry
         .lifecycles()
         .for_kind(&kind)
-        .map_or(ArtifactStatus::Draft, |lifecycle| lifecycle.initial);
+        .map_or(ArtifactStatus::Draft, |lifecycle| lifecycle.initial.clone());
 
-    let mut frontmatter = PlanningFrontmatter::new(id.clone(), kind.clone(), status);
+    let mut frontmatter = PlanningFrontmatter::new(id.clone(), kind.clone(), status.clone());
     frontmatter.title = Some(args.title.clone());
     frontmatter.summary.clone_from(&args.summary);
     frontmatter.owner.clone_from(&args.owner);
@@ -369,7 +369,7 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
             &Created {
                 id: id.to_string(),
                 kind: kind.to_string(),
-                status: status.as_str(),
+                status: status.as_str().to_owned(),
                 path: relative,
             },
             args.store.format,
@@ -381,7 +381,6 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
 /// `protocol artifact move`
 fn move_status(args: &StoreArgs, id: &str, to: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
-    let to = parse_status(to)?;
     let registry = args.lifecycles()?;
 
     let store = args.store()?;
@@ -392,9 +391,18 @@ fn move_status(args: &StoreArgs, id: &str, to: &str) -> Result<ExitCode> {
         .documents
         .get_mut(&id)
         .with_context(|| missing(&store, &id))?;
-    let from = stored.document.frontmatter.status;
+    let from = stored.document.frontmatter.status.clone();
 
-    if let Err(refusal) = stored.document.move_status(to, registry.lifecycles()) {
+    // The target is read *after* the artifact, because what a status name may be is decided by the
+    // ladder this kind declares and not by a list compiled into this binary. `ArtifactStatus` is an
+    // open vocabulary; the ladder is what keeps it open to authors and closed to typos.
+    let kind = stored.document.frontmatter.kind.clone();
+    let to = parse_status_in(to, &kind, registry.lifecycles())?;
+
+    if let Err(refusal) = stored
+        .document
+        .move_status(to.clone(), registry.lifecycles())
+    {
         outln!("{id} is {from}; {refusal}");
         return Ok(crate::exit_code(false));
     }
@@ -411,8 +419,8 @@ fn move_status(args: &StoreArgs, id: &str, to: &str) -> Result<ExitCode> {
         Format::Yaml | Format::Json => crate::print_serialised(
             &Moved {
                 id: id.to_string(),
-                from: from.as_str(),
-                to: to.as_str(),
+                from: from.as_str().to_owned(),
+                to: to.as_str().to_owned(),
                 revision: document.frontmatter.revision,
                 path: path.display().to_string(),
             },
@@ -543,7 +551,7 @@ fn list(args: &StoreArgs, kind: Option<&str>, status: Option<&str>) -> Result<Ex
                     vec![
                         entry.id.clone(),
                         entry.kind.clone(),
-                        entry.status.to_owned(),
+                        entry.status.clone(),
                         entry.title.clone().unwrap_or_default(),
                     ]
                 })
@@ -751,21 +759,21 @@ fn relations(args: &StoreArgs) -> Result<ExitCode> {
 fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(kind).map_err(|error| anyhow::anyhow!("{error}"))?;
     let registry = args.lifecycles()?;
-    let declared = registry.lifecycles().for_kind(&kind);
     let permissive = ArtifactLifecycle::permissive();
-    let lifecycle = declared.unwrap_or(&permissive);
+    let declared = registry.lifecycles().for_kind(&kind).cloned();
+    let lifecycle = declared.clone().unwrap_or(permissive);
 
     let view = Lifecycle {
         kind: kind.to_string(),
         declared: declared.is_some(),
-        initial: lifecycle.initial.as_str(),
+        initial: lifecycle.initial.as_str().to_owned(),
         transitions: lifecycle
             .transitions
             .iter()
             .map(|(from, to)| {
                 (
                     from.as_str().to_owned(),
-                    to.iter().map(|status| status.as_str()).collect(),
+                    to.iter().map(|status| status.as_str().to_owned()).collect(),
                 )
             })
             .collect(),
@@ -782,7 +790,8 @@ fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
                 );
             }
             for (from, to) in &view.transitions {
-                outln!("  {from} -> {}", render_list(to));
+                let to: Vec<&str> = to.iter().map(String::as_str).collect();
+                outln!("  {from} -> {}", render_list(&to));
             }
         }
         Format::Yaml | Format::Json => crate::print_serialised(&view, args.format)?,
@@ -843,23 +852,46 @@ fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-/// Parses a status name, listing the vocabulary when it is not one.
+/// Parses a status name for a read — a filter, where any well-formed name is a fair question.
+///
+/// Asking to list artifacts in a status nothing holds is an empty answer, not an error, so this
+/// checks the shape and nothing else. Writing one is a different matter: see [`parse_status_in`].
 fn parse_status(value: &str) -> Result<ArtifactStatus> {
-    ArtifactStatus::ALL
+    ArtifactStatus::parse(value).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// Parses a status name for a **write**, against the ladder the kind declares.
+///
+/// This is where the open vocabulary is kept honest. `ArtifactStatus` will carry any well-formed
+/// name, so a lifecycle document can add `correction-owed` without a release here — but a name no
+/// ladder declares is a typo, and a typo that becomes a status is a process nobody wrote. The
+/// refusal lists what this kind may actually hold, which is more useful than a list of what the
+/// binary happens to know.
+fn parse_status_in(
+    value: &str,
+    kind: &ArtifactKind,
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+) -> Result<ArtifactStatus> {
+    let status = parse_status(value)?;
+    let Some(lifecycle) = lifecycles.for_kind(kind) else {
+        // No ladder anywhere in this kind's lineage: the store is permissive here, and refusing a
+        // status because nobody wrote a ladder for `runbook` would make it unusable.
+        return Ok(status);
+    };
+    if lifecycle.permits(&status) {
+        return Ok(status);
+    }
+    let declared: Vec<String> = lifecycle
+        .statuses()
         .iter()
-        .copied()
-        .find(|status| status.as_str() == value)
-        .with_context(|| {
-            format!(
-                "`{value}` is not a status; expected one of {}",
-                render_list(
-                    &ArtifactStatus::ALL
-                        .iter()
-                        .map(|status| status.as_str())
-                        .collect::<Vec<_>>()
-                )
-            )
-        })
+        .map(|status| status.as_str().to_owned())
+        .collect();
+    let declared: Vec<&str> = declared.iter().map(String::as_str).collect();
+    anyhow::bail!(
+        "`{value}` is not a status a {kind} may hold; its lifecycle declares {}. \
+         Add the rung to that lifecycle document if it belongs there — it is a line, not a release",
+        render_list(&declared)
+    )
 }
 
 /// Parses `<relation>:<artifact-id>`.
@@ -898,12 +930,14 @@ fn select(report: &StoreReport, kind: Option<&str>, status: Option<&str>) -> Res
             // `ArtifactGraph::of_kind` does. One question, one answer, wherever it is asked.
             kind.as_ref()
                 .is_none_or(|wanted| frontmatter.kind.is_a(wanted))
-                && status.is_none_or(|wanted| frontmatter.status == wanted)
+                && status
+                    .as_ref()
+                    .is_none_or(|wanted| &frontmatter.status == wanted)
         })
         .map(|stored| Listed {
             id: stored.document.frontmatter.id.to_string(),
             kind: stored.document.frontmatter.kind.to_string(),
-            status: stored.document.frontmatter.status.as_str(),
+            status: stored.document.frontmatter.status.as_str().to_owned(),
             title: stored.document.frontmatter.title.clone(),
             path: stored.relative_path.clone(),
         })
@@ -979,7 +1013,7 @@ fn render_list(values: &[&str]) -> String {
 struct Listed {
     id: String,
     kind: String,
-    status: &'static str,
+    status: String,
     title: Option<String>,
     path: String,
 }
@@ -996,7 +1030,9 @@ struct Column {
 struct Created {
     id: String,
     kind: String,
-    status: &'static str,
+    // Owned rather than `&'static str`: a status name may be one a lifecycle document invented,
+    // which no `'static` slice can hold.
+    status: String,
     path: String,
 }
 
@@ -1004,8 +1040,8 @@ struct Created {
 #[derive(Debug, serde::Serialize)]
 struct Moved {
     id: String,
-    from: &'static str,
-    to: &'static str,
+    from: String,
+    to: String,
     revision: u64,
     path: String,
 }
@@ -1057,8 +1093,8 @@ struct RelationRow {
 struct Lifecycle {
     kind: String,
     declared: bool,
-    initial: &'static str,
-    transitions: BTreeMap<String, Vec<&'static str>>,
+    initial: String,
+    transitions: BTreeMap<String, Vec<String>>,
 }
 
 #[cfg(test)]
@@ -1084,12 +1120,70 @@ mod tests {
         );
     }
 
+    /// The status vocabulary is open, and this is where "open" is kept from meaning "unchecked".
+    ///
+    /// This test used to assert the opposite: that `in-progress` is refused because the binary does
+    /// not name it. It is not refused any more — a lifecycle document may declare it — and what
+    /// refuses it now is the **ladder**, which is a document an adopter can change rather than a
+    /// list compiled into this program.
     #[test]
-    fn an_unknown_status_lists_the_ones_that_exist() {
-        let error = parse_status("in-progress").expect_err("that is not a status");
-        let message = error.to_string();
-        assert!(message.contains("in_review"), "{message}");
-        assert!(message.contains("implemented"), "{message}");
+    fn a_status_no_ladder_declares_is_refused_and_the_ladder_says_what_it_may_hold() {
+        // The shape alone is open: a name a lifecycle could declare parses.
+        let open = parse_status("correction-owed").expect("a well-formed status name");
+        assert_eq!(open.as_str(), "correction-owed");
+        assert!(!open.is_named(), "it is not one this binary names");
+
+        // A name no lifecycle could declare is still refused, on its shape.
+        for malformed in ["In Progress", "in progress", "", "9lives"] {
+            parse_status(malformed)
+                .err()
+                .unwrap_or_else(|| panic!("{malformed:?} must not parse as a status"));
+        }
+
+        // And the ladder is the gate for a write: `story` does not declare `correction-owed`, so
+        // the refusal names what it does declare rather than what this binary happens to know.
+        let mut lifecycles = aep_domain::artifact::LifecycleRegistry::new();
+        lifecycles.insert(
+            ArtifactKind::Story,
+            serde_yaml::from_str(
+                "kind: story\ninitial: draft\ntransitions:\n  draft: [proposed]\n  \
+                 proposed: [active]\n  active: []\n",
+            )
+            .expect("the fixture lifecycle parses"),
+        );
+        let refused = parse_status_in("correction-owed", &ArtifactKind::Story, &lifecycles)
+            .expect_err("no ladder declares it");
+        let message = refused.to_string();
+        assert!(message.contains("correction-owed"), "{message}");
+        assert!(message.contains("draft"), "{message}");
+        assert!(message.contains("active"), "{message}");
+        assert!(message.contains("line, not a release"), "{message}");
+
+        // The same name against a ladder that *does* declare it is accepted, with no Rust change.
+        let mut opened = aep_domain::artifact::LifecycleRegistry::new();
+        opened.insert(
+            ArtifactKind::Story,
+            serde_yaml::from_str(
+                "kind: story\ninitial: draft\ntransitions:\n  draft: [correction-owed]\n  \
+                 correction-owed: []\n",
+            )
+            .expect("the fixture lifecycle parses"),
+        );
+        let accepted = parse_status_in("correction-owed", &ArtifactKind::Story, &opened)
+            .expect("the ladder declares it");
+        assert_eq!(accepted.as_str(), "correction-owed");
+    }
+
+    /// A known name always parses to the variant that names it, never to a look-alike `Other`.
+    /// Two values that render identically and compare unequal is the defect an open vocabulary
+    /// invites, and it would make every `status == Draft` in the workspace quietly wrong.
+    #[test]
+    fn a_named_status_never_parses_as_an_invented_one() {
+        for status in ArtifactStatus::ALL {
+            let parsed = parse_status(status.as_str()).expect("a named status parses");
+            assert_eq!(&parsed, status);
+            assert!(parsed.is_named(), "{status} came back as an invented rung");
+        }
     }
 
     #[test]

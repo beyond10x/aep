@@ -637,7 +637,7 @@ impl ArtifactRequirement {
         if self.fresh && artifact.status.is_retired() {
             return false;
         }
-        if let Some(status) = self.status {
+        if let Some(status) = &self.status {
             if !artifact.status.satisfies(status) {
                 return false;
             }
@@ -706,7 +706,7 @@ impl ArtifactRequirement {
 impl fmt::Display for ArtifactRequirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "artifact {}", self.kind)?;
-        if let Some(status) = self.status {
+        if let Some(status) = &self.status {
             write!(f, " ({status})")?;
         }
         if self.at_least != 1 {
@@ -1322,8 +1322,8 @@ fn parse_status(value: &str) -> Result<ArtifactStatus, ParseError> {
     let normalised = value.replace('-', "_");
     ArtifactStatus::ALL
         .iter()
-        .copied()
         .find(|status| status.as_str() == normalised)
+        .cloned()
         .ok_or_else(|| {
             ParseError::shape(
                 "status",
@@ -1331,7 +1331,7 @@ fn parse_status(value: &str) -> Result<ArtifactStatus, ParseError> {
                     "one of {}",
                     ArtifactStatus::ALL
                         .iter()
-                        .map(|status| status.as_str())
+                        .map(super::artifact::ArtifactStatus::as_str)
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
