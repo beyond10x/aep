@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.19.0] — 2026-08-25
+
 ### Added
 
 - **The planning store has a journal, and therefore a history.** Every write — create, move, relate,
