@@ -13,7 +13,8 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:outbound-claims-and-status-vocabulary
 - informed_by: story:adopter-bugs
-revision: 3
+- informed_by: story:entity-runtime-mapping
+revision: 4
 ---
 # Story: Every adopter-facing declaration, checked for whether it is actually open
 
