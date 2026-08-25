@@ -122,25 +122,48 @@ impl PlanningDocument {
         &mut self,
         to: ArtifactStatus,
         lifecycles: &LifecycleRegistry,
-    ) -> Result<(), MoveRefusal> {
+        evidence: &crate::kernel::EvidenceOnHand,
+    ) -> Result<(), Box<MoveRefusal>> {
         let permissive = ArtifactLifecycle::permissive();
         let lifecycle = lifecycles
             .for_kind(&self.frontmatter.kind)
             .unwrap_or(&permissive);
         let from = self.frontmatter.status.clone();
 
-        if !crate::kernel::permits_transition(Some(&self.frontmatter.kind), lifecycle, &from, &to) {
+        let reason = match crate::kernel::decide(
+            Some(&self.frontmatter.kind),
+            lifecycle,
+            &from,
+            &to,
+            evidence,
+        ) {
+            crate::kernel::Verdict::Permitted => None,
+            crate::kernel::Verdict::NotOnTheLadder => Some(RefusalReason::NotOnTheLadder),
+            crate::kernel::Verdict::EvidenceUnobserved {
+                unobserved,
+                message,
+            } => Some(RefusalReason::EvidenceUnobserved {
+                unobserved,
+                message,
+            }),
+            crate::kernel::Verdict::EvidenceInsufficient { message } => {
+                Some(RefusalReason::EvidenceInsufficient { message })
+            }
+        };
+
+        if let Some(reason) = reason {
             let legal = lifecycle
                 .transitions
                 .get(&from)
                 .cloned()
                 .unwrap_or_default();
-            return Err(MoveRefusal {
+            return Err(Box::new(MoveRefusal {
                 kind: self.frontmatter.kind.clone(),
                 from,
                 to,
                 legal,
-            });
+                reason,
+            }));
         }
 
         self.frontmatter.status = to;
@@ -286,6 +309,32 @@ pub struct MoveRefusal {
     pub to: ArtifactStatus,
     /// Every status it may move to from here. Empty when the status is terminal.
     pub legal: BTreeSet<ArtifactStatus>,
+    /// Why. A rung the ladder does not declare, or a rung whose cost is not met.
+    pub reason: RefusalReason,
+}
+
+/// Why a move was refused.
+///
+/// Three, not two, and the split between the last two is gap-register `:39`. *Nobody presented
+/// evidence of that kind* and *evidence was presented and there is not enough of it* send an author
+/// to different places — one to produce a record, the other to argue about the one that exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefusalReason {
+    /// The ladder declares no such move from here. What every refusal was before requirements
+    /// existed, and still the only one a ladder without `requires` can produce.
+    NotOnTheLadder,
+    /// The rung costs evidence and none of that kind was presented.
+    EvidenceUnobserved {
+        /// What the requirement needed and could not read.
+        unobserved: Vec<String>,
+        /// What the requirement said.
+        message: String,
+    },
+    /// Evidence was presented and the requirement is not met.
+    EvidenceInsufficient {
+        /// What the requirement said.
+        message: String,
+    },
 }
 
 impl MoveRefusal {
@@ -303,14 +352,36 @@ impl std::error::Error for MoveRefusal {}
 
 impl fmt::Display for MoveRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.legal.is_empty() {
-            write!(
+        match &self.reason {
+            RefusalReason::NotOnTheLadder => {
+                if self.legal.is_empty() {
+                    write!(
+                        f,
+                        "a {} in {} is at the end of its lifecycle and may not move",
+                        self.kind, self.from
+                    )
+                } else {
+                    write!(f, "a {} may move to: {}", self.kind, self.legal_targets())
+                }
+            }
+            // Names what to go and produce, rather than reporting a requirement as failed when
+            // nobody has been asked for it yet.
+            RefusalReason::EvidenceUnobserved {
+                unobserved,
+                message,
+            } => write!(
                 f,
-                "a {} in {} is at the end of its lifecycle and may not move",
-                self.kind, self.from
-            )
-        } else {
-            write!(f, "a {} may move to: {}", self.kind, self.legal_targets())
+                "{} is on the ladder and not yet earned: {message}. Nothing was presented at {}",
+                self.to,
+                unobserved.join(", ")
+            ),
+            RefusalReason::EvidenceInsufficient { message } => {
+                write!(
+                    f,
+                    "{} is on the ladder and not yet earned: {message}",
+                    self.to
+                )
+            }
         }
     }
 }
@@ -366,7 +437,11 @@ mod tests {
         let text = STORY.replace("revision: 1\n", "revision: 1\nsprint: 42\n");
         let mut parsed = document(&text);
         parsed
-            .move_status(ArtifactStatus::Proposed, &story_lifecycle())
+            .move_status(
+                ArtifactStatus::Proposed,
+                &story_lifecycle(),
+                &std::collections::BTreeMap::default(),
+            )
             .expect("draft to proposed is a legal story move");
         let rendered = parsed.render();
         assert!(rendered.contains("sprint: 42"), "{rendered}");
@@ -436,7 +511,11 @@ mod tests {
     fn an_illegal_move_names_every_legal_target() {
         let mut parsed = document(STORY);
         let refusal = parsed
-            .move_status(ArtifactStatus::Implemented, &story_lifecycle())
+            .move_status(
+                ArtifactStatus::Implemented,
+                &story_lifecycle(),
+                &std::collections::BTreeMap::default(),
+            )
             .expect_err("a draft story cannot jump to implemented");
 
         assert_eq!(refusal.from, ArtifactStatus::Draft);
@@ -467,7 +546,11 @@ mod tests {
         let text = STORY.replace("status: draft", "status: archived");
         let mut parsed = document(&text);
         let refusal = parsed
-            .move_status(ArtifactStatus::Draft, &story_lifecycle())
+            .move_status(
+                ArtifactStatus::Draft,
+                &story_lifecycle(),
+                &std::collections::BTreeMap::default(),
+            )
             .expect_err("archived is the end of the story ladder");
         assert!(refusal.legal.is_empty());
         assert_eq!(
@@ -491,7 +574,11 @@ mod tests {
             "the fixture registry has to hold no runbook lifecycle for this to test the fallback"
         );
         parsed
-            .move_status(ArtifactStatus::Implemented, &LifecycleRegistry::new())
+            .move_status(
+                ArtifactStatus::Implemented,
+                &LifecycleRegistry::new(),
+                &std::collections::BTreeMap::default(),
+            )
             .expect("a kind nobody wrote a ladder for is not blocked by one");
         assert_eq!(parsed.frontmatter.revision, 2);
     }

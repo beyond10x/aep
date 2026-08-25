@@ -156,6 +156,17 @@ pub(crate) enum ArtifactCommand {
         /// The status to move it to, such as `active`.
         #[arg(long)]
         to: String,
+        /// Evidence presented for the move, as `<kind>=<count>`, repeatable.
+        ///
+        /// Needed only for a rung whose lifecycle document declares a `requires:` entry. The
+        /// planning store holds markdown, not evidence records, so what is on hand comes from the
+        /// caller — the same shape the kernel demands of a clock.
+        ///
+        /// **This establishes that a count was presented, not that the records are sound.** Whose
+        /// they are, what they are about and whether the producer was independent are the engine's
+        /// judgements, and wiring them is `story:completion-needs-evidence`.
+        #[arg(long = "evidence", value_name = "KIND=COUNT")]
+        evidence: Vec<String>,
     },
     /// Add an edge from one plan item to another.
     Relate {
@@ -291,7 +302,12 @@ pub(crate) enum PlanningGraphFormat {
 pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
     match command {
         ArtifactCommand::New(args) => create(&args),
-        ArtifactCommand::Move { store, id, to } => move_status(&store, &id, &to),
+        ArtifactCommand::Move {
+            store,
+            id,
+            to,
+            evidence,
+        } => move_status(&store, &id, &to, &evidence),
         ArtifactCommand::Relate {
             store,
             id,
@@ -379,7 +395,8 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
 }
 
 /// `protocol artifact move`
-fn move_status(args: &StoreArgs, id: &str, to: &str) -> Result<ExitCode> {
+fn move_status(args: &StoreArgs, id: &str, to: &str, evidence: &[String]) -> Result<ExitCode> {
+    let evidence = parse_evidence(evidence)?;
     let id = artifact_id(id)?;
     let registry = args.lifecycles()?;
 
@@ -401,7 +418,7 @@ fn move_status(args: &StoreArgs, id: &str, to: &str) -> Result<ExitCode> {
 
     if let Err(refusal) = stored
         .document
-        .move_status(to.clone(), registry.lifecycles())
+        .move_status(to.clone(), registry.lifecycles(), &evidence)
     {
         outln!("{id} is {from}; {refusal}");
         return Ok(crate::exit_code(false));
@@ -850,6 +867,28 @@ fn missing(store: &MarkdownStore, id: &ArtifactId) -> String {
 /// Parses an artifact id, or says what one looks like.
 fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// Parses `<kind>=<count>` pairs into the counts a requirement is checked against.
+///
+/// A kind nobody names is a typo, not an empty count: silently reading `test_reslt=1` as *no test
+/// results* would refuse the move for a reason the author cannot see, which is the failure the
+/// three-valued refusal exists to end.
+fn parse_evidence(pairs: &[String]) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
+    let mut counts = aep_backend_markdown::kernel::EvidenceOnHand::new();
+    for pair in pairs {
+        let (kind, count) = pair.split_once('=').with_context(|| {
+            format!("`{pair}` is not evidence; write it as <kind>=<count>, such as test_result=1")
+        })?;
+        let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let count: usize = count
+            .trim()
+            .parse()
+            .with_context(|| format!("`{count}` is not a count of {} records", kind.as_str()))?;
+        *counts.entry(kind).or_default() += count;
+    }
+    Ok(counts)
 }
 
 /// Parses a status name for a read — a filter, where any well-formed name is a fair question.

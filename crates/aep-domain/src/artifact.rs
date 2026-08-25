@@ -1561,10 +1561,51 @@ pub struct ArtifactLifecycle {
     /// For each status, the statuses it may move to.
     #[serde(default)]
     pub transitions: BTreeMap<ArtifactStatus, BTreeSet<ArtifactStatus>>,
+
+    /// For each status, the evidence an artifact must carry to reach it.
+    ///
+    /// Empty by default, and an empty map means exactly what it did before this field existed: the
+    /// ladder governs *which* moves are legal and says nothing about whether one is earned. That is
+    /// gap-register `:39` — "a story's `implemented` is a claim nothing checks" — and this is where
+    /// a ladder gets to check it.
+    ///
+    /// A requirement is declared beside the rung it guards, rather than in the artifact-kind
+    /// document or in a requirement document, because the refusal a person reads names a rung and
+    /// the thing explaining a rung should sit next to it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub requires: BTreeMap<ArtifactStatus, Vec<StatusRequirement>>,
+}
+
+/// What reaching a status costs: evidence of a kind, at least so many times.
+///
+/// Deliberately **smaller** than [`EvidenceRequirement`](crate::requirement::EvidenceRequirement),
+/// which also carries `subject`, `verifier` and `independent`. Those are judgements the engine
+/// makes about a record — whether the producer was independent of the author, whether the record is
+/// about *this* artifact — and a ladder that declared them without the engine evaluating them would
+/// be a document making a promise nothing keeps. What a ladder can honestly say is *how many of
+/// what kind*, and a shell counts.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct StatusRequirement {
+    /// The kind of evidence.
+    pub evidence: crate::evidence::EvidenceKind,
+    /// How many records of that kind are needed. One by default, because zero would be a
+    /// requirement that requires nothing, written by somebody who believed it required something.
+    #[serde(default = "one")]
+    pub at_least: usize,
+}
+
+fn one() -> usize {
+    1
 }
 
 impl ArtifactLifecycle {
     /// The permissive lifecycle used for kinds that declare none: every status is legal.
+    ///
+    /// It requires nothing, and that is the honest default: refusing a move for want of evidence
+    /// nobody asked for would make the store unusable for the kinds it has no opinion about.
     pub fn permissive() -> Self {
         Self {
             kind: None,
@@ -1578,7 +1619,14 @@ impl ArtifactLifecycle {
                     )
                 })
                 .collect(),
+            requires: BTreeMap::new(),
         }
+    }
+
+    /// What reaching `status` costs, which is nothing unless the ladder says otherwise.
+    #[must_use]
+    pub fn requirements_for(&self, status: &ArtifactStatus) -> &[StatusRequirement] {
+        self.requires.get(status).map_or(&[], Vec::as_slice)
     }
 
     /// Every status this lifecycle mentions.
@@ -2216,6 +2264,7 @@ mod tests {
                 kind: Some(ArtifactKind::Other("log".to_owned())),
                 initial: ArtifactStatus::Draft,
                 transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
+                requires: BTreeMap::new(),
             },
         );
 
@@ -2243,11 +2292,13 @@ mod tests {
             kind: Some(ArtifactKind::Other("log".to_owned())),
             initial: ArtifactStatus::Draft,
             transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
+            requires: BTreeMap::new(),
         };
         let fallback = ArtifactLifecycle {
             kind: None,
             initial: ArtifactStatus::Proposed,
             transitions: [(ArtifactStatus::Proposed, [ArtifactStatus::Accepted].into())].into(),
+            requires: BTreeMap::new(),
         };
         registry.insert(ArtifactKind::Other("log".to_owned()), logs.clone());
         registry.set_fallback(fallback.clone());
@@ -2488,6 +2539,7 @@ mod tests {
                     ),
                 ]
                 .into(),
+                requires: BTreeMap::new(),
             },
         );
 

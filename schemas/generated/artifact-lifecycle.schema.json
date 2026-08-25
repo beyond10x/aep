@@ -26,6 +26,16 @@
         }
       ]
     },
+    "requires": {
+      "description": "For each status, the evidence an artifact must carry to reach it.\n\nEmpty by default, and an empty map means exactly what it did before this field existed: the ladder governs *which* moves are legal and says nothing about whether one is earned. That is gap-register `:39` — \"a story's `implemented` is a claim nothing checks\" — and this is where a ladder gets to check it.\n\nA requirement is declared beside the rung it guards, rather than in the artifact-kind document or in a requirement document, because the refusal a person reads names a rung and the thing explaining a rung should sit next to it.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/StatusRequirement"
+        }
+      }
+    },
     "transitions": {
       "description": "For each status, the statuses it may move to.",
       "default": {},
@@ -90,6 +100,59 @@
       ],
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "EvidenceKind": {
+      "description": "A kind of evidence. The canonical names come first; the rest are older spellings still accepted.",
+      "type": "string",
+      "enum": [
+        "test_result",
+        "static_analysis",
+        "contract_result",
+        "property_test_result",
+        "deployment_result",
+        "metric_observation",
+        "health_observation",
+        "approval",
+        "diff",
+        "artifact",
+        "review",
+        "verification",
+        "specification",
+        "ess_conformance",
+        "trace_conformance",
+        "test_execution",
+        "source_diff",
+        "artifact_evidence",
+        "review_result",
+        "verification_record",
+        "specification_record",
+        "ess_conformance_result"
+      ]
+    },
+    "StatusRequirement": {
+      "description": "What reaching a status costs: evidence of a kind, at least so many times.\n\nDeliberately **smaller** than [`EvidenceRequirement`](crate::requirement::EvidenceRequirement), which also carries `subject`, `verifier` and `independent`. Those are judgements the engine makes about a record — whether the producer was independent of the author, whether the record is about *this* artifact — and a ladder that declared them without the engine evaluating them would be a document making a promise nothing keeps. What a ladder can honestly say is *how many of what kind*, and a shell counts.",
+      "type": "object",
+      "required": [
+        "evidence"
+      ],
+      "properties": {
+        "at_least": {
+          "description": "How many records of that kind are needed. One by default, because zero would be a requirement that requires nothing, written by somebody who believed it required something.",
+          "default": 1,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "evidence": {
+          "description": "The kind of evidence.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EvidenceKind"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

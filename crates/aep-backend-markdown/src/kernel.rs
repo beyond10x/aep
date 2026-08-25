@@ -44,8 +44,44 @@
 use std::collections::BTreeMap;
 
 use aep_domain::artifact::{ArtifactKind, ArtifactLifecycle, ArtifactStatus};
-use entity_core::{EntityDefinition, EntityInstance, Registry, Runtime};
+use aep_domain::evidence::EvidenceKind;
+use entity_core::{CoreError, EntityDefinition, EntityInstance, Registry, Runtime};
 use serde_json::json;
+
+/// How many records of each kind are on hand for the artifact being moved.
+///
+/// The planning store holds no evidence — it holds markdown files with frontmatter — so this comes
+/// from the caller, which is the same shape the kernel already demands of a clock: a value the
+/// outside world knows enters as an argument (`entity-runtime` R-62) rather than being fetched
+/// from inside a decision.
+pub type EvidenceOnHand = BTreeMap<EvidenceKind, usize>;
+
+/// What the kernel said about a move.
+///
+/// Three outcomes and not two, which is the whole of gap-register `:39`. *Nobody presented any
+/// evidence* and *evidence was presented and there is not enough of it* send a person to different
+/// places, and a store that reported both as "refused" would be the prose rule the register
+/// complains about, wearing a type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    /// The move is permitted.
+    Permitted,
+    /// The ladder declares no such move from here.
+    NotOnTheLadder,
+    /// The ladder requires evidence and none was presented for it. Carries the addresses nobody
+    /// looked at, verbatim from the kernel.
+    EvidenceUnobserved {
+        /// What the rule needed and could not read, such as `$args.evidence.test_result`.
+        unobserved: Vec<String>,
+        /// What the requirement said, for a person.
+        message: String,
+    },
+    /// Evidence was presented and the requirement is not met.
+    EvidenceInsufficient {
+        /// What the requirement said, for a person.
+        message: String,
+    },
+}
 
 /// The identity the kernel is handed. It never reads it, and a refusal changes nothing, so one
 /// fixed name for every decision is honest and allocation-free.
@@ -78,20 +114,43 @@ pub fn definition_for(
     // One operation per status something can move *to*, carrying every status it can be moved to
     // from. A status that is only ever a source gets no operation, which is what "nothing moves
     // there" means when the mover names its destination rather than a verb.
-    let mut sources: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    // Keyed by the status itself, not by its name: the requirement lookup needs the status, and
+    // parsing a name back into one would be a round trip that can fail for no reason.
+    let mut sources: BTreeMap<&ArtifactStatus, Vec<&str>> = BTreeMap::new();
     for (from, targets) in &lifecycle.transitions {
         for to in targets {
-            sources.entry(to.as_str()).or_default().push(from.as_str());
+            sources.entry(to).or_default().push(from.as_str());
         }
     }
 
     let operations: serde_json::Map<String, serde_json::Value> = sources
         .into_iter()
-        .map(|(to, from)| {
-            (
-                to.to_owned(),
-                json!({ "transitions": [ { "from": from, "to": to } ] }),
-            )
+        .map(|(status, from)| {
+            let to = status.as_str();
+            // `evidence` is declared `json` so a path into it — `$args.evidence.test_result` — is
+            // a run-time question rather than a registration-time one, which is what lets a
+            // requirement name a kind without this definition enumerating every kind that exists.
+            let mut operation = json!({
+                "arguments": { "fields": { "evidence": { "type": "json" } } },
+                "transitions": [ { "from": from, "to": to } ],
+            });
+            let requirements: Vec<serde_json::Value> = lifecycle
+                .requirements_for(status)
+                .iter()
+                .map(|requirement| {
+                    let kind = requirement.evidence.as_str();
+                    let at_least = requirement.at_least;
+                    json!({
+                        "name": format!("evidence: {kind}"),
+                        "message": format!("reaching {to} needs at least {at_least} {kind} record(s)"),
+                        "assert": { "gte": [format!("$args.evidence.{kind}"), at_least] },
+                    })
+                })
+                .collect();
+            if !requirements.is_empty() {
+                operation["preconditions"] = serde_json::Value::Array(requirements);
+            }
+            (to.to_owned(), operation)
         })
         .collect();
 
@@ -131,11 +190,31 @@ pub fn permits_transition(
     from: &ArtifactStatus,
     to: &ArtifactStatus,
 ) -> bool {
+    decide(kind, lifecycle, from, to, &EvidenceOnHand::new()) == Verdict::Permitted
+}
+
+/// Whether the kernel permits the move, and if not, which of the three reasons.
+///
+/// `entity-core` is pure and a refusal changes nothing, so *attempting* the move is the safe way to
+/// ask — there is no dry-run verb to need, and no state to undo when the answer is no.
+///
+/// A ladder that declares no `requires` cannot reach the two evidence verdicts, whatever is passed
+/// here: with no precondition to evaluate there is nothing for evidence to satisfy. That is what
+/// keeps [`permits_transition`] above a faithful shorthand and what keeps
+/// `tests/kernel_equivalence.rs` meaningful.
+#[must_use]
+pub fn decide(
+    kind: Option<&ArtifactKind>,
+    lifecycle: &ArtifactLifecycle,
+    from: &ArtifactStatus,
+    to: &ArtifactStatus,
+    evidence: &EvidenceOnHand,
+) -> Verdict {
     let definition = definition_for(kind, lifecycle);
     let entity = definition.entity.clone();
     let mut registry = Registry::new();
     if registry.register(definition).is_err() {
-        return false;
+        return Verdict::NotOnTheLadder;
     }
 
     let instance = EntityInstance {
@@ -146,8 +225,31 @@ pub fn permits_transition(
         revision: 1,
         fields: serde_json::Map::new(),
     };
+    let counted: serde_json::Map<String, serde_json::Value> = evidence
+        .iter()
+        .map(|(kind, count)| (kind.as_str().to_owned(), json!(count)))
+        .collect();
 
-    Runtime::new(&registry)
-        .execute(&instance, to.as_str(), json!({}))
-        .is_ok()
+    match Runtime::new(&registry).execute(
+        &instance,
+        to.as_str(),
+        json!({ "evidence": serde_json::Value::Object(counted) }),
+    ) {
+        Ok(_) => Verdict::Permitted,
+        // The two the whole of gap-register :39 turns on. `Unobservable` means the rule read an
+        // address nothing supplied — nobody presented evidence of that kind — and `Failed` means
+        // somebody did and there is not enough of it.
+        Err(CoreError::PreconditionUnobservable {
+            message,
+            unresolved,
+            ..
+        }) => Verdict::EvidenceUnobserved {
+            unobserved: unresolved,
+            message,
+        },
+        Err(CoreError::PreconditionFailed { message, .. }) => {
+            Verdict::EvidenceInsufficient { message }
+        }
+        Err(_) => Verdict::NotOnTheLadder,
+    }
 }
