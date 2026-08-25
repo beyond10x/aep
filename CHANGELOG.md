@@ -9,7 +9,30 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **CI is green again.** It had been red for **eleven consecutive releases** — every tag from
+  0.13.0 to 0.23.1 — with a locally green gate the whole time.
+
+  Two independent causes, and both were in the two jobs `task check` did not run:
+
+  | job | cause |
+  |---|---|
+  | `MSRV 1.85` | `idna_adapter@1.2.2` pulled in `icu_*@2.3.0`, which need rustc **1.88** |
+  | `Website` | a markdown link from `website/docs/` into the repository tree, which Docusaurus resolves at build time |
+
+  The MSRV break came in **through the lockfile**, with no commit of ours touching a line of Rust —
+  a transitive dependency raised *its* `rust-version` and the declared 1.85 stopped holding.
+  `idna_adapter` is pinned to 1.1.0, which uses `unicode-normalization` instead of `icu` and drops
+  eight crates from the tree. The alternative was raising the MSRV, which would have quietly broken
+  the promise `README.md:164` makes to anybody building this.
+
+### Changed
+
+- **`task check` now runs `msrv` and `website`.** Its own description said *"everything CI runs"*
+  while those two were missing, which is how a red CI survived eleven releases behind a green local
+  gate. A gate that covers less than the gate it claims to be is worse than one that admits its
+  scope.
 
 ## [0.23.1] — 2026-08-26
 

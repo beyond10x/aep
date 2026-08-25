@@ -9,9 +9,16 @@ tasks:
   check:
     desc: >-
       Format check, status check, lint, test, doc check, schema check, projection check, suite
-      check, observation check and synthesis check — everything CI runs. The observation check now
-      also covers the committed manifest projection. The last one needs the Go toolchain, the
-      wasm32-unknown-unknown Rust target and Node beside Rust's own.
+      check, observation check, synthesis check, MSRV build and website build — everything CI runs.
+      The observation check now also covers the committed manifest projection. The last ones need
+      the Go toolchain, the wasm32-unknown-unknown Rust target, Node and a Rust 1.85 toolchain
+      beside Rust's own.
+
+      `msrv` and `website` are here because they were **not**, and this description said
+      "everything CI runs" while they were missing. CI was red for eleven consecutive releases —
+      every tag from 0.13.0 to 0.23.1 — with a locally green gate the whole time, because the two
+      things that were failing were the two things only CI ran. A gate that covers less than the
+      gate it claims to be is worse than a gate that admits its scope.
     cmds:
       - task: fmt-check
       - task: status-check
@@ -23,6 +30,26 @@ tasks:
       - task: suite-check
       - task: infra-check
       - task: synth-check
+      - task: msrv
+      - task: website
+
+  msrv:
+    desc: Build on the declared MSRV, which is what CI's `MSRV 1.85` job does.
+    # `--locked`, because the failure this catches lives in the lockfile rather than in the source:
+    # a transitive dependency bumping *its* rust-version breaks the build with no commit of ours
+    # touching a line of Rust. `idna_adapter` pulling in `icu_*@2.3.0` (rustc 1.88) did exactly
+    # that, and nothing local noticed for eleven releases.
+    cmds:
+      - cargo +1.85 build --workspace --locked
+
+  website:
+    desc: Build the documentation site, which is what CI's `Website` workflow does.
+    # Docusaurus resolves every markdown link at build time, so a link into the repository tree
+    # from a page under `website/docs/` fails the build rather than 404ing for a reader. Repository
+    # files are linked by absolute GitHub URL; only site pages are linked relatively.
+    dir: website
+    cmds:
+      - npm run build
 
   # `cargo xtask fmt`, not `cargo fmt --all`: `--all` also formats every member's local path
   # dependencies, and `examples/billing-realization` depends by path on the synthesised crates
