@@ -17,6 +17,7 @@ a copy that goes stale, and drift is the thing this project exists to refuse.
 | `skills/planning/` | the model, the planning-store guardrails, and how to discover the store's vocabulary. Auto-triggers on planning talk or a `.engineering/planning/` directory; also invocable as `/engineering-protocols:planning` |
 | `skills/schema-contracts/` | project schema-registry discovery, offline validation, deterministic TypeScript projection, and drift checks from one JSON Schema source |
 | `agents/decomposer.md` | takes one epic id, drafts the stories that jointly cover it, each with an acceptance statement. Creates drafts only — never moves an artifact, never touches one it did not create |
+| `agents/reverse-engineer.md` | drafts the first plan for a repository that has none: reads it through `protocol reverse scan` and `protocol reverse history`, creates draft artifacts that each cite the `path:line` they rest on, and reports what it could not cite as a question rather than filing it as work |
 | `agents/plan-reviewer.md` | read-only semantic audit: stories that no longer cover their epic, finished epics still open, stale work, missing acceptance statements. Proposes moves, performs none |
 
 The hooks and the eval that used to live here **migrated to the metaharness repository**

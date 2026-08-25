@@ -115,7 +115,50 @@ Writing new artifacts and editing bodies needs no confirmation beyond the reques
 a draft is cheap and reversible. Moving one through its lifecycle is a claim about the state of the
 world, and that is the operator's to make.
 
-## 5. A worked decomposition
+## 5. Starting from a repository that has no store
+
+An empty store in a repository with 40,000 lines of code is not a blank page — it is a plan somebody
+has been carrying in their head. Do not open the editor and start typing epics.
+
+```console
+$ protocol reverse init --protocols <source> --profile <profile>
+$ protocol reverse scan --format json
+```
+
+`reverse init` writes `.engineering/project.yaml` and refuses the two things that quietly break
+later — an absolute path, and a `git+` source pinned to a branch rather than a commit. `reverse scan`
+reads and interprets nothing: it emits located facts — README headings, marked lines, tests that say
+they will not run, CI jobs and the variables on them, task targets, packages, published contracts —
+each carrying the `path:line` it was read from. It writes nothing and it has no clock and no network,
+so two runs over one tree give identical bytes.
+
+Then, in a Git working tree:
+
+```console
+$ protocol reverse history --format json
+```
+
+The axis the scan has none of. It joins to the scan on `path:line` and dates every marked line and
+every disabled test from the commit that wrote it, alongside what the history says about itself:
+reverts, commits that hedged (*for now*, *until we*), churn, dormancy, tracker keys. Dates are quoted
+from commits and never compared against today, so this is byte-stable too.
+
+**Use it, and lead with what it tells you.** A suite switched off is an observation; a suite switched
+off since February 2024 is a finding. The first gets scrolled past.
+
+**Then cite what you file.** An artifact drafted from a bundle entry carries that entry's
+`path:line` in its body. This is the whole reason the scan is a separate program from the session
+that reads it: a plan you invented from a plausible reading of the code is indistinguishable, later,
+from a plan somebody agreed to, and it is the worse of the two because nobody can check it.
+
+The `reverse-engineer` agent does this end to end and reports what it could **not** cite. Use it
+rather than reproducing the loop by hand, and read its fourth report section first — the things that
+look like real work and have no evidence in the tree are the questions worth the operator's time.
+
+A scan reports what is *written down*. A convention that lives in review comments, or the reason a
+module exists, is not in the bundle and must not be invented into one.
+
+## 6. A worked decomposition
 
 An epic, two stories derived from it, one move, one validation.
 
