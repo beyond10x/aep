@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.23.2] — 2026-08-26
+
 ### Fixed
 
 - **CI is green again.** It had been red for **eleven consecutive releases** — every tag from
