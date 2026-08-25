@@ -9,7 +9,58 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Evidence names what it is about, so `implemented` stops being a number somebody typed.**
+  `protocol artifact evidence <id> --kind test_result --source 'task check' --ref <url>` records an
+  observation *about* an artifact. `move` finds it; nobody has to assert it:
+
+  ```console
+  $ protocol artifact evidence story:passkey-login --kind test_result --source "task check"
+  story:passkey-login: test_result recorded from task check
+    on hand: test_result=1
+
+  $ protocol artifact move story:passkey-login --to implemented
+  story:passkey-login moved active -> implemented (revision 4)
+  ```
+
+  **The thing this fixes for a real person:** before today, anyone could satisfy *"implemented needs
+  a test result"* by typing `--evidence test_result=1`, and a reader of the plan six months later had
+  no way to tell that story apart from one whose tests actually ran. Now they can, always — evidence
+  recorded against `story:one` is worth nothing to `story:two`
+  (`tests/journal.rs::evidence_counts_only_for_the_artifact_it_names`), and a move that leaned on a
+  typed number is **labelled as such** in the output and in the history:
+
+  ```console
+  $ protocol artifact move story:other --to implemented --evidence test_result=1
+  story:other moved active -> implemented (revision 4)
+    decided partly on asserted evidence nothing checks: test_result=1
+
+  $ protocol artifact history story:other
+  2026-08-26T09:14:02Z  timo  moved active -> implemented (on asserted evidence) (revision 4)
+  ```
+
+  `--evidence` is **kept on purpose**. A CI run nobody recorded is real evidence, and refusing it
+  would only push people to record a fiction to get past the gate — which is worse than an honest
+  assertion, because a fiction is indistinguishable from a record. So both are accepted, counted
+  apart, and both written down. The claim is not that every move is proven. It is that **no move can
+  be mistaken for proven**.
+
+  Recording and moving are **separate commands**, deliberately. One command that recorded evidence
+  and then moved the artifact would make the evidence a formality of the move rather than a thing
+  that existed before it.
+
+  **This closes the provenance half of gap-register `:39`**, whose mechanism half closed in 0.18.0.
+  What stays open is the engine's judgement — whether a producer was *independent* of what it
+  reports on — which is `:72`/`:80` and a different row.
+
+### Changed
+
+- `journal`'s `moved` entry carries `decided_on`, the split of what the move rested on. Entries
+  written by 0.19.0 have no such field and read back as an **empty** account, which is the honest
+  reading of them: *nothing was recorded about how this was decided*. Defaulting the other way would
+  have made every historical move claim it was evidence-backed
+  (`tests/journal.rs::a_move_written_before_provenance_existed_claims_nothing`).
 
 ## [0.19.0] — 2026-08-25
 

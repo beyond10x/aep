@@ -162,9 +162,15 @@ pub(crate) enum ArtifactCommand {
         /// planning store holds markdown, not evidence records, so what is on hand comes from the
         /// caller — the same shape the kernel demands of a clock.
         ///
-        /// **This establishes that a count was presented, not that the records are sound.** Whose
-        /// they are, what they are about and whether the producer was independent are the engine's
-        /// judgements, and wiring them is `story:completion-needs-evidence`.
+        /// **This establishes that a count was presented, not that the records are sound.** It names
+        /// no test, no run and no artifact, and nothing can go and check it — so a move that uses it
+        /// says so on the way out and the journal records the move as resting on an assertion.
+        ///
+        /// `protocol artifact evidence` is the alternative and the better one: it records an
+        /// observation *about* an artifact with a source and an instant, `move` finds it without
+        /// being told, and evidence about one story is worth nothing to another. This flag stays for
+        /// evidence that lives outside the store — a CI run nobody recorded is still real, and
+        /// refusing it would only push people to record a fiction.
         #[arg(long = "evidence", value_name = "KIND=COUNT")]
         evidence: Vec<String>,
         /// The instant to judge a dated rung against, ISO-8601. Defaults to now.
@@ -242,6 +248,32 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// The artifact, such as `story:passkey-login`.
         id: String,
+    },
+    /// Record evidence about an artifact, so a later move can be decided on it.
+    ///
+    /// The alternative this replaces is `move --evidence test_result=1`, a number that names no
+    /// test, no run and no artifact. This names all three, is appended and never edited, and is
+    /// found by `move` rather than typed at it. The store still cannot *verify* that the run
+    /// happened — but a claim with a subject, a source and an instant is one somebody can go and
+    /// check, and a bare count is not.
+    Evidence {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// What the evidence is about, such as `story:passkey-login`.
+        id: String,
+        /// The kind of observation, such as `test_result` or `approval`.
+        #[arg(long)]
+        kind: String,
+        /// Where it came from — `task check`, a CI run URL, a person's name.
+        #[arg(long)]
+        source: String,
+        /// Where to go and look: a URL, a run id, a file path.
+        #[arg(long = "ref", value_name = "REFERENCE")]
+        reference: Option<String>,
+        /// When it was observed, ISO-8601. Defaults to now, read at the edge.
+        #[arg(long, value_name = "INSTANT")]
+        at: Option<String>,
     },
     /// Check the whole plan: every file, every edge, every status.
     ///
@@ -344,6 +376,21 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate { store } => validate(&store),
         ArtifactCommand::History { store, id } => history(&store, &id),
+        ArtifactCommand::Evidence {
+            store,
+            id,
+            kind,
+            source,
+            reference,
+            at,
+        } => record_evidence(
+            &store,
+            &id,
+            &kind,
+            &source,
+            reference.as_deref(),
+            at.as_deref(),
+        ),
         ArtifactCommand::Kinds { store } => kinds(&store),
         ArtifactCommand::Relations { store } => relations(&store),
         ArtifactCommand::Lifecycle { store, kind } => lifecycle(&store, &kind),
@@ -432,7 +479,7 @@ fn move_status(
     evidence: &[String],
     at: Option<&str>,
 ) -> Result<ExitCode> {
-    let evidence = parse_evidence(evidence)?;
+    let asserted = parse_evidence(evidence)?;
     // The clock, read once, here. `aep-domain` has no clock and neither does the backend; this is
     // the edge, and the instant it read is printed with any dated refusal so a reader can see which
     // moment decided.
@@ -446,6 +493,15 @@ fn move_status(
     let store = args.store()?;
     let mut report = store.load();
     require_clean(&store, &report)?;
+
+    // Evidence recorded *about this artifact* is found rather than typed. Both origins are kept
+    // apart all the way through the decision and into the journal, so the history can say what the
+    // move rested on — see `journal::Provenance`.
+    let decided_on = aep_backend_markdown::journal::Provenance {
+        recorded: aep_backend_markdown::journal::evidence_on_hand(store.root(), &id),
+        asserted,
+    };
+    let evidence = decided_on.total();
 
     let stored = report
         .documents
@@ -479,14 +535,29 @@ fn move_status(
         aep_backend_markdown::journal::Change::Moved {
             from: from.clone(),
             to: to.clone(),
+            decided_on: decided_on.clone(),
         },
     )?;
 
     match args.format {
-        Format::Text => outln!(
-            "{id} moved {from} -> {to} (revision {})",
-            document.frontmatter.revision
-        ),
+        Format::Text => {
+            outln!(
+                "{id} moved {from} -> {to} (revision {})",
+                document.frontmatter.revision
+            );
+            if decided_on.leans_on_an_assertion() {
+                let asserted: Vec<String> = decided_on
+                    .asserted
+                    .iter()
+                    .map(|(kind, count)| format!("{}={count}", kind.as_str()))
+                    .collect();
+                outln!(
+                    "  decided partly on asserted evidence nothing checks: {}",
+                    asserted.join(", ")
+                );
+                outln!("  `protocol artifact evidence {id} --kind <kind> --source <where>` records it instead");
+            }
+        }
         Format::Yaml | Format::Json => crate::print_serialised(
             &Moved {
                 id: id.to_string(),
@@ -938,6 +1009,66 @@ fn missing(store: &MarkdownStore, id: &ArtifactId) -> String {
 /// Parses an artifact id, or says what one looks like.
 fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// `protocol artifact evidence`
+///
+/// Records rather than decides. Nothing is gated here, no status moves, and a rung's `requires:` is
+/// not consulted — recording evidence and acting on it are separate acts on purpose, because a
+/// command that recorded evidence *and* moved the artifact would make the evidence a formality of
+/// the move rather than a thing that existed before it.
+fn record_evidence(
+    args: &StoreArgs,
+    id: &str,
+    kind: &str,
+    source: &str,
+    reference: Option<&str>,
+    at: Option<&str>,
+) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
+        .with_context(|| format!("`{kind}` is not a kind of evidence"))?;
+    if source.trim().is_empty() {
+        anyhow::bail!(
+            "evidence needs a source; write where it came from, such as --source 'task check'"
+        );
+    }
+    let at = at.map_or_else(now_at_the_edge, str::to_owned);
+
+    let store = args.store()?;
+    let report = store.load();
+    // The artifact must exist. Evidence about nothing is not evidence, and a typo'd id would
+    // otherwise sit in the journal looking like a record until somebody wondered why a move refused.
+    let stored = report
+        .documents
+        .get(&id)
+        .with_context(|| missing(&store, &id))?;
+
+    journal(
+        &store,
+        &stored.document,
+        &actor_of(None),
+        &at,
+        aep_backend_markdown::journal::Change::Evidence {
+            kind,
+            source: source.to_owned(),
+            reference: reference.map(str::to_owned),
+        },
+    )?;
+
+    let on_hand = aep_backend_markdown::journal::evidence_on_hand(store.root(), &id);
+    match args.format {
+        Format::Text => {
+            outln!("{id}: {} recorded from {source}", kind.as_str());
+            let held: Vec<String> = on_hand
+                .iter()
+                .map(|(kind, count)| format!("{}={count}", kind.as_str()))
+                .collect();
+            outln!("  on hand: {}", held.join(", "));
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(&on_hand, args.format)?,
+    }
+    Ok(crate::exit_code(true))
 }
 
 /// `protocol artifact history`

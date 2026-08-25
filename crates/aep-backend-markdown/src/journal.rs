@@ -33,7 +33,10 @@ use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use std::collections::BTreeMap;
+
 use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, RelationKind};
+use aep_domain::evidence::EvidenceKind;
 
 /// Where the journal lives, relative to the store root.
 pub const JOURNAL: &str = "journal.jsonl";
@@ -77,6 +80,13 @@ pub enum Change {
         from: ArtifactStatus,
         /// Where it went.
         to: ArtifactStatus,
+        /// What the decision rested on, split by where it came from.
+        ///
+        /// `#[serde(default)]` because entries written before provenance existed have no such
+        /// account, and an empty one is the honest reading of them: *nothing was recorded about how
+        /// this was decided*. Rewriting them to claim otherwise is exactly what append-only forbids.
+        #[serde(default)]
+        decided_on: Provenance,
     },
     /// An edge was added.
     Related {
@@ -87,15 +97,100 @@ pub enum Change {
     },
     /// Its markdown body was replaced.
     BodyReplaced,
+    /// Evidence was recorded **about** this artifact.
+    ///
+    /// The subject is `Entry::artifact`, not a field here, and that is the whole point: evidence
+    /// that does not name what it is about cannot be counted for anything, and a count with no
+    /// subject is the gap this closes. Because the subject is the entry's own artifact,
+    /// [`history`] already shows it and already filters it.
+    Evidence {
+        /// What kind of observation it is.
+        kind: EvidenceKind,
+        /// Where it came from, as the recorder is willing to say — `task check`, a CI run, a
+        /// person's name. Free text for the same reason `actor` is: the store cannot verify it, and
+        /// a field that looks verified and is not is worse than one that plainly is not.
+        source: String,
+        /// Where to go and look — a URL, a run id, a file path. Optional, because evidence with no
+        /// retrievable address is still better attributed than a bare number.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reference: Option<String>,
+    },
+}
+
+/// What a decision rested on, and — the point of the type — **where each part came from**.
+///
+/// # The gap this closes
+///
+/// `docs/plan/gap-register.md:39` says a story's `implemented` is a claim nothing checks. The
+/// mechanism half closed when a rung could declare `requires:` and the move began refusing without
+/// evidence. That left the trust root exactly where it was: `--evidence test_result=1` is a number
+/// somebody typed, naming no test, about no artifact, from no run.
+///
+/// Recorded evidence names its subject, its source and its instant, and cannot be edited afterwards.
+/// Asserted evidence is still accepted — a CI run nobody recorded is real, and refusing it would
+/// only push people to record a fiction — but the two are **counted separately and both written
+/// down**, so a reader of the history can always tell which kind of claim a move rested on. That is
+/// provenance: not that every move is proven, but that no move can be *mistaken* for proven.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Provenance {
+    /// Evidence found in this journal, naming this artifact.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub recorded: BTreeMap<EvidenceKind, usize>,
+    /// Evidence the caller asserted at the command line and nothing checks.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub asserted: BTreeMap<EvidenceKind, usize>,
+}
+
+impl Provenance {
+    /// Everything on hand, whatever its origin — what the rung's `requires:` is decided against.
+    ///
+    /// Summed rather than preferring one side: two recorded test results and one asserted are three
+    /// test results for the purpose of *did anybody look*, and the account of which is which is kept
+    /// in the fields rather than smuggled into the total.
+    #[must_use]
+    pub fn total(&self) -> BTreeMap<EvidenceKind, usize> {
+        let mut total = self.recorded.clone();
+        for (kind, count) in &self.asserted {
+            *total.entry(*kind).or_default() += *count;
+        }
+        total
+    }
+
+    /// Whether any part of this rested on a number nobody can go and check.
+    #[must_use]
+    pub fn leans_on_an_assertion(&self) -> bool {
+        !self.asserted.is_empty()
+    }
 }
 
 impl fmt::Display for Change {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Created { status } => write!(f, "created as {status}"),
-            Self::Moved { from, to } => write!(f, "moved {from} -> {to}"),
+            Self::Moved {
+                from,
+                to,
+                decided_on,
+            } => {
+                write!(f, "moved {from} -> {to}")?;
+                if decided_on.leans_on_an_assertion() {
+                    f.write_str(" (on asserted evidence)")?;
+                }
+                Ok(())
+            }
             Self::Related { relation, target } => write!(f, "{relation} {target}"),
             Self::BodyReplaced => f.write_str("body replaced"),
+            Self::Evidence {
+                kind,
+                source,
+                reference,
+            } => {
+                write!(f, "{} recorded from {source}", kind.as_str())?;
+                if let Some(reference) = reference {
+                    write!(f, " ({reference})")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -160,4 +255,29 @@ pub fn history(root: &Path, artifact: &ArtifactId) -> (Vec<Entry>, usize) {
             .collect(),
         unreadable,
     )
+}
+
+/// How much evidence this journal holds **about one artifact**, by kind.
+///
+/// The counting rule is deliberately the dullest one available: one recorded entry is one piece of
+/// evidence. No deduplication by source, no expiry, no weighting. Each of those is a judgement about
+/// what makes evidence good, and this function's job is only to say what is there — a judgement
+/// belongs in a rung's `requires:`, where it is written down and can be argued with, not buried in a
+/// counter.
+///
+/// Evidence is **not** invalidated by a later move. A test result recorded before a story went to
+/// `implemented` still counts if it is moved back and forward again, and that is the append-only
+/// reading: the observation happened, and nothing that happened afterwards un-happens it. A rung
+/// that needs *fresh* evidence should say so with a time guard, which is a thing the ladder can
+/// already express.
+#[must_use]
+pub fn evidence_on_hand(root: &Path, artifact: &ArtifactId) -> BTreeMap<EvidenceKind, usize> {
+    let (entries, _) = history(root, artifact);
+    let mut counted = BTreeMap::new();
+    for entry in entries {
+        if let Change::Evidence { kind, .. } = entry.change {
+            *counted.entry(kind).or_default() += 1;
+        }
+    }
+    counted
 }
