@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.17.0] — 2026-08-25
+
 ### Added
 
 - **`obligation` — a commitment on a clock nobody here controls.** Gap-register `:74`. A filing due

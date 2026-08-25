@@ -43,6 +43,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.14.0` | 0.14.0 — the protocol reads a repository that already exists |
 | `0.15.0` | 0.15.0 — a rung may cost evidence |
 | `0.16.0` | 0.16.0 — a rung may open on a date |
+| `0.17.0` | 0.17.0 — obligation, and the open vocabulary spent |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
