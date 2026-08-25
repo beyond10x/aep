@@ -9,7 +9,41 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **The planning store has a journal, and therefore a history.** Every write — create, move, relate,
+  body — appends an entry recording who, when, which artifact, which revision and what changed.
+  `protocol artifact history <id>` reads it back:
+
+  ```console
+  $ protocol artifact history story:journalled
+  2026-08-25T21:52:32Z  timo  created as draft (revision 1)
+  2026-08-25T21:52:32Z  timo  moved draft -> proposed (revision 2)
+  2026-08-25T21:52:32Z  timo  moved proposed -> active (revision 3)
+  ```
+
+  **Why not git.** This crate's own description says *git as the log*, and git is a fine log for a
+  person reading diffs. It is a poor one for a tool: a rename is a guess, a squash loses the moves,
+  a rebase rewrites the times, and none of it answers *which of these was a status move* without
+  parsing markdown out of a patch. The journal records the change the store actually made, in the
+  shape the protocol reasons about.
+
+  **Append-only**, which is invariant 16 applied to the record of what was done: a mistake is
+  corrected by a later entry, never by editing an earlier one. A line that will not parse is skipped
+  rather than fatal — one half-written entry from a killed process must not make a year of history
+  unreadable — and the count of skipped lines is *printed*, because a shorter history reported as if
+  it were complete is the quiet failure this whole file exists against.
+
+  A source scan asserts that every verb which writes also records, so a verb added next year that
+  forgets is a visible omission rather than a hole in the history. It is checked against a planted
+  unrecorded write, because a guard nobody has broken on purpose is a guard nobody knows works.
+
+  **This closes one third of gap-register `:37`.** The row names three absences — a journal, an
+  audit join, and a history — and this is the journal and the history. It is **not**
+  `CommandService`: that needs command envelopes, idempotent replay and revision conflicts, and it
+  has an architectural question inside it, because the contract's `execute` is async and this store
+  is synchronous file IO. That is worth deciding deliberately rather than in passing, so the row
+  stays open and now says which third is closed.
 
 ## [0.18.0] — 2026-08-25
 

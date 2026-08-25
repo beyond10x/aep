@@ -231,6 +231,18 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, value_enum, default_value_t = PlanningGraphFormat::Dot)]
         format: PlanningGraphFormat,
     },
+    /// Show what happened to one artifact, oldest first.
+    ///
+    /// Read from the store's own journal rather than from git: a rename is a guess in a repository
+    /// log, a squash loses the moves, and neither answers *which of these was a status move*
+    /// without parsing markdown out of a patch.
+    History {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+    },
     /// Check the whole plan: every file, every edge, every status.
     ///
     /// Three classes of problem, accumulated into one list rather than reported one run at a time:
@@ -331,6 +343,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate { store } => validate(&store),
+        ArtifactCommand::History { store, id } => history(&store, &id),
         ArtifactCommand::Kinds { store } => kinds(&store),
         ArtifactCommand::Relations { store } => relations(&store),
         ArtifactCommand::Lifecycle { store, kind } => lifecycle(&store, &kind),
@@ -385,6 +398,15 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
 
     let store = args.store.store()?;
     let path = store.create(&document)?;
+    journal(
+        &store,
+        &document,
+        &actor_of(None),
+        &now_at_the_edge(),
+        aep_backend_markdown::journal::Change::Created {
+            status: status.clone(),
+        },
+    )?;
     let relative = store.relative_path_for(&id);
 
     match args.store.format {
@@ -449,6 +471,16 @@ fn move_status(
     let relative = stored.relative_path.clone();
     let document = stored.document.clone();
     let path = store.update(&relative, &document)?;
+    journal(
+        &store,
+        &document,
+        &actor_of(None),
+        &now,
+        aep_backend_markdown::journal::Change::Moved {
+            from: from.clone(),
+            to: to.clone(),
+        },
+    )?;
 
     match args.format {
         Format::Text => outln!(
@@ -509,6 +541,16 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<Ex
     }
 
     store.update(&relative, &document)?;
+    journal(
+        &store,
+        &document,
+        &actor_of(None),
+        &now_at_the_edge(),
+        aep_backend_markdown::journal::Change::Related {
+            relation,
+            target: target.to_string(),
+        },
+    )?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} (revision {})",
@@ -556,6 +598,13 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
     let relative = stored.relative_path.clone();
     let document = stored.document.clone();
     let path = store.update(&relative, &document)?;
+    journal(
+        &store,
+        &document,
+        &actor_of(None),
+        &now_at_the_edge(),
+        aep_backend_markdown::journal::Change::BodyReplaced,
+    )?;
     match args.format {
         Format::Text => outln!(
             "{id} body replaced (revision {}) at {}",
@@ -891,6 +940,77 @@ fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+/// `protocol artifact history`
+fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let store = args.store()?;
+    let (entries, unreadable) = aep_backend_markdown::journal::history(store.root(), &id);
+
+    // Said out loud rather than folded into the count. A journal is append-only and long-lived, so
+    // one half-written line from a killed process must not make the rest unreadable — but a shorter
+    // history reported as if it were complete is exactly the quiet failure this file exists against.
+    if unreadable > 0 {
+        outln!("{unreadable} journal line(s) could not be read and are not counted below");
+    }
+
+    match args.format {
+        Format::Text => {
+            if entries.is_empty() {
+                outln!("{id}: nothing recorded");
+            }
+            for entry in &entries {
+                outln!(
+                    "{}  {}  {} (revision {})",
+                    entry.at,
+                    entry.actor,
+                    entry.change,
+                    entry.revision
+                );
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(&entries, args.format)?,
+    }
+    Ok(crate::exit_code(true))
+}
+
+/// Records what a write verb just did.
+///
+/// One helper, called from each of the four verbs that write, so a new verb that forgets it is a
+/// visible omission rather than a silent one — `every_write_verb_is_journalled` fails if a verb
+/// writes without appearing here.
+///
+/// A failure to journal is **reported and not swallowed**. A journal that quietly stops recording
+/// is worse than one that was never there: the first looks like a plan where nothing happened.
+fn journal(
+    store: &MarkdownStore,
+    document: &PlanningDocument,
+    actor: &str,
+    at: &str,
+    change: aep_backend_markdown::journal::Change,
+) -> Result<()> {
+    let entry = aep_backend_markdown::journal::Entry {
+        at: at.to_owned(),
+        actor: actor.to_owned(),
+        artifact: document.frontmatter.id.clone(),
+        kind: document.frontmatter.kind.clone(),
+        revision: document.frontmatter.revision,
+        change,
+    };
+    aep_backend_markdown::journal::append(store.root(), &entry)
+        .with_context(|| format!("recording {} in the journal", entry.change))
+}
+
+/// Who is doing this, as they are willing to say.
+///
+/// The store cannot verify an identity, so this is free text and the journal's own documentation
+/// says as much. A field that looks verified and is not is worse than one that plainly is not.
+fn actor_of(given: Option<&str>) -> String {
+    given.map_or_else(
+        || std::env::var("USER").unwrap_or_else(|_| "unknown".to_owned()),
+        str::to_owned,
+    )
+}
+
 /// The instant this invocation ran, ISO-8601, read from the system clock.
 ///
 /// The only clock in the planning path, and it is in the shell by construction: `aep-domain` has a
@@ -1208,6 +1328,48 @@ mod tests {
             parse_relation("derived_from:epic:passwordless").expect("a well-formed edge");
         assert_eq!(relation, RelationKind::DerivedFrom);
         assert_eq!(target.to_string(), "epic:passwordless");
+    }
+
+    /// The scan has to see a write that records nothing, or it is decoration.
+    #[test]
+    fn the_journal_scan_sees_a_write_that_records_nothing() {
+        let planted = "    let path = store.update(&relative, &document)?;\n    Ok(())\n";
+        let window: String = planted.lines().take(12).collect::<Vec<_>>().join("\n");
+        assert!(
+            !window.contains("journal("),
+            "a write with no journal call must read as unrecorded"
+        );
+    }
+
+    /// The promise `journal`'s own documentation makes: a verb that writes appears there.
+    ///
+    /// A source scan, because that is the only thing that can see an omission. A verb added next
+    /// year that calls `store.update` and forgets to record it would leave a history with a hole in
+    /// it, and a hole in a history is indistinguishable from a plan where nothing happened.
+    #[test]
+    fn every_write_verb_is_journalled() {
+        let source = include_str!("planning.rs");
+        let mut unrecorded = Vec::new();
+        for (number, line) in source.lines().enumerate() {
+            if !line.contains("store.update(") && !line.contains("store.create(") {
+                continue;
+            }
+            // The next few lines must reach the helper. Deliberately a window and not the whole
+            // function: a `journal(` call three hundred lines later is not this write's record.
+            let window: String = source
+                .lines()
+                .skip(number)
+                .take(12)
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !window.contains("journal(") {
+                unrecorded.push(format!("{}: {}", number + 1, line.trim()));
+            }
+        }
+        assert!(
+            unrecorded.is_empty(),
+            "these writes record nothing in the journal: {unrecorded:#?}"
+        );
     }
 
     #[test]

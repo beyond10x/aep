@@ -80,6 +80,7 @@
 pub mod claim;
 pub mod document;
 pub mod frontmatter;
+pub mod journal;
 pub mod kernel;
 pub mod store;
 
