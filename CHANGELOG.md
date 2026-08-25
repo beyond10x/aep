@@ -9,6 +9,45 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- **The harness-neutrality claim has met a second harness.** Gap-register `:38`, `partial` tier.
+
+  `trace_spec::codex` reads codex-cli's session rollout JSONL into the same `TraceIr` the Claude
+  adapter produces, so one specification decides both. Correlation stays `TraceIr::new`'s job rather
+  than being re-derived — two adapters correlating separately are two places for the pairing to
+  disagree.
+
+  **What the second adapter bought immediately** — three places where an empty value would have been
+  a *claim* rather than a reading, invisible while only one harness existed:
+
+  | field | reads | because the empty value would say |
+  |---|---|---|
+  | `tools` | `None` | *no tool was available* — which nobody observed |
+  | `operations` | empty | mapping `apply_patch` → `file.write` is a rendering's question, answered invisibly in Rust |
+  | `is_error` | `None` | *the call succeeded* — the adapter asserting, not reading |
+
+  Each is now pinned by a test. This is the whole argument for a second implementation: a vocabulary
+  tested against one harness is shaped like that harness, and nobody can tell which from inside.
+
+  **A verified finding about the format, found on the way.** Reading 400 real rollouts from a local
+  codex-cli 0.145.0 install: **374 read, 26 refused** — and in **23** of those a record began
+  *mid-line*, two JSON objects concatenated with no newline between them. A torn append, not
+  truncation: only 3 of the 26 were at end-of-file.
+
+  The reader refuses those by line number rather than recovering. A reader that guesses where a
+  record starts produces records nobody can trust, and this reader's entire job is to be the thing a
+  verdict rests on. This is the substance the *refused, with a reason* tier was written for —
+  **format instability, exactly as the research predicted, and not an enforcement gap**.
+
+  **Not done: the `full` tier** — one live `llm` step run under Codex and decided against the same
+  specification file. That costs money and needs a person at the keyboard, and the gate reaches no
+  network.
+
+  The committed fixture is **synthetic**, written in the verified format rather than copied from a
+  session, and the test says so. Real rollouts are somebody's actual working transcripts; a fixture
+  whose provenance is unstated is a fixture nobody can weigh.
+
 ### Fixed
 
 - **`ess impact` no longer reports more owed artifacts than exist.** Gap-register `:46`.

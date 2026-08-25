@@ -49,6 +49,7 @@
 
 pub mod adapter;
 pub mod check;
+pub mod codex;
 pub mod event_stream;
 pub mod evidence;
 mod json;
