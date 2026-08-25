@@ -374,6 +374,12 @@ pub struct RawCommandStep {
     /// How many times to retry a step that could not run at all.
     #[serde(default)]
     pub retries: Option<u32>,
+    /// The outside thing this step needs, if it needs one.
+    #[serde(default)]
+    pub depends_on: Option<String>,
+    /// After how many failures of `depends_on` to stop attempting it in this run.
+    #[serde(default)]
+    pub circuit_breaker: Option<u32>,
 }
 
 /// An `llm` step, as written.
@@ -538,6 +544,27 @@ pub struct CommandStep {
     pub evidence: Option<EvidenceMapping>,
     /// How many times to retry a step that could not run at all.
     pub retries: u32,
+    /// The outside thing this step needs, if it needs one.
+    ///
+    /// A name, not an address: `github-api`, `staging-cluster`. It is what a circuit breaker is
+    /// keyed by, so two steps that call the same dependency share its fate — which is the whole
+    /// difference between a circuit breaker and a retry budget. Retry bounds *this step keeps
+    /// crashing*; a breaker bounds *this dependency keeps failing*, across every step that needs
+    /// it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<String>,
+    /// After how many failures of [`Self::depends_on`] to stop attempting it in this run.
+    ///
+    /// `None` is no breaker, which is what every map written before this had. When set, the run
+    /// stops *attempting* the dependency once the count is reached: later steps naming it are
+    /// skipped and recorded as skipped, rather than run and failed.
+    ///
+    /// Skipped and **not** failed, because a step that was never attempted produced no observation,
+    /// and recording a failure for it would fabricate one — the same rule D5 already applies to a
+    /// step that crashed. The difference a reader needs is between *we looked and it was broken*
+    /// and *we stopped looking*, and only the second is what an open circuit means.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub circuit_breaker: Option<u32>,
 }
 
 impl CommandStep {
@@ -1017,6 +1044,52 @@ impl TryFrom<RawStepMap> for StepMap {
     }
 }
 
+/// The circuit-breaker half of a command step's validation, refusing a breaker that cannot work.
+///
+/// Its own function because `validate_step` is at the line limit, and because these three refusals
+/// are one idea: a breaker that is declared and cannot fire is worse than no breaker at all, since
+/// the belief that one exists is what stops somebody adding a real one.
+fn validate_circuit_breaker(
+    command: &RawCommandStep,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> bool {
+    let mut usable = true;
+    if command.circuit_breaker.is_some() && command.depends_on.is_none() {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            format!("{location}.circuit_breaker"),
+            "a circuit breaker is keyed by `depends_on`, and this step names no dependency; \
+             say which outside thing keeps failing",
+        ));
+        usable = false;
+    }
+    // Zero opens before anything is attempted, which is not a breaker — it is a step that never
+    // runs, spelled in a way that hides it.
+    if command.circuit_breaker == Some(0) {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            format!("{location}.circuit_breaker"),
+            "a circuit breaker of 0 opens before anything is attempted; that is a step that \
+             never runs, so delete the step or raise the threshold",
+        ));
+        usable = false;
+    }
+    if command
+        .depends_on
+        .as_deref()
+        .is_some_and(|name| name.trim().is_empty())
+    {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            format!("{location}.depends_on"),
+            "a dependency with no name cannot be shared with the other steps that need it",
+        ));
+        usable = false;
+    }
+    usable
+}
+
 /// Validates one step, pushing what is wrong with it and returning it when nothing is.
 fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) -> Option<Step> {
     match raw {
@@ -1030,6 +1103,9 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
                 ));
                 usable = false;
             }
+            if !validate_circuit_breaker(&command, location, errors) {
+                usable = false;
+            }
             let evidence = command.evidence.and_then(|mapping| {
                 let validated = validate_mapping(mapping, location, errors);
                 usable &= validated.is_some();
@@ -1040,6 +1116,8 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
                 description: command.description,
                 evidence,
                 retries: command.retries.unwrap_or(DEFAULT_COMMAND_RETRIES),
+                depends_on: command.depends_on.clone(),
+                circuit_breaker: command.circuit_breaker,
             };
             for word in step.expandable() {
                 for name in placeholders_in(word) {
@@ -1334,6 +1412,55 @@ mod tests {
             outcome.is_err(),
             "an llm step must not accept an evidence block"
         );
+    }
+
+    /// Gap register `:78`. A breaker that cannot be keyed, or that opens before anything runs,
+    /// is refused at load rather than ignored.
+    ///
+    /// A map whose author believes it has a circuit breaker and does not is worse than one with
+    /// none, because the belief is what stops them adding a real one.
+    #[test]
+    fn a_circuit_breaker_that_cannot_work_is_refused_at_load() {
+        for (fragment, expected) in [
+            (
+                r#"{"kind":"command","run":["x"],"circuit_breaker":2}"#,
+                "names no dependency",
+            ),
+            (
+                r#"{"kind":"command","run":["x"],"depends_on":"api","circuit_breaker":0}"#,
+                "opens before anything is attempted",
+            ),
+            (
+                r#"{"kind":"command","run":["x"],"depends_on":"  ","circuit_breaker":2}"#,
+                "cannot be shared",
+            ),
+        ] {
+            let mut errors = ValidationErrors::new();
+            let raw: RawStep = serde_json::from_str(fragment).expect("parses as a raw step");
+            let step = validate_step(raw, "steps[0]", &mut errors);
+            assert!(step.is_none(), "{fragment} must not load");
+            let said = errors.to_string();
+            assert!(
+                said.contains(expected),
+                "the refusal must say what is wrong ({expected}): {said}"
+            );
+        }
+    }
+
+    /// And a well-formed one loads, so the guard is a filter and not a wall.
+    #[test]
+    fn a_well_formed_circuit_breaker_loads() {
+        let mut errors = ValidationErrors::new();
+        let raw: RawStep = serde_json::from_str(
+            r#"{"kind":"command","run":["x"],"depends_on":"staging-cluster","circuit_breaker":3}"#,
+        )
+        .expect("parses as a raw step");
+        let step = validate_step(raw, "steps[0]", &mut errors).expect("loads");
+        let Step::Command(command) = step else {
+            panic!("expected a command step");
+        };
+        assert_eq!(command.depends_on.as_deref(), Some("staging-cluster"));
+        assert_eq!(command.circuit_breaker, Some(3));
     }
 
     #[test]

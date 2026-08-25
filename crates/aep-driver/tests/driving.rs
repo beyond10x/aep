@@ -161,6 +161,36 @@ states:
           verifier: compiler
 ";
 
+/// Two steps needing the same outside thing, with a breaker that opens after one failure.
+///
+/// Retry is deliberately generous here (`retries: 5`) so that if the breaker did nothing the run
+/// would keep hammering the dependency — which is what makes the test about the breaker rather than
+/// about the budget.
+const FLAKY_DEPENDENCY_MAP: &str = r"
+format: aep.driver-steps/1
+id: test/flaky
+workflow: test/linear/1
+states:
+  implement:
+    steps:
+      - kind: command
+        run: [does-not-exist]
+        retries: 5
+        depends_on: staging-cluster
+        circuit_breaker: 1
+        evidence:
+          kind: diff
+          verifier: compiler
+      - kind: command
+        run: [does-not-exist-either]
+        retries: 5
+        depends_on: staging-cluster
+        circuit_breaker: 1
+        evidence:
+          kind: diff
+          verifier: compiler
+";
+
 fn registry() -> Registry {
     let mut registry = Registry::new();
     registry
@@ -1063,5 +1093,58 @@ fn a_failing_suite_is_routed_by_the_engine_and_the_visit_budget_ends_the_cycle()
     assert!(
         fake.script.is_empty(),
         "the run stopped on the visit budget, not because the script ran out"
+    );
+}
+
+/// Gap register `:78`: a dependency that keeps failing stops being attempted.
+///
+/// The property, and the reason it is not the retry budget: the **second** step is skipped because
+/// the **first** step's dependency failed. Retry is per step and resets when the run moves on; a
+/// breaker is per dependency and does not. Two steps calling the same service share its fate.
+#[test]
+fn a_dependency_that_keeps_failing_stops_being_attempted() {
+    let root = scratch("breaker");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(FLAKY_DEPENDENCY_MAP);
+    let run = run_directory(&root);
+    // One crash offered. If the breaker did nothing, the run would ask for more — `retries: 5` on
+    // two steps — and the fake would run out.
+    let mut fake = Fake::new(&[Act::Crash("staging is down")]);
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions::default(),
+    )
+    .expect("an open circuit is a report, not an error");
+
+    assert_eq!(
+        report
+            .cursor
+            .attempts_at(&"implement".parse().expect("a state id"), 1),
+        0,
+        "the second step was never attempted: the first step's dependency had already failed"
+    );
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("circuit is open") && note.contains("staging-cluster")),
+        "the record names the dependency and says the circuit opened: {:?}",
+        report.notes
+    );
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("was not attempted")),
+        "a skipped step is recorded as skipped, never as failed — a step nobody ran produced no \
+         observation, and recording one would fabricate it: {:?}",
+        report.notes
     );
 }

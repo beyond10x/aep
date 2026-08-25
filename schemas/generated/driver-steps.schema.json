@@ -212,6 +212,24 @@
             "run"
           ],
           "properties": {
+            "circuit_breaker": {
+              "description": "After how many failures of `depends_on` to stop attempting it in this run.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "depends_on": {
+              "description": "The outside thing this step needs, if it needs one.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "description": {
               "description": "What this step is for, in one line.",
               "default": null,

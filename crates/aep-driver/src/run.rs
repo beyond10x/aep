@@ -387,6 +387,37 @@ struct Progress {
 struct Tally {
     progress: Progress,
     streak: Streak,
+    breaker: Breaker,
+}
+
+/// How many times each outside dependency has failed in this run, and which have been given up on.
+///
+/// Gap register `:78`. The retry budget and this are the two halves of the same question asked at
+/// different scopes, and conflating them is the mistake the tier exists to avoid. Retry bounds
+/// **this step keeps crashing** and resets when the run moves on. A breaker bounds **this dependency
+/// keeps failing** and does *not* reset, across every step that names it — because the third call to
+/// an API that has been down for ten minutes is not new information, it is ten more seconds of
+/// timeout and one more indistinguishable line in the log.
+///
+/// Counted per dependency name rather than per step: two steps that call the same service share its
+/// fate, and that sharing is the entire difference between a breaker and a retry budget.
+#[derive(Debug, Default)]
+struct Breaker {
+    failures: std::collections::BTreeMap<String, u32>,
+}
+
+impl Breaker {
+    /// Records one failure of a dependency, returning the total so far in this run.
+    fn record(&mut self, dependency: &str) -> u32 {
+        let count = self.failures.entry(dependency.to_owned()).or_default();
+        *count += 1;
+        *count
+    }
+
+    /// Whether this dependency has failed enough times that the run should stop attempting it.
+    fn is_open(&self, dependency: &str, threshold: u32) -> bool {
+        self.failures.get(dependency).copied().unwrap_or(0) >= threshold
+    }
 }
 
 /// Consecutive attempts at one step that produced no verdict.
@@ -604,6 +635,26 @@ impl<C: Clock> Session<'_, C> {
             )));
         }
 
+        // The breaker is read *before* the attempt, because the whole point is not to make it. A
+        // step skipped here costs nothing; a step attempted against a dependency that has been down
+        // since the first state costs a timeout and produces one more line saying the same thing.
+        if let Step::Command(command) = step {
+            if let (Some(dependency), Some(threshold)) =
+                (command.depends_on.as_deref(), command.circuit_breaker)
+            {
+                if tally.breaker.is_open(dependency, threshold) {
+                    tally.progress.notes.push(format!(
+                        "step {index} of `{state}` ({label}) was not attempted: `{dependency}` has \
+                         failed {threshold} time(s) in this run and its circuit is open. Nothing \
+                         was observed here, so nothing was recorded either"
+                    ));
+                    cursor.step += 1;
+                    tally.streak.clear();
+                    return Ok(None);
+                }
+            }
+        }
+
         let attempt = cursor.record_attempt(&state, index);
         let outcome = self.execute(executors, execution, &state, index, evaluation, cursor);
         tally.progress.steps_run += 1;
@@ -627,6 +678,22 @@ impl<C: Clock> Session<'_, C> {
                     "attempt {attempt} at step {index} of `{state}` ({label}) produced no verdict: \
                      {reason}"
                 ));
+                // A no-verdict is a failure *of the dependency* when the step named one, and that
+                // count is what the next step naming it reads.
+                if let Step::Command(command) = &self.map.steps_for(&state)[index] {
+                    if let Some(dependency) = command.depends_on.as_deref() {
+                        let failures = tally.breaker.record(dependency);
+                        if command
+                            .circuit_breaker
+                            .is_some_and(|threshold| failures >= threshold)
+                        {
+                            tally.progress.notes.push(format!(
+                                "`{dependency}` has now failed {failures} time(s); its circuit is \
+                                 open and later steps that need it will not be attempted"
+                            ));
+                        }
+                    }
+                }
                 let spent = tally.streak.record(&state, index);
                 if spent > budget {
                     tally.progress.notes.push(format!(

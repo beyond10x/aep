@@ -86,6 +86,40 @@ belongs in the commit message or in `docs/design/`.
   place: the downgrade moves the exit code, the record names every downgraded id, and the underlying
   fact ignores the flag.
 
+- **A dependency that keeps failing stops being called.** Gap-register `:78`, circuit-break half.
+
+  ```yaml
+  - kind: command
+    run: [deploy, --to, staging]
+    retries: 5
+    depends_on: staging-cluster
+    circuit_breaker: 2        # after 2 failures of staging-cluster, stop attempting it
+  ```
+
+  **What this saves a person:** a run against a service that has been down since the first state no
+  longer spends five retries per step producing five indistinguishable timeout lines. The first two
+  failures are real information; the rest is noise that buries the run's actual history.
+
+  Keyed by **dependency name, not by step** — which is the entire difference from the retry budget
+  that already existed. Retry bounds *this step keeps crashing* and resets when the run moves on. A
+  breaker bounds *this dependency keeps failing*, does not reset, and is shared: two steps calling
+  the same service share its fate. The test asserts exactly that — the **second** step is skipped
+  because the **first** step's dependency failed.
+
+  A skipped step is recorded as **skipped, never as failed**. A step nobody ran produced no
+  observation, and recording a failure for it would fabricate one — the same rule the driver already
+  applies to a step that crashed. The difference a reader needs is between *we looked and it was
+  broken* and *we stopped looking*.
+
+  A breaker with no `depends_on`, an empty dependency name, or a threshold of `0` is **refused at
+  load**. A map whose author believes it has a circuit breaker and does not is worse than one with
+  none, because the belief is what stops them adding a real one.
+
+  The **retry** half of `:78` turned out to be closed by code already and simply unrecorded; the
+  register now says so. The third half — a dependency declared as *simulated* against a named ESS
+  specification, so a workflow touching a third party has an offline form — is a real build and is
+  **not** done here.
+
 ## [0.20.0] — 2026-08-26
 
 ### Added
