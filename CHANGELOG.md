@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.22.0] — 2026-08-26
+
 ### Added
 
 - **The harness-neutrality claim has met a second harness.** Gap-register `:38`, `partial` tier.

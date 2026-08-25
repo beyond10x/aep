@@ -48,6 +48,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.19.0` | 0.19.0 — the plan has a history |
 | `0.20.0` | 0.20.0 — evidence names what it is about |
 | `0.21.0` | 0.21.0 — W5: the engine's mechanisms |
+| `0.22.0` | 0.22.0 — W6: portability and drift |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
