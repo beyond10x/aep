@@ -7,6 +7,62 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Added
+
+- **A lifecycle document may declare what a rung costs, and `protocol artifact move` checks it.**
+  `requires:` beside `transitions:` says which evidence a status needs and how much of it:
+
+  ```yaml
+  requires:
+    implemented:
+      - evidence: test_result
+        at_least: 1
+  ```
+
+  `artifacts/lifecycles/story.yaml` carries the first real one. Every other rung on every ladder is
+  still free, and a test records exactly which rungs cost what, so a rung gaining or losing a cost
+  is seen there rather than discovered by somebody's move failing.
+
+  The move is decided by `entity-core` against evidence the caller presents, and there are **three**
+  outcomes rather than two. That split is the whole of gap-register `:39`:
+
+  ```console
+  $ protocol artifact move --to implemented story:x
+  story:x is active; implemented is on the ladder and not yet earned: reaching implemented needs at
+  least 1 test_result record(s). Nothing was presented at $args.evidence.test_result
+
+  $ protocol artifact move --to implemented story:x --evidence test_result=0
+  story:x is active; implemented is on the ladder and not yet earned: reaching implemented needs at
+  least 1 test_result record(s)
+
+  $ protocol artifact move --to implemented story:x --evidence test_result=2
+  story:x moved active -> implemented (revision 4)
+  ```
+
+  The first sends an author to produce a record; the second to argue about the one that exists. A
+  store reporting both as "refused" is the prose rule the register complains about, wearing a type.
+
+  **What this closes and what it does not.** It closes the *mechanism* half of `:39` — a status can
+  now cost something, declared in a document rather than in Rust. It does **not** establish
+  provenance: `--evidence test_result=2` says a count was presented, not that the records are sound,
+  about this artifact, or produced independently. Those are the engine's judgements and they are
+  `story:completion-needs-evidence`. The planning store holds markdown, not evidence records, so
+  what is on hand comes from the caller — the same shape the kernel already demands of a clock.
+
+  `StatusRequirement` is deliberately smaller than `EvidenceRequirement`: a ladder declaring
+  `independent: true` without the engine evaluating it would be a document making a promise nothing
+  keeps. The requirement sits beside the rung it guards rather than in the artifact-kind document,
+  because the refusal a person reads names a rung.
+
+  Breaking for library callers: `PlanningDocument::move_status` takes the evidence on hand and
+  returns `Box<MoveRefusal>`; `MoveRefusal` carries a `reason`.
+
+- `entity-core` moves to release tag **0.4.0**, which adds typed references between entities and a
+  crate that draws them. Nothing here uses either yet; the bump keeps the gate exercising the kernel
+  this repository actually depends on rather than one release behind it.
+
 ## [0.14.0] — 2026-08-25
 
 ### Added
