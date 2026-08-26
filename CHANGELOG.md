@@ -11,6 +11,33 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.27.3] — 2026-08-26
+
+**A release cut later retroactively failed the gate of a release cut earlier**, and `0.27.1` sat on
+the remote for an hour as a tag nobody could find a release for.
+
+### Fixed
+
+* **`status --check` and `version-check` asked the clone what had shipped, not the commit.**
+  `0.27.1` and `0.27.2` left in one `git push`. The Release workflow for `0.27.1` checked out
+  `0.27.1`'s commit — with *both* tags fetched, because a clone holds the tag namespace and not a
+  snapshot of it. `docs/status.md` at that commit recorded 38 tags; `git tag` answered 39; the
+  drift check refused a release that had been correct when it was cut, and the publish step after
+  it never ran.
+
+  Every tag lookup in `xtask` now asks for the tags reachable from `HEAD`, so each release's gate
+  answers the question it means to ask: what had shipped *as of this commit*. `status`,
+  `version_check` and `previous_tag` all took the same filter. At the tip of `main` the two sets
+  are identical, so nothing about the everyday check changes.
+
+  Pinned by a test that builds the same shape — two tagged commits, `HEAD` detached at the older
+  one — and which fails with the workflow's own error message when the filter is removed. The
+  check that was supposed to catch drift could not catch its own release, which is the recurring
+  shape of this repository's defects: the safety net needed a second one behind it.
+
+  `0.27.1`'s GitHub Release is now published from its `CHANGELOG.md` section — byte-for-byte what
+  the workflow would have produced, since this repository's Release workflow attaches no binaries.
+
 ## [0.27.2] — 2026-08-26
 
 **Six documents were still describing a deviation that closed in 0.27.0.** Cutting a release does
@@ -3255,7 +3282,32 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.7.1-infra-waves-1-4...HEAD
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.27.3...HEAD
+[0.27.3]: https://github.com/beyond10x/engineering-protocols/compare/0.27.2...0.27.3
+[0.27.2]: https://github.com/beyond10x/engineering-protocols/compare/0.27.1...0.27.2
+[0.27.1]: https://github.com/beyond10x/engineering-protocols/compare/0.27.0...0.27.1
+[0.27.0]: https://github.com/beyond10x/engineering-protocols/compare/0.26.0...0.27.0
+[0.26.0]: https://github.com/beyond10x/engineering-protocols/compare/0.25.0...0.26.0
+[0.25.0]: https://github.com/beyond10x/engineering-protocols/compare/0.24.0...0.25.0
+[0.24.0]: https://github.com/beyond10x/engineering-protocols/compare/0.23.2...0.24.0
+[0.23.2]: https://github.com/beyond10x/engineering-protocols/compare/0.23.1...0.23.2
+[0.23.1]: https://github.com/beyond10x/engineering-protocols/compare/0.23.0...0.23.1
+[0.23.0]: https://github.com/beyond10x/engineering-protocols/compare/0.22.0...0.23.0
+[0.22.0]: https://github.com/beyond10x/engineering-protocols/compare/0.21.0...0.22.0
+[0.21.0]: https://github.com/beyond10x/engineering-protocols/compare/0.20.0...0.21.0
+[0.20.0]: https://github.com/beyond10x/engineering-protocols/compare/0.19.0...0.20.0
+[0.19.0]: https://github.com/beyond10x/engineering-protocols/compare/0.18.0...0.19.0
+[0.18.0]: https://github.com/beyond10x/engineering-protocols/compare/0.17.0...0.18.0
+[0.17.0]: https://github.com/beyond10x/engineering-protocols/compare/0.16.0...0.17.0
+[0.16.0]: https://github.com/beyond10x/engineering-protocols/compare/0.15.0...0.16.0
+[0.15.0]: https://github.com/beyond10x/engineering-protocols/compare/0.14.0...0.15.0
+[0.14.0]: https://github.com/beyond10x/engineering-protocols/compare/0.13.0...0.14.0
+[0.13.0]: https://github.com/beyond10x/engineering-protocols/compare/0.12.0...0.13.0
+[0.12.0]: https://github.com/beyond10x/engineering-protocols/compare/0.11.0-ground-truth-and-docs...0.12.0
+[0.11.0-ground-truth-and-docs]: https://github.com/beyond10x/engineering-protocols/compare/0.10.0-horizons-dogfood-lab...0.11.0-ground-truth-and-docs
+[0.10.0-horizons-dogfood-lab]: https://github.com/beyond10x/engineering-protocols/compare/0.9.0-harness-waves-2-3...0.10.0-horizons-dogfood-lab
+[0.9.0-harness-waves-2-3]: https://github.com/beyond10x/engineering-protocols/compare/0.8.0-harness-wave-1-trace-wave-1...0.9.0-harness-waves-2-3
+[0.8.0-harness-wave-1-trace-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.7.1-infra-waves-1-4...0.8.0-harness-wave-1-trace-wave-1
 [0.7.1-infra-waves-1-4]: https://github.com/beyond10x/engineering-protocols/compare/0.7.0-ess-wave-7...0.7.1-infra-waves-1-4
 [0.7.0-ess-wave-7]: https://github.com/beyond10x/engineering-protocols/compare/0.6.1-ess-wave-6.5...0.7.0-ess-wave-7
 [0.6.1-ess-wave-6.5]: https://github.com/beyond10x/engineering-protocols/compare/0.6.0-ess-wave-6...0.6.1-ess-wave-6.5

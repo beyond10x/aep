@@ -646,7 +646,8 @@ fn main() -> Result<()> {
 /// If git cannot be run, if there are no tags, or if the two numbers disagree.
 fn version_check(root: &Path) -> Result<()> {
     let output = std::process::Command::new("git")
-        .args(["tag", "--list", "--sort=-v:refname"])
+        // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
+        .args(["tag", "--list", "--merged", "HEAD", "--sort=-v:refname"])
         .current_dir(root)
         .output()
         .context("running git — the version is checked against the tags")?;
@@ -668,10 +669,13 @@ fn version_check(root: &Path) -> Result<()> {
                     .split('.')
                     .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
         })
-        .context(
-            "no bare-version tag is visible, so there is nothing to check the workspace version \
-             against — fetch them first (`git fetch --tags`)",
-        )?;
+        .with_context(|| {
+            format!(
+                "no bare-version tag is visible, so there is nothing to check the workspace \
+                 version against — fetch them first (`git fetch --tags`) \
+                 ({TAGS_REACHABLE_FROM_HEAD})"
+            )
+        })?;
 
     let manifest =
         fs::read_to_string(root.join("Cargo.toml")).context("reading the workspace manifest")?;
@@ -1084,7 +1088,8 @@ fn fixed_sections(text: &str) -> Vec<(String, Vec<String>)> {
 /// wrong comparison.
 fn previous_tag(root: &Path, version: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
-        .args(["tag", "--list", "--sort=-creatordate"])
+        // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
+        .args(["tag", "--list", "--merged", "HEAD", "--sort=-creatordate"])
         .current_dir(root)
         .output()
         .context("running git — released claims are checked against the tags")?;
@@ -1108,6 +1113,22 @@ fn previous_tag(root: &Path, version: &str) -> Result<Option<String>> {
         .and_then(|at| ordered.get(at + 1))
         .map(|tag| (*tag).to_owned()))
 }
+
+/// Why every tag lookup in this file asks for `--merged HEAD` rather than the whole namespace.
+///
+/// A gate step runs *at a commit*, but `git tag` answers with the tags the **clone** happens to
+/// hold — not the tags that existed when that commit was made. Push two release tags in one
+/// `git push` and the older tag's Release run checks out the older commit with both tags fetched:
+/// `docs/status.md` there records 38 tags, the clone shows 39, and the drift check fails a release
+/// that was correct when it was cut. That is exactly what happened to 0.27.1 — the tag shipped,
+/// its own gate refused it, and no GitHub Release was ever published for it.
+///
+/// Reachability makes each release's gate answer the question it means to ask: what had shipped
+/// *as of this commit*. At the tip of `main` the two sets are identical, so nothing about the
+/// everyday check changes.
+const TAGS_REACHABLE_FROM_HEAD: &str =
+    "only tags reachable from HEAD are counted, so a later release cannot retroactively fail an \
+     earlier one";
 
 /// Whether `token` appears anywhere in the tree at `tag`.
 fn existed_at(root: &Path, tag: &str, token: &str) -> Result<bool> {
@@ -1153,6 +1174,9 @@ fn status(root: &Path, check: bool) -> Result<()> {
         .args([
             "for-each-ref",
             "refs/tags",
+            // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
+            "--merged",
+            "HEAD",
             "--sort=creatordate",
             "--format=%(refname:short)\t%(subject)",
         ])
@@ -1174,7 +1198,8 @@ fn status(root: &Path, check: bool) -> Result<()> {
         bail!(
             "no tags are visible, so there is nothing to derive the delivered-waves record from — \
              fetch them first (`git fetch --tags`). Failing here rather than writing an empty \
-             table, because an empty record reads exactly like a project that shipped nothing"
+             table, because an empty record reads exactly like a project that shipped nothing \
+             ({TAGS_REACHABLE_FROM_HEAD})"
         );
     }
 
@@ -3526,10 +3551,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        contract_digest_in, delivered_waves, generate, go_tool, schema, splice_generated, suite,
-        synth, workspace_root, INDEX, NORMATIVE_EXAMPLE, OBSERVATION_PROJECTION, PROJECTIONS,
-        PROJECTION_EXCLUSIONS, SUITES, SUITE_SPECIFICATIONS, SYNTH, SYNTH_GO, SYNTH_SPECIFICATIONS,
-        SYNTH_WEB,
+        contract_digest_in, delivered_waves, generate, go_tool, schema, splice_generated, status,
+        suite, synth, version_check, workspace_root, INDEX, NORMATIVE_EXAMPLE,
+        OBSERVATION_PROJECTION, PROJECTIONS, PROJECTION_EXCLUSIONS, STATUS_BEGIN, STATUS_END,
+        SUITES, SUITE_SPECIFICATIONS, SYNTH, SYNTH_GO, SYNTH_SPECIFICATIONS, SYNTH_WEB,
     };
 
     #[test]
@@ -3544,6 +3569,97 @@ mod tests {
              |---|---|\n\
              | `0.1.0` | 0.1.0 — domain model and document layer |\n\
              | `0.2.0-wave-1` | 0.2.0-wave-1 — the execution core |\n"
+        );
+    }
+
+    /// Runs git in `repo` with a fixed identity, so a developer's signing config cannot fail it.
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=xtask test",
+                "-c",
+                "user.email=xtask@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "tag.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(repo)
+            .output()
+            .expect("running git");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// A release cut later must not retroactively fail the gate of a release cut earlier.
+    ///
+    /// # The defect this catches, and what it cost
+    ///
+    /// 0.27.1 and 0.27.2 left in a single `git push`. The Release workflow for 0.27.1 checked out
+    /// 0.27.1's commit — with **both** tags fetched, because a clone holds the tag namespace and
+    /// not a snapshot of it. `docs/status.md` at that commit recorded 38 tags; `git tag` answered
+    /// 39; the drift check refused a release that had been correct when it was cut. The tag is on
+    /// the remote and no GitHub Release was ever published for it.
+    ///
+    /// Neither `status --check` nor `version_check` could see the difference, because both asked
+    /// the clone rather than the commit. The test builds the same shape — two tagged commits, HEAD
+    /// detached at the older one — and asserts both checks pass there.
+    #[test]
+    fn a_later_release_does_not_fail_an_earlier_releases_gate() {
+        let repo = workspace_root().join("target/xtask-tests/tags-reachable-from-head");
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(repo.join("docs")).expect("creating the scratch repository");
+        git(&repo, &["init", "--initial-branch=main", "--quiet"]);
+
+        let mut first = String::new();
+        for (version, tags) in [
+            ("1.0.0", &["1.0.0"][..]),
+            ("1.1.0", &["1.0.0", "1.1.0"][..]),
+        ] {
+            std::fs::write(
+                repo.join("Cargo.toml"),
+                format!("[workspace.package]\nversion = \"{version}\"\n"),
+            )
+            .expect("writing the manifest");
+            let listed: Vec<(&str, &str)> = tags.iter().map(|tag| (*tag, "a wave")).collect();
+            std::fs::write(
+                repo.join(super::STATUS_PAGE),
+                format!("{STATUS_BEGIN}\n{}{STATUS_END}\n", delivered_waves(&listed)),
+            )
+            .expect("writing the status page");
+            git(&repo, &["add", "-A"]);
+            git(&repo, &["commit", "--quiet", "-m", version]);
+            git(&repo, &["tag", "-a", version, "-m", "a wave"]);
+            if first.is_empty() {
+                first = String::from_utf8(
+                    std::process::Command::new("git")
+                        .args(["rev-parse", "HEAD"])
+                        .current_dir(&repo)
+                        .output()
+                        .expect("running git")
+                        .stdout,
+                )
+                .expect("a commit id is UTF-8")
+                .trim()
+                .to_owned();
+            }
+        }
+
+        // The shape the Release workflow checks out for the older tag: its commit, both tags.
+        git(&repo, &["checkout", "--quiet", &first]);
+
+        status(&repo, true).expect(
+            "the delivered-waves record at 1.0.0's commit records what had shipped by 1.0.0; a \
+             tag on a descendant commit is not part of that answer",
+        );
+        version_check(&repo).expect(
+            "1.0.0's commit declares version 1.0.0, and 1.1.0 is not a release it could have \
+             known about",
         );
     }
 

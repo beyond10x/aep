@@ -1,7 +1,7 @@
 # generated from billing v3
 # model digest 13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861
 # contract digest 5974d118c78f23503fa49ebcd02e3ccdd16dd44b6c34cfd9c410050df452d301
-# compiler 0.27.2 · generator 0.27.2
+# compiler 0.27.3 · generator 0.27.3
 # do not edit: regenerate with `protocol ess generate`
 openapi: 3.1.0
 info:
@@ -17,8 +17,8 @@ info:
     specification_version: v3
     source_digest: 13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861
     contract_digest: 5974d118c78f23503fa49ebcd02e3ccdd16dd44b6c34cfd9c410050df452d301
-    compiler_version: 0.27.2
-    generator_version: 0.27.2
+    compiler_version: 0.27.3
+    generator_version: 0.27.3
 tags:
 - name: email
   description: Sending the notifications other contexts ask for.

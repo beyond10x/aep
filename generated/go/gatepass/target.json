@@ -4,8 +4,8 @@
     "specification_version": "v1",
     "source_digest": "f2e0f8ff51c077fa1c713d8151544379bafac36a5a927e71c685042d53ab6e61",
     "contract_digest": "e6e58e055d24f8f494dcff274f55e723d967f9d1f9aea16641bb8dacbb71171e",
-    "compiler_version": "0.27.2",
-    "generator_version": "0.27.2"
+    "compiler_version": "0.27.3",
+    "generator_version": "0.27.3"
   },
   "target": "go",
   "weakenings": [

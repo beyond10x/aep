@@ -603,6 +603,24 @@ Skipping this fails `generate-check` **at the tag**, which is loud rather than s
 tax on every release, and whether those two stamps earn it is
 `story:generator-version-stamp`.
 
+**The tag has to exist before the delivered-waves row can be written, so cutting one is a loop:**
+
+```console
+git commit …                       # the work
+git tag -a 0.27.3 -m "…"           # so `cargo xtask status` can see the row it must write
+cargo xtask status                 # writes the row into docs/status.md
+git commit -m "chore(release): 0.27.3" docs/status.md
+git tag -f -a 0.27.3 -m "…"        # onto the commit that carries the record
+task check                         # the whole gate, at the tag
+private Atlas delivery tooling push origin main 0.27.3
+```
+
+**Every tag lookup in the gate is scoped to tags reachable from `HEAD`.** A gate step runs at a
+commit, but `git tag` answers with the tags the *clone* holds. Two tags in one `git push` used to
+mean the older tag's Release run saw the newer one and failed a release that had been correct when
+it was cut — which is how `0.27.1` shipped with no GitHub Release. Reachability makes each gate
+answer *what had shipped as of this commit*; batching tags in one push is safe again.
+
 ## Commits
 
 * Conventional prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
