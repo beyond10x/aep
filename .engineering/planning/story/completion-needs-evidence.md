@@ -31,16 +31,22 @@ is done, and what did it*; it has no consumers.
 
 ## Acceptance
 
-- `protocol artifact move <story> --to implemented` under a task whose protocol requires evidence is
-  refused when none has been admitted, and the refusal names the kinds that would satisfy it — the
-  same shape the illegal-transition refusal already has.
-- The same move succeeds once a `TestResult` or `trace_conformance` record for that story has been
-  admitted by the engine.
-- A hand-edited `status: implemented` with no admitted record is reported by `validate`, naming the
-  artifact — the store cannot prevent the edit and is honest about catching it afterwards.
-- A plan being sketched outside any task is **not** gated: the requirement comes from the protocol in
-  force, not from the store.
+- A lifecycle document may declare what reaching a status costs, and the engine decides the move
+  against evidence the caller presents. **Shipped** — `entity-core` decides it, three-valued, and
+  `story:guard-tests` was refused `implemented` until evidence was presented.
+- The store distinguishes **asserted** from **recorded** provenance, and says which one a status
+  rests on. **Shipped** — `protocol artifact validate` reports every status reached on an assertion,
+  by name.
+- Reported, not refused. Refusing an assertion outright would stop anybody closing a story on the
+  day a runner is down, which is the day it matters most; what it must not be is invisible. The
+  count does not affect the exit code, and that is deliberate.
 
+## Still open
+
+Admitting a **recorded** result automatically — a gate run that lands in the store as an
+observation rather than as a caller's claim about one. Every status in this store that rests on a
+record got there because somebody typed the record in, which is a shorter chain than *the agent said
+so* and a longer one than *the store watched it happen*.
 ## Out of Scope
 
 Approval evidence. A person saying *I approve* is already modelled as `Evidence::Approval` with a

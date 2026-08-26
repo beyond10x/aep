@@ -906,11 +906,31 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
             .map(ToString::to_string),
     );
 
+    // Closed on somebody's word, and the store knows the difference. A move whose provenance is
+    // `asserted` reached this status because a caller said the evidence existed; one that is
+    // `recorded` reached it because the store held a record. Both are legal — refusing an assertion
+    // outright would stop anybody closing a story the day a runner is down — and reporting only the
+    // second as evidence is what makes the first honest rather than invisible.
+    let (entries, _) = aep_backend_markdown::journal::read(store.root());
+    let mut asserted: Vec<String> = Vec::new();
+    for entry in &entries {
+        if let aep_backend_markdown::journal::Change::Moved { to, decided_on, .. } = &entry.change {
+            if decided_on.leans_on_an_assertion() {
+                asserted.push(format!(
+                    "{} reached {to} on an assertion rather than a record — the evidence was \
+                     claimed, not held",
+                    entry.artifact
+                ));
+            }
+        }
+    }
+
     let summary = Summary {
         store: store.root().display().to_string(),
         files_read: report.files_read,
         artifacts: report.documents.len(),
         problems: problems.clone(),
+        closed_on_an_assertion: asserted.clone(),
     };
 
     match args.format {
@@ -921,6 +941,15 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
                 summary.store,
                 summary.artifacts
             );
+            // Reported, and deliberately **not** counted as a problem. Refusing an assertion
+            // outright would stop anybody closing a story on the day a runner is down, which is the
+            // day it matters most. What it must not be is invisible.
+            if !asserted.is_empty() {
+                outln!("{} closed on an assertion:", asserted.len());
+                for note in &asserted {
+                    outln!("  - {note}");
+                }
+            }
             if problems.is_empty() {
                 outln!("valid");
             } else {
@@ -1491,6 +1520,13 @@ struct Summary {
     files_read: usize,
     artifacts: usize,
     problems: Vec<String>,
+    /// Statuses reached because a caller said the evidence existed, not because the store held it.
+    ///
+    /// Reported and **not** counted as a problem: refusing an assertion outright would stop
+    /// anybody closing a story on the day a runner is down, which is the day it matters most. What
+    /// it must not be is invisible.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    closed_on_an_assertion: Vec<String>,
 }
 
 /// One kind in the vocabulary.
