@@ -226,11 +226,15 @@ impl MarkdownBackend {
     /// replay, which is what makes replaying one safe to do on a store somebody else is reading.
     fn persist(&self, result: &CommandResult) -> Result<(), CommandError> {
         for reference in &result.affected {
-            let Some((artifact, relative)) = self.file_for(&reference.id) else {
-                // An entity this store has no document for. Skipped rather than invented: a file
-                // nobody wrote appearing in somebody's plan is worse than an entity that lives only
-                // in this process, and `MarkdownBackend::unprojected` reports them rather than
-                // leaving the gap silent.
+            // Where this entity's document is: the one it was read from, or — for an entity
+            // created through the contract and not yet on disk — the one its address says it
+            // belongs in. An entity addressed somewhere else entirely is a conformance suite's, and
+            // inventing a file for it would put a document nobody wrote into somebody's plan.
+            let placed = match self.file_for(&reference.id) {
+                Some(found) => Some(found),
+                None => self.artifact_for(&reference.id)?,
+            };
+            let Some((artifact, relative)) = placed else {
                 self.note_unprojected(&reference.id);
                 continue;
             };
@@ -246,12 +250,30 @@ impl MarkdownBackend {
             // nowhere in the entity, so rebuilding a file from the entity alone would silently
             // delete it. Only the frontmatter fields the body actually carries are touched.
             let report = self.store.load();
-            let existing = report
+            let found = report
                 .documents
                 .values()
                 .find(|stored| stored.relative_path == relative)
-                .map(|stored| stored.document.clone())
-                .ok_or_else(|| self.latch(format!("{relative} is no longer in the store")))?;
+                .map(|stored| stored.document.clone());
+            // A create writes a document that is not there yet. Its frontmatter is what the entity
+            // carries and its body is **empty** — a body this crate invented would be prose nobody
+            // is accountable for, in a document that reads as though somebody had thought about it.
+            let creating = found.is_none();
+            let existing = match found {
+                Some(document) => document,
+                None => crate::document::PlanningDocument {
+                    frontmatter: crate::frontmatter::PlanningFrontmatter::new(
+                        artifact.clone(),
+                        artifact.namespace().parse().map_err(|error| {
+                            self.latch(format!("`{artifact}` has no usable kind: {error}"))
+                        })?,
+                        "draft".parse().map_err(|error| {
+                            self.latch(format!("`draft` is not a status: {error}"))
+                        })?,
+                    ),
+                    body: String::new(),
+                },
+            };
             let mut updated = existing.clone();
             apply_body(&mut updated.frontmatter, &body.data);
             updated.frontmatter.revision = reference.revision.get();
@@ -260,17 +282,27 @@ impl MarkdownBackend {
                 continue;
             }
 
-            let before = existing.frontmatter.status;
-            self.store
-                .update(&relative, &updated)
-                .map_err(|error| self.latch(error.to_string()))?;
+            let before = existing.frontmatter.status.clone();
+            if creating {
+                self.store
+                    .create(&updated)
+                    .map_err(|error| self.latch(error.to_string()))?;
+            } else {
+                self.store
+                    .update(&relative, &updated)
+                    .map_err(|error| self.latch(error.to_string()))?;
+            }
 
-            let change = if before == updated.frontmatter.status {
+            let change = if creating {
+                journal::Change::Created {
+                    status: updated.frontmatter.status.clone(),
+                }
+            } else if before == updated.frontmatter.status {
                 journal::Change::BodyReplaced
             } else {
                 journal::Change::Moved {
                     from: before,
-                    to: updated.frontmatter.status,
+                    to: updated.frontmatter.status.clone(),
                     decided_on: journal::Provenance::default(),
                 }
             };
@@ -288,6 +320,39 @@ impl MarkdownBackend {
             .map_err(|error| self.latch(format!("the journal could not be appended: {error}")))?;
         }
         Ok(())
+    }
+
+    /// The artifact an entity **should** be filed as, when it has no document yet.
+    ///
+    /// `Ok(None)` for an entity that is not addressed into this store — a conformance suite's, say.
+    /// That is not a failure: the contract holds entities this store has no document shape for, and
+    /// inventing a file for one would put a document nobody wrote into somebody's plan.
+    ///
+    /// The address is the whole of the decision. `seed` files an artifact at
+    /// `ep://<organisation>/<space>/<kind>/<name>`, so an entity under this store's organisation and
+    /// space, whose `kind` segment names a kind this vocabulary knows, is one of ours and its file
+    /// follows from its id.
+    ///
+    /// # Errors
+    ///
+    /// If the entity cannot be read back at all, which means memory and disk have already parted.
+    fn artifact_for(&self, id: &EntityId) -> Result<Option<(ArtifactId, String)>, CommandError> {
+        let envelope = block_on(
+            self.inner
+                .get(&EntityRef::new(id.clone()), QueryConsistency::Current),
+        )
+        .map_err(|error| self.latch(format!("the entity could not be read back: {error}")))?;
+        let locator = &envelope.metadata.locator;
+        if locator.organisation() != ORGANISATION || locator.space() != SPACE {
+            return Ok(None);
+        }
+        let Ok(artifact) = format!("{}:{}", locator.kind(), locator.key()).parse::<ArtifactId>()
+        else {
+            return Ok(None);
+        };
+        // The path the store would file it at, which is what `MarkdownStore::create` derives too.
+        let relative = format!("{}/{}.md", artifact.namespace(), artifact.name());
+        Ok(Some((artifact, relative)))
     }
 
     /// The artifact and path an entity was read from, if this store holds one.

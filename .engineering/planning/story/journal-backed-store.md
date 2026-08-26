@@ -61,9 +61,23 @@ frontmatter, because an entity's relations live as separate `Relation` records a
 back. So `artifact new` and `artifact relate` have no command path that would produce the document
 they are for.
 
-Closing this needs `persist` to grow two projections — create, and relations — and that is the
-remaining half of P3 rather than a footnote to it. **D-P1 stays open against the CLI** until it
-lands; what changed is that it is now open against four named lines instead of the whole store.
+**One of the two projections has since landed.** `persist` now creates a document for an entity that
+has none, when the entity's address says it belongs in this store —
+`ep://planning/store/<kind>/<name>`, which is the address `seed` files an artifact at. Its
+frontmatter is what the entity carries; its **body is empty**, because a body this crate invented
+would be prose nobody is accountable for in a document that reads as though somebody had thought
+about it. An entity addressed anywhere else — a conformance suite's — still gets no file and is
+reported by `unprojected` (`a_created_entity_becomes_a_document_this_store_holds`,
+`an_entity_this_store_is_not_addressed_for_gets_no_invented_file`).
+
+**What is still missing is the relation projection**, and with it the routing. An entity's relations
+live as separate `Relation` records; nothing maps them back into frontmatter, so
+`protocol artifact relate` has no command path that would produce the edge it exists to write. Until
+it does, all four CLI sites stay as they are — routing three of them and leaving the fourth would be
+two write paths rather than one, which is the thing invariant 14 forbids.
+
+**D-P1 stays open against the CLI**; what changed is that it is open against four named lines and
+one missing projection, rather than the whole store.
 
 ## Out of Scope
 

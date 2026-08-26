@@ -187,6 +187,94 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
 }
 
 #[test]
+fn a_created_entity_becomes_a_document_this_store_holds() {
+    // The first of the two projections `persist` was missing, and the one that blocks
+    // `protocol artifact new` from routing through a command. Before it, an entity created through
+    // the contract lived only in this process: correct by the suites, and gone on restart.
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, CreateEntity};
+    use aep_domain::entity::{EntityLocator, EntityType};
+
+    let root = scratch("created");
+    let at = Timestamp::from_epoch_millis(1_700_000_000_000);
+    let actor = ActorRef::parse("human:operator").expect("an actor");
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+        .expect("an empty store opens");
+
+    let payload = Command::CreateEntity(CreateEntity {
+        entity_type: EntityType::parse("aep.story/v1").expect("a type"),
+        locator: EntityLocator::parse("ep://planning/store/story/new-one").expect("a locator"),
+        data: aep_domain::node::Node::Map(
+            [
+                ("status".to_owned(), aep_domain::node::Node::from("draft")),
+                (
+                    "title".to_owned(),
+                    aep_domain::node::Node::from("A new story"),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+    });
+    let context = CommandContext::new(
+        "req-new".parse().expect("a request id"),
+        "key-new".parse().expect("an idempotency key"),
+        actor,
+        "corr-new".parse().expect("a correlation id"),
+        at,
+    );
+    let envelope = CommandEnvelope::new(
+        "cmd-new".parse().expect("a command id"),
+        "aep.entity.create/v1",
+        payload,
+        context,
+    );
+    block_on(store.execute(envelope)).expect("the create is permitted");
+
+    let written = std::fs::read_to_string(root.join("story").join("new-one.md"))
+        .expect("the document the command produced");
+    assert!(written.contains("id: story:new-one"), "{written}");
+    assert!(written.contains("status: draft"), "{written}");
+    assert!(written.contains("title: A new story"), "{written}");
+
+    let (entries, _) = aep_backend_markdown::journal::read(&root);
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.artifact.to_string() == "story:new-one"),
+        "and the creation is in the journal"
+    );
+}
+
+#[test]
+fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
+    // The other half of the same decision. A conformance suite's entities are real to the contract
+    // and this store has no document shape for them; writing one anyway would put a document nobody
+    // wrote into somebody's plan. They are reported instead.
+    let root = scratch("unprojected");
+    let at = Timestamp::from_epoch_millis(1_700_000_000_000);
+    let store = MarkdownBackend::open(
+        &root,
+        std::iter::empty(),
+        at,
+        ActorRef::parse("human:operator").expect("an actor"),
+    )
+    .expect("an empty store opens");
+
+    let report = aep_conformance::run(&store, aep_conformance::Level::Full);
+    assert!(report.passed(), "the suites still pass");
+    assert!(
+        !store.unprojected().is_empty(),
+        "and the entities they invented are reported rather than filed"
+    );
+    assert!(
+        !root.join("suite").exists(),
+        "no directory was invented for them"
+    );
+}
+
+#[test]
 fn the_only_write_path_out_of_this_crate_is_a_command() {
     // P3's other half: "a source scan finds no other write path in the crate". `MarkdownStore`
     // still *has* `create` and `update` — they are how a file gets written — but nothing inside
@@ -219,17 +307,11 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
             if code.starts_with("//") || code.starts_with("///") || code.starts_with('*') {
                 continue;
             }
-            // The one permitted site.
-            if *name == "backend.rs" {
-                let window: String = source
-                    .lines()
-                    .skip(number.saturating_sub(40))
-                    .take(45)
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if window.contains("fn persist(") {
-                    continue;
-                }
+            // The one permitted site, bounded by the function itself rather than by a fixed
+            // window. A window is a guess about how long `persist` is, and the first time it grew
+            // this scan reported its own crate — right answer, wrong reason.
+            if *name == "backend.rs" && within_persist(source, number) {
+                continue;
             }
             offenders.push(format!("{name}:{}: {}", number + 1, code));
         }
@@ -257,4 +339,25 @@ fn the_scan_sees_a_write_it_should_refuse() {
         offends,
         "the scan's own predicate must catch a planted write"
     );
+}
+
+/// Whether line `number` (0-based) falls inside `fn persist`.
+///
+/// Bounded by the next item at the same indentation, so the answer does not depend on how long the
+/// function happens to be today.
+fn within_persist(source: &str, number: usize) -> bool {
+    let lines: Vec<&str> = source.lines().collect();
+    let Some(start) = lines.iter().position(|line| line.contains("fn persist(")) else {
+        return false;
+    };
+    if number < start {
+        return false;
+    }
+    let end = lines
+        .iter()
+        .enumerate()
+        .skip(start + 1)
+        .find(|(_, line)| line.starts_with("    fn ") || line.starts_with("    pub fn "))
+        .map_or(lines.len(), |(at, _)| at);
+    number < end
 }
