@@ -120,12 +120,21 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      # Belt and braces, and it earned both: on a **tag** ref — which is how `release.yml` calls
+      # this workflow — `fetch-tags` above still left the other tags behind, and the check failed
+      # on 0.24.0 with a record that was correct in the commit it was checking. An explicit fetch
+      # is cheap and does not depend on which ref triggered the run.
+      - name: Fetch the tags this check reads
+        run: git fetch --tags --force --prune origin
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Check the delivered-waves record
-        run: cargo xtask status --check
+        run: |
+          echo "tags visible: $(git tag | wc -l)"
+          cargo xtask status --check
 
   # Its own job for the same reason as `schemas`: a stale projection reads as a stale projection.
   # A generated OpenAPI document that no longer matches the specification is a contract someone is
