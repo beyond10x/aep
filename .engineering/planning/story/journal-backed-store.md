@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:journal-backed-store
 kind: story
-status: active
+status: implemented
 title: 'P3: the markdown store writes through CommandService'
 summary: The store's two write functions reroute through command envelopes, the journal becomes the history it does not have, and the sixteen conformance suites run against it.
 owner: store
@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:planning-store-as-backend
-revision: 3
+revision: 4
 ---
 # Story: P3 — the markdown store writes through `CommandService`
 

@@ -5,6 +5,7 @@ members = [
     "crates/aep-contract",
     "crates/aep-backend-markdown",
     "crates/aep-backend-memory",
+    "crates/aep-backend-sqlite",
     "crates/aep-engine",
     "crates/aep-schema",
     "crates/aep-conformance",
@@ -63,6 +64,7 @@ aep-domain = { path = "crates/aep-domain", version = "0.26.0" }
 aep-contract = { path = "crates/aep-contract", version = "0.26.0" }
 aep-backend-markdown = { path = "crates/aep-backend-markdown", version = "0.26.0" }
 aep-backend-memory = { path = "crates/aep-backend-memory", version = "0.26.0" }
+aep-backend-sqlite = { path = "crates/aep-backend-sqlite", version = "0.26.0" }
 aep-engine = { path = "crates/aep-engine", version = "0.26.0" }
 aep-conformance = { path = "crates/aep-conformance", version = "0.26.0" }
 aep-driver-spec = { path = "crates/aep-driver-spec", version = "0.26.0" }

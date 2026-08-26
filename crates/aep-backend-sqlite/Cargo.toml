@@ -1,0 +1,30 @@
+[package]
+name = "aep-backend-sqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aep-contract.workspace = true
+aep-domain.workspace = true
+# **The contract logic lives once.** Same argument as `aep-backend-markdown`: this crate is the
+# durability half, not a second implementation of idempotency, revision conflicts and the audit a
+# refusal still leaves. Two implementations of those drift in exactly the ways a suite run months
+# apart discovers.
+aep-backend-memory.workspace = true
+# The transactional store from `entity-runtime`: one `BEGIN`, both writes, one `COMMIT`, with a busy
+# timeout so a second writer waits rather than being told the system is broken. Writing a second
+# transactional store here by hand would be building, badly, the thing next door that is already
+# tested against a torn write. Pinned to a release tag for the same reason `entity-core` is.
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0" }
+serde_json.workspace = true
+
+[dev-dependencies]
+aep-conformance.workspace = true
+
+[lints]
+workspace = true
