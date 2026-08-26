@@ -14,6 +14,7 @@ validate them without linking the Rust crates.
 | [`profile.schema.json`](profile.schema.json) | `RawProfile` | a profile |
 | [`task.schema.json`](task.schema.json) | `RawTask` | a task |
 | [`project.schema.json`](project.schema.json) | `RawProjectConfig` | what an adopting project says about itself |
+| [`workspace.schema.json`](workspace.schema.json) | `RawWorkspace` | the repositories one command answers across |
 | [`artifact-manifest.schema.json`](artifact-manifest.schema.json) | `RawArtifactManifest` | a project's artifact manifest |
 | [`artifact-lifecycle.schema.json`](artifact-lifecycle.schema.json) | `ArtifactLifecycle` | the statuses one artifact kind may hold |
 | [`evidence.schema.json`](evidence.schema.json) | `Evidence` | one piece of submitted evidence |

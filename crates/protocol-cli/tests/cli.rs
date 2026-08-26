@@ -4133,3 +4133,170 @@ fn an_evidence_document_without_an_observation_time_is_refused_by_name() {
         stderr(&output)
     );
 }
+
+/// `protocol workspace members` reports what it found and does not fail on a member nobody has.
+///
+/// The state worth pinning is `absent`: a workspace is read on machines that checked out different
+/// subsets of it, and a command that failed because a colleague's repository is missing from your
+/// disk is a command nobody could put in a script.
+#[test]
+fn a_workspace_member_nobody_checked_out_is_reported_rather_than_fatal() {
+    let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("workspace-members");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".engineering")).expect("scratch root");
+    std::fs::create_dir_all(root.join("here/.engineering/planning")).expect("a store that exists");
+    std::fs::write(
+        root.join(".engineering/workspace.yaml"),
+        "version: aep.workspace/1\nmembers:\n  - name: here\n    source: ../here\n  - name: gone\n    source: ../gone\n",
+    )
+    .expect("workspace file");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["workspace", "members", "--root"])
+        .arg(&root)
+        .args(["--format", "json"])
+        .output()
+        .expect("the protocol binary runs");
+
+    assert!(
+        output.status.success(),
+        "an absent member must not fail the command: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("the report is JSON");
+    let members = report["members"].as_array().expect("members");
+    assert_eq!(members.len(), 2);
+    assert_eq!(members[0]["name"], "here");
+    assert_eq!(members[0]["state"], "ok");
+    assert_eq!(members[1]["name"], "gone");
+    assert_eq!(members[1]["state"], "absent");
+}
+
+/// A repository without a workspace file answers only for itself, and says so rather than failing.
+#[test]
+fn a_repository_with_no_workspace_file_is_not_an_error() {
+    let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("workspace-none");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".engineering")).expect("scratch root");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["workspace", "members", "--root"])
+        .arg(&root)
+        .output()
+        .expect("the protocol binary runs");
+
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("no workspace"),
+        "it should say there is no workspace rather than print an empty list"
+    );
+}
+
+/// Builds a two-member workspace on disk and returns its root.
+fn two_member_workspace(name: &str, docs: &[(&str, &str, &str)]) -> std::path::PathBuf {
+    let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".engineering")).expect("scratch root");
+    std::fs::write(
+        root.join(".engineering/workspace.yaml"),
+        "version: aep.workspace/1\nmembers:\n  - name: one\n    source: ../one\n  - name: two\n    source: ../two\n",
+    )
+    .expect("workspace file");
+
+    for (member, id, title) in docs {
+        let (kind, artifact) = id.split_once(':').expect("kind:name");
+        let directory = root.join(member).join(".engineering/planning").join(kind);
+        std::fs::create_dir_all(&directory).expect("kind directory");
+        std::fs::write(
+            directory.join(format!("{artifact}.md")),
+            format!(
+                "---\nformat: aep.planning-md/1\nid: {id}\nkind: {kind}\nstatus: draft\ntitle: {title}\nrevision: 1\n---\n\n# {title}\n"
+            ),
+        )
+        .expect("a planning document");
+    }
+    root
+}
+
+/// `workspace list` answers across members, and every row says which member it came from.
+#[test]
+fn a_workspace_list_names_the_member_every_artifact_came_from() {
+    let root = two_member_workspace(
+        "workspace-list",
+        &[
+            ("one", "story:alpha", "Alpha"),
+            ("two", "story:beta", "Beta"),
+        ],
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["workspace", "list", "--root"])
+        .arg(&root)
+        .args(["--format", "json"])
+        .output()
+        .expect("the protocol binary runs");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON");
+    let rows = report["artifacts"].as_array().expect("artifacts");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["reference"], "one/story:alpha");
+    assert_eq!(rows[1]["reference"], "two/story:beta");
+}
+
+/// A name two members both hold is refused, and the refusal is the two things to retype.
+///
+/// The failure being bought off here is the quiet one: answering with whichever store was read
+/// first tells somebody a fact about the other repository and says nothing about having chosen.
+#[test]
+fn a_reference_two_members_both_hold_is_refused_with_both_spellings() {
+    let root = two_member_workspace(
+        "workspace-ambiguous",
+        &[
+            ("one", "story:passkey-login", "Passkey login, here"),
+            ("two", "story:passkey-login", "Passkey login, elsewhere"),
+        ],
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["workspace", "show", "story:passkey-login", "--root"])
+        .arg(&root)
+        .args(["--format", "json"])
+        .output()
+        .expect("the protocol binary runs");
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an ambiguous reference is a refusal"
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON");
+    let mut retypeable: Vec<&str> = report["try"]
+        .as_array()
+        .expect("the refusal offers what to type")
+        .iter()
+        .map(|value| value.as_str().expect("a string"))
+        .collect();
+    retypeable.sort_unstable();
+    assert_eq!(
+        retypeable,
+        vec!["one/story:passkey-login", "two/story:passkey-login"]
+    );
+
+    // And each spelling resolves on its own.
+    let qualified = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["workspace", "show", "two/story:passkey-login", "--root"])
+        .arg(&root)
+        .args(["--format", "json"])
+        .output()
+        .expect("the protocol binary runs");
+    assert!(qualified.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&qualified.stdout).expect("JSON");
+    assert_eq!(report["member"], "two");
+    assert_eq!(report["title"], "Passkey login, elsewhere");
+}

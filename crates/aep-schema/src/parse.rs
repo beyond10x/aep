@@ -49,6 +49,8 @@ pub enum DocumentKind {
     Evidence,
     /// A project's own configuration.
     Project,
+    /// A workspace: the repositories one CLI answers across.
+    Workspace,
     /// A driver's step map: what a harness does in each state of a workflow.
     StepMap,
 }
@@ -66,6 +68,7 @@ impl DocumentKind {
             Self::Lifecycle => "lifecycle",
             Self::Evidence => "evidence",
             Self::Project => "project",
+            Self::Workspace => "workspace",
             Self::StepMap => "step-map",
         }
     }
@@ -81,6 +84,7 @@ impl DocumentKind {
         Self::Lifecycle,
         Self::Evidence,
         Self::Project,
+        Self::Workspace,
         Self::StepMap,
     ];
 
@@ -92,7 +96,10 @@ impl DocumentKind {
             Self::Workflow => "workflows",
             Self::Profile => "profiles",
             Self::Task => "tasks",
-            Self::ArtifactManifest => ".engineering",
+            // Both live in `.engineering/`, beside `project.yaml`: the manifest is what this
+            // repository declares about its own artifacts, and the workspace is what it declares
+            // about the set of repositories it answers across.
+            Self::ArtifactManifest | Self::Workspace => ".engineering",
             Self::Lifecycle => "artifacts/lifecycles",
             Self::Evidence => "evidence",
             Self::Project => "project",
@@ -241,6 +248,18 @@ pub fn task(text: &str, origin: Option<&str>) -> Result<Task, DocumentError> {
 /// Reads an artifact manifest.
 pub fn artifact_manifest(text: &str, origin: Option<&str>) -> Result<ArtifactGraph, DocumentError> {
     document::<RawArtifactManifest, ArtifactGraph>(DocumentKind::ArtifactManifest, text, origin)
+}
+
+/// Reads a project's own configuration.
+pub fn workspace(
+    text: &str,
+    origin: Option<&str>,
+) -> Result<aep_domain::workspace::Workspace, DocumentError> {
+    document::<aep_domain::workspace::RawWorkspace, aep_domain::workspace::Workspace>(
+        DocumentKind::Workspace,
+        text,
+        origin,
+    )
 }
 
 /// Reads a project's own configuration.
@@ -514,6 +533,9 @@ workflow: test/linear
         // Beside the four document kinds the tree already held, because a step map is a validated,
         // versioned, schema-generated document exactly like them.
         assert_eq!(DocumentKind::StepMap.directory(), "drivers");
-        assert_eq!(DocumentKind::ALL.len(), 10);
+        // A workspace sits beside `project.yaml`: one names this repository, the other names the
+        // set of repositories one command answers across.
+        assert_eq!(DocumentKind::Workspace.directory(), ".engineering");
+        assert_eq!(DocumentKind::ALL.len(), 11);
     }
 }

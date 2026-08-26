@@ -206,11 +206,10 @@ not conformant: the implementation contradicted the specification (exit 1)
 
 ## What does not work yet
 
-No durable backend — the only implementation is in memory. No federated artifact graphs across
-repositories. Generated code is structural, never behavioural: a specification synthesises types,
-typestate lifecycles, ports, transports and a plan, and every algorithm remains a typed
-obligation someone still has to implement — and an obligation is a plan entry, not yet an artifact
-a task can own (W7.4, deferred by decision). The delta still has a fail-closed arm: conversions,
+No durable backend — the only implementation is in memory. Generated code is structural, never
+behavioural: a specification synthesises types, typestate lifecycles, ports, transports and a plan,
+and every algorithm remains a typed obligation someone still has to implement — and an obligation is
+a plan entry, not yet an artifact a task can own (W7.4, deferred by decision). The delta still has a fail-closed arm: conversions,
 workloads and a domain's naming have no compared construct family, so a change there owes the whole
 suite rather than being narrowed; and predicates are compared only for canonical equality, so a
 provably weaker rewrite still reads as *changed* — implication stays refused. **The conformance runner cannot reach

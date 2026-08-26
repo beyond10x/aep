@@ -47,6 +47,7 @@ use aep_domain::project::{
     PROJECT_DIRECTORY, PROJECT_FILE,
 };
 use aep_domain::task::Task;
+use aep_domain::workspace::{Member, Workspace, WORKSPACE_FILE};
 use sha2::{Digest, Sha256};
 
 use crate::load::{load_tree_report, LoadErrors, LoadFailure, LoadOutcome};
@@ -309,6 +310,42 @@ fn read_config(root: &Path) -> Result<(PathBuf, PathBuf, ProjectConfig), LoadFai
             detail: error.to_string(),
         })?;
     Ok((engineering, config_path, config))
+}
+
+/// Reads `.engineering/workspace.yaml`, if this repository has one.
+///
+/// `Ok(None)` when the file is absent, which is the ordinary case: a repository that answers only
+/// for itself is not a broken workspace, it is a repository without one. A file that exists and
+/// does not validate is an error, because somebody wrote it and meant it.
+pub fn load_workspace(root: &Path) -> Result<Option<Workspace>, LoadErrors> {
+    let path = root.join(project_directory()).join(WORKSPACE_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(LoadErrors::from_failures(vec![LoadFailure {
+                path: Some(path),
+                detail: format!("cannot be read: {error}"),
+            }]))
+        }
+    };
+
+    aep_schema::parse::workspace(&text, Some(&path.display().to_string()))
+        .map(Some)
+        .map_err(|error| {
+            LoadErrors::from_failures(vec![LoadFailure {
+                path: Some(path),
+                detail: error.to_string(),
+            }])
+        })
+}
+
+/// Where a member's tree is on this machine, materializing a pinned Git member if it is not yet.
+///
+/// The same resolution a project's `protocols:` gets, for the same reason: one spelling for *where
+/// a tree comes from* means one set of refusals, already tested.
+pub fn resolve_member(member: &Member, engineering: &Path) -> Result<PathBuf, String> {
+    resolve_protocol_source(&member.source, engineering)
 }
 
 /// Resolves a local tree immediately or materializes an immutable repository source in the cache.

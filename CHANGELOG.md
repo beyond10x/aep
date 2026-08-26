@@ -11,6 +11,62 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.25.0] — 2026-08-26
+
+One CLI across repositories. Until now every repository was an island — `protocol artifact` read one
+store, and the limitations page said so: *no federated artifact graphs across repositories*. A story
+here that is blocked by a story in `entity-runtime` can now say so, and one command answers over
+both.
+
+### Added
+
+* **A workspace names its member repositories, and pins them.** `.engineering/workspace.yaml` at
+  `version: aep.workspace/1`, each member a name and a `source`. `source` is the same locator
+  `project.yaml`'s `protocols:` takes, which means it arrives carrying two refusals already argued
+  for: an **absolute path is refused**, because a path rooted somewhere only one machine has is true
+  on that machine and false in CI; and an **unpinned git locator is refused**, because a tree that
+  can move under you is a dependency whose meaning changes with no commit in your repository. A
+  generated JSON Schema ships beside it.
+
+* **`protocol workspace` — `list`, `crossings`, `show`, `members`.** The plan across every member,
+  the relations whose two ends are in different repositories, one artifact, and what resolved.
+
+  ```console
+  $ protocol workspace crossings
+  engineering-protocols/story:assemble-across-sources informed_by entity-runtime/story:typed-references  [entity-runtime]
+  ```
+
+* **A member nobody has checked out is a normal condition, not a broken workspace.** `members` exits
+  `0` with an unresolved member listed as unresolved. A command that failed because a colleague's
+  repository is missing from your disk is a command nobody could use.
+
+* **An ambiguous reference is refused by name.** `story:passkey-login` exists in more than one
+  repository today and they are different stories. An unqualified reference held by more than one
+  member resolves to `Ambiguous`, listing every holder, and the lookup returns **no document** —
+  returning *a* document for an ambiguous reference is exactly the guess this path exists to refuse.
+  An unqualified reference is not the same thing as an ambiguous one, and the two are distinguished
+  where the type is defined.
+
+* **Membership is carried beside the id, never folded into it.** Nothing is renamed and no id is
+  rewritten on the way into the assembly, so reading a store through a workspace and reading it on
+  its own give the same artifacts — and a member can be dropped from the workspace without touching
+  a file.
+
+* **A member that failed to load is reported, never skipped.** It produces an empty member rather
+  than an absent one, with its failures attached to its name. An assembly that quietly answered from
+  two members when it was asked about three would give a smaller answer that looks exactly like a
+  complete one.
+
+* **A relation whose target lives in another member.** The vocabulary is unchanged — `blocks`,
+  `depends_on`, `derived_from`; what is new is that the target resolves elsewhere, and that an
+  unresolvable one is a typed fact rather than an error. Cycle detection holds over the combined
+  graph, including a cycle that only exists once two members are read together.
+
+### Notes
+
+* Every `protocol workspace` verb **reads**. Nothing here writes to another member's store, which
+  would need a permission model, a lock and a review path that do not exist.
+
 ## [0.24.0] — 2026-08-26
 
 ### Added

@@ -77,6 +77,7 @@
 //! the tooling maintains beside it is a second answer that goes stale the first time somebody
 //! rebases. The same reasoning fixes the CLI's seeding clock to `Timestamp::EPOCH`.
 
+pub mod assembly;
 pub mod claim;
 pub mod document;
 pub mod frontmatter;

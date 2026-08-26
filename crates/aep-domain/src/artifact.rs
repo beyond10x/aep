@@ -41,6 +41,17 @@ pub struct ArtifactId {
 }
 
 impl ArtifactId {
+    /// The member this id names, when it names one.
+    ///
+    /// `entity-runtime/story:provider-spi` is `Some("entity-runtime")`; `story:provider-spi` is
+    /// `None`, meaning *whichever store this was written in*. The separator is the one character an
+    /// id already permits and nothing has ever used — see [`crate::workspace::WorkspaceRef`], which
+    /// is where the spelling is defined and where a reference is resolved.
+    #[must_use]
+    pub fn member(&self) -> Option<&str> {
+        self.namespace.split_once('/').map(|(member, _)| member)
+    }
+
     /// Parses an artifact id.
     pub fn new(value: impl AsRef<str>) -> Result<Self, ParseError> {
         let value = value.as_ref();
@@ -1951,7 +1962,14 @@ impl ArtifactGraph {
             }
             for (index, relation) in artifact.relations.iter().enumerate() {
                 let location = format!("artifacts.{}.relations[{index}]", artifact.id);
-                if !self.artifacts.contains_key(relation.target.id()) {
+                // A target naming another member is *outside* this manifest by construction, so
+                // "the manifest does not declare it" is not a defect — it is the whole point of a
+                // workspace. Whether that member holds it is a question only an assembly of every
+                // member can answer, and it answers it as a typed fact rather than an error,
+                // because a member nobody checked out holds nothing and that is normal.
+                if relation.target.id().member().is_none()
+                    && !self.artifacts.contains_key(relation.target.id())
+                {
                     errors.push(
                         ValidationError::new(
                             ValidationCode::UndeclaredReference,
@@ -2515,6 +2533,41 @@ mod tests {
         ])
         .expect_err("cycle");
         assert!(cyclic.to_string().contains("cycle"), "{cyclic}");
+    }
+
+    #[test]
+    fn a_relation_naming_another_member_is_external_rather_than_dangling() {
+        // The point of a workspace: this manifest genuinely does not declare the target, and that
+        // is correct rather than broken. Whether the member holds it is a question only an assembly
+        // of every member can answer, and `protocol workspace crossings` is where it is answered.
+        let graph = ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
+            .with_relation(
+                RelationKind::DependsOn,
+                reference("entity-runtime/story:provider-spi"),
+            )])
+        .expect("a member-qualified target is outside this manifest by construction");
+
+        assert_eq!(graph.len(), 1);
+        let target = ArtifactId::new("entity-runtime/story:provider-spi").expect("id");
+        assert_eq!(target.member(), Some("entity-runtime"));
+        assert_eq!(
+            ArtifactId::new("story:provider-spi").expect("id").member(),
+            None,
+            "an unqualified id means the store it was written in, which is never ambiguous"
+        );
+    }
+
+    #[test]
+    fn an_unqualified_dangling_edge_is_still_refused() {
+        // The escape hatch is exactly one character wide: without a member, nothing changed.
+        let dangling =
+            ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
+                .with_relation(RelationKind::DependsOn, reference("story:missing"))])
+            .expect_err("a local dangling edge is still a dangling edge");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
     }
 
     #[test]

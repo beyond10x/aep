@@ -80,6 +80,11 @@ pub fn generated_schemas() -> Vec<GeneratedSchema> {
             "project",
             "what an adopting project says about itself",
         ),
+        entry::<aep_domain::workspace::RawWorkspace>(
+            "RawWorkspace",
+            "workspace",
+            "the repositories one command answers across",
+        ),
         entry::<RawArtifactManifest>(
             "RawArtifactManifest",
             "artifact-manifest",

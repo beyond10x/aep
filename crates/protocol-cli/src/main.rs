@@ -436,6 +436,19 @@ enum Command {
         #[command(subcommand)]
         command: EvidenceCommand,
     },
+    /// Answer across the repositories a workspace names, rather than only this one.
+    ///
+    /// A project file says what *this* repository runs under; `.engineering/workspace.yaml` says
+    /// which repositories one command should answer across. A story here blocked by a story
+    /// somewhere else can then say so, and one board shows the work rather than three.
+    ///
+    /// A repository without a workspace file is not a broken workspace — it is a repository that
+    /// answers only for itself, which is the ordinary case.
+    Workspace {
+        /// Which question to ask.
+        #[command(subcommand)]
+        command: workspace::WorkspaceCommand,
+    },
     /// Inspect built-in schemas or work with project-owned JSON Schema contracts.
     Schema {
         /// What to do. A built-in schema name such as `workflow` remains accepted.
@@ -671,6 +684,7 @@ mod contract;
 // programme, and it shares nothing with the rest. It is also where the one rule that programme has
 // about its own output lives: counts of facts, never a score.
 mod eval;
+mod workspace;
 
 // The seventh, and the only one whose output is another component's input. It reads the same
 // workflow `render` draws and writes the document `b10x-harness-flow` plans, which is a projection
@@ -769,6 +783,7 @@ fn run() -> Result<ExitCode> {
             ),
         },
         Command::Reverse { command } => reverse::run(command),
+        Command::Workspace { command } => workspace::run(command),
         Command::Schema { command } => schema::run(command),
         Command::Conformance {
             level,

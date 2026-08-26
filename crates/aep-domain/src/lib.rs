@@ -72,6 +72,7 @@ pub mod time;
 pub mod verification;
 pub mod version;
 pub mod workflow;
+pub mod workspace;
 
 pub use action::{Action, ActionRequest};
 pub use artifact::{

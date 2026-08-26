@@ -47,6 +47,8 @@ const DOCUMENT_TYPES: &[(&str, &str)] = &[
     ("RawTask", "Task"),
     ("RawProjectConfig", "ProjectConfig"),
     ("RawArtifactManifest", "ArtifactGraph"),
+    ("RawWorkspace", "Workspace"),
+    ("RawMember", "Member"),
 ];
 
 /// Every `.rs` file of the crate, as `(file name, contents)`, in a stable order.

@@ -1,0 +1,31 @@
+# The repositories one `protocol` command answers across.
+#
+# A project file (`project.yaml`, beside this one) says what *this* repository runs under. This file
+# says which repositories a question should be answered over — so a story here that is blocked by a
+# story in `entity-runtime` can say so, and one board shows the work rather than three.
+#
+# `source` takes the same locator `project.yaml`'s `protocols:` does: a path relative to this
+# directory, or a **pinned** `git+ssh://`, `git+https://` or `git+file://` revision. Both refusals
+# that type already carries apply here for the same reasons — an absolute path is true on one
+# machine and false in CI, and an unpinned repository is a dependency whose meaning changes with no
+# commit in this one.
+#
+# A member nobody has checked out is a normal condition, not a broken workspace.
+version: aep.workspace/1
+
+members:
+  # This repository. Named explicitly rather than implied, so every artifact in the assembled graph
+  # carries a member and none of them is the special one that does not.
+  - name: engineering-protocols
+    source: ..
+
+  # The kernel that decides this repository's status ladders. The arrow points one way — nothing of
+  # ours appears in a manifest of theirs — but the *plans* are related in both directions, which is
+  # exactly the edge a workspace exists to carry.
+  - name: entity-runtime
+    source: ../../entity-runtime
+
+  # Drives a vendor harness and holds the paid evaluation runs. Used here as a tool, never as a
+  # dependency; its backlog and this one block each other regularly.
+  - name: metaharness
+    source: ../../metaharness

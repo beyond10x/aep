@@ -217,7 +217,6 @@ The compact list; [Limitations](./limitations.md) carries the consequences of ea
 * No out-of-process conformance runner, on either side.
 * No behavioural synthesis — every algorithm is an obligation, by design.
 * No attested evidence — `independent: true` is structural, not cryptographic.
-* No federated artifact graphs across repositories.
 * Obligations are plan entries, not yet artifacts a task can own (deferred by decision).
 * Nothing gates on `trace_conformance`, so a driven run's own transcript check is provenance in the
   audit trail rather than a gate that can stop it.

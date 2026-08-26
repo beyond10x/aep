@@ -170,8 +170,12 @@ worth its space here: none of it was visible to the people who built the thing.
 
 ## Scope limits that are boundaries, not gaps
 
-* **No federated artifact graphs.** A manifest describes one project; cross-repository references
-  are resolved by hand.
+* **A workspace reads; it never writes.** `0.25.0` federated the artifact graph — a workspace
+  manifest names its members, `protocol workspace` answers across them, and a cross-repository
+  relation is a resolvable edge rather than something resolved by hand. Every verb over it reads.
+  Writing into another member's store would need a permission model, a lock and a review path, none
+  of which exist, so a cross-repository *plan* is one command and a cross-repository *edit* is still
+  two checkouts.
 * **Infrastructure scanning lives outside.** Raw cluster scans are trusted to the external scanner;
   this workspace begins at the observation file.
 * **One governed run, and it stopped.** The protocol has now driven a real story out of a real

@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RawWorkspace",
+  "description": "A workspace document, as parsed.",
+  "type": "object",
+  "properties": {
+    "members": {
+      "description": "The repositories this workspace answers across.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawMember"
+      }
+    },
+    "version": {
+      "description": "The format version.",
+      "default": "aep.workspace/1",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "RawMember": {
+      "description": "One member, as parsed.",
+      "type": "object",
+      "required": [
+        "name",
+        "source"
+      ],
+      "properties": {
+        "name": {
+          "description": "The short name, which becomes the namespace.",
+          "type": "string"
+        },
+        "source": {
+          "description": "A relative tree path, or a pinned `git+ssh://`, `git+https://` or `git+file://` revision.",
+          "type": "string"
+        },
+        "store": {
+          "description": "Where the planning store sits inside the tree.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -219,7 +219,8 @@ fn load_file(registry: &mut Registry, path: &Path, kind: DocumentKind) -> Result
         DocumentKind::Task
         | DocumentKind::ArtifactManifest
         | DocumentKind::Evidence
-        | DocumentKind::Project => {
+        | DocumentKind::Project
+        | DocumentKind::Workspace => {
             Err(format!("{kind} documents do not belong in a protocol tree"))
         }
     };
