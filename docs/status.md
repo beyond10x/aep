@@ -58,6 +58,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.27.0` | 0.27.0 — three implementors, one write path, and 27 findings closed |
 | `0.27.1` | 0.27.1 — the check that only CI could run |
 | `0.27.2` | 0.27.2 — six documents describing a deviation that had closed |
+| `0.27.3` | 0.27.3 — a release cut later no longer fails the gate of a release cut earlier |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
