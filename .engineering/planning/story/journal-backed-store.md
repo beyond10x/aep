@@ -41,6 +41,30 @@ mitigation.
 - An out-of-band file edit is still indistinguishable in the file (**D-P2**) and the store says so
   rather than pretending otherwise.
 
+## What is done, and the one acceptance line that is not
+
+Done: `MarkdownBackend` implements `CommandService` and `QueryService`; the sixteen suites pass and
+are shown to fail it under injected faults; a command reaches the file and the prose survives; the
+journal answers without git; and a source scan pins that **nothing inside this crate** writes except
+`MarkdownBackend::persist`, which exists only to be called by `execute`
+(`the_only_write_path_out_of_this_crate_is_a_command`, with a guard test that plants a write the
+scan must refuse).
+
+**Not done: `protocol artifact`'s own verbs still call `MarkdownStore::create` and `update`
+directly** — `crates/protocol-cli/src/planning.rs:495, 577, 662, 719`. Four sites, in a different
+crate, so the in-crate scan does not see them.
+
+They cannot be routed through the backend yet, and the reason is specific rather than effort:
+`persist` copies back **only the frontmatter fields an entity body carries** — status, title,
+summary, owner. It cannot create a file that does not exist, and it cannot project a relation into
+frontmatter, because an entity's relations live as separate `Relation` records and nothing maps them
+back. So `artifact new` and `artifact relate` have no command path that would produce the document
+they are for.
+
+Closing this needs `persist` to grow two projections — create, and relations — and that is the
+remaining half of P3 rather than a footnote to it. **D-P1 stays open against the CLI** until it
+lands; what changed is that it is now open against four named lines instead of the whole store.
+
 ## Out of Scope
 
 A new store trait. The seam is the existing `aep-contract` traits; a second trait would be a second

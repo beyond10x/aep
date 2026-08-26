@@ -185,3 +185,76 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
         "the move is in the journal, answerable without reading git"
     );
 }
+
+#[test]
+fn the_only_write_path_out_of_this_crate_is_a_command() {
+    // P3's other half: "a source scan finds no other write path in the crate". `MarkdownStore`
+    // still *has* `create` and `update` — they are how a file gets written — but nothing inside
+    // this crate may reach them except `MarkdownBackend::persist`, which exists only to be called
+    // by `execute`. Anything else would be a second write path, and a second write path is a second
+    // place for idempotency, revision checks and the audit record to be forgotten.
+    //
+    // A scan, because that is the only thing that can see an omission: a module added next year
+    // that calls `store.update` directly would compile, pass every test, and quietly reopen D-P1.
+    const SOURCES: &[(&str, &str)] = &[
+        ("backend.rs", include_str!("../src/backend.rs")),
+        ("assembly.rs", include_str!("../src/assembly.rs")),
+        ("journal.rs", include_str!("../src/journal.rs")),
+        ("claim.rs", include_str!("../src/claim.rs")),
+        ("document.rs", include_str!("../src/document.rs")),
+        ("frontmatter.rs", include_str!("../src/frontmatter.rs")),
+        ("kernel.rs", include_str!("../src/kernel.rs")),
+        ("lib.rs", include_str!("../src/lib.rs")),
+    ];
+
+    let mut offenders = Vec::new();
+    for (name, source) in SOURCES {
+        for (number, line) in source.lines().enumerate() {
+            let calls_write = line.contains(".create(&") || line.contains(".update(&");
+            if !calls_write {
+                continue;
+            }
+            // Doc comments and prose naming the functions are not calls.
+            let code = line.trim_start();
+            if code.starts_with("//") || code.starts_with("///") || code.starts_with('*') {
+                continue;
+            }
+            // The one permitted site.
+            if *name == "backend.rs" {
+                let window: String = source
+                    .lines()
+                    .skip(number.saturating_sub(40))
+                    .take(45)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if window.contains("fn persist(") {
+                    continue;
+                }
+            }
+            offenders.push(format!("{name}:{}: {}", number + 1, code));
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "a write outside `MarkdownBackend::persist` is a second write path, which invariant 14 \
+         exists to forbid — model the change as a command and let `execute` carry it:\n  {}",
+        offenders.join("\n  ")
+    );
+}
+
+#[test]
+fn the_scan_sees_a_write_it_should_refuse() {
+    // The guard. A scan that has never rejected anything is a scan nobody has evidence discriminates.
+    //
+    // If this test ever starts passing, `the_only_write_path_out_of_this_crate_is_a_command` has
+    // stopped being evidence.
+    let planted = "fn somewhere_else() {\n    store.update(&relative, &document)?;\n}\n";
+    let offends = planted
+        .lines()
+        .any(|line| line.contains(".update(&") && !line.trim_start().starts_with("//"));
+    assert!(
+        offends,
+        "the scan's own predicate must catch a planted write"
+    );
+}
