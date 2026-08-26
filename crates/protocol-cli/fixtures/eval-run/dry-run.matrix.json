@@ -3,7 +3,7 @@
   "specifications": [
     {
       "id": "eval-case/development-default",
-      "digest": "44d8f5a374c92f926a64a571172cda9f5cf57450a3cbb9e369d74d6198e34ce1",
+      "digest": "2dc3eeaaa139e4933f405f47adc3f214c2960e61c16d51d74e7d92da476e124f",
       "runs": 4
     }
   ],
@@ -22,6 +22,7 @@
       "held": 9,
       "violated": 2,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": 318400,
       "tokens": 59150,
       "wall_time_ms": 11260
@@ -40,6 +41,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": 521600,
       "tokens": 116546,
       "wall_time_ms": 22320
@@ -58,6 +60,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": 521600,
       "tokens": 116546,
       "wall_time_ms": 22320
@@ -76,6 +79,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": null,
       "tokens": 116546,
       "wall_time_ms": 22320
@@ -90,6 +94,7 @@
       "held": 9,
       "violated": 2,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": {
         "runs": 1,
         "total": 318400
@@ -111,6 +116,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": {
         "runs": 1,
         "total": 521600
@@ -132,6 +138,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": {
         "runs": 1,
         "total": 521600
@@ -153,6 +160,7 @@
       "held": 11,
       "violated": 0,
       "unobservable": 0,
+      "advisory": 1,
       "cost_micro_usd": null,
       "tokens": {
         "runs": 1,
@@ -407,6 +415,50 @@
     },
     {
       "workflow": "adp/default",
+      "expectation": "the-scope-was-actually-tested",
+      "harness": "claude",
+      "arm": "raw",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 0,
+      "advisory": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-scope-was-actually-tested",
+      "harness": "claude",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 0,
+      "advisory": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-scope-was-actually-tested",
+      "harness": "claude",
+      "arm": "driven",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 0,
+      "advisory": 1
+    },
+    {
+      "workflow": "adp/default",
+      "expectation": "the-scope-was-actually-tested",
+      "harness": "codex",
+      "arm": "plugin",
+      "runs": 1,
+      "held": 0,
+      "violated": 0,
+      "unobservable": 0,
+      "advisory": 1
+    },
+    {
+      "workflow": "adp/default",
       "expectation": "the-specification-came-before-the-decomposition",
       "harness": "claude",
       "arm": "raw",
@@ -608,5 +660,6 @@
   ],
   "held": 42,
   "violated": 2,
-  "unobservable": 0
+  "unobservable": 0,
+  "advisory": 4
 }

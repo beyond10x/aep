@@ -1,56 +1,60 @@
 eval.matrix/1 — 4 run(s), 1 specification(s), 4 cell(s)
 
-workflow                  harness    arm       runs   held   violated   unobservable
-adp/default               claude     raw       1      9      2          0
-adp/default               claude     plugin    1      11     0          0
-adp/default               claude     driven    1      11     0          0
-adp/default               codex      plugin    1      11     0          0
+workflow                  harness    arm       runs   held   violated   unobservable  advisory
+adp/default               claude     raw       1      9      2          0             1
+adp/default               claude     plugin    1      11     0          0             1
+adp/default               claude     driven    1      11     0          0             1
+adp/default               codex      plugin    1      11     0          0             1
 
-expectation                   harness    arm       runs   held   violated   unobservable
-no-artifact-file-was-rewritten-whole  claude     raw       1      1      0          0
-no-artifact-file-was-rewritten-whole  claude     plugin    1      1      0          0
-no-artifact-file-was-rewritten-whole  claude     driven    1      1      0          0
-no-artifact-file-was-rewritten-whole  codex      plugin    1      1      0          0
-nothing-was-refused           claude     raw       1      1      0          0
-nothing-was-refused           claude     plugin    1      1      0          0
-nothing-was-refused           claude     driven    1      1      0          0
-nothing-was-refused           codex      plugin    1      1      0          0
-terminal-record-clean         claude     raw       1      1      0          0
-terminal-record-clean         claude     plugin    1      1      0          0
-terminal-record-clean         claude     driven    1      1      0          0
-terminal-record-clean         codex      plugin    1      1      0          0
-the-editor-was-used-at-all    claude     raw       1      1      0          0
-the-editor-was-used-at-all    claude     plugin    1      1      0          0
-the-editor-was-used-at-all    claude     driven    1      1      0          0
-the-editor-was-used-at-all    codex      plugin    1      1      0          0
-the-harness-had-a-writer-to-refuse  claude     raw       1      1      0          0
-the-harness-had-a-writer-to-refuse  claude     plugin    1      1      0          0
-the-harness-had-a-writer-to-refuse  claude     driven    1      1      0          0
-the-harness-had-a-writer-to-refuse  codex      plugin    1      1      0          0
-the-implementation-was-changed  claude     raw       1      1      0          0
-the-implementation-was-changed  claude     plugin    1      1      0          0
-the-implementation-was-changed  claude     driven    1      1      0          0
-the-implementation-was-changed  codex      plugin    1      1      0          0
-the-specification-came-before-the-decomposition  claude     raw       1      1      0          0
-the-specification-came-before-the-decomposition  claude     plugin    1      1      0          0
-the-specification-came-before-the-decomposition  claude     driven    1      1      0          0
-the-specification-came-before-the-decomposition  codex      plugin    1      1      0          0
-the-store-was-validated       claude     raw       1      1      0          0
-the-store-was-validated       claude     plugin    1      1      0          0
-the-store-was-validated       claude     driven    1      1      0          0
-the-store-was-validated       codex      plugin    1      1      0          0
-the-suite-was-run-before-there-was-code-to-pass-it  claude     raw       1      0      1          0
-the-suite-was-run-before-there-was-code-to-pass-it  claude     plugin    1      1      0          0
-the-suite-was-run-before-there-was-code-to-pass-it  claude     driven    1      1      0          0
-the-suite-was-run-before-there-was-code-to-pass-it  codex      plugin    1      1      0          0
-the-test-came-before-the-code  claude     raw       1      0      1          0
-the-test-came-before-the-code  claude     plugin    1      1      0          0
-the-test-came-before-the-code  claude     driven    1      1      0          0
-the-test-came-before-the-code  codex      plugin    1      1      0          0
-turns-within-reason           claude     raw       1      1      0          0
-turns-within-reason           claude     plugin    1      1      0          0
-turns-within-reason           claude     driven    1      1      0          0
-turns-within-reason           codex      plugin    1      1      0          0
+expectation                   harness    arm       runs   held   violated   unobservable  advisory
+no-artifact-file-was-rewritten-whole  claude     raw       1      1      0          0             0
+no-artifact-file-was-rewritten-whole  claude     plugin    1      1      0          0             0
+no-artifact-file-was-rewritten-whole  claude     driven    1      1      0          0             0
+no-artifact-file-was-rewritten-whole  codex      plugin    1      1      0          0             0
+nothing-was-refused           claude     raw       1      1      0          0             0
+nothing-was-refused           claude     plugin    1      1      0          0             0
+nothing-was-refused           claude     driven    1      1      0          0             0
+nothing-was-refused           codex      plugin    1      1      0          0             0
+terminal-record-clean         claude     raw       1      1      0          0             0
+terminal-record-clean         claude     plugin    1      1      0          0             0
+terminal-record-clean         claude     driven    1      1      0          0             0
+terminal-record-clean         codex      plugin    1      1      0          0             0
+the-editor-was-used-at-all    claude     raw       1      1      0          0             0
+the-editor-was-used-at-all    claude     plugin    1      1      0          0             0
+the-editor-was-used-at-all    claude     driven    1      1      0          0             0
+the-editor-was-used-at-all    codex      plugin    1      1      0          0             0
+the-harness-had-a-writer-to-refuse  claude     raw       1      1      0          0             0
+the-harness-had-a-writer-to-refuse  claude     plugin    1      1      0          0             0
+the-harness-had-a-writer-to-refuse  claude     driven    1      1      0          0             0
+the-harness-had-a-writer-to-refuse  codex      plugin    1      1      0          0             0
+the-implementation-was-changed  claude     raw       1      1      0          0             0
+the-implementation-was-changed  claude     plugin    1      1      0          0             0
+the-implementation-was-changed  claude     driven    1      1      0          0             0
+the-implementation-was-changed  codex      plugin    1      1      0          0             0
+the-scope-was-actually-tested  claude     raw       1      0      0          0             1
+the-scope-was-actually-tested  claude     plugin    1      0      0          0             1
+the-scope-was-actually-tested  claude     driven    1      0      0          0             1
+the-scope-was-actually-tested  codex      plugin    1      0      0          0             1
+the-specification-came-before-the-decomposition  claude     raw       1      1      0          0             0
+the-specification-came-before-the-decomposition  claude     plugin    1      1      0          0             0
+the-specification-came-before-the-decomposition  claude     driven    1      1      0          0             0
+the-specification-came-before-the-decomposition  codex      plugin    1      1      0          0             0
+the-store-was-validated       claude     raw       1      1      0          0             0
+the-store-was-validated       claude     plugin    1      1      0          0             0
+the-store-was-validated       claude     driven    1      1      0          0             0
+the-store-was-validated       codex      plugin    1      1      0          0             0
+the-suite-was-run-before-there-was-code-to-pass-it  claude     raw       1      0      1          0             0
+the-suite-was-run-before-there-was-code-to-pass-it  claude     plugin    1      1      0          0             0
+the-suite-was-run-before-there-was-code-to-pass-it  claude     driven    1      1      0          0             0
+the-suite-was-run-before-there-was-code-to-pass-it  codex      plugin    1      1      0          0             0
+the-test-came-before-the-code  claude     raw       1      0      1          0             0
+the-test-came-before-the-code  claude     plugin    1      1      0          0             0
+the-test-came-before-the-code  claude     driven    1      1      0          0             0
+the-test-came-before-the-code  codex      plugin    1      1      0          0             0
+turns-within-reason           claude     raw       1      1      0          0             0
+turns-within-reason           claude     plugin    1      1      0          0             0
+turns-within-reason           claude     driven    1      1      0          0             0
+turns-within-reason           codex      plugin    1      1      0          0             0
 
 what the runs that recorded it cost
 workflow                  harness    arm       cost                tokens              wall time

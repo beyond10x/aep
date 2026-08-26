@@ -67,6 +67,14 @@ struct Case {
     transcript: String,
     #[serde(default)]
     violated: Vec<Violation>,
+    /// Advisory rows this case expects to gap, and why.
+    ///
+    /// An advisory row judges whether the *evidence* is worth anything, not whether the run did
+    /// anything wrong — so a case whose only gap is advisory still `held`. Declared rather than
+    /// ignored: an advisory gap nobody pinned is one that can appear or vanish unnoticed, and
+    /// a declared one that stops gapping fails this test.
+    #[serde(default)]
+    advisory_gaps: Vec<Violation>,
 }
 
 /// What the case says the check must report.
@@ -279,6 +287,23 @@ fn every_case_replays_to_the_verdict_it_declares() {
         );
 
         let gapped = rows_with(&report, Verdict::Gap);
+        let declared_advisory: Vec<&str> = case
+            .advisory_gaps
+            .iter()
+            .map(|row| row.expectation.as_str())
+            .collect();
+        let blocking: Vec<&str> = gapped
+            .iter()
+            .copied()
+            .filter(|id| !declared_advisory.contains(id))
+            .collect();
+        for expected in &declared_advisory {
+            assert!(
+                gapped.contains(expected),
+                "{id}: declares an advisory gap for `{expected}` and it did not gap — a declared \
+                 observation that stopped happening is a change worth seeing\n{rendered}"
+            );
+        }
 
         match case.verdict {
             DeclaredVerdict::Held => {
@@ -287,7 +312,7 @@ fn every_case_replays_to_the_verdict_it_declares() {
                     "{id}: declares `verdict: held` and lists violations; it cannot say both"
                 );
                 assert_eq!(
-                    gapped,
+                    blocking,
                     Vec::<&str>::new(),
                     "{id}: declares `verdict: held` and contradicted these rows\n{rendered}"
                 );
@@ -314,7 +339,7 @@ fn every_case_replays_to_the_verdict_it_declares() {
                 // gapping is a fixture somebody repaired into agreement; a row that started is a
                 // bound that has begun catching something else.
                 assert_eq!(
-                    gapped, declared,
+                    blocking, declared,
                     "{id}: the rows this run contradicts are not the rows the case declares\n{rendered}"
                 );
 

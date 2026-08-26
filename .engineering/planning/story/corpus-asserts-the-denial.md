@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:corpus-asserts-the-denial
 kind: story
-status: active
+status: implemented
 title: A corpus row that asserts the refusal, not the absence
 summary: no-artifact-file-was-rewritten-whole now passes by construction on the scoped arm; add the sibling that fails when nothing was refused.
 owner: eval
@@ -11,7 +11,7 @@ tags:
 - trace
 relations:
 - decomposes: epic:self-evaluation
-revision: 3
+revision: 4
 ---
 # Story: a control that can still fail
 
@@ -37,49 +37,48 @@ identically. One of those runs demonstrated the harness; the other demonstrated 
 - It is written in the neutral vocabulary — operations and subjects — so it is not blind on any arm.
 - Both rows appear in the case's expectations, and the report distinguishes them in one reading.
 
-## Attempted 2026-08-26, reverted, and what it found
+## What landed, 2026-08-26
 
-The row was written — `the-scope-was-actually-tested`, advisory,
-`permission.denied: {at_least: 1}` — and it worked:
+`the-scope-was-actually-tested`, advisory, `permission.denied: {at_least: 1}`, in
+`development-honest/expectations.trace.yaml`. It gaps on every transcript in the corpus, **and that
+is the row working, not failing**: the acceptance asks for a sibling that *fails on a transcript
+where the scope was never tested*, and no transcript here has ever tested one.
 
-```console
-$ protocol trace check --spec …/expectations.trace.yaml --transcript …/transcript.jsonl
-eval-case/development-default — 11 ok, 1 gap, 0 unk
-  gap (adv) the-scope-was-actually-tested   permission_denials = 0, at least 1 at event 18
-exit 0
-```
+Two things had to be built first, and both were decisions rather than repairs.
 
-It was reverted, because landing it needs two decisions this story has not taken.
+**A case can now say `held, with an observation.`** The corpus had two verdicts — `held` means
+nothing gapped, `violated` means exactly these rows gapped — so an advisory row forced a run that did
+nothing wrong to declare itself violated. `advisory_gaps:` on a case is the third thing, pinned in
+**both** directions: an undeclared advisory gap fails, and a declared one that stops gapping fails
+too. An observation nobody pinned is one that can appear or vanish unnoticed.
 
-### Finding: no arm in this corpus has ever tested a scope
+**The matrix counts an advisory gap in its own column.** `eval.matrix/1` had `held` / `violated` /
+`unobservable`, and an advisory gap landed in `violated` — so every honest run would have published
+`violated: 1`. A fourth column, `advisory`, rather than excluding them: an observation nobody can see
+is one that stops being made. The column is omitted when zero, so a matrix written before it existed
+reads unchanged. The text table shows it too — a count in the JSON and not in the table people read
+is the same silence one step further along.
 
-Checked, not assumed. All five committed transcripts — `development-honest`,
-`development-tests-after-the-code`, `decomposer-charter`, `plan-reviewer-charter`,
-`release-progressive-honest` — carry `permission_denials: []`. So every guardrail row that asserts
-an *absence* has been passing by construction since the corpus existed, exactly as the context above
-suspected. That is now a measurement rather than a suspicion.
+    workflow      harness  arm     runs  held  violated  unobservable  advisory
+    adp/default   claude   raw     1     9     2         0             1
+    adp/default   claude   plugin  1     11    0         0             1
 
-### Blocker 1: an advisory gap has nowhere to live
+The `raw` arm still shows its two real violations. The honest arms no longer show any.
 
-A case declares `verdict: held` or `verdict: violated`, and `held` means *nothing gapped*. An
-advisory row that gaps forces an honest run to declare itself `violated`, which mislabels it. A
-prototype `advisory_gaps:` field on the case — pinned in both directions, so a declared observation
-that stops happening still fails — makes the corpus able to say *held, with an observation*, and is
-the shape this needs.
+## The finding this produced
 
-### Blocker 2: the matrix counts an advisory gap as a violation
+**No arm in this corpus has ever tested a scope.** Checked, not assumed: all five committed
+transcripts — `development-honest`, `development-tests-after-the-code`, `decomposer-charter`,
+`plan-reviewer-charter`, `release-progressive-honest` — carry `permission_denials: []`. Every
+guardrail row asserting an absence has been passing by construction since the corpus existed, and
+the report said nothing. It says so now, on every run.
 
-`eval.matrix/1` is asserted byte-for-byte, and its per-run columns are `held` / `violated` /
-`unobservable`. An advisory gap lands in `violated`, so every honest run would read `violated: 1` in
-the published matrix. Fixing that means either a fourth column or excluding advisory rows from the
-count — a change to a published shape, and a decision rather than a repair.
+## What a deliberate-denial arm would add
 
-### Blocker 3, the real one
-
-Even with both fixed, the row can only ever report *the scope was never tested* until a
-**deliberate-denial arm** exists: a run that reaches for something the toolset refuses. That is a
-paid run against a real harness and it needs a person to start it. Inventing a transcript would be
-asserting precisely what `conformance/eval/README.md` warns against.
+A transcript where the row **passes** — where the guardrail rows above it decided something rather
+than being decorations. That needs a paid run against a real harness. It is what turns this row from
+*the evidence is worth nothing* into *the evidence is worth something*, and it is not needed for the
+row to do its job: reporting the first honestly is the job.
 
 ## Out of Scope
 

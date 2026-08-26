@@ -55,3 +55,13 @@ task: |
 
 expectations: expectations.trace.yaml
 transcript: transcript.jsonl
+
+# The run did nothing wrong; what gaps is an observation about the evidence, not about the run.
+advisory_gaps:
+  - expectation: the-scope-was-actually-tested
+    why: >-
+      This transcript carries `permission_denials: []`, as every transcript in this corpus does, so the
+      guardrail rows above it were never given anything to refuse. Closing
+      `story:corpus-asserts-the-denial` needs a deliberate-denial arm — a run that reaches for
+      something the toolset refuses — and until one exists this row reports, honestly, that those
+      rows are decorations.

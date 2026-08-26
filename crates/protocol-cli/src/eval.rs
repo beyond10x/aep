@@ -161,6 +161,14 @@ enum Outcome {
     Violated,
     /// The record could not decide it — or recorded no verdict at all.
     Unobservable,
+    /// An **advisory** row contradicted it.
+    ///
+    /// Its own column, and this is the decision: an advisory row judges whether the *evidence* is
+    /// worth anything, not whether the run did anything wrong. Counting one in `violated` would
+    /// publish `violated: 1` against a run that behaved perfectly, and a matrix that mislabels good
+    /// runs is one nobody trusts about bad ones. Dropping it instead would be worse — an
+    /// observation nobody can see is one that stops being made.
+    Advisory,
 }
 
 /// The three counts, which is all a cell of the matrix ever holds.
@@ -172,6 +180,15 @@ struct Counts {
     violated: usize,
     /// How many nobody could find out.
     unobservable: usize,
+    /// How many advisory rows were contradicted. Observations, not violations.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    advisory: usize,
+}
+
+/// Whether a count is zero, so a matrix written before advisory rows existed reads unchanged.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero(count: &usize) -> bool {
+    *count == 0
 }
 
 impl Counts {
@@ -181,6 +198,7 @@ impl Counts {
             Outcome::Held => self.held += 1,
             Outcome::Violated => self.violated += 1,
             Outcome::Unobservable => self.unobservable += 1,
+            Outcome::Advisory => self.advisory += 1,
         }
     }
 
@@ -189,6 +207,7 @@ impl Counts {
         self.held += other.held;
         self.violated += other.violated;
         self.unobservable += other.unobservable;
+        self.advisory += other.advisory;
     }
 }
 
@@ -735,6 +754,9 @@ struct RawRecord {
 struct RawRow {
     /// The id the specification gave it.
     id: Option<String>,
+    /// `advisory` or `gate`, as the checker wrote it. Absent reads as a gate row, which is the safe
+    /// default: a row whose severity nobody stated is one whose contradiction should be seen.
+    severity: Option<String>,
     /// The verdict after the expectation's own `on_unknown` policy — the same value the report's
     /// summary counts and its exit code is derived from.
     verdict: Option<String>,
@@ -771,7 +793,7 @@ impl TryFrom<RawRecord> for Record {
                 refusals.push(Refusal::RowWithoutId { position });
                 continue;
             };
-            match outcome_of(row.verdict.as_deref()) {
+            match outcome_of(row.verdict.as_deref(), row.severity.as_deref()) {
                 Ok(outcome) => rows.push((id, outcome)),
                 Err(written) => refusals.push(Refusal::VerdictUnknown { id, written }),
             }
@@ -797,9 +819,13 @@ impl TryFrom<RawRecord> for Record {
 /// matrix that counted silence as a pass would be the one number this programme refuses to produce.
 /// A word this build cannot read is refused instead of bucketed, because *the checker said
 /// something new* and *nobody found out* are different facts.
-fn outcome_of(verdict: Option<&str>) -> Result<Outcome, String> {
+fn outcome_of(verdict: Option<&str>, severity: Option<&str>) -> Result<Outcome, String> {
     match verdict {
         Some("ok") => Ok(Outcome::Held),
+        // An advisory row's gap is an observation about the evidence, not a contradiction by the
+        // run. Absent severity reads as a gate row: a row whose severity nobody stated is one whose
+        // contradiction should be seen.
+        Some("gap") if severity == Some("advisory") => Ok(Outcome::Advisory),
         Some("gap") => Ok(Outcome::Violated),
         // The checker's own third verdict, and the absence of any verdict at all, are the same
         // answer here: nothing was established. Written as one arm because they *are* one answer —
@@ -1351,6 +1377,7 @@ fn to_text(matrix: &Matrix) -> String {
         ("held", 5),
         ("violated", 9),
         ("unobservable", 12),
+        ("advisory", 9),
     ]));
     for cell in &matrix.cells {
         lines.push(row(&[
@@ -1361,6 +1388,7 @@ fn to_text(matrix: &Matrix) -> String {
             (&cell.counts.held.to_string(), 5),
             (&cell.counts.violated.to_string(), 9),
             (&cell.counts.unobservable.to_string(), 12),
+            (&cell.counts.advisory.to_string(), 9),
         ]));
     }
 
@@ -1373,6 +1401,7 @@ fn to_text(matrix: &Matrix) -> String {
         ("held", 5),
         ("violated", 9),
         ("unobservable", 12),
+        ("advisory", 9),
     ]));
     for expectation in &matrix.expectations {
         lines.push(row(&[
@@ -1383,6 +1412,7 @@ fn to_text(matrix: &Matrix) -> String {
             (&expectation.counts.held.to_string(), 5),
             (&expectation.counts.violated.to_string(), 9),
             (&expectation.counts.unobservable.to_string(), 12),
+            (&expectation.counts.advisory.to_string(), 9),
         ]));
     }
 

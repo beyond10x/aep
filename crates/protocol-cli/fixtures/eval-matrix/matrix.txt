@@ -1,44 +1,44 @@
 eval.matrix/1 — 7 run(s), 1 specification(s), 6 cell(s)
 
-workflow                  harness    arm       runs   held   violated   unobservable
-adp/default               claude     raw       1      3      2          0
-adp/default               claude     plugin    1      5      0          0
-adp/default               claude     driven    2      6      4          0
-adp/default               codex      raw       1      2      2          1
-adp/default               codex      plugin    1      3      1          1
-adp/default               codex      driven    1      4      0          1
+workflow                  harness    arm       runs   held   violated   unobservable  advisory
+adp/default               claude     raw       1      3      2          0             0
+adp/default               claude     plugin    1      5      0          0             0
+adp/default               claude     driven    2      6      4          0             0
+adp/default               codex      raw       1      2      2          1             0
+adp/default               codex      plugin    1      3      1          1             0
+adp/default               codex      driven    1      4      0          1             0
 
-expectation                   harness    arm       runs   held   violated   unobservable
-created-through-the-cli       claude     raw       1      0      1          0
-created-through-the-cli       claude     plugin    1      1      0          0
-created-through-the-cli       claude     driven    2      1      1          0
-created-through-the-cli       codex      raw       1      0      1          0
-created-through-the-cli       codex      plugin    1      1      0          0
-created-through-the-cli       codex      driven    1      1      0          0
-nothing-was-refused           claude     raw       1      1      0          0
-nothing-was-refused           claude     plugin    1      1      0          0
-nothing-was-refused           claude     driven    2      0      2          0
-nothing-was-refused           codex      raw       1      1      0          0
-nothing-was-refused           codex      plugin    1      1      0          0
-nothing-was-refused           codex      driven    1      1      0          0
-terminal-record-clean         claude     raw       1      1      0          0
-terminal-record-clean         claude     plugin    1      1      0          0
-terminal-record-clean         claude     driven    2      2      0          0
-terminal-record-clean         codex      raw       1      1      0          0
-terminal-record-clean         codex      plugin    1      1      0          0
-terminal-record-clean         codex      driven    1      1      0          0
-thinking-estimate-recorded    claude     raw       1      1      0          0
-thinking-estimate-recorded    claude     plugin    1      1      0          0
-thinking-estimate-recorded    claude     driven    2      2      0          0
-thinking-estimate-recorded    codex      raw       1      0      0          1
-thinking-estimate-recorded    codex      plugin    1      0      0          1
-thinking-estimate-recorded    codex      driven    1      0      0          1
-validated-its-own-work        claude     raw       1      0      1          0
-validated-its-own-work        claude     plugin    1      1      0          0
-validated-its-own-work        claude     driven    2      1      1          0
-validated-its-own-work        codex      raw       1      0      1          0
-validated-its-own-work        codex      plugin    1      0      1          0
-validated-its-own-work        codex      driven    1      1      0          0
+expectation                   harness    arm       runs   held   violated   unobservable  advisory
+created-through-the-cli       claude     raw       1      0      1          0             0
+created-through-the-cli       claude     plugin    1      1      0          0             0
+created-through-the-cli       claude     driven    2      1      1          0             0
+created-through-the-cli       codex      raw       1      0      1          0             0
+created-through-the-cli       codex      plugin    1      1      0          0             0
+created-through-the-cli       codex      driven    1      1      0          0             0
+nothing-was-refused           claude     raw       1      1      0          0             0
+nothing-was-refused           claude     plugin    1      1      0          0             0
+nothing-was-refused           claude     driven    2      0      2          0             0
+nothing-was-refused           codex      raw       1      1      0          0             0
+nothing-was-refused           codex      plugin    1      1      0          0             0
+nothing-was-refused           codex      driven    1      1      0          0             0
+terminal-record-clean         claude     raw       1      1      0          0             0
+terminal-record-clean         claude     plugin    1      1      0          0             0
+terminal-record-clean         claude     driven    2      2      0          0             0
+terminal-record-clean         codex      raw       1      1      0          0             0
+terminal-record-clean         codex      plugin    1      1      0          0             0
+terminal-record-clean         codex      driven    1      1      0          0             0
+thinking-estimate-recorded    claude     raw       1      1      0          0             0
+thinking-estimate-recorded    claude     plugin    1      1      0          0             0
+thinking-estimate-recorded    claude     driven    2      2      0          0             0
+thinking-estimate-recorded    codex      raw       1      0      0          1             0
+thinking-estimate-recorded    codex      plugin    1      0      0          1             0
+thinking-estimate-recorded    codex      driven    1      0      0          1             0
+validated-its-own-work        claude     raw       1      0      1          0             0
+validated-its-own-work        claude     plugin    1      1      0          0             0
+validated-its-own-work        claude     driven    2      1      1          0             0
+validated-its-own-work        codex      raw       1      0      1          0             0
+validated-its-own-work        codex      plugin    1      0      1          0             0
+validated-its-own-work        codex      driven    1      1      0          0             0
 
 what the runs that recorded it cost
 workflow                  harness    arm       cost                tokens              wall time
