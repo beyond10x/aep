@@ -62,7 +62,7 @@ fixed here**, and the ones that were false claims are named rather than quietly 
   be uneditable — could be edited after the fact. It also declared `expected_revision` and never
   enforced it, silently dropping a caller's assertion about what it had read.
 
-* **A relation was journalled as `body_replaced`**, a repeated `--relate` bumped a new artifact to
+* **A relation was journalled as `Change::BodyReplaced`**, a repeated `--relate` bumped a new artifact to
   revision 3, and a replayed command re-wrote the file — three defects compounding, all from the
   same place: the no-op guard ran after the revision had already been incremented, so it was dead.
 
