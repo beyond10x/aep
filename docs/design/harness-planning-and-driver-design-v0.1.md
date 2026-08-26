@@ -289,7 +289,7 @@ document.
 Numbered, because these are decisions and not oversights, and because the honest list is short
 enough to read. Each says what is deviated from, why the deviation is taken now, and what closes it.
 
-**D-P1 — the CLI writes through the store, not through `CommandService`.**
+**D-P1 — the CLI writes through the store, not through `CommandService`. CLOSED 2026-08-26 (0.27.0).**
 Invariant 14 says every mutation is a command, and there is exactly one write path. The
 `protocol artifact` verbs do not construct a `CommandEnvelope`; they call the store crate directly.
 This is a real deviation and it is taken for one wave. The mitigation is structural rather than
@@ -323,7 +323,7 @@ Invariant 16 says nothing is physically deleted, and the CLI keeps that line: th
 artifacts are files, and `rm` is a program. This is inherent to a file store and is not closed by
 anything at this layer; it is closed, to the extent it can be, by the files being in git.
 
-**D-P5 — `describe_type` still reports no lifecycle.**
+**D-P5 — `describe_type` still reports no lifecycle. STILL OPEN**, and an acceptance line in `story:journal-backed-store` claimed otherwise until a review caught it on 2026-08-26.
 `QueryService::describe_type` (`crates/aep-contract/src/query.rs:345`) exists so a harness can ask
 what a design *is* rather than hard-coding it, and `TypeDescriptor` has a `lifecycle` field. The
 in-memory backend never populates it (`crates/aep-backend-memory/src/query.rs:189`), so a harness

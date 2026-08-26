@@ -212,8 +212,10 @@ observation; this workspace reads the file, refuses it or compiles it.
 
 The compact list; [Limitations](./limitations.md) carries the consequences of each.
 
-* No durable implementation of the AEP storage contract — the markdown planning store is durable but
-  does not go through the contract, so the 16 conformance suites do not run against it.
+* `describe_type` reports no lifecycle, so a harness cannot ask what a kind's ladder is (**D-P5**).
+* `protocol conformance` runs only against the in-memory backend. The markdown and SQLite backends
+  pass the sixteen suites — in Rust tests, each with a faulty-backend guard — but not from the
+  command line.
 * No out-of-process conformance runner, on either side.
 * No behavioural synthesis — every algorithm is an obligation, by design.
 * No attested evidence — `independent: true` is structural, not cryptographic.

@@ -341,14 +341,28 @@ implementor — [`aep-backend-memory`](../../crates/aep-backend-memory/) — and
 suites runs against that and nothing else. A backend that survives a process exit has never been held
 to them.
 
-A durable store does exist, and it is not that. [`aep-backend-markdown`](../../crates/aep-backend-markdown/)
-keeps planning artifacts as markdown files under `.engineering/planning/`, one artifact per file, and
-this repository plans its own work in it. It writes through its own two functions rather than through
-`CommandService` — a second write path, recorded as deviation **D-P1** against invariant 14 rather
-than left to be discovered — so it implements neither trait and the suites cannot be pointed at it.
-What changes that is `story:journal-backed-store` ("P3: the markdown store writes through
-`CommandService`") under `epic:planning-store-as-backend`, both in `.engineering/planning/`. Until
-then, "there is a durable backend" is a claim the suites do not support.
+Two durable backends exist, and both implement the contract.
+[`aep-backend-markdown`](../../crates/aep-backend-markdown/) keeps planning artifacts as markdown
+files under `.engineering/planning/`, one artifact per file, and this repository plans its own work
+in it. [`aep-backend-sqlite`](../../crates/aep-backend-sqlite/) keeps whatever the contract holds in
+one file, with no server.
+
+The sixteen suites run against both, and each crate also runs them against a **deliberately faulty**
+version of itself — a suite that has never failed is not evidence that it can.
+
+**Neither reimplements the contract.** Each hands every command to `aep-backend-memory` and adds
+durability around it. Idempotency, revision conflicts, "a refusal still leaves an audit record",
+"nothing is ever physically deleted": each is a decision whose wrong version looks right, and two
+implementations of them drift in exactly the ways a suite run months apart discovers.
+
+Deviation **D-P1** — the CLI writing through the store rather than through `CommandService` — is
+**closed** (0.27.0). It stayed open because the vocabulary was missing two words: a planning store's
+ladders are data with an open status vocabulary, and an evidence record is the input to the
+evidence-gated move. `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
+
+What is still true: `protocol conformance` runs only against the in-memory backend, so a durable
+store's conformance is shown by a Rust test rather than from the command line
+(`story:conformance-verb-takes-a-backend`).
 
 ## The reference to diff against
 

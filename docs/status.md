@@ -210,7 +210,9 @@ not conformant: the implementation contradicted the specification (exit 1)
 
 ## What does not work yet
 
-No durable backend — the only implementation is in memory. Generated code is structural, never
+`describe_type` reports no lifecycle (**D-P5**), and `protocol conformance` runs only against the
+in-memory backend — a durable store's conformance is shown by a Rust test rather than from the
+command line. Generated code is structural, never
 behavioural: a specification synthesises types, typestate lifecycles, ports, transports and a plan,
 and every algorithm remains a typed obligation someone still has to implement — and an obligation is
 a plan entry, not yet an artifact a task can own (W7.4, deferred by decision). The delta still has a fail-closed arm: conversions,

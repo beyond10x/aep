@@ -31,19 +31,30 @@ class, and that acceptance is the operator's to make.
 
 ## Storage
 
-**There is a durable store, and it is not an implementation of the contract.** Planning artifacts
-live as markdown under `.engineering/planning/` and survive a restart — this repository's own plan is
-101 of them. But `aep-backend-markdown` writes through its own `create`/`update` rather than through
-`CommandService`, so the 16 `aep-conformance` suites do not run against it, and it has no audit join.
+**Two durable backends implement the contract, as of `0.27.0`.** Planning artifacts live as markdown
+under `.engineering/planning/` and survive a restart — this repository's own plan is 101 of them —
+and `aep-backend-sqlite` keeps whatever the contract holds in one file with no server. The 16
+`aep-conformance` suites run against both, and each crate also runs them against a **deliberately
+faulty** version of itself, because a suite that has never failed is not evidence that it can.
 
-Since `0.19.0` it *does* have a journal and a history: every write appends a line of JSONL and
-`protocol artifact history <id>` reads it back. That closes the gap for a person reading a plan and
-leaves the contract gap exactly where it was — the journal is the markdown store's own, not the
-contract's, so it is not a step toward the 16 suites running.
+Neither reimplements the contract: each hands every command to the in-memory reference backend and
+adds durability. Idempotency, revision conflicts and the audit a refusal still leaves are decided in
+one place rather than two that drift.
 
-*Consequence:* "there is a durable backend" is not yet a claim you can lean on. The only
-implementation of the AEP storage contract is still in memory, and it forgets entities, audit trails
-and histories when the process exits.
+Deviation **D-P1** — the CLI writing through the store rather than through `CommandService` — is
+closed. It stayed open because the vocabulary was missing two words: a planning store's ladders are
+data with an open status vocabulary, and an evidence record is the input to the evidence-gated move.
+`aep.status.move/v1` and `aep.evidence.record/v1` are those words.
+
+*What is still limited:* `protocol conformance` runs only against the in-memory backend, so a durable
+store's conformance is shown by a Rust test rather than from the command line. And `describe_type`
+still reports no lifecycle (**D-P5**), so a harness cannot ask the contract which statuses a story
+may hold — it has to read the lifecycle document itself.
+
+**Hydration is deferred, and `aep-backend-sqlite` refuses rather than guesses.** It does not read a
+database back on open, so a second run against a populated file would mint identities from a fresh
+counter and overwrite what is there. It refuses a row it did not write, by name. Deferring hydration
+is a decision (`P5`); destroying data is not, and the refusal is what keeps the two apart.
 
 The `entity-core` dependency does not change this and cannot: that kernel performs no IO of any kind
 — no filesystem, no clock, no network, asserted by a scan over its own sources — so it stores

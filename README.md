@@ -119,9 +119,10 @@ itself in; an agent transcript judged against a typed specification; a
 that walks a workflow rather than being steered along one, deciding each tool call in Rust
 (`decide_tool` in `crates/protocol-cli/src/drive.rs`) rather than in a hook script.
 
-Not working yet, stated plainly: no durable backend implements the storage contract — the markdown
-store holds files but writes through its own functions, so the contract still has one implementor
-and it is in memory; generated code is structural, never behavioural — every algorithm
+Not working yet, stated plainly: `describe_type` reports no lifecycle, so a harness still cannot ask
+what a kind's ladder is (**D-P5**); `protocol conformance` runs only against the in-memory backend,
+so a durable store's conformance is shown by a Rust test rather than from the command line;
+generated code is structural, never behavioural — every algorithm
 remains a typed obligation; the conformance runner cannot reach an out-of-process implementation —
 holding your own system to a specification means depending on `ess-conformance` from your own tests;
 `independent: true` is self-declared, with no signature or attestation binding a verifier to its

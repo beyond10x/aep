@@ -11,6 +11,40 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.27.2] — 2026-08-26
+
+**Six documents were still describing a deviation that closed in 0.27.0.** Cutting a release does
+not update the prose that describes what it changed, and this repository's own rule is that a claim
+the code does not support is not made. These were making one.
+
+### Changed
+
+* **`README.md`, `docs/status.md` and `where-this-stands.md`** said *"no durable backend implements
+  the storage contract — the contract still has one implementor and it is in memory"*. It has three,
+  and the sixteen suites run against all of them.
+
+* **`docs/guide/backend.md`** told an adopter writing their own backend that `aep-backend-markdown`
+  *"implements neither trait and the suites cannot be pointed at it"* — the page whose whole job is
+  to explain what implementing the contract means. It now says what the two durable backends do,
+  including that neither reimplements the contract: each hands every command to the in-memory
+  reference and adds durability, so idempotency, revision conflicts and the audit a refusal leaves
+  are decided once rather than twice.
+
+* **`website/docs/status/limitations.md`** carried the old storage limitation. It now carries the
+  two that are real — `protocol conformance` runs only in-memory, and `describe_type` reports no
+  lifecycle — plus one that was not written down anywhere: **`aep-backend-sqlite` does not hydrate
+  on open and refuses a row it did not write**, because deferring hydration is a decision and
+  destroying data is not.
+
+* **`harness-planning-and-driver-design-v0.1.md`** marks **D-P1 closed** and **D-P5 still open** —
+  the latter noted with the fact that an acceptance line claimed it closed until a review caught it.
+
+### Fixed
+
+* Nothing in the code. Everything here is prose that had stopped being true, and it is listed rather
+  than quietly corrected because *when* a document stopped matching the code is the part that tells
+  you how it happened.
+
 ## [0.27.1] — 2026-08-26
 
 ### Fixed
