@@ -140,6 +140,11 @@ fn assemble(root: &Path) -> Result<(Assembly, Vec<String>)> {
                 tree: Some(tree), ..
             } => roots.push((member.name.clone(), tree.join(&member.store))),
             Resolved { name, detail, .. } => {
+                // Dropped from `roots`, but **not** from the answer. A member that could not be
+                // resolved is carried out of here so every verb can say the answer is partial —
+                // an assembly that quietly answered from two members when it was asked about three
+                // gives a smaller answer that looks exactly like a complete one, which is the one
+                // thing this layer must never do.
                 unresolved.push(format!(
                     "{name}: {}",
                     detail.unwrap_or_else(|| "unresolved".to_owned())
@@ -218,6 +223,10 @@ fn crossings(root: &Path, strict: bool, format: Format) -> Result<ExitCode> {
     let (assembly, unresolved) = assemble(root)?;
     let crossings = assembly.crossing_relations();
     let unresolved_count = crossings.iter().filter(|c| !c.is_resolved()).count();
+    // The cycle that only exists once two members are read together. Each member validates cleanly
+    // alone — the loop is made of edges that are crossings on both sides — so this is the only
+    // place it can be found, and until it was, nothing looked.
+    let cycles = assembly.cycles();
 
     match format {
         Format::Text => {
@@ -231,9 +240,13 @@ fn crossings(root: &Path, strict: bool, format: Format) -> Result<ExitCode> {
                     crossing.resolution
                 );
             }
+            for cycle in &cycles {
+                println!("cycle: {cycle}");
+            }
             println!(
-                "{} crossing relation(s), {unresolved_count} unresolved",
-                crossings.len()
+                "{} crossing relation(s), {unresolved_count} unresolved, {} cycle(s)",
+                crossings.len(),
+                cycles.len()
             );
             report_unresolved(&unresolved);
         }
@@ -249,11 +262,17 @@ fn crossings(root: &Path, strict: bool, format: Format) -> Result<ExitCode> {
                 })).collect::<Vec<_>>(),
                 "unresolved": unresolved_count,
                 "members_not_read": unresolved,
+                "cycles": cycles.iter().map(|cycle| json!({
+                    "relation": cycle.kind,
+                    "path": cycle.path,
+                })).collect::<Vec<_>>(),
             }),
         )?,
     }
 
-    Ok(if strict && unresolved_count > 0 {
+    // A cycle fails whatever `--strict` says. `--strict` is about *unresolved* members, which is a
+    // fact about this checkout; a cycle is a fact about the plan, and it is wrong on every machine.
+    Ok(if !cycles.is_empty() || (strict && unresolved_count > 0) {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
@@ -269,7 +288,7 @@ fn show(root: &Path, reference: &str, format: Format) -> Result<ExitCode> {
     let parsed = WorkspaceRef::parse(reference)
         .map_err(|error| anyhow::anyhow!("{error}"))
         .with_context(|| format!("reading the reference `{reference}`"))?;
-    let (assembly, _) = assemble(root)?;
+    let (assembly, unresolved) = assemble(root)?;
     let resolution = assembly.resolve(&parsed);
 
     let (code, payload) = match &resolution {
@@ -300,9 +319,17 @@ fn show(root: &Path, reference: &str, format: Format) -> Result<ExitCode> {
                     .collect::<Vec<_>>(),
             }),
         ),
+        // "No member holds it" and "no member that could hold it was read" are different facts,
+        // and answering the first when the second is true reports a fact about this checkout as a
+        // fact about the plan — the same absent/unreachable conflation the store layer spends a
+        // whole crate refusing.
         Resolution::Absent => (
             ExitCode::FAILURE,
-            json!({ "reference": parsed.to_string(), "absent": true }),
+            json!({
+                "reference": parsed.to_string(),
+                "absent": true,
+                "members_not_read": unresolved,
+            }),
         ),
     };
 
@@ -320,9 +347,19 @@ fn show(root: &Path, reference: &str, format: Format) -> Result<ExitCode> {
                     println!("  {member}/{}", parsed.artifact);
                 }
             }
-            Resolution::Absent => println!("{parsed} is held by no member of this workspace"),
+            Resolution::Absent => {
+                println!("{parsed} is held by no member of this workspace that could be read");
+                if let Some(member) = parsed.member.as_ref() {
+                    println!("  the reference names member `{member}`");
+                }
+            }
         },
         Format::Yaml | Format::Json => render(format, &payload)?,
+    }
+    if matches!(resolution, Resolution::Absent | Resolution::Ambiguous(_))
+        && matches!(format, Format::Text)
+    {
+        report_unresolved(&unresolved);
     }
     Ok(code)
 }

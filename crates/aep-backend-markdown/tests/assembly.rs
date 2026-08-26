@@ -241,3 +241,75 @@ fn a_relation_that_stays_inside_its_member_is_not_a_crossing() {
         "an unqualified relation means this member, and needs no workspace to check"
     );
 }
+
+#[test]
+fn a_cycle_that_only_exists_once_two_members_are_read_together_is_found() {
+    // The case nothing looked for. Each member validates cleanly on its own: `one/story:alpha
+    // blocks two/story:beta` is a crossing, and so is the edge back. The loop exists only in the
+    // combined graph, and `crossing_relations` resolves each edge without ever asking what shape
+    // they make together.
+    let root = scratch("cross-member-cycle");
+    let one = root.join("one");
+    let two = root.join("two");
+    std::fs::create_dir_all(&one).expect("member one");
+    std::fs::create_dir_all(&two).expect("member two");
+
+    write_with_relation(&one, "story:alpha", "Alpha", "blocks", "two/story:beta");
+    write_with_relation(&two, "story:beta", "Beta", "blocks", "one/story:alpha");
+
+    let assembly = Assembly::read([
+        (MemberName::parse("one").expect("a name"), one.as_path()),
+        (MemberName::parse("two").expect("a name"), two.as_path()),
+    ]);
+
+    let cycles = assembly.cycles();
+    assert_eq!(cycles.len(), 1, "one cycle, in `blocks`: {cycles:?}");
+    assert_eq!(cycles[0].kind, "blocks");
+    assert!(
+        cycles[0].path.len() >= 3,
+        "the path names the loop: {:?}",
+        cycles[0].path
+    );
+    assert_eq!(
+        cycles[0].path.first(),
+        cycles[0].path.last(),
+        "and reads as a cycle: {:?}",
+        cycles[0].path
+    );
+}
+
+#[test]
+fn an_unresolved_crossing_contributes_no_edge_and_so_no_cycle() {
+    // A cycle that depends on which repositories happen to be checked out on this machine is not a
+    // fact about the plan. An edge nobody can resolve is not known to close a loop.
+    let root = scratch("unresolved-no-cycle");
+    let one = root.join("one");
+    std::fs::create_dir_all(&one).expect("member one");
+    write_with_relation(&one, "story:alpha", "Alpha", "blocks", "two/story:beta");
+
+    let assembly = Assembly::read([(MemberName::parse("one").expect("a name"), one.as_path())]);
+    assert!(
+        assembly.cycles().is_empty(),
+        "the far end was never read, so nothing is claimed about it"
+    );
+}
+
+#[test]
+fn a_cycle_inside_one_member_is_found_through_the_assembly_too() {
+    // The regression the workspace change introduced: any `member/` prefix used to disable cycle
+    // detection, so the same loop passed or failed depending only on how it was spelled.
+    let root = scratch("same-member-cycle");
+    let one = root.join("one");
+    std::fs::create_dir_all(&one).expect("member one");
+    write_with_relation(&one, "story:alpha", "Alpha", "depends_on", "one/story:beta");
+    write_with_relation(&one, "story:beta", "Beta", "depends_on", "one/story:alpha");
+
+    let assembly = Assembly::read([(MemberName::parse("one").expect("a name"), one.as_path())]);
+    let cycles = assembly.cycles();
+    assert_eq!(
+        cycles.len(),
+        1,
+        "spelled with its own member, it still cycles: {cycles:?}"
+    );
+    assert_eq!(cycles[0].kind, "depends_on");
+}

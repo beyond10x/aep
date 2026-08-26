@@ -86,9 +86,30 @@ impl StoreArgs {
     fn lifecycles(&self) -> Result<aep_engine::Registry> {
         self.location.lifecycles()
     }
+
+    /// The repository the store sits in.
+    fn repository_root(&self) -> PathBuf {
+        self.location.repository_root()
+    }
 }
 
 impl StoreLocation {
+    /// The repository the store sits in, so a workspace beside it can be found.
+    ///
+    /// `<repo>/.engineering/planning` is the store, so the repository is two directories up. An
+    /// explicit `--store` somewhere else answers the same way, which is what lets one repository's
+    /// verbs validate another's store.
+    fn repository_root(&self) -> PathBuf {
+        self.store.as_ref().map_or_else(
+            || PathBuf::from("."),
+            |path| {
+                path.parent()
+                    .and_then(std::path::Path::parent)
+                    .map_or_else(|| PathBuf::from("."), std::path::Path::to_path_buf)
+            },
+        )
+    }
+
     /// The planning store, from `--store` or from the project this was run in.
     fn store(&self) -> Result<MarkdownStore> {
         if let Some(path) = &self.store {
@@ -397,6 +418,27 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
     }
 }
 
+/// The members the workspace beside this store declares, if there is one.
+///
+/// A store with no workspace file declares no members, so every member-qualified target is a
+/// dangling edge — which is what makes a misspelled member name a defect rather than a crossing
+/// nobody can check.
+fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
+    let path = root.join(aep_engine::project::project_directory());
+    aep_engine::project::load_workspace(&path).map_or_else(
+        |_| Vec::new(),
+        |workspace| {
+            workspace.map_or_else(Vec::new, |workspace| {
+                workspace
+                    .members
+                    .iter()
+                    .map(|member| member.name.clone())
+                    .collect()
+            })
+        },
+    )
+}
+
 /// The artifact graph a planning store describes, for the entity surface to seed from.
 ///
 /// Refuses an unreadable store rather than seeding a partial one: an entity surface answering
@@ -405,8 +447,12 @@ pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
     let store = MarkdownStore::open(root);
     let report = store.load();
     require_clean(&store, &report)?;
+    let repository = root
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or(Path::new("."));
     report
-        .graph()
+        .graph_in_workspace(declared_members(repository))
         .map_err(|errors| anyhow::anyhow!("{errors}"))
         .with_context(|| format!("reading the planning store at {}", root.display()))
 }
@@ -603,7 +649,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<Ex
 
     // Checked before it is written, not after: a cycle is only visible from the whole graph, and a
     // store that has to be repaired by hand after an edge went in is a store people stop using.
-    if let Err(errors) = report.graph() {
+    if let Err(errors) = report.graph_in_workspace(declared_members(&args.repository_root())) {
         outln!("`{id} {relation} {target}` would not build a graph:");
         for error in errors.as_slice() {
             outln!("  - {error}");
@@ -770,7 +816,7 @@ fn graph(args: &StoreLocation, format: PlanningGraphFormat) -> Result<ExitCode> 
     let report = store.load();
     warn_unclean(&report);
 
-    let graph = match report.graph() {
+    let graph = match report.graph_in_workspace(declared_members(&args.repository_root())) {
         Ok(graph) => graph,
         Err(errors) => {
             outln!("the plan does not build a graph:");
@@ -824,7 +870,7 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
     let registry = args.lifecycles()?;
 
     let mut problems: Vec<String> = report.failures.iter().map(ToString::to_string).collect();
-    match report.graph() {
+    match report.graph_in_workspace(declared_members(&args.repository_root())) {
         Ok(graph) => problems.extend(
             graph
                 .validate_lifecycles(registry.lifecycles())

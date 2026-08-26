@@ -187,6 +187,66 @@ impl Assembly {
         crossings
     }
 
+    /// Cycles in the combined graph, one per relation kind that has one.
+    ///
+    /// # The one this exists for
+    ///
+    /// A cycle that only exists once two members are read together. Each member validates cleanly
+    /// on its own — `one/story:alpha blocks two/story:beta` is a crossing, and so is
+    /// `two/story:beta blocks one/story:alpha` — and the loop appears only here. Nothing else in
+    /// the workspace path looks for it: `crossing_relations` resolves each edge and asks nothing
+    /// about the shape they make together.
+    ///
+    /// An unresolved crossing contributes no edge. It is not known to close a loop, and guessing
+    /// that it does would report a cycle that depends on which repositories happen to be checked
+    /// out on this machine.
+    #[must_use]
+    pub fn cycles(&self) -> Vec<AssemblyCycle> {
+        // Every artifact, addressed the one way that is unique across members.
+        let mut edges: BTreeMap<String, BTreeMap<String, BTreeSet<String>>> = BTreeMap::new();
+        let mut nodes: BTreeSet<String> = BTreeSet::new();
+
+        for (member, id, document) in self.documents() {
+            let from = format!("{member}/{id}");
+            nodes.insert(from.clone());
+            for relation in &document.document.frontmatter.relations {
+                let target = relation.target.id();
+                let to = if let Some(other) = target.member() {
+                    // A crossing: only counted when it actually resolves somewhere.
+                    let Ok(reference) = WorkspaceRef::parse(target.to_string()) else {
+                        continue;
+                    };
+                    let _ = other;
+                    if let Resolution::Unique(holder) = self.resolve(&reference) {
+                        format!("{holder}/{}", reference.artifact)
+                    } else {
+                        continue;
+                    }
+                } else {
+                    format!("{member}/{target}")
+                };
+                nodes.insert(to.clone());
+                edges
+                    .entry(relation.kind.to_string())
+                    .or_default()
+                    .entry(from.clone())
+                    .or_default()
+                    .insert(to);
+            }
+        }
+
+        let mut found = Vec::new();
+        for (kind, by_source) in &edges {
+            if let Some(path) = first_cycle(&nodes, by_source) {
+                found.push(AssemblyCycle {
+                    kind: kind.clone(),
+                    path,
+                });
+            }
+        }
+        found
+    }
+
     /// How many artifacts the workspace holds in total.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -224,4 +284,76 @@ impl CrossingRelation {
     pub fn is_resolved(&self) -> bool {
         matches!(self.resolution, Resolution::Unique(_))
     }
+}
+
+/// A cycle found in the combined graph, and the relation kind it is made of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssemblyCycle {
+    /// Which relation cycles: `blocks`, `depends_on`, and the rest of the vocabulary.
+    pub kind: String,
+    /// The loop, `member/id` each, first node repeated at the end so it reads as a cycle.
+    pub path: Vec<String>,
+}
+
+impl std::fmt::Display for AssemblyCycle {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "`{}` edges form a cycle: ", self.kind)?;
+        write!(formatter, "{}", self.path.join(" -> "))
+    }
+}
+
+/// The first cycle reachable in one relation kind's edges, as a path with the entry repeated.
+///
+/// Iterative rather than recursive: a workspace graph is somebody's whole backlog, and a recursive
+/// walk over one is a stack depth nobody chose.
+fn first_cycle(
+    nodes: &BTreeSet<String>,
+    edges: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<Vec<String>> {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Mark {
+        Open,
+        Done,
+    }
+
+    let mut marks: BTreeMap<&str, Mark> = BTreeMap::new();
+    let empty = BTreeSet::new();
+
+    for start in nodes {
+        if marks.contains_key(start.as_str()) {
+            continue;
+        }
+        // (node, how many of its targets have been taken)
+        let mut stack: Vec<(&str, usize)> = vec![(start.as_str(), 0)];
+        marks.insert(start.as_str(), Mark::Open);
+
+        while let Some(&mut (node, ref mut taken)) = stack.last_mut() {
+            let targets = edges.get(node).unwrap_or(&empty);
+            if let Some(next) = targets.iter().nth(*taken) {
+                *taken += 1;
+                match marks.get(next.as_str()) {
+                    Some(Mark::Open) => {
+                        // The loop is everything on the stack from `next` onwards.
+                        let at = stack
+                            .iter()
+                            .position(|(on, _)| *on == next.as_str())
+                            .unwrap_or(0);
+                        let mut path: Vec<String> =
+                            stack[at..].iter().map(|(on, _)| (*on).to_owned()).collect();
+                        path.push(next.clone());
+                        return Some(path);
+                    }
+                    Some(Mark::Done) => {}
+                    None => {
+                        marks.insert(next.as_str(), Mark::Open);
+                        stack.push((next.as_str(), 0));
+                    }
+                }
+            } else {
+                marks.insert(node, Mark::Done);
+                stack.pop();
+            }
+        }
+    }
+    None
 }

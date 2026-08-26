@@ -28,6 +28,7 @@ use crate::facts::{FactPath, FactStore, FactValue};
 use crate::ids::{ProviderId, RepositoryRef};
 use crate::node::Node;
 use crate::time::Timestamp;
+use crate::workspace::MemberName;
 
 /// Identifier of an artifact, written `<namespace>:<name>`, such as `design:passkeys-auth`.
 ///
@@ -1800,6 +1801,17 @@ impl LifecycleRegistry {
 #[serde(transparent)]
 pub struct ArtifactGraph {
     artifacts: BTreeMap<ArtifactId, Artifact>,
+    /// The members a workspace declares, when this graph was built inside one.
+    ///
+    /// Empty for a plain single-repository store, which is the common case and the safe default:
+    /// with no workspace, a member-qualified target is a target this manifest cannot possibly
+    /// resolve, and saying nothing about it would let `entity-runtme/story:typo` pass as a
+    /// deliberate crossing rather than the misspelling it is.
+    ///
+    /// Not serialised: a serialised graph is its artifacts, and which workspace it happened to be
+    /// validated inside is not a property of the graph.
+    #[serde(skip)]
+    members: BTreeSet<MemberName>,
 }
 
 impl ArtifactGraph {
@@ -1815,6 +1827,43 @@ impl ArtifactGraph {
     /// [`LifecycleRegistry`]; pass one to [`ArtifactGraph::validate_lifecycles`].
     pub fn build<I: IntoIterator<Item = Artifact>>(artifacts: I) -> Result<Self, ValidationErrors> {
         let mut graph = Self::new();
+        let mut errors = ValidationErrors::new();
+
+        for artifact in artifacts {
+            let id = artifact.id.clone();
+            if graph.artifacts.insert(id.clone(), artifact).is_some() {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::DuplicateDeclaration,
+                        format!("artifacts.{id}"),
+                        format!("artifact {id} is declared more than once"),
+                    )
+                    .with_hint("artifact identifiers must be unique within a manifest"),
+                );
+            }
+        }
+
+        errors.extend(graph.validate_edges());
+        errors.into_result(graph)
+    }
+
+    /// The same, for a graph built inside a workspace that declares `members`.
+    ///
+    /// A relation targeting one of them is a crossing and is left for an [`Assembly`] to resolve;
+    /// one targeting anything else is checked here exactly as a local target is.
+    ///
+    /// [`Assembly`]: https://docs.rs/aep-backend-markdown
+    ///
+    /// # Errors
+    ///
+    /// The same defects [`ArtifactGraph::build`] rejects.
+    pub fn build_in_workspace<I, M>(artifacts: I, members: M) -> Result<Self, ValidationErrors>
+    where
+        I: IntoIterator<Item = Artifact>,
+        M: IntoIterator<Item = MemberName>,
+    {
+        let mut graph = Self::new();
+        graph.members = members.into_iter().collect();
         let mut errors = ValidationErrors::new();
 
         for artifact in artifacts {
@@ -1962,12 +2011,22 @@ impl ArtifactGraph {
             }
             for (index, relation) in artifact.relations.iter().enumerate() {
                 let location = format!("artifacts.{}.relations[{index}]", artifact.id);
-                // A target naming another member is *outside* this manifest by construction, so
-                // "the manifest does not declare it" is not a defect — it is the whole point of a
-                // workspace. Whether that member holds it is a question only an assembly of every
-                // member can answer, and it answers it as a typed fact rather than an error,
-                // because a member nobody checked out holds nothing and that is normal.
-                if relation.target.id().member().is_none()
+                // A target naming a member **this workspace declares** is outside this manifest by
+                // construction, so "the manifest does not declare it" is not a defect — it is the
+                // whole point of a workspace. Whether that member holds it is a question only an
+                // assembly of every member can answer, and it answers it as a typed fact rather
+                // than an error, because a member nobody checked out holds nothing and that is
+                // normal.
+                //
+                // A member this workspace does **not** declare is a different thing entirely, and
+                // exempting it was a hole: with no workspace file at all, every dangling edge
+                // could be hidden behind a `/`, and a misspelled member name passed silently in a
+                // plain single-repository store.
+                let crosses_to_a_declared_member =
+                    relation.target.id().member().is_some_and(|member| {
+                        self.members.iter().any(|known| known.as_str() == member)
+                    });
+                if !crosses_to_a_declared_member
                     && !self.artifacts.contains_key(relation.target.id())
                 {
                     errors.push(
@@ -2540,11 +2599,18 @@ mod tests {
         // The point of a workspace: this manifest genuinely does not declare the target, and that
         // is correct rather than broken. Whether the member holds it is a question only an assembly
         // of every member can answer, and `protocol workspace crossings` is where it is answered.
-        let graph = ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
-            .with_relation(
-                RelationKind::DependsOn,
-                reference("entity-runtime/story:provider-spi"),
-            )])
+        //
+        // Only for a member the workspace **declares** — see the two tests below, which are the
+        // hole this one used to leave open.
+        let graph = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtime/story:provider-spi"),
+                ),
+            ],
+            [MemberName::parse("entity-runtime").expect("a name")],
+        )
         .expect("a member-qualified target is outside this manifest by construction");
 
         assert_eq!(graph.len(), 1);
@@ -2564,6 +2630,44 @@ mod tests {
             ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
                 .with_relation(RelationKind::DependsOn, reference("story:missing"))])
             .expect_err("a local dangling edge is still a dangling edge");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn a_member_qualified_target_in_a_store_with_no_workspace_is_still_dangling() {
+        // The hole: the exemption applied to *any* target whose namespace held a `/`, workspace or
+        // no workspace. In a plain single-repository store every dangling edge could be hidden
+        // behind one character, which is the opposite of what a workspace is for.
+        let dangling =
+            ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
+                .with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtime/story:provider-spi"),
+                )])
+            .expect_err("no workspace declares that member, so nothing can resolve it");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn a_misspelled_member_is_dangling_even_inside_a_workspace() {
+        // `entity-runtme` is nobody's repository. Passing it silently as a deliberate crossing is
+        // how a typo becomes an edge nobody ever checks.
+        let dangling = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtme/story:provider-spi"),
+                ),
+            ],
+            [MemberName::parse("entity-runtime").expect("a name")],
+        )
+        .expect_err("the workspace declares `entity-runtime`, not `entity-runtme`");
         assert!(
             dangling.to_string().contains("does not declare"),
             "{dangling}"

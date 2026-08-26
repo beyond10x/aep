@@ -250,7 +250,7 @@ pub fn artifact_manifest(text: &str, origin: Option<&str>) -> Result<ArtifactGra
     document::<RawArtifactManifest, ArtifactGraph>(DocumentKind::ArtifactManifest, text, origin)
 }
 
-/// Reads a project's own configuration.
+/// Reads the workspace file: which repositories one command answers across.
 pub fn workspace(
     text: &str,
     origin: Option<&str>,

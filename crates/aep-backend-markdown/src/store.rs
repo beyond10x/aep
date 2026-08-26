@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 
 use aep_domain::artifact::{ArtifactGraph, ArtifactId, ArtifactKind};
 use aep_domain::error::ValidationErrors;
+use aep_domain::workspace::MemberName;
 
 use crate::document::PlanningDocument;
 
@@ -327,12 +328,31 @@ impl StoreReport {
     /// the tenth file has a typo — and it is why every verb that *writes* checks
     /// [`Self::is_clean`] first.
     pub fn graph(&self) -> Result<ArtifactGraph, ValidationErrors> {
-        ArtifactGraph::build(self.documents.values().map(|stored| {
-            stored
-                .document
-                .frontmatter
-                .to_artifact(&stored.relative_path)
-        }))
+        self.graph_in_workspace(std::iter::empty())
+    }
+
+    /// The same, for a store read inside a workspace that declares `members`.
+    ///
+    /// A relation targeting a declared member is a crossing, left for an assembly to resolve. One
+    /// targeting anything else — including a **misspelled** member — is a dangling edge and is
+    /// refused here, exactly as a local target is.
+    ///
+    /// # Errors
+    ///
+    /// The same defects [`Self::graph`] reports.
+    pub fn graph_in_workspace<M: IntoIterator<Item = MemberName>>(
+        &self,
+        members: M,
+    ) -> Result<ArtifactGraph, ValidationErrors> {
+        ArtifactGraph::build_in_workspace(
+            self.documents.values().map(|stored| {
+                stored
+                    .document
+                    .frontmatter
+                    .to_artifact(&stored.relative_path)
+            }),
+            members,
+        )
     }
 }
 

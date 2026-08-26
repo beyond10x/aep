@@ -11,6 +11,68 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.26.0] — 2026-08-26
+
+**A review of 0.25.0 found that three of its published claims were false, and that it had quietly
+weakened a check that had nothing to do with workspaces.** Two independent reviewers, run against the
+released commit; two of the three were found by both. Nothing in 0.25.0 has been rewritten — a
+published section stays as it was published, and the corrections are here.
+
+### Corrections to 0.25.0
+
+* **"Cycle detection holds over the combined graph" was not true — it was absent.** No combined graph
+  was ever built. `find_cycle` had one caller, over one manifest, and `crossing_relations` resolved
+  each edge without asking what shape they made together. See below.
+
+* **"`story:passkey-login` exists in more than one repository today and they are different stories"
+  is not a fact.** It is held by **no** member of the shipped workspace. The behaviour is real and
+  tested — against a fixture — but the example given for it was not. `story:namespaced-identity`
+  carries the correction in its own body.
+
+* **A member listed by `members` is reported as `absent`, not `unresolved`.** The changelog used a
+  word the code does not. They are different states and the distinction is the point of the feature,
+  so the code's word is the one that stands.
+
+### Fixed
+
+* **Cross-member cycles are now found, because now something looks for them.** `Assembly::cycles()`
+  builds the combined graph — every artifact addressed `member/id`, every resolved crossing an edge —
+  and walks it per relation kind. `protocol workspace crossings` reports what it finds and **exits 1
+  on a cycle whatever `--strict` says**: `--strict` is about unresolved members, which is a fact
+  about your checkout, and a cycle is a fact about the plan, which is wrong on every machine.
+
+  An unresolved crossing contributes no edge. A cycle that depended on which repositories happen to
+  be checked out here would not be a fact about the plan either.
+
+* **Any `member/` prefix disabled cycle detection inside a single store.** The same loop passed or
+  failed depending only on whether its edges were written `story:beta` or `self/story:beta`. This was
+  a regression 0.25.0 introduced against behaviour that worked before it.
+
+* **The dangling-reference check was relaxed for every repository, workspace or not.** The exemption
+  applied to any target whose namespace contained a `/` — unconditionally, with no workspace file
+  needed. In a plain single-repository store every dangling edge could be hidden behind one
+  character, and a misspelled member (`entity-runtme/story:typo`, which is nobody's repository)
+  passed silently as a deliberate crossing.
+
+  A graph now carries the members its workspace declares. A target naming one of them is a crossing;
+  a target naming anything else is a dangling edge, checked exactly as a local target is.
+  `ArtifactGraph::build_in_workspace` and `StoreReport::graph_in_workspace` are the workspace-aware
+  forms; `build` and `graph` declare no members, which is the safe default.
+
+* **`protocol workspace show` reported a fact about your checkout as a fact about the plan.** It
+  discarded the unresolved-member list, so a member you had not checked out produced *"held by no
+  member of this workspace"* — indistinguishable from an artifact that genuinely does not exist. It
+  now says *"no member of this workspace that could be read"*, lists the members it could not read,
+  and names the member the reference asked for.
+
+* **A member whose source is a pinned git revision vanished from the assembly entirely.** It was
+  dropped rather than arriving as an empty member, so with `beta` spelled as a path an ambiguous
+  reference was refused, and with the same `beta` spelled as a git locator the same reference
+  resolved to `alpha` and exited 0. The unresolved list now reaches every verb that can report it.
+
+* `parse::workspace`'s documentation was `parse::project`'s, copied. It is a public item and it
+  described the wrong file.
+
 ## [0.25.0] — 2026-08-26
 
 One CLI across repositories. Until now every repository was an island — `protocol artifact` read one

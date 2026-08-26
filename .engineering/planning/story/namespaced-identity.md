@@ -4,7 +4,7 @@ id: story:namespaced-identity
 kind: story
 status: implemented
 title: An identity is unique across members, and an ambiguous one is refused
-summary: story:passkey-login exists in more than one repository today and they are different stories. Decide the spelling once, and refuse an ambiguous reference by name rather than resolving it to the nearest match.
+summary: 'Two repositories can hold a story of the same name and mean different things. Decide the spelling once, and refuse an ambiguous reference by name rather than resolving it to the nearest match.'
 relations:
 - decomposes: epic:one-cli-many-repositories
 - depends_on: story:workspace-manifest
@@ -14,9 +14,14 @@ revision: 4
 
 ## Outcome
 
-Nobody is handed the wrong story. `story:passkey-login` exists in more than one repository today and
-they are different stories; asked across a workspace, the command says which members hold it rather
-than picking one.
+Nobody is handed the wrong story. Two members can hold a story of the same name and mean different
+things by it; asked across a workspace, the command says which members hold it rather than picking
+one.
+
+**A correction.** This story and the 0.25.0 changelog both said `story:passkey-login` *exists in more
+than one repository today*. It does not — it is held by no member of the shipped workspace, and the
+behaviour is tested against a fixture. The mechanism was real and the example was not, which is the
+shape of claim this repository exists to catch.
 
 ## Context
 
