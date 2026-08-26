@@ -275,6 +275,66 @@ fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
 }
 
 #[test]
+fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
+    // The second projection, and the one `protocol artifact relate` has no command path without.
+    // The contract models an edge as a `Relation` record, not as a field on an entity, so nothing
+    // about updating a body brings it along.
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::artifact::RelationKind;
+    use aep_domain::command::{Command, CreateRelation};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let root = scratch("related");
+    write_story(&root, "one", "draft", "# One\n\nProse.");
+    write_story(&root, "two", "draft", "# Two\n\nProse.");
+
+    let at = Timestamp::from_epoch_millis(1_700_000_000_000);
+    let actor = ActorRef::parse("human:operator").expect("an actor");
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+        .expect("the store opens");
+
+    let one = block_on(
+        store.resolve(&EntityLocator::parse("ep://planning/store/story/one").expect("a locator")),
+    )
+    .expect("story:one is seeded");
+    let two = block_on(
+        store.resolve(&EntityLocator::parse("ep://planning/store/story/two").expect("a locator")),
+    )
+    .expect("story:two is seeded");
+
+    let context = CommandContext::new(
+        "req-rel".parse().expect("a request id"),
+        "key-rel".parse().expect("an idempotency key"),
+        actor,
+        "corr-rel".parse().expect("a correlation id"),
+        at,
+    );
+    let envelope = CommandEnvelope::new(
+        "cmd-rel".parse().expect("a command id"),
+        "aep.relation.create/v1",
+        Command::CreateRelation(CreateRelation {
+            kind: RelationKind::DependsOn,
+            source: EntityRef::new(one),
+            target: EntityRef::new(two),
+        }),
+        context,
+    );
+    block_on(store.execute(envelope)).expect("the relation is permitted");
+
+    let written = std::fs::read_to_string(root.join("story").join("one.md")).expect("the document");
+    assert!(
+        written.contains("depends_on: story:two"),
+        "the edge reached the file:\n{written}"
+    );
+    assert!(
+        written.contains("Prose."),
+        "and the body survived it:\n{written}"
+    );
+}
+
+#[test]
 fn the_only_write_path_out_of_this_crate_is_a_command() {
     // P3's other half: "a source scan finds no other write path in the crate". `MarkdownStore`
     // still *has* `create` and `update` — they are how a file gets written — but nothing inside
@@ -310,7 +370,7 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
             // The one permitted site, bounded by the function itself rather than by a fixed
             // window. A window is a guess about how long `persist` is, and the first time it grew
             // this scan reported its own crate — right answer, wrong reason.
-            if *name == "backend.rs" && within_persist(source, number) {
+            if *name == "backend.rs" && within_persist_document(source, number) {
                 continue;
             }
             offenders.push(format!("{name}:{}: {}", number + 1, code));
@@ -341,13 +401,16 @@ fn the_scan_sees_a_write_it_should_refuse() {
     );
 }
 
-/// Whether line `number` (0-based) falls inside `fn persist`.
+/// Whether line `number` (0-based) falls inside `fn persist_document`.
 ///
 /// Bounded by the next item at the same indentation, so the answer does not depend on how long the
 /// function happens to be today.
-fn within_persist(source: &str, number: usize) -> bool {
+fn within_persist_document(source: &str, number: usize) -> bool {
     let lines: Vec<&str> = source.lines().collect();
-    let Some(start) = lines.iter().position(|line| line.contains("fn persist(")) else {
+    let Some(start) = lines
+        .iter()
+        .position(|line| line.contains("fn persist_document("))
+    else {
         return false;
     };
     if number < start {

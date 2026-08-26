@@ -213,8 +213,22 @@ impl CommandService for MarkdownBackend {
         envelope: CommandEnvelope<Self::Command>,
     ) -> Result<CommandResult, CommandError> {
         self.check_latch()?;
+        // The endpoints a relation command changes the *document* of. The contract reports no
+        // affected entity for one — an edge is a thing in its own right and neither endpoint's
+        // revision moves — but the source's **document** does change, because a planning document
+        // carries its edges in frontmatter. Read before executing, since the payload is consumed.
+        // `RemoveRelation` is deliberately absent: `apply_relations` adds and does not remove, so
+        // re-projecting the source after one would write the file back unchanged and journal a
+        // change that did not happen. Projecting a removal is its own piece of work.
+        let touched = match &envelope.payload {
+            Command::CreateRelation(create) => vec![create.source.id.clone()],
+            _ => Vec::new(),
+        };
         let result = block_on(self.inner.execute(envelope))?;
         self.persist(&result)?;
+        for id in touched {
+            self.persist_document(&id, None)?;
+        }
         Ok(result)
     }
 }
@@ -226,23 +240,39 @@ impl MarkdownBackend {
     /// replay, which is what makes replaying one safe to do on a store somebody else is reading.
     fn persist(&self, result: &CommandResult) -> Result<(), CommandError> {
         for reference in &result.affected {
+            self.persist_document(&reference.id, Some(reference.revision.get()))?;
+        }
+        Ok(())
+    }
+
+    /// Writes one entity's document, at `revision` when the entity's own revision moved.
+    ///
+    /// `None` for a change that alters the document without altering the entity — a relation, whose
+    /// edge lives in frontmatter while the contract holds it as a record of its own. Bumping the
+    /// document's revision there would claim the artifact moved when it did not.
+    fn persist_document(
+        &self,
+        entity: &EntityId,
+        revision: Option<u64>,
+    ) -> Result<(), CommandError> {
+        {
             // Where this entity's document is: the one it was read from, or — for an entity
             // created through the contract and not yet on disk — the one its address says it
             // belongs in. An entity addressed somewhere else entirely is a conformance suite's, and
             // inventing a file for it would put a document nobody wrote into somebody's plan.
-            let placed = match self.file_for(&reference.id) {
+            let placed = match self.file_for(entity) {
                 Some(found) => Some(found),
-                None => self.artifact_for(&reference.id)?,
+                None => self.artifact_for(entity)?,
             };
             let Some((artifact, relative)) = placed else {
-                self.note_unprojected(&reference.id);
-                continue;
+                self.note_unprojected(entity);
+                return Ok(());
             };
 
-            let body = block_on(self.inner.get(
-                &EntityRef::new(reference.id.clone()),
-                QueryConsistency::Current,
-            ))
+            let body = block_on(
+                self.inner
+                    .get(&EntityRef::new(entity.clone()), QueryConsistency::Current),
+            )
             .map_err(|error| self.latch(format!("the entity could not be read back: {error}")))?;
 
             // Re-read rather than re-render from scratch. **The prose is the document.** An
@@ -276,10 +306,13 @@ impl MarkdownBackend {
             };
             let mut updated = existing.clone();
             apply_body(&mut updated.frontmatter, &body.data);
-            updated.frontmatter.revision = reference.revision.get();
+            self.apply_relations(entity, &mut updated.frontmatter)?;
+            if let Some(revision) = revision {
+                updated.frontmatter.revision = revision;
+            }
 
             if updated == existing {
-                continue;
+                return Ok(());
             }
 
             let before = existing.frontmatter.status.clone();
@@ -318,6 +351,65 @@ impl MarkdownBackend {
                 },
             )
             .map_err(|error| self.latch(format!("the journal could not be appended: {error}")))?;
+        }
+        Ok(())
+    }
+
+    /// Writes the entity's outgoing relations into its frontmatter.
+    ///
+    /// The second projection `persist` needs, and the one `protocol artifact relate` has no command
+    /// path without. An entity's relations are separate `Relation` records — the contract models an
+    /// edge as a thing, not as a field — so nothing about updating an entity's body brings them
+    /// along.
+    ///
+    /// # What it does not do, and why
+    ///
+    /// **It adds; it does not remove.** A relation whose target this store cannot name — an entity
+    /// under some other organisation and space — is left out of the frontmatter, and an edge already
+    /// in the file that the contract does not know about is left alone. Rewriting the list from the
+    /// contract's view would delete, on the first status move, every edge that was written by hand
+    /// into a document this backend has never been the author of. `RemoveRelation` is a command and
+    /// belongs on the same path as the rest; until it is projected too, this side only grows.
+    ///
+    /// # Errors
+    ///
+    /// If the relations cannot be read, which means memory and disk have already parted.
+    fn apply_relations(
+        &self,
+        id: &EntityId,
+        frontmatter: &mut crate::frontmatter::PlanningFrontmatter,
+    ) -> Result<(), CommandError> {
+        let query = RelationQuery {
+            source: Some(EntityRef::new(id.clone())),
+            target: None,
+            kind: None,
+            limit: None,
+            after: None,
+            consistency: QueryConsistency::Current,
+        };
+        let page = block_on(self.inner.relations(&query))
+            .map_err(|error| self.latch(format!("the relations could not be read: {error}")))?;
+
+        for relation in &page.items {
+            let Some((target, _)) = self.file_for(&relation.target.id).map_or_else(
+                || self.artifact_for(&relation.target.id),
+                |found| Ok(Some(found)),
+            )?
+            else {
+                continue;
+            };
+            let already = frontmatter
+                .relations
+                .iter()
+                .any(|existing| existing.kind == relation.kind && existing.target.id() == &target);
+            if !already {
+                frontmatter
+                    .relations
+                    .push(aep_domain::artifact::ArtifactRelation::new(
+                        relation.kind,
+                        aep_domain::artifact::ArtifactRef::new(target, None),
+                    ));
+            }
         }
         Ok(())
     }

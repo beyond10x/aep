@@ -70,14 +70,43 @@ about it. An entity addressed anywhere else — a conformance suite's — still 
 reported by `unprojected` (`a_created_entity_becomes_a_document_this_store_holds`,
 `an_entity_this_store_is_not_addressed_for_gets_no_invented_file`).
 
-**What is still missing is the relation projection**, and with it the routing. An entity's relations
-live as separate `Relation` records; nothing maps them back into frontmatter, so
-`protocol artifact relate` has no command path that would produce the edge it exists to write. Until
-it does, all four CLI sites stay as they are — routing three of them and leaving the fourth would be
-two write paths rather than one, which is the thing invariant 14 forbids.
+**Both projections have since landed.** The relation one needed a contract fact stated first:
+`CreateRelation` reports **no affected entity**, because an edge is a thing in its own right and
+neither endpoint's revision moves. The *document* still changes, since a planning document carries
+its edges in frontmatter, so `execute` projects the source explicitly — and deliberately does **not**
+bump the document's revision, because claiming the artifact moved when only an edge was added would
+be a lie in the journal.
 
-**D-P1 stays open against the CLI**; what changed is that it is open against four named lines and
-one missing projection, rather than the whole store.
+`apply_relations` **adds and does not remove**. Rewriting the list from the contract's view would
+delete, on the first status move, every edge written by hand into a document this backend has never
+been the author of. Projecting `RemoveRelation` is its own piece of work.
+
+## The decision that blocks the last acceptance line
+
+`persist` can now produce every document shape the CLI's verbs need. Routing them is still blocked,
+and on a question rather than on effort.
+
+**`protocol artifact new` writes a body** — `template(&document_root, &kind)`, the kind's starting
+document (`planning.rs:490`). A command carries an entity, and this backend's create writes an
+**empty** body on purpose: *the prose is the document*, an entity holds none, and a body invented by
+this crate would be prose nobody is accountable for. Routing `new` through `execute` as it stands
+would silently drop the template.
+
+So one of two things has to be true, and neither is free:
+
+| | what it costs |
+|---|---|
+| **prose enters the contract as entity data** | every status move carries the whole body through the command path, and the entity becomes the document — which is the distinction this backend was built to keep |
+| **the CLI keeps a second write path for bodies** | exactly what invariant 14 forbids, and what D-P1 is |
+
+A third option exists and needs designing rather than choosing: a command whose payload *is* a
+document body, so a body change is a command like any other and the entity still holds no prose.
+
+**Until that is decided, all four CLI sites stay as they are.** Routing three and leaving `new`
+direct would be two write paths rather than one, which is the defect, not a step toward fixing it.
+
+**D-P1 stays open against the CLI** — now against four named lines and one decision, rather than a
+missing capability.
 
 ## Out of Scope
 
