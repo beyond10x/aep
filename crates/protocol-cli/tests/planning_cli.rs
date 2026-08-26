@@ -871,3 +871,53 @@ fn the_new_kinds_have_the_ladder_the_store_needs() {
 fn story(id: &str, status: &str, extra: &str) -> String {
     format!("---\nid: {id}\nkind: story\nstatus: {status}\n{extra}---\n# {id}\n")
 }
+
+#[test]
+fn no_planning_verb_writes_to_the_store_except_through_a_command() {
+    // **D-P1, closed and pinned.** The store used to be written by the verbs directly, through its
+    // own `create`/`update`, which is a second write path — a second place for idempotency,
+    // revision checks and the audit record to be forgotten, and what invariant 14 exists to forbid.
+    //
+    // Every verb now issues a command and `MarkdownBackend` writes the file. A verb added next year
+    // that called the store directly would compile, pass every test, and quietly reopen it.
+    let source = include_str!("../src/planning.rs");
+    let offenders: Vec<String> = source
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| {
+            let code = line.trim_start();
+            !code.starts_with("//")
+                && !code.starts_with("///")
+                // The scan's own guard plants one of these in a string literal.
+                && !code.starts_with("let planted")
+                && (code.contains("store.update(") || code.contains("store.create("))
+        })
+        .map(|(number, line)| format!("{}: {}", number + 1, line.trim()))
+        .collect();
+
+    assert!(
+        offenders.is_empty(),
+        "a verb writing the store directly is the second write path D-P1 was — model the change as \
+         a command and let `MarkdownBackend` carry it:\n  {}",
+        offenders.join("\n  ")
+    );
+}
+
+#[test]
+fn the_command_only_scan_sees_a_write_it_should_refuse() {
+    // The guard. A scan that has never rejected anything is a scan nobody has evidence
+    // discriminates — the lesson of the `entity-sqlite` rollback test, applied before it costs
+    // anything.
+    //
+    // If this test ever starts passing, `no_planning_verb_writes_to_the_store_except_through_a_command`
+    // has stopped being evidence.
+    let planted = "fn a_new_verb() {\n    store.update(&relative, &document)?;\n}\n";
+    let caught = planted.lines().any(|line| {
+        let code = line.trim_start();
+        !code.starts_with("//") && code.contains("store.update(")
+    });
+    assert!(
+        caught,
+        "the scan's own predicate must catch a planted write"
+    );
+}

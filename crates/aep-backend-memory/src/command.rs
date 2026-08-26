@@ -299,6 +299,27 @@ fn apply_valid(
             vec![reference]
         }
 
+        // The move the planning store's open ladders need, and the reason `D-P1` was open: there
+        // was no command for the one thing that store does most, so the CLI wrote those moves to
+        // disk directly.
+        //
+        // **This applies a decision; it does not take one.** Whether the move was earned is decided
+        // by the engine against the kind's lifecycle document and whatever evidence was presented,
+        // before the command is issued. A backend that re-decided it here would be a second
+        // protocol, which is the thing the whole arrangement exists to avoid.
+        Command::MoveStatus(move_status) => {
+            let reference = mutate(
+                store,
+                envelope,
+                &move_status.target,
+                at,
+                &actor,
+                executor.as_ref(),
+                |entity| set_status(&mut entity.data, &move_status.to),
+            )?;
+            vec![reference]
+        }
+
         Command::AcceptAdr(accept) => {
             require_revision(store, &accept.adr)?;
             let reference = mutate(

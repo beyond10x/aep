@@ -75,12 +75,22 @@ pub struct MarkdownBackend {
     latched: Mutex<Option<String>>,
     /// Entities accepted by the contract that this store has no document shape for.
     unprojected: Mutex<Vec<EntityId>>,
+    /// The account the move currently being written rested on, when one arrived with it.
+    decided_on: Mutex<Option<journal::Provenance>>,
     actor: ActorRef,
-    /// The instant this backend stamps journal entries with.
+    /// The instant this backend stamps journal entries with, as the journal spells one: ISO-8601.
     ///
-    /// Handed in, never read: this crate has no clock, for the same reason the kernel next door
-    /// has none — a record that dated itself could not be replayed.
-    at: Timestamp,
+    /// Handed in, never read: this crate has no clock, for the same reason the kernel next door has
+    /// none — a record that dated itself could not be replayed. Held as the string rather than as a
+    /// `Timestamp`, because `Timestamp`'s own `Display` is epoch milliseconds — right for a wire
+    /// value, wrong in a journal whose every other entry is a date somebody can read, and a journal
+    /// carrying both spellings is one nobody can sort.
+    ///
+    /// Kept beside the `Timestamp` rather than derived from it at each write, because `Timestamp`'s
+    /// own `Display` is epoch milliseconds — correct for a wire value, and wrong in a journal whose
+    /// every other entry is a date somebody can read. A journal carrying both spellings is a
+    /// journal nobody can sort.
+    at_iso: String,
 }
 
 impl MarkdownBackend {
@@ -148,8 +158,9 @@ impl MarkdownBackend {
             paths: Mutex::new(paths),
             latched: Mutex::new(None),
             unprojected: Mutex::new(Vec::new()),
+            decided_on: Mutex::new(None),
             actor,
-            at,
+            at_iso: iso_8601(at),
         })
     }
 
@@ -224,6 +235,39 @@ impl CommandService for MarkdownBackend {
             Command::CreateRelation(create) => vec![create.source.id.clone()],
             _ => Vec::new(),
         };
+        // The account the move arrived with. Read before executing, because the payload is consumed
+        // — and carried into the journal entry, because a status somebody asserted the evidence for
+        // and one a record established are different facts, and defaulting it away would make every
+        // move look equally well founded.
+        let decided_on = match &envelope.payload {
+            Command::MoveStatus(move_status) => match move_status.decided_on.as_ref() {
+                Some(aep_domain::node::Node::Text(account)) => Some(
+                    serde_json::from_str::<journal::Provenance>(account).map_err(|error| {
+                        CommandError::Conflict {
+                            reason: format!("the move's account is not a provenance: {error}"),
+                        }
+                    })?,
+                ),
+                // Not `.ok()` anywhere on this path. An account that failed to decode and was
+                // silently dropped leaves a move looking as well founded as one nobody had evidence
+                // for — which is the one distinction this field exists to carry.
+                Some(other) => {
+                    return Err(CommandError::Conflict {
+                        reason: format!(
+                            "the move's account is {other:?}, and an account travels as JSON text \
+                             because `Node`'s numbers are floating point and a count of `1` that \
+                             returns as `1.0` is not a count"
+                        ),
+                    })
+                }
+                None => None,
+            },
+            _ => None,
+        };
+        *self
+            .decided_on
+            .lock()
+            .expect("the provenance slot is not poisoned") = decided_on;
         let result = block_on(self.inner.execute(envelope))?;
         self.persist(&result)?;
         for id in touched {
@@ -247,9 +291,14 @@ impl MarkdownBackend {
 
     /// Writes one entity's document, at `revision` when the entity's own revision moved.
     ///
-    /// `None` for a change that alters the document without altering the entity — a relation, whose
-    /// edge lives in frontmatter while the contract holds it as a record of its own. Bumping the
-    /// document's revision there would claim the artifact moved when it did not.
+    /// `None` for a change that alters the document without altering the *entity* — a relation,
+    /// whose edge lives in frontmatter while the contract holds it as a record of its own.
+    ///
+    /// **The document's revision advances either way**, because it counts changes to the document
+    /// and an edge is one. What `None` says is only that the entity's own revision is not the
+    /// number to take: a backend is opened per invocation and every artifact is seeded at revision
+    /// 1, so an entity's revision after one command is always 2, and taking it would clamp every
+    /// document in the store to 2 for ever.
     fn persist_document(
         &self,
         entity: &EntityId,
@@ -306,9 +355,21 @@ impl MarkdownBackend {
             };
             let mut updated = existing.clone();
             apply_body(&mut updated.frontmatter, &body.data);
+            // Absent leaves the prose alone; present replaces it. See `BODY_KEY`.
+            if let aep_domain::node::Node::Map(fields) = &body.data {
+                if let Some(aep_domain::node::Node::Text(prose)) = fields.get(BODY_KEY) {
+                    updated.body.clone_from(prose);
+                }
+            }
             self.apply_relations(entity, &mut updated.frontmatter)?;
-            if let Some(revision) = revision {
-                updated.frontmatter.revision = revision;
+            // **The document's revision is the document's own count, not the entity's.** A backend
+            // is opened per invocation and every artifact is seeded at revision 1, so an entity's
+            // revision after one command is always 2 — taking it would clamp every document in the
+            // store to 2 for ever, however many times it moved. What the file says it has been
+            // through is what the file says, plus this change.
+            let _ = revision;
+            if !creating {
+                updated.frontmatter.revision = existing.frontmatter.revision.saturating_add(1);
             }
 
             if updated == existing {
@@ -336,13 +397,18 @@ impl MarkdownBackend {
                 journal::Change::Moved {
                     from: before,
                     to: updated.frontmatter.status.clone(),
-                    decided_on: journal::Provenance::default(),
+                    decided_on: self
+                        .decided_on
+                        .lock()
+                        .expect("the provenance slot is not poisoned")
+                        .clone()
+                        .unwrap_or_default(),
                 }
             };
             journal::append(
                 self.store.root(),
                 &journal::Entry {
-                    at: self.at.to_string(),
+                    at: self.at_iso.clone(),
                     actor: self.actor.to_string(),
                     artifact: artifact.clone(),
                     kind: updated.frontmatter.kind,
@@ -479,6 +545,54 @@ impl MarkdownBackend {
     }
 }
 
+/// One instant, as a date a person can read.
+///
+/// The civil date from a Unix millisecond, without a date library: days since the epoch, then the
+/// proleptic Gregorian calendar. A dependency whose only job is this would be one more thing to
+/// audit for a clock of its own.
+fn iso_8601(at: Timestamp) -> String {
+    let millis = i64::try_from(at.epoch_millis()).unwrap_or(i64::MAX);
+    let seconds = millis.div_euclid(1000);
+    let days = seconds.div_euclid(86_400);
+    let time = seconds.rem_euclid(86_400);
+
+    // Howard Hinnant's civil_from_days, which is the standard way to do this without a library.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        time / 3600,
+        (time % 3600) / 60,
+        time % 60
+    )
+}
+
+/// The key an entity carries its document's prose under.
+///
+/// # The decision, and why it is not "the entity becomes the document"
+///
+/// A document's prose had to reach this backend somehow, and the alternatives were worse. Leaving
+/// the CLI to write bodies directly is a second write path, which is what invariant 14 forbids and
+/// what D-P1 is. Inventing a body here is prose nobody is accountable for.
+///
+/// So prose is data, under a reserved key, exactly as `status` and `title` already are. The fear it
+/// raised — *every status move now carries the whole body* — is not what happens: `UpdateEntity`
+/// carries only the keys that changed, so a status move carries no body at all.
+///
+/// **An entity that does not carry it leaves the document's prose alone.** That is what makes this
+/// safe against every artifact seeded before it existed: absent is not empty, and a backend that
+/// read absence as "delete the prose" would empty the store on its first status move.
+pub const BODY_KEY: &str = "body";
+
 /// Copies the frontmatter fields an entity body carries, and only those.
 ///
 /// Everything else in the frontmatter — tags, relations, `extra` — is left alone, because the body
@@ -505,6 +619,17 @@ fn apply_body(
         if let Some(aep_domain::node::Node::Text(value)) = fields.get(key) {
             *slot = Some(value.clone());
         }
+    }
+    // Tags, same rule as everything else here: present replaces, absent leaves alone. A command
+    // that says nothing about tags is not a command that removed them.
+    if let Some(aep_domain::node::Node::Seq(tags)) = fields.get("tags") {
+        frontmatter.tags = tags
+            .iter()
+            .filter_map(|tag| match tag {
+                aep_domain::node::Node::Text(text) => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
     }
 }
 

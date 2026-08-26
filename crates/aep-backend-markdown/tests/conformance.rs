@@ -335,6 +335,101 @@ fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
 }
 
 #[test]
+fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
+    // The decision that lets `protocol artifact new` route through a command: prose is data under a
+    // reserved key, exactly as `status` and `title` already are.
+    //
+    // The half that matters more is the second assertion. An entity that does **not** carry the key
+    // leaves the prose alone — absent is not empty. A backend that read absence as "delete the
+    // prose" would empty every artifact in the store on its first status move.
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, CreateEntity, UpdateEntity};
+    use aep_domain::entity::{EntityLocator, EntityRef, EntityType};
+
+    let root = scratch("prose");
+    let at = Timestamp::from_epoch_millis(1_700_000_000_000);
+    let actor = ActorRef::parse("human:operator").expect("an actor");
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+        .expect("an empty store opens");
+
+    let context = |name: &str| {
+        CommandContext::new(
+            format!("req-{name}").parse().expect("a request id"),
+            format!("key-{name}").parse().expect("an idempotency key"),
+            actor.clone(),
+            "corr-prose".parse().expect("a correlation id"),
+            at,
+        )
+    };
+
+    block_on(
+        store.execute(CommandEnvelope::new(
+            "cmd-create".parse().expect("a command id"),
+            "aep.entity.create/v1",
+            Command::CreateEntity(CreateEntity {
+                entity_type: EntityType::parse("aep.story/v1").expect("a type"),
+                locator: EntityLocator::parse("ep://planning/store/story/prosaic")
+                    .expect("a locator"),
+                data: aep_domain::node::Node::Map(
+                    [
+                        ("status".to_owned(), aep_domain::node::Node::from("draft")),
+                        (
+                            aep_backend_markdown::backend::BODY_KEY.to_owned(),
+                            aep_domain::node::Node::from(
+                                "# Prosaic\n\nThe template a person will fill in.",
+                            ),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            }),
+            context("create"),
+        )),
+    )
+    .expect("the create is permitted");
+
+    let written = std::fs::read_to_string(root.join("story").join("prosaic.md")).expect("document");
+    assert!(
+        written.contains("The template a person will fill in."),
+        "the command carried the prose:\n{written}"
+    );
+
+    // Now a change that says nothing about the body.
+    let id =
+        block_on(store.resolve(
+            &EntityLocator::parse("ep://planning/store/story/prosaic").expect("a locator"),
+        ))
+        .expect("it resolves");
+    block_on(
+        store.execute(CommandEnvelope::new(
+            "cmd-title".parse().expect("a command id"),
+            "aep.entity.update/v1",
+            Command::UpdateEntity(UpdateEntity {
+                target: EntityRef::new(id),
+                changes: [("title".to_owned(), aep_domain::node::Node::from("Renamed"))]
+                    .into_iter()
+                    .collect(),
+            }),
+            context("title"),
+        )),
+    )
+    .expect("the update is permitted");
+
+    let after = std::fs::read_to_string(root.join("story").join("prosaic.md")).expect("document");
+    assert!(
+        after.contains("title: Renamed"),
+        "the change landed:\n{after}"
+    );
+    assert!(
+        after.contains("The template a person will fill in."),
+        "and a command that said nothing about the body left it alone:\n{after}"
+    );
+}
+
+#[test]
 fn the_only_write_path_out_of_this_crate_is_a_command() {
     // P3's other half: "a source scan finds no other write path in the crate". `MarkdownStore`
     // still *has* `create` and `update` — they are how a file gets written — but nothing inside

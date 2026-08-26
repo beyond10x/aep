@@ -81,32 +81,48 @@ be a lie in the journal.
 delete, on the first status move, every edge written by hand into a document this backend has never
 been the author of. Projecting `RemoveRelation` is its own piece of work.
 
-## The decision that blocks the last acceptance line
+## D-P1, closed
 
-`persist` can now produce every document shape the CLI's verbs need. Routing them is still blocked,
-and on a question rather than on effort.
+Every `protocol artifact` verb issues a command; `MarkdownBackend` writes the file and journals it
+as one act. `no_planning_verb_writes_to_the_store_except_through_a_command` scans `planning.rs` and
+finds nothing, with a planted-write guard beside it.
 
-**`protocol artifact new` writes a body** — `template(&document_root, &kind)`, the kind's starting
-document (`planning.rs:490`). A command carries an entity, and this backend's create writes an
-**empty** body on purpose: *the prose is the document*, an entity holds none, and a body invented by
-this crate would be prose nobody is accountable for. Routing `new` through `execute` as it stands
-would silently drop the template.
-
-So one of two things has to be true, and neither is free:
-
-| | what it costs |
+| verb | command |
 |---|---|
-| **prose enters the contract as entity data** | every status move carries the whole body through the command path, and the entity becomes the document — which is the distinction this backend was built to keep |
-| **the CLI keeps a second write path for bodies** | exactly what invariant 14 forbids, and what D-P1 is |
+| `new` | `CreateEntity`, carrying the kind's template body under `BODY_KEY`, plus a `CreateRelation` per `--relate` |
+| `relate` | `CreateRelation` |
+| `body` | `UpdateEntity` carrying the prose |
+| `move` | **`MoveStatus`**, new |
 
-A third option exists and needs designing rather than choosing: a command whose payload *is* a
-document body, so a body change is a command like any other and the entity still holds no prose.
+### The vocabulary was missing a word
 
-**Until that is decided, all four CLI sites stay as they are.** Routing three and leaving `new`
-direct would be two write paths rather than one, which is the defect, not a step toward fixing it.
+`UpdateEntity` says in its own documentation that a `status` key there is a mistake — statuses move
+through the commands that name the move. The domain commands that name one (`ApproveDesign`,
+`AcceptAdr`) each name a *specific* move on a *specific* kind. The planning store's ladders are
+**data**, with an open status vocabulary since 0.13.0, so there was no command for the one thing
+that store does most.
 
-**D-P1 stays open against the CLI** — now against four named lines and one decision, rather than a
-missing capability.
+**D-P1 was open because a word was missing, not because anybody preferred a second write path.**
+`MoveStatus` applies a decision and does not take one: the engine still decides against the kind's
+lifecycle document and the evidence presented, before the command is issued. A backend that
+re-decided it would be a second protocol.
+
+### Three defects the routing exposed
+
+- **The document's revision was clamped to 2 for ever.** A backend is opened per invocation and
+  every artifact is seeded at revision 1, so an entity's revision after one command is always 2.
+  Taking it as the document's revision would have frozen every artifact in the store. The document's
+  revision is the document's own count now.
+- **The journal stamped raw milliseconds** where every other entry is ISO-8601. A journal carrying
+  both spellings is one nobody can sort.
+- **The move's provenance was silently lost** — `{}` where the record should read
+  `{"recorded": {"test_result": 1}}`. `Node`'s numbers are floating point, so an evidence count of
+  `1` returned as `1.0` and failed to decode, and **both ends swallowed it with `.ok()`**. That is
+  the difference `story:completion-needs-evidence` exists over, thrown away by two characters.
+  Neither end swallows now; the account travels as JSON text.
+
+The old `every_write_verb_is_journalled` scan is superseded and says so in place, rather than being
+deleted: a check that disappears from a file reads exactly like a check nobody thought was needed.
 
 ## Out of Scope
 

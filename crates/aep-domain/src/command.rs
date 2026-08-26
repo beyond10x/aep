@@ -79,6 +79,8 @@ pub enum CommandKind {
     ApproveDesign,
     /// Accept an architecture decision record.
     AcceptAdr,
+    /// Move an artifact along its declared status ladder.
+    MoveStatus,
 }
 
 impl CommandKind {
@@ -96,6 +98,7 @@ impl CommandKind {
         Self::SubmitDesignReview,
         Self::ApproveDesign,
         Self::AcceptAdr,
+        Self::MoveStatus,
     ];
 
     /// The versioned name as it appears on the wire.
@@ -110,6 +113,7 @@ impl CommandKind {
             Self::SubmitDesignReview => "aep.design.submit-review/v1",
             Self::ApproveDesign => "aep.design.approve/v1",
             Self::AcceptAdr => "aep.adr.accept/v1",
+            Self::MoveStatus => "aep.status.move/v1",
         }
     }
 
@@ -206,6 +210,50 @@ pub struct CreateEntity {
     pub locator: EntityLocator,
     /// The body, in whatever shape the entity type declares.
     pub data: Node,
+}
+
+/// Moving an artifact along the status ladder its kind declares.
+///
+/// # Why this exists, and why it is not `UpdateEntity`
+///
+/// [`UpdateEntity`] says in its own documentation that a `status` key there is a mistake — statuses
+/// move through the commands that name the move, which is what gives an engine something to
+/// validate. The domain commands that name one (`ApproveDesign`, `AcceptAdr`) each name a *specific*
+/// move on a *specific* kind.
+///
+/// The planning store's ladders are **data**: a kind declares its own, and the status vocabulary is
+/// open (0.13.0). So there was no command for the one thing that store does most, and the CLI wrote
+/// those moves to disk directly — which is what deviation `D-P1` was, and it was open because the
+/// vocabulary was missing a word rather than because anybody preferred a second write path.
+///
+/// # Who decides
+///
+/// Not this type, and not the backend. The move is decided by the engine against the kind's
+/// lifecycle document and whatever evidence was presented; what crosses the wire is the decision
+/// that was reached, with the account of what it rested on. A backend that re-decided it would be a
+/// second protocol.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct MoveStatus {
+    /// Which artifact.
+    pub target: EntityRef,
+    /// The status it moved to, as the kind's ladder spells it.
+    pub to: String,
+    /// The revision the caller expected, when it stated one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<EntityRevision>,
+    /// The account of what the decision rested on, as the caller recorded it.
+    ///
+    /// Carried as data rather than as a type, because the shape belongs to whatever recorded it —
+    /// a store's journal, an audit trail — and the command vocabulary is not the place to fix one.
+    /// What matters here is that it **travels with the move**: the difference between a status
+    /// somebody asserted the evidence for and one a record established is the difference
+    /// `story:completion-needs-evidence` exists over, and a move that arrived without its account
+    /// would lose it silently.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_on: Option<Node>,
 }
 
 /// Changing an entity's ordinary mutable fields.
@@ -359,6 +407,8 @@ pub enum Command {
     ApproveDesign(ApproveDesign),
     /// Accept an architecture decision record.
     AcceptAdr(AcceptAdr),
+    /// Move an artifact along its declared status ladder.
+    MoveStatus(MoveStatus),
 }
 
 impl Command {
@@ -374,6 +424,7 @@ impl Command {
             Self::SubmitDesignReview(_) => CommandKind::SubmitDesignReview,
             Self::ApproveDesign(_) => CommandKind::ApproveDesign,
             Self::AcceptAdr(_) => CommandKind::AcceptAdr,
+            Self::MoveStatus(_) => CommandKind::MoveStatus,
         }
     }
 
@@ -389,7 +440,8 @@ impl Command {
             Self::CreateEntity(_) | Self::RemoveRelation(_) => None,
             Self::UpdateEntity(UpdateEntity { target, .. })
             | Self::ArchiveEntity(ArchiveEntity { target, .. })
-            | Self::SupersedeEntity(SupersedeEntity { target, .. }) => Some(target.clone()),
+            | Self::SupersedeEntity(SupersedeEntity { target, .. })
+            | Self::MoveStatus(MoveStatus { target, .. }) => Some(target.clone()),
             Self::CreateRelation(CreateRelation { source, .. }) => Some(source.clone()),
             Self::SubmitDesignReview(SubmitDesignReview { design, .. })
             | Self::ApproveDesign(ApproveDesign { design, .. }) => Some(design.unversioned()),
@@ -412,6 +464,12 @@ impl Command {
             | Self::RemoveRelation(_)
             | Self::ArchiveEntity(_)
             | Self::SupersedeEntity(_) => None,
+            // Stated here, unlike the domain commands below, because a ladder move names no
+            // revision of its own to read one from — the caller is the only thing that knows which
+            // revision it looked at.
+            Self::MoveStatus(MoveStatus {
+                expected_revision, ..
+            }) => *expected_revision,
             Self::SubmitDesignReview(SubmitDesignReview { design, .. })
             | Self::ApproveDesign(ApproveDesign { design, .. }) => Some(design.revision),
             Self::AcceptAdr(AcceptAdr { adr, .. }) => Some(adr.revision),
@@ -434,7 +492,8 @@ impl Command {
             | Self::SupersedeEntity(_)
             | Self::SubmitDesignReview(_)
             | Self::ApproveDesign(_)
-            | Self::AcceptAdr(_) => true,
+            | Self::AcceptAdr(_)
+            | Self::MoveStatus(_) => true,
         }
     }
 
@@ -455,7 +514,8 @@ impl Command {
             | Self::ArchiveEntity(_)
             | Self::SupersedeEntity(_)
             | Self::ApproveDesign(_)
-            | Self::AcceptAdr(_) => Capability::ArtifactWrite,
+            | Self::AcceptAdr(_)
+            | Self::MoveStatus(_) => Capability::ArtifactWrite,
         }
     }
 
@@ -467,6 +527,7 @@ impl Command {
                 locator,
                 ..
             }) => format!("create {entity_type} at {locator}"),
+            Self::MoveStatus(MoveStatus { target, to, .. }) => format!("move {target} to {to}"),
             Self::UpdateEntity(UpdateEntity { target, changes }) => format!(
                 "update {target} ({})",
                 changes
@@ -520,6 +581,21 @@ impl Command {
     pub fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();
         match self {
+            Self::MoveStatus(MoveStatus { to, .. }) => {
+                if to.trim().is_empty() {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::EmptyChange,
+                            "command.move-status.to",
+                            "a move must name the status it moved to",
+                        )
+                        .with_hint(
+                            "the ladder a kind declares is what says which names are legal; an \
+                             empty one names nothing on any ladder",
+                        ),
+                    );
+                }
+            }
             Self::UpdateEntity(UpdateEntity { changes, .. }) => {
                 if changes.is_empty() {
                     errors.push(
@@ -612,6 +688,12 @@ mod tests {
                     "title".to_owned(),
                     Node::from("Passkey authentication"),
                 )])),
+            }),
+            Command::MoveStatus(MoveStatus {
+                target: reference(DESIGN),
+                to: "accepted".to_owned(),
+                expected_revision: None,
+                decided_on: None,
             }),
             Command::UpdateEntity(UpdateEntity {
                 target: reference(DESIGN),

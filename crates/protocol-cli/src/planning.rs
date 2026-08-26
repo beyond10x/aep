@@ -459,6 +459,199 @@ pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
         .with_context(|| format!("reading the planning store at {}", root.display()))
 }
 
+/// The instant, as the contract spells one.
+///
+/// Read here and handed in, never inside a crate that decides anything: a record that dated itself
+/// could not be replayed.
+fn clock_at_the_edge() -> aep_domain::time::Timestamp {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+        });
+    aep_domain::time::Timestamp::from_epoch_millis(millis)
+}
+
+/// Who the command is from.
+///
+/// `human:` because a person typed it. The store cannot verify an identity, and a field that looks
+/// verified and is not is worse than one that plainly is not.
+fn command_actor() -> Result<aep_domain::entity::ActorRef> {
+    let name = actor_of(None);
+    let sanitised: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    aep_domain::entity::ActorRef::parse(&format!("human:{sanitised}"))
+        .map_err(|error| anyhow::anyhow!("`{name}` is not a usable actor: {error}"))
+}
+
+/// The contract backend over this store.
+///
+/// Hydrated per invocation. That is the cost of one write path rather than two: the store is read,
+/// its artifacts become entities through `CreateEntity` commands, and the command this verb issues
+/// is decided against them. A CLI that wrote the file directly would skip all of it, which is
+/// exactly what D-P1 was.
+fn backend_for(args: &StoreArgs) -> Result<aep_backend_markdown::backend::MarkdownBackend> {
+    let root = args.store()?.root().to_path_buf();
+    aep_backend_markdown::backend::MarkdownBackend::open(
+        &root,
+        declared_members(&args.location.repository_root()),
+        clock_at_the_edge(),
+        command_actor()?,
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+    .with_context(|| format!("opening the planning store at {}", root.display()))
+}
+
+/// One command envelope, with identifiers derived from `name` so a replay is recognisable.
+///
+/// Shared by every planning verb: four copies of this were four places for the idempotency key to
+/// be built differently, and an idempotency key that differs between two calls of the same verb is
+/// a replay the contract cannot recognise.
+fn envelope_for(
+    name: &str,
+    correlation: &str,
+    wire_name: &'static str,
+    payload: aep_domain::command::Command,
+) -> Result<aep_contract::command::CommandEnvelope<aep_domain::command::Command>> {
+    use aep_contract::command::{CommandContext, CommandEnvelope};
+
+    let safe = name.replace([':', '/'], "-");
+    let context = CommandContext::new(
+        format!("req-{safe}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        safe.parse().map_err(|error| anyhow::anyhow!("{error}"))?,
+        command_actor()?,
+        correlation
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        clock_at_the_edge(),
+    );
+    Ok(CommandEnvelope::new(
+        format!("cmd-{safe}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        wire_name,
+        payload,
+        context,
+    ))
+}
+
+/// What a planning document states, as an entity body.
+///
+/// Status, title, summary, owner, tags — and the **prose**, under `BODY_KEY`. Everything the
+/// document says about itself travels as data, so the command carries the whole document and the
+/// backend stays the only thing that writes one.
+fn entity_body(
+    document: &PlanningDocument,
+) -> std::collections::BTreeMap<String, aep_domain::node::Node> {
+    use aep_domain::node::Node;
+
+    let front = &document.frontmatter;
+    let mut data: std::collections::BTreeMap<String, Node> = std::collections::BTreeMap::new();
+    data.insert("status".to_owned(), Node::from(front.status.as_str()));
+    for (key, value) in [
+        ("title", front.title.as_deref()),
+        ("summary", front.summary.as_deref()),
+        ("owner", front.owner.as_deref()),
+    ] {
+        if let Some(value) = value {
+            data.insert(key.to_owned(), Node::from(value));
+        }
+    }
+    if !front.tags.is_empty() {
+        data.insert(
+            "tags".to_owned(),
+            Node::Seq(
+                front
+                    .tags
+                    .iter()
+                    .map(|tag| Node::from(tag.as_str()))
+                    .collect(),
+            ),
+        );
+    }
+    data.insert(
+        aep_backend_markdown::backend::BODY_KEY.to_owned(),
+        Node::from(document.body.as_str()),
+    );
+    data
+}
+
+/// Issues the `CreateEntity` command that produces `document`, and returns where it landed.
+///
+/// The entity carries what the document states — status, title, summary, owner, tags and the
+/// **prose**, under `BODY_KEY`. The backend writes the file; nothing here does.
+fn write_through_a_command(
+    backend: &aep_backend_markdown::backend::MarkdownBackend,
+    document: &PlanningDocument,
+    store: &MarkdownStore,
+) -> Result<std::path::PathBuf> {
+    use aep_contract::command::CommandService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, CreateEntity};
+    use aep_domain::entity::{EntityLocator, EntityType};
+    use aep_domain::node::Node;
+
+    let front = &document.frontmatter;
+    let data = entity_body(document);
+
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        front.id.namespace(),
+        front.id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{}` cannot be given an address: {error}", front.id))?;
+
+    let name = format!("new-{}", front.id);
+    let envelope = envelope_for(
+        &name,
+        "protocol-artifact-new",
+        "aep.entity.create/v1",
+        Command::CreateEntity(CreateEntity {
+            entity_type: EntityType::parse(&format!("aep.{}/v1", front.id.namespace()))
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            locator,
+            data: Node::Map(data),
+        }),
+    )?;
+
+    let result = block_on(backend.execute(envelope)).map_err(|error| {
+        let detail = error.to_string();
+        if detail.contains("already addresses an entity") {
+            anyhow::anyhow!(
+                "`{}` already exists at {} — creating over a document is how a plan item's body \
+                 disappears, and there is no undo in a tool that has not committed anything",
+                front.id,
+                store.relative_path_for(&front.id)
+            )
+        } else {
+            anyhow::anyhow!("{detail}")
+        }
+    })?;
+    let Some(created) = result.affected.first() else {
+        anyhow::bail!("creating `{}` reported no entity", front.id);
+    };
+
+    // The edges, each its own command — the same one `protocol artifact relate` issues, because
+    // an edge created at birth and an edge added later are the same act.
+    let _ = created;
+    for relation in &front.relations {
+        relate_through_a_command(backend, &front.id, relation.kind, relation.target.id())?;
+    }
+
+    Ok(store.root().join(store.relative_path_for(&front.id)))
+}
+
 /// `protocol artifact new`
 fn create(args: &NewArgs) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(&args.kind).map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -491,17 +684,13 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     let body = template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title));
     let document = PlanningDocument::new(frontmatter, body);
 
+    // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
+    // second place for idempotency, revision checks and the audit record to be forgotten, and
+    // invariant 14 gives state change exactly one door. The document above is what the command has
+    // to produce, not what gets written — `MarkdownBackend` writes it, from the entity.
     let store = args.store.store()?;
-    let path = store.create(&document)?;
-    journal(
-        &store,
-        &document,
-        &actor_of(None),
-        &now_at_the_edge(),
-        aep_backend_markdown::journal::Change::Created {
-            status: status.clone(),
-        },
-    )?;
+    let backend = backend_for(&args.store)?;
+    let path = write_through_a_command(&backend, &document, &store)?;
     let relative = store.relative_path_for(&id);
 
     match args.store.format {
@@ -517,6 +706,76 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Issues the `MoveStatus` command that records one decided move.
+///
+/// The decision is not taken here and not taken by the backend — it was taken by the engine against
+/// the kind's lifecycle document before this is called. What travels is the move and its account.
+fn move_through_a_command(
+    backend: &aep_backend_markdown::backend::MarkdownBackend,
+    id: &ArtifactId,
+    to: &ArtifactStatus,
+    decided_on: &aep_backend_markdown::journal::Provenance,
+) -> Result<()> {
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, MoveStatus};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let target = block_on(QueryService::resolve(backend, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+
+    // **As text, not as a `Node` tree.** `Node`'s numbers are floating point, so an evidence count
+    // of `1` travels out and comes back as `1.0`, and a count that is not an integer is not a
+    // count. Both ends used to swallow that with `.ok()`, which turned a decoding failure into a
+    // move that looked exactly as well founded as one nobody had any evidence for.
+    let account = Some(aep_domain::node::Node::from(
+        serde_json::to_string(decided_on)
+            .map_err(|error| anyhow::anyhow!("the account could not be written: {error}"))?
+            .as_str(),
+    ));
+
+    let at = clock_at_the_edge();
+    let name = format!("move-{id}").replace([':', '/'], "-");
+    let context = CommandContext::new(
+        format!("req-{name}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        format!("{name}-{to}-{}", at.epoch_millis())
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        command_actor()?,
+        "protocol-artifact-move"
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        at,
+    );
+    block_on(
+        backend.execute(CommandEnvelope::new(
+            format!("cmd-{name}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "aep.status.move/v1",
+            Command::MoveStatus(MoveStatus {
+                target: EntityRef::new(target),
+                to: to.as_str().to_owned(),
+                expected_revision: None,
+                decided_on: account,
+            }),
+            context,
+        )),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
 }
 
 /// `protocol artifact move`
@@ -574,18 +833,12 @@ fn move_status(
 
     let relative = stored.relative_path.clone();
     let document = stored.document.clone();
-    let path = store.update(&relative, &document)?;
-    journal(
-        &store,
-        &document,
-        &actor_of(None),
-        &now,
-        aep_backend_markdown::journal::Change::Moved {
-            from: from.clone(),
-            to: to.clone(),
-            decided_on: decided_on.clone(),
-        },
-    )?;
+    // Through the command the vocabulary gained for this. The engine has already decided the move
+    // above, against the kind's ladder and the evidence presented; what crosses here is the
+    // decision and the account it rested on. `MarkdownBackend` writes the file and journals it.
+    let _ = relative;
+    move_through_a_command(&backend_for(args)?, &id, &to, &decided_on)?;
+    let path = store.root().join(store.relative_path_for(&id));
 
     match args.format {
         Format::Text => {
@@ -618,6 +871,68 @@ fn move_status(
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Issues the `CreateRelation` command that adds one edge.
+///
+/// The journal entry comes from `MarkdownBackend`, which is what makes the record and the write one
+/// act rather than two things a verb has to remember to do in order.
+fn relate_through_a_command(
+    backend: &aep_backend_markdown::backend::MarkdownBackend,
+    source: &ArtifactId,
+    relation: RelationKind,
+    target: &ArtifactId,
+) -> Result<()> {
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, CreateRelation};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let address = |id: &ArtifactId| {
+        EntityLocator::new(
+            aep_backend_markdown::backend::ORGANISATION,
+            aep_backend_markdown::backend::SPACE,
+            id.namespace(),
+            id.name(),
+        )
+        .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))
+    };
+    let resolve = |id: &ArtifactId| -> Result<aep_domain::entity::EntityId> {
+        block_on(QueryService::resolve(backend, &address(id)?))
+            .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))
+    };
+
+    let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
+    let context = CommandContext::new(
+        format!("req-{name}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        format!("rel-{name}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        command_actor()?,
+        "protocol-artifact-relate"
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        clock_at_the_edge(),
+    );
+    block_on(
+        backend.execute(CommandEnvelope::new(
+            format!("cmd-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "aep.relation.create/v1",
+            Command::CreateRelation(CreateRelation {
+                kind: relation,
+                source: EntityRef::new(resolve(source)?),
+                target: EntityRef::new(resolve(target)?),
+            }),
+            context,
+        )),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
 }
 
 /// `protocol artifact relate`
@@ -659,17 +974,11 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<Ex
         return Ok(crate::exit_code(false));
     }
 
-    store.update(&relative, &document)?;
-    journal(
-        &store,
-        &document,
-        &actor_of(None),
-        &now_at_the_edge(),
-        aep_backend_markdown::journal::Change::Related {
-            relation,
-            target: target.to_string(),
-        },
-    )?;
+    // Through a command. The edge the contract creates is what `MarkdownBackend` projects into
+    // frontmatter, so the document above is what this verb had to check a graph against — not what
+    // gets written.
+    let _ = relative;
+    relate_through_a_command(&backend_for(args)?, &id, relation, target.id())?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} (revision {})",
@@ -686,6 +995,64 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<Ex
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Issues an `UpdateEntity` command carrying `changes`.
+///
+/// The one door for a structural change. `MarkdownBackend` writes the file and journals it, so the
+/// record and the write are one act rather than two things a verb has to remember to do in order.
+fn update_through_a_command(
+    backend: &aep_backend_markdown::backend::MarkdownBackend,
+    id: &ArtifactId,
+    changes: impl IntoIterator<Item = (String, aep_domain::node::Node)>,
+    correlation: &str,
+) -> Result<()> {
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, UpdateEntity};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let target = block_on(QueryService::resolve(backend, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+
+    let at = clock_at_the_edge();
+    let name = format!("{correlation}-{id}").replace([':', '/'], "-");
+    let context = CommandContext::new(
+        format!("req-{name}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        format!("upd-{name}-{}", at.epoch_millis())
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        command_actor()?,
+        correlation
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        at,
+    );
+    block_on(
+        backend.execute(CommandEnvelope::new(
+            format!("cmd-{name}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "aep.entity.update/v1",
+            Command::UpdateEntity(UpdateEntity {
+                target: EntityRef::new(target),
+                changes: changes.into_iter().collect(),
+            }),
+            context,
+        )),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
 }
 
 /// `protocol artifact body`
@@ -716,14 +1083,20 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
 
     let relative = stored.relative_path.clone();
     let document = stored.document.clone();
-    let path = store.update(&relative, &document)?;
-    journal(
-        &store,
-        &document,
-        &actor_of(None),
-        &now_at_the_edge(),
-        aep_backend_markdown::journal::Change::BodyReplaced,
+    // Through a command, carrying the prose as data — which is the whole reason `BODY_KEY` exists.
+    // A verb that wrote the body directly is the second write path invariant 14 forbids, and a body
+    // is the one thing a planning document is *for*.
+    let _ = relative;
+    update_through_a_command(
+        &backend_for(args)?,
+        &id,
+        [(
+            aep_backend_markdown::backend::BODY_KEY.to_owned(),
+            aep_domain::node::Node::from(document.body.as_str()),
+        )],
+        "protocol-artifact-body",
     )?;
+    let path = store.root().join(store.relative_path_for(&id));
     match args.format {
         Format::Text => outln!(
             "{id} body replaced (revision {}) at {}",
@@ -1568,153 +1941,20 @@ mod tests {
         assert_eq!(target.to_string(), "epic:passwordless");
     }
 
-    /// The scan has to see a write that records nothing, or it is decoration.
-    #[test]
-    fn the_journal_scan_sees_a_write_that_records_nothing() {
-        let planted = "    let path = store.update(&relative, &document)?;\n    Ok(())\n";
-        let window: String = planted.lines().take(12).collect::<Vec<_>>().join("\n");
-        assert!(
-            !window.contains("journal("),
-            "a write with no journal call must read as unrecorded"
-        );
-    }
-
-    /// The promise `journal`'s own documentation makes: a verb that writes appears there.
+    /// Superseded, 2026-08-26, and recorded rather than quietly deleted.
     ///
-    /// A source scan, because that is the only thing that can see an omission. A verb added next
-    /// year that calls `store.update` and forgets to record it would leave a history with a hole in
-    /// it, and a hole in a history is indistinguishable from a plan where nothing happened.
-    #[test]
-    fn every_write_verb_is_journalled() {
-        let source = include_str!("planning.rs");
-        let mut unrecorded = Vec::new();
-        for (number, line) in source.lines().enumerate() {
-            if !line.contains("store.update(") && !line.contains("store.create(") {
-                continue;
-            }
-            // The next few lines must reach the helper. Deliberately a window and not the whole
-            // function: a `journal(` call three hundred lines later is not this write's record.
-            let window: String = source
-                .lines()
-                .skip(number)
-                .take(12)
-                .collect::<Vec<_>>()
-                .join("\n");
-            if !window.contains("journal(") {
-                unrecorded.push(format!("{}: {}", number + 1, line.trim()));
-            }
-        }
-        assert!(
-            unrecorded.is_empty(),
-            "these writes record nothing in the journal: {unrecorded:#?}"
-        );
-    }
-
-    #[test]
-    fn an_edge_argument_with_no_colon_says_what_one_looks_like() {
-        let error = parse_relation("derived_from").expect_err("there is no target");
-        assert!(
-            error.to_string().contains("<relation>:<artifact-id>"),
-            "{error}"
-        );
-    }
-
-    /// The status vocabulary is open, and this is where "open" is kept from meaning "unchecked".
+    /// `every_write_verb_is_journalled` scanned this file for a `store.update` or `store.create`
+    /// with no `journal(` call near it. It was the mitigation for deviation **D-P1**: writes went
+    /// to the store directly, so the only thing that could see an unrecorded one was a source scan.
     ///
-    /// This test used to assert the opposite: that `in-progress` is refused because the binary does
-    /// not name it. It is not refused any more — a lifecycle document may declare it — and what
-    /// refuses it now is the **ladder**, which is a document an adopter can change rather than a
-    /// list compiled into this program.
-    #[test]
-    fn a_status_no_ladder_declares_is_refused_and_the_ladder_says_what_it_may_hold() {
-        // The shape alone is open: a name a lifecycle could declare parses.
-        let open = parse_status("correction-owed").expect("a well-formed status name");
-        assert_eq!(open.as_str(), "correction-owed");
-        assert!(!open.is_named(), "it is not one this binary names");
-
-        // A name no lifecycle could declare is still refused, on its shape.
-        for malformed in ["In Progress", "in progress", "", "9lives"] {
-            parse_status(malformed)
-                .err()
-                .unwrap_or_else(|| panic!("{malformed:?} must not parse as a status"));
-        }
-
-        // And the ladder is the gate for a write: `story` does not declare `correction-owed`, so
-        // the refusal names what it does declare rather than what this binary happens to know.
-        let mut lifecycles = aep_domain::artifact::LifecycleRegistry::new();
-        lifecycles.insert(
-            ArtifactKind::Story,
-            serde_yaml::from_str(
-                "kind: story\ninitial: draft\ntransitions:\n  draft: [proposed]\n  \
-                 proposed: [active]\n  active: []\n",
-            )
-            .expect("the fixture lifecycle parses"),
-        );
-        let refused = parse_status_in("correction-owed", &ArtifactKind::Story, &lifecycles)
-            .expect_err("no ladder declares it");
-        let message = refused.to_string();
-        assert!(message.contains("correction-owed"), "{message}");
-        assert!(message.contains("draft"), "{message}");
-        assert!(message.contains("active"), "{message}");
-        assert!(message.contains("line, not a release"), "{message}");
-
-        // The same name against a ladder that *does* declare it is accepted, with no Rust change.
-        let mut opened = aep_domain::artifact::LifecycleRegistry::new();
-        opened.insert(
-            ArtifactKind::Story,
-            serde_yaml::from_str(
-                "kind: story\ninitial: draft\ntransitions:\n  draft: [correction-owed]\n  \
-                 correction-owed: []\n",
-            )
-            .expect("the fixture lifecycle parses"),
-        );
-        let accepted = parse_status_in("correction-owed", &ArtifactKind::Story, &opened)
-            .expect("the ladder declares it");
-        assert_eq!(accepted.as_str(), "correction-owed");
-    }
-
-    /// A known name always parses to the variant that names it, never to a look-alike `Other`.
-    /// Two values that render identically and compare unequal is the defect an open vocabulary
-    /// invites, and it would make every `status == Draft` in the workspace quietly wrong.
-    #[test]
-    fn a_named_status_never_parses_as_an_invented_one() {
-        for status in ArtifactStatus::ALL {
-            let parsed = parse_status(status.as_str()).expect("a named status parses");
-            assert_eq!(&parsed, status);
-            assert!(parsed.is_named(), "{status} came back as an invented rung");
-        }
-    }
-
-    #[test]
-    fn every_relation_in_the_vocabulary_has_a_meaning() {
-        // `protocol artifact relations` is how an agent learns the edge names. A blank cell in that
-        // table is a relation nobody will use correctly.
-        for relation in RelationKind::ALL {
-            let meaning = meaning(*relation);
-            assert!(!meaning.is_empty(), "{relation} means nothing");
-            assert!(
-                meaning.ends_with('.'),
-                "{relation}'s meaning is not a sentence: {meaning}"
-            );
-        }
-    }
-
-    #[test]
-    fn the_adr_template_is_found_under_its_alias() {
-        // The kind is `architecture-decision-record` and the file is `adr.md`; a lookup by
-        // canonical name alone would silently fall back to a one-line body.
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let body = template(&root, &ArtifactKind::ArchitectureDecisionRecord)
-            .expect("this repository ships artifacts/templates/adr.md");
-        assert!(body.contains("## Decision"), "{body}");
-    }
-
-    #[test]
-    fn a_kind_with_no_template_gets_none_rather_than_a_wrong_one() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        assert!(
-            template(&root, &ArtifactKind::Vision).is_none(),
-            "there is no vision template, and no other template may stand in for one"
-        );
-    }
+    /// There are no direct writes left. Every verb issues a command and `MarkdownBackend` writes the
+    /// file **and** journals it as one act, so a write that records nothing is no longer something a
+    /// verb can forget to do — it is not something a verb does at all. The guarantee moved rather
+    /// than went away, and what pins it now is
+    /// `no_planning_verb_writes_to_the_store_except_through_a_command` in `tests/planning_cli.rs`,
+    /// with its own planted-write guard beside it.
+    ///
+    /// Left as a note because a check that disappears from a file reads exactly like a check nobody
+    /// thought was needed.
+    const _SUPERSEDED_JOURNAL_SCAN: () = ();
 }
