@@ -1,7 +1,7 @@
 ---
 title: CLI reference
 sidebar_position: 1
-description: Every subcommand of the reference CLI, grouped by surface — protocol, entity, ESS and infrastructure — with exit codes.
+description: Every subcommand of the reference CLI, grouped by surface — protocol, planning, adoption, driver, evidence, entity, ESS, infrastructure, trace and contract — with exit codes.
 ---
 
 # CLI reference
@@ -55,12 +55,14 @@ from, default `.`).
 | Command | Does |
 |---|---|
 | `protocol artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--relate rel:id]` | writes one file, at the path the id determines; refuses to overwrite an existing one |
-| `protocol artifact move <id> --to <status>` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead |
+| `protocol artifact move <id> --to <status>` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead — or, when the rung is on the ladder but its evidence has not been recorded, says **which kind** is missing and how many. See [Lifecycles, decided as data](../concepts/lifecycles.md) |
 | `protocol artifact relate <id> <relation> <target>` | adds one edge |
 | `protocol artifact body <id> --from <path\|->` | replaces the complete markdown body while preserving CLI-owned frontmatter; changed bytes bump one revision, identical bytes do nothing |
 | `protocol artifact list [--kind …] [--status …]` | the plan, one line per artifact |
 | `protocol artifact board [--kind …]` | the same plan as status columns |
 | `protocol artifact graph [--format dot\|json]` | the plan's graph — `dot` for `dot -Tsvg`, `json` for a consumer that would otherwise parse a diagram |
+| `protocol artifact history <id> [--format text\|yaml\|json]` | what happened to one artifact, oldest first, out of the store's append-only journal: creations, moves, and every evidence record. A corrupt journal line is skipped **and counted**, never silently dropped |
+| `protocol artifact evidence <id> --kind <k> --source <s> [--ref <url>] [--at <iso8601>]` | records an observation about an artifact, so a later move can be decided on it. `--at` defaults to now, read at the edge |
 | `protocol artifact validate` | every file, every edge, every status, accumulated into one list: a file where its id does not put it, an edge pointing at nothing, a cycle, a duplicate id, a status the lifecycle does not have |
 | `protocol artifact kinds` | the 26 artifact kinds, marking which are planning rather than output |
 | `protocol artifact relations` | the 13 relations, with what each edge means |
@@ -69,6 +71,26 @@ from, default `.`).
 `new`, `move`, `relate` and `body` write without an `--out`, unlike `ess generate` and `ess synthesize`.
 The difference is that they write exactly one file, at a path the id determines, inside a directory
 somebody opted into — and an item you did not want is removed with `rm`.
+
+## Adoption surface
+
+`protocol reverse` points the tooling at a repository that already exists and was not written with
+any of this in mind. Three of its four verbs **write nothing** — the consequence for a person
+evaluating the tool is that you can run it against your own repository before deciding anything,
+and the worst case is a report you disagree with.
+
+| Command | Does |
+|---|---|
+| `protocol reverse scan [root] [--format text\|yaml\|json]` | reads a repository and reports what it already says about itself — headings, declared toolchains, gates, test layout — as an `aep.reverse-scan/1` bundle. **Writes nothing** |
+| `protocol reverse history [root] [--recent 500] [--top 15] [--format …]` | reads what the repository's own git history says: who touches what, which areas are dormant, where change concentrates. **Writes nothing** |
+| `protocol reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists; standard output when `--out` is absent |
+| `protocol reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
+
+`--protocols` takes a path or a pinned `git+…#<40-hex>` locator: a governing document tree that
+could move under you is a gate whose meaning changes without a commit in your repository.
+
+See [Adopting a repository that already exists](https://github.com/beyond10x/engineering-protocols/blob/main/docs/guide/adopting.md)
+for the walkthrough.
 
 ## Driver surface
 

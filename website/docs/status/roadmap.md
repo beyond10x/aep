@@ -30,6 +30,21 @@ before code generation was allowed to be judged by it.)
 | Harness wave 1, trace wave 1 | the markdown planning store and the `protocol artifact` verbs, the Claude Code plugin, and the transcript checker | `0.8.0-harness-wave-1-trace-wave-1` |
 | Harness waves 2–3, trace wave 2 | the reference driver — decided, then built: `protocol drive`, the driven shell, two enforcement hooks, `protocol workflow render`; and transcript conformance as an evidence kind the engine admits | `0.9.0-harness-waves-2-3` |
 | Evidence horizons, the first governed run | records carry `observed_at` and requirements carry a `horizon`; `protocol drive` walked a real story out of this repository's own backlog, and blocked | `0.10.0-horizons-dogfood-lab` |
+| Ground truth and docs | an outside adopter's corpus replaced this repository's own guesses about evidence in prose, and this site was written | `0.11.0-ground-truth-and-docs` |
+| A workflow declares where a run may write | the toolset a state grants is a property of the workflow, and a fourth eval arm proves the toolset holds it | `0.12.0` |
+| **The ladder is data** | the status ladder becomes a YAML file decided by `entity-core`, an IO-free kernel taken as a pinned dependency, and the status vocabulary is opened to authors | `0.13.0` |
+| The protocol reads a repository that already exists | `protocol reverse scan\|history\|openapi\|init` — three verbs that write nothing, and one that writes `project.yaml` | `0.14.0` |
+| A rung may cost evidence | `requires:` on a ladder; the refusal names which kind of observation is missing and how many | `0.15.0` |
+| A rung may open on a date | date and duration operators in the condition language, with the clock read at the edge and passed in | `0.16.0` |
+| `obligation`, and the open vocabulary spent | a commitment on a clock nobody here controls, as a ladder — and it never gates a transition | `0.17.0` |
+| The typed `blocker` | something stopping work, typed by what would clear it; plus an audit of which vocabularies are open, which are closed, and what each closure buys | `0.18.0` |
+| **The plan has a history** | the markdown store gains an append-only journal, and `protocol artifact history` answers what happened to one artifact | `0.19.0` |
+| Evidence names what it is about | `protocol artifact evidence` records an observation against an artifact, and a move separates evidence *recorded* from evidence *asserted* | `0.20.0` |
+| W5 — the engine's mechanisms | evidence names its subject and a mismatch is refused before the record is built; an advisory requirement tier that reports and gates nothing; `depends_on` and a circuit breaker in step maps; and the driver writes what each step was **not** allowed to do | `0.21.0` |
+| W6 — portability and drift | a second transcript shape decided by the same `trace-spec/1`, and three prose counts re-derived from the commands that print them | `0.22.0` |
+| W7 — **a claim that left the boundary** | `outbound-claim`, where sending is not undoable — added as a YAML file with no Rust change at all, which is the proof the whole `entity-core` programme was for | `0.23.0` |
+| The pin says what it links | the `entity-core` pin moved to the tag that exists, and `outbound-claim` starts at the built-in `draft` rather than an invented near-miss | `0.23.1` |
+| **The first tag this repository has verified** | `task check` gained the MSRV build and the website build — the two jobs CI ran and the local gate did not, which is how CI stayed red behind a green gate for eleven consecutive releases | `0.23.2` |
 
 ## Deferred by decision
 

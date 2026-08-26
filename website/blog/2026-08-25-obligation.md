@@ -1,0 +1,45 @@
+---
+title: "0.17.0 — obligation, a commitment on a clock nobody here controls"
+description: >
+  A second ladder, and the rule attached to it is the point: an obligation must never gate a
+  transition. A missed external deadline is a fact to report, not a permission to withhold.
+slug: obligation
+tags: [release, aep, planning]
+---
+
+An `obligation` is a commitment on a clock **nobody here controls**: a customer's deadline, a
+regulator's window, a partner's delivery date.
+
+```console
+$ protocol artifact lifecycle obligation
+obligation starts at open
+  met -> nothing
+  open -> met, slipped
+  slipped -> met
+```
+
+{/* truncate */}
+
+## The rung that justifies the kind
+
+`slipped`. And the rule attached to it is the point of the whole release: **an obligation must never
+gate a transition.**
+
+A missed external deadline is a **fact to report**, not a **permission to withhold**. A tool that
+let a slipped obligation block your work would have turned somebody else's missed date into your
+blocked pull request — which is both unfair and useless, because you cannot fix it from here.
+
+This is also why it is a second ladder rather than a widening of the existing status vocabulary.
+`slipped` on `ArtifactStatus` would have been available to every kind, and something would
+eventually have gated on it.
+
+## Why `slipped -> met` exists
+
+An obligation you missed and then satisfied is a real and common history. A ladder that made
+`slipped` terminal would push people to avoid recording it in the first place — and the state you
+most want recorded is the one nobody wants to write down.
+
+## What it cost to add
+
+A YAML file. No Rust change. This is the second kind added that way, and by this point the claim
+`0.13.0` made has two releases of evidence behind it.

@@ -289,7 +289,8 @@ xtask/              repository automation
 Requires a recent stable Rust and [go-task](https://taskfile.dev).
 
 ```console
-task check          # ten steps: format check, status, clippy, tests, rustdoc, schema, projections, suites, observation IR, synthesis
+task check          # twelve steps: format check, status, clippy, tests, rustdoc, schema, projections,
+                    #              suites, observation IR, synthesis, MSRV build, website build
 task test
 task status         # regenerate the delivered-waves table above from the tags
 task schema         # regenerate schemas/generated/

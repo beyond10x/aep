@@ -499,7 +499,7 @@ principle is timed against a phase your workflow does not have.
 
 This repository does the same thing from the other side: `crates/aep-engine/tests/documents.rs` loads
 the tree, asserts it has no failures, and resolves a task against every profile — so a principle that
-could never fire cannot be committed. Its own gate is `task check`, ten steps, and a step whose
+could never fire cannot be committed. Its own gate is `task check`, twelve steps, and a step whose
 toolchain is missing fails and names it rather than skipping.
 
 ## Next

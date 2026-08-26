@@ -6,18 +6,26 @@ description: What is implemented, per component, with the numbers the repository
 
 # Where this stands
 
-Current as of the tag `0.10.0-horizons-dogfood-lab` (2026-08-21). The repository's gate, `task
-check`, runs ten steps — formatting, clippy with warnings as errors, the test suite, rustdoc with
-warnings as errors, and six drift checks that regenerate every schema, projection, suite,
-synthesized tree, infrastructure IR and the delivered-waves record and compare bytes. This page
-states no suite or test counts: four hand-written counts drifted apart within the repository's first
-48 hours, so the count now lives in exactly one place — the gate's own output. Run `task check` for
-the measurement.
+Current as of the tag `0.23.2` (2026-08-26). The repository's gate, `task check`, runs **twelve
+steps** — formatting, clippy with warnings as errors, the test suite, rustdoc with warnings as
+errors, six drift checks that regenerate every schema, projection, suite, synthesized tree,
+infrastructure IR and the delivered-waves record and compare bytes, a build on the declared MSRV,
+and this documentation site's own build. This page states no suite or test counts: four
+hand-written counts drifted apart within the repository's first 48 hours, so the count now lives in
+exactly one place — the gate's own output. Run `task check` for the measurement.
 
-CI runs the same ten steps; nothing lands that does not pass all of them. The gate needs the Go
+CI runs the same twelve steps; nothing lands that does not pass all of them. The gate needs the Go
 toolchain, the `wasm32-unknown-unknown` Rust target and Node beside Rust's own, and a step whose
 toolchain is missing fails and names it rather than skipping — a skipped check reads exactly like a
 passing one.
+
+Two of those twelve were added on 2026-08-26, and the reason is the most useful thing on this page:
+**CI had been red for eleven consecutive releases behind a green local gate**, because `task check`
+was missing exactly the two jobs CI also ran. One failure arrived through the lockfile — a
+transitive dependency raised *its own* `rust-version` and the declared MSRV stopped holding, with no
+commit of ours touching a line of Rust. The other was a markdown link from a documentation page into
+the repository tree, which this site's build resolves and CI's does too. A gate that covers less
+than the gate it claims to be is worse than one that admits its scope.
 
 ## The headline: the protocol has now governed a real run, and the run stopped
 
@@ -65,16 +73,65 @@ The v0.2 scope is complete.
 
 | | State |
 |---|---|
-| domain model, engine, documents, CLI | implemented — 17 top-level CLI verbs |
+| domain model, engine, documents, CLI | implemented — 20 top-level CLI verbs |
 | interaction contract, identity, audit | implemented, with an in-memory reference backend |
 | conformance suites for backends | implemented — 16 suites, 3 levels, 89 properties at `full`, checked against a deliberately broken backend |
 | a durable planning store | implemented as markdown (`aep-backend-markdown`) — **not** an implementation of the storage contract; see [Limitations](./limitations.md) |
 | a reference driver | implemented — `protocol drive run\|status\|resume`, with `command`, `llm` and `operator` steps |
 | running on a real project | **once**, and it blocked; see above |
 
-The document tree is 45 files — 3 protocols, 22 principles, 4 workflows, 6 profiles, 8 artifact
-lifecycles and 2 step maps — validated against the protocol vocabulary in CI, plus 15 generated JSON
-Schemas that CI fails on if they drift from the Rust types.
+The document tree is 49 files — 3 protocols, 22 principles, 4 workflows, 6 profiles, **12 artifact
+lifecycles** and 2 step maps — validated against the protocol vocabulary in CI, plus 15 generated
+JSON Schemas that CI fails on if they drift from the Rust types.
+
+### The ladder became data
+
+Between `0.13.0` and `0.23.2` the status ladder every plan item climbs stopped being a hand-written
+Rust lookup and became a YAML file, decided by
+[`entity-core`](https://github.com/beyond10x/entity-runtime) — a separate, IO-free kernel taken as a
+pinned dependency. The consequence for a person: **modelling a kind of work this repository never
+anticipated no longer needs a pull request here and a release.**
+
+The proof is `outbound-claim`, added in `0.23.0` as **a YAML file and no Rust change at all** — a
+ladder for a statement that left the boundary, where `sent` has no path back to `draft` and a wrong
+claim is fixed by making a second claim.
+
+| shipped | what it means for a plan |
+|---|---|
+| the ladder is data | a kind's transitions live in `artifacts/lifecycles/<kind>.yaml`, in your tree or ours |
+| the vocabulary is open to authors | `ArtifactKind` and `ArtifactStatus` accept a rung *some ladder declares* — open to authors, closed to typos |
+| a rung can cost evidence | `requires:` names the kind and the count; the refusal says which kind of `no` it is |
+| a rung can open on a date | the clock is read at the edge and passed in, never read inside the kernel |
+| the store has a journal | `protocol artifact history` answers what happened to one artifact, out of append-only JSONL; a corrupt line is skipped **and counted** |
+| a move records its provenance | evidence that was *recorded* is separated from evidence that was *asserted*, and a move leaning on an assertion says so as it happens |
+| three ladders that needed no Rust | `blocker`, `obligation` and `outbound-claim` |
+
+The dependency is reversible on purpose:
+`crates/aep-backend-markdown/tests/kernel_equivalence.rs` holds the kernel's verdict identical to
+the lookup it replaced, so the lookup is still standing behind it. See
+[Lifecycles, decided as data](../concepts/lifecycles.md).
+
+**What `entity-core` is not**: a store. It performs no IO of any kind — a source scan in its own
+test suite refuses the tokens for filesystem, network, clock and randomness, and its whole
+dependency list is `serde` and `serde_json`. Every byte the planning store writes is written by
+`aep-backend-markdown` here. What it decides is the transition, and nothing else.
+
+### The engine and the driver gained four things
+
+| shipped | what it means for a run |
+|---|---|
+| evidence names its subject | a record declaring a subject that does not match the task it is submitted against is refused **before** the record is constructed, so a fact about one story cannot discharge another story's gate |
+| an advisory enforcement tier | a requirement may be declared advisory with an owner and an exit criterion; it is evaluated and counted and **gates nothing**, so a rule can be measured before it is enforced |
+| a dependency that keeps failing stops being called | a step map may declare `depends_on` and a circuit breaker; a repeatedly failing dependency opens the breaker instead of being retried |
+| the driver writes what a step was **not** allowed to do | refusals are emitted as their own `trace-spec/1` document, so the absence of a tool call is a checkable fact rather than a silence |
+
+### Adoption, from the other end
+
+`protocol reverse` reads a repository that already exists and was not written with any of this in
+mind. Three of its four verbs write nothing — `scan` reports what a repository already says about
+itself, `history` reports what its git history says, `openapi` drafts an `ess/1` domain from an
+OpenAPI document — and only `init` writes, producing the `project.yaml` that makes a repository an
+adopting project.
 
 ### Evidence gained a time
 
@@ -96,8 +153,8 @@ contributed by an outside adopter: **43 occurrences, 43 records, 0 unparsed**.
 
 | | State |
 |---|---|
-| the markdown planning store (`aep.planning-md/1`) | implemented — this repository's own plan is 59 artifacts under `.engineering/planning/` |
-| `protocol artifact new\|move\|relate\|list\|board\|graph\|validate\|kinds\|relations\|lifecycle` | implemented — a status move is checked against the kind's lifecycle |
+| the markdown planning store (`aep.planning-md/1`) | implemented — this repository's own plan is 101 artifacts under `.engineering/planning/`, with an append-only journal behind `protocol artifact history` |
+| `protocol artifact new\|move\|relate\|body\|list\|board\|graph\|history\|evidence\|validate\|kinds\|relations\|lifecycle` | implemented — a status move is decided against the kind's lifecycle by [`entity-core`](../concepts/lifecycles.md), and may be refused for want of recorded evidence |
 | the Claude Code plugin | implemented — one `planning` skill, two agents (`decomposer` writes, `plan-reviewer` only reads), two `PreToolUse` hooks (`store-integrity` over edits, `driven-surface` over the shell) and an eval that spends real money on a real headless session and judges it two ways |
 | `protocol workflow render` | implemented — `svg`, `html`, `png`, `tui`, and `--watch` to redraw a live run |
 
@@ -164,14 +221,21 @@ The compact list; [Limitations](./limitations.md) carries the consequences of ea
 * Obligations are plan entries, not yet artifacts a task can own (deferred by decision).
 * Nothing gates on `trace_conformance`, so a driven run's own transcript check is provenance in the
   audit trail rather than a gate that can stop it.
-* A second harness has never been driven, so the harness-neutrality claim is still untested.
+* A second harness has never been **driven**. `0.22.0` added a Codex rollout adapter so one
+  `trace-spec/1` specification now decides two transcript shapes — which is the neutrality claim
+  answered for the *vocabulary* — but it is checked against committed **synthetic** fixtures, and
+  the verified reader for Codex rollouts lives in `metaharness`, not here. Neutrality of the
+  driving path remains untested.
 
 ---
 
 **Sources.** `git tag -l`; `target/debug/protocol validate`, `conformance --level full --format
-json`, `evidence scan`, `--help` (verb counts) at `0.10.0-horizons-dogfood-lab`;
-`Taskfile.yml` (the ten gate steps); `docs/plan/harness-wave-4-governed-dogfood.md` § *W4.1*;
+json`, `evidence scan`, `--help` (verb counts), `artifact lifecycle`, `artifact history` at `0.23.2`;
+`ls artifacts/lifecycles/` and `find .engineering/planning -name '*.md' | wc -l` (the ladder and
+artifact counts); `Taskfile.yml` (the twelve gate steps);
+`crates/aep-backend-markdown/Cargo.toml` and `src/kernel.rs` (the `entity-core` pin and the seam);
+`docs/plan/harness-wave-4-governed-dogfood.md` § *W4.1*;
 `docs/plan/gap-register.md`; `examples/evidence-horizons-corpus/expected.json`;
 `examples/k3d-dev-cluster/simulation.json` and `projection/SUMMARY.md`;
 `generated/rust/billing/PLAN.md`; `suites/generated/*/suite.json`;
-`crates/trace-domain/src/spec.rs` (the expectation kinds); `CHANGELOG.md` § *0.10.0*.
+`crates/trace-domain/src/spec.rs` (the expectation kinds); `CHANGELOG.md` §§ *0.10.0*–*0.23.2*.

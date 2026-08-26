@@ -11,6 +11,72 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.24.0] — 2026-08-26
+
+### Added
+
+- **A release workflow, so a tag cuts its own GitHub Release.** `.github/workflows/release.yml`
+  fires on a version tag, runs `ci.yml` itself — called rather than copied, so a tag cannot ship
+  against a shorter gate than `main` does — and creates the release with the tag's own section of
+  this file as its notes.
+
+  No binaries are attached. Every release this repository has cut carries none, and `protocol` is
+  built from source (`cargo build --release -p protocol-cli`). Adding archives later is a matrix job
+  beside this one.
+
+- **`cargo xtask notes <version>`**, which prints one release's notes: its CHANGELOG section,
+  reflowed. Release notes render as **GFM**, where a single newline becomes a `<br>`, so a file
+  hard-wrapped at 100 columns arrives broken after *"added"* and before *"the"*, in spots no author
+  chose. The file stays wrapped — that is the right shape for something reviewed in a diff — and
+  only the notes are joined.
+
+  `cargo xtask notes --self-test` holds the eight shapes the reflow must not damage: fenced code,
+  tables, headings, blockquotes, list-item boundaries, paragraph joining, blank-line separation, and
+  a line ending in two spaces. It runs in the workflow **before** the notes are generated, because
+  the failure it catches is silent — nobody re-reads a release they already cut.
+
+### Fixed
+
+- **A deliberate line break is no longer eaten by the reflow.** A line ending in two spaces is
+  Markdown's own request for a break; the reflow ended the paragraph there but dropped the two
+  spaces, leaving the break standing on the very GFM quirk the reflow exists to remove. The spaces
+  are kept now. Found by the self-test above on its first run.
+
+### Documentation
+
+- **The website describes the tooling as it now is.** It had drifted badly: since `0.13.0` the
+  repository gained 7,805 lines and the site gained three. What changed:
+
+  | page | what it now says |
+  |---|---|
+  | *Lifecycles, decided as data* (new) | the ladder is a YAML file, decided by `entity-core`; evidence-gated and date-gated rungs; the journal; and what that kernel explicitly does **not** do |
+  | *CLI reference* | `protocol reverse` — four verbs, 2,782 lines, and **no mention on the site at all** until now — plus `artifact history` and `artifact evidence` |
+  | *Where this stands* | current as of `0.23.2` rather than `0.10.0-horizons-dogfood-lab`; the ladder, the engine's four new mechanisms, and adoption from the other end |
+  | *Roadmap* | the delivered table ran to `0.10.0` and now runs to `0.23.2` |
+  | *Limitations* | the markdown store **does** have a journal and a history since `0.19.0`; the contract gap is unchanged and says so |
+  | *Vocabulary* | artifact kinds and statuses are open to authors, and why `evidence_kinds` is closed |
+  | `/releases` | **one post per release — all 33 tags, plus this one.** Three existed; 30 were written for this release |
+
+- **Every release now has a page explaining, in prose, what changed from the one before it.** The
+  site had three posts covering `0.5.0`, `0.6.0` and `0.7.0`, and thirty tags with nothing. The
+  backported posts are **marked as written retrospectively** and carry no command output: the code
+  has moved on, and inventing a transcript for a released version would be worse than describing it.
+  Posts for `0.13.0` onward carry real output.
+
+- **Counts that had drifted, each re-derived from the thing it describes**: top-level CLI verbs
+  17 → **20**; artifact lifecycles 8 → **12**; this repository's own plan 59 → **101** artifacts;
+  the document tree 45 → **49** files; the gate ten → **twelve** steps, in `AGENTS.md`, `README.md`,
+  `docs/status.md`, `docs/guide/adopting.md` and four website pages. `AGENTS.md` also still claimed
+  the billing suite runs 27 scenarios where its own guard asserts 29.
+
+- **The boundary with `metaharness` is written down rather than remembered.** Two rules, because
+  both were being reconstructed differently each time they came up: harness-specific transcript
+  readers belong there and the normalised `metaharness.event/1` stream is the production path here
+  (the two direct vendor readers that predate it are named, with what each is for and what it is
+  checked against); and the evaluation *machinery and corpus* are here while the *paid runs and
+  their results* are there — a finer split than "evals moved", and the table now says which is
+  which.
+
 ## [0.23.2] — 2026-08-26
 
 ### Fixed

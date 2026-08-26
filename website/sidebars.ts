@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'concepts/overview',
         'concepts/aep',
+        'concepts/lifecycles',
         'concepts/evidence',
         'concepts/ess',
         'concepts/design-principles',

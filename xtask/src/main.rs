@@ -318,6 +318,14 @@ struct Cli {
 /// The available tasks.
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Print one release's notes: its CHANGELOG section, reflowed for GitHub.
+    Notes {
+        /// The version, without a leading `v`. Omitted with `--self-test`.
+        version: Option<String>,
+        /// Check the reflow against the shapes it must not damage, and print nothing else.
+        #[arg(long, conflicts_with = "version")]
+        self_test: bool,
+    },
     /// Regenerate the published JSON Schemas.
     Schema {
         /// Verify the committed files match instead of writing them.
@@ -364,9 +372,208 @@ enum Command {
     },
 }
 
+/// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
+/// mid-sentence.
+///
+/// # Why the reflow
+///
+/// Release bodies render as **GFM**, and GFM turns a single newline into a `<br>`. Confirmed against
+/// GitHub's own `/markdown` endpoint rather than assumed: the same text posted with `mode: markdown`
+/// reflows and with `mode: gfm` does not.
+///
+/// `CHANGELOG.md` is hard-wrapped at 100 columns, so fed to a release verbatim every one of those
+/// wraps arrives as a literal break — text snapping after "added" and before "the", in spots no
+/// author chose. Across `entity-runtime`'s seven published releases that was 228 stray breaks.
+///
+/// **The file stays wrapped.** That is the right shape for something reviewed in a diff, and
+/// writing the changelog in one-line paragraphs would make every edit a whole-paragraph diff to
+/// please a renderer. Only the notes are joined.
+fn notes(root: &Path, version: &str) -> Result<()> {
+    let text = fs::read_to_string(root.join("CHANGELOG.md")).context("reading CHANGELOG.md")?;
+    let section = changelog_section(&text, version);
+    if section.trim().is_empty() {
+        bail!("CHANGELOG.md has no section for {version}");
+    }
+    print!("{}", reflow(&section));
+    Ok(())
+}
+
+/// Checks the reflow against the shapes a release note must survive.
+///
+/// This runs in the release workflow *before* the notes are generated, because the failure it
+/// catches is silent: a reflow that eats a table or joins two list items produces a release page
+/// that is wrong rather than a job that is red, and nobody re-reads a release they already cut.
+///
+/// Each case is `(name, input, expected)`. The rule under test is the same one everywhere — a line
+/// ending is typography inside a paragraph and **content** everywhere else.
+fn notes_self_test() -> Result<()> {
+    let cases: &[(&str, &str, &str)] = &[
+        (
+            "a paragraph joins",
+            "one line\nand its continuation\n",
+            "one line and its continuation\n",
+        ),
+        (
+            "a blank line separates paragraphs",
+            "first\npara\n\nsecond\npara\n",
+            "first para\n\nsecond para\n",
+        ),
+        (
+            "a fence is copied byte for byte",
+            "before\n```console\n$ one\n$ two\n```\nafter\n",
+            "before\n```console\n$ one\n$ two\n```\nafter\n",
+        ),
+        (
+            "a table keeps one row per line",
+            "| a | b |\n|---|---|\n| 1 | 2 |\n",
+            "| a | b |\n|---|---|\n| 1 | 2 |\n",
+        ),
+        (
+            "a heading stands alone",
+            "### Fixed\nthe body\n",
+            "### Fixed\nthe body\n",
+        ),
+        (
+            "a blockquote is left as written",
+            "> quoted\n> lines\n",
+            "> quoted\n> lines\n",
+        ),
+        (
+            "list items do not merge, but a wrapped item does",
+            "- first item\n  wrapped on\n- second item\n",
+            "- first item wrapped on\n- second item\n",
+        ),
+        (
+            "two trailing spaces are the author asking for a break",
+            "hard break here  \nnext line\n",
+            "hard break here  \nnext line\n",
+        ),
+    ];
+
+    let mut failed = 0;
+    for (name, input, expected) in cases {
+        let got = reflow(input);
+        if got == *expected {
+            println!("ok    {name}");
+        } else {
+            failed += 1;
+            println!("FAIL  {name}\n  expected: {expected:?}\n  got:      {got:?}");
+        }
+    }
+    if failed > 0 {
+        bail!("{failed} of {} reflow shapes damaged", cases.len());
+    }
+    println!("{} reflow shapes hold", cases.len());
+    Ok(())
+}
+
+/// The lines under `## [version]`, up to the next `## [`.
+fn changelog_section(text: &str, version: &str) -> String {
+    let mut out = Vec::new();
+    let mut found = false;
+    for line in text.lines() {
+        if line.starts_with("## [") {
+            if found {
+                break;
+            }
+            found = line.starts_with(&format!("## [{version}]"));
+            continue;
+        }
+        if found {
+            out.push(line);
+        }
+    }
+    out.join("\n")
+}
+
+/// `true` when this line carries a list item's own marker: `-`, `*`, `+`, `1.` or `1)`.
+fn is_list_item(line: &str) -> bool {
+    let rest = line.trim_start();
+    if let Some(after) = rest.strip_prefix(['-', '*', '+']) {
+        return after.starts_with(' ');
+    }
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    !digits.is_empty()
+        && rest[digits.len()..].starts_with(['.', ')'])
+        && rest[digits.len() + 1..].starts_with(' ')
+}
+
+/// Joins the continuation lines of each paragraph, leaving everything else exactly as written.
+///
+/// Untouched are the places a line ending is **content** rather than typography: fenced code,
+/// tables, headings, blockquotes, list-item boundaries, and a line ending in two spaces — which is
+/// Markdown's own way of asking for a break, and honouring it is the difference between reflowing
+/// and overriding the author.
+fn reflow(text: &str) -> String {
+    fn flush(out: &mut Vec<String>, pending: &mut Vec<String>) {
+        if !pending.is_empty() {
+            out.push(pending.join(" "));
+            pending.clear();
+        }
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    let mut in_fence = false;
+
+    for line in text.lines() {
+        let stripped = line.trim();
+
+        if stripped.starts_with("```") || stripped.starts_with("~~~") {
+            flush(&mut out, &mut pending);
+            out.push(line.to_owned());
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            out.push(line.to_owned());
+            continue;
+        }
+        if stripped.is_empty() || stripped.starts_with(['|', '#', '>']) {
+            flush(&mut out, &mut pending);
+            out.push(line.to_owned());
+            continue;
+        }
+        if is_list_item(line) {
+            flush(&mut out, &mut pending);
+            pending.push(line.trim_end().to_owned());
+            continue;
+        }
+        if line.ends_with("  ") {
+            // Markdown's own request for a break. The two spaces are kept, not just the line
+            // ending: a bare newline renders as `<br>` under GFM today, so dropping them would
+            // leave the author's deliberate break standing on the very quirk this reflow exists
+            // to remove.
+            let kept = if pending.is_empty() {
+                line.to_owned()
+            } else {
+                format!("{stripped}  ")
+            };
+            pending.push(kept);
+            flush(&mut out, &mut pending);
+            continue;
+        }
+        if pending.is_empty() {
+            pending.push(line.trim_end().to_owned());
+        } else {
+            pending.push(stripped.to_owned());
+        }
+    }
+    flush(&mut out, &mut pending);
+    format!("{}\n", out.join("\n").trim())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Notes { version, self_test } => {
+            if self_test {
+                notes_self_test()
+            } else {
+                let version = version.context("a version is required without --self-test")?;
+                notes(&workspace_root(), &version)
+            }
+        }
         Command::Schema { check } => schema(&workspace_root(), check),
         Command::Generate { check } => {
             let root = workspace_root();

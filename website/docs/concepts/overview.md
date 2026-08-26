@@ -49,15 +49,17 @@ outputs     plans, decisions, refusals,          docs, JSON Schema, OpenAPI, Asy
 | `aep-contract` | the storage-independent command/query contract for engineering entities |
 | `aep-backend-memory` | the in-memory reference implementation of that contract |
 | `aep-conformance` | black-box suites a backend runs to prove it implements the contract |
-| `aep-backend-markdown` | the durable planning store: epics, stories and tasks as markdown under `.engineering/planning/` |
+| `aep-backend-markdown` | the durable planning store: epics, stories and tasks as markdown under `.engineering/planning/`, with an append-only journal beside it. Its status ladders are decided by [`entity-core`](./lifecycles.md), an IO-free kernel taken as a pinned dependency — the only dependency this repository has on another of its own |
 | `aep-driver`, `aep-driver-spec` | the reference driver, and the step map it walks |
 | `aep-render` | a workflow, and a run over it, drawn as SVG, HTML, PNG or a terminal frame |
 | `adp-domain`, `aop-domain` | development-specific and operations-specific vocabularies |
-| `protocol-cli` | the reference CLI over all of it — seventeen top-level verbs |
+| `protocol-cli` | the reference CLI over all of it — twenty top-level verbs |
 
 The document tree (`protocols/`, `principles/`, `workflows/`, `profiles/`, `artifacts/lifecycles/`
-and `drivers/` — 45 files in this repository) is data, not code. Teams vendor it and add their own
-documents beside it; see [Govern a task](../guides/govern-a-task.md).
+and `drivers/` — 49 files in this repository) is data, not code. Teams vendor it and add their own
+documents beside it; see [Govern a task](../guides/govern-a-task.md). A status ladder under
+`artifacts/lifecycles/` is data in the strong sense: a kind nobody here anticipated is a YAML file
+you write, with no change to any crate — see [Lifecycles, decided as data](./lifecycles.md).
 
 ### ESS: the specification side
 
@@ -122,6 +124,13 @@ Stated so it can be held.
 * **Not a deployment platform.** Compiling a specification into a file that *describes*
   infrastructure, and judging whether an observed state conforms, is in scope. Operating a system —
   calling a cloud API, holding a credential, applying a plan, watching a rollout — is not.
+* **Not a general entity runtime, and not a store for one.** The kernel that decides a status move
+  is [`entity-core`](https://github.com/beyond10x/entity-runtime), a separate repository this one
+  depends on. That kernel performs no IO at all — no clock, no filesystem, no network — so it stores
+  nothing, and everything this repository persists is written by `aep-backend-markdown` here. The
+  arrow points one way only: nothing from this repository appears in a manifest of
+  `entity-runtime`'s, at any version, so a kernel that could be shaped by its adopter never becomes
+  one.
 
 The responsibility, in one sentence per half: define the semantics by which engineering work can be
 constrained, evidenced, verified and progressed — and the semantics by which a software system can

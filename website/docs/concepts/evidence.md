@@ -1,6 +1,6 @@
 ---
 title: Evidence and completion
-sidebar_position: 3
+sidebar_position: 4
 description: Evidence records, the two times they carry, producers and independence, horizons and decay to Unknown, three-valued evaluation, ordering facts, and the join between AEP and ESS.
 ---
 

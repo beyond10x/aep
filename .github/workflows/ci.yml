@@ -8,6 +8,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Callable, so `release.yml` can run *this* gate against a tag rather than a shorter copy of it.
+  # A release that verified something other than what CI verifies is a release nobody can read.
+  workflow_call:
 
 # Cancel superseded runs on the same ref — a force-push should not leave stale jobs burning minutes.
 concurrency:

@@ -72,6 +72,20 @@ subkind.
 Statuses: `draft proposed in_review approved accepted rejected active implemented superseded
 archived`. Requiring `approved` is satisfied by `accepted`, `active` or `implemented` too.
 
+**Both vocabularies are open to authors.** Since `0.13.0` a kind and a status may be any name *some
+ladder declares* — the two lists above are the built-ins, not the boundary. Adding a kind of work
+this repository never anticipated is a `<kind>.yaml` in your own document tree, with no change to
+any crate; see [Lifecycles, decided as data](../concepts/lifecycles.md).
+
+Open to authors is not open to anything. A status is accepted because a ladder declares it, never
+because it parses, so `drafted` is refused where `draft` was meant — a typo one letter from a
+built-in is not a new rung.
+
+**`evidence_kinds`, above, is deliberately closed**, and the reason is the general one for closing a
+vocabulary here: an open evidence vocabulary would let a caller invent the kind of proof a gate is
+asking for. Openness is decided per vocabulary and the reason is written down; no vocabulary here is
+closed by accident.
+
 ## Phases
 
 `aep/1`: `intake specification planning implementation verification review learning completion`.

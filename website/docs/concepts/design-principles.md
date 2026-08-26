@@ -1,6 +1,6 @@
 ---
 title: Design principles
-sidebar_position: 5
+sidebar_position: 6
 description: The rules the whole project is built on — what each one means in practice, what enforces it, and where its limits are.
 ---
 

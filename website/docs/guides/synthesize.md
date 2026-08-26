@@ -86,7 +86,7 @@ candidate implementations; ambiguity is an error.
 
 The generated code is judged by the suite the same specification generated
 (see [Verify an implementation](./verify-conformance.md)), and the repository's gate runs the whole
-argument on every commit — `cargo xtask synth --check`, one of the ten steps of `task check`:
+argument on every commit — `cargo xtask synth --check`, one of the twelve steps of `task check`:
 
 * The committed billing suite, **unchanged**, passes the generated workspace linked with the
   hand-written realization — 29 of 29 scenarios — and a deliberately corrupted linkage fails

@@ -33,13 +33,22 @@ class, and that acceptance is the operator's to make.
 
 **There is a durable store, and it is not an implementation of the contract.** Planning artifacts
 live as markdown under `.engineering/planning/` and survive a restart — this repository's own plan is
-59 of them. But `aep-backend-markdown` writes through its own `create`/`update` rather than through
-`CommandService`, so the 16 `aep-conformance` suites do not run against it, and it has no journal, no
-audit join and no history.
+101 of them. But `aep-backend-markdown` writes through its own `create`/`update` rather than through
+`CommandService`, so the 16 `aep-conformance` suites do not run against it, and it has no audit join.
+
+Since `0.19.0` it *does* have a journal and a history: every write appends a line of JSONL and
+`protocol artifact history <id>` reads it back. That closes the gap for a person reading a plan and
+leaves the contract gap exactly where it was — the journal is the markdown store's own, not the
+contract's, so it is not a step toward the 16 suites running.
 
 *Consequence:* "there is a durable backend" is not yet a claim you can lean on. The only
 implementation of the AEP storage contract is still in memory, and it forgets entities, audit trails
-and histories when the process exits. Writing a durable one means implementing two traits and
+and histories when the process exits.
+
+The `entity-core` dependency does not change this and cannot: that kernel performs no IO of any kind
+— no filesystem, no clock, no network, asserted by a scan over its own sources — so it stores
+nothing. It decides whether a status move is permitted, and every byte written here is written here.
+See [Lifecycles, decided as data](../concepts/lifecycles.md). Writing a durable one means implementing two traits and
 proving the result against the shipped conformance suites — `docs/guide/backend.md` in the
 repository covers it. Register rows D-P1 and D-P3.
 
@@ -68,12 +77,16 @@ The reference driver exists and has walked a real story. What it has not yet don
 * **A driven session is not hermetic.** A scratch config directory does not exclude account-level
   MCP servers: two of the four sessions in the first run listed three of them, all unauthenticated,
   and nothing asserts their absence.
-* **Harness neutrality has never met a second harness.** Every behavioural document here is
-  published as harness-neutral, and exactly one adapter exists. The claim is untested.
-* **A story's `implemented` is a claim nothing checks.** A status move is validated against the
-  kind's lifecycle and nothing else, so an artifact's status is whatever was typed. The rule that
-  would fix it exists one layer down — the `ess-conformance` principle gates a *task's* completion on
-  independent evidence — and has no analogue for the artifact.
+* **Harness neutrality has been answered for the vocabulary, not for the driving path.** `0.22.0`
+  added a second transcript adapter, so one `trace-spec/1` specification now decides two shapes —
+  but it is checked against committed **synthetic** fixtures, and the verified reader for that
+  harness lives in [metaharness](https://github.com/beyond10x/metaharness), not here. No second
+  harness has been **driven**.
+* **A story's `implemented` is a claim nothing checks *by default*.** Since `0.15.0` a ladder rung
+  *may* declare what it costs — `requires: [{ evidence: test_result, at_least: 1 }]` — and the move
+  is then refused until the observation is recorded. The shipped `story` ladder does not declare one,
+  so out of the box a story's status is still whatever was typed. The mechanism exists; this
+  repository has not yet spent it on its own `story` kind.
 
 ## Evidence horizons: what decay does not yet reach
 

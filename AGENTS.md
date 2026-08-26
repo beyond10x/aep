@@ -100,6 +100,32 @@ Each of these was learned by building the thing it names. They are enforced wher
   `crates/protocol-cli/fixtures/metaharness-frame-canonical.json`, minted by the driver's own code
   path; the other side pins the same bytes. Changing the format is a coordinated migration under the
   atlas rule, not an edit.
+* **Harness-specific readers are `metaharness`'s; the trace *vocabulary* is ours.** The division is
+  that `metaharness` normalises each vendor's format and this repository decides against the
+  result: `crates/trace-spec/src/event_stream.rs` reads `metaharness.event/1`, and that is the
+  production path. Two direct vendor readers predate it and stay for stated reasons —
+  `src/adapter.rs` (Claude Code `stream-json`), and `src/codex.rs`, which exists to answer gap
+  `:38`, *harness neutrality has never met a second harness*, by proving one specification decides
+  two shapes. **Neither is the verified reader for its harness.**
+  `metaharness/crates/metaharness-codex/src/rollout.rs` is, and it says so: verified against the
+  binary and **2,437 real rollout files**, where ours is checked against **two committed synthetic
+  fixtures** that `crates/trace-spec/tests/codex_rollout.rs:18` labels as synthetic. A neutrality
+  probe on constructed bytes is a real answer to a real gap and is not a claim to read anybody's
+  transcripts in production. **Do not add a third vendor reader here** — normalise it in
+  `metaharness` and read `metaharness.event/1`.
+* **The evaluation machinery and its corpus are here; the paid runs and their results are not.**
+  The split is finer than *evals moved to metaharness*, so it is written out rather than
+  remembered:
+
+  | here | there |
+  |---|---|
+  | the runner, `protocol eval` (`crates/protocol-cli/src/eval.rs`) | the workflows, prompts and trace expectations a run is judged against (`metaharness/evals/engineering-protocols/`) |
+  | the eval-case corpus (`conformance/eval/`), five cases with the verdict each declares | every recorded stream and matrix from a **paid** run |
+  | synthetic proof streams (`crates/protocol-cli/fixtures/eval-run/`), labelled synthetic where they are used | anything that spawned a vendor binary or spent money |
+
+  There is **no `evals/` directory here** and no observed transcript is committed here; what is
+  committed is constructed, and every place it is used says so. The rules are public; the runs are
+  not.
 * **The scanner is a separate repository because it holds the credentials.** `infra-scout` reaches a
   cluster; **nothing here reaches a network** (see the gate's network rule). Secrets appear in
   `infra-domain` only ever as digests (IW1).
@@ -319,7 +345,7 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Ten steps, all ten of which CI also runs, in this order:
+Twelve steps, all twelve of which CI also runs, in this order:
 
 1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
    `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since
@@ -352,7 +378,7 @@ Ten steps, all ten of which CI also runs, in this order:
    an export its module does not have, or the module exports one no page names — HTML's version of
    a dangling reference, checked against the compiled module's own export table because nothing in
    a browser would refuse it; if the committed billing suite no longer holds against the workspace
-   linked with `examples/billing-realization`, where the honest linkage must pass all 27 scenarios
+   linked with `examples/billing-realization`, where the honest linkage must pass all 29 scenarios
    and the deliberately corrupted one must fail exactly the scenario that exists to catch it; or if
    the browser boundary no longer holds — the realized module is loaded outside a browser through
    the page's own `bridge.js` and driven through one round trip, and seventeen claims about it must
@@ -368,7 +394,21 @@ Ten steps, all ten of which CI also runs, in this order:
    like a check that passed. `cargo test` needs all three too, because `xtask`'s own tests write
    all three trees and build them.
 
-Land nothing that does not pass all ten.
+11. `msrv` — `cargo +1.85 build --workspace --locked`. `--locked` is the point: the failure this
+   catches arrives **through the lockfile**, with no commit of ours touching a line of Rust. A
+   transitive dependency raising *its own* `rust-version` breaks the declared MSRV, and
+   `idna_adapter@1.2.2` pulling `icu_*@2.3.0` (rustc 1.88) did exactly that.
+12. `website` — `npm run build` in `website/`. Docusaurus resolves every markdown link at build
+   time, so a link from a page under `website/docs/` into the repository tree fails the build
+   rather than 404ing for a reader. Repository files are linked by absolute GitHub URL; only site
+   pages are linked relatively.
+
+   **Steps 11 and 12 were in CI and not in `task check` for eleven consecutive releases** — every
+   tag from 0.13.0 to 0.23.1 — and CI was red the whole time behind a green local gate. A gate that
+   covers less than the gate it claims to be is worse than one that admits its scope; that is why
+   this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
+
+Land nothing that does not pass all twelve.
 
 **A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
 *toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a

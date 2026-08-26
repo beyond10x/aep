@@ -94,6 +94,7 @@ repositories beside it.
 | repo | relationship |
 |---|---|
 | [metaharness](https://github.com/beyond10x/metaharness) | drives a vendor harness and decides each tool call at a seam. The driver's enforcement policy answers that seam per call; the evals that judge this repository's own runs live there, under `evals/engineering-protocols/` |
+| [entity-runtime](https://github.com/beyond10x/entity-runtime) | the only repository here takes a **dependency** on, and the arrow points one way only. Its `entity-core` is an IO-free kernel — no clock, no filesystem, no network — that takes an entity type as data and answers whether a status move is permitted. `crates/aep-backend-markdown/src/kernel.rs` asks it exactly that and nothing else; nothing of this repository's appears in a manifest of theirs, at any version |
 | [infra-scout](https://github.com/beyond10x/infra-scout) | the actor that holds a kubeconfig and produces the `infra-observation/1` bundles the `infra-*` crates here check three-valued against a desired state |
 | [atlas](https://github.com/beyond10x/atlas) | the map of the wider `beyond10x` estate this sits in |
 
@@ -102,7 +103,7 @@ this is deliberately not", and it is why that repository exists separately.
 
 ## Status
 
-**Shipped and tagged, adopted by nobody. Latest release `0.12.0` (2026-08-24).** Releases are cut
+**Shipped and tagged, adopted by nobody. Latest release `0.23.2` (2026-08-26).** Releases are cut
 per delivered wave; `docs/status.md` derives its delivered-waves table from the annotated tags, and
 `task status-check` fails the gate if the two disagree.
 
