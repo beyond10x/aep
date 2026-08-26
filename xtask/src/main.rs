@@ -370,6 +370,8 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Check the workspace version against the newest release tag.
+    Version,
 }
 
 /// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
@@ -594,6 +596,7 @@ fn main() -> Result<()> {
         Command::Infra { check } => infra(&workspace_root(), check),
         Command::Fmt { check } => fmt(check),
         Command::Status { check } => status(&workspace_root(), check),
+        Command::Version => version_check(&workspace_root()),
         Command::Synth { check } => {
             let root = workspace_root();
             let specifications: Vec<(PathBuf, &[&str])> = SYNTH_SPECIFICATIONS
@@ -616,6 +619,74 @@ fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// The workspace version must equal the newest release tag.
+///
+/// # The consequence for a person
+///
+/// `protocol --version` prints `CARGO_PKG_VERSION`, which is the workspace version. If that number
+/// does not move with the releases, every build of this tool reports the same string for ever — and
+/// somebody running an installed `protocol` from three weeks ago has no way to find out. That is
+/// not hypothetical: on 2026-08-26 an installed binary predating the store journal silently wrote
+/// **no journal entries** for six status moves, while printing the same `0.1.0` the current build
+/// printed. The moves happened, the record did not, and nothing said so.
+///
+/// So the version is checked against the tags, in the same spirit as the delivered-waves record:
+/// derived from what actually shipped rather than maintained by hand beside it.
+///
+/// # Errors
+///
+/// If git cannot be run, if there are no tags, or if the two numbers disagree.
+fn version_check(root: &Path) -> Result<()> {
+    let output = std::process::Command::new("git")
+        .args(["tag", "--list", "--sort=-v:refname"])
+        .current_dir(root)
+        .output()
+        .context("running git — the version is checked against the tags")?;
+    if !output.status.success() {
+        bail!(
+            "git tag failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let listed = String::from_utf8(output.stdout).context("reading the tag list as UTF-8")?;
+    // Bare-version tags only. The pre-0.12.0 slugged form is left behind by convention, and a slug
+    // sorted by `-v:refname` would win over a plain number that is actually newer.
+    let newest = listed
+        .lines()
+        .map(str::trim)
+        .find(|tag| {
+            !tag.is_empty()
+                && tag
+                    .split('.')
+                    .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+        })
+        .context(
+            "no bare-version tag is visible, so there is nothing to check the workspace version \
+             against — fetch them first (`git fetch --tags`)",
+        )?;
+
+    let manifest =
+        fs::read_to_string(root.join("Cargo.toml")).context("reading the workspace manifest")?;
+    let declared = manifest
+        .lines()
+        .skip_while(|line| line.trim() != "[workspace.package]")
+        .find_map(|line| line.trim().strip_prefix("version = "))
+        .map(|value| value.trim().trim_matches('"'))
+        .context("the workspace manifest declares no `[workspace.package] version`")?;
+
+    if declared != newest {
+        bail!(
+            "the workspace version is `{declared}` and the newest release tag is `{newest}`.\n\
+             `protocol --version` prints the workspace version, so while these disagree the binary \
+             cannot say which build it is — which is how a stale install writes nothing and looks \
+             like it worked.\n\
+             Set `[workspace.package] version` to `{newest}`, or cut the tag the version expects."
+        );
+    }
+    println!("version {declared} matches the newest release tag");
+    Ok(())
 }
 
 /// The repository root, derived from this crate's manifest directory.

@@ -572,6 +572,32 @@ follows it. Its `CHANGELOG.md` heading matches the version. The tag message stat
 implementation percentage after it, so `git tag -n99` reads as a project history without opening a
 browser.
 
+**The workspace version moves with the tag, and `version-check` fails when it does not.**
+`protocol --version` prints `CARGO_PKG_VERSION`; while that number lags the tags, every build of the
+tool reports the same string for ever and a stale install cannot be told from the current one — which
+is exactly how a binary predating the store journal wrote no journal entries for a day while printing
+the same version the current build printed.
+
+**Bumping it regenerates.** `compiler_version` and `generator_version` are stamped into every
+generated projection and into the committed conformance evidence, so a version bump rewrites ~120
+files whose content is otherwise identical. Run, in this order, before cutting the tag:
+
+```console
+cargo xtask generate    # 35 projections
+cargo xtask suite       # the 3 conformance suites
+cargo xtask infra       # the cluster IR
+cargo xtask synth       # the synthesised trees
+protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
+  > examples/billing-conformance/evidence/06-conformance.yaml
+protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
+  --inject accept-invalid-amount > examples/billing-conformance/evidence/06-conformance-faulty.yaml
+task check
+```
+
+Skipping this fails `generate-check` **at the tag**, which is loud rather than silent — but it is a
+tax on every release, and whether those two stamps earn it is
+`story:generator-version-stamp`.
+
 ## Commits
 
 * Conventional prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.

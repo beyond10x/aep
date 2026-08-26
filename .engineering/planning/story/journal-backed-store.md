@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:journal-backed-store
 kind: story
-status: draft
+status: active
 title: 'P3: the markdown store writes through CommandService'
 summary: The store's two write functions reroute through command envelopes, the journal becomes the history it does not have, and the sixteen conformance suites run against it.
 owner: store
@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:planning-store-as-backend
-revision: 1
+revision: 3
 ---
 # Story: P3 — the markdown store writes through `CommandService`
 
@@ -48,6 +48,21 @@ write path and `crates/aep-contract/tests/write_surface.rs` would fail on the de
 
 ## Open Questions
 
-Where the journal lives on disk — beside the artifacts or in one file per store. Decides: store
-owner. Default if nobody answers: one append-only file per store, because a journal fragmented across
-kind directories is a journal that merges badly.
+Where the journal lives on disk — beside the artifacts or in one file per store. **Answered by what
+shipped**: one append-only `journal.jsonl` per store, which is what `journal::append` writes.
+
+## Decisions, 2026-08-26
+
+| question | decision | why |
+|---|---|---|
+| `CommandService::execute` is async; this store is synchronous file IO | **Wrap the sync store; do not make the store async.** The impl body completes without awaiting, exactly as `aep-backend-memory` does (`crates/aep-backend-memory/src/command.rs:40` carries the same `unused_async_trait_impl` allow and the same one-line reason) | The async belongs to the contract, not to this backend. Making file IO async would pull a runtime into a crate that needs none, and `aep-backend-memory` has already established that a sync body behind an async signature is the shape this contract expects |
+| P4: a second hand-written store, or an adapter | **An adapter over `entity-runtime`'s `entity-sqlite`.** It ships one `BEGIN`, both writes, one `COMMIT`, a busy timeout, and a conformance suite of its own | ADR 0002 already points the dependency arrow this way — `aep-backend-markdown` takes `entity-core` today. Writing a second transactional store by hand would be building, badly, the thing next door that is already tested against a torn write |
+
+## Found while reading, not yet fixed
+
+`MarkdownStore::write` (`crates/aep-backend-markdown/src/store.rs:262`) derives its temporary file
+name from the document's filename alone — `.{name}.tmp` — so two writers of one document share it,
+and one writer's `rename` can install an inode the other is still filling. There is no `fsync`
+either. This is the same defect `entity-runtime` 0.8.0 fixed in its own `FileStore`, and P3 rewrites
+this exact write path, so it is fixed there rather than in a patch that would have to be written
+twice.

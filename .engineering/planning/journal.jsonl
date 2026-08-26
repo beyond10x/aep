@@ -27,3 +27,6 @@
 {"at":"2026-08-26T07:16:21Z","actor":"timo","artifact":"epic:one-cli-many-repositories","kind":"epic","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
 {"at":"2026-08-26T07:16:21Z","actor":"timo","artifact":"epic:one-cli-many-repositories","kind":"epic","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
 {"at":"2026-08-26T07:16:21Z","actor":"timo","artifact":"epic:one-cli-many-repositories","kind":"epic","revision":4,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{}}}
+{"at":"2026-08-26T08:46:15Z","actor":"timo","artifact":"story:journal-backed-store","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
+{"at":"2026-08-26T08:46:15Z","actor":"timo","artifact":"story:journal-backed-store","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
+{"at":"2026-08-26T08:58:06Z","actor":"timo","artifact":"story:generator-version-stamp","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}

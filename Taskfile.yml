@@ -8,8 +8,9 @@ tasks:
 
   check:
     desc: >-
-      Format check, status check, lint, test, doc check, schema check, projection check, suite
-      check, observation check, synthesis check, MSRV build and website build — everything CI runs.
+      Format check, status check, version check, lint, test, doc check, schema check, projection
+      check, suite check, observation check, synthesis check, MSRV build and website build —
+      everything CI runs.
       The observation check now also covers the committed manifest projection. The last ones need
       the Go toolchain, the wasm32-unknown-unknown Rust target, Node and a Rust 1.85 toolchain
       beside Rust's own.
@@ -22,6 +23,7 @@ tasks:
     cmds:
       - task: fmt-check
       - task: status-check
+      - task: version-check
       - task: clippy
       - task: test
       - task: doc-check
@@ -77,6 +79,14 @@ tasks:
     desc: Fail if the delivered-waves record in docs/status.md no longer matches the tags.
     cmds:
       - cargo xtask status --check
+
+  version-check:
+    desc: >-
+      Fail if the workspace version no longer matches the newest release tag. `protocol --version`
+      prints the workspace version, so while these disagree the binary cannot say which build it
+      is — which is how a stale install writes nothing and looks like it worked.
+    cmds:
+      - cargo xtask version
 
   clippy:
     desc: Lint every target, warnings are errors.

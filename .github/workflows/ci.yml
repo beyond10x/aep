@@ -136,6 +136,13 @@ jobs:
           echo "tags visible: $(git tag | wc -l)"
           cargo xtask status --check
 
+      # Same job because it reads the same thing — the tags — and the fetch above is what makes
+      # either check possible. `protocol --version` prints the workspace version, so a version that
+      # does not move with the releases makes every build report the same string for ever, and an
+      # installed binary from three weeks ago cannot be told from the current one.
+      - name: Check the workspace version against the newest tag
+        run: cargo xtask version
+
   # Its own job for the same reason as `schemas`: a stale projection reads as a stale projection.
   # A generated OpenAPI document that no longer matches the specification is a contract someone is
   # building against, and "the gate failed" would bury that behind a test log. The fix is
