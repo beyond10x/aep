@@ -57,6 +57,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.26.0` | 0.26.0 — three claims 0.25.0 made, and a check it quietly weakened |
 | `0.27.0` | 0.27.0 — three implementors, one write path, and 27 findings closed |
 | `0.27.1` | 0.27.1 — the check that only CI could run |
+| `0.27.2` | 0.27.2 — six documents describing a deviation that had closed |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
