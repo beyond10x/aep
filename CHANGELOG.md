@@ -37,6 +37,13 @@ Nothing yet.
 
 ### Fixed
 
+- **The delivered-waves check reads the tags when the run is on a tag.** The first run of the new
+  release workflow failed here, against a `docs/status.md` that was correct in the commit it was
+  checking. The job already asked for `fetch-depth: 0` and `fetch-tags: true`, and on a **tag** ref
+  — which is how `release.yml` calls the gate — that still left the other tags behind, so a 34-row
+  record was compared against a near-empty tag list. An explicit `git fetch --tags --force --prune`
+  does not depend on which ref triggered the run, and the step now prints how many tags it can see.
+
 - **A deliberate line break is no longer eaten by the reflow.** A line ending in two spaces is
   Markdown's own request for a break; the reflow ended the paragraph there but dropped the two
   spaces, leaving the break standing on the very GFM quirk the reflow exists to remove. The spaces
@@ -56,6 +63,14 @@ Nothing yet.
   | *Limitations* | the markdown store **does** have a journal and a history since `0.19.0`; the contract gap is unchanged and says so |
   | *Vocabulary* | artifact kinds and statuses are open to authors, and why `evidence_kinds` is closed |
   | `/releases` | **one post per release — all 33 tags, plus this one.** Three existed; 30 were written for this release |
+
+- **A release post says which release it is.** Each carries `release_tag` and `release_commit` in
+  its front matter, and its filename carries the hour and minute, so `website/blog/` sorts in
+  release order in an editor and under `ls` alike — several releases were cut on the same day, and a
+  date-only prefix put them in alphabetical order instead. The timestamp is the **tagged commit's**
+  committer date rather than the tag's own: the first three tags were cut in one batch and share a
+  creation timestamp to the second, which sorted two releases wrong. File modification times are set
+  to match.
 
 - **Every release now has a page explaining, in prose, what changed from the one before it.** The
   site had three posts covering `0.5.0`, `0.6.0` and `0.7.0`, and thirty tags with nothing. The
