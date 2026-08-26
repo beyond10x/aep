@@ -34,6 +34,7 @@ tasks:
       - task: suite-check
       - task: infra-check
       - task: synth-check
+      - task: lab-check
       - task: msrv
       - task: website
 
@@ -97,6 +98,14 @@ tasks:
       two of `entity-runtime` 0.6.0's three entries described defects that never shipped.
     cmds:
       - cargo xtask claims
+
+  lab-check:
+    desc: >-
+      Fail when the lab's copy of the emitted glue differs from what the emitter produces. Only the
+      Website workflow checked this, so `task check` was green while CI was red for two releases —
+      the version stamp went to 0.26.0 and the copy stayed at 0.1.0. Component gates are not enough.
+    cmds:
+      - cmp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs
 
   version-check:
     desc: >-

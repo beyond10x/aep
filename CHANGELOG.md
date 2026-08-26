@@ -11,6 +11,24 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.27.1] — 2026-08-26
+
+### Fixed
+
+* **The lab's copy of the emitted glue had been stale for two releases, and only CI could see it.**
+  `website/src/pages/lab/_bridge.mjs` must be byte-identical to
+  `generated/web/billing/bridge.js`; the version stamp went to `0.26.0` and the copy stayed at
+  `0.1.0`, so anybody opening the lab ran glue built by a compiler two releases old.
+
+  The check lived **only** in the Website workflow. `task check` was green while CI was red, through
+  0.26.0 and 0.27.0 — which is this repository's own rule failing in the direction nobody watches: a
+  check that exists only in CI cannot be run before pushing, so it reports after the tag rather than
+  before it.
+
+  Fixed three ways rather than one: the copy is synced, `lab-check` is now a step in `task check`,
+  and `AGENTS.md` § *Releases* lists the copy among the regeneration steps — it named four and there
+  were five.
+
 ## [0.27.0] — 2026-08-26
 
 The planning store implements the contract it is held to, and every verb that writes goes through

@@ -591,6 +591,7 @@ cargo xtask generate    # 35 projections
 cargo xtask suite       # the 3 conformance suites
 cargo xtask infra       # the cluster IR
 cargo xtask synth       # the synthesised trees
+cp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs   # the lab's byte-identical copy
 protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
   > examples/billing-conformance/evidence/06-conformance.yaml
 protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
