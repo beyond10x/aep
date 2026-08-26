@@ -269,3 +269,57 @@ fn an_artifact_with_no_journal_entries_at_all_is_not_drift() {
     .collect();
     assert!(journal::reconcile(&directory, &held).is_empty());
 }
+
+#[test]
+fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
+    // The blind spot: only the **last** entry was examined, and an `evidence` entry carries no
+    // status — so four of this repository's own artifacts had their status checked by nothing at
+    // all, because recording evidence was the last thing that happened to each of them.
+    let directory = scratch("reconcile-silent-newest");
+    let artifact = ArtifactId::new("story:quiet").expect("an id");
+    let kind = ArtifactKind::parse("story").expect("a kind");
+
+    journal::append(
+        &directory,
+        &Entry {
+            at: "2026-08-26T00:00:00Z".to_owned(),
+            actor: "timo".to_owned(),
+            artifact: artifact.clone(),
+            kind: kind.clone(),
+            revision: 1,
+            change: Change::Created {
+                status: ArtifactStatus::parse("draft").expect("a status"),
+            },
+        },
+    )
+    .expect("the entry lands");
+    journal::append(
+        &directory,
+        &Entry {
+            at: "2026-08-26T00:00:01Z".to_owned(),
+            actor: "timo".to_owned(),
+            artifact: artifact.clone(),
+            kind,
+            revision: 1,
+            change: Change::Evidence {
+                kind: EvidenceKind::TestResult,
+                source: "task check".to_owned(),
+                reference: None,
+            },
+        },
+    )
+    .expect("the entry lands");
+
+    // The file claims a status the journal never recorded a move to.
+    let held = [(
+        artifact,
+        (ArtifactStatus::parse("implemented").expect("a status"), 1),
+    )]
+    .into_iter()
+    .collect();
+
+    let drift = journal::reconcile(&directory, &held);
+    assert_eq!(drift.len(), 1, "{drift:?}");
+    assert!(drift[0].to_string().contains("implemented"), "{}", drift[0]);
+    assert!(drift[0].to_string().contains("draft"), "{}", drift[0]);
+}

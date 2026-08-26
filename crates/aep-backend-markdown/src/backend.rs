@@ -77,20 +77,20 @@ pub struct MarkdownBackend {
     unprojected: Mutex<Vec<EntityId>>,
     /// The account the move currently being written rested on, when one arrived with it.
     decided_on: Mutex<Option<journal::Provenance>>,
+    /// Whether the change currently being written already had a ladder ruling on it.
+    decided: Mutex<bool>,
+    /// The instant the command currently being written carried, ISO-8601.
+    at: Mutex<String>,
     actor: ActorRef,
-    /// The instant this backend stamps journal entries with, as the journal spells one: ISO-8601.
+    /// The ladders each kind declares.
     ///
-    /// Handed in, never read: this crate has no clock, for the same reason the kernel next door has
-    /// none — a record that dated itself could not be replayed. Held as the string rather than as a
-    /// `Timestamp`, because `Timestamp`'s own `Display` is epoch milliseconds — right for a wire
-    /// value, wrong in a journal whose every other entry is a date somebody can read, and a journal
-    /// carrying both spellings is one nobody can sort.
-    ///
-    /// Kept beside the `Timestamp` rather than derived from it at each write, because `Timestamp`'s
-    /// own `Display` is epoch milliseconds — correct for a wire value, and wrong in a journal whose
-    /// every other entry is a date somebody can read. A journal carrying both spellings is a
-    /// journal nobody can sort.
-    at_iso: String,
+    /// **The store is what has ladders**, and it is the only layer that can refuse an illegal move.
+    /// The contract is storage-agnostic and permits a `status` key on an `UpdateEntity` — its own
+    /// conformance suites use one — so a backend that copied that key straight into a document
+    /// wrote a transition nothing had checked. A story at `draft` reached `active` with
+    /// `draft: [proposed, archived]` declared, and the test written for it asserted the bypass as
+    /// correct.
+    lifecycles: aep_domain::artifact::LifecycleRegistry,
 }
 
 impl MarkdownBackend {
@@ -107,6 +107,7 @@ impl MarkdownBackend {
         members: impl IntoIterator<Item = MemberName>,
         at: Timestamp,
         actor: ActorRef,
+        lifecycles: aep_domain::artifact::LifecycleRegistry,
     ) -> Result<Self, CommandError> {
         let store = MarkdownStore::open(root.as_ref());
         let report = store.load();
@@ -159,8 +160,10 @@ impl MarkdownBackend {
             latched: Mutex::new(None),
             unprojected: Mutex::new(Vec::new()),
             decided_on: Mutex::new(None),
+            decided: Mutex::new(false),
+            at: Mutex::new(iso_8601(at)),
             actor,
-            at_iso: iso_8601(at),
+            lifecycles,
         })
     }
 
@@ -190,6 +193,19 @@ impl MarkdownBackend {
     }
 
     /// Refuses when a previous write left memory and disk disagreeing.
+    /// Refuses a read when a write has left memory and the store disagreeing.
+    fn refuse_when_latched(&self) -> Result<(), QueryError> {
+        match self.latched() {
+            None => Ok(()),
+            Some(detail) => Err(QueryError::Unavailable {
+                reason: format!(
+                    "this backend is not answering: a write failed and what it holds no longer \
+                     matches what is stored — {detail}. Reopen it once the cause is fixed."
+                ),
+            }),
+        }
+    }
+
     fn check_latch(&self) -> Result<(), CommandError> {
         match self.latched() {
             None => Ok(()),
@@ -268,16 +284,211 @@ impl CommandService for MarkdownBackend {
             .decided_on
             .lock()
             .expect("the provenance slot is not poisoned") = decided_on;
+        // An observation writes no document; it writes the journal the gated move reads. Handled
+        // here because `affected` is empty for it — a record about an artifact changes nothing
+        // about the artifact.
+        // Whether a ladder has already ruled on this change. `MoveStatus` carries a decision the
+        // engine took against the kind's lifecycle **and the evidence presented**; re-deciding it
+        // here without that evidence refuses a move that was correctly earned. `UpdateEntity` may
+        // carry a `status` — the contract's own suites use one — and nothing has ruled on that, so
+        // that is the case the ladder check exists for.
+        *self
+            .decided
+            .lock()
+            .expect("the decided flag is not poisoned") =
+            matches!(&envelope.payload, Command::MoveStatus(_));
+        // **The instant the command carried**, not one this backend chose. `protocol artifact
+        // evidence --at` names an instant somebody observed, and a backend stamping its own would
+        // silently ignore the flag — the clock is read at the edge and handed in, which is the rule
+        // this whole workspace holds.
+        *self.at.lock().expect("the instant slot is not poisoned") =
+            iso_8601(envelope.context.issued_at);
+        let observation = match &envelope.payload {
+            Command::RecordEvidence(record) => Some((
+                record.target.id.clone(),
+                record.kind.clone(),
+                record.source.clone(),
+                record.reference.clone(),
+            )),
+            _ => None,
+        };
         let result = block_on(self.inner.execute(envelope))?;
+        // **A replay applied nothing, so it writes nothing.** `MemoryBackend` returns `affected`
+        // populated on a replay, which is what made a repeated `--relate` journal a second change
+        // that never happened and bump the revision of a brand-new artifact to 3.
+        if result.outcome == aep_contract::command::CommandOutcome::Replayed {
+            return Ok(result);
+        }
         self.persist(&result)?;
         for id in touched {
             self.persist_document(&id, None)?;
+        }
+        if let Some((id, kind, source, reference)) = observation {
+            self.record_observation(&id, &kind, &source, reference.as_deref())?;
         }
         Ok(result)
     }
 }
 
 impl MarkdownBackend {
+    /// The account the move currently being written rested on.
+    fn provenance(&self) -> journal::Provenance {
+        self.decided_on
+            .lock()
+            .expect("the provenance slot is not poisoned")
+            .clone()
+            .unwrap_or_default()
+    }
+
+    /// Which change the journal should record.
+    ///
+    /// **Which change it actually was.** `Change::Related` existed and was never emitted, so an
+    /// edge was journalled as `body_replaced` — a record describing something that did not happen,
+    /// in the one place a reader goes to find out what did.
+    fn change_for(
+        creating: bool,
+        existing: &crate::document::PlanningDocument,
+        updated: &crate::document::PlanningDocument,
+        decided_on: journal::Provenance,
+    ) -> journal::Change {
+        if creating {
+            return journal::Change::Created {
+                status: updated.frontmatter.status.clone(),
+            };
+        }
+        if existing.frontmatter.status != updated.frontmatter.status {
+            return journal::Change::Moved {
+                from: existing.frontmatter.status.clone(),
+                to: updated.frontmatter.status.clone(),
+                decided_on,
+            };
+        }
+        match updated
+            .frontmatter
+            .relations
+            .iter()
+            .find(|edge| !existing.frontmatter.relations.contains(edge))
+        {
+            Some(added) => journal::Change::Related {
+                relation: added.kind,
+                target: added.target.to_string(),
+            },
+            None => journal::Change::BodyReplaced,
+        }
+    }
+
+    /// Refuses a status change nothing has ruled on.
+    ///
+    /// The contract is storage-agnostic and permits a `status` key on an `UpdateEntity` — its own
+    /// conformance suites use one — so **the store is the only layer that can refuse an illegal
+    /// move**. Without this a story at `draft` reached `active` with `draft: [proposed, archived]`
+    /// declared, and the test written for it asserted the bypass as correct.
+    ///
+    /// A `MoveStatus` is exempt, and that is not a hole: it carries a decision the engine already
+    /// took against the kind's lifecycle **and the evidence presented**. Re-deciding it here without
+    /// that evidence refuses moves that were correctly earned — which is what happened the first
+    /// time this check was written.
+    ///
+    /// # Errors
+    ///
+    /// If the status moved somewhere the kind's ladder does not go.
+    fn check_the_ladder(
+        &self,
+        creating: bool,
+        existing: &crate::document::PlanningDocument,
+        updated: &crate::document::PlanningDocument,
+        artifact: &ArtifactId,
+    ) -> Result<(), CommandError> {
+        let already_decided = *self
+            .decided
+            .lock()
+            .expect("the decided flag is not poisoned");
+        if creating || already_decided || updated.frontmatter.status == existing.frontmatter.status
+        {
+            return Ok(());
+        }
+        let permissive = aep_domain::artifact::ArtifactLifecycle::permissive();
+        let lifecycle = self
+            .lifecycles
+            .for_kind(&existing.frontmatter.kind)
+            .unwrap_or(&permissive);
+        if crate::kernel::permits_transition(
+            Some(&existing.frontmatter.kind),
+            lifecycle,
+            &existing.frontmatter.status,
+            &updated.frontmatter.status,
+        ) {
+            return Ok(());
+        }
+        Err(CommandError::Conflict {
+            reason: format!(
+                "`{artifact}` is {} and {} is not on its ladder; a status that reached a document \
+                 without a ladder saying so is a transition nothing checked",
+                existing.frontmatter.status, updated.frontmatter.status
+            ),
+        })
+    }
+
+    /// Appends an observation about an artifact to the journal.
+    ///
+    /// The evidence-gated move reads these, so they are written on the same path as everything
+    /// else rather than by a verb reaching past it.
+    fn record_observation(
+        &self,
+        entity: &EntityId,
+        kind: &str,
+        source: &str,
+        reference: Option<&str>,
+    ) -> Result<(), CommandError> {
+        let Some((artifact, _)) = self
+            .file_for(entity)
+            .map_or_else(|| self.artifact_for(entity), |found| Ok(Some(found)))?
+        else {
+            self.note_unprojected(entity);
+            return Ok(());
+        };
+        let parsed = kind
+            .parse::<aep_domain::evidence::EvidenceKind>()
+            .map_err(|error| CommandError::Conflict {
+                reason: format!("`{kind}` is not an evidence kind: {error}"),
+            })?;
+        let stored = self.store.load();
+        let recorded_kind = stored
+            .documents
+            .values()
+            .find(|held| held.document.frontmatter.id == artifact)
+            .map(|held| held.document.frontmatter.kind.clone())
+            .ok_or_else(|| CommandError::Conflict {
+                reason: format!("`{artifact}` is no longer in the store"),
+            })?;
+        let revision = stored
+            .documents
+            .values()
+            .find(|held| held.document.frontmatter.id == artifact)
+            .map_or(0, |held| held.document.frontmatter.revision);
+        journal::append(
+            self.store.root(),
+            &journal::Entry {
+                at: self
+                    .at
+                    .lock()
+                    .expect("the instant slot is not poisoned")
+                    .clone(),
+                actor: self.actor.to_string(),
+                artifact,
+                kind: recorded_kind,
+                revision,
+                change: journal::Change::Evidence {
+                    kind: parsed,
+                    source: source.to_owned(),
+                    reference: reference.map(ToOwned::to_owned),
+                },
+            },
+        )
+        .map_err(|error| self.latch(format!("the journal could not be appended: {error}")))?;
+        Ok(())
+    }
+
     /// Writes every entity a command touched back to its file, and journals the change.
     ///
     /// A command that changed nothing writes nothing: `CommandResult::affected` is empty for a
@@ -355,6 +566,7 @@ impl MarkdownBackend {
             };
             let mut updated = existing.clone();
             apply_body(&mut updated.frontmatter, &body.data);
+            self.check_the_ladder(creating, &existing, &updated, &artifact)?;
             // Absent leaves the prose alone; present replaces it. See `BODY_KEY`.
             if let aep_domain::node::Node::Map(fields) = &body.data {
                 if let Some(aep_domain::node::Node::Text(prose)) = fields.get(BODY_KEY) {
@@ -368,15 +580,17 @@ impl MarkdownBackend {
             // store to 2 for ever, however many times it moved. What the file says it has been
             // through is what the file says, plus this change.
             let _ = revision;
+            // **The comparison first, then the count.** Bumping before comparing made the no-op
+            // guard dead on every update path: `updated` always differed by its revision, so a
+            // command that changed nothing still rewrote the file and journalled a change that did
+            // not happen.
+            if updated == existing {
+                return Ok(());
+            }
             if !creating {
                 updated.frontmatter.revision = existing.frontmatter.revision.saturating_add(1);
             }
 
-            if updated == existing {
-                return Ok(());
-            }
-
-            let before = existing.frontmatter.status.clone();
             if creating {
                 self.store
                     .create(&updated)
@@ -387,28 +601,15 @@ impl MarkdownBackend {
                     .map_err(|error| self.latch(error.to_string()))?;
             }
 
-            let change = if creating {
-                journal::Change::Created {
-                    status: updated.frontmatter.status.clone(),
-                }
-            } else if before == updated.frontmatter.status {
-                journal::Change::BodyReplaced
-            } else {
-                journal::Change::Moved {
-                    from: before,
-                    to: updated.frontmatter.status.clone(),
-                    decided_on: self
-                        .decided_on
-                        .lock()
-                        .expect("the provenance slot is not poisoned")
-                        .clone()
-                        .unwrap_or_default(),
-                }
-            };
+            let change = Self::change_for(creating, &existing, &updated, self.provenance());
             journal::append(
                 self.store.root(),
                 &journal::Entry {
-                    at: self.at_iso.clone(),
+                    at: self
+                        .at
+                        .lock()
+                        .expect("the instant slot is not poisoned")
+                        .clone(),
                     actor: self.actor.to_string(),
                     artifact: artifact.clone(),
                     kind: updated.frontmatter.kind,
@@ -642,6 +843,11 @@ impl QueryService for MarkdownBackend {
         reference: &EntityRef,
         consistency: QueryConsistency,
     ) -> Result<EntityEnvelope, QueryError> {
+        // The latch covers reads too, and the module doc always said it did: "every later call
+        // refuses rather than serving state that is not durable". It covered writes only, so a
+        // latched backend went on answering from memory about a store it no longer matched — which
+        // is the one thing the latch exists to stop.
+        self.refuse_when_latched()?;
         block_on(self.inner.get(reference, consistency))
     }
 

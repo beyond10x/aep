@@ -56,3 +56,5 @@
 {"at":"2026-08-26T09:43:05Z","actor":"timo","artifact":"story:corpus-asserts-the-denial","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
 {"at":"2026-08-26T10:04:06Z","actor":"timo","artifact":"story:corpus-asserts-the-denial","kind":"story","revision":3,"change":{"change":"evidence","kind":"test_result","source":"task check 2026-08-26","reference":"15 steps, 166 suites, 2615 tests, exit 0"}}
 {"at":"2026-08-26T10:04:06Z","actor":"timo","artifact":"story:corpus-asserts-the-denial","kind":"story","revision":4,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{"recorded":{"test_result":1}}}}
+{"at":"2026-08-26T10:28:34Z","actor":"timo","artifact":"story:journal-backed-store","kind":"story","revision":4,"change":{"change":"evidence","kind":"test_result","source":"task check 2026-08-26","reference":"15 steps, 166 suites, 2610 tests, exit 0"}}
+{"at":"2026-08-26T11:01:16Z","actor":"human:operator","artifact":"story:conformance-verb-takes-a-backend","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}

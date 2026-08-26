@@ -872,6 +872,24 @@ fn story(id: &str, status: &str, extra: &str) -> String {
     format!("---\nid: {id}\nkind: story\nstatus: {status}\n{extra}---\n# {id}\n")
 }
 
+/// Whether one line of source writes the store or its journal directly.
+///
+/// **The scan and its guard call this, and neither restates it.** The guard used to carry its own
+/// copy, so weakening the real predicate left the guard green — the failure mode this scan exists
+/// to refuse, one level up.
+fn writes_behind_the_contract(line: &str) -> bool {
+    let code = line.trim_start();
+    if code.starts_with("//") || code.starts_with("///") || code.starts_with("let planted") {
+        return false;
+    }
+    // The store, and **the journal**. An evidence record is the input to the evidence-gated move
+    // decision, so a verb appending one directly is writing the thing the decision reads without
+    // passing the door every other write passes.
+    code.contains("store.update(")
+        || code.contains("store.create(")
+        || code.contains("journal::append(")
+}
+
 #[test]
 fn no_planning_verb_writes_to_the_store_except_through_a_command() {
     // **D-P1, closed and pinned.** The store used to be written by the verbs directly, through its
@@ -881,43 +899,40 @@ fn no_planning_verb_writes_to_the_store_except_through_a_command() {
     // Every verb now issues a command and `MarkdownBackend` writes the file. A verb added next year
     // that called the store directly would compile, pass every test, and quietly reopen it.
     let source = include_str!("../src/planning.rs");
-    let offenders: Vec<String> = source
+    let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+    let offenders: Vec<String> = production
         .lines()
         .enumerate()
-        .filter(|(_, line)| {
-            let code = line.trim_start();
-            !code.starts_with("//")
-                && !code.starts_with("///")
-                // The scan's own guard plants one of these in a string literal.
-                && !code.starts_with("let planted")
-                && (code.contains("store.update(") || code.contains("store.create("))
-        })
+        .filter(|(_, line)| writes_behind_the_contract(line))
         .map(|(number, line)| format!("{}: {}", number + 1, line.trim()))
         .collect();
 
     assert!(
         offenders.is_empty(),
-        "a verb writing the store directly is the second write path D-P1 was — model the change as \
-         a command and let `MarkdownBackend` carry it:\n  {}",
+        "a verb writing the store or its journal directly is the second write path D-P1 was — \
+         model the change as a command and let `MarkdownBackend` carry it:\n  {}",
         offenders.join("\n  ")
     );
 }
 
 #[test]
 fn the_command_only_scan_sees_a_write_it_should_refuse() {
-    // The guard. A scan that has never rejected anything is a scan nobody has evidence
-    // discriminates — the lesson of the `entity-sqlite` rollback test, applied before it costs
-    // anything.
+    // The guard, calling the real predicate rather than a copy of it. Delete a clause from
+    // `writes_behind_the_contract` and this fails, which is the whole point.
     //
-    // If this test ever starts passing, `no_planning_verb_writes_to_the_store_except_through_a_command`
-    // has stopped being evidence.
-    let planted = "fn a_new_verb() {\n    store.update(&relative, &document)?;\n}\n";
-    let caught = planted.lines().any(|line| {
-        let code = line.trim_start();
-        !code.starts_with("//") && code.contains("store.update(")
-    });
+    // If this test ever starts passing while the scan above still does, that one has stopped being
+    // evidence.
+    assert!(writes_behind_the_contract(
+        "    store.update(&relative, &document)?;"
+    ));
+    assert!(writes_behind_the_contract(
+        "    let path = store.create(&document)?;"
+    ));
+    assert!(writes_behind_the_contract(
+        "    journal::append(store.root(), &entry)?;"
+    ));
     assert!(
-        caught,
-        "the scan's own predicate must catch a planted write"
+        !writes_behind_the_contract("    /// Calls `store.update(…)` on its behalf."),
+        "and must not fire on prose that names it"
     );
 }

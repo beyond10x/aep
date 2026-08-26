@@ -87,6 +87,14 @@ pub fn from_manifest(
             .clone();
         for relation in &artifact.relations {
             let target_id = relation.target.id();
+            // **A crossing is not a dangling edge.** A target naming another member lives in
+            // another store by construction; seeding one repository cannot resolve it, and failing
+            // here made every verb that opens a backend refuse on a store holding a legitimate
+            // cross-repository relation — which is what a workspace is for. The edge stays in the
+            // document, where `protocol workspace crossings` resolves it against the assembly.
+            if target_id.member().is_some() {
+                continue;
+            }
             let target =
                 report
                     .by_id

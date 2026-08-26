@@ -33,11 +33,18 @@ mitigation.
 
 - Both write functions route through command envelopes; a source scan finds no other write path in
   the crate.
-- `protocol conformance` runs all sixteen `aep-conformance` suites against the markdown store and
-  passes, against the same `FaultyBackend` baseline that proves the suites catch injected defects.
+- The sixteen `aep-conformance` suites run against the markdown store and pass, against the same
+  `FaultyBackend` baseline that proves the suites catch injected defects. **Met by
+  `crates/aep-backend-markdown/tests/conformance.rs`, not by the `protocol conformance` verb** —
+  that verb is still hard-coded to `MemoryBackend` (`protocol-cli/src/main.rs:901`) and its own help
+  says so. Giving it a backend flag is `story:conformance-verb-takes-a-backend`; this line was
+  ticked before that was noticed, and the correction is here rather than in a quiet edit.
 - The journal answers what an artifact looked like at a given revision, and who moved it, without
   reading git.
-- `describe_type` reports the kind's lifecycle, closing **D-P5**.
+- ~~`describe_type` reports the kind's lifecycle, closing **D-P5**.~~ **Not done, and this line
+  should not have been ticked.** `TypeDescriptor::lifecycle` is initialised `None` and nothing
+  assigns it, in any backend; `docs/design/harness-planning-and-driver-design-v0.1.md:326` still
+  reads *"D-P5 — `describe_type` still reports no lifecycle."* D-P5 is untouched by this story.
 - An out-of-band file edit is still indistinguishable in the file (**D-P2**) and the store says so
   rather than pretending otherwise.
 

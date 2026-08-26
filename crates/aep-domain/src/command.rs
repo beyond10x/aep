@@ -81,6 +81,8 @@ pub enum CommandKind {
     AcceptAdr,
     /// Move an artifact along its declared status ladder.
     MoveStatus,
+    /// Record an observation about an artifact.
+    RecordEvidence,
 }
 
 impl CommandKind {
@@ -99,6 +101,7 @@ impl CommandKind {
         Self::ApproveDesign,
         Self::AcceptAdr,
         Self::MoveStatus,
+        Self::RecordEvidence,
     ];
 
     /// The versioned name as it appears on the wire.
@@ -114,6 +117,7 @@ impl CommandKind {
             Self::ApproveDesign => "aep.design.approve/v1",
             Self::AcceptAdr => "aep.adr.accept/v1",
             Self::MoveStatus => "aep.status.move/v1",
+            Self::RecordEvidence => "aep.evidence.record/v1",
         }
     }
 
@@ -210,6 +214,30 @@ pub struct CreateEntity {
     pub locator: EntityLocator,
     /// The body, in whatever shape the entity type declares.
     pub data: Node,
+}
+
+/// Recording an observation about an artifact.
+///
+/// # Why this is a command and not a journal append
+///
+/// An evidence record is the **input to the evidence-gated move decision** — `evidence_on_hand`
+/// reads it, and a ladder consults it before permitting a status. A verb appending one directly
+/// writes the thing the decision reads without passing the door every other write passes, which is
+/// the same deviation `D-P1` was and was invisible to a scan looking only for store writes.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct RecordEvidence {
+    /// Which artifact the observation is about.
+    pub target: EntityRef,
+    /// What kind of observation it is.
+    pub kind: String,
+    /// Where it came from, as the recorder is willing to say.
+    pub source: String,
+    /// What it points at — a run, a digest, a suite's own words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
 }
 
 /// Moving an artifact along the status ladder its kind declares.
@@ -409,6 +437,8 @@ pub enum Command {
     AcceptAdr(AcceptAdr),
     /// Move an artifact along its declared status ladder.
     MoveStatus(MoveStatus),
+    /// Record an observation about an artifact.
+    RecordEvidence(RecordEvidence),
 }
 
 impl Command {
@@ -425,6 +455,7 @@ impl Command {
             Self::ApproveDesign(_) => CommandKind::ApproveDesign,
             Self::AcceptAdr(_) => CommandKind::AcceptAdr,
             Self::MoveStatus(_) => CommandKind::MoveStatus,
+            Self::RecordEvidence(_) => CommandKind::RecordEvidence,
         }
     }
 
@@ -441,7 +472,8 @@ impl Command {
             Self::UpdateEntity(UpdateEntity { target, .. })
             | Self::ArchiveEntity(ArchiveEntity { target, .. })
             | Self::SupersedeEntity(SupersedeEntity { target, .. })
-            | Self::MoveStatus(MoveStatus { target, .. }) => Some(target.clone()),
+            | Self::MoveStatus(MoveStatus { target, .. })
+            | Self::RecordEvidence(RecordEvidence { target, .. }) => Some(target.clone()),
             Self::CreateRelation(CreateRelation { source, .. }) => Some(source.clone()),
             Self::SubmitDesignReview(SubmitDesignReview { design, .. })
             | Self::ApproveDesign(ApproveDesign { design, .. }) => Some(design.unversioned()),
@@ -463,7 +495,10 @@ impl Command {
             | Self::CreateRelation(_)
             | Self::RemoveRelation(_)
             | Self::ArchiveEntity(_)
-            | Self::SupersedeEntity(_) => None,
+            | Self::SupersedeEntity(_)
+            // An observation is *about* an artifact and asserts nothing about its revision — the
+            // whole point is that it can be recorded whenever it was made.
+            | Self::RecordEvidence(_) => None,
             // Stated here, unlike the domain commands below, because a ladder move names no
             // revision of its own to read one from — the caller is the only thing that knows which
             // revision it looked at.
@@ -493,7 +528,8 @@ impl Command {
             | Self::SubmitDesignReview(_)
             | Self::ApproveDesign(_)
             | Self::AcceptAdr(_)
-            | Self::MoveStatus(_) => true,
+            | Self::MoveStatus(_)
+            | Self::RecordEvidence(_) => true,
         }
     }
 
@@ -515,7 +551,8 @@ impl Command {
             | Self::SupersedeEntity(_)
             | Self::ApproveDesign(_)
             | Self::AcceptAdr(_)
-            | Self::MoveStatus(_) => Capability::ArtifactWrite,
+            | Self::MoveStatus(_)
+            | Self::RecordEvidence(_) => Capability::ArtifactWrite,
         }
     }
 
@@ -528,6 +565,9 @@ impl Command {
                 ..
             }) => format!("create {entity_type} at {locator}"),
             Self::MoveStatus(MoveStatus { target, to, .. }) => format!("move {target} to {to}"),
+            Self::RecordEvidence(RecordEvidence { target, kind, .. }) => {
+                format!("record {kind} about {target}")
+            }
             Self::UpdateEntity(UpdateEntity { target, changes }) => format!(
                 "update {target} ({})",
                 changes
@@ -581,6 +621,21 @@ impl Command {
     pub fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();
         match self {
+            Self::RecordEvidence(RecordEvidence { kind, source, .. }) => {
+                if kind.trim().is_empty() || source.trim().is_empty() {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::EmptyChange,
+                            "command.record-evidence",
+                            "an observation states what kind it is and where it came from",
+                        )
+                        .with_hint(
+                            "evidence that names neither cannot be counted for anything, and a \
+                             count with no subject is the gap this closes",
+                        ),
+                    );
+                }
+            }
             Self::MoveStatus(MoveStatus { to, .. }) => {
                 if to.trim().is_empty() {
                     errors.push(
@@ -694,6 +749,12 @@ mod tests {
                 to: "accepted".to_owned(),
                 expected_revision: None,
                 decided_on: None,
+            }),
+            Command::RecordEvidence(RecordEvidence {
+                target: reference(DESIGN),
+                kind: "test_result".to_owned(),
+                source: "task check".to_owned(),
+                reference: Some("63 suites, exit 0".to_owned()),
             }),
             Command::UpdateEntity(UpdateEntity {
                 target: reference(DESIGN),

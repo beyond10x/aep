@@ -307,7 +307,29 @@ fn apply_valid(
         // by the engine against the kind's lifecycle document and whatever evidence was presented,
         // before the command is issued. A backend that re-decided it here would be a second
         // protocol, which is the thing the whole arrangement exists to avoid.
+        // An observation changes no entity: it is a record *about* one. The store keeps it as an
+        // audit record, and the markdown backend writes it into the journal the gated move reads.
+        Command::RecordEvidence(record) => {
+            require_entity(store, &record.target)?;
+            Vec::new()
+        }
+
         Command::MoveStatus(move_status) => {
+            // The same guard `UpdateEntity` carries, and it was missed: both write the same
+            // `status` key, so without it a **review result** — the one kind `is_mutable` refuses —
+            // became editable after the fact through the new command, which is the whole reason
+            // that kind is immutable.
+            require_mutable(store, &move_status.target)?;
+            // The caller's assertion about what it read. Every other revision-guarded command
+            // carries a `VersionedEntityRef` and reaches `require_revision` through it; this one
+            // states the revision on the payload, and `CommandEnvelope::new` does not copy it — so
+            // without this the caller's `expected_revision` was accepted and silently dropped.
+            if let Some(expected) = move_status.expected_revision {
+                if let Err(error) = require_revision(store, &move_status.target.at(expected)) {
+                    record_rejection(store, envelope, &error);
+                    return Err(error);
+                }
+            }
             let reference = mutate(
                 store,
                 envelope,

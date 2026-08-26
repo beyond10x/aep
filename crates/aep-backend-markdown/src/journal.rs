@@ -375,11 +375,18 @@ pub fn reconcile(root: &Path, held: &BTreeMap<ArtifactId, (ArtifactStatus, u64)>
         let Some(entry) = last.get(artifact) else {
             continue;
         };
-        let recorded = match &entry.change {
-            Change::Created { status } => Some(status.clone()),
-            Change::Moved { to, .. } => Some(to.clone()),
-            _ => None,
-        };
+        // The last entry that **said** something about the status, not merely the last entry. An
+        // `evidence` or `related` entry says nothing about it, so taking only the newest left four
+        // of this repository's own artifacts with their status checked by nothing at all.
+        let recorded = entries
+            .iter()
+            .rev()
+            .filter(|entry| &entry.artifact == artifact)
+            .find_map(|entry| match &entry.change {
+                Change::Created { status } => Some(status.clone()),
+                Change::Moved { to, .. } => Some(to.clone()),
+                _ => None,
+            });
         let status_disagrees = recorded.as_ref().is_some_and(|recorded| recorded != status);
         if status_disagrees || entry.revision != *revision {
             drift.push(Drift::Disagrees {

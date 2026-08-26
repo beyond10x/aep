@@ -11,6 +11,78 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.27.0] — 2026-08-26
+
+The planning store implements the contract it is held to, and every verb that writes goes through
+one door. **Two independent reviews of this work found 27 defects between them; all of them are
+fixed here**, and the ones that were false claims are named rather than quietly corrected.
+
+### Added
+
+* **`aep-backend-markdown` is a contract implementation.** `MarkdownBackend` implements
+  `CommandService` and `QueryService`; the sixteen `aep-conformance` suites run against it and are
+  shown to **fail** it under injected faults, because a suite that has never failed is not evidence
+  that it can. Deviation **D-P1** is closed.
+
+  The contract logic is not written twice: every command goes to `aep-backend-memory` and this crate
+  adds durability. Idempotency, revision conflicts, "a refusal still leaves an audit record" — each
+  is a decision whose wrong version looks right, and two implementations drift in exactly the ways a
+  suite run months apart discovers.
+
+* **`aep-backend-sqlite`** — the first database backend. One file, no server, adapted over
+  `entity-runtime`'s transactional store rather than written again here.
+
+* **Two new commands, and their absence is why D-P1 stayed open.** `aep.status.move/v1` and
+  `aep.evidence.record/v1`. The planning store's ladders are data with an open status vocabulary,
+  and an evidence record is the input to the evidence-gated move — neither had a command, so the CLI
+  wrote both behind the contract. `UpdateEntity`'s own documentation says a `status` key there is a
+  mistake; there was simply no command that named the move.
+
+* **`eval.matrix/1` has a fourth column, `advisory`.** An advisory row judges whether the *evidence*
+  is worth anything, not whether the run did anything wrong; counting one in `violated` published
+  `violated: 1` against runs that behaved perfectly. Omitted when zero, so a matrix written before it
+  reads unchanged.
+
+* **Three gate steps**: `cargo xtask guards` (no test body duplicated), `cargo xtask claims` (a
+  released `### Fixed` entry names something that existed to be broken), `cargo xtask version` (the
+  workspace version matches the newest tag, so `protocol --version` can say which build it is).
+
+* `protocol artifact validate` reconciles the journal against the files, and reports every status
+  that reached its rung on an **asserted** rather than a **recorded** provenance.
+
+### Fixed
+
+* **A status could reach a document with no ladder consulted.** The contract permits a `status` key
+  on an `UpdateEntity` — its own suites use one — so the store is the only layer that can refuse an
+  illegal move, and it did not: a story at `draft` reached `active` with `draft: [proposed,
+  archived]` declared. A `MoveStatus` stays exempt, because the engine has already decided it
+  against the ladder **and the evidence presented**.
+
+* `MoveStatus` bypassed the immutability check, so a **review result** — the one kind that exists to
+  be uneditable — could be edited after the fact. It also declared `expected_revision` and never
+  enforced it, silently dropping a caller's assertion about what it had read.
+
+* **A relation was journalled as `body_replaced`**, a repeated `--relate` bumped a new artifact to
+  revision 3, and a replayed command re-wrote the file — three defects compounding, all from the
+  same place: the no-op guard ran after the revision had already been incremented, so it was dead.
+
+* `protocol artifact new --relate` with an unresolvable target wrote the artifact, journalled it,
+  and then failed — leaving the caller told the command failed and holding a document without the
+  edge they asked for. Targets are resolved before anything is written.
+
+* **The latch did not cover reads**, in either durable backend, though both modules said it did.
+
+* `protocol artifact evidence --at` was ignored once the verb went through a command. The instant
+  travels on the command now, because the clock is read at the edge and handed in.
+
+* Seeding refused any store holding a **cross-repository relation**, which broke `protocol artifact
+  new` on this repository's own plan. A crossing is not a dangling edge.
+
+### Changed
+
+* `AGENTS.md`, `docs/plan/gap-register.md` and `aep-backend-markdown`'s own module documentation all
+  said D-P1 was open and the contract had one implementor. They said so after it had three.
+
 ## [0.26.0] — 2026-08-26
 
 **A review of 0.25.0 found that three of its published claims were false, and that it had quietly

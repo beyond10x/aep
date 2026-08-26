@@ -159,10 +159,14 @@ Each of these was learned by building the thing it names. They are enforced wher
   as blocked. **Built is not adopted**: one story driven once says the mechanism holds on real work;
   it does not say driven runs are how work happens here.
 * **`trace_conformance` still gates nothing.** Do not describe it as if it does.
-* **A claim the suites do not support is not made.** `aep-backend-markdown` is a durable *store*, not
-  a `CommandService`/`QueryService` implementation — it writes through its own two functions, which
-  is deviation D-P1 against invariant 14 — so the contract still has exactly one implementor,
-  `aep-backend-memory`, and the sixteen conformance suites run against that and nothing else.
+* **A claim the suites do not support is not made.** As of 2026-08-26 the contract has **three**
+  implementors: `aep-backend-memory`, `aep-backend-markdown` and `aep-backend-sqlite`. The sixteen
+  suites run against all three, and each crate also runs them against a deliberately faulty version
+  of itself — a suite that has never failed is not evidence that it can.
+  `aep-backend-markdown` and `aep-backend-sqlite` do not reimplement the contract: each hands every
+  command to `aep-backend-memory` and adds durability, so idempotency, revision conflicts and the
+  audit a refusal still leaves are decided in one place.
+  **D-P1 is closed** — `docs/plan/gap-register.md` carries what that took.
 
 ### The driver and the engine
 

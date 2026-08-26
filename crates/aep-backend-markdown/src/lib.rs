@@ -22,21 +22,22 @@
 //!
 //! # Where this sits relative to the contract
 //!
-//! This crate is **the store**, not yet the backend. The plan is that it becomes the second
-//! implementor of the `aep-contract` traits — `CommandService` and `QueryService` over a
-//! journal beside the markdown, so a replayed command returns its original result and every
-//! refusal leaves a record. That is a labelled later milestone and deliberately not attempted
-//! here: the contract's guarantees are about idempotency, optimistic concurrency and audit, and
-//! bolting them onto a file tree without a journal would produce a backend that passes by accident
-//! and fails under a second writer. What exists today is the layer that implementor will sit on:
-//! parse, render, validate a status move, read a whole tree and hand back an
-//! [`ArtifactGraph`](aep_domain::artifact::ArtifactGraph).
+//! This crate is the store **and** the backend. [`backend::MarkdownBackend`] implements
+//! `CommandService` and `QueryService`, the sixteen `aep-conformance` suites run against it, and
+//! they are shown to fail it under injected faults — a suite that has never failed is not evidence
+//! that it can.
 //!
-//! That gap is registered rather than left implicit: the CLI writes through this crate's
-//! [`create`](store::MarkdownStore::create) and [`update`](store::MarkdownStore::update) instead of
-//! through a command, which is **deviation D-P1** against invariant 14 in
-//! `docs/plan/gap-register.md`. The mitigation is the shape above — every write in the workspace
-//! funnels through those two functions, so the milestone that reroutes them reroutes all of it.
+//! **The contract logic is not written twice.** Every command is handed to `aep-backend-memory` and
+//! this crate adds durability around it: idempotency, revision conflicts, "a refusal still leaves an
+//! audit record", "nothing is ever physically deleted" — each is a decision whose wrong version
+//! looks right, and two implementations drift in exactly the ways a suite run months apart
+//! discovers.
+//!
+//! **Deviation D-P1 is closed** (2026-08-26). It existed because the CLI wrote through this crate's
+//! [`create`](store::MarkdownStore::create) and [`update`](store::MarkdownStore::update) rather than
+//! through a command — and it stayed open because the vocabulary was missing two words: a planning
+//! store's ladders are data with an open status vocabulary, and an evidence record is the input to
+//! the gated move. `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 //!
 //! Consequently there is **no delete**, on any type here. Removing a plan item is a status move to
 //! `archived`, which is invariant 16 spelled for a file tree: an epic that was abandoned is a fact

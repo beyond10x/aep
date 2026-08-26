@@ -737,6 +737,12 @@ fn guards(root: &Path) -> Result<()> {
     // argue with it, which is the difference between an exception and a blind spot.
     const PARALLEL_VOCABULARIES: &[&str] = &["adp-domain", "aep-domain", "aop-domain"];
 
+    // Two emitters that agree. `ess-synth`'s Go and Rust `type_name` are different functions reached
+    // through a `use` in each module; `billing.invoice.Invoice.State` becomes `InvoiceState` in both
+    // languages, so the two tests are identical after comments are stripped and are still testing
+    // two different things. Named rather than skipped, so a reader can disagree.
+    const AGREEING_EMITTERS: &[&str] = &["a_nested_declaration_becomes_one_identifier"];
+
     let mut bodies: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
 
     for entry in walk(&root.join("crates")) {
@@ -785,7 +791,19 @@ fn guards(root: &Path) -> Result<()> {
             excused += 1;
             continue;
         }
-        if crates.len() > 1 {
+        if sites.len() > 1
+            && sites
+                .iter()
+                .all(|(_, name)| AGREEING_EMITTERS.contains(&name.as_str()))
+        {
+            excused += 1;
+            continue;
+        }
+        // **Two tests with one body, wherever they live.** Requiring different crates missed a
+        // real pair inside one — `ess-synth`'s Go and Rust name tests are byte-identical — and a
+        // duplicate is a duplicate: either the assertion belongs in one place run against both, or
+        // one of the two is named for something it does not assert.
+        if sites.len() > 1 {
             findings.push(
                 sites
                     .iter()
@@ -834,12 +852,22 @@ fn test_bodies(text: &str) -> Vec<(String, String)> {
             continue;
         };
 
+        // Braces inside a string literal are not braces. Counting them swallowed the `#[test]`
+        // that followed two real bodies, so those two were never compared at all.
         let mut depth = 0i32;
         let mut end = None;
+        let mut in_string = false;
+        let mut escaped = false;
         for (index, character) in after[open..].char_indices() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
             match character {
-                '{' => depth += 1,
-                '}' => {
+                '\\' if in_string => escaped = true,
+                '"' => in_string = !in_string,
+                '{' if !in_string => depth += 1,
+                '}' if !in_string => {
                     depth -= 1;
                     if depth == 0 {
                         end = Some(open + index);
@@ -907,34 +935,25 @@ fn walk(root: &Path) -> Vec<PathBuf> {
 ///
 /// If git cannot be run, or if a released bullet names something that did not yet exist.
 fn claims(root: &Path) -> Result<()> {
+    // Published sections are not rewritten — that rule has held all through this repository's
+    // history and is why corrections live in a *later* section. So an entry already released that
+    // names only its own fix is excused **by name, with its reason**, rather than quietly skipped
+    // or fixed by editing what shipped.
+    const EXCUSED: &[(&str, &str)] = &[(
+        "0.26.0",
+        "the dangling-check bullet names `ArtifactGraph::build_in_workspace` and \
+         `StoreReport::graph_in_workspace`, both introduced by the fix. What was broken lived in \
+         `artifact.rs`, which the bullet describes in prose and does not backtick. Released; a \
+         published section stays as published.",
+    )];
+
     let text = fs::read_to_string(root.join("CHANGELOG.md")).context("reading CHANGELOG.md")?;
 
-    // Released sections only, newest first, and never `[Unreleased]`: a bullet there describes work
-    // that has not shipped, so there is no previous release to check it against.
-    let mut sections: Vec<(String, Vec<String>)> = Vec::new();
-    let mut version: Option<String> = None;
-    let mut fixed = false;
-    let mut bullets: Vec<String> = Vec::new();
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("## [") {
-            if let Some(previous) = version.take() {
-                sections.push((previous, std::mem::take(&mut bullets)));
-            }
-            let name = rest.split(']').next().unwrap_or_default().to_owned();
-            version = (name != "Unreleased").then_some(name);
-            fixed = false;
-        } else if line.starts_with("### ") {
-            fixed = line.trim() == "### Fixed";
-        } else if fixed && (line.starts_with("* ") || line.starts_with("- ")) {
-            bullets.push(line.to_owned());
-        }
-    }
-    if let Some(previous) = version {
-        sections.push((previous, bullets));
-    }
+    let sections = fixed_sections(&text);
 
     let mut checked = 0usize;
     let mut unverifiable = 0usize;
+    let mut excused = 0usize;
     let mut findings = Vec::new();
 
     for (release, bullets) in &sections {
@@ -948,9 +967,15 @@ fn claims(root: &Path) -> Result<()> {
                 .step_by(2)
                 .filter(|token| {
                     // A token worth checking: a path, a symbol, or a requirement id. Prose in
-                    // backticks — a shell line, a sentence — is not.
+                    // backticks — a shell line, a sentence — is not, and neither is a literal:
+                    // `1..=3650` contains a dot and named nothing anybody could grep for.
+                    let starts_like_a_name = token
+                        .chars()
+                        .next()
+                        .is_some_and(|first| first.is_ascii_alphabetic());
                     !token.contains(' ')
                         && token.len() > 3
+                        && (starts_like_a_name || token.starts_with("R-"))
                         && (token.contains('.') || token.contains('_') || token.starts_with("R-"))
                 })
                 .collect();
@@ -958,15 +983,38 @@ fn claims(root: &Path) -> Result<()> {
                 unverifiable += 1;
                 continue;
             }
-            for token in named {
-                checked += 1;
-                if !existed_at(root, &before, token)? {
-                    findings.push(format!(
-                        "{release} `### Fixed` names `{token}`, which does not appear anywhere at \
-                         {before} — so a user of {before} cannot have hit it. If it was caught \
-                         while the wave was built, it belongs in `### Changed` or the tag message."
-                    ));
+            // **At least one named thing must have existed**, not all of them. A `### Fixed`
+            // bullet names the defect *and* the fix, and the fix's identifiers are new by
+            // definition — requiring every one to pre-date the release flagged twenty-four entries
+            // that were describing themselves honestly.
+            //
+            // What the rule still catches is the case it was written for: a bullet where *nothing*
+            // it names existed at the previous release describes a defect no user of that release
+            // could have met. `R-90b` was exactly that — its only token appeared nowhere but in the
+            // changelog entry claiming it was wrong.
+            checked += 1;
+            let mut any_existed = false;
+            for token in &named {
+                if existed_at(root, &before, token)? {
+                    any_existed = true;
+                    break;
                 }
+            }
+            if !any_existed && EXCUSED.iter().any(|(tag, _)| *tag == release.as_str()) {
+                excused += 1;
+                continue;
+            }
+            if !any_existed {
+                findings.push(format!(
+                    "{release} `### Fixed` names {} — and none of them appears anywhere at \
+                     {before}, so a user of {before} cannot have hit this. If it was caught while \
+                     the wave was built, it belongs in `### Changed` or the tag message.",
+                    named
+                        .iter()
+                        .map(|token| format!("`{token}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
         }
     }
@@ -975,8 +1023,8 @@ fn claims(root: &Path) -> Result<()> {
         println!("  - {finding}");
     }
     println!(
-        "{checked} claim(s) checked against the previous release, {unverifiable} unverifiable, {} \
-         finding(s)",
+        "{checked} claim(s) checked against the previous release, {unverifiable} unverifiable, \
+         {excused} excused, {} finding(s)",
         findings.len()
     );
     if findings.is_empty() {
@@ -986,28 +1034,78 @@ fn claims(root: &Path) -> Result<()> {
     }
 }
 
+/// Every released `### Fixed` section, as (version, bullets).
+///
+/// `[Unreleased]` is skipped: a bullet there describes work that has not shipped, so there is no
+/// previous release to check it against. Its bullets are still **drained** at the header, because
+/// leaving them in the buffer attributed them to the next released heading — a correctly-filed
+/// unreleased fix checked against the wrong tag.
+///
+/// A bullet's continuation lines are joined onto it. Dropping them read only the first line of every
+/// multi-line entry, which in this repository is almost all of them.
+fn fixed_sections(text: &str) -> Vec<(String, Vec<String>)> {
+    let mut sections: Vec<(String, Vec<String>)> = Vec::new();
+    let mut version: Option<String> = None;
+    let mut fixed = false;
+    let mut bullets: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("## [") {
+            let carried = std::mem::take(&mut bullets);
+            if let Some(previous) = version.take() {
+                sections.push((previous, carried));
+            }
+            let name = rest.split(']').next().unwrap_or_default().to_owned();
+            version = (name != "Unreleased").then_some(name);
+            fixed = false;
+        } else if line.starts_with("### ") {
+            fixed = line.trim() == "### Fixed";
+        } else if fixed && (line.starts_with("* ") || line.starts_with("- ")) {
+            bullets.push(line.to_owned());
+        } else if fixed && !line.trim().is_empty() && line.starts_with("  ") {
+            if let Some(last) = bullets.last_mut() {
+                last.push(' ');
+                last.push_str(line.trim());
+            }
+        }
+    }
+    if let Some(previous) = version {
+        sections.push((previous, bullets));
+    }
+    sections
+}
+
 /// The release tag immediately before `version`, if this repository has one.
+///
+/// **Ordered by when the tag was made, not by version name.** Tags before `0.12.0` carry a slugged
+/// form (`0.11.0-ground-truth-and-docs`), and a bare-version-only ordering skipped straight past
+/// them — so `0.12.0` was checked against `0.2.1`, thirty releases earlier, and every identifier
+/// introduced in between read as one that "did not exist". Twenty-five false findings from one
+/// wrong comparison.
 fn previous_tag(root: &Path, version: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
-        .args(["tag", "--list", "--sort=-v:refname"])
+        .args(["tag", "--list", "--sort=-creatordate"])
         .current_dir(root)
         .output()
         .context("running git — released claims are checked against the tags")?;
+    // A git that failed is not a repository with no tags. Ignoring the status let a clone without
+    // tags skip every section and report green having checked nothing.
+    if !output.status.success() {
+        bail!(
+            "git tag failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
     let listed = String::from_utf8(output.stdout).context("reading the tag list as UTF-8")?;
-    let bare: Vec<&str> = listed
+    let ordered: Vec<&str> = listed
         .lines()
         .map(str::trim)
-        .filter(|tag| {
-            !tag.is_empty()
-                && tag
-                    .split('.')
-                    .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
-        })
+        .filter(|tag| !tag.is_empty())
         .collect();
-    Ok(bare
+    Ok(ordered
         .iter()
         .position(|tag| *tag == version)
-        .and_then(|at| bare.get(at + 1))
+        .and_then(|at| ordered.get(at + 1))
         .map(|tag| (*tag).to_owned()))
 }
 

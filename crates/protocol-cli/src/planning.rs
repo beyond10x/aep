@@ -505,6 +505,10 @@ fn backend_for(args: &StoreArgs) -> Result<aep_backend_markdown::backend::Markdo
         declared_members(&args.location.repository_root()),
         clock_at_the_edge(),
         command_actor()?,
+        // The ladders this store's kinds declare. Without them the backend falls back to the
+        // permissive lifecycle and a status copied out of a command is a transition nothing
+        // checked.
+        args.lifecycles()?.lifecycles().clone(),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
     .with_context(|| format!("opening the planning store at {}", root.display()))
@@ -520,6 +524,7 @@ fn envelope_for(
     correlation: &str,
     wire_name: &'static str,
     payload: aep_domain::command::Command,
+    at: aep_domain::time::Timestamp,
 ) -> Result<aep_contract::command::CommandEnvelope<aep_domain::command::Command>> {
     use aep_contract::command::{CommandContext, CommandEnvelope};
 
@@ -533,7 +538,7 @@ fn envelope_for(
         correlation
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
-        clock_at_the_edge(),
+        at,
     );
     Ok(CommandEnvelope::new(
         format!("cmd-{safe}")
@@ -596,6 +601,7 @@ fn write_through_a_command(
     store: &MarkdownStore,
 ) -> Result<std::path::PathBuf> {
     use aep_contract::command::CommandService;
+    use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::command::{Command, CreateEntity};
     use aep_domain::entity::{EntityLocator, EntityType};
@@ -612,6 +618,29 @@ fn write_through_a_command(
     )
     .map_err(|error| anyhow::anyhow!("`{}` cannot be given an address: {error}", front.id))?;
 
+    // **Every target resolved before anything is written.** They used to be resolved inside the
+    // loop, after the create had been committed and journalled — so a typo in `--relate` left the
+    // caller told the command failed and holding an artifact without the edge they asked for.
+    for relation in &front.relations {
+        let target = relation.target.id();
+        block_on(QueryService::resolve(
+            backend,
+            &EntityLocator::new(
+                aep_backend_markdown::backend::ORGANISATION,
+                aep_backend_markdown::backend::SPACE,
+                target.namespace(),
+                target.name(),
+            )
+            .map_err(|error| anyhow::anyhow!("`{target}` cannot be given an address: {error}"))?,
+        ))
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "`{}` would point at `{target}`, which this store does not hold: {error}",
+                front.id
+            )
+        })?;
+    }
+
     let name = format!("new-{}", front.id);
     let envelope = envelope_for(
         &name,
@@ -623,6 +652,7 @@ fn write_through_a_command(
             locator,
             data: Node::Map(data),
         }),
+        clock_at_the_edge(),
     )?;
 
     let result = block_on(backend.execute(envelope)).map_err(|error| {
@@ -1488,6 +1518,69 @@ fn artifact_id(value: &str) -> Result<ArtifactId> {
 ///
 /// Records rather than decides. Nothing is gated here, no status moves, and a rung's `requires:` is
 /// not consulted — recording evidence and acting on it are separate acts on purpose, because a
+/// The instant a verb was told to record, as the contract spells one.
+///
+/// `--at` names an instant somebody observed. It travels on the command, because the clock is read
+/// at the edge and handed in — a backend that stamped its own would silently ignore the flag.
+///
+/// # Errors
+///
+/// If the text is not an instant this build can read.
+fn instant(text: &str) -> Result<aep_domain::time::Timestamp> {
+    aep_domain::time::CivilDate::parse(text)
+        .map(aep_domain::time::CivilDate::to_timestamp)
+        .or_else(|_| {
+            text.parse::<u64>()
+                .map(aep_domain::time::Timestamp::from_epoch_millis)
+                .map_err(|_| ())
+        })
+        .map_err(|()| anyhow::anyhow!("`{text}` is not an instant this build can read"))
+}
+
+/// Issues the `RecordEvidence` command that records one observation.
+fn evidence_through_a_command(
+    backend: &aep_backend_markdown::backend::MarkdownBackend,
+    id: &ArtifactId,
+    kind: aep_domain::evidence::EvidenceKind,
+    source: &str,
+    reference: Option<&str>,
+    at: aep_domain::time::Timestamp,
+) -> Result<()> {
+    use aep_contract::command::CommandService;
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, RecordEvidence};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let target = block_on(QueryService::resolve(backend, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+
+    let envelope = envelope_for(
+        &format!(
+            "evidence-{id}-{kind}-{}",
+            clock_at_the_edge().epoch_millis()
+        ),
+        "protocol-artifact-evidence",
+        "aep.evidence.record/v1",
+        Command::RecordEvidence(RecordEvidence {
+            target: EntityRef::new(target),
+            kind: kind.to_string(),
+            source: source.to_owned(),
+            reference: reference.map(ToOwned::to_owned),
+        }),
+        at,
+    )?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
+}
+
 /// command that recorded evidence *and* moved the artifact would make the evidence a formality of
 /// the move rather than a thing that existed before it.
 fn record_evidence(
@@ -1517,16 +1610,18 @@ fn record_evidence(
         .get(&id)
         .with_context(|| missing(&store, &id))?;
 
-    journal(
-        &store,
-        &stored.document,
-        &actor_of(None),
-        &at,
-        aep_backend_markdown::journal::Change::Evidence {
-            kind,
-            source: source.to_owned(),
-            reference: reference.map(str::to_owned),
-        },
+    // Through a command, like every other write. An evidence record is the **input to the
+    // evidence-gated move decision**, so a verb appending one directly writes the thing the
+    // decision reads without passing the door every other write passes — the same deviation D-P1
+    // was, and invisible to a scan looking only for store writes.
+    let _ = stored;
+    evidence_through_a_command(
+        &backend_for(args)?,
+        &id,
+        kind,
+        source,
+        reference,
+        instant(&at)?,
     )?;
 
     let on_hand = aep_backend_markdown::journal::evidence_on_hand(store.root(), &id);
@@ -1577,32 +1672,22 @@ fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     Ok(crate::exit_code(true))
 }
 
-/// Records what a write verb just did.
+/// Superseded, 2026-08-26, and recorded rather than quietly deleted.
 ///
-/// One helper, called from each of the four verbs that write, so a new verb that forgets it is a
-/// visible omission rather than a silent one — `every_write_verb_is_journalled` fails if a verb
-/// writes without appearing here.
+/// `fn journal` wrote a journal entry beside each verb's own write, and `every_write_verb_is_journalled`
+/// scanned this file for a write that had no such call near it. Both were the mitigation for
+/// deviation **D-P1**, which existed because the verbs wrote the store directly.
 ///
-/// A failure to journal is **reported and not swallowed**. A journal that quietly stops recording
-/// is worse than one that was never there: the first looks like a plan where nothing happened.
-fn journal(
-    store: &MarkdownStore,
-    document: &PlanningDocument,
-    actor: &str,
-    at: &str,
-    change: aep_backend_markdown::journal::Change,
-) -> Result<()> {
-    let entry = aep_backend_markdown::journal::Entry {
-        at: at.to_owned(),
-        actor: actor.to_owned(),
-        artifact: document.frontmatter.id.clone(),
-        kind: document.frontmatter.kind.clone(),
-        revision: document.frontmatter.revision,
-        change,
-    };
-    aep_backend_markdown::journal::append(store.root(), &entry)
-        .with_context(|| format!("recording {} in the journal", entry.change))
-}
+/// They do not. Every verb issues a command and `MarkdownBackend` writes the file **and** journals
+/// it as one act, so a write that records nothing is not something a verb can forget — it is not
+/// something a verb does. The last holdout was `protocol artifact evidence`, which appended to the
+/// journal directly; an evidence record is the input to the evidence-gated move decision, so a verb
+/// writing one behind the contract was writing the thing the decision reads. It goes through
+/// `aep.evidence.record/v1` now.
+///
+/// What pins it is `no_planning_verb_writes_to_the_store_except_through_a_command`, whose predicate
+/// covers the journal as well as the store, with a guard that calls that same predicate.
+const _SUPERSEDED_JOURNAL_HELPER: () = ();
 
 /// Who is doing this, as they are willing to say.
 ///

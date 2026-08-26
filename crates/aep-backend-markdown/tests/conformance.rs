@@ -20,12 +20,22 @@ fn scratch(name: &str) -> PathBuf {
     root
 }
 
+/// The ladders these tests hold a store to.
+///
+/// Empty, so every kind falls back to the permissive lifecycle — these tests are about the contract
+/// and durability, not about any particular ladder. `a_status_off_the_ladder_is_refused` builds a
+/// real one.
+fn ladders() -> aep_domain::artifact::LifecycleRegistry {
+    aep_domain::artifact::LifecycleRegistry::default()
+}
+
 fn backend(name: &str) -> MarkdownBackend {
     MarkdownBackend::open(
         scratch(name),
         std::iter::empty(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
         ActorRef::parse("human:conformance").expect("a well-formed actor"),
+        ladders(),
     )
     .expect("an empty store opens")
 }
@@ -135,7 +145,7 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
         .expect("the store opens");
 
     let locator = EntityLocator::parse("ep://planning/store/story/one").expect("a locator");
@@ -199,7 +209,7 @@ fn a_created_entity_becomes_a_document_this_store_holds() {
     let root = scratch("created");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
         .expect("an empty store opens");
 
     let payload = Command::CreateEntity(CreateEntity {
@@ -259,6 +269,7 @@ fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
         std::iter::empty(),
         at,
         ActorRef::parse("human:operator").expect("an actor"),
+        ladders(),
     )
     .expect("an empty store opens");
 
@@ -292,7 +303,7 @@ fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
         .expect("the store opens");
 
     let one = block_on(
@@ -335,6 +346,83 @@ fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
 }
 
 #[test]
+fn a_status_off_the_ladder_is_refused_however_it_arrives() {
+    // **The bypass this closes, and the test that used to bless it.**
+    //
+    // The contract is storage-agnostic and permits a `status` key on an `UpdateEntity` — its own
+    // conformance suites use one (`aep-conformance/src/suites/causation.rs`). So the store is the
+    // only layer that can refuse an illegal move, and until this check it did not: a story at
+    // `draft` reached `active` with `draft: [proposed, archived]` declared, because nothing
+    // consulted a ladder on that path. The test written for it asserted the bypass as correct.
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::artifact::{
+        ArtifactKind, ArtifactLifecycle, ArtifactStatus, LifecycleRegistry,
+    };
+    use aep_domain::command::{Command, UpdateEntity};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let root = scratch("ladder");
+    write_story(&root, "one", "draft", "# One\n\nProse.");
+
+    // `draft` goes to `proposed`, and nowhere else.
+    let mut lifecycle = ArtifactLifecycle::permissive();
+    lifecycle.kind = Some(ArtifactKind::parse("story").expect("a kind"));
+    lifecycle.initial = ArtifactStatus::parse("draft").expect("a status");
+    lifecycle.transitions.clear();
+    lifecycle.transitions.insert(
+        ArtifactStatus::parse("draft").expect("a status"),
+        [ArtifactStatus::parse("proposed").expect("a status")]
+            .into_iter()
+            .collect(),
+    );
+    let mut ladders = LifecycleRegistry::new();
+    ladders.insert(ArtifactKind::parse("story").expect("a kind"), lifecycle);
+
+    let at = Timestamp::from_epoch_millis(1_700_000_000_000);
+    let actor = ActorRef::parse("human:operator").expect("an actor");
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders)
+        .expect("the store opens");
+
+    let id = block_on(
+        store.resolve(&EntityLocator::parse("ep://planning/store/story/one").expect("a locator")),
+    )
+    .expect("it resolves");
+
+    let error = block_on(
+        store.execute(CommandEnvelope::new(
+            "cmd-jump".parse().expect("a command id"),
+            "aep.entity.update/v1",
+            Command::UpdateEntity(UpdateEntity {
+                target: EntityRef::new(id),
+                changes: [("status".to_owned(), aep_domain::node::Node::from("active"))]
+                    .into_iter()
+                    .collect(),
+            }),
+            CommandContext::new(
+                "req-jump".parse().expect("a request id"),
+                "key-jump".parse().expect("an idempotency key"),
+                actor,
+                "corr-jump".parse().expect("a correlation id"),
+                at,
+            ),
+        )),
+    )
+    .expect_err("`active` is not on `draft`'s ladder");
+    assert!(
+        error.to_string().contains("is not on its ladder"),
+        "and it says so: {error}"
+    );
+
+    let written = std::fs::read_to_string(root.join("story").join("one.md")).expect("document");
+    assert!(
+        written.contains("status: draft"),
+        "and the file did not move:\n{written}"
+    );
+}
+
+#[test]
 fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
     // The decision that lets `protocol artifact new` route through a command: prose is data under a
     // reserved key, exactly as `status` and `title` already are.
@@ -351,7 +439,7 @@ fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
     let root = scratch("prose");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone())
+    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
         .expect("an empty store opens");
 
     let context = |name: &str| {
@@ -448,18 +536,20 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
         ("frontmatter.rs", include_str!("../src/frontmatter.rs")),
         ("kernel.rs", include_str!("../src/kernel.rs")),
         ("lib.rs", include_str!("../src/lib.rs")),
+        // **`store.rs` was missing, and it is the module that holds the write primitive.** The
+        // scan claimed all eight modules and read seven; a helper added beside `create`/`update`
+        // calling the private `write` was invisible to it.
+        ("store.rs", include_str!("../src/store.rs")),
     ];
 
     let mut offenders = Vec::new();
     for (name, source) in SOURCES {
-        for (number, line) in source.lines().enumerate() {
-            let calls_write = line.contains(".create(&") || line.contains(".update(&");
-            if !calls_write {
-                continue;
-            }
-            // Doc comments and prose naming the functions are not calls.
-            let code = line.trim_start();
-            if code.starts_with("//") || code.starts_with("///") || code.starts_with('*') {
+        // Production code only. A `#[cfg(test)] mod tests` exercising `create`/`update` directly is
+        // testing the primitive, which is what a unit test of a store is for — it is not a path
+        // anything outside this crate can reach.
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        for (number, line) in production.lines().enumerate() {
+            if !writes_to_the_store(line) {
                 continue;
             }
             // The one permitted site, bounded by the function itself rather than by a fixed
@@ -468,7 +558,7 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
             if *name == "backend.rs" && within_persist_document(source, number) {
                 continue;
             }
-            offenders.push(format!("{name}:{}: {}", number + 1, code));
+            offenders.push(format!("{name}:{}: {}", number + 1, line.trim()));
         }
     }
 
@@ -480,19 +570,38 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
     );
 }
 
+/// Whether one line of source writes to the store.
+///
+/// **The scan and its guard call this, and neither restates it.** The guard used to carry its own
+/// copy of the predicate, so weakening the real one left the guard green — which is precisely the
+/// failure this whole file exists to refuse: a test that cannot fail is not evidence, and a guard
+/// that guards a copy of the thing guards nothing.
+fn writes_to_the_store(line: &str) -> bool {
+    let code = line.trim_start();
+    if code.starts_with("//") || code.starts_with("///") || code.starts_with('*') {
+        return false;
+    }
+    code.contains(".create(&") || code.contains(".update(&")
+}
+
 #[test]
 fn the_scan_sees_a_write_it_should_refuse() {
-    // The guard. A scan that has never rejected anything is a scan nobody has evidence discriminates.
+    // The guard, and it calls the real predicate rather than a copy of it. Delete `.update(&` from
+    // `writes_to_the_store` and this fails, which is the whole point.
     //
-    // If this test ever starts passing, `the_only_write_path_out_of_this_crate_is_a_command` has
-    // stopped being evidence.
-    let planted = "fn somewhere_else() {\n    store.update(&relative, &document)?;\n}\n";
-    let offends = planted
-        .lines()
-        .any(|line| line.contains(".update(&") && !line.trim_start().starts_with("//"));
+    // If this test ever starts passing while `the_only_write_path_out_of_this_crate_is_a_command`
+    // still does, that one has stopped being evidence.
     assert!(
-        offends,
+        writes_to_the_store("    store.update(&relative, &document)?;"),
         "the scan's own predicate must catch a planted write"
+    );
+    assert!(
+        writes_to_the_store("        self.store.create(&updated)?;"),
+        "and a create"
+    );
+    assert!(
+        !writes_to_the_store("    /// Calls `store.update(&relative, &document)` on its behalf."),
+        "and must not fire on prose that names it"
     );
 }
 

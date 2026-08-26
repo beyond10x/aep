@@ -35,3 +35,10 @@ task: |
 
 expectations: expectations.trace.yaml
 transcript: transcript.jsonl
+
+# The run did nothing wrong; what gaps is an observation about the evidence, not about the run.
+advisory_gaps:
+  - expectation: the-scope-was-actually-tested
+    why: >-
+      This transcript carries `permission_denials: []`, as every transcript in this corpus does, so
+      the guardrail rows above were never given anything to refuse.

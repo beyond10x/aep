@@ -60,6 +60,20 @@ pub struct SqliteBackend {
     inner: MemoryBackend,
     durable: Mutex<entity_sqlite::SqliteStore>,
     latched: Mutex<Option<String>>,
+    /// The identities this backend has written, so it can tell its own rows from somebody else's.
+    ///
+    /// # What this stops, and it is not hypothetical
+    ///
+    /// `open` builds a fresh [`MemoryBackend`], which mints identities from a **per-process
+    /// counter** — the first `CreateEntity` of every run is `01MEM…0001`. A second run against the
+    /// same file therefore reuses run 1's identity, and `persist` reads the durable revision
+    /// immediately before committing, so the expectation matches by construction and
+    /// `ON CONFLICT … DO UPDATE` overwrites the row. No conflict, no latch, exit 0, and somebody's
+    /// data gone.
+    ///
+    /// Hydration is `P5`'s work and is deliberately deferred. Deferring it does not license
+    /// destroying what is already there.
+    written: Mutex<std::collections::BTreeSet<String>>,
 }
 
 impl std::fmt::Debug for SqliteBackend {
@@ -88,6 +102,7 @@ impl SqliteBackend {
             inner: MemoryBackend::new(),
             durable: Mutex::new(durable),
             latched: Mutex::new(None),
+            written: Mutex::new(std::collections::BTreeSet::new()),
         })
     }
 
@@ -105,6 +120,7 @@ impl SqliteBackend {
             inner: MemoryBackend::new(),
             durable: Mutex::new(durable),
             latched: Mutex::new(None),
+            written: Mutex::new(std::collections::BTreeSet::new()),
         })
     }
 
@@ -124,6 +140,19 @@ impl SqliteBackend {
     /// `true` when it holds nothing.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+
+    /// Refuses a read when a write has left memory and the store disagreeing.
+    fn refuse_when_latched(&self) -> Result<(), QueryError> {
+        match self.latched() {
+            None => Ok(()),
+            Some(detail) => Err(QueryError::Unavailable {
+                reason: format!(
+                    "this backend is not answering: a write failed and what it holds no longer \
+                     matches what is stored — {detail}. Reopen it once the cause is fixed."
+                ),
+            }),
+        }
     }
 
     fn check_latch(&self) -> Result<(), CommandError> {
@@ -184,11 +213,33 @@ impl SqliteBackend {
             let held =
                 entity_store::StateProvider::load(&*durable, STORED_AS, &reference.id.to_string())
                     .map_err(|error| self.latch(error.to_string()))?;
+            // **A row this backend never wrote is somebody else's.** See `written`: identities come
+            // from a per-process counter, so a second run's first entity collides with the first
+            // run's, and the expectation below would match by construction and overwrite it. This
+            // is the check that turns silent destruction into a refusal.
+            let key = reference.id.to_string();
+            let mine = self
+                .written
+                .lock()
+                .expect("the written set is not poisoned")
+                .contains(&key);
+            if held.is_some() && !mine {
+                drop(durable);
+                return Err(self.latch(format!(
+                    "the database already holds `{key}`, and this backend did not write it. It                      cannot yet read a database back, so it would mint this identity from a fresh                      counter and overwrite what is there. Hydration is P5; point this at an empty                      database until then."
+                )));
+            }
+
             let expect = held.map_or(entity_store::Expect::Absent, |held| {
                 entity_store::Expect::Revision(held.revision)
             });
             entity_store::Store::commit(&mut *durable, &decision, expect)
                 .map_err(|error| self.latch(error.to_string()))?;
+            drop(durable);
+            self.written
+                .lock()
+                .expect("the written set is not poisoned")
+                .insert(key);
         }
         Ok(())
     }
@@ -245,6 +296,11 @@ impl QueryService for SqliteBackend {
         reference: &EntityRef,
         consistency: QueryConsistency,
     ) -> Result<EntityEnvelope, QueryError> {
+        // The latch covers reads too, and the module doc always said it did: "every later call
+        // refuses rather than serving state that is not durable". It covered writes only, so a
+        // latched backend went on answering from memory about a store it no longer matched — which
+        // is the one thing the latch exists to stop.
+        self.refuse_when_latched()?;
         block_on(self.inner.get(reference, consistency))
     }
 
