@@ -30,3 +30,15 @@
 {"at":"2026-08-26T08:46:15Z","actor":"timo","artifact":"story:journal-backed-store","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
 {"at":"2026-08-26T08:46:15Z","actor":"timo","artifact":"story:journal-backed-store","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
 {"at":"2026-08-26T08:58:06Z","actor":"timo","artifact":"story:generator-version-stamp","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-26T09:24:35Z","actor":"timo","artifact":"story:guard-tests","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-26T09:24:35Z","actor":"timo","artifact":"story:journal-reconciliation","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-26T09:24:35Z","actor":"timo","artifact":"story:changelog-claims-are-checked","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-26T09:27:08Z","actor":"timo","artifact":"story:guard-tests","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
+{"at":"2026-08-26T09:27:08Z","actor":"timo","artifact":"story:guard-tests","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
+{"at":"2026-08-26T09:32:40Z","actor":"timo","artifact":"story:guard-tests","kind":"story","revision":4,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{"asserted":{"test_result":1}}}}
+{"at":"2026-08-26T09:32:40Z","actor":"timo","artifact":"story:journal-reconciliation","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
+{"at":"2026-08-26T09:32:40Z","actor":"timo","artifact":"story:journal-reconciliation","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
+{"at":"2026-08-26T09:32:41Z","actor":"timo","artifact":"story:journal-reconciliation","kind":"story","revision":4,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{"asserted":{"test_result":1}}}}
+{"at":"2026-08-26T09:32:41Z","actor":"timo","artifact":"story:changelog-claims-are-checked","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed","decided_on":{}}}
+{"at":"2026-08-26T09:32:41Z","actor":"timo","artifact":"story:changelog-claims-are-checked","kind":"story","revision":3,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
+{"at":"2026-08-26T09:32:41Z","actor":"timo","artifact":"story:changelog-claims-are-checked","kind":"story","revision":4,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{"asserted":{"test_result":1}}}}

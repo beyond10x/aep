@@ -17,6 +17,9 @@ dependencies = [
 name = "aep-backend-markdown"
 version = "0.26.0"
 dependencies = [
+ "aep-backend-memory",
+ "aep-conformance",
+ "aep-contract",
  "aep-domain",
  "entity-core",
  "schemars",

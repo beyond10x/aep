@@ -48,6 +48,9 @@ pub struct MarkdownStore {
     root: PathBuf,
 }
 
+/// Distinguishes one write's temporary file from another's in the same process.
+static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 impl MarkdownStore {
     /// Opens the store rooted at `root`.
     ///
@@ -259,15 +262,42 @@ impl MarkdownStore {
             || "document.md".to_owned(),
             |name| name.to_string_lossy().into_owned(),
         );
-        let temporary = parent.join(format!(".{name}.tmp"));
+        // The process id and a counter, not the document's name alone. A temporary shared by every
+        // writer of one document is worse than no temporary at all: writer A's `rename` installs an
+        // inode writer B is still filling, and a reader sees B's bytes arrive in a file that was
+        // supposed to appear whole. `entity-runtime` 0.8.0 fixed the same defect in its own file
+        // store; this is that fix, here.
+        let temporary = parent.join(format!(
+            ".{name}.{}.{}.tmp",
+            std::process::id(),
+            WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
 
-        fs::write(&temporary, contents).map_err(|source| StoreError::Io {
+        let mut file = fs::File::create(&temporary).map_err(|source| StoreError::Io {
             path: temporary.clone(),
             source,
         })?;
-        fs::rename(&temporary, path).map_err(|source| StoreError::Io {
-            path: path.to_path_buf(),
+        std::io::Write::write_all(&mut file, contents.as_bytes()).map_err(|source| {
+            StoreError::Io {
+                path: temporary.clone(),
+                source,
+            }
+        })?;
+        // `write` only empties this process's buffer. Without this the rename can be journalled
+        // while the bytes it names are not, and the document that appears is empty — which reads as
+        // a document somebody deliberately emptied.
+        file.sync_all().map_err(|source| StoreError::Io {
+            path: temporary.clone(),
             source,
+        })?;
+        drop(file);
+
+        fs::rename(&temporary, path).map_err(|source| {
+            let _ = fs::remove_file(&temporary);
+            StoreError::Io {
+                path: path.to_path_buf(),
+                source,
+            }
         })
     }
 }

@@ -78,6 +78,7 @@
 //! rebases. The same reasoning fixes the CLI's seeding clock to `Timestamp::EPOCH`.
 
 pub mod assembly;
+pub mod backend;
 pub mod claim;
 pub mod document;
 pub mod frontmatter;

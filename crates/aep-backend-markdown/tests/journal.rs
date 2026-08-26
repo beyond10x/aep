@@ -195,3 +195,77 @@ fn every_change_round_trips() {
     let read: Vec<Change> = entries.into_iter().map(|entry| entry.change).collect();
     assert_eq!(read, changes.to_vec());
 }
+
+#[test]
+fn a_status_the_journal_does_not_account_for_is_drift() {
+    // The defect, exactly as it happened on 2026-08-26: two epics shipped at
+    // `implemented, revision 4` with a journal holding one `created` entry apiece, because the
+    // binary that moved them predated the journal and printed every move it failed to record.
+    let directory = scratch("reconcile-disagrees");
+    let artifact = ArtifactId::new("epic:the-shell").expect("an id");
+    journal::append(
+        &directory,
+        &Entry {
+            at: "2026-08-26T00:00:00Z".to_owned(),
+            actor: "timo".to_owned(),
+            artifact: artifact.clone(),
+            kind: ArtifactKind::parse("epic").expect("a kind"),
+            revision: 1,
+            change: Change::Created {
+                status: ArtifactStatus::parse("draft").expect("a status"),
+            },
+        },
+    )
+    .expect("the entry lands");
+
+    let held = [(
+        artifact,
+        (ArtifactStatus::parse("implemented").expect("a status"), 4),
+    )]
+    .into_iter()
+    .collect();
+
+    let drift = journal::reconcile(&directory, &held);
+    assert_eq!(drift.len(), 1, "{drift:?}");
+    assert!(drift[0].to_string().contains("implemented"), "{}", drift[0]);
+    assert!(drift[0].to_string().contains("draft"), "{}", drift[0]);
+}
+
+#[test]
+fn an_entry_naming_an_artifact_this_store_does_not_hold_is_drift() {
+    // The other half, also from that day: six entries in one repository recorded the creation of
+    // another repository's artifacts. That store held none of them, and every file was valid.
+    let directory = scratch("reconcile-orphan");
+    journal::append(
+        &directory,
+        &Entry {
+            at: "2026-08-26T01:37:16Z".to_owned(),
+            actor: "timo".to_owned(),
+            artifact: ArtifactId::new("story:workspace-manifest").expect("an id"),
+            kind: ArtifactKind::parse("story").expect("a kind"),
+            revision: 1,
+            change: Change::Created {
+                status: ArtifactStatus::parse("draft").expect("a status"),
+            },
+        },
+    )
+    .expect("the entry lands");
+
+    let drift = journal::reconcile(&directory, &BTreeMap::new());
+    assert_eq!(drift.len(), 1, "{drift:?}");
+    assert!(drift[0].to_string().contains("never here"), "{}", drift[0]);
+}
+
+#[test]
+fn an_artifact_with_no_journal_entries_at_all_is_not_drift() {
+    // A store predating the journal is a known state, not a defect. Reporting every artifact in one
+    // as drifted would make the check useless on the only stores that have the problem.
+    let directory = scratch("reconcile-silent");
+    let held = [(
+        ArtifactId::new("story:old").expect("an id"),
+        (ArtifactStatus::parse("implemented").expect("a status"), 9),
+    )]
+    .into_iter()
+    .collect();
+    assert!(journal::reconcile(&directory, &held).is_empty());
+}

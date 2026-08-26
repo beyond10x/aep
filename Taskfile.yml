@@ -24,6 +24,8 @@ tasks:
       - task: fmt-check
       - task: status-check
       - task: version-check
+      - task: guard-check
+      - task: claim-check
       - task: clippy
       - task: test
       - task: doc-check
@@ -79,6 +81,22 @@ tasks:
     desc: Fail if the delivered-waves record in docs/status.md no longer matches the tags.
     cmds:
       - cargo xtask status --check
+
+  guard-check:
+    desc: >-
+      Fail when a test body is duplicated across crates. A test asserting exactly what a test in
+      another crate asserts is not evidence that the two behave differently — which is how a
+      "rolls back both halves" test that asserted a pre-check refusal was cited for two releases.
+    cmds:
+      - cargo xtask guards
+
+  claim-check:
+    desc: >-
+      Fail when a released `### Fixed` entry names something that did not exist at the previous
+      release. `### Fixed` is a promise about what a user of the previous version experienced, and
+      two of `entity-runtime` 0.6.0's three entries described defects that never shipped.
+    cmds:
+      - cargo xtask claims
 
   version-check:
     desc: >-

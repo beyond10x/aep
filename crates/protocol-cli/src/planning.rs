@@ -424,8 +424,10 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
 /// dangling edge — which is what makes a misspelled member name a defect rather than a crossing
 /// nobody can check.
 fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
-    let path = root.join(aep_engine::project::project_directory());
-    aep_engine::project::load_workspace(&path).map_or_else(
+    // `load_workspace` joins the project directory itself; joining it here too looked right and
+    // pointed at `.engineering/.engineering/workspace.yaml`, so every member read as undeclared and
+    // every crossing as a dangling edge.
+    aep_engine::project::load_workspace(root).map_or_else(
         |_| Vec::new(),
         |workspace| {
             workspace.map_or_else(Vec::new, |workspace| {
@@ -880,6 +882,29 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
         ),
         Err(errors) => problems.extend(errors.as_slice().iter().map(ToString::to_string)),
     }
+
+    // The journal against the files. A status the journal does not account for, and an entry naming
+    // an artifact this store does not hold, are the two ways the record can be wrong — and on
+    // 2026-08-26 both happened here in one day, with `validate` reporting every file valid through
+    // both, because it read the files and the files were fine.
+    let held: std::collections::BTreeMap<_, _> = report
+        .documents
+        .values()
+        .map(|stored| {
+            (
+                stored.document.frontmatter.id.clone(),
+                (
+                    stored.document.frontmatter.status.clone(),
+                    stored.document.frontmatter.revision,
+                ),
+            )
+        })
+        .collect();
+    problems.extend(
+        aep_backend_markdown::journal::reconcile(store.root(), &held)
+            .iter()
+            .map(ToString::to_string),
+    );
 
     let summary = Summary {
         store: store.root().display().to_string(),

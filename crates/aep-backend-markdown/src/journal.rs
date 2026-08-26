@@ -281,3 +281,117 @@ pub fn evidence_on_hand(root: &Path, artifact: &ArtifactId) -> BTreeMap<Evidence
     }
     counted
 }
+
+/// Where the journal and the files disagree about an artifact.
+///
+/// # The two ways a journal can be wrong, both of which happened on 2026-08-26
+///
+/// A store's files say what an artifact *is*; its journal says what *happened* to it. Either can be
+/// right while the other is wrong, and neither was visible:
+///
+/// * Six status moves ran through a `protocol` predating the journal. Each printed
+///   `moved draft -> proposed (revision 2)`; each wrote nothing. Two epics shipped at
+///   `status: implemented, revision: 4` with one `created` entry apiece.
+/// * Six journal entries in a neighbouring repository recorded the creation of *this* repository's
+///   artifacts, written a minute before the same six were created here. That store held none of
+///   them, and `validate` reported every file valid — because it reads the files, and the files
+///   were fine.
+///
+/// # Why findings and not refusals
+///
+/// A store that refused to be read because its history is incomplete is a store nobody can repair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Drift {
+    /// The journal's last word about an artifact disagrees with the file.
+    Disagrees {
+        /// Which artifact.
+        artifact: ArtifactId,
+        /// What the file says.
+        file: String,
+        /// What the journal last recorded.
+        journal: String,
+    },
+    /// The journal names an artifact this store does not hold.
+    ///
+    /// Not the same as an archived one: this is an entry about something that was never here.
+    Orphan {
+        /// Which artifact the entry names.
+        artifact: ArtifactId,
+        /// How many entries name it.
+        entries: usize,
+    },
+}
+
+impl std::fmt::Display for Drift {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Disagrees {
+                artifact,
+                file,
+                journal,
+            } => write!(
+                formatter,
+                "{artifact} reads {file} in its file, and the journal's last word on it is \
+                 {journal}; a status nothing accounts for is a status nobody can audit"
+            ),
+            Self::Orphan { artifact, entries } => write!(
+                formatter,
+                "the journal holds {entries} entr{} naming {artifact}, which this store does not \
+                 hold — an entry about an artifact that was never here",
+                if *entries == 1 { "y" } else { "ies" }
+            ),
+        }
+    }
+}
+
+/// Compares the journal against what the store holds.
+///
+/// `held` is every artifact in the store, with the status and revision its file states.
+///
+/// An artifact with **no** journal entries at all is not drift: that is a store predating the
+/// journal, which is a known state rather than a defect. Drift is a journal that disagrees, not one
+/// that is absent.
+pub fn reconcile(root: &Path, held: &BTreeMap<ArtifactId, (ArtifactStatus, u64)>) -> Vec<Drift> {
+    let (entries, _) = read(root);
+    let mut last: BTreeMap<&ArtifactId, &Entry> = BTreeMap::new();
+    let mut counts: BTreeMap<&ArtifactId, usize> = BTreeMap::new();
+    for entry in &entries {
+        *counts.entry(&entry.artifact).or_default() += 1;
+        last.insert(&entry.artifact, entry);
+    }
+
+    let mut drift = Vec::new();
+
+    for (artifact, count) in &counts {
+        if !held.contains_key(*artifact) {
+            drift.push(Drift::Orphan {
+                artifact: (*artifact).clone(),
+                entries: *count,
+            });
+        }
+    }
+
+    for (artifact, (status, revision)) in held {
+        let Some(entry) = last.get(artifact) else {
+            continue;
+        };
+        let recorded = match &entry.change {
+            Change::Created { status } => Some(status.clone()),
+            Change::Moved { to, .. } => Some(to.clone()),
+            _ => None,
+        };
+        let status_disagrees = recorded.as_ref().is_some_and(|recorded| recorded != status);
+        if status_disagrees || entry.revision != *revision {
+            drift.push(Drift::Disagrees {
+                artifact: artifact.clone(),
+                file: format!("{status} at revision {revision}"),
+                journal: recorded.map_or_else(
+                    || format!("revision {}", entry.revision),
+                    |recorded| format!("{recorded} at revision {}", entry.revision),
+                ),
+            });
+        }
+    }
+
+    drift
+}

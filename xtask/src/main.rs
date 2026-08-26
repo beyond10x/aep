@@ -372,6 +372,10 @@ enum Command {
     },
     /// Check the workspace version against the newest release tag.
     Version,
+    /// Check that every uniqueness claim in a test name has a guard beside it.
+    Guards,
+    /// Check that each released `### Fixed` entry names something that existed to be broken.
+    Claims,
 }
 
 /// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
@@ -597,6 +601,8 @@ fn main() -> Result<()> {
         Command::Fmt { check } => fmt(check),
         Command::Status { check } => status(&workspace_root(), check),
         Command::Version => version_check(&workspace_root()),
+        Command::Guards => guards(&workspace_root()),
+        Command::Claims => claims(&workspace_root()),
         Command::Synth { check } => {
             let root = workspace_root();
             let specifications: Vec<(PathBuf, &[&str])> = SYNTH_SPECIFICATIONS
@@ -687,6 +693,332 @@ fn version_check(root: &Path) -> Result<()> {
     }
     println!("version {declared} matches the newest release tag");
     Ok(())
+}
+
+/// A test asserting the same thing as one in another crate is not evidence of a difference.
+///
+/// # The defect this catches, and why the gate could not
+///
+/// On 2026-08-26 a reviewer found that `entity-sqlite`'s `a_refused_commit_rolls_back_both_halves`
+/// asserted a refusal that happens at the **pre-check**, before either write — so there were no
+/// halves to roll back. It was byte-for-byte the same assertion as
+/// `every_provider_leaves_a_refused_commit_with_no_trace`, which runs against the providers that
+/// document they *cannot* keep that promise. It had been cited as evidence for a requirement across
+/// two releases.
+///
+/// The gate could not tell. It checks that a cited test **passes**, and a test that asserts nothing
+/// distinguishing passes beautifully.
+///
+/// So: a test body that appears in more than one crate is reported. Either the two crates are
+/// testing one shared behaviour — in which case the assertion belongs in a shared suite, run
+/// against both, which is what `aep-conformance` is — or one of them is named for a property it
+/// does not assert.
+///
+/// # Why bodies and not names
+///
+/// A name heuristic was tried first and reported 92 findings against correct code, because ordinary
+/// test names contain "only" and "cannot". A check that fires that often on working code is one
+/// somebody switches off, which makes it worse than nothing. A duplicated body is a fact.
+///
+/// # Errors
+///
+/// If a source file cannot be read, or if a body is duplicated across crates.
+fn guards(root: &Path) -> Result<()> {
+    /// A body shorter than this says too little to be worth comparing.
+    const FLOOR: usize = 120;
+
+    // The three parallel command vocabularies. `adp`, `aep` and `aop` each define their own
+    // `Command` enum and each carries the same structural tests over it — round-trips through JSON,
+    // the sample set covering every kind. The bodies are identical because the *shape* is identical
+    // and the type is reached through a `use` at the top of each file; they are three tests of
+    // three different types, not one test cited twice.
+    //
+    // Allowlisted rather than silently skipped: a reader of this list can see what was excused and
+    // argue with it, which is the difference between an exception and a blind spot.
+    const PARALLEL_VOCABULARIES: &[&str] = &["adp-domain", "aep-domain", "aop-domain"];
+
+    let mut bodies: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+
+    for entry in walk(&root.join("crates")) {
+        if entry.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let text =
+            fs::read_to_string(&entry).with_context(|| format!("reading {}", entry.display()))?;
+        if !text.contains("#[test]") {
+            continue;
+        }
+        let relative = entry.strip_prefix(root).unwrap_or(&entry);
+        let crate_name = relative.components().nth(1).map_or_else(
+            || "?".to_owned(),
+            |c| c.as_os_str().to_string_lossy().into_owned(),
+        );
+
+        for (name, body) in test_bodies(&text) {
+            // Comments and whitespace out: two tests that differ only in what they say about
+            // themselves are the same test.
+            let normalised: String = body
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with("//"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if normalised.len() < FLOOR {
+                continue;
+            }
+            bodies
+                .entry(normalised)
+                .or_default()
+                .push((crate_name.clone(), name));
+        }
+    }
+
+    let mut findings = Vec::new();
+    let mut excused = 0usize;
+    for sites in bodies.values() {
+        let crates: BTreeSet<&str> = sites.iter().map(|(krate, _)| krate.as_str()).collect();
+        if crates.len() > 1
+            && crates
+                .iter()
+                .all(|krate| PARALLEL_VOCABULARIES.contains(krate))
+        {
+            excused += 1;
+            continue;
+        }
+        if crates.len() > 1 {
+            findings.push(
+                sites
+                    .iter()
+                    .map(|(krate, name)| format!("{krate}::{name}"))
+                    .collect::<Vec<_>>()
+                    .join("  ==  "),
+            );
+        }
+    }
+
+    for finding in &findings {
+        println!("  - {finding}");
+    }
+    println!(
+        "{} test body/bodies compared, {} duplicated across crates, {excused} excused (the three \
+         parallel command vocabularies)",
+        bodies.len(),
+        findings.len()
+    );
+    if findings.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "a test asserting exactly what a test in another crate asserts is not evidence that \
+             the two behave differently. Either move the assertion into a shared suite run against \
+             both — which is what `aep-conformance` is for — or make the test assert the thing its \
+             name claims."
+        )
+    }
+}
+
+/// Every `#[test]` function's name and body text.
+fn test_bodies(text: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    for (at, _) in text.match_indices("#[test]") {
+        let rest = &text[at..];
+        let Some(fn_at) = rest.find("fn ") else {
+            continue;
+        };
+        let after = &rest[fn_at + 3..];
+        let Some(paren) = after.find('(') else {
+            continue;
+        };
+        let name = after[..paren].trim().to_owned();
+        let Some(open) = after.find('{') else {
+            continue;
+        };
+
+        let mut depth = 0i32;
+        let mut end = None;
+        for (index, character) in after[open..].char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + index);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(end) = end {
+            found.push((name, after[open + 1..end].to_owned()));
+        }
+    }
+    found
+}
+
+/// Every file under `root`, recursively.
+fn walk(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().and_then(|n| n.to_str()) == Some("target") {
+                    continue;
+                }
+                pending.push(path);
+            } else {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// A released `### Fixed` entry must name something that existed at the previous release.
+///
+/// # The defect this catches
+///
+/// `entity-runtime` 0.6.0 shipped three `### Fixed` entries. **Two described defects that never
+/// existed in a release.** One named a requirement-numbering scheme, `R-90b`, that appears nowhere
+/// in that repository's history except in the changelog entry claiming it was wrong; the other
+/// described a `serde` defect in a file that did not exist before the release it was said to be
+/// fixed in.
+///
+/// Both were real — caught while the wave was being built. The tag message said so correctly:
+/// *"three defects the wave's own tests caught on first run"*. `### Fixed` did not, and `### Fixed`
+/// is a promise about what a user of the **previous** version experienced.
+///
+/// # What is checked, and what is not
+///
+/// Backticked identifiers only — file paths, symbol names, requirement ids. Each must appear
+/// somewhere in the tree at the previous release tag. Prose is not read and fairness is not judged:
+/// this checks that the things a bullet names were there to be broken.
+///
+/// A bullet naming nothing checkable is counted as **unverifiable** rather than passed, so the
+/// number of claims actually checked is honest.
+///
+/// # Errors
+///
+/// If git cannot be run, or if a released bullet names something that did not yet exist.
+fn claims(root: &Path) -> Result<()> {
+    let text = fs::read_to_string(root.join("CHANGELOG.md")).context("reading CHANGELOG.md")?;
+
+    // Released sections only, newest first, and never `[Unreleased]`: a bullet there describes work
+    // that has not shipped, so there is no previous release to check it against.
+    let mut sections: Vec<(String, Vec<String>)> = Vec::new();
+    let mut version: Option<String> = None;
+    let mut fixed = false;
+    let mut bullets: Vec<String> = Vec::new();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("## [") {
+            if let Some(previous) = version.take() {
+                sections.push((previous, std::mem::take(&mut bullets)));
+            }
+            let name = rest.split(']').next().unwrap_or_default().to_owned();
+            version = (name != "Unreleased").then_some(name);
+            fixed = false;
+        } else if line.starts_with("### ") {
+            fixed = line.trim() == "### Fixed";
+        } else if fixed && (line.starts_with("* ") || line.starts_with("- ")) {
+            bullets.push(line.to_owned());
+        }
+    }
+    if let Some(previous) = version {
+        sections.push((previous, bullets));
+    }
+
+    let mut checked = 0usize;
+    let mut unverifiable = 0usize;
+    let mut findings = Vec::new();
+
+    for (release, bullets) in &sections {
+        let Some(before) = previous_tag(root, release)? else {
+            continue;
+        };
+        for bullet in bullets {
+            let named: Vec<&str> = bullet
+                .split('`')
+                .skip(1)
+                .step_by(2)
+                .filter(|token| {
+                    // A token worth checking: a path, a symbol, or a requirement id. Prose in
+                    // backticks — a shell line, a sentence — is not.
+                    !token.contains(' ')
+                        && token.len() > 3
+                        && (token.contains('.') || token.contains('_') || token.starts_with("R-"))
+                })
+                .collect();
+            if named.is_empty() {
+                unverifiable += 1;
+                continue;
+            }
+            for token in named {
+                checked += 1;
+                if !existed_at(root, &before, token)? {
+                    findings.push(format!(
+                        "{release} `### Fixed` names `{token}`, which does not appear anywhere at \
+                         {before} — so a user of {before} cannot have hit it. If it was caught \
+                         while the wave was built, it belongs in `### Changed` or the tag message."
+                    ));
+                }
+            }
+        }
+    }
+
+    for finding in &findings {
+        println!("  - {finding}");
+    }
+    println!(
+        "{checked} claim(s) checked against the previous release, {unverifiable} unverifiable, {} \
+         finding(s)",
+        findings.len()
+    );
+    if findings.is_empty() {
+        Ok(())
+    } else {
+        bail!("`### Fixed` is a promise about what a user of the previous version experienced")
+    }
+}
+
+/// The release tag immediately before `version`, if this repository has one.
+fn previous_tag(root: &Path, version: &str) -> Result<Option<String>> {
+    let output = std::process::Command::new("git")
+        .args(["tag", "--list", "--sort=-v:refname"])
+        .current_dir(root)
+        .output()
+        .context("running git — released claims are checked against the tags")?;
+    let listed = String::from_utf8(output.stdout).context("reading the tag list as UTF-8")?;
+    let bare: Vec<&str> = listed
+        .lines()
+        .map(str::trim)
+        .filter(|tag| {
+            !tag.is_empty()
+                && tag
+                    .split('.')
+                    .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+        })
+        .collect();
+    Ok(bare
+        .iter()
+        .position(|tag| *tag == version)
+        .and_then(|at| bare.get(at + 1))
+        .map(|tag| (*tag).to_owned()))
+}
+
+/// Whether `token` appears anywhere in the tree at `tag`.
+fn existed_at(root: &Path, tag: &str, token: &str) -> Result<bool> {
+    let output = std::process::Command::new("git")
+        .args(["grep", "--fixed-strings", "--quiet", token, tag])
+        .current_dir(root)
+        .output()
+        .context("running git grep")?;
+    Ok(output.status.success())
 }
 
 /// The repository root, derived from this crate's manifest directory.

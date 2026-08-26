@@ -143,6 +143,16 @@ jobs:
       - name: Check the workspace version against the newest tag
         run: cargo xtask version
 
+      # Cheap, and it reads only source. A test body that appears in two crates is either a shared
+      # behaviour that belongs in a shared suite, or a test named for a property it does not assert.
+      - name: Check no test body is duplicated across crates
+        run: cargo xtask guards
+
+      # Reads the tags this job already fetched: a released `### Fixed` bullet must name something
+      # that existed at the previous release, or a user of that release cannot have hit it.
+      - name: Check released Fixed entries against the previous release
+        run: cargo xtask claims
+
   # Its own job for the same reason as `schemas`: a stale projection reads as a stale projection.
   # A generated OpenAPI document that no longer matches the specification is a contract someone is
   # building against, and "the gate failed" would bury that behind a test log. The fix is

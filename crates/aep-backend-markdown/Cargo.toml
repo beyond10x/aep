@@ -10,6 +10,15 @@ authors.workspace = true
 
 [dependencies]
 aep-domain.workspace = true
+aep-contract.workspace = true
+# **The contract logic lives once.** This crate is the durability half of the interaction contract,
+# not a second implementation of it: `MarkdownBackend` hydrates `aep-backend-memory`'s store from
+# the files, hands every command to it, and writes the result back. Idempotency, revision conflicts,
+# the audit record a refusal still leaves — all of that is decided in one place, by the
+# implementation the sixteen conformance suites already police, rather than written twice and
+# expected to agree. The name says "memory" because that is where its store lives; what this crate
+# takes from it is the contract, not the storage.
+aep-backend-memory.workspace = true
 # The status ladder, decided as data rather than by a hand-written lookup — see `src/kernel.rs`.
 # An IO-free kernel with no clock, no filesystem and no network: it takes an entity type as data
 # and answers whether a move is permitted, which is the whole of what this crate asks of it.
@@ -28,3 +37,6 @@ thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+aep-conformance.workspace = true
