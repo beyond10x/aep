@@ -52,6 +52,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.23.0` | 0.23.0 — W7: a claim that left the boundary |
 | `0.23.1` | 0.23.1 — the pin says what it links, the ladder says `draft` |
 | `0.23.2` | 0.23.2 — the first tag this repository has verified |
+| `0.24.0` | 0.24.0 — every release explains itself |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
