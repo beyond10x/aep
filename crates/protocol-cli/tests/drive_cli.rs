@@ -583,19 +583,28 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
          Before `story:evidence-producers-for-the-driven-map` this run was refused for \
          `contract_result`, `property_test_result`, `verification` and `specification`:\n{said}"
     );
+    // The coverage pre-flight runs **before** the metaharness one, deliberately, so this assertion
+    // means the same thing on a machine that has the binary and one that does not. With the order
+    // the other way round this test passed vacuously in CI, where `metaharness` is not installed:
+    // the run stopped at the machine check and the gap was never looked for.
+    let allocated = said.contains("run        PRE-1/1");
+    let stopped_for_the_machine = said.contains("is not on PATH");
     assert!(
-        said.contains("run        PRE-1/1"),
-        "the run was allocated, which only happens after the pre-flight passed:\n{said}"
+        allocated || stopped_for_the_machine,
+        "the run got past coverage — either to a run id, or to the machine check that follows \
+         it. Neither means the pre-flight is refusing something it should not:\n{said}"
     );
-    assert!(
-        directory.join(".engineering/runs/PRE-1").exists(),
-        "the run directory exists:\n{said}"
-    );
-    assert_eq!(
-        stdout(&output).matches("steps      0 run").count(),
-        1,
-        "no step of the cargo map was executed:\n{said}"
-    );
+    if allocated {
+        assert!(
+            directory.join(".engineering/runs/PRE-1").exists(),
+            "the run directory exists:\n{said}"
+        );
+        assert_eq!(
+            stdout(&output).matches("steps      0 run").count(),
+            1,
+            "no step of the cargo map was executed:\n{said}"
+        );
+    }
 }
 
 /// A crossing relation the workspace manifest declares is not a reason to refuse the run.
@@ -605,71 +614,48 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
 /// `protocol drive` read the graph with no manifest at all and refused to start — *the planning
 /// store cannot be trusted* — on a store the other verb had just called valid. Both were answering
 /// honestly; only one of them was answering the question a person asked.
+///
+/// Driven over the fixture map, whose steps are all `command`, so this runs on a machine with no
+/// `metaharness` — which is every CI runner. The first version of this test used the committed
+/// cargo map, and its six `llm` steps meant it could only ever pass here.
 #[test]
 fn a_relation_the_workspace_declares_does_not_stop_a_run_before_it_starts() {
-    let directory = std::env::temp_dir().join("protocol-drive-declared-crossing");
-    std::fs::remove_dir_all(&directory).ok();
-    std::fs::create_dir_all(directory.join(".engineering/planning/story"))
-        .expect("the temporary tree is writable");
-    let task = directory.join("task.yaml");
+    let declared = Fixture::new("declared-crossing", false);
     write(
-        &task,
-        "id: XR-1\nkind: feature\nobjective: a-crossing-edge\nprotocol: adp/1\n\
-         profile: development.driven\n",
-    );
-    write(
-        &directory.join(".engineering/workspace.yaml"),
+        &declared.directory.join(".engineering/workspace.yaml"),
         "version: aep.workspace/1\nmembers:\n  - name: elsewhere\n    source: ../elsewhere\n",
     );
+    let crossing = "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\n\
+         status: draft\ntitle: A story that points at another repository\nrelations:\n\
+         - informed_by: elsewhere/story:theirs\nrevision: 1\n---\n# Story\n\nBody.\n";
     write(
-        &directory.join(".engineering/planning/story/crossing.md"),
-        "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\nstatus: draft\n\
-         title: A story that points at another repository\nrelations:\n\
-         - informed_by: elsewhere/story:theirs\nrevision: 1\n---\n# Story\n\nBody.\n",
+        &declared
+            .directory
+            .join(".engineering/planning/story/crossing.md"),
+        crossing,
     );
 
-    let map = root().join("drivers/development/default.yaml");
-    let run = |project: &Path| {
-        protocol(&[
-            "drive",
-            "run",
-            "--project",
-            printable(project),
-            "--root",
-            printable(&root()),
-            "--task",
-            printable(&task),
-            "--map",
-            printable(&map),
-            "--max-iterations",
-            "0",
-            "--pause-on-approval",
-        ])
-    };
-
-    let output = run(&directory);
+    let output = declared.drive(&["run"], &["--max-iterations", "0"]);
     let said = format!("{}{}", stdout(&output), stderr(&output));
     assert!(
         !said.contains("cannot be trusted"),
         "the manifest declares `elsewhere`, so the edge is declared and not dangling:\n{said}"
     );
     assert!(
-        said.contains("run        XR-1/1"),
+        said.contains("run        DRIVE-1/1"),
         "the run was allocated, which only happens after the store was read:\n{said}"
     );
 
-    // The other half, so the fix is not "trust everything": with no manifest the same edge is
-    // dangling and the run still refuses, which is what a store with no workspace beside it means.
-    let undeclared = std::env::temp_dir().join("protocol-drive-undeclared-crossing");
-    std::fs::remove_dir_all(&undeclared).ok();
-    std::fs::create_dir_all(undeclared.join(".engineering/planning/story"))
-        .expect("the temporary tree is writable");
-    std::fs::copy(
-        directory.join(".engineering/planning/story/crossing.md"),
-        undeclared.join(".engineering/planning/story/crossing.md"),
-    )
-    .expect("the story copies");
-    let refused = run(&undeclared);
+    // The other half, so the fix is not *trust everything*: the same story with no manifest beside
+    // it is a dangling edge, and the run still refuses and still says which edge.
+    let undeclared = Fixture::new("undeclared-crossing", false);
+    write(
+        &undeclared
+            .directory
+            .join(".engineering/planning/story/crossing.md"),
+        crossing,
+    );
+    let refused = undeclared.drive(&["run"], &["--max-iterations", "0"]);
     let complaint = format!("{}{}", stdout(&refused), stderr(&refused));
     assert_ne!(
         code(&refused),

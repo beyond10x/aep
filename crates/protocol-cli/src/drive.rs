@@ -427,10 +427,14 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     // The static pre-flights, both checked before the lock is taken for the same reason: a run
     // that cannot spawn its `llm` steps — or that no map step can ever evidence out of — should
     // not own a run id and a lock to find that out.
-    if let Some(refusal) = metaharness_preflight(&inputs.map) {
-        outln!("{refusal}");
-        return Ok(ExitCode::from(1));
-    }
+    //
+    // **Coverage first, and the order is load-bearing.** Both are static, but they answer about
+    // different things: coverage is decidable from the two documents and says *this map can never
+    // finish this plan* on every machine, while the metaharness check says *this machine cannot
+    // run it today*. With the machine check first, a map with a real coverage gap read as fine
+    // wherever the binary was missing — which is exactly what happened: the test asserting the
+    // cargo map's gap is closed passed **vacuously** in CI, where `metaharness` is not installed,
+    // and would have gone on passing if the gap came back.
 
     // F-W4.2-4: the other half of `check_run`, and the half that was missing. `check_run` asks
     // whether every kind the map declares is one the protocol knows; this asks whether every kind
@@ -449,6 +453,11 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         // — who will have produced a record when the step runs, or whether a person will hand one
         // over between runs — and refusing on an undecided question is what invariant 5 forbids.
         outln!("note: {warning}");
+    }
+
+    if let Some(refusal) = metaharness_preflight(&inputs.map) {
+        outln!("{refusal}");
+        return Ok(ExitCode::from(1));
     }
 
     // D3(c): the headless pre-flight, static and decidable and run before anything executes.
