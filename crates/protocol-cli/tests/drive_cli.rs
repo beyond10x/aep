@@ -598,6 +598,86 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
     );
 }
 
+/// A crossing relation the workspace manifest declares is not a reason to refuse the run.
+///
+/// The two readers of one store used to disagree: `protocol artifact validate` resolved a relation
+/// into another repository against `.engineering/workspace.yaml` and called it declared, while
+/// `protocol drive` read the graph with no manifest at all and refused to start — *the planning
+/// store cannot be trusted* — on a store the other verb had just called valid. Both were answering
+/// honestly; only one of them was answering the question a person asked.
+#[test]
+fn a_relation_the_workspace_declares_does_not_stop_a_run_before_it_starts() {
+    let directory = std::env::temp_dir().join("protocol-drive-declared-crossing");
+    std::fs::remove_dir_all(&directory).ok();
+    std::fs::create_dir_all(directory.join(".engineering/planning/story"))
+        .expect("the temporary tree is writable");
+    let task = directory.join("task.yaml");
+    write(
+        &task,
+        "id: XR-1\nkind: feature\nobjective: a-crossing-edge\nprotocol: adp/1\n\
+         profile: development.driven\n",
+    );
+    write(
+        &directory.join(".engineering/workspace.yaml"),
+        "version: aep.workspace/1\nmembers:\n  - name: elsewhere\n    source: ../elsewhere\n",
+    );
+    write(
+        &directory.join(".engineering/planning/story/crossing.md"),
+        "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\nstatus: draft\n\
+         title: A story that points at another repository\nrelations:\n\
+         - informed_by: elsewhere/story:theirs\nrevision: 1\n---\n# Story\n\nBody.\n",
+    );
+
+    let map = root().join("drivers/development/default.yaml");
+    let run = |project: &Path| {
+        protocol(&[
+            "drive",
+            "run",
+            "--project",
+            printable(project),
+            "--root",
+            printable(&root()),
+            "--task",
+            printable(&task),
+            "--map",
+            printable(&map),
+            "--max-iterations",
+            "0",
+            "--pause-on-approval",
+        ])
+    };
+
+    let output = run(&directory);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+    assert!(
+        !said.contains("cannot be trusted"),
+        "the manifest declares `elsewhere`, so the edge is declared and not dangling:\n{said}"
+    );
+    assert!(
+        said.contains("run        XR-1/1"),
+        "the run was allocated, which only happens after the store was read:\n{said}"
+    );
+
+    // The other half, so the fix is not "trust everything": with no manifest the same edge is
+    // dangling and the run still refuses, which is what a store with no workspace beside it means.
+    let undeclared = std::env::temp_dir().join("protocol-drive-undeclared-crossing");
+    std::fs::remove_dir_all(&undeclared).ok();
+    std::fs::create_dir_all(undeclared.join(".engineering/planning/story"))
+        .expect("the temporary tree is writable");
+    std::fs::copy(
+        directory.join(".engineering/planning/story/crossing.md"),
+        undeclared.join(".engineering/planning/story/crossing.md"),
+    )
+    .expect("the story copies");
+    let refused = run(&undeclared);
+    let complaint = format!("{}{}", stdout(&refused), stderr(&refused));
+    assert_ne!(code(&refused), 0, "an undeclared crossing still stops the run:\n{complaint}");
+    assert!(
+        complaint.contains("does not declare") || complaint.contains("undeclared"),
+        "and it says which edge and why:\n{complaint}"
+    );
+}
+
 /// The checks map plans against this repository's own task, which is the check `drive run` makes
 /// before it executes anything.
 ///

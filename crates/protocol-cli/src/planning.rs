@@ -309,6 +309,8 @@ impl Plan {
 /// the driver treats a plan it cannot trust as `StoreBroken`, not as *blocked*.
 pub(crate) struct DrivenPlan {
     plan: Plan,
+    /// The project the plan belongs to, so the workspace manifest beside it can be read.
+    project: PathBuf,
 }
 
 impl DrivenPlan {
@@ -320,7 +322,10 @@ impl DrivenPlan {
             },
             None => Plan::for_project(&project.join(project_directory()))?,
         };
-        Ok(Self { plan })
+        Ok(Self {
+            plan,
+            project: project.to_path_buf(),
+        })
     }
 }
 
@@ -349,6 +354,12 @@ impl aep_driver::PlanSource for DrivenPlan {
 
     fn describe(&self) -> String {
         self.plan.describe()
+    }
+
+    /// What `<project>/.engineering/workspace.yaml` declares, so a relation into another
+    /// repository is judged the same way `protocol artifact validate` judges it.
+    fn declared_members(&self) -> Vec<aep_domain::workspace::MemberName> {
+        declared_members(&self.project)
     }
 }
 
