@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Score a `protocol drive` run: what it spent, and how much of it was refused.
+
+    drive-score <run-dir-or-repo> [<another> …]
+
+One number decides whether a change to the driver helped: **waste**, the share of a session's tool
+calls that were refused by somebody. Every call the model made and could not have made is a turn
+paid for and thrown away, and the four causes are counted apart because they have different fixes.
+
+Two runs scored by one implementation, or the comparison is of instruments rather than of runs.
+"""
+import json
+import os
+import sys
+import collections
+
+CAUSES = (
+    ("composed shell command", lambda c: "composes or redirects" in c),
+    ("program outside the surface", lambda c: "outside the surface this state admits" in c),
+    ("tool not in the state's set", lambda c: "is not offered in state" in c),
+    ("harness has no such tool", lambda c: "No such tool available" in c),
+    ("no shell in this state", lambda c: "does not admit `command.execute`" in c),
+)
+
+# A call the *CLI* rejected is wasted too, and the first version of this scorer missed it: the five
+# `unrecognized subcommand 'show'` calls of run W4-3/1 were counted as ordinary tool errors, so the
+# verb that fixed them could not have moved the number. A usage error is a turn spent on a call that
+# could never have worked.
+#
+# A command that ran and reported a failure is **not** waste — a red suite is the point of running
+# it. The line is whether the program refused the invocation or answered it.
+CLI_REFUSALS = (
+    "unrecognized subcommand",
+    "error: unexpected argument",
+    "error: the following required arguments",
+    "error: invalid value",
+    "command not found",
+)
+
+
+def transcripts_of(path):
+    if os.path.isdir(os.path.join(path, "transcripts")):
+        return os.path.join(path, "transcripts")
+    for root, dirs, files in os.walk(path):
+        if os.path.basename(root) == "transcripts" and any(f.endswith(".jsonl") for f in files):
+            return root
+        dirs[:] = [d for d in dirs if d not in ("target", "node_modules", ".git")]
+    return None
+
+
+def score(path):
+    where = transcripts_of(os.path.abspath(path))
+    if not where:
+        return None
+    calls = collections.Counter()
+    wasted = collections.Counter()
+    causes = collections.Counter()
+    turns, cost, errors = {}, {}, 0
+    for name in sorted(os.listdir(where)):
+        if not name.endswith(".jsonl"):
+            continue
+        state = name.rsplit("-", 2)[0]
+        for line in open(os.path.join(where, name)):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            k = e.get("event")
+            if k == "tool.requested":
+                calls[state] += 1
+            elif k == "tool.decided":
+                d = e.get("decision") or {}
+                if isinstance(d, dict) and d.get("decision") != "allow":
+                    wasted[state] += 1
+                    reason = str(d.get("reason", ""))
+                    for label, hit in CAUSES:
+                        if hit(reason):
+                            causes[label] += 1
+                            break
+                    else:
+                        causes["other refusal"] += 1
+            elif k == "tool.result" and e.get("is_error"):
+                content = str(e.get("content") or "")
+                if "No such tool available" in content:
+                    wasted[state] += 1
+                    causes["harness has no such tool"] += 1
+                elif any(marker in content for marker in CLI_REFUSALS):
+                    wasted[state] += 1
+                    causes["the CLI refused the invocation"] += 1
+            elif k == "session.ended":
+                turns[state] = e.get("num_turns") or 0
+                cost[state] = e.get("total_cost_usd") or 0.0
+                if e.get("is_error"):
+                    errors += 1
+    return {"where": where, "calls": calls, "wasted": wasted, "causes": causes,
+            "turns": turns, "cost": cost, "errors": errors}
+
+
+def report(name, s):
+    total = sum(s["calls"].values())
+    lost = sum(s["wasted"].values())
+    rate = (100.0 * lost / total) if total else 0.0
+    print(f"\n{name}")
+    print(f"  {s['where']}")
+    print(f"  {'state':22} {'calls':>6} {'wasted':>7} {'turns':>6} {'cost':>8}")
+    for state in sorted(s["calls"]):
+        print(f"  {state:22} {s['calls'][state]:6} {s['wasted'][state]:7} "
+              f"{s['turns'].get(state, 0):6} {s['cost'].get(state, 0):8.2f}")
+    print(f"  {'TOTAL':22} {total:6} {lost:7} {sum(s['turns'].values()):6} "
+          f"{sum(s['cost'].values()):8.2f}")
+    turns = sum(s["turns"].values())
+    spend = sum(s["cost"].values())
+    print(f"  waste {rate:.1f}%   sessions errored {s['errors']}")
+    # **Cost and turns are printed beside waste, always, and the reason is on this line.** The first
+    # version of this scorer reported waste alone. Admitting `grep` to a reading state cut waste from
+    # 17.2% to 3.0% and multiplied the cost of one state by 3.6, and the instrument showed only the
+    # half that flattered the change. A score that reports the number its author set out to move,
+    # and not the one that pays the bill, is an instrument that agrees with whoever built it.
+    if turns:
+        print(f"  ${spend:.2f} over {turns} turns — ${spend / turns:.3f}/turn, "
+              f"${spend / max(total, 1):.3f}/call")
+    if s["causes"]:
+        for cause, n in s["causes"].most_common():
+            print(f"     {n:4}  {cause}")
+    return rate
+
+
+def main():
+    targets = sys.argv[1:] or ["."]
+    rates = {}
+    for t in targets:
+        s = score(t)
+        if s is None:
+            print(f"\n{t}\n  no run found")
+            continue
+        rates[t] = report(t, s)
+    if len(rates) > 1:
+        print("\ncomparison")
+        best = min(rates, key=rates.get)
+        for t, r in sorted(rates.items(), key=lambda x: x[1]):
+            mark = "  <-- least waste" if t == best else ""
+            print(f"  {r:5.1f}%  {t}{mark}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Follow a `protocol drive` run: every state, as it happens, in one command.
+
+    drive-watch                 # newest run under ./.engineering/runs
+    drive-watch <repo-or-run>   # a repo, or one run directory
+
+Switches to each new state's transcript by itself. Ctrl-C to stop.
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import textwrap
+
+# Line-buffered, always. Piped into `less` or redirected to a file, block buffering means a reader
+# sees nothing until 8 KB has accumulated — which looks exactly like a run that has stopped, and
+# that is the one thing this tool exists to tell you apart from.
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except AttributeError:  # pragma: no cover - Python < 3.7
+    pass
+
+TTY = sys.stdout.isatty()
+C = {"dim": "\033[2m", "red": "\033[31m", "grn": "\033[32m", "yel": "\033[33m",
+     "cya": "\033[36m", "bld": "\033[1m", "off": "\033[0m"}
+if not TTY:
+    C = {k: "" for k in C}
+W = 100
+
+
+def candidate_roots(start):
+    """Every tree a run could be in: the one named, and every worktree of its repository.
+
+    A driven run happens in whichever checkout the operator pointed the driver at, and there are
+    usually several — the repository, a dogfood worktree, a measurement worktree, one per fixer. The
+    first version of this tool searched only the directory it was launched from, so it followed a
+    run finished a week earlier and printed nothing, twice, and the operator had to notice for it.
+    Looking in one place is what made that possible.
+    """
+    roots = [start]
+    try:
+        listed = subprocess.run(
+            ["git", "-C", start, "worktree", "list", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout
+        roots += [l.split(" ", 1)[1].strip() for l in listed.splitlines() if l.startswith("worktree ")]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    seen, unique = set(), []
+    for r in roots:
+        r = os.path.abspath(r)
+        if r not in seen and os.path.isdir(r):
+            seen.add(r)
+            unique.append(r)
+    return unique
+
+
+def newest_run(start):
+    """The transcripts directory being written to right now, across every candidate tree.
+
+    Newest **file**, not newest directory, and across all of them — because the question an operator
+    is asking is *show me the run that is happening*, and they should not have to know which
+    checkout it is in.
+    """
+    if os.path.isdir(os.path.join(start, "transcripts")):
+        return os.path.join(start, "transcripts")
+    best, best_t = None, -1
+    for root in candidate_roots(start):
+        runs = os.path.join(root, ".engineering", "runs")
+        if not os.path.isdir(runs):
+            continue
+        for here, dirs, files in os.walk(runs):
+            if os.path.basename(here) == "transcripts":
+                for f in files:
+                    if f.endswith(".jsonl"):
+                        t = os.path.getmtime(os.path.join(here, f))
+                        if t > best_t:
+                            best, best_t = here, t
+                dirs[:] = []
+    return best
+
+
+def brief(value, limit=150):
+    """One line for a call's input — the subject, then whatever narrows it.
+
+    The qualifiers are not decoration. Five reads of one file at five offsets rendered as the same
+    line five times, which reads as a model looping over a file it has already seen; it was reading
+    a thousand-line source in windows. A view that hides what distinguishes two calls invents a
+    defect that is not there.
+    """
+    if not isinstance(value, dict):
+        return str(value)[:limit]
+    for key in ("command", "file_path", "path", "pattern", "skill", "id", "prompt"):
+        if key in value:
+            head = str(value[key]).replace("\n", " ")[:limit]
+            rest = {k: v for k, v in value.items() if k != key and k != "description"}
+            if rest:
+                qualifiers = " ".join(f"{k}={v}" for k, v in sorted(rest.items()))
+                return f"{head}  {C['dim']}{qualifiers}{C['off']}"
+            return head
+    return json.dumps(value)[:limit]
+
+
+UNKNOWN_WARNED = set()
+
+
+def show(e, state):
+    k = e.get("event")
+    if k is None:
+        # Not a `metaharness.event/1` stream. Runs before 2026-08-22 recorded the vendor's own
+        # `stream-json`, whose lines carry `type` and no `event`, and every branch below would miss
+        # them — printing nothing at all, which is indistinguishable from a run doing nothing.
+        if state not in UNKNOWN_WARNED:
+            UNKNOWN_WARNED.add(state)
+            print(f"{C['yel']}{state}: this transcript is not `metaharness.event/1` "
+                  f"(its lines carry `{'`, `'.join(list(e)[:3])}`), so there is nothing here I can "
+                  f"read. It is probably a run from before 2026-08-22.{C['off']}")
+        return
+    if k == "thinking.estimate":
+        # A live counter only where there is a cursor to rewrite. Piped or redirected, it is noise
+        # that cannot be erased, so it is simply not written.
+        if TTY:
+            sys.stdout.write(f"\r\033[2K{C['dim']}   thinking ~{e.get('estimate')} tokens…{C['off']}")
+            sys.stdout.flush()
+        return
+    if TTY:
+        sys.stdout.write("\r\033[2K")
+    if k == "session.started":
+        print(f"\n{C['bld']}{C['cya']}=== {state}{C['off']}  {e.get('model')}  "
+              f"{C['dim']}tools {len(e.get('offered_tools') or [])} · "
+              f"plugins {len(e.get('plugins') or [])}{C['off']}")
+    elif k == "tool.requested":
+        print(f"{C['cya']}->{C['off']} {C['bld']}{e.get('name')}{C['off']}  {brief(e.get('input'))}")
+    elif k == "tool.decided":
+        d = e.get("decision") or {}
+        v = d.get("decision") if isinstance(d, dict) else str(d)
+        if v != "allow":
+            print(f"   {C['red']}{v}{C['off']}")
+    elif k == "tool.result":
+        raw = e.get("tool_use_result")
+        # A shell result arrives as a structured record; the part a reader wants is what the command
+        # printed, not the four flags around it.
+        if isinstance(raw, dict):
+            body = (raw.get("stdout") or raw.get("stderr") or "").strip()
+        else:
+            body = str(raw or e.get("content") or "").strip()
+        if e.get("is_error"):
+            print(f"   {C['red']}!! {body[:300]}{C['off']}")
+        elif body:
+            head = [l for l in body.split("\n") if l.strip()][:2]
+            for l in head:
+                print(f"   {C['dim']}| {l[:W - 5]}{C['off']}")
+    elif k == "text":
+        t = (e.get("text") or "").strip()
+        if t:
+            print()
+            for para in t.split("\n"):
+                print(textwrap.fill(para, W, initial_indent="  ", subsequent_indent="  ") or "")
+            print()
+    elif k == "session.ended":
+        cost = e.get("total_cost_usd")
+        money = f" cost ${cost:.2f}" if isinstance(cost, (int, float)) else ""
+        colour = C["red"] if e.get("is_error") else C["grn"]
+        print(f"{colour}=== {state} ended{C['off']}  turns {e.get('num_turns')}{money}  "
+              f"{e.get('stop_reason') or ''}")
+    elif k == "rate_limit":
+        i = e.get("info") or {}
+        print(f"{C['yel']}   rate limit {i.get('status')} ({i.get('window')}){C['off']}")
+
+
+def main():
+    start = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
+    transcripts = newest_run(start)
+    while transcripts is None:
+        print(f"{C['dim']}waiting for a run under {start}…{C['off']}")
+        time.sleep(3)
+        transcripts = newest_run(start)
+    newest_file = max(
+        (os.path.join(transcripts, f) for f in os.listdir(transcripts) if f.endswith(".jsonl")),
+        key=os.path.getmtime,
+        default=None,
+    )
+    age = time.time() - os.path.getmtime(newest_file) if newest_file else 0
+    print(f"{C['dim']}following {transcripts}{C['off']}")
+    if age > 300:
+        hours = age / 3600
+        print(f"{C['yel']}This run's last event was {hours:.1f} hours ago — it is not live. "
+              f"Point me at the repository whose run you mean:{C['off']}")
+        print(f"{C['yel']}    drive-watch <path-to-repo-or-worktree>{C['off']}")
+    current, handle, offset = None, None, 0
+    while True:
+        files = sorted(
+            (f for f in os.listdir(transcripts) if f.endswith(".jsonl")),
+            key=lambda f: os.path.getmtime(os.path.join(transcripts, f)),
+        )
+        newest = files[-1] if files else None
+        if newest and newest != current:
+            current, offset = newest, 0
+            if handle:
+                handle.close()
+            handle = open(os.path.join(transcripts, current), "r")
+        if handle:
+            state = current.rsplit("-", 2)[0]
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    show(json.loads(line), state)
+                except (ValueError, KeyError):
+                    pass
+        time.sleep(0.4)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()

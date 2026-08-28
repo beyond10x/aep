@@ -613,6 +613,30 @@ makes the change. Internal refactors that change nothing observable do not.
 Write the entry for the person hitting the behaviour, not for the person who wrote it: "an approval
 of version 3 no longer satisfies a review requirement for version 7", not "added freshness check".
 
+## Watching and scoring a driven run
+
+Two tools, both in `scripts/`, both written while driving `W4-3` and both fixed by being wrong in
+front of the operator.
+
+```console
+scripts/drive-watch                 # follow the live run, whichever worktree it is in
+scripts/drive-score <run> [<run>]   # what it spent, and how much of it was refused
+```
+
+**`drive-watch` searches every worktree of this repository**, because a driven run happens in
+whichever checkout the driver was pointed at and there are usually several. Run from the wrong one
+it used to follow a run finished a week earlier and print nothing, which reads exactly like a live
+run that has stopped; it now says so, with the age, and names what to type instead. It follows
+whichever transcript is being written and switches state by itself.
+
+**`drive-score` prints cost and turns beside waste, always.** *Waste* is the share of tool calls
+somebody refused — the policy, the harness, or the CLI — and it is the number a change to the driver
+moves. Reporting it alone is how an instrument comes to agree with whoever built it: admitting
+`grep` to a reading state took waste from 17.2% to 3.0% and multiplied one state's cost by 3.6, and
+a scorer that showed only the first half would have called that an unqualified win. A command that
+ran and reported a failure is **not** waste — a red suite is the point of running it. The line is
+whether the program refused the invocation or answered it.
+
 ## Releases
 
 The bare-version tag is an org-wide convention (atlas § *Naming*); what follows is this
