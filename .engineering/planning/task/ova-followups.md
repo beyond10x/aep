@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-followups
 kind: task
-status: draft
+status: implemented
 title: Every unsettled closed row names a follow-up artifact that resolves
 summary: 'R10: each unsettled closed row carries a story or architecture-decision-record id that protocol artifact list resolves, a settled one carries an em dash, and the named artifacts are created in this run.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-closed-cells
-revision: 3
+revision: 6
 ---
 # Task: every unsettled closure names an artifact that resolves
 

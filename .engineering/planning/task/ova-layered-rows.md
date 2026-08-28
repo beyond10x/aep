@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-layered-rows
 kind: task
-status: draft
+status: implemented
 title: 'One row per layer: the artifact-status case gets two rows, never an averaged verdict'
 summary: 'R5: a declaration open at the document layer and closed at the value layer appears twice with its own verdict each time, shown by the artifact-status worked example.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-table-shape
-revision: 3
+revision: 6
 ---
 # Task: one row per layer, never an averaged verdict
 

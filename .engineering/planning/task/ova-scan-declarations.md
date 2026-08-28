@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-scan-declarations
 kind: task
-status: draft
+status: implemented
 title: 'scan-declarations.sh: the candidate surfaces the tree declares'
 summary: 'The derivation: sorted, byte-identical between runs, tree-only, emitting every top-level vocabulary key under protocols/ and every adopter-writable document family under artifacts/.'
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: specification:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
-revision: 1
+revision: 4
 ---
 # Task: the derivation, and its determinism
 

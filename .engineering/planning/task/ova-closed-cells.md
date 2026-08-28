@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-closed-cells
 kind: task
-status: draft
+status: implemented
 title: A closed row states its guarantee and where an adopter reads the reason
 summary: 'R9: Guarantee is a statement or the literal none, Reason for adopters at is a corpus path that exists or the literal none, and settled versus unsettled is decided from those two cells.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-table-shape
-revision: 3
+revision: 6
 ---
 # Task: a closed row states what the closure buys, and where an adopter reads why
 

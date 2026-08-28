@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-checks-runner
 kind: task
-status: draft
+status: implemented
 title: 'run.sh: every check, one row each, an honest exit code'
 summary: 'The runner the driver''s verifier invokes: one row per decomposed unit, a missing check script as a failed row, the table printed on every path, non-zero while any check fails.'
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: specification:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
-revision: 1
+revision: 4
 ---
 # Task: the runner, its table and its exit code
 

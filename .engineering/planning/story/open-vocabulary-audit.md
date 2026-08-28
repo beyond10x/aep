@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:open-vocabulary-audit
 kind: story
-status: draft
+status: implemented
 title: Every adopter-facing declaration, checked for whether it is actually open
 summary: 'The audit the meta-defect asks for: for each thing the docs invite an adopter to declare, is the vocabulary open, and is the closure deliberate and stated.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - informed_by: story:outbound-claims-and-status-vocabulary
 - informed_by: story:adopter-bugs
 - informed_by: story:entity-runtime-mapping
-revision: 4
+revision: 8
 ---
 # Story: Every adopter-facing declaration, checked for whether it is actually open
 
@@ -49,6 +49,44 @@ declaration, whether it is open, and — where closed — the guaranteed semanti
 - Every closed entry found to have **no** guarantee behind it gets a story or a recorded decision that
   it stays closed; a closed vocabulary with no stated reason does not survive the audit unremarked.
 - The audit is repeatable: it says how it was produced, so the next round is a diff and not a rewrite.
+
+## Second round, and the suite that decides it — 2026-08-28
+
+The audit table existed from the W4-2 driven run; this round re-ran it against the tree and settled
+the two rows the `ova-*` stories name. **18 rows before and after — 14 open, 4 closed — and the two
+closed vocabularies that had no stated reason now have one.**
+
+| what the round found | |
+|---|---|
+| stale citations | **7** — five into `vocabulary.md` had drifted 14 lines, two into `artifact.rs` 12; one was pointing at the word `Clone,` |
+| corpus | grew by `website/docs/concepts/lifecycles.md`, 33 → 34 files |
+| relation names | closed, deliberately — reason and the 13 kinds now in `docs/guide/adopting.md#relation-names`, with how to ask for a new one |
+| predicate operators | closed, same class of reason — the full set `eq ne lt lte gt gte any_of none_of exists truthy` in `docs/guide/adopting.md#predicate-operators` |
+
+**The acceptance is a suite, and it is green.** `bash .engineering/checks/run.sh` → **119 pass, 0
+fail, 13 of 13 units**, each unit a `task:ova-*` in this store, all now `implemented` on that run.
+Two of its rows had been red for reasons that were not about the audit at all, and both were fixed
+rather than excused:
+
+- **H2 was reading the store with whatever `protocol` was on `PATH`** — here `0.28.0` against a
+  `0.31.0` store — and reported five stories as drifted from their journal that had not drifted. It
+  now uses this tree's own build and refuses when the versions disagree, naming both.
+- **H4 was asserting a file that left the repository** on 2026-08-22 with
+  `epic:metaharness-migration`. It now asserts what is still assertable here: that this suite has
+  not grown its own copy of the migrated model.
+
+**Two candidate rows were considered and refused**, with the reason in the audit's own method
+section: *fact spellings* (closed and already argued, but four types project facts, so there is no
+single declaration to attach a verdict to) and *evidence producer* (what an adopter writes there is
+a verifier class, which the open `verifiers:` row already covers).
+
+**B2 — the project directory name — gets no row**, and the reason is recorded rather than left as a
+gap: it is already fixed in `main` (`AEP_PROJECT_DIR`, `crates/aep-engine/tests/project_directory_env.rs:39`),
+and the table's own checks make a row mechanically impossible for it — an open row's `crates/` line
+must be a `Variant(String)`, which a `const` is not.
+
+Still advisory, and named here rather than discovered later: the `source`/`target` pairings in
+`artifacts/relations/relations.yaml` are read by nothing in `crates/`.
 
 ## Out of Scope
 

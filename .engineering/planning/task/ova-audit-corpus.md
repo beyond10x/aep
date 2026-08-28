@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-audit-corpus
 kind: task
-status: draft
+status: implemented
 title: The audit at docs/guide/open-vocabulary.md, and the corpus it names
 summary: 'R0-R2: the audit exists at the guide path, docs/guide/README.md routes to it, and the corpus list in the audit equals the set the R1 globs produce, every path resolving.'
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - decomposes: specification:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
-revision: 2
+revision: 5
 ---
 # Task: the audit document, and the corpus it declares
 

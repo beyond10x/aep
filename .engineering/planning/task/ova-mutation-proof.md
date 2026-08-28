@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-mutation-proof
 kind: task
-status: draft
+status: implemented
 title: Four deliberate mutations, each turning the suite red
 summary: 'Acceptance 2-5: a deleted candidate row, a guarantee downgraded to none, a follow-up pointing at nothing, and a deleted quoted fragment, each shown to turn a named check red and then restored.'
 owner: protocol
@@ -17,7 +17,7 @@ relations:
 - depends_on: task:ova-closed-cells
 - depends_on: task:ova-followups
 - depends_on: task:ova-citations
-revision: 6
+revision: 9
 ---
 # Task: nine deliberate mutations, each turning the suite red
 

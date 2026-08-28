@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-table-shape
 kind: task
-status: draft
+status: implemented
 title: One table, the header the checks parse by, two verdict values, a row floor
 summary: 'R3, R4 and R11: exactly one table with the seven named columns in order, Verdict holding only open or closed, and a row count that cannot be satisfied by an empty table.'
 owner: protocol
@@ -15,7 +15,7 @@ relations:
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-audit-corpus
 - depends_on: task:ova-scan-declarations
-revision: 4
+revision: 7
 ---
 # Task: one table, one header, two verdicts, a floor
 

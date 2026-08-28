@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:ova-relation-vocabulary
 kind: story
-status: draft
+status: implemented
 title: 'Relation names a relations document may use are a closed enum: state the reason or open it'
 summary: The open-vocabulary audit found artifacts/relations/ open as a document and closed at the value layer, with no reason written anywhere an adopter reads. Decide which it is.
 relations:
 - derived_from: story:open-vocabulary-audit
-revision: 1
+revision: 5
 ---
 # Story: Relation names a relations document may use
 
@@ -36,6 +36,26 @@ left the audit **unsettled** and pointing here.
   reference or the limitations page — or a decision recorded that the enum opens.
 - The audit's row for it moves from unsettled to settled, or its verdict changes, and the suite that
   decides the audit stays green either way.
+
+## Verdict — closed, with the reason written, 2026-08-28
+
+`RelationKind` **stays a closed enum**, and the closure is now stated where an adopter meets
+relations rather than left to be discovered by trying to invent one:
+`docs/guide/adopting.md#relation-names` carries all 13 kinds, the reason, and the way to ask for a
+new one.
+
+**The reason, in the form a reader can disagree with:** a relation name is a graph semantic the
+engine *interprets*, not a label it carries. `decomposes` is what builds the tree `protocol artifact
+board` prints; `depends_on` is what the driver's coverage pre-flight and `validate` follow;
+`supersedes` is the one relation with a lifecycle consequence attached. An open vocabulary here
+would let an adopter write a name that nothing can act on — a relation that reads like a fact and
+moves nothing — which is worse than a refusal that names the 13 that work.
+
+Held by the audit's own suite: the relation vocabulary gets **one row per layer** rather than one
+averaged verdict (`task:ova-layered-rows`, green), so *the document may name any relation* and *the
+engine knows thirteen* stay separate claims.
+
+Evidence: `bash .engineering/checks/run.sh` → 119 pass, 0 fail, 2026-08-28.
 
 ## Out of Scope
 

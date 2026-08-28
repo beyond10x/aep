@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-repeatability
 kind: task
-status: draft
+status: implemented
 title: How it was produced, so the next round is a diff
 summary: 'R14 and R15: a section naming the corpus rule, the scan command by path, the commit the round was taken at and the reading pass, with the named script running and exiting 0.'
 owner: protocol
@@ -15,7 +15,7 @@ relations:
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-scan-declarations
 - depends_on: task:ova-audit-corpus
-revision: 4
+revision: 7
 ---
 # Task: how it was produced, so the next round is a diff
 

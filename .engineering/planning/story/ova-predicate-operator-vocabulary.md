@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:ova-predicate-operator-vocabulary
 kind: story
-status: draft
+status: implemented
 title: 'Predicate operators in mapping form are fixed and unexplained: state the reason or open it'
 summary: The open-vocabulary audit found the mapping-form operator set closed in the engine with no guarantee stated and no adopter-facing reason. Decide which it is.
 relations:
 - derived_from: story:open-vocabulary-audit
-revision: 1
+revision: 5
 ---
 # Story: Predicate operators in mapping form
 
@@ -34,6 +34,23 @@ for adopters, no guarantee is claimed for the closure either. That is the shape 
   decision that predicates gain an extension point.
 - The audit's row moves from unsettled to settled, or its verdict changes, and the suite that decides
   the audit stays green either way.
+
+## Verdict — closed, with the reason written, 2026-08-28
+
+The predicate operators in mapping form **stay closed**, for the same class of reason as relation
+names, and the full set is now published where the mapping form is documented
+(`docs/guide/adopting.md#predicate-operators`): `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `any_of`,
+`none_of`, `exists`, `truthy`.
+
+**The reason:** an operator is something the engine *evaluates*, three-valued, against facts that
+may not have been observed at all. An open operator vocabulary would be a name the engine cannot
+evaluate, which cannot fail closed and cannot fail open — it can only be ignored, and a predicate
+nobody evaluates is a gate that cannot fire.
+
+The story left its own Open Question undecided; this takes the closed reading, and it is a sentence
+a reader can disagree with rather than an omission.
+
+Evidence: `bash .engineering/checks/run.sh` → 119 pass, 0 fail, 2026-08-28.
 
 ## Out of Scope
 

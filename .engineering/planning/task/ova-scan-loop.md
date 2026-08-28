@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-scan-loop
 kind: task
-status: draft
+status: implemented
 title: 'Completeness and provenance: the two checks that close the loop on the scan'
 summary: 'R13: every scan candidate has a row, every non-scanned row carries a resolving corpus citation, and the audit states in its own words what the scan cannot find.'
 owner: protocol
@@ -15,7 +15,7 @@ relations:
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-scan-declarations
 - depends_on: task:ova-citations
-revision: 4
+revision: 7
 ---
 # Task: completeness and provenance, and the limit stated out loud
 

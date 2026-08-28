@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-surface-hygiene
 kind: task
-status: draft
+status: implemented
 title: 'Inside the lines: the declared write surface, and checks that read no planning body'
 summary: 'Acceptance 6 and 7 plus R18: protocol validate and protocol artifact validate exit 0, changed paths are only under docs/ and .engineering/, and no check reads the specification, the task or a planning artifact body.'
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - decomposes: specification:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
-revision: 2
+revision: 5
 ---
 # Task: inside the declared lines, and checks that read no planning body
 

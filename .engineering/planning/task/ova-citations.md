@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-citations
 kind: task
-status: draft
+status: implemented
 title: 'Invited at and Decided by: every verdict has a path behind it'
 summary: 'R6 and R7: each Invited at cites a corpus path with a line number and a verbatim fragment that still occurs there; each Decided by resolves to a file in this tree.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-table-shape
-revision: 3
+revision: 6
 ---
 # Task: every verdict has a path behind it
 

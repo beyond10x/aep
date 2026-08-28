@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: task:ova-open-cells
 kind: task
-status: draft
+status: implemented
 title: An open row's three trailing cells hold an em dash, not a blank
 summary: 'R8: for every open row, Guarantee, Reason for adopters at and Follow-up each hold the literal em dash, so no cell is readable as either not-applicable or not-yet-filled.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - derived_from: task:w4-2-open-vocabulary-audit
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-table-shape
-revision: 3
+revision: 6
 ---
 # Task: an open row's trailing cells hold an em dash
 
