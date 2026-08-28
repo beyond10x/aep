@@ -11,6 +11,23 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.32.1] — 2026-08-28
+
+### Fixed
+
+* **The evidence-coverage pre-flight runs before the machine check.** `protocol drive run` refused a
+  map whose `llm` steps it could not spawn — *`metaharness` is not on PATH* — **before** asking
+  whether the map could produce the evidence the plan demands. On any machine without that binary a
+  real coverage gap was never looked for, so the test that guards it passed while guarding nothing.
+  Coverage is decidable from the two documents and says *this map can never finish this plan*
+  everywhere; the machine check says *this machine cannot run it today*. The document defect is
+  reported first. An operator whose map has both problems now sees the one that will not go away by
+  installing something.
+
+* **0.32.0's `Release` workflow failed and published no GitHub Release**, on the two `drive_cli`
+  tests that needed `metaharness` installed. Both now assert the same thing on a machine with the
+  binary and one without: the whole gate is green with it hidden.
+
 ## [0.32.0] — 2026-08-28
 
 ### Added
@@ -3607,7 +3624,8 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...HEAD
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.32.1...HEAD
+[0.32.1]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...0.32.1
 [0.32.0]: https://github.com/beyond10x/engineering-protocols/compare/0.31.0...0.32.0
 [0.31.0]: https://github.com/beyond10x/engineering-protocols/compare/0.30.0...0.31.0
 [0.30.0]: https://github.com/beyond10x/engineering-protocols/compare/0.29.0...0.30.0
