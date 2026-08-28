@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:adopter-bugs
 kind: story
-status: draft
+status: implemented
 title: 'The unambiguous ones: the fallback lifecycle, the kind ladder, the project merge'
 summary: A1, A2, A3 plus B2's compile-time directory name and G2's untyped failure policy — five defects that need no decision.
 owner: protocol
@@ -11,7 +11,7 @@ tags:
 - bug
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 1
+revision: 5
 ---
 # Story: The unambiguous ones — the fallback lifecycle, the kind ladder, the project merge
 
@@ -76,6 +76,33 @@ decision that a code fix does not make on its own.
   with the reason.
 - An unknown key in a `FailurePolicy` is refused at validation, with the adopter's exact invented
   policy as the fixture.
+
+## All five were already fixed — closed on the tests that now hold them, 2026-08-28
+
+**Every one of A1, A2, A3, B2 and G2 was fixed in `main` by `62b0f66`**, on 2026-08-21, by the agent
+this story's Context said was working in parallel. What was missing was not the behaviour: it was
+the assertion. Three of the five had no test that would fail if the fix were reverted, and this
+story closes on the tests rather than on the fixes.
+
+| defect | fixed in main | asserted before | test that holds it now |
+|---|---|---|---|
+| **A1** kindless lifecycle registers the fallback | yes | yes | `crates/aep-engine/tests/lifecycle_fallback.rs:96` |
+| **A2** last-segment parent for custom kinds | yes | unit only, no fixture tree | `lifecycle_fallback.rs:217` — `digest`, `briefing` and `insight` share one ladder in a fixture tree |
+| **A1×A2 precedence** exact kind → parent chain → fallback last | stated on `for_kind`, not in the guidance | `log`/`observation-log` only | `lifecycle_fallback.rs:288`, and the rule is now in the lifecycle-document guidance at `website/docs/reference/documents.md` § *Artifact lifecycle* |
+| **A3** the guide and `ProjectPaths` agree | yes — the guide states the vendoring rule (the story's own default) | **nothing loaded the example** | `crates/aep-engine/tests/adopting_guide.rs` — both layouts, loaded as written |
+| **B2** the project directory is resolvable without recompiling | yes — `AEP_PROJECT_DIR`, `.engineering` the default | yes | `crates/aep-engine/tests/project_directory_env.rs:39`; the constant's doc now names the variable that renames it |
+| **G2** an unknown key in a `FailurePolicy` is refused | yes, on **both** paths | yes, with the adopter's exact invented policy | `crates/aep-domain/src/principle.rs:1252`; the generated schemas carry `additionalProperties: false` per action |
+
+Every new guard was proved by breaking what it guards: `suffix_parent` returning `None` fails both
+lifecycle tests; making `for_kind` consult the fallback first fails the precedence test; skipping the
+project-local merge fails two of three `adopting_guide` tests.
+
+One note for whoever reads the adopting guide next: its A3 fixture uses `development.standard`
+rather than the guide's `acme.knowledge`, which no document in this tree declares.
+
+Evidence: `cargo test -p aep-engine --test lifecycle_fallback --test adopting_guide --test
+project_directory_env` → 3 + 6 + 1 passed; `cargo test -p aep-domain --lib principle::` → 11 passed,
+both 2026-08-28.
 
 ## Out of Scope
 
