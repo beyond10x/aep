@@ -358,12 +358,20 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Eighteen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
-other six are `version-check`, `dep-check` (`cargo xtask deps`: every `entity-*` crate resolves
-once, from one `entity-runtime` pin), `guard-check` and `claim-check` between `status-check` and
-`clippy` — source-only and sub-second — then `postgres-check` after `test` (the Postgres backend's
-tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying they did not run),
-and `lab-check` before `msrv`:
+Nineteen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
+other seven are `plan-check`, `version-check`, `dep-check` (`cargo xtask deps`: every `entity-*`
+crate resolves once, from one `entity-runtime` pin), `guard-check` and `claim-check` between
+`status-check` and `clippy` — source-only and sub-second — then `postgres-check` after `test` (the
+Postgres backend's tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying
+they did not run), and `lab-check` before `msrv`.
+
+**`plan-check` is `protocol artifact validate` over this repository's own store**, added 2026-08-28
+on `story:own-engineering-store`'s stated default. It fails on an unparseable document, a relation
+into a repository the workspace manifest does not declare, or a status no lifecycle permits — and
+**reports without failing** on a status reached on an assertion rather than a record, which is
+`story:completion-needs-evidence`'s deliberate position. It runs from the repository root and from
+any directory inside it; that it did not, until the same day, was the defect `story:own-engineering-store`
+recorded against itself:
 
 1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
    `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since

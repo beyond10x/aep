@@ -23,6 +23,7 @@ tasks:
     cmds:
       - task: fmt-check
       - task: status-check
+      - task: plan-check
       - task: version-check
       - task: dep-check
       - task: guard-check
@@ -84,6 +85,17 @@ tasks:
     desc: Fail if the delivered-waves record in docs/status.md no longer matches the tags.
     cmds:
       - cargo xtask status --check
+
+  plan-check:
+    desc: >-
+      Fail if this repository's own planning store is not valid — an unparseable document, a
+      relation into a repository the workspace manifest does not declare, a status no lifecycle
+      permits. Local, clock-free and sub-second, which is the same argument that placed
+      `status-check` here. It reports statuses reached on an assertion rather than a record and
+      does not fail on them, deliberately: refusing those would stop anybody closing a story on the
+      day a runner is down, which is the day it matters most.
+    cmds:
+      - cargo run -q -p protocol-cli --bin protocol -- artifact validate
 
   guard-check:
     desc: >-

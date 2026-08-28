@@ -94,15 +94,25 @@ impl StoreLocation {
     /// `<repo>/.engineering/planning` is the store, so the repository is two directories up. An
     /// explicit `--store` somewhere else answers the same way, which is what lets one repository's
     /// verbs validate another's store.
+    ///
+    /// Without `--store` this used to answer `.`, the **working directory** — so the same command
+    /// that exits 0 at the repository root exited 1 from `crates/aep-domain/`, reporting every
+    /// cross-repository relation as undeclared because `.engineering/workspace.yaml` was looked for
+    /// beside the subdirectory. `story:own-engineering-store` promises *run anywhere inside it, with
+    /// no flag*, and that promise and a green `validate` could not both hold. It now walks up to the
+    /// project the way discovery does, and falls back to `.` only when there is no project at all —
+    /// which is the historical answer for a tree that is not one.
     fn repository_root(&self) -> PathBuf {
-        self.store.as_ref().map_or_else(
-            || PathBuf::from("."),
-            |path| {
-                path.parent()
-                    .and_then(std::path::Path::parent)
-                    .map_or_else(|| PathBuf::from("."), std::path::Path::to_path_buf)
-            },
-        )
+        if let Some(path) = self.store.as_ref() {
+            return path
+                .parent()
+                .and_then(std::path::Path::parent)
+                .map_or_else(|| PathBuf::from("."), std::path::Path::to_path_buf);
+        }
+        std::env::current_dir()
+            .ok()
+            .and_then(|here| aep_engine::project::discover(&here))
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     /// Where the plan is kept, as `--store` or `project.yaml` says, with paths resolved.

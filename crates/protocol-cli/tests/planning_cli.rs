@@ -637,6 +637,62 @@ fn the_store_defaults_to_the_planning_directory_of_the_project_it_is_run_in() {
 }
 
 #[test]
+fn validate_answers_the_same_from_a_subdirectory_as_it_does_from_the_root() {
+    // `story:own-engineering-store` promises `protocol artifact validate` run **anywhere inside**
+    // the project, with no flag. It used to resolve the workspace manifest against the working
+    // directory rather than the project, so the same store validated at the root and reported every
+    // cross-repository relation as undeclared one directory down — exit 0 and exit 1 for one store.
+    let fixture = scratch("aep-validate-from-a-subdirectory");
+    let project = fixture.join("project");
+    let nested = project.join("crates/deep/inside");
+    std::fs::create_dir_all(&nested).expect("the nested directory is writable");
+
+    write(
+        &project.join(".engineering/project.yaml"),
+        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+         protocols: ../../tree\n",
+    );
+    // The manifest that declares the other repository. Found from the root before this fix, and
+    // from nowhere else.
+    write(
+        &project.join(".engineering/workspace.yaml"),
+        "version: aep.workspace/1\nmembers:\n  - name: other\n    source: ../other\n",
+    );
+    write(
+        &fixture.join("tree/artifacts/lifecycles/story.yaml"),
+        "kind: story\ninitial: draft\ntransitions:\n  draft: [active]\n  active: []\n",
+    );
+    write(
+        &project.join(".engineering/planning/story/crossing.md"),
+        "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\nstatus: draft\n\
+         title: A story that names another repository\nrelations:\n\
+         - depends_on: other/story:theirs\nrevision: 1\n---\n# Story\n\nBody.\n",
+    );
+
+    let at_root = protocol_in(&project, &["artifact", "validate"]);
+    let from_below = protocol_in(&nested, &["artifact", "validate"]);
+    assert_eq!(
+        code(&at_root),
+        0,
+        "the manifest declares the member: {}{}",
+        stdout(&at_root),
+        stderr(&at_root)
+    );
+    assert_eq!(
+        code(&from_below),
+        code(&at_root),
+        "one store, one answer, whatever directory the person is standing in:\nroot: {}\nbelow: {}",
+        stdout(&at_root),
+        stdout(&from_below)
+    );
+    assert!(
+        !stdout(&from_below).contains("undeclared_reference"),
+        "the workspace is resolved against the project, not the working directory: {}",
+        stdout(&from_below)
+    );
+}
+
+#[test]
 fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
     // The store and its governing documents are one project configuration. Before this regression,
     // store discovery honored `project.yaml` while lifecycle and template discovery silently used

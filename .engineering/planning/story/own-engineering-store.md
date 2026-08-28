@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:own-engineering-store
 kind: story
-status: active
+status: implemented
 title: The repository's own .engineering/, holding this backlog
 summary: A project.yaml pointing at this repository as its own protocol tree, and the real roadmap as artifacts the driver can evaluate a gate against.
 owner: protocol
@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:reference-driver
-revision: 4
+revision: 6
 ---
 # Story: The repository's own `.engineering/`, holding this backlog
 
@@ -70,6 +70,42 @@ repository root but a contributor does not.
 
 Also recorded: the output this story cites (`harness-wave-4-governed-dogfood.md:77-91`) is over
 **33** artifacts; the store is now **125**.
+
+## Closed — both halves, 2026-08-28
+
+Written into this story on the same day it was re-scoped, because both remaining items turned out
+to be one afternoon rather than a wave.
+
+**1. `validate` is green from anywhere inside the project.** `repository_root()` answered `.` — the
+*working directory* — when no `--store` was given, so `.engineering/workspace.yaml` was looked for
+beside whatever directory a person happened to be standing in, and every cross-repository relation
+read as undeclared one level down. It now walks up to the project the way discovery already does,
+and falls back to `.` only when there is no project at all.
+
+```console
+$ cd crates/aep-domain && protocol artifact validate
+125 file(s) in …/.engineering/planning: 125 artifact(s)
+valid
+exit=0
+```
+
+Guarded by `validate_answers_the_same_from_a_subdirectory_as_it_does_from_the_root`
+(`crates/protocol-cli/tests/planning_cli.rs`), which builds a project with a declared workspace
+member and asserts the root's exit code and the subdirectory's are the **same** — the form that
+catches a future regression in either direction. Verified by breaking it: restoring the old `.`
+fails the test with *one store, one answer, whatever directory the person is standing in*.
+
+**2. The Open Question's default is taken: `artifact validate` joins the gate.** `task plan-check`
+is step 3 of `task check`, and `AGENTS.md` § *Gate* gains its row in the same change — a gate whose
+step list disagrees with the Taskfile is the drift invariant 1 exists to prevent. It is local,
+clock-free and sub-second, which is the argument that placed `status-check` there.
+
+It reports statuses reached on an assertion and does **not** fail on them, which is
+`story:completion-needs-evidence`'s deliberate position rather than an oversight: refusing those
+would stop anybody closing a story on the day a runner is down, which is the day it matters most.
+
+The story's recorded output (`harness-wave-4-governed-dogfood.md:77-91`) was over 33 artifacts; this
+store is 125, and the gate now re-reads it on every run rather than a person re-recording it.
 
 ## Out of Scope
 

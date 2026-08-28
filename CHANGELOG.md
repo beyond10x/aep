@@ -11,6 +11,13 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **`task plan-check` is a step of the gate.** `protocol artifact validate` over this repository's
+  own planning store, third of nineteen steps: an unparseable document, a relation into a repository
+  the workspace manifest does not declare, or a status no lifecycle permits now fails `task check`.
+  A status reached on an assertion rather than a record is **reported and does not fail**, which is
+  deliberate — refusing it would stop anybody closing a story on the day a runner is down
+  (`story:own-engineering-store`).
+
 * **`protocol artifact explain <id>` answers *what made this done*.** Per status the artifact
   reached: the move, the evidence records it rested on, and — the point of the verb — **the revision
   the artifact was at when each record was admitted**, so an edit made afterwards cannot make an old
@@ -20,6 +27,12 @@ belongs in the commit message or in `docs/design/`.
   (`story:completion-audit-join`).
 
 ### Fixed
+
+* **`protocol artifact validate` is green from anywhere inside a project.** It resolved the
+  workspace manifest against the *working directory*, so the same store validated at the repository
+  root and reported every cross-repository relation as undeclared one directory down — exit 0 and
+  exit 1 for one store, depending on where the person was standing. It now walks up to the project
+  the way discovery does (`story:own-engineering-store`).
 
 * **Over SQLite and Postgres, every provenance account was silently empty.** A move's `decided_on`
   travels as JSON *text* and was read only as a JSON object, so a move made on a bare
