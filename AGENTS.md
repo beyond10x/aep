@@ -358,7 +358,7 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Nineteen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
+Twenty steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
 other seven are `plan-check`, `version-check`, `dep-check` (`cargo xtask deps`: every `entity-*`
 crate resolves once, from one `entity-runtime` pin), `guard-check` and `claim-check` between
 `status-check` and `clippy` — source-only and sub-second — then `postgres-check` after `test` (the
@@ -371,7 +371,22 @@ into a repository the workspace manifest does not declare, or a status no lifecy
 **reports without failing** on a status reached on an assertion rather than a record, which is
 `story:completion-needs-evidence`'s deliberate position. It runs from the repository root and from
 any directory inside it; that it did not, until the same day, was the defect `story:own-engineering-store`
-recorded against itself:
+recorded against itself.
+
+**`audit-check` is the drift detector of `docs/guide/open-vocabulary.md`**, added 2026-08-28: seven
+of the thirteen units of `.engineering/checks/`, four seconds, re-resolving every `file:line` the
+audit cites. It exists because a citation rotted silently — `20923a8` added eight doc-comment lines
+above `pub enum EvidenceKind`, so a *closed* verdict came to point at a serde attribute, and the
+suite that catches exactly this was not in the gate, so the story resting on it stayed
+`implemented` on a record that had stopped being true. Six units are not in the gate, for two reasons. Four run the suite
+itself (nine tree copies for the mutation proof) and cost 65 of its 70 seconds; run them with `bash
+.engineering/checks/run.sh` when the suite changes. The fifth, `audit-corpus`, is out because its C9
+row reads `git status` and asserts *this unit's writes stayed inside its two declared files* — a
+claim about the **run** that produced the audit, not about the tree, so in a gate it reddens on any
+unrelated uncommitted file. A check that cannot pass on a dirty tree is a run verifier, not a gate
+step. **The suite reads the store with this tree's own
+build**, never the ambient `protocol`: the version is checked and a mismatch is a refusal, because a
+stale install reported five phantom drifted stories on 2026-08-28 and nothing said why.
 
 1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
    `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since
@@ -434,7 +449,7 @@ recorded against itself:
    covers less than the gate it claims to be is worse than one that admits its scope; that is why
    this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
 
-Land nothing that does not pass all eighteen.
+Land nothing that does not pass all twenty.
 
 **A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
 *toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a
@@ -627,7 +642,7 @@ version bump changes no projection, no suite, no synthesised tree and no cluster
 and fails if any file spells the build version.
 
 **Two files still move, and for a reason that is content.** The conformance evidence documents name
-the implementation they checked — `billing-reference 0.31.0` — which is what the record is *about*,
+the implementation they checked — `billing-reference 0.32.1` — which is what the record is *about*,
 not a stamp of the thing that wrote it. Rewrite both before cutting the tag:
 
 ```console

@@ -24,6 +24,7 @@ tasks:
       - task: fmt-check
       - task: status-check
       - task: plan-check
+      - task: audit-check
       - task: version-check
       - task: dep-check
       - task: guard-check
@@ -85,6 +86,27 @@ tasks:
     desc: Fail if the delivered-waves record in docs/status.md no longer matches the tags.
     cmds:
       - cargo xtask status --check
+
+  audit-check:
+    desc: >-
+      The seven document units of the open-vocabulary audit's own suite: the table's shape, the open
+      and closed cells, the follow-ups, the citations, the layered rows and the scan loop. Four
+      seconds, and what it buys is the drift detector — every `file:line` the audit cites is
+      re-resolved, so a commit that shifts a cited declaration fails here instead of leaving a
+      closed verdict pointing at a serde attribute, which is what happened on 2026-08-28.
+    # Six of the thirteen units are deliberately not here, for two different reasons.
+    #
+    # `surface-hygiene`, `repeatability`, `mutation-proof` and `checks-runner` **run the suite
+    # itself** — nine tree copies for the mutation proof — and cost 65 of its 70 seconds. They are
+    # the suite's meta-tests; run them with `bash .engineering/checks/run.sh` when the suite changes.
+    #
+    # `audit-corpus` is out for a different and more interesting reason: its C9 row asserts *this
+    # unit's writes stay inside its two declared files*, read from `git status`. That is a claim
+    # about the **run** that produced the audit, not about the tree — so in a gate it reddens on any
+    # unrelated uncommitted file, which is every working tree that is mid-change. A check that
+    # cannot pass on a dirty tree is not a gate step; it is a run verifier, and it stays one.
+    cmds:
+      - bash .engineering/checks/run.sh table-shape open-cells closed-cells followups citations layered-rows scan-loop
 
   plan-check:
     desc: >-

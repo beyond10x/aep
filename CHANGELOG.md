@@ -97,7 +97,7 @@ Nothing yet.
   `generator_version` are gone from every projection's provenance block, from the three conformance
   suites (with `synthesizer_version`), from the synthesised trees (`planner_version`) and from the
   compiled cluster IR. `source_digest` and `contract_digest` are untouched and still answer what the
-  artefact was made *from*. Every stamp was the release tag copied into 115 files, so a version bump
+  artefact was made *from*. Every stamp was the release tag copied into 118 files, so a version bump
   rewrote all of them with nothing else changed — and a release cut without regenerating failed the
   gate at the tag. An `ess_conformance` record written before this still reads: both fields stay
   declared on the published schema and accepted on input, never written, and neither was ever

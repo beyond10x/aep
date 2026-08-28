@@ -29,10 +29,10 @@ done
 
 # ---- H1 -----------------------------------------------------------------------------------------
 R=0
-if ! have protocol; then
-  R=1; why "protocol is not on PATH; the map requires bash, git and protocol"
+if ! protocol_ready; then
+  R=1; why "$(protocol_absence)"
 else
-  OUT="$( ( cd "$REPO" && protocol validate --root . ) 2>&1 )"
+  OUT="$( ( cd "$REPO" && "$PROTOCOL" validate --root . ) 2>&1 )"
   if [ $? -ne 0 ]; then
     R=1
     while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
@@ -44,26 +44,16 @@ row H1 "$R"
 
 # ---- H2 -----------------------------------------------------------------------------------------
 R=0
-BIN="$(protocol_bin)"
-if [ -z "$BIN" ]; then
-  R=1; why "no protocol binary: neither target/debug, target/release, nor PATH"
+if ! protocol_ready; then
+  R=1; why "$(protocol_absence)"
 else
-  # The build has to match the tree, or this row reports the binary's age as the store's drift.
-  WANT="$(workspace_version)"
-  GOT="$("$BIN" --version 2>/dev/null | awk '{print $2}')"
-  if [ "$GOT" != "$WANT" ]; then
+  OUT="$( ( cd "$REPO" && "$PROTOCOL" artifact validate ) 2>&1 )"
+  if [ $? -ne 0 ]; then
     R=1
-    why "$BIN is $GOT and this tree is $WANT — build it before reading the store, or every"
-    why "answer below is that binary's opinion of a store it predates"
+    while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
   else
-    OUT="$( ( cd "$REPO" && "$BIN" artifact validate ) 2>&1 )"
-    if [ $? -ne 0 ]; then
-      R=1
-      while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
-    else
-      note "$(head -1 <<< "$OUT")"
-      note "read by $BIN ($GOT)"
-    fi
+    note "$(head -1 <<< "$OUT")"
+    note "read by $PROTOCOL ($(workspace_version))"
   fi
 fi
 row H2 "$R"

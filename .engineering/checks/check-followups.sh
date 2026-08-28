@@ -28,7 +28,7 @@ declare_row F7 "each named artifact is in its kind's initial status — none was
 declare_row F8 "the partition is read from check-closed-cells.sh, not recomputed here"
 declare_row F9 "rows examined equals the number of closed rows in the table"
 
-have protocol || { red_all "protocol is not on PATH; R18 allows no other route to the store"; finish; exit; }
+protocol_ready || { red_all "$(protocol_absence)"; finish; exit; }
 audit_present || { red_all "no $AUDIT_REL"; finish; exit; }
 
 # ---- F8 -----------------------------------------------------------------------------------------

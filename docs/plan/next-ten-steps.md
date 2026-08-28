@@ -1,6 +1,21 @@
 # The next ten steps — after the store waves
 
-> **Status: proposed 2026-08-28**, written against `engineering-protocols` 0.31.0 (`1419f1c`) and
+> **Status: delivered 2026-08-28, except step 5** — released as `0.32.0` (`bfd391d`) and `0.32.1`
+> (`6868ccc`). Nine of the ten steps shipped in one wave; **step 5, the driven run, is prepared and
+> not run**, because it spends money and stops at a person (D1's default). Its hand-off is
+> [`w4-3-to-try.md`](w4-3-to-try.md).
+>
+> **Two things this page says that the tree contradicts, corrected here rather than quietly.** The
+> *two releases* below did not happen that way: steps 6–10 depended on nothing in 1–5, so everything
+> except the driven run shipped in **0.32.0** and there is no 0.33.0. And **D6's candidate changed**
+> — step 1 found `story:retry-budgets` already shipped and closed it, so the run drives
+> `story:operator-resume-ux`. D4 was also decided against its own default, and its row already says
+> so.
+>
+> The Goal below still reads as a promise. One clause of it — *one real story is driven end to end*
+> — is the one thing outstanding, and `story:governed-dogfood-run` is still `draft`.
+>
+> Originally **proposed 2026-08-28**, written against `engineering-protocols` 0.31.0 (`1419f1c`) and
 > `entity-runtime` 0.13.0 (`ddee747`), the day waves F–H closed (`store-waves-f-g-h.md`). Every fact
 > in § 1 was read from the two trees on that date; nothing below it is a fact until a story ships.
 > Ten steps rather than a wave, because they cross four epics and two repositories and the point
@@ -38,10 +53,14 @@ adopter-facing defects that need no decision are gone — before any new capabil
 | 9 | Harness-neutrality as a gate step | `story:shell-echo-harness` | cross-harness-portability | 5 | 2 days |
 | 10 | A release that rewrites nothing it did not change | `story:generator-version-stamp` | — | — | 1 day |
 
-Two releases: **0.32.0** after step 5 (the plan is true, completion is evidence-gated, one story was
-driven), **0.33.0** after step 10. Nothing in 6–10 changes a printed output that 1–5 pin, so the
-order inside each half is free; the order between the halves is not — 5 is the claim the first
-half exists to make.
+~~Two releases: **0.32.0** after step 5 (the plan is true, completion is evidence-gated, one story was
+driven), **0.33.0** after step 10.~~ **Not what happened, 2026-08-28.** Steps 6–10 turned out to
+depend on nothing in 1–5, and three of them (1, 6, 9) were audits that closed on work already
+shipped — so waiting for step 5 would have held nine finished steps behind one paid run. Everything
+except the driven run shipped in **0.32.0**, patched by **0.32.1**; there is no 0.33.0, and the
+release after step 5 is whatever number is next when it runs.
+
+The rest of the paragraph held: nothing in 6–10 changed a printed output that 1–5 pin.
 
 ## 3. Each step, in one paragraph
 
@@ -130,8 +149,8 @@ stopped rewriting files. The proof is `a_version_bump_rewrites_no_generated_file
 | D2 | Step 3's verdict on `story-completion-evidence-design-v0.1.md` | **accepted in part**: the two shipped halves accepted; the producer-independence judgement refused as engine work and kept under `story:evidence-producers-for-the-driven-map` |
 | D3 | Step 7: `RelationKind` stays a closed enum or opens | stays closed, with the reason written: a relation name is a graph semantic the engine interprets (`decomposes` builds the tree `board` prints), and an open one would be a name nothing can act on |
 | D4 | Step 10: what replaces the build version in a stamp | **taken, and narrower than the default: nothing replaces it.** The specification's content is already `source_digest` and the slice's is `contract_digest`; a digest of the generator's own source answers *by which build* no more actionably than the tag did and moves on every commit to the generator rather than once per release. Recorded as deviation 13 in `docs/design/reconciliation-v0.2.md` §5 |
-| D5 | Two releases or one | two — 0.32.0 after step 5, 0.33.0 after step 10 |
-| D6 | Which story step 5 drives | `story:retry-budgets`, unless step 1 finds it shipped, then `story:reusable-workflow-nodes` |
+| D5 | Two releases or one | ~~two — 0.32.0 after step 5, 0.33.0 after step 10~~ → **one, 0.32.0 (+0.32.1)**: steps 6–10 depended on nothing in 1–5, so holding them behind a paid run bought nothing |
+| D6 | Which story step 5 drives | ~~`story:retry-budgets`~~ → **`story:operator-resume-ux`**. Step 1 did find `retry-budgets` shipped and closed it. The fallback named here was `reusable-workflow-nodes`; `operator-resume-ux` was taken instead because it fits `story:governed-dogfood-run`'s own default better — one real defect, one crate, mechanical acceptance |
 | D7 | Step 2's verb: `protocol artifact explain` or `protocol explain` | `protocol artifact explain <id>` — it is a plan question; `protocol explain` already means a policy evaluation |
 
 ## 5. Not in these ten, and where each lives
