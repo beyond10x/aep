@@ -3334,11 +3334,11 @@ mod tests {
     fn a_metacharacter_inside_quotes_is_an_argument_and_outside_them_it_composes() {
         for one_invocation in [
             r#"grep -n "StolenLock\|took_lock_from" crates/"#,
-            r#"grep -n 'a;b' file"#,
+            r"grep -n 'a;b' file",
             r#"grep -E "fn (drive|resume)" src/run.rs"#,
-            r#"rg 'x > y' crates"#,
-            r#"grep -n '$(whoami)' file"#,
-            r#"grep -n '`date`' file"#,
+            r"rg 'x > y' crates",
+            r"grep -n '$(whoami)' file",
+            r"grep -n '`date`' file",
             "protocol artifact list",
         ] {
             assert_eq!(
