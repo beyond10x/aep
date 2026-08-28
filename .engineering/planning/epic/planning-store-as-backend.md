@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: epic:planning-store-as-backend
 kind: epic
-status: draft
+status: proposed
 title: The planning store answers as a backend
 summary: 'P3-P6: the markdown store writes through CommandService, runs the sixteen conformance suites, and gains database and hybrid siblings.'
 owner: store
@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: initiative:the-repo-governs-itself
-revision: 1
+revision: 2
 ---
 # Epic: The planning store answers as a backend
 

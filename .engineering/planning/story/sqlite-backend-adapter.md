@@ -7,7 +7,8 @@ title: 'P4: aep-backend-sqlite, an adapter over entity-sqlite rather than a seco
 summary: 'The first database backend: one file, no server, and the transactional store next door rather than a second one written here.'
 relations:
 - decomposes: epic:planning-store-as-backend
-revision: 4
+- supersedes: story:sqlite-backend
+revision: 5
 ---
 # Story: P4 — `aep-backend-sqlite`
 

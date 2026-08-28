@@ -12,7 +12,9 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:postgres-backend
-revision: 1
+- depends_on: story:markdown-documents-as-a-store
+- depends_on: story:store-selection-in-project-yaml
+revision: 4
 ---
 # Story: P6 — `aep-backend-hybrid`, and what its atomicity actually is
 
@@ -51,3 +53,20 @@ story is last in the epic rather than merely later.
 The guarantee itself. Decides: store owner, on a written decision, before any code. Default if nobody
 answers: eventually consistent with an explicit repair verb — the weakest honest claim, which is the
 one that cannot be quietly wrong.
+
+## Re-scoped for wave H, proposed 2026-08-28
+
+The composite is **`entity-runtime`'s `Hybrid<L: Store, R: Store>`** (`crates/entity-remote/src/hybrid.rs:168`),
+instantiated as `EntityBackend<Hybrid<MarkdownProvider, SqliteStore>>` — the plan in markdown for
+pull requests and in SQLite for tooling, both local, no network. The open question above — *the
+guarantee itself* — is answered by citing rather than choosing: the runtime's `store-v0.1.md` § 10
+declares authority, read path, unreachable and divergence behaviour as required words with no
+default (R-106), records a losing write as a divergence rather than swallowing it (R-107), and
+`catch_up` merges nothing (R-108). The first acceptance line is met by that citation, and the four
+words are typed in `project.yaml` (`story:store-selection-in-project-yaml`). Two verbs are ours:
+`protocol artifact divergences` and `protocol artifact catch-up`.
+
+Edges: `depends_on: story:postgres-backend` above is no longer true — a hybrid of two local stores
+needs no Postgres. `depends_on: story:markdown-documents-as-a-store` and
+`depends_on: story:store-selection-in-project-yaml` are added beside it; this line says which is live.
+Plan: `docs/plan/store-waves-f-g-h.md` § Wave H.

@@ -12,7 +12,9 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:sqlite-backend
-revision: 1
+- depends_on: story:sqlite-backend-adapter
+- depends_on: story:one-adapter-over-any-store
+revision: 4
 ---
 # Story: P5 — `aep-backend-postgres`
 
@@ -47,3 +49,16 @@ protocol's job, not the backend's, and putting it here would create a second pla
 Whether the driver's store lock becomes an advisory lock in this backend rather than a file. Decides:
 driver and store owners together. Not blocking: the file lock is per store, and a Postgres store is
 still reachable through one project directory.
+
+## Re-scoped for wave H, proposed 2026-08-28
+
+The provider is **`entity-runtime`'s** (`story:postgres-provider` there), and this crate is
+`EntityBackend<PostgresStore>` — a type over the adapter `story:one-adapter-over-any-store` extracts.
+What stays here: the CI service, the sixteen suites against it, the two-writers acceptance above,
+and `AGENTS.md` § *Dependencies*. *"Schema creation and upgrade are a command"* is met by the
+provider's idempotent `migrate`, called from `protocol artifact` on open.
+
+Edges: `depends_on: story:sqlite-backend` above points at the story `story:sqlite-backend-adapter`
+superseded; the store has no `unrelate`, so `depends_on: story:sqlite-backend-adapter` and
+`depends_on: story:one-adapter-over-any-store` are added beside it and this line says which is live.
+Plan: `docs/plan/store-waves-f-g-h.md` § Wave H.

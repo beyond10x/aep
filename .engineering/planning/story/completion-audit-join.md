@@ -13,7 +13,8 @@ relations:
 - decomposes: epic:evidence-gated-completion
 - depends_on: story:journal-backed-store
 - depends_on: story:completion-needs-evidence
-revision: 1
+- depends_on: story:history-from-the-event-log
+revision: 2
 ---
 # Story: What made this done, answerable from the store
 
