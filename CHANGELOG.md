@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+* **`protocol artifact show <id>` prints one artifact.** Its frontmatter fields — id, kind, status,
+  title, summary, owner, tags, relations, revision — and then its markdown body, verbatim. There was
+  no verb for an id in hand: `list` prints the whole plan, `board` arranges it, `history` prints the
+  event log, `explain` answers what made a status happen, and `body` writes. A driven session in run
+  `W4-3/1` typed `show` five times and was answered `unrecognized subcommand` every time, which is
+  why the verb is called `show`. An id the plan does not hold is refused naming it. Read through the
+  contract, so a markdown, SQLite, Postgres or hybrid plan gives one answer.
+
 ### Fixed
 
 * **The resume line the driver prints is a line that works.** A stopped run printed `resume with:
