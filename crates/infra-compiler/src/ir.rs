@@ -521,9 +521,13 @@ pub struct Provenance {
     /// When the scan ran.
     pub scanned_at: String,
     /// The scanner's version.
+    ///
+    /// The observation's own claim, read out of the bundle rather than stamped here: it says what
+    /// produced the bytes this compiler was handed, which is a fact *about the input*. What is not
+    /// recorded beside it is this compiler's own build — `story:generator-version-stamp`: a
+    /// compiled IR records what it was made from, and a build number that moves with the release
+    /// tag rewrites every committed IR whenever the tag moves and nothing else does.
     pub scout_version: String,
-    /// This compiler's version.
-    pub compiler_version: String,
 }
 
 /// The compiled IR: the model, its provenance, and the total lookups.

@@ -121,8 +121,6 @@ $ protocol ess conform evidence --path examples/billing --target billing --obser
   scenarios_total: 29
   scenarios_failed: 0
   suite_version: ess-conformance/1
-  compiler_version: 0.1.0
-  generator_version: 0.1.0
   observed_at: 1699920000000
   producer:
     producer: verifier

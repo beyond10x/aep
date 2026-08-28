@@ -187,7 +187,7 @@ signatures rather than internals.
 | D1 | which crate owns the scenario IR, the synthesizer and the runner | §35, §36 | a new `ess-conformance` crate — `ess-gen` can hold neither the synthesizer's fallibility nor the runner's clock |
 | D2 | what drives `async fn run_suite`; this workspace has no async runtime | §27 | make the runner synchronous, and keep `async` out until a transport-level target needs it |
 | D3 | how a bounded eventual assertion waits, given that §40 forbids sleeps | §15, §40 | the target waits; the runner passes a deadline and never sleeps |
-| D4 | what `generator_version` means once the synthesizer is not `ess-gen` | §23 | two fields — `generator_version` for the projector, `synthesizer_version` for the suite producer |
+| D4 | what `generator_version` means once the synthesizer is not `ess-gen` | §23 | ~~two fields — `generator_version` for the projector, `synthesizer_version` for the suite producer~~ — **closed the other way**: neither field exists, see §23 and reconciliation §5 deviation 13 |
 
 Everything else here is settled. A reader who disagrees with a settled part records the disagreement in
 [`docs/design/reconciliation-v0.2.md`](reconciliation-v0.2.md) §5 rather than diverging silently, which
@@ -1062,10 +1062,14 @@ the generator version, and every projected artifact emits it. Extend or reuse it
 a parallel shape: two provenance types in one repository are two answers to "which specification
 produced this", and the point of provenance is that there is one.
 
-**Open decision D4.** Once the synthesizer is a separate thing from `ess-gen` (§36), `generator_version`
-has two possible referents, and a report that cannot say which oracle produced a verdict is not
-reproducible — which is the whole purpose of the field. Default: two fields, `generator_version` for
-the projector and `synthesizer_version` for the suite producer.
+**Open decision D4 — closed, against this default.** It was once open: once the synthesizer is a
+separate thing from `ess-gen` (§36), `generator_version` has two possible referents, and the default
+was two fields, `generator_version` for the projector and `synthesizer_version` for the suite
+producer. Both shipped and both are now gone, with `compiler_version` (`story:generator-version-stamp`,
+`docs/design/reconciliation-v0.2.md` §5 deviation 13). A suite is a function of the model
+`spec_digest` names, so the digest already tells a reader whether two suites are the same suite;
+each version was `env!("CARGO_PKG_VERSION")`, so it named the release tag and nothing narrower, and
+stamping it rewrote every committed suite at every release for no change in what they check.
 
 Every scenario should also identify which ESS semantic elements caused it to exist.
 

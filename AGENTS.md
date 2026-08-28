@@ -617,26 +617,23 @@ tool reports the same string for ever and a stale install cannot be told from th
 is exactly how a binary predating the store journal wrote no journal entries for a day while printing
 the same version the current build printed.
 
-**Bumping it regenerates.** `compiler_version` and `generator_version` are stamped into every
-generated projection and into the committed conformance evidence, so a version bump rewrites ~120
-files whose content is otherwise identical. Run, in this order, before cutting the tag:
+**Bumping it no longer regenerates the tree.** A generated artifact records what it was made
+*from* — its two digests — and never which build made it (`story:generator-version-stamp`), so a
+version bump changes no projection, no suite, no synthesised tree and no cluster IR.
+`a_version_bump_rewrites_no_generated_file` in `xtask` holds that: it regenerates the whole corpus
+and fails if any file spells the build version.
+
+**Two files still move, and for a reason that is content.** The conformance evidence documents name
+the implementation they checked — `billing-reference 0.31.0` — which is what the record is *about*,
+not a stamp of the thing that wrote it. Rewrite both before cutting the tag:
 
 ```console
-cargo xtask generate    # 35 projections
-cargo xtask suite       # the 3 conformance suites
-cargo xtask infra       # the cluster IR
-cargo xtask synth       # the synthesised trees
-cp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs   # the lab's byte-identical copy
 protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
   > examples/billing-conformance/evidence/06-conformance.yaml
 protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
   --inject accept-invalid-amount > examples/billing-conformance/evidence/06-conformance-faulty.yaml
 task check
 ```
-
-Skipping this fails `generate-check` **at the tag**, which is loud rather than silent — but it is a
-tax on every release, and whether those two stamps earn it is
-`story:generator-version-stamp`.
 
 **The tag has to exist before the delivered-waves row can be written, so cutting one is a loop:**
 

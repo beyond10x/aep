@@ -147,7 +147,11 @@ struct ProvenanceMirror {
     context: String,
     scanned_at: String,
     scout_version: String,
-    compiler_version: String,
+    /// Accepted and discarded: `story:generator-version-stamp` took this compiler's own build
+    /// number out of what it writes, and a reader that refused every IR written before the change
+    /// would lose the documents the change exists to stop rewriting.
+    #[allow(dead_code, reason = "read for tolerance, never used")]
+    compiler_version: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1245,7 +1249,6 @@ impl ModelMirror {
                 context: provenance.context,
                 scanned_at: provenance.scanned_at,
                 scout_version: provenance.scout_version,
-                compiler_version: provenance.compiler_version,
             },
             model: InfraModel {
                 namespaces,

@@ -194,8 +194,11 @@ impl ConformanceReport {
                 .filter(|result| result.status != Status::Passed)
                 .count(),
             suite_version: Some(self.suite.suite_version.to_string()),
-            compiler_version: Some(self.suite.compiler_version.clone()),
-            generator_version: Some(self.suite.generator_version.clone()),
+            // Never written: `story:generator-version-stamp`. The record names the specification
+            // it attests about and the implementation it checked; which build wrote it is the
+            // release tag again, and stamping it rewrote every committed record at every release.
+            compiler_version: None,
+            generator_version: None,
             failed_scenarios: self
                 .failures()
                 .map(|result| format!("{} {}", result.status, result.scenario))
@@ -295,9 +298,6 @@ mod tests {
                     "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
                 )
                 .expect("a digest"),
-                compiler_version: "0.1.0".to_owned(),
-                generator_version: "0.1.0".to_owned(),
-                synthesizer_version: "0.1.0".to_owned(),
             },
             implementation: ImplementationIdentity::new("billing-reference", "0.1.0"),
             started_at: aep_domain::time::Timestamp::from_epoch_millis(1_700_000_000_000),

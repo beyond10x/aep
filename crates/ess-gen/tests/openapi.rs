@@ -371,7 +371,19 @@ fn every_document_carries_its_provenance_as_a_comment_and_as_data() {
         assert_eq!(carried["system"], "billing", "{path}");
         assert_eq!(carried["specification_version"], "v3", "{path}");
         assert_eq!(carried["source_digest"], provenance.source_digest, "{path}");
-        assert_eq!(carried["generator_version"], Provenance::VERSION, "{path}");
+        // Its own slice's digest, not the whole model's, so only the shape is asserted here —
+        // `run` re-derives it from the recorded slice and refuses a stamp that disagrees.
+        assert!(
+            carried["contract_digest"].as_str().is_some_and(
+                |digest| digest.len() == 64 && digest.chars().all(|c| c.is_ascii_hexdigit())
+            ),
+            "{path} does not say which model slice it derives from"
+        );
+        // What it was made from, never which build made it: `story:generator-version-stamp`.
+        assert!(
+            carried.get("compiler_version").is_none() && carried.get("generator_version").is_none(),
+            "{path} stamps a build version, which is a second copy of the release tag"
+        );
     }
 }
 

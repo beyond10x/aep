@@ -217,21 +217,20 @@ impl ConformanceSuite {
 ///
 /// [`ess_gen::Provenance`] already answers "which specification produced this artifact", and every
 /// projection under `generated/` carries it. [`SuiteProvenance::of`] therefore *derives* from it:
-/// the system, the specification version, the digest and the compiler version are read from a
+/// the system, the specification version and the two digests are read from a
 /// [`ess_gen::Provenance`] built for the same IR, never computed a second way. Two provenance types
 /// in one repository are two answers to one question, and the point of provenance is that there is
 /// one.
 ///
-/// What is added is what a suite has and a projection does not: the version of the thing that
-/// synthesised the scenarios, and the format of the document itself.
+/// What is added is what a suite has and a projection does not: the format of the document itself.
 ///
 /// # Why the fields are not `ess_gen::Provenance` itself
 ///
-/// A suite is read back (§21, §49). [`ess_gen::Provenance`] cannot be: its `compiler_version` and
-/// `generator_version` are `&'static str`, which no parsed document can produce without leaking, and
-/// it derives `Serialize` alone. Holding one here would make the write path reuse and the read path
-/// impossible — so the shared facts are copied from it once, at the only place that can go wrong,
-/// and `the_suite_records_the_same_model_digest_the_projections_do` fails if the two ever disagree.
+/// A suite is read back (§21, §49), and its digests are [`SpecDigest`]s — parsed and validated,
+/// where a projection carries plain strings. Holding an `ess_gen::Provenance` here would mean
+/// re-parsing them at every read, so the shared facts are copied from it once, at the only place
+/// that can go wrong, and `the_suite_records_the_same_model_digest_the_projections_do` fails if the
+/// two ever disagree.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SuiteProvenance {
     /// The format this document is written in — what a runner checks before reading the rest.
@@ -256,22 +255,9 @@ pub struct SuiteProvenance {
     /// different suite. Derived from [`ess_gen::Provenance::contract_digest`], never computed a
     /// second way — one model, one slice rule, one digest.
     pub contract_digest: SpecDigest,
-    /// The build that resolved the specification.
-    pub compiler_version: String,
-    /// The build that writes the projections under `generated/`.
-    pub generator_version: String,
-    /// The build that synthesised these scenarios.
-    ///
-    /// Design's open decision D4, taken as its default: two fields, because once the synthesizer is
-    /// not `ess-gen` a report that cannot say which oracle produced a verdict is not reproducible —
-    /// which is the entire purpose of the field.
-    pub synthesizer_version: String,
 }
 
 impl SuiteProvenance {
-    /// This crate's version: the build that synthesises scenarios.
-    pub const SYNTHESIZER_VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
     /// Derives provenance from the model a suite is generated from.
     ///
     /// # Panics
@@ -297,9 +283,6 @@ impl SuiteProvenance {
             specification_version: projection.specification_version,
             spec_digest: digest(projection.source_digest.as_str()),
             contract_digest: digest(projection.contract_digest.as_str()),
-            compiler_version: projection.compiler_version.clone(),
-            generator_version: projection.generator_version.clone(),
-            synthesizer_version: Self::SYNTHESIZER_VERSION.to_owned(),
         }
     }
 }
@@ -317,11 +300,11 @@ pub const SUPPORTED_SUITE_FORMATS: &[u32] = &[1];
 /// # Why this is what `suite_version` means
 ///
 /// Design §23 asks for a `suite_version` beside the spec and compiler versions. A suite's *contents*
-/// are already identified exactly by [`SuiteProvenance::spec_digest`] and
-/// [`SuiteProvenance::synthesizer_version`] together — the suite is a function of those two — so a
-/// hand-maintained content version beside them would be a third answer to a question already
-/// answered twice, and the one that drifts. What is genuinely unversioned without this is the shape
-/// of the document, which is what a future runner in another language must check before parsing.
+/// are already identified exactly by [`SuiteProvenance::spec_digest`] — the suite is a function of
+/// the model that digest names — so a hand-maintained content version beside it would be a second
+/// answer to a question already answered, and the one that drifts. What is genuinely unversioned
+/// without this is the shape of the document, which is what a future runner in another language
+/// must check before parsing.
 ///
 /// It is separate from the specification language's format on purpose: `ess/1` versions what an
 /// author writes, this versions what a synthesizer writes, and tying them together would force one
@@ -1950,9 +1933,6 @@ mod tests {
                 "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
             )
             .expect("a digest"),
-            compiler_version: "0.1.0".to_owned(),
-            generator_version: "0.1.0".to_owned(),
-            synthesizer_version: "0.1.0".to_owned(),
         }
     }
 }

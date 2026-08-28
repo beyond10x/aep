@@ -307,8 +307,6 @@ function renderHeader(from, realized) {
     ["specification", catalog.provenance.specification_version],
     ["model digest", catalog.provenance.source_digest],
     ["contract digest", catalog.provenance.contract_digest],
-    ["compiler", catalog.provenance.compiler_version],
-    ["generator", catalog.provenance.generator_version],
     ["plan", `${catalog.plan.generated} generated · ${catalog.plan.obligations} obligations · ${catalog.plan.refused} refused`],
     ["module", from],
   ];

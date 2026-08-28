@@ -881,9 +881,11 @@ fn every_document_carries_the_provenance_of_the_model_it_came_from() {
             Some(provenance.source_digest.as_str()),
             "{path} carries the digest as data, not only as a comment a parser throws away"
         );
-        assert_eq!(
-            recorded.get("generator_version").and_then(Value::as_str),
-            Some(Provenance::VERSION),
+        // What it was made from, never which build made it: `story:generator-version-stamp`.
+        assert!(
+            recorded.get("compiler_version").is_none()
+                && recorded.get("generator_version").is_none(),
+            "{path} stamps a build version, which is a second copy of the release tag"
         );
     }
 }

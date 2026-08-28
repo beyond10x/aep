@@ -389,6 +389,9 @@ fn a_suite_serialised_in_one_process_resolves_in_another() {
 
 #[test]
 fn a_suite_parses_from_text_alone_without_an_ir() {
+    // Deliberately stamped with the three build versions `story:generator-version-stamp` removed:
+    // suites written before that change carry them, and a reader that refused one would make every
+    // committed suite in an adopter's tree unreadable to buy nothing.
     // No `EssIr` in this test at all — which is the whole claim of §21: a committed suite is read
     // back on a later checkout, by a later build, possibly in another language, and none of those
     // has the IR that produced it.
@@ -458,10 +461,7 @@ fn the_steps_a_binding_and_an_invariant_need_survive_being_read_back_from_text()
     "system": "billing",
     "specification_version": "v3",
     "spec_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "contract_digest": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-    "compiler_version": "0.1.0",
-    "generator_version": "0.1.0",
-    "synthesizer_version": "0.1.0"
+    "contract_digest": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   },
   "scenarios": {
     "billing.invoice.Invoice/invariant/after/billing.invoice.CreateInvoice/accepted": {
@@ -561,10 +561,7 @@ fn a_suite_naming_something_that_is_not_an_ess_name_is_refused_while_it_is_read(
     "system": "billing",
     "specification_version": "v3",
     "spec_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "contract_digest": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-    "compiler_version": "0.1.0",
-    "generator_version": "0.1.0",
-    "synthesizer_version": "0.1.0"
+    "contract_digest": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   },
   "scenarios": {
     "billing.invoice.CreateInvoice/outcome/rejected": {
@@ -673,13 +670,23 @@ fn the_suite_records_the_same_model_digest_the_projections_do() {
         suite.specification_version,
         projection.specification_version
     );
-    assert_eq!(suite.compiler_version, projection.compiler_version);
-    assert_eq!(suite.generator_version, projection.generator_version);
-    assert_eq!(
-        suite.synthesizer_version,
-        SuiteProvenance::SYNTHESIZER_VERSION,
-        "and the synthesizer is named separately, because it is a different thing (D4)"
-    );
+
+    // And nothing in it names a build. `story:generator-version-stamp` closed design D4 the other
+    // way: a suite is a function of the model its digest names, so a build number beside the digest
+    // is the release tag again — and stamping it rewrote all three committed suites at every
+    // release for no change in what they check.
+    let written = serde_json::to_value(&suite).expect("the provenance serialises");
+    let fields = written.as_object().expect("an object");
+    for stamp in [
+        "compiler_version",
+        "generator_version",
+        "synthesizer_version",
+    ] {
+        assert!(
+            !fields.contains_key(stamp),
+            "a suite must not stamp `{stamp}`: {written}"
+        );
+    }
 }
 
 #[test]

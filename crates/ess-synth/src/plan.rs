@@ -92,9 +92,12 @@ pub struct SynthesisPlan {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SynthesisScope {
     /// Which slice of the specification's capabilities this synthesis owns.
+    ///
+    /// The scope, and not the build that applied it: `story:generator-version-stamp`. A profile
+    /// names what the plan covers, which is a fact about the plan; a planner version names the
+    /// release tag, which rewrites every synthesised tree whenever the tag moves and the trees do
+    /// not.
     pub profile: String,
-    /// The build that planned.
-    pub planner_version: String,
 }
 
 impl SynthesisScope {
@@ -103,7 +106,6 @@ impl SynthesisScope {
     fn component_skeletons() -> Self {
         Self {
             profile: "component-skeletons".to_owned(),
-            planner_version: env!("CARGO_PKG_VERSION").to_owned(),
         }
     }
 }
@@ -457,14 +459,13 @@ impl SynthesisPlan {
         let counts = self.counts();
         let _ = write!(
             out,
-            "# Synthesis plan — {} {}\n\nScope: `{}`, planner `ess-synth {}`. Regenerate with \
+            "# Synthesis plan — {} {}\n\nScope: `{}`, planned by `ess-synth`. Regenerate with \
              `{REGENERATE}`.\n\n{} capabilities: **{} generated**, **{} obligations**, **{} \
              refused**. An obligation is yours to implement against its contract; a refusal is a \
              fact about this synthesis scope, not about the specification.\n",
             self.provenance.system,
             self.provenance.specification_version,
             self.scope.profile,
-            self.scope.planner_version,
             self.capabilities.len(),
             counts.generated,
             counts.obligations,

@@ -1021,11 +1021,19 @@ pub struct EssConformanceResult {
     /// The version of the suite that ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suite_version: Option<String>,
-    /// The compiler that produced the suite.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The compiler that produced the suite — accepted on read, never written.
+    ///
+    /// `story:generator-version-stamp` took the build stamps off every generated artifact: a record
+    /// says what it is *about*, and the build that wrote it is a second copy of the release tag.
+    /// The field stays declared because this record refuses unknown fields, and a reader that
+    /// refuses every conformance record written before the change would make an adopter's history
+    /// unreadable to buy nothing. Nothing in this repository populates it.
+    #[serde(default, skip_serializing)]
     pub compiler_version: Option<String>,
-    /// The generator that produced it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The generator that produced it — accepted on read, never written.
+    ///
+    /// [`Self::compiler_version`]'s reason, exactly.
+    #[serde(default, skip_serializing)]
     pub generator_version: Option<String>,
     /// Which scenarios failed, so a failure names something actionable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

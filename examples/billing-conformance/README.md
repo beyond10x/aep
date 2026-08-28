@@ -58,8 +58,6 @@ $ $B ess conform evidence --path examples/billing --target billing
   scenarios_total: 29
   scenarios_failed: 0
   suite_version: ess-conformance/1
-  compiler_version: 0.1.0
-  generator_version: 0.1.0
   producer:
     producer: verifier
     verifier: conformance-runner

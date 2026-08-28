@@ -4524,6 +4524,69 @@ mod tests {
 
         std::fs::remove_dir_all(&out).ok();
     }
+    // ---- the release that rewrites nothing it did not change -------------------------------------
+
+    /// A version bump rewrites no generated file.
+    ///
+    /// `story:generator-version-stamp`, executed rather than described. The direct form — bump the
+    /// workspace version, regenerate, count the changed files — cannot run inside `cargo test`:
+    /// every version a generator could stamp arrives through `env!("CARGO_PKG_VERSION")`, which is
+    /// fixed when this binary is compiled, so a test that "bumped the version" would have to
+    /// compile a second workspace before it could observe anything.
+    ///
+    /// The equivalent that does run is both cheaper and stronger: regenerate the whole corpus and
+    /// assert this build's own version appears nowhere in it. A version bump changes exactly one
+    /// input — that string — so a corpus that never spells it is a corpus no bump can move, for
+    /// every future version rather than for one sampled one. Nothing here can encode the version
+    /// without spelling it: the two digests are over the IR, and the IR carries no build version.
+    ///
+    /// The two conformance evidence documents under `examples/billing-conformance/` are out of
+    /// scope deliberately. They name the *implementation* that was checked — `billing-reference`
+    /// and its version — which is what the record is about, not a stamp of the thing that wrote it.
+    #[test]
+    fn a_version_bump_rewrites_no_generated_file() {
+        let root = std::env::temp_dir().join("xtask-version-bump");
+        std::fs::remove_dir_all(&root).ok();
+        let repo = workspace_root();
+
+        generate(
+            &repo.join(NORMATIVE_EXAMPLE),
+            &root.join("generated"),
+            false,
+        )
+        .expect("the projections are written");
+        suite(&specifications(), &root.join("suites"), false).expect("the suites are written");
+        synth(
+            &synth_specifications(),
+            &root.join("rust"),
+            &root.join("go"),
+            &root.join("web"),
+            false,
+        )
+        .expect("all three synthesised trees are written");
+
+        // The cluster IR is the CLI's own stdout, so it is read where `infra-check` already holds
+        // it byte-identical rather than recompiled here for one assertion.
+        let mut corpus = super::walk(&root);
+        corpus.push(repo.join(super::OBSERVATION_IR));
+
+        let version = env!("CARGO_PKG_VERSION");
+        let stamped: Vec<String> = corpus
+            .iter()
+            .filter(|path| std::fs::read_to_string(path).is_ok_and(|text| text.contains(version)))
+            .map(|path| path.display().to_string())
+            .collect();
+
+        assert!(
+            stamped.is_empty(),
+            "{} generated files spell the build version `{version}`, so bumping it rewrites every \
+             one of them without changing anything they say:\n{}",
+            stamped.len(),
+            stamped.join("\n")
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
 }
 
 #[cfg(test)]

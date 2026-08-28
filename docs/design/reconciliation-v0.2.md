@@ -167,3 +167,18 @@ Recorded here so they are decisions rather than drift:
     must refuse an update to a review result; §43 says such records *may* be immutable. The reference
     backend refuses it, because a descriptor that says `mutable: false` while the backend accepts
     edits is a claim the system does not keep. Archiving remains available.
+
+13. **A generated artifact records what it was made from, never which build made it.** §10 asks a
+    projection's provenance for a `compiler_version` and a `generator_version`, and §23 asks a
+    suite's for both plus a `synthesizer_version`; W4's open decision D4 took the two-field default
+    and shipped it. All five are gone (`story:generator-version-stamp`). Reason: each was
+    `env!("CARGO_PKG_VERSION")`, so by this repository's own release procedure — the workspace
+    version moves with the tag, and the tree is regenerated at the tag — every committed artifact
+    stamped exactly the version it shipped under. That is `git describe` written into 115 files, and
+    it made a version bump rewrite all of them with nothing else changed. The two digests answer
+    what the artifact was made *from*; when a generator's output actually differs, the output
+    differs and the diff says so. Nothing replaced them: a digest over the generator's own source
+    would answer the same question and move on *every* commit to the generator rather than once per
+    release, which is the same defect with a shorter period. `EssConformanceResult` keeps its two
+    fields declared and accepts them on read — it refuses unknown fields, so a reader without them
+    would refuse every conformance record written before the change — and writes neither.

@@ -1908,19 +1908,18 @@ fn provenance_comment(provenance: &Provenance) -> String {
     out
 }
 
-/// The same four facts, visible.
+/// The same facts, visible.
 ///
 /// Duplicated on purpose: the comment above is for a tool and a diff, and it is invisible to exactly
 /// the person who is about to edit a generated file by hand and lose the work.
 fn provenance_footer(provenance: &Provenance) -> String {
     format!(
-        "\n---\n\nGenerated from {} {} · model digest `{}` · compiler {} · generator {}. Do not \
+        "\n---\n\nGenerated from {} {} · model digest `{}` · contract digest `{}`. Do not \
          edit this file; change the specification and regenerate it with `protocol ess generate`.\n",
         provenance.system,
         provenance.specification_version,
         provenance.source_digest,
-        provenance.compiler_version,
-        provenance.generator_version,
+        provenance.contract_digest,
     )
 }
 

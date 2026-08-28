@@ -117,6 +117,10 @@ story's answer is a stamp derived from what the artefact was made **from** — t
 digest, the generator's own source digest — so a version bump that changes neither rewrites
 nothing, and a change to either rewrites exactly what it should. Acceptance: `cargo xtask
 generate` after a version bump reports `0 changed`; AGENTS.md § Releases loses five lines.
+**Shipped**, and D4 came out narrower than its default: the two digests already there were the
+whole answer, and no generator-source digest was added. `synthesizer_version` and the synthesised
+trees' `planner_version` went with them, because a release that still rewrites twelve files has not
+stopped rewriting files. The proof is `a_version_bump_rewrites_no_generated_file` in `xtask`.
 
 ## 4. Decisions this plan takes
 
@@ -125,7 +129,7 @@ generate` after a version bump reports `0 changed`; AGENTS.md § Releases loses 
 | D1 | Step 5 needs a paid model run and the operator at the keyboard for the approval step | everything up to the run is prepared and gated; the run itself waits for a short numbered *to try* block and a yes |
 | D2 | Step 3's verdict on `story-completion-evidence-design-v0.1.md` | **accepted in part**: the two shipped halves accepted; the producer-independence judgement refused as engine work and kept under `story:evidence-producers-for-the-driven-map` |
 | D3 | Step 7: `RelationKind` stays a closed enum or opens | stays closed, with the reason written: a relation name is a graph semantic the engine interprets (`decomposes` builds the tree `board` prints), and an open one would be a name nothing can act on |
-| D4 | Step 10: what replaces the build version in a stamp | the digest of the artefact's inputs (specification content, generator source), never a build identifier |
+| D4 | Step 10: what replaces the build version in a stamp | **taken, and narrower than the default: nothing replaces it.** The specification's content is already `source_digest` and the slice's is `contract_digest`; a digest of the generator's own source answers *by which build* no more actionably than the tag did and moves on every commit to the generator rather than once per release. Recorded as deviation 13 in `docs/design/reconciliation-v0.2.md` §5 |
 | D5 | Two releases or one | two — 0.32.0 after step 5, 0.33.0 after step 10 |
 | D6 | Which story step 5 drives | `story:retry-budgets`, unless step 1 finds it shipped, then `story:reusable-workflow-nodes` |
 | D7 | Step 2's verb: `protocol artifact explain` or `protocol explain` | `protocol artifact explain <id>` — it is a plan question; `protocol explain` already means a policy evaluation |

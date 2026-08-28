@@ -411,7 +411,6 @@ pub fn compile(observation: &Observation) -> InfraIr {
             context: observation.context.clone(),
             scanned_at: observation.scanned_at.clone(),
             scout_version: observation.scout_version.clone(),
-            compiler_version: env!("CARGO_PKG_VERSION").to_owned(),
         },
         model: InfraModel {
             namespaces,

@@ -1,8 +1,10 @@
 //! Where a generated artifact came from.
 //!
-//! Four facts, because each of them moves independently and each one alone is insufficient: the same
-//! specification version compiled by two builds can differ, and the same compiler run through two
-//! generator versions certainly does. Design §10.
+//! What it was made **from**, and never which build made it. Design §10, narrowed by
+//! `story:generator-version-stamp`: the two digests content-address the input, and a build version
+//! beside them is a second copy of the release tag that rewrites every artifact whenever the tag
+//! moves and nothing else does. When a generator's output actually differs, the output differs and
+//! the diff says so; when it does not, no reader is owed the name of the build.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -13,12 +15,10 @@ use ess_compiler::EssIr;
 
 /// What produced an artifact.
 ///
-/// `Deserialize` as well as `Serialize`, and the two version fields are owned rather than
-/// `&'static str`, because provenance is read back and not only written. A conformance suite is
-/// committed and re-read by a later run, and a document that has been on disk cannot hold a
-/// `&'static str` that came from someone else's `env!`. Costing two allocations per artifact to let
-/// the same type serve both directions is a better trade than a second provenance type that drifts
-/// from this one — which is what happened to the schema mapping this crate publishes.
+/// `Deserialize` as well as `Serialize`, because provenance is read back and not only written: a
+/// conformance suite is committed and re-read by a later run. Letting the same type serve both
+/// directions is a better trade than a second provenance type that drifts from this one — which is
+/// what happened to the schema mapping this crate publishes.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Provenance {
     /// The system the artifact describes.
@@ -43,19 +43,9 @@ pub struct Provenance {
     /// conversions and workloads are in every slice — because a too-big slice costs a regeneration
     /// and a too-small one costs a false "still current", and those are not comparable errors.
     pub contract_digest: String,
-    /// The build that resolved it.
-    pub compiler_version: String,
-    /// The build that wrote the artifact.
-    pub generator_version: String,
 }
 
 impl Provenance {
-    /// This crate's version, as both the compiler and generator version.
-    ///
-    /// One number while the two ship together. When they stop shipping together this becomes two
-    /// numbers, and the field names already say which is which.
-    pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
     /// Derives provenance from the model an artifact is generated from.
     ///
     /// The contract digest is the **whole model's** — the honest default, and the fail-closed one:
@@ -67,8 +57,6 @@ impl Provenance {
             specification_version: ir.version.to_string(),
             source_digest: digest(ir),
             contract_digest: slice_digest(ir, None),
-            compiler_version: Self::VERSION.to_owned(),
-            generator_version: Self::VERSION.to_owned(),
         }
     }
 
@@ -139,10 +127,6 @@ impl Provenance {
             ),
             format!("model digest {}", self.source_digest),
             format!("contract digest {}", self.contract_digest),
-            format!(
-                "compiler {} · generator {}",
-                self.compiler_version, self.generator_version
-            ),
             format!("do not edit: regenerate with `{regenerate}`"),
         ]
     }
