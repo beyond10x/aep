@@ -1,0 +1,11 @@
+Correction: three files in this commit are not part of this change.
+
+`.engineering/planning/epic/ingestion-vocabulary.md`,
+`story/acquisition-phase-set.md` and `story/communication-publish-capability.md`
+are another session's work on adopter feedback round 2. They were untracked in
+the working tree and a `git add -A` swept them in.
+
+They are valid artifacts and the store validates with them, so they are left
+where they are rather than reverted — removing somebody's uncommitted work to
+tidy a commit message would be the worse error. Recorded here so their author,
+and anybody reading this commit for the driver change, can tell the two apart.
