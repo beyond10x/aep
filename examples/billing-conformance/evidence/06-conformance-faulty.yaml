@@ -6,8 +6,6 @@
   scenarios_total: 29
   scenarios_failed: 1
   suite_version: ess-conformance/1
-  compiler_version: 0.31.0
-  generator_version: 0.31.0
   failed_scenarios:
   - failed billing.invoice.CreateInvoice/outcome/rejected
   observed_at: 1699920000000

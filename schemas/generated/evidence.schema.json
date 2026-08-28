@@ -739,7 +739,8 @@
       ],
       "properties": {
         "compiler_version": {
-          "description": "The compiler that produced the suite.",
+          "description": "The compiler that produced the suite — accepted on read, never written.\n\n`story:generator-version-stamp` took the build stamps off every generated artifact: a record says what it is *about*, and the build that wrote it is a second copy of the release tag. The field stays declared because this record refuses unknown fields, and a reader that refuses every conformance record written before the change would make an adopter's history unreadable to buy nothing. Nothing in this repository populates it.",
+          "writeOnly": true,
           "type": [
             "string",
             "null"
@@ -753,7 +754,8 @@
           }
         },
         "generator_version": {
-          "description": "The generator that produced it.",
+          "description": "The generator that produced it — accepted on read, never written.\n\n[`Self::compiler_version`]'s reason, exactly.",
+          "writeOnly": true,
           "type": [
             "string",
             "null"
