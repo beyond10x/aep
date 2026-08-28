@@ -11,6 +11,19 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **The resume line the driver prints is a line that works.** A stopped run printed `resume with:
+  protocol drive resume <run>`, and that command re-read none of `--map`, `--task`,
+  `--pause-on-approval` or `--plugin-dir` — so an operator who typed exactly what they were told got
+  a different run, or an error. The run directory now holds a `launch.json` recording how the run
+  was started, and `resume` fills in anything the caller left out; a flag still wins over it. A run
+  started before this exists resumes exactly as it did.
+
+* **A resumed run gets the budget the operator typed.** `--max-iterations` was compared against the
+  cursor's *lifetime* count, so a run that had already spent 25 iterations was `budget-exhausted`
+  before evaluating anything — W4-2's first resume reported `steps 0 run` having done nothing, and
+  no flag could have changed it. The bound is now on the call. The lifetime count stays in the
+  cursor and the stop message reports both, because *how far did this run get* is a real question.
+
 * **`protocol drive` refuses a run whose sessions could not reach the `protocol` CLI, instead of
   spending on one.** A driven `llm` step reaches the planning store through that CLI and nothing
   else — the state's shell exists for it and admits no other program. metaharness **constructs** the

@@ -364,6 +364,86 @@ fn a_run_stopped_by_its_iteration_bound_resumes_where_it_stopped() {
     );
 }
 
+/// The line the driver prints is a line that works, with nothing else on it.
+///
+/// **F-W4.2-4, answered.** A stopped run printed `resume with: protocol drive resume <run>` and
+/// that command re-read none of `--map`, `--task`, `--pause-on-approval` or `--plugin-dir`: an
+/// operator who typed exactly what they were told got a different run, or an error. It was found by
+/// running W4-2 on 2026-08-24 and recorded as *the line as printed does not work*.
+///
+/// The run directory now remembers how it was launched. This drives the fixture with an explicit
+/// map and task, stops it on the bound, and then resumes with **only** the run id — the literal
+/// printed line — and asserts it continued the same run under the same map.
+#[test]
+fn the_resume_line_the_driver_prints_works_with_nothing_else_on_it() {
+    let fixture = Fixture::new("bare-resume", false);
+    let first = fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let opening = stdout(&first);
+    assert!(
+        opening.contains("resume with: protocol drive resume DRIVE-1/1"),
+        "the driver printed the line this test is about:\n{opening}"
+    );
+    let before = fixture.cursor("DRIVE-1/1");
+
+    // Exactly the printed line: the verb, the run id, and the project, which is the only thing a
+    // person standing in the repository would not have to type.
+    let bare = protocol(&[
+        "drive",
+        "resume",
+        "DRIVE-1/1",
+        "--project",
+        printable(&fixture.directory),
+    ]);
+    let text = format!("{}{}", stdout(&bare), stderr(&bare));
+    assert!(
+        text.contains("run        DRIVE-1/1"),
+        "the printed line continued the run it names:\n{text}"
+    );
+    let after = fixture.cursor("DRIVE-1/1");
+    assert_eq!(
+        after["map_digest"], before["map_digest"],
+        "and under the same map, which the run remembered rather than being told again"
+    );
+    assert!(
+        after["iterations"].as_u64().unwrap_or(0) > before["iterations"].as_u64().unwrap_or(0),
+        "and it did something: {before} then {after}"
+    );
+    assert!(
+        fixture.runs().join("DRIVE-1/1/launch.json").is_file(),
+        "the run recorded how it was launched, which is what makes the short line true"
+    );
+}
+
+/// A resumed run gets the budget the operator typed, not what is left of the run's lifetime.
+///
+/// **Also F-W4.2-4.** `--max-iterations` was compared against the cursor's lifetime count, so a run
+/// that had already spent 25 iterations was `budget-exhausted` before evaluating anything: W4-2's
+/// first resume returned `steps 0 run`, having done nothing, and no flag the operator could pass
+/// would have changed it. The lifetime count stays in the cursor, because *how far did this run
+/// get* is a real question; the bound is on the call.
+#[test]
+fn a_resume_gets_the_iterations_it_was_given_rather_than_what_the_run_has_left() {
+    let fixture = Fixture::new("resume-budget", false);
+    fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let before = fixture.cursor("DRIVE-1/1");
+    let spent = before["iterations"].as_u64().unwrap_or(0);
+    assert!(spent >= 2, "the first call spent its budget: {before}");
+
+    // A budget *smaller* than what the run has already spent. Under the old rule this did nothing
+    // at all; under the new one it is two more iterations.
+    let second = fixture.drive(&["resume", "DRIVE-1/1"], &["--max-iterations", "2"]);
+    let text = stdout(&second);
+    let after = fixture.cursor("DRIVE-1/1");
+    assert!(
+        after["iterations"].as_u64().unwrap_or(0) > spent,
+        "the resume ran: {before} then {after}\n{text}"
+    );
+    assert!(
+        !text.contains("steps      0 run"),
+        "a resume that evaluates nothing is the defect this test exists for:\n{text}"
+    );
+}
+
 #[test]
 fn a_headless_start_refuses_what_only_a_person_can_answer_and_the_flag_is_the_route_through() {
     let fixture = Fixture::new("operator", true);

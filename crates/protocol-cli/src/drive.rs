@@ -160,7 +160,7 @@ pub(crate) enum DriveCommand {
 }
 
 /// Where the run's inputs are.
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 pub(crate) struct DriveLocation {
     /// The project directory — the one holding `.engineering`. Discovered when omitted.
     #[arg(long)]
@@ -332,6 +332,35 @@ impl DriveLocation {
             map_origin,
             plugin_dirs,
         })
+    }
+
+    /// This location, with anything the caller left out filled in from what the run remembers.
+    ///
+    /// A flag always wins: an operator who names a map on a resume means that map, and a run
+    /// directory is a record of what happened rather than a policy about what happens next.
+    fn remembering(&self, launch: Option<&Launch>, project: &Path) -> Self {
+        let mut merged = self.clone();
+        merged.project = Some(
+            merged
+                .project
+                .clone()
+                .unwrap_or_else(|| project.to_path_buf()),
+        );
+        if let Some(launch) = launch {
+            if merged.task.is_none() {
+                merged.task.clone_from(&launch.task);
+            }
+            if merged.map.is_none() {
+                merged.map.clone_from(&launch.map);
+            }
+            if merged.root.is_none() {
+                merged.root.clone_from(&launch.root);
+            }
+            if merged.plugin_dir.is_empty() {
+                merged.plugin_dir.clone_from(&launch.plugin_dirs);
+            }
+        }
+        merged
     }
 
     /// The plugin directories a session loads: the flags, then the environment, then the project's own.
@@ -513,6 +542,17 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     let directory = RunDirectory::at(run_path(&runs, &run_id));
     fs::create_dir_all(directory.path())
         .with_context(|| format!("creating {}", directory.path().display()))?;
+    // How this run was launched, so `resume` needs none of it again and the line this command
+    // prints is a line that works.
+    Launch {
+        task: args.location.task.clone(),
+        map: args.location.map.clone(),
+        project: Some(inputs.project.clone()),
+        root: args.location.root.clone(),
+        pause_on_approval: args.pause_on_approval,
+        plugin_dirs: inputs.plugin_dirs.clone(),
+    }
+    .write(directory.path());
     fs::write(runs.join(CURRENT_FILE), format!("{run_id}\n"))
         .with_context(|| format!("writing {}", runs.join(CURRENT_FILE).display()))?;
 
@@ -552,8 +592,14 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
 
 /// `protocol drive resume`
 fn resume(args: &ResumeArgs) -> Result<ExitCode> {
-    let inputs = args.location.inputs()?;
-    let runs = runs_directory(&inputs.project)?;
+    // The run directory is found before the inputs are resolved, because the inputs are what the
+    // run directory remembers: `protocol drive resume <run>` with no other flag is the line this
+    // command prints, and until 2026-08-29 that line did not work.
+    let project = match &args.location.project {
+        Some(named) => named.clone(),
+        None => discover_project()?,
+    };
+    let runs = runs_directory(&project)?;
     let run_id: RunId = args
         .run
         .parse()
@@ -562,6 +608,11 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     if !directory.path().is_dir() {
         bail!("no run {run_id} in {}", runs.display());
     }
+    let launch = Launch::read(directory.path());
+    let location = args.location.remembering(launch.as_ref(), &project);
+    let inputs = location.inputs()?;
+    let pause_on_approval =
+        args.pause_on_approval || launch.as_ref().is_some_and(|l| l.pause_on_approval);
 
     // The same pre-flight `run` does, and a resume needs it just as much: a resume re-takes the
     // lock, so discovering the missing binary mid-step costs a lock and an attempt in the cursor of
@@ -580,7 +631,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     let engine = Engine::new(inputs.registry.clone());
     let options = DriverOptions {
         max_iterations: args.max_iterations,
-        pause_on_approval: args.pause_on_approval,
+        pause_on_approval,
         headless: true,
     };
     let mut executors = CliExecutors::new(
@@ -721,6 +772,10 @@ fn finish(
         outln!("{explanation}");
     }
     if report.cursor.status.is_resumable() {
+        // The line has to work as printed. Until 2026-08-29 it did not: `--map`, `--task`,
+        // `--pause-on-approval` and `--plugin-dir` were all re-read from nothing, so an operator
+        // who typed exactly this got a different run or an error (F-W4.2-4). The run directory now
+        // remembers all four, so the short line is the true one.
         outln!("resume with: protocol drive resume {run}");
     }
 
@@ -1801,6 +1856,56 @@ fn metaharness_preflight(map: &StepMap) -> Option<String> {
          Install it with `cargo install --path crates/metaharness-cli` from a metaharness checkout, \
          or drive a map whose steps are all `command` and `operator` steps, which needs neither."
     ))
+}
+
+/// What a run was started with, written beside its cursor so `resume` does not have to be told again.
+///
+/// **The printed resume line did not work, and that is the whole reason this exists.** A stopped
+/// run prints `resume with: protocol drive resume <run>`; that command re-read none of `--map`,
+/// `--task`, `--pause-on-approval` or `--plugin-dir`, so an operator who typed exactly what the
+/// driver told them to type got a different run — a different map, no pause, no plugin — or an
+/// error. It was recorded as F-W4.2-4 on 2026-08-24 and answered by observation: *the line as
+/// printed does not work*.
+///
+/// Beside the cursor rather than inside it: the cursor is `aep.driver-cursor/1`, a published
+/// document about **where a run is**, and how it was launched is not that. A missing or unreadable
+/// launch record is not an error — a run started before this existed resumes exactly as it did,
+/// from the flags the caller passes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct Launch {
+    /// The task document, as given.
+    task: Option<PathBuf>,
+    /// The map, as given — a path or an id, whichever the caller used.
+    map: Option<String>,
+    /// The project directory the run was started against.
+    project: Option<PathBuf>,
+    /// The document tree.
+    root: Option<PathBuf>,
+    /// Whether the run may stop at an approval.
+    pause_on_approval: bool,
+    /// The plugin directories the sessions loaded.
+    plugin_dirs: Vec<PathBuf>,
+}
+
+impl Launch {
+    /// `<run>/launch.json`.
+    fn path(run_directory: &Path) -> PathBuf {
+        run_directory.join("launch.json")
+    }
+
+    /// Writes it, and says nothing if it cannot: a run that walks and does not record how it was
+    /// launched is worse off at resume time and is not wrong now.
+    fn write(&self, run_directory: &Path) {
+        if let Ok(text) = serde_json::to_string_pretty(self) {
+            let _ = fs::write(Self::path(run_directory), text + "\n");
+        }
+    }
+
+    /// Reads it, or `None` for a run started before this existed.
+    fn read(run_directory: &Path) -> Option<Self> {
+        let text = fs::read_to_string(Self::path(run_directory)).ok()?;
+        serde_json::from_str(&text).ok()
+    }
 }
 
 /// The `PATH` a driven session will actually have, which is **not** this process's.

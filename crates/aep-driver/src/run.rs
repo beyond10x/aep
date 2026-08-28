@@ -509,6 +509,8 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         let mut tally = Tally::default();
         let mut checked = false;
 
+        // Iterations spent in *this* call, beside the cursor's lifetime count.
+        let mut here: u32 = 0;
         loop {
             let graph = match self.graph() {
                 Ok(graph) => graph,
@@ -540,11 +542,19 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
 
             let evaluation = self.engine.evaluate(&execution);
             cursor.iterations += 1;
-            if cursor.iterations > self.options.max_iterations {
+            // **This invocation's iterations, not the run's.** `cursor.iterations` is the run's
+            // lifetime count and stays that way — it is what a reader asks *how far did this run
+            // get*. The bound is a bound on **this call**, because that is what an operator typing
+            // `--max-iterations 40` is asking for. Comparing the flag against the lifetime count
+            // meant a resumed run had spent its budget before evaluating anything: `W4-2/1`'s
+            // first resume returned `budget-exhausted`, `steps 0 run`, having done nothing, and the
+            // operator had no way to see why from the flag they passed (F-W4.2-4).
+            here += 1;
+            if here > self.options.max_iterations {
                 tally.progress.notes.push(format!(
-                    "the run stopped after {} iterations, which is `max_iterations`; the state it \
-                     was in is `{}`",
-                    self.options.max_iterations, cursor.state
+                    "this call stopped after {} iteration(s), which is `max_iterations`; the run \
+                     has spent {} in total and the state it was in is `{}`",
+                    self.options.max_iterations, cursor.iterations, cursor.state
                 ));
                 tally.progress.reasons.extend(evaluation.blocking_reasons());
                 return self.finish(
