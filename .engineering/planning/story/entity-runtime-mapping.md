@@ -10,7 +10,7 @@ tags:
 - adoption
 - lifecycle
 - protocol
-revision: 3
+revision: 6
 ---
 # Story: Another repository has already expressed our eight ladders as data, and asks for a verdict
 
@@ -132,6 +132,133 @@ Invariant 16 (*nothing is physically deleted*) is the reason and is a good one; 
 an author is that the graph accumulates edges nobody meant, and `graph` cannot distinguish them from
 the intended ones. Worth a register row: a mistyped relation is not a superseded fact, and the
 vocabulary has no way to say so.
+
+## Verdict — 2026-08-28
+
+**Accepted in part.** An adopter reading either repository can from today rely on this: the eleven
+ladders this repository publishes and `entity-runtime` re-expresses agree — same states, same
+starting rung, same edges — and **each repository now holds a pinned copy of the other's documents
+and fails its own gate when the two drift apart**, so the agreement is a tested claim rather than a
+stated one. What nobody may rely on is a **verb**. `propose`, `activate`, `implement` and the eight
+other operation names in their `examples/aep/` are that repository's invention, this verdict endorses
+none of them, and no surface published here names one.
+
+The mechanism is a second equivalence test, on this side of the boundary.
+`crates/aep-backend-markdown/tests/entity_runtime_equivalence.rs` reads their `examples/aep/*.yaml`
+from a committed fixture pinned at their tag `0.13.0` (`ddee747`), with a sha256 per file held in
+both directions by `the_pinned_copy_is_the_bytes_this_pin_records`, and compares it against
+`artifacts/lifecycles/*.yaml` read through `ArtifactLifecycle` — the type `Document::move_status`
+actually decides moves with, so this compares what the code reads and not merely what the YAML says.
+Six tests over eleven kinds:
+`each_definition_declares_exactly_the_states_our_transitions_map_declares`,
+`each_definition_starts_where_our_ladder_starts`, and — the claim the verdict rests on —
+`each_definition_yields_exactly_the_edges_our_transitions_map_yields`, which compares **77 edges**
+in both directions and asserts that total, so a ladder cannot quietly leave both sides at once.
+Verified by breaking it: moving `story`'s `activate` from `proposed` to `draft` in the fixture fails
+naming the kind and both halves — *in our ladder, not expressed there: `[("proposed", "active")]` /
+expressed there, not in our ladder: `[("draft", "active")]`* — with the pin check failing beside it.
+
+The twelfth ladder is `outbound-claim`, and it is **not** compared: it landed here (`bba1a15`,
+`4d331a0`) after the commit their fixture pins, so no definition for it exists there yet. It is
+named as a constant in the test rather than filtered out by absence, so a *thirteenth* ladder growing
+here without a counterpart fails by name — which is the failure their own fixture once had, staying
+green about eight ladders while nine existed.
+
+### The verbs: refused, and the refusal costs nothing
+
+There is nothing here to pin a verb against. Our lifecycle documents declare target statuses only,
+and `protocol artifact move --to <TO>` names a status, never a verb; their own test compares
+`(from, to)` and carries the operation name solely to detect two operations claiming one edge. So the
+eleven names entered the mapping unreviewed and stay unreviewed. **Phase 2 already took this line
+without being told to**: the operations `crates/aep-backend-markdown/src/kernel.rs` builds are named
+for their *target status*, so the kernel decides our moves without a verb of theirs reaching our
+wire (`entity-runtime/docs/design/engineering-protocols-adoption-v0.1.md` § 3, *Phase 2, as built*).
+Any later phase that puts a verb on a published surface needs its own decision — `move --to
+implemented` and `execute --operation implement` are different things to have promised.
+
+### The sequencing question, answered by history — and not the way this story predicted
+
+The story's default was *the journal first*. **It went the other way, and the fear was unfounded.**
+The kernel-decided move landed first: `f20c9d6`, 2026-08-25 14:44, released as 0.13.0 —
+`PlanningDocument::move_status` asks `crate::kernel::permits_transition`, held identical to the
+lookup it replaced over 800 ordered status pairs by
+`crates/aep-backend-markdown/tests/kernel_equivalence.rs` (`docs/plan/gap-register.md:39`). The
+journal landed **behind** it the same day (`ab48bc8`, 23:54, released in 0.19.0), and
+`story:journal-backed-store`'s own acceptance — the `CommandService` envelopes and the sixteen
+conformance suites — behind that on 2026-08-26, shipping in 0.27.0 as wave D
+(`docs/plan/store-waves-f-g-h.md:8`; `docs/plan/gap-register.md:37`).
+
+What this story predicted was that whichever shipped first would be built twice. It was not. The
+envelope work added `MoveStatus`, a command that *applies* a decision and does not take one — the
+ladder still decides, through the kernel, before the command is issued, because "a backend that
+re-decided it would be a second protocol" (`story:journal-backed-store`). `kernel.rs` has been
+touched three times since and every one added a rung guard rather than unpicking the seam:
+`a193caa` (evidence), `c0ee6e8` (dates), `6069178` (project addressing). **The sequencing question
+is closed as moot**: both seams are cut, in the order this story argued against, and the cost it
+priced was never paid.
+
+### The schema half: no verdict now, and that is the answer
+
+Default taken. `title`, `summary`, `owner`, `tags` and `body: json` are their reading of our
+frontmatter and claim nothing about `artifacts/kinds/*.yaml`; `required_sections` is not modelled,
+their README says so, and the test above compares no field. An unmodelled `body: json` cannot be
+wrong about our kinds, so there is nothing yet to accept or refuse. When `required_sections` becomes
+fields over there, that is a new reading of a document of ours and it earns its own verdict.
+
+### A mistyped relation gets no way out
+
+Default taken: **no `unrelate`, and no soft-delete flag either.** Invariant 16 — *nothing is
+physically deleted* — wins, and the consequence for an author is concrete: a wrong edge is
+permanent, `protocol artifact graph` renders it exactly as it renders an intended one, and the only
+correction available is a *second* edge annotating the first, which leaves both. That is not
+hypothetical — `entity-runtime`'s own store still carries `story:aep-lifecycles-as-definitions
+depends_on story:aep-mapping-review`, decided backwards on 2026-08-25, with the correction
+`story:aep-mapping-review informed_by story:aep-lifecycles-as-definitions` written beside it rather
+than instead of it. Both edges are in the graph and `graph` renders them alike.
+
+**And three times in this repository's own store**, each corrected in prose because prose is the
+only correction there is: `story:governed-dogfood-run` carries a stale
+`depends_on: story:driven-eval-acceptance` and says so (`:76-78`); `story:driven-eval-acceptance`
+names the same edge from the other end and points at this very row (`:63-65`); and
+`story:postgres-backend` carries `depends_on` against a superseded story, tracked as D-H3
+(`docs/plan/store-waves-f-g-h.md:204`). Four instances is not an edge case. What is owed is a **vocabulary, not a verb**: *this edge was a
+mistake* is a different fact from `supersedes`, which says the target was once right. The register
+row this story asked for is written — `docs/plan/gap-register.md` § *Open, from 2026-08-28 — using
+our own tooling from another repository* — so an author is told before making the mistake rather
+than by making it.
+
+### The dependency: not a decision to take, a fact to record
+
+For a person, this is what it already means: `protocol artifact move` refuses **in-process**, so the
+refusal names the rule and the unresolved reference instead of arriving as a string somebody
+re-parses, and anyone who clones this repository and runs `cargo test` gets it without installing
+anything of theirs. The mechanism: this workspace takes **five** `entity-runtime` crates —
+`entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote` — declared once
+in `Cargo.toml:112-116`, all at git **tag `0.13.0`**, with `cargo xtask deps` (the gate's
+`dep-check`) failing if the lockfile ever resolves two pins or two versions (`AGENTS.md`
+§ *Dependencies*). The arrow is one-way and permanent: no manifest in `entity-runtime` may name a
+crate of ours, at any version, ever
+(`atlas/architecture/adr/0002-the-entity-runtime-dependency-arrow.md`).
+
+That ADR's own § *Taken, 2026-08-25* records that its step 3 — **this verdict** — was skipped and
+phase 2 was built anyway on the operator's instruction. This section is that step, arriving late,
+and it changes nothing that shipped: it says the evidence holds, names what was never endorsed, and
+leaves the removal cost where the ADR left it (*"deleting one module and one manifest line"*) in
+case a later reading of these ladders does not.
+
+### What this story got wrong, and how it aged
+
+Kept rather than edited away, because the *Context* above is the record of what was believed on the
+day it was written. Corrected here:
+
+| the story says | true on 2026-08-28 |
+|---|---|
+| `entity-runtime` is `0.2.1` | `0.13.0` (`ddee747`), seventeen releases later |
+| our eight ladders, 64 edges | **twelve** ladders here, eleven of them expressed there, **77** edges compared |
+| their fixture is pinned at `79b641c` | `3de6e07`; the eleven shared files still hash to what their `PIN.md` records, so their copy of us is current |
+| *"no dependency exists in either direction"* | false since 0.13.0 — five crates, one tag, one way |
+| `docs/plan/gap-register.md:77` is the stale `parent()` row | that row is now at `:102`, was already closed by code, and its citations were re-read and corrected on 2026-08-28. A2 is shut: `crates/aep-domain/src/artifact.rs:529` |
+| the schema half "is pinned against nothing at all" | still true, and it is why the schema half gets no verdict |
 
 ## Acceptance
 

@@ -541,10 +541,11 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 Written down because it is already practised, and an unwritten standard is one the next agent meets
 only by violating it.
 
-* **The workspace has fourteen direct third-party crates.** Eleven are declared once in
+* **The workspace has fifteen direct third-party crates.** Twelve are declared once in
   `[workspace.dependencies]`: seven from crates.io — `serde`, `serde_json`, `serde_yaml`,
-  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s four by **git tag** —
-  `entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote` — the only
+  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s **five** by **git tag** —
+  `entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote`
+  (`Cargo.toml:112-116`, all at tag `0.13.0`) — the only
   dependencies not taken by version: they are not on crates.io, a ladder's verdicts are a published surface that must
   not move under us, and **one tag, declared once,** is what `dep-check` enforces after two kernels
   were compiled side by side for two releases (`aep-backend-markdown` takes `entity-core`;
@@ -552,8 +553,10 @@ only by violating it.
   `entity-sqlite`; `aep-backend-postgres` takes `entity-postgres`, which brings `postgres` 0.19
   without default features and no TLS backend — the connection is the caller's, by URL;
   `aep-backend-hybrid` takes `entity-remote` for `Hybrid`, which brings nothing further). Three are
-  crate-local: `sha2` wherever a document is content-addressed (`ess-gen`, `trace-domain`,
-  `infra-domain`, `infra-compiler`, `aep-driver-spec`), `jsonschema` as a dev-dependency of
+  crate-local: `sha2` wherever a document is content-addressed (`aep-engine`, `aep-driver-spec`,
+  `ess-gen`, `infra-compiler`, `infra-domain`, `protocol-cli`, `trace-domain`, and as a
+  dev-dependency of `aep-backend-markdown`, which hashes no shipped document and holds a pinned copy
+  of `entity-runtime`'s), `jsonschema` as a dev-dependency of
   `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a dev-dependency of
   `ess-compiler` (`default-features = false`, and every property runs under a fixed seed so the gate
   cannot be flaky — the seed and the way to widen locally are documented where each is used).

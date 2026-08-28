@@ -47,3 +47,11 @@ workspace = true
 
 [dev-dependencies]
 aep-conformance.workspace = true
+# Test-only, and the same `0.10` seven other crates here already take — it is the workspace's one
+# hashing crate and adding a second would be two answers to one question. It is here rather than in
+# `[dependencies]` because nothing this crate ships hashes anything: it verifies
+# `tests/fixtures/entity-runtime-aep/PIN.md` against the bytes beside it, so a copy of another
+# repository's documents cannot drift without the pin drifting too. `entity-runtime` holds the
+# mirror-image copy of ours and checks it the same way, in its gate's `pin-check`; this repository
+# has no such step, so the check lives in the test that depends on the copy.
+sha2 = "0.10"
