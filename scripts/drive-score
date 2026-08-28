@@ -88,8 +88,13 @@ def score(path):
                     wasted[state] += 1
                     causes["the CLI refused the invocation"] += 1
             elif k == "session.ended":
-                turns[state] = e.get("num_turns") or 0
-                cost[state] = e.get("total_cost_usd") or 0.0
+                # **Accumulated, never assigned.** A state can be entered more than once — a retry,
+                # a resume, a `verify -> implement` cycle — and every attempt writes its own
+                # transcript under the same state name. Assigning here silently kept the last
+                # attempt and discarded the rest, so a run that retried cost more than this said it
+                # did, in the direction that flatters the run.
+                turns[state] = turns.get(state, 0) + (e.get("num_turns") or 0)
+                cost[state] = cost.get(state, 0.0) + (e.get("total_cost_usd") or 0.0)
                 if e.get("is_error"):
                     errors += 1
     return {"where": where, "calls": calls, "wasted": wasted, "causes": causes,
