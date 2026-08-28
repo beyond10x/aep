@@ -9,6 +9,17 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+* **A driven state that admits reading can now read at scale.** `repository.read` renders `Glob` and
+  `Grep`; Claude Code 2.1.247 offers neither, and its own error tells the model to *search file
+  contents with `grep` via the Bash tool instead* — which the driver refused. So a session was told
+  to do the one thing the driver denied, and run `W4-3/1` spent 19 of its 215 calls discovering that
+  and never searched anything. The shell now also admits `grep`, `rg`, `ls`, `cat`, `head`, `tail`
+  and `wc`, and only when the state admits reading. It is not a general shell: `sed` and `awk` write,
+  `find` has `-delete` and `-exec`, `xargs` and `env` run something else, and composition and
+  redirection were already refused — which is the only reason a reader cannot become a writer here.
+
 ### Added
 
 * **A run directory records which binary each `command` step actually ran.** `commands.jsonl` holds

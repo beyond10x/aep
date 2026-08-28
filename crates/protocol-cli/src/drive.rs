@@ -1521,9 +1521,10 @@ fn surface_lines(harness: Harness, tools: &ToolConfig) -> String {
             "\n`Bash` runs **one simple invocation per call**. No `&&`, no `|`, no `;`, no `$(…)`, \
              no redirect — a composed command is refused whole, so two things you want are two \
              calls.\n\
-             The only program it will run is `protocol`, and only `protocol artifact …` and \
-             `protocol trace …`. Not `ls`, not `cat`, not `git`, not `grep`, not `cargo`, not \
-             `protocol --help`: read files with `Read` and search with the tools listed above. \
+             It runs `protocol artifact …`, `protocol trace …`, and the readers `grep`, `rg`, \
+             `ls`, `cat`, `head`, `tail` and `wc` — those only because nothing here can redirect \
+             their output into a file. Not `git`, not `cargo`, not `sed`, not `awk`, not `find`, \
+             not `xargs`, not `protocol --help`. \
              Building and testing are `command` steps the driver runs itself, so that their records \
              carry a verifier's provenance instead of yours — running them here would produce \
              nothing the engine can admit.\n",
@@ -1652,6 +1653,28 @@ fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
 
 /// The harness's tool names for an admitted capability set.
 ///
+/// Programs a driven step may run because they only ever **read**, and the state admits reading.
+///
+/// **A driven session had no way to search, and the harness told it to use the one thing the driver
+/// denied.** `repository.read` renders `Glob` and `Grep`, which Claude Code 2.1.247 does not offer;
+/// its own error then says *search file contents with `grep` via the Bash tool instead*, and
+/// `driven_surface` refused `grep`. Run `W4-3/1` spent 13 calls on `sed`, `ls` and `cat`, 6 on the
+/// two tools that do not exist, and never once searched anything. A state that admits reading and
+/// offers no way to read at scale is a capability gap wearing a policy's clothes.
+///
+/// The set is small and every member is chosen for one property: **it cannot write.** That holds
+/// only because composition and redirection are already refused a few lines above — `>` , `|`, `;`,
+/// `&&` and `$(…)` never reach here — so there is no route from a reader to a file. Deliberately
+/// absent, each for a reason rather than an oversight:
+///
+/// * `sed` and `awk` — both write. `sed -i` edits in place; `awk` has `print > "file"`.
+/// * `find` — `-delete`, `-exec` and `-fprintf` are writes wearing a search's name.
+/// * `xargs`, `env`, `sh`, `bash` — each runs a program this list did not admit.
+///
+/// It is not a general shell and this does not make it one. The rule is unchanged: a driven step's
+/// shell reaches the `protocol` CLI, and now also reads what the state already permits it to read.
+const READ_ONLY_PROGRAMS: &[&str] = &["grep", "rg", "ls", "cat", "head", "tail", "wc"];
+
 /// The rendering half of adapter point 2: the *decision* about which capabilities admit which
 /// actions is the protocol's and is shared; only this table is Claude Code's. Three entries are not
 /// functions of a capability and each is decided rather than left to an implementer — a shell is
@@ -2051,7 +2074,19 @@ fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Resul
     let mut words = command.split_whitespace();
     let program = words.next().unwrap_or_default();
     let verb = words.next().unwrap_or_default();
-    if program.rsplit('/').next().unwrap_or(program) != "protocol" {
+    let leaf = program.rsplit('/').next().unwrap_or(program);
+    if READ_ONLY_PROGRAMS.contains(&leaf) {
+        if context.tools.admits(&Capability::RepositoryRead)
+            || context.tools.admits(&Capability::ArtifactRead)
+        {
+            return Ok(());
+        }
+        return Err(format!(
+            "`{leaf}` reads the repository and state `{}` does not admit `repository.read`.",
+            context.state
+        ));
+    }
+    if leaf != "protocol" {
         return Err(format!(
             "`{}` is outside the surface this state admits. A driven step's shell exists so the \
              `protocol` CLI is reachable; it is not a general shell. Build, test and inspection \
@@ -3256,6 +3291,98 @@ mod tests {
         }
     }
 
+    /// A state that admits reading can read at scale, and still cannot write by any route.
+    ///
+    /// **The gap this closes.** `repository.read` renders `Glob` and `Grep`; Claude Code 2.1.247
+    /// offers neither, and its own error tells the model to *search file contents with `grep` via
+    /// the Bash tool instead* — which `driven_surface` refused. So a driven session was told to do
+    /// the one thing the driver denied, and run `W4-3/1` spent 19 calls discovering that and never
+    /// searched anything.
+    ///
+    /// The widening is safe only because composition and redirection are refused before this rule
+    /// is reached, so this asserts both halves: the readers are admitted, and every route from a
+    /// reader to a written byte is still closed.
+    #[test]
+    fn a_reading_state_may_read_at_scale_and_still_cannot_write_by_any_route() {
+        let _step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
+            description: None,
+            harness: LlmStep::DEFAULT_HARNESS.to_owned(),
+            skills: Vec::new(),
+            prompt: "find it".to_owned(),
+        };
+        let tools = config(&[Capability::RepositoryRead, Capability::CommandExecution]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let requirements: Vec<String> = Vec::new();
+        let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            task: &task,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+        let bash = |command: &str| {
+            decide_tool(&context, "Bash", &serde_json::json!({ "command": command }))
+        };
+
+        for reading in [
+            "grep -rn DriverOptions crates/",
+            "rg --files crates/aep-driver",
+            "ls .engineering/planning",
+            "cat README.md",
+            "head -40 crates/aep-driver/src/run.rs",
+            "wc -l Cargo.toml",
+        ] {
+            assert!(
+                bash(reading).is_ok(),
+                "`{reading}` only reads and the state admits reading"
+            );
+        }
+
+        // Every route from a reader to a byte on disk. The first four are refused by the
+        // composition rule; the rest are programs that write with no help from a shell.
+        for writing in [
+            "grep -rn x crates/ > out.txt",
+            "cat a.md >> b.md",
+            "ls | tee out.txt",
+            "cat a && rm b",
+            "sed -i s/a/b/ Cargo.toml",
+            "awk '{print > \"out\"}' a",
+            "find . -delete",
+            "xargs rm",
+            "sh -c 'rm -rf x'",
+            "env rm x",
+        ] {
+            assert!(
+                bash(writing).is_err(),
+                "`{writing}` reaches a write and must be refused"
+            );
+        }
+
+        // And a state with no read capability gets none of them.
+        let blind = config(&[Capability::CommandExecution]);
+        let deaf = StepContext {
+            tools: &blind,
+            ..context
+        };
+        assert!(
+            decide_tool(
+                &deaf,
+                "Bash",
+                &serde_json::json!({ "command": "grep -r x ." })
+            )
+            .is_err(),
+            "a state that does not admit reading does not get a reader"
+        );
+    }
+
     /// The prompt states every rule the shell will refuse on, and the policy agrees with it.
     ///
     /// **Measured on run `W4-3/1`, 2026-08-29: 28 of 174 tool calls — 16% of everything the run did
@@ -3309,13 +3436,15 @@ mod tests {
         let refused = |command: &str| {
             decide_tool(&context, "Bash", &serde_json::json!({ "command": command })).is_err()
         };
+        // `ls` and `cat` were on this list until the readers were admitted, and this test is
+        // where that change had to be argued: what is forbidden is what *writes* or what runs a
+        // program the surface never admitted, not what reads.
         for forbidden in [
             "protocol artifact list && protocol artifact graph",
             "protocol artifact list | head",
-            "ls -a",
-            "cat README.md",
             "git status",
             "cargo test --workspace",
+            "sed -i s/a/b/ Cargo.toml",
             "protocol --help",
         ] {
             assert!(
