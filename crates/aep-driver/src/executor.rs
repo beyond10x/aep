@@ -36,6 +36,7 @@ use std::path::Path;
 
 use aep_domain::action::ActionRequest;
 use aep_domain::ids::StateId;
+use aep_domain::task::Task;
 use aep_driver_spec::map::{CommandStep, LlmStep, OperatorStep};
 use aep_driver_spec::tool::ToolConfig;
 use aep_engine::policy::Decision;
@@ -60,6 +61,19 @@ pub struct StepAttempt {
 /// granularity checkable: a step's input does not depend on a previous step's hidden context.
 #[derive(Debug)]
 pub struct StepContext<'a> {
+    /// **The task this run is driving.**
+    ///
+    /// A step map's prompt can only say *read the task under `.engineering/`*, because a map is
+    /// written once and driven many times. A repository that has driven more than one run has more
+    /// than one task document sitting there, and the model picks one — on 2026-08-28 run `W4-3/1`
+    /// picked `task.yaml`, which is `W4-1`, and reported that the intake it was asked for already
+    /// existed. The engine's cursor said `W4-3` throughout. A run that is about one thing to its
+    /// own audit trail and another thing to the agent doing the work is worse than a run that
+    /// fails, because everything downstream of it is *about* something and nothing says what.
+    ///
+    /// So the driver states it, and the step map no longer has to. Sequencing is the driver's
+    /// business and the identity of the work is the run's.
+    pub task: &'a Task,
     /// The workflow state the run is in.
     pub state: &'a StateId,
     /// Which step of that state's list this is.

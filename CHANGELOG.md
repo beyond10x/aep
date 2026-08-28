@@ -9,6 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+* **A driven session is told which task the run drives.** A step map is written once and driven
+  many times, so its prompt can only say *read the task under `.engineering/`* — and a repository
+  that has driven more than one run has several sitting there. Run `W4-3/1` read `task.yaml`, which
+  belongs to `W4-1`, described that objective instead, found its intake already in the store and
+  reported the work done; the engine's cursor said `W4-3` the whole time. Nothing was violated —
+  the guards held, the store was untouched, every transition was the engine's — the run was simply
+  *about* something other than its own audit trail said. `StepContext` now carries the task and the
+  prompt names it, with what it is derived from, before the map's own words
+  (`story:governed-dogfood-run`).
+
 ### Added
 
 * **`task audit-check` is a step of the gate**, fourth of twenty: seven units of

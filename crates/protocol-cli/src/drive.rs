@@ -1318,6 +1318,35 @@ impl LlmStepExecutor for CliExecutors {
 /// therefore the property the narrow replay claim rests on.
 fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
     let mut prompt = String::new();
+    // **Which task this run is driving, before anything the map says.** A step map is written once
+    // and driven many times, so its prompt can only say *the task under `.engineering/`* — and a
+    // repository that has driven more than one run has several sitting there. Run `W4-3/1` read
+    // `task.yaml`, which is `W4-1`, and reported that the intake it had been asked for already
+    // existed; the cursor said `W4-3` the whole time. The engine knew and the model did not.
+    //
+    // It leads rather than follows the step's own prompt because it is the subject of every
+    // sentence after it, and it names the artifacts rather than a path: a path has to be read
+    // correctly, and an id is what the store answers to.
+    prompt.push_str("This run drives task `");
+    prompt.push_str(context.task.id.as_str());
+    prompt.push_str("` — objective `");
+    prompt.push_str(context.task.objective.summary.as_str());
+    prompt.push('`');
+    let derived = &context.task.artifacts.derived_from;
+    if !derived.is_empty() {
+        prompt.push_str(", derived from ");
+        for (position, artifact) in derived.iter().enumerate() {
+            if position > 0 {
+                prompt.push_str(", ");
+            }
+            prompt.push('`');
+            prompt.push_str(&artifact.to_string());
+            prompt.push('`');
+        }
+    }
+    prompt.push_str(
+        ". Any other task document in this tree belongs to another run and is not yours to read.\n\n",
+    );
     prompt.push_str(&step.prompt);
     // The skills the step names, in the prompt rather than on the command line. `--agents` takes a
     // JSON object of *agent definitions* and is not a skill selector; a step map's `skills:` list
@@ -2141,6 +2170,19 @@ mod tests {
         ToolConfig::new(capabilities.iter().cloned().collect())
     }
 
+    /// The task a prompt test's run is driving.
+    ///
+    /// `derived_from` is populated because the identity line names the artifacts, and a fixture
+    /// without one would let the line pass by saying nothing.
+    fn driven_task() -> aep_domain::task::Task {
+        aep_schema::parse::task(
+            "id: T-1\nkind: feature\nobjective: drive something\nprotocol: aep/1\n\
+             profile: test.standard\nderived_from: [story:the-one-being-driven]\n",
+            None,
+        )
+        .expect("the fixture task parses")
+    }
+
     /// The prompt the driver would build for one `llm` step.
     fn prompt_with_skills(skills: &[&str]) -> String {
         let step = LlmStep {
@@ -2155,7 +2197,9 @@ mod tests {
         let state: StateId = "specify".parse().expect("a state id");
         let requirements: Vec<String> = Vec::new();
         let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 0,
             attempt: 1,
@@ -2166,6 +2210,74 @@ mod tests {
             preceding_llm: None,
         };
         prompt_for(&step, &context)
+    }
+
+    /// The session is told which task the run drives, before it is told anything else.
+    ///
+    /// **Run `W4-3/1`, 2026-08-28, is why.** The map's `receive` prompt says *read the task under
+    /// `.engineering/`* — a map is written once and driven many times, so it cannot say more. By
+    /// then that directory held three task documents from three runs. The session read `task.yaml`,
+    /// which is `W4-1`, described a different objective entirely, found the intake for it already
+    /// in the store and reported that its work was done. It created nothing. The engine's cursor
+    /// said `W4-3` throughout, and the next state went further wrong: 62 mentions of the wrong
+    /// story against 10 of the right one.
+    ///
+    /// Nothing was violated — the guards held, the store was untouched, every transition was the
+    /// engine's. The run was simply about something else than its own audit trail said, which is
+    /// worse than a run that fails, because everything downstream is *about* something and nothing
+    /// says what.
+    ///
+    /// The identity leads the prompt, so it is the subject of every sentence after it, and it names
+    /// artifacts rather than a path — a path has to be read correctly, an id is what the store
+    /// answers to.
+    #[test]
+    fn the_prompt_names_the_task_the_run_drives_before_the_maps_own_words() {
+        let step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
+            description: None,
+            harness: LlmStep::DEFAULT_HARNESS.to_owned(),
+            skills: Vec::new(),
+            prompt: "Read the task under `.engineering/` and record what is asked for.".to_owned(),
+        };
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "receive".parse().expect("a state id");
+        let requirements: Vec<String> = Vec::new();
+        let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            task: &task,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+
+        let prompt = prompt_for(&step, &context);
+        let identity = prompt
+            .split("Read the task under")
+            .next()
+            .expect("the map's own prompt follows the identity");
+        assert!(
+            identity.contains("`T-1`"),
+            "the run's task is named before the step's own words: {prompt}"
+        );
+        assert!(
+            identity.contains("story:the-one-being-driven"),
+            "and so is what it is derived from, because that is what the store answers to: {prompt}"
+        );
+        assert!(
+            identity.contains("belongs to another run"),
+            "and the other task documents are ruled out by name, which is the whole defect: {prompt}"
+        );
+        assert!(
+            prompt.starts_with("This run drives task"),
+            "it leads, so it is the subject of every sentence after it: {prompt}"
+        );
     }
 
     /// What the step is trying to reach reaches the step, under a heading of its own.
@@ -2193,7 +2305,9 @@ mod tests {
             "-> implement: guard: test.exists".to_owned(),
             "-> implement: ✗ test.first_result == failed [principle test-driven]".to_owned(),
         ];
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 0,
             attempt: 1,
@@ -2274,7 +2388,9 @@ mod tests {
         let state: StateId = "implement".parse().expect("a state id");
         let requirements: Vec<String> = Vec::new();
         let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 1,
             attempt: 1,
@@ -2317,6 +2433,7 @@ mod tests {
         // has run is D5's `Unknown` rather than a verdict about a file that is not there.
         let empty: Vec<String> = Vec::new();
         let unrun = StepContext {
+            task: &task,
             state: &state,
             index: 1,
             attempt: 1,
@@ -2357,7 +2474,9 @@ mod tests {
         let tools = config(&[Capability::RepositoryRead]);
         let state: StateId = "review".parse().expect("a state id");
         let empty: Vec<String> = Vec::new();
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 0,
             attempt: 1,
@@ -2409,7 +2528,9 @@ mod tests {
         let tools = config(&[Capability::RepositoryRead]);
         let state: StateId = "adversarial_verify".parse().expect("a state id");
         let empty: Vec<String> = Vec::new();
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 3,
             attempt: 1,
@@ -2471,9 +2592,18 @@ mod tests {
 
     // ------------------------------------------------------------ the per-call policy
 
+    /// The fixture task, borrowed for a context that outlives this call.
+    ///
+    /// Leaked rather than threaded through every caller: it is one small value per test binary,
+    /// and the alternative is a lifetime parameter on two helpers that exist to shorten tests.
+    fn task_ref() -> &'static aep_domain::task::Task {
+        Box::leak(Box::new(driven_task()))
+    }
+
     /// One context for the policy tests.
     fn policy_context<'a>(state: &'a StateId, tools: &'a ToolConfig) -> StepContext<'a> {
         StepContext {
+            task: task_ref(),
             state,
             index: 0,
             attempt: 1,
@@ -2590,6 +2720,7 @@ mod tests {
         reaching: &'a [String],
     ) -> StepContext<'a> {
         StepContext {
+            task: task_ref(),
             state,
             index: 2,
             attempt: 3,
@@ -2830,7 +2961,9 @@ mod tests {
         let state: StateId = "implement".parse().expect("a state id");
         let requirements = vec!["the suite is red before the implementation".to_owned()];
         let reaching = vec!["to verify: the suite is green".to_owned()];
+        let task = driven_task();
         let context = StepContext {
+            task: &task,
             state: &state,
             index: 2,
             attempt: 1,

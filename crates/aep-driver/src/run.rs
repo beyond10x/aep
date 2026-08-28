@@ -843,6 +843,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             // there is nothing it wrote to be about.
             .filter(|preceding| preceding.attempt > 0);
         let context = StepContext {
+            task: self.task,
             state,
             index,
             attempt,
