@@ -225,8 +225,19 @@ artifact must have a successor declaring `supersedes:` it.
 
 A lifecycle document that names **no** `kind:` is the tree's fallback — the lifecycle every kind
 with no nearer one is held to, and the only way to bind kinds nobody has enumerated. One tree may
-declare at most one. A lifecycle registered for the kind itself, or for a kind it specialises,
-always wins over it.
+declare at most one.
+
+Which ladder governs a kind is decided in this order, and the first answer wins:
+
+1. the lifecycle registered for **exactly that kind**;
+2. one registered for a kind it specialises, **nearest ancestor first** — a custom kind's parent is
+   what its last hyphen segment names, so `weekly-digest` is a `digest` and one `digest` document
+   gives a whole family its ladder;
+3. the **kind-less fallback**, last.
+
+So a tree holding both a `digest` lifecycle and a fallback governs `weekly-digest` by the `digest`
+one: the most specific ladder you declared always wins, and the fallback is what is left when
+nothing matched.
 
 ## Evidence records
 

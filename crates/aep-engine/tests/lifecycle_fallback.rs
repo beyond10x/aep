@@ -15,8 +15,12 @@ use aep_domain::artifact::{
 use aep_engine::load_tree_report;
 
 /// Builds a throwaway document tree, holding only the lifecycles each test writes into it.
+///
+/// Rooted at `CARGO_TARGET_TMPDIR` rather than the system temporary directory: the tree is written
+/// and read back within one test, and a `/tmp` that drops a write under pressure would show up as a
+/// document the loader never saw rather than as the disk problem it is.
 fn tree(name: &str, lifecycles: &[(&str, &str)]) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("aep-lifecycle-fallback-{name}"));
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("lifecycle-fallback-{name}"));
     std::fs::remove_dir_all(&root).ok();
     let directory = root.join("artifacts/lifecycles");
     std::fs::create_dir_all(&directory).expect("the tree is writable");
@@ -48,6 +52,31 @@ const SECOND_FALLBACK: &str = "\
 initial: proposed
 transitions:
   proposed: [rejected]
+";
+
+/// One ladder for the `digest` family: every `*-digest` a team invents is held to it.
+const DIGEST: &str = "\
+kind: digest
+initial: draft
+transitions:
+  draft: [active]
+  active: [archived]
+";
+
+/// A second family, with a deliberately different ladder — `briefing`.
+const BRIEFING: &str = "\
+kind: briefing
+initial: proposed
+transitions:
+  proposed: [approved]
+";
+
+/// A third, different again — `insight`. Three ladders nobody upstream declared.
+const INSIGHT: &str = "\
+kind: insight
+initial: draft
+transitions:
+  draft: [accepted]
 ";
 
 fn artifact(id: &str, kind: &str, status: ArtifactStatus) -> Artifact {
@@ -180,6 +209,142 @@ fn the_fallback_makes_a_status_on_an_unregistered_kind_refusable() {
         "the fallback declares no `active`, so this one status is refused: {errors}"
     );
     assert!(errors.contains(aep_domain::error::ValidationCode::UnknownState));
+
+    clean(&root);
+}
+
+#[test]
+fn a_family_of_custom_kinds_shares_the_ladder_its_last_segment_names() {
+    // Three families this crate has never heard of, one ladder each, and **no fallback in the
+    // tree at all** — so anything that resolves here resolved through the last-segment rule and
+    // not through something global.
+    let root = tree(
+        "families",
+        &[
+            ("digest.yaml", DIGEST),
+            ("briefing.yaml", BRIEFING),
+            ("insight.yaml", INSIGHT),
+        ],
+    );
+    let outcome = load_tree_report(&root);
+    assert!(
+        outcome.failures.is_empty(),
+        "a lifecycle for a kind nobody upstream declared is an ordinary document: {}",
+        outcome
+            .failures
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+
+    let lifecycles = outcome.registry.lifecycles();
+    assert_eq!(
+        lifecycles.len(),
+        3,
+        "three ladders, and none of them a fallback"
+    );
+    assert!(
+        lifecycles.fallback().is_none(),
+        "no kind-less document, so nothing here can answer for everything"
+    );
+
+    for (member, family) in [
+        ("weekly-digest", "digest"),
+        ("monday-briefing", "briefing"),
+        ("market-insight", "insight"),
+    ] {
+        let member_kind = ArtifactKind::parse(member).expect("artifact kind");
+        let family_kind = ArtifactKind::parse(family).expect("artifact kind");
+        assert!(
+            lifecycles.for_kind_exact(&member_kind).is_none(),
+            "nothing is registered for `{member}` itself, so the family rule is what answers"
+        );
+        assert_eq!(
+            lifecycles.for_kind(&member_kind),
+            lifecycles.for_kind_exact(&family_kind),
+            "`{member}` is a `{family}` and shares its ladder"
+        );
+    }
+
+    // The three ladders differ, so the equalities above could not have held by their being alike.
+    assert_ne!(
+        lifecycles.for_kind_exact(&ArtifactKind::parse("digest").expect("artifact kind")),
+        lifecycles.for_kind_exact(&ArtifactKind::parse("briefing").expect("artifact kind")),
+        "the fixture distinguishes the families it is asserting about"
+    );
+    // And the ladder is shared within a family rather than across the tree.
+    assert!(
+        lifecycles
+            .for_kind(&ArtifactKind::parse("retrospective").expect("artifact kind"))
+            .is_none(),
+        "a kind in none of the three families is governed by none of their ladders"
+    );
+
+    clean(&root);
+}
+
+#[test]
+fn the_family_ladder_wins_over_the_fallback_and_the_fallback_answers_last() {
+    // The disambiguation, with both candidates in one tree: a `digest` ladder and a kind-less
+    // fallback. `weekly-digest` could resolve either way, and the order is exact kind, then the
+    // parent chain nearest ancestor first, then the fallback — so the ladder wins.
+    let root = tree(
+        "precedence",
+        &[("digest.yaml", DIGEST), ("fallback.yaml", FALLBACK)],
+    );
+    let outcome = load_tree_report(&root);
+    assert!(
+        outcome.failures.is_empty(),
+        "a kinded ladder and a fallback are one tree's ordinary contents: {}",
+        outcome
+            .failures
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+
+    let lifecycles = outcome.registry.lifecycles();
+    let digest = ArtifactKind::parse("digest").expect("artifact kind");
+    let weekly = ArtifactKind::parse("weekly-digest").expect("artifact kind");
+    let fallback = lifecycles.fallback().expect("the tree declares one");
+
+    // The fixture reached the state the rule is load-bearing in: both candidates exist, and they
+    // are different documents, so whichever answers is visible in the answer.
+    assert!(
+        lifecycles.for_kind_exact(&digest).is_some(),
+        "a `digest` ladder is registered"
+    );
+    assert_ne!(
+        lifecycles.for_kind_exact(&digest),
+        Some(fallback),
+        "the ladder and the fallback are distinguishable"
+    );
+    assert!(
+        lifecycles.for_kind_exact(&weekly).is_none(),
+        "nothing is registered for `weekly-digest` itself, so this is the chain answering"
+    );
+
+    assert_eq!(
+        lifecycles.for_kind(&weekly),
+        lifecycles.for_kind_exact(&digest),
+        "the nearest ancestor's ladder is nearer than the tree's fallback"
+    );
+    assert!(
+        lifecycles
+            .for_kind(&weekly)
+            .expect("a ladder")
+            .permits(&ArtifactStatus::Active),
+        "and it is the digest ladder's rungs that govern, not the fallback's"
+    );
+
+    // A kind with nothing in its chain reaches the fallback, which is what the fallback is for.
+    assert_eq!(
+        lifecycles.for_kind(&ArtifactKind::parse("retrospective").expect("artifact kind")),
+        Some(fallback),
+        "nothing nearer answers for this one, so the fallback does"
+    );
 
     clean(&root);
 }
