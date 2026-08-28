@@ -671,7 +671,11 @@ fn a_relation_the_workspace_declares_does_not_stop_a_run_before_it_starts() {
     .expect("the story copies");
     let refused = run(&undeclared);
     let complaint = format!("{}{}", stdout(&refused), stderr(&refused));
-    assert_ne!(code(&refused), 0, "an undeclared crossing still stops the run:\n{complaint}");
+    assert_ne!(
+        code(&refused),
+        0,
+        "an undeclared crossing still stops the run:\n{complaint}"
+    );
     assert!(
         complaint.contains("does not declare") || complaint.contains("undeclared"),
         "and it says which edge and why:\n{complaint}"

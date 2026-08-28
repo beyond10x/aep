@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.32.0] — 2026-08-28
+
 ### Added
 
 * **A driven run of the cargo map produces every kind its plan demands.** `protocol drive run --map
@@ -3603,7 +3607,12 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.27.3...HEAD
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...HEAD
+[0.32.0]: https://github.com/beyond10x/engineering-protocols/compare/0.31.0...0.32.0
+[0.31.0]: https://github.com/beyond10x/engineering-protocols/compare/0.30.0...0.31.0
+[0.30.0]: https://github.com/beyond10x/engineering-protocols/compare/0.29.0...0.30.0
+[0.29.0]: https://github.com/beyond10x/engineering-protocols/compare/0.28.0...0.29.0
+[0.28.0]: https://github.com/beyond10x/engineering-protocols/compare/0.27.3...0.28.0
 [0.27.3]: https://github.com/beyond10x/engineering-protocols/compare/0.27.2...0.27.3
 [0.27.2]: https://github.com/beyond10x/engineering-protocols/compare/0.27.1...0.27.2
 [0.27.1]: https://github.com/beyond10x/engineering-protocols/compare/0.27.0...0.27.1

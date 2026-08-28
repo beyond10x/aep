@@ -878,12 +878,12 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         report
             .graph_in_workspace(self.store.declared_members())
             .map_err(|errors| {
-            errors
-                .as_slice()
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-        })
+                errors
+                    .as_slice()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
     }
 
     /// Refuses when the cursor and the snapshot disagree about where the run is.
