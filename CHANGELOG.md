@@ -9,6 +9,31 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+* **`protocol artifact explain <id>` answers *what made this done*.** Per status the artifact
+  reached: the move, the evidence records it rested on, and — the point of the verb — **the revision
+  the artifact was at when each record was admitted**, so an edit made afterwards cannot make an old
+  record look like it was about the new text. A status reached with no record says so. The join is
+  one-to-many and is a stored fact, not a path: deleting the file a record's `--ref` names does not
+  unlink it. Read through the contract, so markdown, SQLite, Postgres and the hybrid answer alike
+  (`story:completion-audit-join`).
+
+### Fixed
+
+* **Over SQLite and Postgres, every provenance account was silently empty.** A move's `decided_on`
+  travels as JSON *text* and was read only as a JSON object, so a move made on a bare
+  `--evidence KIND=COUNT` was indistinguishable from one the store held a record for — in exactly
+  the two stores that have no journal file to fall back on. `protocol artifact history` over them
+  prints the `(on asserted evidence)` marker it was dropping. Found while building `explain`, which
+  could not have been honest over it.
+
+* **`synth-check` can run in a `git worktree`.** `go build` stamps the building repository's VCS
+  state, and a linked worktree's `.git` is a file, so the step failed with `error obtaining VCS
+  status: exit status 128` on a tree byte-identical to the one where it passed. `GOFLAGS=-buildvcs=false`
+  is pinned beside `GOPROXY=off` and `GOTOOLCHAIN=local`; the synthesised module's identity is its
+  specification's digest and no binary the step builds is kept.
+
 ### Removed
 
 * **`task plugin-eval` and `task driven-eval` are gone.** Both invoked
