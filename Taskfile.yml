@@ -266,22 +266,13 @@ tasks:
     cmds:
       - cargo doc --workspace --no-deps
 
-  # Talks to the Claude API: network and money. Deliberately not a step of `check` — the gate
-  # stays hermetic. See integrations/claude-code/eval/README.md for what green means.
-  plugin-eval:
-    desc: Run the Claude Code plugin eval (headless agent + mechanical inspection).
-    cmds:
-      - integrations/claude-code/eval/run.sh
-
-  # The second eval, and it judges the layer above the first: `protocol drive` holding the workflow,
-  # one model session per `llm` step, the plugin's hooks as the driver's enforcement arm. Same rule
-  # as its neighbour and for the same reason — it reaches the API, so it is never a step of `check`.
-  # Two sessions, one of which is deliberately refused what the guardrails forbid; the first real
-  # runs cost about **$0.70** each. Needs `claude` and `jq` on PATH, and says which is missing.
-  driven-eval:
-    desc: Run the driven eval (protocol drive + real model sessions + the enforcement hooks).
-    cmds:
-      - integrations/claude-code/eval/run-driven.sh
+  # `plugin-eval` and `driven-eval` were removed 2026-08-28. Both invoked
+  # `integrations/claude-code/eval/`, which `epic:metaharness-migration` deleted on 2026-08-22: the
+  # agent-eval checks and their recorded transcripts live at metaharness
+  # `evals/engineering-protocols/`, and `run.sh` retired with the hooks it inspected. Neither task
+  # was a step of `check`, so nothing was failing — a task runner that offers a verb pointing at a
+  # deleted script is the drift invariant 1 exists to prevent, and it is removed rather than
+  # repointed because the eval is no longer this repository's to run.
 
   codex-eval:
     desc: Check the Codex instruction surface (free, no API call, no model).
