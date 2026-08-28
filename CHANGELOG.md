@@ -11,6 +11,19 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A run directory records which binary each `command` step actually ran.** `commands.jsonl` holds
+  one line per step attempt with the program the map wrote, the program that was spawned and which
+  of the two it was; each step's `.log` now opens with the same fact. Substituting a binary
+  silently is its own kind of lie, and a reader can now tell a step that used the driver's build
+  from one that used something it found.
+
+* **`protocol drive run` and `protocol drive resume` refuse before allocating a run id when a map's
+  `command` steps say `protocol` and the driver cannot guarantee they get this build.** It fires
+  only where the driver cannot name its own binary and the `protocol` on its `PATH` is a different
+  version; the refusal names both versions, and it names the fix correctly —
+  `cargo install --root ~/.local` puts the binary where a *session* looks, while a driver-side
+  `PATH` is the operator's own shell, so putting `~/.local/bin` first in it is part of the answer.
+
 * **`protocol artifact show <id>` prints one artifact.** Its frontmatter fields — id, kind, status,
   title, summary, owner, tags, relations, revision — and then its markdown body, verbatim. There was
   no verb for an id in hand: `list` prints the whole plan, `board` arranges it, `history` prints the
@@ -20,6 +33,16 @@ belongs in the commit message or in `docs/design/`.
   contract, so a markdown, SQLite, Postgres or hybrid plan gives one answer.
 
 ### Fixed
+
+* **A `command` step of a step map that says `protocol` now runs the build that is driving the
+  run.** A `command` step is spawned by the driver with the driver's own environment, so the name
+  resolved against whatever `protocol` came first on the operator's shell `PATH`. Run `W4-3/1` hit
+  a 0.28.0 install predating the `property` verb: `protocol property evidence` wrote nothing,
+  the driver correctly reported *nothing was observed*, and the step spent its whole retry budget
+  three times with the cause invisible in the message. The driver now spawns its own
+  `current_exe()` for any step whose program's file name is `protocol`, which also guarantees the
+  version agreement the run's evidence is recorded against. Every other program a step names —
+  `cargo`, `bash`, `git` — resolves exactly as before.
 
 * **The resume line the driver prints is a line that works.** A stopped run printed `resume with:
   protocol drive resume <run>`, and that command re-read none of `--map`, `--task`,
