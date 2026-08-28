@@ -67,7 +67,8 @@ use aep_driver::run::{DriveError, DriverOptions, RunDirectory, RunReport};
 use aep_driver::tool::TOOL_CANDIDATES;
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus, StolenLock};
 use aep_driver_spec::map::{
-    placeholders_in, CommandStep, EvidenceMapping, LlmStep, OperatorStep, Step, StepMap,
+    placeholders_in, CommandStep, EvidenceMapping, LlmStep, OperatorStep, ScopeRule, Step, StepMap,
+    WriteScope,
 };
 use aep_driver_spec::tool::ToolConfig;
 use aep_engine::engine::EvidenceSubmission;
@@ -190,12 +191,49 @@ pub(crate) struct DriveLocation {
     plugin_dir: Vec<PathBuf>,
 }
 
+/// What a `harness: b10x` step needs and a step map cannot say.
+///
+/// **Three facts about the machine, not about the work.** `metaharness run b10x` refuses a launch
+/// that names no endpoint and no model rather than defaulting either — *"a default here would aim
+/// an evaluation arm at somebody's production API the first time the flag was forgotten"* — and
+/// the b10x loop holds no vendor login of its own, so the credential is a file or a variable
+/// somebody named. None of that belongs in a step map: a map is pinned, committed and driven on
+/// more than one machine, and an endpoint written into one would be the same URL for all of them.
+///
+/// They are flags rather than environment variables for the reason the launch record exists at
+/// all: a run has to be able to say what it was started with, and a variable that was exported in
+/// one shell is not a fact anybody can read back afterwards. They persist into `launch.json` with
+/// everything else, so a `resume` re-reads them instead of being told again.
+#[derive(Debug, Clone, Default, Args, serde::Serialize, serde::Deserialize)]
+pub(crate) struct B10xOptions {
+    /// The endpoint a `harness: b10x` step's loop is pointed at, as the gateway's root URL.
+    #[arg(long = "b10x-endpoint", value_name = "BASE_URL")]
+    #[serde(default)]
+    endpoint: Option<String>,
+    /// The model that endpoint serves. The loop picks none of its own.
+    #[arg(long = "b10x-model", value_name = "MODEL")]
+    #[serde(default)]
+    model: Option<String>,
+    /// Point the loop at `OPENAI_API_KEY` instead of launching it with no credential at all.
+    ///
+    /// Off by default, because a gateway that authenticates nobody is the case a driven b10x run
+    /// starts in and a credential nobody asked to send is one that travels by accident. With it,
+    /// metaharness refuses the launch by name when the variable is not in this process's
+    /// environment rather than starting a run that will fail at its first request.
+    #[arg(long = "b10x-api-key")]
+    #[serde(default)]
+    api_key: bool,
+}
+
 /// The arguments of `protocol drive run`.
 #[derive(Debug, Args)]
 pub(crate) struct RunArgs {
     /// Where the run's inputs are.
     #[command(flatten)]
     location: DriveLocation,
+    /// What a `harness: b10x` step needs from this machine.
+    #[command(flatten)]
+    b10x: B10xOptions,
     /// Run until the first thing a person owes, then persist and exit 0.
     #[arg(long)]
     pause_on_approval: bool,
@@ -504,16 +542,9 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         outln!("note: {warning}");
     }
 
-    if let Some(refusal) = metaharness_preflight(&inputs.map) {
+    if let Some(refusal) = machine_preflights(&inputs.map, &inputs.project, &args.b10x) {
         outln!("{refusal}");
         return Ok(ExitCode::from(1));
-    }
-
-    if has_llm_steps(&inputs.map) {
-        if let Some(refusal) = protocol_on_the_session_path() {
-            outln!("{refusal}");
-            return Ok(ExitCode::from(1));
-        }
     }
 
     // D3(c): the headless pre-flight, static and decidable and run before anything executes.
@@ -551,6 +582,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         root: args.location.root.clone(),
         pause_on_approval: args.pause_on_approval,
         plugin_dirs: inputs.plugin_dirs.clone(),
+        b10x: args.b10x.clone(),
     }
     .write(directory.path());
     fs::write(runs.join(CURRENT_FILE), format!("{run_id}\n"))
@@ -567,6 +599,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         inputs.plugin_dirs.clone(),
         inputs.map.workflow.id().to_string(),
         inputs.map.workflow.major().to_string(),
+        args.b10x.clone(),
     );
     let report = aep_driver::run::drive(
         &engine,
@@ -614,10 +647,19 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     let pause_on_approval =
         args.pause_on_approval || launch.as_ref().is_some_and(|l| l.pause_on_approval);
 
-    // The same pre-flight `run` does, and a resume needs it just as much: a resume re-takes the
+    // What the run was pointed at, remembered rather than retyped — the same argument as `--map`
+    // and `--task`, and stronger: a `resume` given a different endpoint or a different model would
+    // be a run whose second half was produced by something its own record does not name.
+    let b10x = launch.as_ref().map(|l| l.b10x.clone()).unwrap_or_default();
+
+    // The same pre-flights `run` does, and a resume needs them just as much: a resume re-takes the
     // lock, so discovering the missing binary mid-step costs a lock and an attempt in the cursor of
     // a run that was already stopped once.
     if let Some(refusal) = metaharness_preflight(&inputs.map) {
+        outln!("{refusal}");
+        return Ok(ExitCode::from(1));
+    }
+    if let Some(refusal) = b10x_preflight(&inputs.map, &b10x) {
         outln!("{refusal}");
         return Ok(ExitCode::from(1));
     }
@@ -640,6 +682,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         inputs.plugin_dirs.clone(),
         inputs.map.workflow.id().to_string(),
         inputs.map.workflow.major().to_string(),
+        b10x,
     );
     let report = aep_driver::run::resume(
         &engine,
@@ -1091,6 +1134,8 @@ struct CliExecutors {
     workflow_id: String,
     /// Its pinned major version, as the step map states it.
     workflow_version: String,
+    /// What a `harness: b10x` step needs from this machine, and nothing else reads.
+    b10x: B10xOptions,
 }
 
 impl CliExecutors {
@@ -1101,6 +1146,7 @@ impl CliExecutors {
         plugin_dirs: Vec<PathBuf>,
         workflow_id: String,
         workflow_version: String,
+        b10x: B10xOptions,
     ) -> Self {
         Self {
             working_directory,
@@ -1108,6 +1154,7 @@ impl CliExecutors {
             plugin_dirs,
             workflow_id,
             workflow_version,
+            b10x,
         }
     }
 
@@ -1141,6 +1188,38 @@ impl CliExecutors {
         Ok(path)
     }
 
+    /// The `metaharness run` invocation for one step, on whichever arm the step named.
+    ///
+    /// The frame document is written for **both** harnesses and passed to only one. See
+    /// [`b10x_argv`]: metaharness refuses a b10x launch that carries a frame, because a frame is
+    /// enforced through a decision channel that loop does not have. What the file is on that arm
+    /// is the record of what the step was, in the same neutral vocabulary, beside the same refusal
+    /// specification and the same `metaharness.event/1` transcript — which is what makes the two
+    /// arms comparable at all.
+    fn argv_for(
+        &self,
+        harness: Harness,
+        step: &LlmStep,
+        frame_file: &Path,
+        prompt: &str,
+    ) -> Vec<String> {
+        match harness {
+            Harness::ClaudeCode => metaharness_argv(
+                frame_file,
+                &self.working_directory,
+                &self.plugin_dirs,
+                prompt,
+            ),
+            Harness::B10x => b10x_argv(
+                &self.b10x,
+                &self.working_directory,
+                &step.scope,
+                &step.context,
+                prompt,
+            ),
+        }
+    }
+
     /// The one `llm` executor: the vendor is driven through the metaharness seam, in ask mode.
     ///
     /// The step's surface travels twice, deliberately (F9's "both halves"): the sealed
@@ -1154,6 +1233,7 @@ impl CliExecutors {
     /// looking clean.
     fn run_llm_metaharness(
         &mut self,
+        harness: Harness,
         step: &LlmStep,
         context: &StepContext<'_>,
         authorize: StepAuthorizer<'_>,
@@ -1179,12 +1259,7 @@ impl CliExecutors {
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
 
-        let argv = metaharness_argv(
-            &frame_file,
-            &self.working_directory,
-            &self.plugin_dirs,
-            &prompt_for(step, context),
-        );
+        let argv = self.argv_for(harness, step, &frame_file, &prompt_for(step, context));
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
         let spawned = Process::new(&argv[0])
@@ -1221,7 +1296,8 @@ impl CliExecutors {
                 };
             }
         };
-        answer_events(
+        let adjudication = answer_events(
+            harness,
             context,
             events,
             &mut commands,
@@ -1229,6 +1305,7 @@ impl CliExecutors {
             authorize,
         );
         drop(commands);
+        outln!("{}", adjudication.line(harness, context.state));
         let status = child.wait();
         let stderr_text = stderr_thread.join().unwrap_or_default();
 
@@ -1375,21 +1452,89 @@ impl LlmStepExecutor for CliExecutors {
     ) -> StepOutcome {
         // The seam § 4.9 point 3 names, and the reason it is a name rather than a trait: a
         // second harness is a second executor selected by this string. Since
-        // `epic:metaharness-migration` there is no bare-argv path left to select — `claude-code`
-        // names the vendor, and the vendor is only ever driven through the metaharness seam.
-        // `metaharness` stays accepted as the name the executor first landed under.
-        if step.harness != LlmStep::DEFAULT_HARNESS && step.harness != METAHARNESS_HARNESS {
+        // `epic:metaharness-migration` there is no bare-argv path left to select — every name here
+        // reaches a `metaharness run` invocation, because a second way to launch a session is a
+        // second policy to forget. `claude-code` names the vendor, `metaharness` is the name the
+        // executor first landed under, and `b10x` is the loop this org owns.
+        let Some(harness) = Harness::named(&step.harness) else {
             return StepOutcome::NoVerdict {
                 reason: format!(
-                    "the step names harness `{}`, and this build only invokes `{}` and `{}`",
+                    "the step names harness `{}`, and this build invokes {}",
                     step.harness,
-                    LlmStep::DEFAULT_HARNESS,
-                    METAHARNESS_HARNESS
+                    Harness::NAMES.map(|name| format!("`{name}`")).join(", ")
                 ),
             };
-        }
-        self.run_llm_metaharness(step, context, authorize)
+        };
+        self.run_llm_metaharness(harness, step, context, authorize)
     }
+}
+
+/// What the session is told about its own surface, in the harness's own words.
+///
+/// Split out of [`prompt_for`] because it is the one paragraph that is genuinely per-harness, and
+/// because the two arms differ in *what kind of thing* bounds them: one is refused by a seam, the
+/// other is never offered the tool at all. Rendered from the same [`ToolConfig`] the policy reads,
+/// so the prompt and the enforcement cannot disagree — two lists that could drift would be worse
+/// than one list nobody has, because the model would trust the wrong one.
+fn surface_lines(harness: Harness, tools: &ToolConfig) -> String {
+    let mut lines = String::new();
+    let offered = harness.tools(tools);
+    if !offered.is_empty() {
+        lines.push_str("\nThe tools this state admits, and there are no others: ");
+        lines.push_str(&offered.join(", "));
+        lines.push_str(if harness.adjudicates() {
+            ".\nA call outside that set is refused by the driver before it runs. Do not search for \
+             a tool that is not on the list — it is not hidden, it does not exist here.\n"
+        } else {
+            // Not *refused* — **absent**. Telling an observed loop that a call will be refused
+            // would describe a seam it does not have, and a session told to expect a refusal that
+            // never comes learns nothing from the silence.
+            ".\nThat list is what this **state** admits, and there is no seam behind it: a tool \
+             outside it is not published to you at all, so there is nothing to search for and \
+             nothing that will refuse you. What you were actually **given** is the part of it \
+             this machine can confine, which may be less — a write or an exec entry appears only \
+             where the workspace is confined. Work from the tools you have, and do not reach for \
+             one that is named here and absent from your surface: it is not hidden, this machine \
+             could not publish it.\n"
+        });
+    }
+    // **The shell's two rules, stated rather than discovered.** `driven_surface` refuses on both,
+    // and a session not told either learns them by being refused: measured over run `W4-3/1`, 21 of
+    // 174 calls — 12% of everything the run did — were one of these two, in every state, from the
+    // first to the last. They are the cheapest possible thing to say and the most expensive thing
+    // to find out.
+    //
+    // The b10x arm needs one of the two and not the other, and the difference is the point: its
+    // `run` entry takes an argv **list**, so there is no string for a `&&` to appear in and a
+    // composed command is not a thing that can be written. The program restriction still has to be
+    // stated, because a declared program set is only cheap to obey when it is known.
+    if tools.shell_offered() && !harness.adjudicates() {
+        lines.push_str(
+            "\n`run` takes an argv **list** and starts one program. Nothing is composed, \
+             redirected or substituted — there is no shell here to do it with — and the only \
+             program it will start is `protocol`, and only `protocol artifact …` and `protocol \
+             trace …`. Building and testing are `command` steps the driver runs itself, so that \
+             their records carry a verifier's provenance instead of yours.\n",
+        );
+    } else if tools.shell_offered() {
+        lines.push_str(
+            "\n`Bash` runs **one simple invocation per call**. No `&&`, no `|`, no `;`, no `$(…)`, \
+             no redirect — a composed command is refused whole, so two things you want are two \
+             calls.\n\
+             The only program it will run is `protocol`, and only `protocol artifact …` and \
+             `protocol trace …`. Not `ls`, not `cat`, not `git`, not `grep`, not `cargo`, not \
+             `protocol --help`: read files with `Read` and search with the tools listed above. \
+             Building and testing are `command` steps the driver runs itself, so that their records \
+             carry a verifier's provenance instead of yours — running them here would produce \
+             nothing the engine can admit.\n",
+        );
+    } else {
+        lines.push_str(
+            "\nThis state holds **no shell**. Anything a suite must observe is run by the driver as \
+             a `command` step, recorded with a verifier's provenance rather than yours.\n",
+        );
+    }
+    lines
 }
 
 /// The prompt one `llm` step is given.
@@ -1398,7 +1543,15 @@ impl LlmStepExecutor for CliExecutors {
 /// the document that asked for it. Everything an `llm` step knows is either in a file or in this
 /// string — which is the property that makes a step's input a function of persisted state, and
 /// therefore the property the narrow replay claim rests on.
+///
+/// **The harness is read off the step rather than passed in**, so the prompt and the tool set the
+/// step will actually be given cannot be rendered from two different tables. A step map that names
+/// `b10x` and a prompt naming `Bash` would be an instruction to reach for a tool that does not
+/// exist in that loop's catalogue — a whole turn spent, per session, learning what the driver
+/// already knew. A name this build does not invoke falls back to the default rendering; nothing
+/// runs on that path, because [`Harness::named`] has already refused the step.
 fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
+    let harness = Harness::named(&step.harness).unwrap_or(Harness::ClaudeCode);
     let mut prompt = String::new();
     // **Which task this run is driving, before anything the map says.** A step map is written once
     // and driven many times, so its prompt can only say *the task under `.engineering/`* — and a
@@ -1444,10 +1597,14 @@ fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
             prompt.push_str(skill);
             prompt.push('`');
         }
-        prompt.push_str(if step.skills.len() == 1 {
-            " skill before you act, with the `Skill` tool.\n"
-        } else {
-            " skills before you act, with the `Skill` tool.\n"
+        // Named without a tool on a harness that has no skill mechanism: the b10x catalogue has no
+        // entry for `skill.load`, so instructing it to use one would be instructing it to reach
+        // for something the loop cannot publish.
+        prompt.push_str(match (step.skills.len() == 1, harness.adjudicates()) {
+            (true, true) => " skill before you act, with the `Skill` tool.\n",
+            (false, true) => " skills before you act, with the `Skill` tool.\n",
+            (true, false) => " skill before you act.\n",
+            (false, false) => " skills before you act.\n",
         });
     }
     prompt.push_str("\n\nYou are in workflow state `");
@@ -1485,38 +1642,7 @@ fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
     // Rendered from `context.tools`, the same value `decide_tool` reads, so the prompt and the
     // policy cannot disagree. Two lists that could drift would be worse than one list nobody has:
     // the model would trust the wrong one.
-    let offered = allowed_tools(context.tools);
-    if !offered.is_empty() {
-        prompt.push_str("\nThe tools this state admits, and there are no others: ");
-        prompt.push_str(&offered.join(", "));
-        prompt.push_str(
-            ".\nA call outside that set is refused by the driver before it runs. Do not search for \
-             a tool that is not on the list — it is not hidden, it does not exist here.\n",
-        );
-    }
-    // **The shell's two rules, stated rather than discovered.** `driven_surface` refuses on both,
-    // and a session not told either learns them by being refused: measured over run `W4-3/1`, 21 of
-    // 174 calls — 12% of everything the run did — were one of these two, in every state, from the
-    // first to the last. They are the cheapest possible thing to say and the most expensive thing
-    // to find out.
-    if context.tools.shell_offered() {
-        prompt.push_str(
-            "\n`Bash` runs **one simple invocation per call**. No `&&`, no `|`, no `;`, no `$(…)`, \
-             no redirect — a composed command is refused whole, so two things you want are two \
-             calls.\n\
-             The only program it will run is `protocol`, and only `protocol artifact …` and \
-             `protocol trace …`. Not `ls`, not `cat`, not `git`, not `grep`, not `cargo`, not \
-             `protocol --help`: read files with `Read` and search with the tools listed above. \
-             Building and testing are `command` steps the driver runs itself, so that their records \
-             carry a verifier's provenance instead of yours — running them here would produce \
-             nothing the engine can admit.\n",
-        );
-    } else {
-        prompt.push_str(
-            "\nThis state holds **no shell**. Anything a suite must observe is run by the driver as \
-             a `command` step, recorded with a verifier's provenance rather than yours.\n",
-        );
-    }
+    prompt.push_str(&surface_lines(harness, context.tools));
     prompt.push_str(
         "\nYou cannot submit evidence, and nothing you say is evidence. What you achieve is \
          observed by the verifier the driver runs after this step.\n",
@@ -1681,12 +1807,14 @@ fn engine_refusal(decision: &Decision) -> String {
 ///
 /// Every reason names its layer, because the event stream is where a person finds out who refused.
 fn answer_events(
+    harness: Harness,
     context: &StepContext<'_>,
     events: impl std::io::Read,
     commands: &mut impl std::io::Write,
     transcript: &mut impl std::io::Write,
     authorize: StepAuthorizer<'_>,
-) {
+) -> Adjudication {
+    let mut tally = Adjudication::default();
     for line in std::io::BufRead::lines(std::io::BufReader::new(events)) {
         let Ok(line) = line else { break };
         let _ = transcript
@@ -1708,9 +1836,15 @@ fn answer_events(
         if event["event"] == "session.started" {
             if let Some(offered) = event["offered_tools"].as_array() {
                 let present: Vec<&str> = offered.iter().filter_map(|v| v.as_str()).collect();
-                let missing: Vec<String> = allowed_tools(context.tools)
+                let missing: Vec<String> = harness
+                    .tools(context.tools)
                     .into_iter()
-                    .filter(|named| named != "Bash" && !present.contains(&named.as_str()))
+                    // The shell is the one entry a harness may legitimately hold back: Claude Code
+                    // does not list `Bash` among its offered tools, and the b10x loop publishes
+                    // `run` only where the machine can confine an exec.
+                    .filter(|named| {
+                        named != "Bash" && named != "run" && !present.contains(&named.as_str())
+                    })
                     .collect();
                 if !missing.is_empty() {
                     outln!(
@@ -1724,7 +1858,15 @@ fn answer_events(
                 }
             }
         }
+        if event["event"] == "tool.requested" {
+            tally.requested += 1;
+        }
+        // **`decision_required: false` is a fact and not a silence.** The b10x adapter sets it on
+        // every call, beside `Seam::None`, because nothing on that loop adjudicates — so the
+        // driver counts what it saw and answers nothing. Writing a `tool.decide` here would be
+        // this process claiming a decision the wire says nobody made.
         if event["event"] == "tool.requested" && event["decision_required"] == true {
+            tally.asked += 1;
             let call_id = event["call_id"].as_str().unwrap_or_default();
             let name = event["name"].as_str().unwrap_or_default();
             let deny = |reason: String| serde_json::json!({ "decision": "deny", "reason": reason });
@@ -1746,6 +1888,9 @@ fn answer_events(
                     }
                 },
             };
+            if decision["decision"] == "deny" {
+                tally.denied += 1;
+            }
             let command = serde_json::json!({
                 "format": "metaharness.command/1",
                 "id": format!("decide-{call_id}"),
@@ -1763,7 +1908,62 @@ fn answer_events(
             }
         }
     }
+    tally
 }
+
+/// What the driver was actually asked while one session ran.
+///
+/// # Why three counts and not one
+///
+/// A denial count on its own is only readable when something was asking. The claude arm answers
+/// every call, so `denied: 0` there genuinely means *nothing this session did was refused by the
+/// driver*. The b10x arm answers nothing — `Seam::None`, `decision_required: false` on every
+/// `tool.requested` — so `denied: 0` there means *nobody asked*, and a report that printed the
+/// same words for both would be reporting an adjudication that never happened. Two runs compared
+/// on that number would be compared on an artefact of the instrument.
+///
+/// So [`Self::requested`] is what the session did, [`Self::asked`] is how much of it reached this
+/// process at all, and [`Self::denied`] is what this process refused. `asked == 0` is the state
+/// [`Self::line`] refuses to describe as a clean run.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct Adjudication {
+    /// `tool.requested` events seen, whether or not one asked anything.
+    requested: u32,
+    /// Those that put a decision to this process.
+    asked: u32,
+    /// Those this process refused, by its own policy or by the engine's.
+    denied: u32,
+}
+
+impl Adjudication {
+    /// The line the run prints about one session's calls.
+    ///
+    /// A harness that does not adjudicate gets a sentence naming what bounded the run instead of a
+    /// count of what this process refused, because the count is `0` for a reason that has nothing
+    /// to do with the session's behaviour.
+    fn line(self, harness: Harness, state: &StateId) -> String {
+        if harness.adjudicates() {
+            return format!(
+                "note: state `{state}` put {} tool call(s) to the driver and {} were refused.",
+                self.asked, self.denied
+            );
+        }
+        format!(
+            "note: state `{state}` observed {} tool call(s) and adjudicated none of them — the \
+             `{}` loop publishes a toolset computed from what the machine can confine, so a tool \
+             outside it does not exist rather than being refused. Nothing here says the run was \
+             not refused anything; it says nobody asked this process. What the loop itself \
+             refused is in the `{}` transcript beside this run, and the refusal specification for \
+             this step is what checks it.",
+            self.requested,
+            harness.kind(),
+            METAHARNESS_EVENT_FORMAT
+        )
+    }
+}
+
+/// The event stream both harnesses write, and the one both are checked from.
+const METAHARNESS_EVENT_FORMAT: &str = "metaharness.event/1";
 
 /// The per-call policy: the retired shell hooks, in the driver's own process.
 ///
@@ -1878,8 +2078,126 @@ fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Resul
 /// The harness name that selects the metaharness executor.
 const METAHARNESS_HARNESS: &str = "metaharness";
 
+/// The harness name that selects the b10x loop.
+const B10X_HARNESS: &str = "b10x";
+
 /// The binary every `llm` step is spawned through.
 const METAHARNESS_BINARY: &str = "metaharness";
+
+/// The loop `metaharness run b10x` spawns, which has to be installed separately.
+const B10X_BINARY: &str = "b10x-harness";
+
+/// Which harness an `llm` step is spawned through, and the only place the two differ.
+///
+/// **§ 4.9 point 3's seam, with a second implementation in it at last.** The design says a second
+/// harness is *a second free function chosen by this name*, not a trait added before there is
+/// anything to design one against; `story:shell-echo-harness` proved the shape with a fake
+/// executor and this is the first real one. What varies between the two is exactly three things —
+/// the `metaharness run` kind, the naming table a shared capability decision renders into, and
+/// whether the seam puts a decision to this process at all — and they are enumerated here so a
+/// third harness has to answer the same three questions rather than discover them.
+///
+/// What deliberately does **not** vary: [`metaharness_operations`], which is the neutral
+/// vocabulary the frame and the refusal specification are written in, and
+/// `aep_driver::tool::tool_config`, which decides what a capability admits. A harness that decided
+/// for itself could quietly re-admit a shell the state never granted, which is the one thing point
+/// 2 exists to prevent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Harness {
+    /// Claude Code, driven through `metaharness run claude` in ask mode: every call is put to this
+    /// process and answered before it runs.
+    ClaudeCode,
+    /// The b10x loop, spawned through `metaharness run b10x` and **observed**.
+    ///
+    /// It adjudicates nothing, by design and not by omission: the loop's published toolset is
+    /// computed from what the machine can confine, so a tool outside the surface does not exist
+    /// rather than being refused, and a seam that adjudicated its calls would put the driven arm's
+    /// treatment back on top of the arm that exists to measure its absence.
+    B10x,
+}
+
+impl Harness {
+    /// The harness a step's `harness:` field names, or nothing this build can invoke.
+    fn named(name: &str) -> Option<Self> {
+        match name {
+            // `claude-code` names the vendor and `metaharness` is the name the executor first
+            // landed under; both reach the same invocation.
+            LlmStep::DEFAULT_HARNESS | METAHARNESS_HARNESS => Some(Self::ClaudeCode),
+            B10X_HARNESS => Some(Self::B10x),
+            _ => None,
+        }
+    }
+
+    /// Every name this build invokes, for a refusal that lists them rather than hinting.
+    const NAMES: [&'static str; 3] = [LlmStep::DEFAULT_HARNESS, METAHARNESS_HARNESS, B10X_HARNESS];
+
+    /// The `metaharness run` kind.
+    fn kind(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => "claude",
+            Self::B10x => B10X_HARNESS,
+        }
+    }
+
+    /// This harness's own names for an admitted capability set.
+    ///
+    /// The rendering half of § 4.9 point 2. Both arms read the same [`ToolConfig`] and neither
+    /// decides anything about it.
+    fn tools(self, config: &ToolConfig) -> Vec<String> {
+        match self {
+            Self::ClaudeCode => allowed_tools(config),
+            Self::B10x => b10x_tools(config),
+        }
+    }
+
+    /// Whether this harness's seam puts a decision to the driver before a call runs.
+    ///
+    /// `false` for b10x, and the run report has to say so in those words rather than reporting a
+    /// denial count of zero: *nobody asked me* and *nothing was refused* are different findings
+    /// and only one of them is about the run.
+    fn adjudicates(self) -> bool {
+        matches!(self, Self::ClaudeCode)
+    }
+}
+
+/// The b10x loop's tool names for an admitted capability set.
+///
+/// The second naming table, and the reason § 4.9 point 2 puts the *decision* somewhere else: this
+/// function reads the same [`ToolConfig`] [`allowed_tools`] reads and renames its answer. Nothing
+/// here consults a capability the shared decision did not already admit.
+///
+/// The names are `b10x-harness-tools`' own catalogue entries — `file_read`, `file_write`,
+/// `file_edit`, `dir_list`, `search`, `run` — read from `entry_names()` there rather than invented
+/// here. Three neutral operations the Claude Code table renders have **no entry at all** in that
+/// catalogue and are therefore rendered by nothing:
+///
+/// | operation | Claude Code | b10x |
+/// |---|---|---|
+/// | `web.read` | `WebFetch`, `WebSearch` | *no entry* — the loop has no web tool |
+/// | `skill.load` | `Skill` | *no entry* — the loop has no skill mechanism |
+/// | `subagent.spawn` | never offered | *no entry*, and never offered either |
+///
+/// A capability this table cannot render is **not** silently downgraded: `network.read` stays
+/// admitted by the policy and the session simply has no tool for it, which the session-start audit
+/// in [`answer_events`] reports against the same list. Rendering it as something else would be the
+/// second, weaker policy point 2 forbids.
+fn b10x_tools(config: &ToolConfig) -> Vec<String> {
+    let mut tools: Vec<String> = Vec::new();
+    if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
+        tools.extend(["dir_list", "file_read", "search"].map(ToOwned::to_owned));
+    }
+    if config.admits(&Capability::RepositoryWrite) {
+        tools.extend(["file_edit", "file_write"].map(ToOwned::to_owned));
+    }
+    if config.shell_offered() {
+        // `run` and not a shell: the entry takes an argv list, composes nothing and starts only a
+        // declared program. See [`b10x_argv`] for why the declaration travels on the launch.
+        tools.push("run".to_owned());
+    }
+    tools.sort();
+    tools.dedup();
+    tools
+}
 
 /// Refuses a run before it is allocated when the seam's binary is not installed.
 ///
@@ -1917,14 +2235,194 @@ fn metaharness_preflight(map: &StepMap) -> Option<String> {
     Some(format!(
         "this map has {llm_steps} `llm` step(s) and `{METAHARNESS_BINARY}` is not on PATH.\n\
          \n\
-         Every `llm` step is spawned through `{METAHARNESS_BINARY} run claude --decisions ask`: the \
-         step's surface travels as a sealed frame document and this process answers every tool call \
-         the session makes. There is no path around it — the bare vendor argv was retired with \
-         `epic:metaharness-migration`, because a second way to launch a session is a second policy \
-         to forget.\n\
+         Every `llm` step is spawned through `{METAHARNESS_BINARY} run <harness>`, whichever \
+         harness the step names: on `{}` the step's surface travels as a sealed frame document \
+         and this process answers every tool call the session makes. There is no path around it \
+         — the bare vendor argv was retired with `epic:metaharness-migration`, because a second \
+         way to launch a session is a second policy to forget.\n\
          \n\
          Install it with `cargo install --path crates/metaharness-cli` from a metaharness checkout, \
-         or drive a map whose steps are all `command` and `operator` steps, which needs neither."
+         or drive a map whose steps are all `command` and `operator` steps, which needs neither.",
+        LlmStep::DEFAULT_HARNESS
+    ))
+}
+
+/// Every *this machine cannot run it today* pre-flight, in the order they are answered.
+///
+/// Three checks, and the order is the one a person can act on: the seam's binary, then the CLI a
+/// driven session reaches the store through, then everything a `harness: b10x` step needs. Each is
+/// decidable before a run id, a lock, a snapshot or a model bill exists, which is the whole
+/// argument for them being here rather than at the first `llm` step.
+///
+/// The evidence-coverage check is deliberately **not** folded in and runs before this: it is
+/// decidable from the two documents alone and says *this map can never finish this plan* on every
+/// machine, so a real coverage gap must not be hidden behind a binary that happens to be missing.
+///
+/// The read-only note is printed rather than returned, because it refuses nothing: a b10x step in
+/// a state that only reads is legitimate work.
+fn machine_preflights(map: &StepMap, project: &Path, b10x: &B10xOptions) -> Option<String> {
+    if let Some(refusal) = metaharness_preflight(map) {
+        return Some(refusal);
+    }
+    if has_llm_steps(map) {
+        if let Some(refusal) = protocol_on_the_session_path() {
+            return Some(refusal);
+        }
+    }
+    if let Some(refusal) = b10x_preflight(map, b10x) {
+        return Some(refusal);
+    }
+    if let Some(note) = b10x_read_only_note(map, project) {
+        outln!("note: {note}");
+    }
+    None
+}
+
+/// How many `llm` steps name the b10x loop.
+fn b10x_step_count(map: &StepMap) -> usize {
+    map.states
+        .values()
+        .flat_map(|state| state.steps.iter())
+        .filter(|step| matches!(step, Step::Llm(step) if step.harness == B10X_HARNESS))
+        .count()
+}
+
+/// Whether the installed `metaharness` publishes an adapter for this kind.
+///
+/// **The one pre-flight here that spawns, and the exception is argued rather than assumed.**
+/// [`on_path`] refuses to run a binary to find out whether it exists, because that is a side
+/// effect in a check and because a binary that exists and then fails is a different finding. This
+/// asks a different question — *does this install know the kind at all* — which `PATH` cannot
+/// answer and which nothing else can either: an adapter is compiled in, so an older binary under
+/// the same name and the same `--version` refuses `b10x` as an invalid argument at the first step.
+///
+/// `capabilities` is the verb metaharness publishes for exactly this. Its own design says it
+/// *"exists so an embedder can refuse early rather than discovering mid-run that a tier is
+/// absent"*, and it is one of the three verbs that "work with no model and no credential": it
+/// prints a value, reaches no network and spends nothing. Everything is discarded — the answer
+/// wanted is the exit status.
+fn metaharness_knows(kind: &str) -> bool {
+    Process::new(METAHARNESS_BINARY)
+        .arg("capabilities")
+        .arg(kind)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+/// Refuses a run whose `llm` steps name a harness this machine cannot spawn.
+///
+/// The third of the launch-time pre-flights and the same argument as the two beside it: a map that
+/// names `b10x` on a machine with no b10x loop, no endpoint or no model is decidable from the
+/// documents and the filesystem, and finding it out at the first `llm` step costs a run id, the
+/// store lock, a snapshot and — on the arms that get that far — a model bill, for a
+/// [`StepOutcome::NoVerdict`] that is not unknown at all.
+///
+/// Four checks, first refusal wins, each naming what to install or declare. The two that are
+/// decidable anywhere come first — an invocation that names no endpoint is wrong on every machine
+/// — and the two about *this* machine follow, so a missing loop cannot mask a missing flag.
+fn b10x_preflight(map: &StepMap, options: &B10xOptions) -> Option<String> {
+    let steps = b10x_step_count(map);
+    if steps == 0 {
+        return None;
+    }
+    // **The two facts about the invocation come first, and the order is load-bearing** — the same
+    // lesson `start`'s coverage check records. These are decidable on every machine; the two below
+    // them say *this machine cannot run it today*. With the machine checks first, a run that named
+    // no endpoint at all would read as fine wherever the loop happened to be missing, and the test
+    // asserting it is refused would pass vacuously in CI.
+    if options.endpoint.is_none() {
+        return Some(format!(
+            "this map has {steps} `llm` step(s) that name harness `{B10X_HARNESS}` and no \
+             `--b10x-endpoint` was given.\n\
+             \n\
+             The loop is pointed at an endpoint by its caller and has no service of its own to \
+             fall back on, and metaharness refuses to default one: a default would aim a driven \
+             run at somebody's production API the first time the flag was forgotten. It is a fact \
+             about this machine rather than about the work, which is why the step map cannot \
+             carry it.\n\
+             \n\
+             Pass the gateway's root URL as `--b10x-endpoint`, and the model it serves as \
+             `--b10x-model`."
+        ));
+    }
+    if options.model.is_none() {
+        return Some(format!(
+            "this map has {steps} `llm` step(s) that name harness `{B10X_HARNESS}` and no \
+             `--b10x-model` was given. The endpoint serves several and the loop picks none."
+        ));
+    }
+    let path = session_path();
+    let installed = path
+        .split(':')
+        .any(|directory| Path::new(directory).join(B10X_BINARY).is_file());
+    if !installed {
+        return Some(format!(
+            "this map has {steps} `llm` step(s) that name harness `{B10X_HARNESS}` and \
+             `{B10X_BINARY}` is not on the `PATH` the run will give its child.\n\
+             \n\
+             That `PATH` is `{path}` — **constructed by metaharness, not inherited** (H3) — so a \
+             loop the operator can run is not automatically one the run can. It is the same \
+             constructed `PATH` the `protocol` CLI has to be installed onto, and for the same \
+             reason.\n\
+             \n\
+             Install it where the run will find it:\n\
+             \n\
+                 cargo install --path crates/harness-cli --root ~/.local\n\
+             \n\
+             from a `beyond10x/harness` checkout, or drive this map's `llm` steps on \
+             `{}` instead.",
+            LlmStep::DEFAULT_HARNESS
+        ));
+    }
+    if !metaharness_knows(B10X_HARNESS) {
+        return Some(format!(
+            "this map has {steps} `llm` step(s) that name harness `{B10X_HARNESS}` and the \
+             installed `{METAHARNESS_BINARY}` does not publish an adapter for it.\n\
+             \n\
+             The adapter is compiled in, so an install predating it carries the same name and the \
+             same `--version` and refuses `{B10X_HARNESS}` as an invalid argument at the first \
+             step — after the run id, the lock and the snapshot. `{METAHARNESS_BINARY} \
+             capabilities {B10X_HARNESS}` is the question that was asked and it did not answer.\n\
+             \n\
+             Reinstall it from a metaharness checkout that has the adapter:\n\
+             \n\
+                 cargo install --path crates/metaharness-cli --root ~/.local"
+        ));
+    }
+    None
+}
+
+/// What a driven b10x session will not be able to do here, said before it is paid for.
+///
+/// **Not a refusal, because a read-only session is legitimate work.** A `specify` or a `review`
+/// state that admits `repository.read` and nothing else drives perfectly well on this arm. What
+/// would be wrong is a `implement` state discovering it, one turn at a time, in a session that was
+/// told it had `file_write`.
+///
+/// The rule is metaharness's and it is a naming rule: substrate represents a workspace only when
+/// its directory name starts with `ws_`, and a confined launch over a directory it cannot adopt is
+/// refused rather than degraded. A driven run's working directory is the operator's repository, so
+/// no driven b10x session is confined, so the loop publishes only the three reading entries — the
+/// toolset is computed from what the machine can confine, and unconfined that is reading.
+///
+/// It is a note and not a refusal for a second reason: what a state admits is decided per state by
+/// the engine at run time, and a pre-flight reading a map cannot know whether any state will reach
+/// for a write.
+fn b10x_read_only_note(map: &StepMap, working_directory: &Path) -> Option<String> {
+    if b10x_step_count(map) == 0 {
+        return None;
+    }
+    Some(format!(
+        "a driven `{B10X_HARNESS}` session is **read-only** over {}. The loop publishes the tools \
+         the machine can confine, substrate represents a workspace only when its directory name \
+         starts with `ws_`, and a governed tree is the operator's repository — so no driven \
+         session of this arm is confined and `file_write`, `file_edit` and `run` are not \
+         published to it. A state that admits `repository.write` will say so at session start, in \
+         the note beside this one.",
+        working_directory.display()
     ))
 }
 
@@ -1955,6 +2453,13 @@ struct Launch {
     pause_on_approval: bool,
     /// The plugin directories the sessions loaded.
     plugin_dirs: Vec<PathBuf>,
+    /// What a `harness: b10x` step was pointed at.
+    ///
+    /// `#[serde(default)]` on every field of it, so a run started before this existed reads an
+    /// empty value and resumes exactly as it did — which for a map with no b10x step is what it
+    /// had anyway.
+    #[serde(default)]
+    b10x: B10xOptions,
 }
 
 impl Launch {
@@ -2268,6 +2773,94 @@ fn metaharness_argv(
     argv
 }
 
+/// One write scope as `--write-scope`'s grammar spells it.
+///
+/// Total and written out rather than taken off the type's `Serialize`, so a rule the map gains
+/// later fails to compile here instead of reaching an argv as an empty word. It coincides with the
+/// map's own kebab-case wire form and that is not an accident worth relying on silently —
+/// `the_write_scope_words_are_the_ones_the_step_map_is_written_in` asserts the two agree.
+fn write_scope_word(scope: WriteScope) -> &'static str {
+    match scope {
+        WriteScope::Allowed => "allowed",
+        WriteScope::PartialOnly => "partial-only",
+        WriteScope::Denied => "denied",
+    }
+}
+
+/// The `metaharness run b10x` invocation for one step.
+///
+/// # Why there is no `--frame` here, and why that is not a shortcut
+///
+/// The claude arm's surface travels twice — the sealed frame document *and* a per-call answer —
+/// because F9 says a frame whose text reaches the model while nothing enforces it tells the model
+/// *"strictly only these operations"* and makes it false. metaharness enforces that rule on its own
+/// side: `required_commands` adds `tool.decide` to any spec carrying a frame, the b10x adapter
+/// refuses `tool.decide` because nothing on that loop ever asks, and so **`metaharness run b10x
+/// --frame …` is refused before a model is reached**. `--decisions observe` is refused for the same
+/// reason, and `--decisions frame` — the default, and what this argv leaves in place — is the only
+/// one the adapter admits.
+///
+/// The frame is still *minted and written* beside the transcript for a b10x step. It is the record
+/// of what the step was, in the neutral vocabulary both arms are checked in, and the refusal
+/// specification beside it is derived from the same [`ToolConfig`]. What changes is that on this
+/// arm the document is evidence about the step rather than an instruction to a seam.
+///
+/// # What the surface travels as instead
+///
+/// `--write-scope` and `--context`, which are the b10x-only spec fields that exist for exactly this
+/// — the loop has no seam, so *"for that kind the scope has to travel to the tools"*. Both come
+/// off the step map's own `scope:` and `context:` keys, which no other executor reads.
+///
+/// # What is deliberately not asked for, because it cannot be had over a governed tree
+///
+/// No `--substrate-embedded`, no `--substrate` and no `--cgroup-root`. substrate represents a
+/// workspace only when its directory name starts with `ws_`, and the working directory of a driven
+/// run is the operator's repository — metaharness refuses a confined launch over a directory it
+/// cannot adopt rather than degrading it. So a driven b10x session is **read-only**: the loop
+/// publishes what the machine can confine, and with no confinement that is the three reading
+/// entries. Asking for confinement here would turn every driven b10x step into a launch refusal;
+/// not asking for it makes the limitation visible where it can be acted on, in [`b10x_preflight`]
+/// before the run and in the session-start audit during it.
+fn b10x_argv(
+    options: &B10xOptions,
+    working_directory: &Path,
+    scope: &[ScopeRule],
+    context_files: &[String],
+    prompt: &str,
+) -> Vec<String> {
+    let mut argv = vec![
+        METAHARNESS_BINARY.to_owned(),
+        "run".to_owned(),
+        B10X_HARNESS.to_owned(),
+        "--hermetic".to_owned(),
+        "--cwd".to_owned(),
+        working_directory.display().to_string(),
+        "--model-endpoint".to_owned(),
+        options.endpoint.clone().unwrap_or_default(),
+        "--model".to_owned(),
+        options.model.clone().unwrap_or_default(),
+        "--credentials".to_owned(),
+        // `operator-login` is the flag's default and names nothing on this loop, which refuses it
+        // rather than launching a run with no credential under a flag that claims one.
+        if options.api_key { "api-key" } else { "none" }.to_owned(),
+    ];
+    for rule in scope {
+        for path in &rule.paths {
+            argv.push("--write-scope".to_owned());
+            // `<glob>=<allowed|partial-only|denied>`, ordered, first match wins — which is why the
+            // rules are pushed in the order the map wrote them and never sorted.
+            argv.push(format!("{path}={}", write_scope_word(rule.write)));
+        }
+    }
+    for file in context_files {
+        argv.push("--context".to_owned());
+        argv.push(file.clone());
+    }
+    argv.push("-p".to_owned());
+    argv.push(prompt.to_owned());
+    argv
+}
+
 /// The instant the driver just observed something, from the wall clock.
 ///
 /// The driver runs the program and reads its exit status, so *now* is the truthful observation
@@ -2444,6 +3037,41 @@ mod tests {
         ToolConfig::new(capabilities.iter().cloned().collect())
     }
 
+    /// One `llm` step, as a step map that names the second harness would produce it.
+    ///
+    /// The harness is spelled as a literal rather than through a constant, deliberately: this is
+    /// the string a step map author writes, and a test that read it out of the same constant the
+    /// selector reads would pass whatever that constant said.
+    fn b10x_step() -> LlmStep {
+        LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
+            description: None,
+            harness: "b10x".to_owned(),
+            skills: Vec::new(),
+            prompt: "do the thing".to_owned(),
+        }
+    }
+
+    /// A step context with nothing outstanding, for a test that is about the surface.
+    fn step_context<'a>(
+        tools: &'a ToolConfig,
+        state: &'a StateId,
+        task: &'a aep_domain::task::Task,
+    ) -> StepContext<'a> {
+        StepContext {
+            task,
+            state,
+            index: 0,
+            attempt: 1,
+            tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &[],
+            reaching: &[],
+            preceding_llm: None,
+        }
+    }
+
     /// The task a prompt test's run is driving.
     ///
     /// `derived_from` is populated because the identity line names the artifacts, and a fixture
@@ -2578,6 +3206,52 @@ mod tests {
                     || tool == "Bash"
                     || matches!(tool.as_str(), "Edit" | "Write" | "NotebookEdit"),
                 "the prompt names `{tool}` and the policy refuses it"
+            );
+        }
+    }
+
+    /// A step that names `b10x` is told **that** harness's tool names, not Claude Code's.
+    ///
+    /// The rendering half of § 4.9 point 2, in the place it is most expensive to get wrong. The
+    /// decision about which capabilities admit which operations is shared and is
+    /// `aep_driver::tool::tool_config`'s; only the naming table is the harness's. A prompt that
+    /// named `Read`, `Edit` and `Bash` to the b10x loop would be naming six tools that do not
+    /// exist in its catalogue — which is exactly the class of waste this executor was added to
+    /// remove, reintroduced by the driver itself.
+    ///
+    /// The b10x names are `b10x_harness_tools::entry_names`', read from the loop's own catalogue:
+    /// `file_read`, `file_write`, `file_edit`, `dir_list`, `search`, `run`.
+    #[test]
+    fn a_b10x_step_is_told_the_b10x_catalogues_names_and_never_claude_codes() {
+        let prompt = prompt_for(
+            &b10x_step(),
+            &step_context(
+                &config(&[
+                    Capability::RepositoryRead,
+                    Capability::RepositoryWrite,
+                    Capability::CommandExecution,
+                ]),
+                &"implement".parse().expect("a state id"),
+                &driven_task(),
+            ),
+        );
+        for named in [
+            "file_read",
+            "file_write",
+            "file_edit",
+            "dir_list",
+            "search",
+            "run",
+        ] {
+            assert!(
+                prompt.contains(named),
+                "`{named}` is in the b10x catalogue and this state admits it: {prompt}"
+            );
+        }
+        for vendor in ["`Read`", "`Edit`", "`Write`", "`Glob`", "`Grep`", "`Bash`"] {
+            assert!(
+                !prompt.contains(vendor),
+                "{vendor} is Claude Code's name and no b10x session has one: {prompt}"
             );
         }
     }
@@ -3384,6 +4058,359 @@ mod tests {
         assert!(argv.contains(&"--hermetic".to_owned()));
     }
 
+    /// The b10x argv is the launch that loop refuses least, and it carries no frame.
+    ///
+    /// **Three of these assertions are about what is absent, and the absences are the design.**
+    /// `metaharness run b10x --frame …` is refused before a model is reached — a frame's
+    /// enforcement rides on `tool.decide`, which the b10x adapter refuses because nothing on that
+    /// loop ever asks — and `--decisions observe` is refused for the same reason, so the launch
+    /// leaves the default in place. `--substrate-embedded` is absent because substrate adopts a
+    /// workspace only when its directory name starts with `ws_`, and a governed tree is the
+    /// operator's repository: asking would turn every driven b10x step into a launch refusal.
+    ///
+    /// What is present instead is the surface travelling as the two spec fields that exist for a
+    /// harness with no seam — the step's `scope:` as `--write-scope` in the order it was written,
+    /// and its `context:` as `--context`.
+    #[test]
+    fn the_b10x_argv_carries_the_scope_and_never_the_frame_that_loop_would_refuse() {
+        let mut step = b10x_step();
+        step.scope = vec![
+            ScopeRule {
+                paths: vec![".engineering/planning/**".to_owned()],
+                write: WriteScope::PartialOnly,
+            },
+            ScopeRule {
+                paths: vec!["**".to_owned()],
+                write: WriteScope::Denied,
+            },
+        ];
+        step.context = vec!["AGENTS.md".to_owned()];
+        let options = B10xOptions {
+            endpoint: Some("http://127.0.0.1:8080".to_owned()),
+            model: Some("a-model".to_owned()),
+            api_key: false,
+        };
+
+        let argv = b10x_argv(
+            &options,
+            Path::new("/operator/repo"),
+            &step.scope,
+            &step.context,
+            "do the thing",
+        );
+        assert_eq!(argv[0], "metaharness");
+        assert_eq!(argv[1], "run");
+        assert_eq!(argv[2], "b10x");
+        let has = |flag: &str, value: &str| {
+            argv.windows(2)
+                .any(|pair| pair[0] == flag && pair[1] == value)
+        };
+        assert!(has("--cwd", "/operator/repo"));
+        assert!(has("--model-endpoint", "http://127.0.0.1:8080"));
+        assert!(has("--model", "a-model"));
+        assert!(has("--credentials", "none"), "{argv:?}");
+        assert!(has("-p", "do the thing"));
+        assert!(argv.contains(&"--hermetic".to_owned()));
+
+        // Ordered, first match wins, so the map's own order is the argv's order.
+        let scopes: Vec<&String> = argv
+            .windows(2)
+            .filter(|pair| pair[0] == "--write-scope")
+            .map(|pair| &pair[1])
+            .collect();
+        assert_eq!(
+            scopes,
+            [".engineering/planning/**=partial-only", "**=denied"]
+        );
+        assert!(has("--context", "AGENTS.md"));
+
+        for refused in [
+            "--frame",
+            "--decisions",
+            "--substrate-embedded",
+            "--plugin-dir",
+        ] {
+            assert!(
+                !argv.iter().any(|word| word == refused),
+                "`{refused}` is either refused by the b10x adapter or means nothing to it: {argv:?}"
+            );
+        }
+
+        // The credential is a choice and not a silence: `operator-login` is the flag's default and
+        // names nothing on this loop, which refuses it rather than launching unauthenticated.
+        let authenticated = b10x_argv(
+            &B10xOptions {
+                api_key: true,
+                ..options
+            },
+            Path::new("/operator/repo"),
+            &[],
+            &[],
+            "do the thing",
+        );
+        assert!(authenticated
+            .windows(2)
+            .any(|pair| pair[0] == "--credentials" && pair[1] == "api-key"));
+    }
+
+    /// One capability decision, two naming tables, and no second decision anywhere.
+    ///
+    /// § 4.9 point 2's load-bearing assertion, driven from `aep_driver::tool::tool_config` rather
+    /// than from a hand-built [`ToolConfig`] so the shared half is genuinely the shared function.
+    /// A second harness that re-decided could quietly re-admit a shell the state never granted,
+    /// which is what makes this the guard rather than the name comparison.
+    #[test]
+    fn the_shared_tool_decision_renders_into_two_vocabularies_and_is_taken_once() {
+        use aep_domain::capability::CapabilityPolicy;
+        use aep_driver::tool::tool_config;
+
+        let everything = tool_config(&CapabilityPolicy::allowing(TOOL_CANDIDATES.iter().cloned()));
+        assert!(
+            !everything.is_empty(),
+            "the widest policy admits something, or every assertion below is vacuous"
+        );
+        let b10x = b10x_tools(&everything);
+        let claude = allowed_tools(&everything);
+        assert!(!b10x.is_empty() && !claude.is_empty());
+        for named in &b10x {
+            assert!(
+                !claude.contains(named),
+                "`{named}` is in both tables, so one of them is not a rendering of its own harness"
+            );
+        }
+        // The three entries § 4.9 point 2 decides rather than leaves to an implementer.
+        assert!(
+            !everything.subagents_offered() && !b10x.iter().any(|named| named.contains("agent")),
+            "no subagent spawner is ever rendered, whatever is admitted"
+        );
+        for (capabilities, admitted) in [
+            (vec![Capability::RepositoryRead], false),
+            (
+                vec![Capability::RepositoryRead, Capability::CommandExecution],
+                true,
+            ),
+        ] {
+            let config = tool_config(&CapabilityPolicy::allowing(capabilities.clone()));
+            assert_eq!(
+                b10x_tools(&config).contains(&"run".to_owned()),
+                admitted,
+                "the exec entry is offered iff `command.execute` is admitted, and \
+                 {capabilities:?} admits it: {admitted}"
+            );
+        }
+        // `web.read` and `skill.load` have no entry in that loop's catalogue. Not downgraded to
+        // something else and not silently dropped from the shared decision: the capability stays
+        // admitted and the session simply has no tool, which the session-start audit reports.
+        let networked = tool_config(&CapabilityPolicy::allowing([
+            Capability::RepositoryRead,
+            Capability::NetworkRead,
+        ]));
+        assert!(
+            networked.admits(&Capability::NetworkRead),
+            "the shared decision still admits it"
+        );
+        assert_eq!(
+            b10x_tools(&networked),
+            ["dir_list", "file_read", "search"],
+            "and this table renders nothing for it, because the catalogue has no entry"
+        );
+    }
+
+    /// The `--write-scope` words are the words a step map is written in.
+    ///
+    /// Two spellings of one rule is one spelling that drifts, and the drift here is silent: a rule
+    /// rendered as an unknown word is a rule metaharness refuses at launch, or worse, one it reads
+    /// as a different rule.
+    #[test]
+    fn the_write_scope_words_are_the_ones_the_step_map_is_written_in() {
+        for scope in [
+            WriteScope::Allowed,
+            WriteScope::PartialOnly,
+            WriteScope::Denied,
+        ] {
+            let written = serde_json::to_value(scope).expect("a scope serialises");
+            assert_eq!(
+                written.as_str().expect("a string"),
+                write_scope_word(scope),
+                "the argv word and the document word are one word"
+            );
+        }
+    }
+
+    /// An observed session's calls are counted and never reported as an adjudication.
+    ///
+    /// **The failure this exists to make impossible.** The b10x adapter sets
+    /// `decision_required: false` on every `tool.requested` and `Seam::None` beside it, so a
+    /// driver that folded that stream into the claude arm's report would print *0 refused* — and
+    /// two arms compared on that number would be compared on an artefact of the instrument rather
+    /// than on what the runs did. What is refused on this arm is refused by the toolset, before a
+    /// call exists to be counted.
+    ///
+    /// Both directions are asserted, because a report that said *nobody asked* on every run would
+    /// be exactly as wrong in the other direction.
+    #[test]
+    fn an_observed_session_is_counted_and_never_reported_as_a_clean_adjudication() {
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "specify".parse().expect("a state id");
+        let task = driven_task();
+        let context = step_context(&tools, &state, &task);
+        let observed = format!(
+            "{}\n{}\n",
+            serde_json::json!({
+                "format": METAHARNESS_EVENT_FORMAT,
+                "event": "tool.requested",
+                "decision_required": false,
+                "seam": "none",
+                "call_id": "call-1",
+                "name": "file_read",
+                "input": { "path": "AGENTS.md" },
+            }),
+            serde_json::json!({
+                "format": METAHARNESS_EVENT_FORMAT,
+                "event": "tool.requested",
+                "decision_required": false,
+                "seam": "none",
+                "call_id": "call-2",
+                "name": "search",
+                "input": { "path": "." },
+            })
+        );
+
+        let mut commands: Vec<u8> = Vec::new();
+        let mut transcript: Vec<u8> = Vec::new();
+        let mut authorize = |_: &ActionRequest| -> Decision {
+            panic!("an observed stream asks the engine nothing, because nobody asked the driver")
+        };
+        let tally = answer_events(
+            Harness::B10x,
+            &context,
+            observed.as_bytes(),
+            &mut commands,
+            &mut transcript,
+            &mut authorize,
+        );
+
+        assert_eq!(
+            tally,
+            Adjudication {
+                requested: 2,
+                asked: 0,
+                denied: 0
+            }
+        );
+        assert!(
+            commands.is_empty(),
+            "answering a call nobody put would be this process claiming a decision the wire says \
+             nobody made: {}",
+            String::from_utf8_lossy(&commands)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&transcript),
+            observed,
+            "every event line reaches the transcript, decided or not"
+        );
+
+        let line = tally.line(Harness::B10x, &state);
+        assert!(
+            line.contains("observed 2 tool call(s) and adjudicated none"),
+            "the count of what happened is reported: {line}"
+        );
+        assert!(
+            line.contains("nobody asked this process"),
+            "and it is distinguished from nothing having been refused: {line}"
+        );
+        assert!(
+            !line.contains("were refused"),
+            "a denial count here would read as a verdict about the run: {line}"
+        );
+
+        // The other direction: an arm that does adjudicate reports the counts, because there the
+        // zero genuinely means nothing was refused.
+        let adjudicated = Adjudication {
+            requested: 5,
+            asked: 5,
+            denied: 1,
+        }
+        .line(Harness::ClaudeCode, &state);
+        assert!(
+            adjudicated.contains("put 5 tool call(s) to the driver and 1 were refused"),
+            "{adjudicated}"
+        );
+    }
+
+    /// A map naming a harness this machine cannot spawn is refused before a run id or a lock.
+    ///
+    /// The same shape as the two pre-flights beside it, and the same argument: this is decidable
+    /// from the map and the filesystem, and discovering it at the first `llm` step means a run
+    /// directory, an id, the store lock and a snapshot for a `NoVerdict` about something that was
+    /// never run.
+    ///
+    /// Asserted on the two checks that need no process — a map with no b10x step is silent, and a
+    /// map with one that declares no endpoint is refused naming the flag. The two spawning checks
+    /// above them are not exercised here: a unit test that shelled out to whatever
+    /// `{METAHARNESS_BINARY}` this machine happens to hold would report on the machine.
+    #[test]
+    fn a_map_naming_the_b10x_harness_is_refused_when_the_run_cannot_say_where_to_point_it() {
+        let map = aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/b10x\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: llm\n        prompt: do it\n\
+             \x20       harness: b10x\n",
+            None,
+        )
+        .expect("the map validates");
+        assert_eq!(b10x_step_count(&map), 1, "the fixture reaches the rule");
+
+        let claude = aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/llm\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: llm\n        prompt: do it\n",
+            None,
+        )
+        .expect("the map validates");
+        assert!(
+            b10x_preflight(&claude, &B10xOptions::default()).is_none(),
+            "a map with no b10x step is not this pre-flight's business, whatever is installed"
+        );
+
+        // The two checks that read only the arguments, and they answer the same on every machine
+        // — which is the reason they run first.
+        let refusal = b10x_preflight(&map, &B10xOptions::default()).expect("refused");
+        assert!(
+            refusal.contains("--b10x-endpoint"),
+            "the refusal names the flag that answers it: {refusal}"
+        );
+        let refusal = b10x_preflight(
+            &map,
+            &B10xOptions {
+                endpoint: Some("http://127.0.0.1:8080".to_owned()),
+                ..B10xOptions::default()
+            },
+        )
+        .expect("refused");
+        assert!(refusal.contains("--b10x-model"), "{refusal}");
+
+        // With both declared, what is left is about this machine, so the assertion is about which
+        // answer it gave rather than about which one it should have.
+        let declared = B10xOptions {
+            endpoint: Some("http://127.0.0.1:8080".to_owned()),
+            model: Some("a-model".to_owned()),
+            api_key: false,
+        };
+        let installed = session_path()
+            .split(':')
+            .any(|directory| Path::new(directory).join(B10X_BINARY).is_file());
+        match b10x_preflight(&map, &declared) {
+            None => assert!(
+                installed && metaharness_knows(B10X_HARNESS),
+                "the only reason to admit a b10x map is that both halves are installed"
+            ),
+            Some(refusal) => assert!(
+                refusal.contains(B10X_BINARY) || refusal.contains("does not publish an adapter"),
+                "an install predating the adapter is named as that rather than as a missing \
+                 binary: {refusal}"
+            ),
+        }
+    }
+
     // -------------------------------------------------- the golden the other repository replays
 
     /// The name of the committed cross-repository golden, under this crate's `fixtures/`.
@@ -3615,6 +4642,7 @@ profile: test.reading
             let mut authorize =
                 |request: &ActionRequest| engine.authorize(&mut *execution, request);
             answer_events(
+                Harness::ClaudeCode,
                 context,
                 requested(tool, input).as_bytes(),
                 &mut commands,
