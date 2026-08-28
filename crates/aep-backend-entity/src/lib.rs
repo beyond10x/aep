@@ -84,6 +84,8 @@
 //! store that no longer agrees. Each `commit` is atomic; the sequence of them is not. Closing that
 //! properly needs a durable intent log, which is `P6`.
 
+pub mod kernel;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Mutex;
@@ -343,6 +345,10 @@ pub trait Projection<S: Store> {
     /// conformance suite's, in a plan), whose history is then the in-memory one.
     fn coordinates(&self, inner: &MemoryBackend, id: &EntityId) -> Option<(String, String)>;
 
+    /// The ladders this store's kinds are held to, when it holds any — what `describe_type` renders
+    /// and what a move is decided against, from one object.
+    fn lifecycles(&self) -> Option<&aep_domain::artifact::LifecycleRegistry>;
+
     /// The records to write beside the placements, from what changed since `before`.
     ///
     /// # Errors
@@ -361,21 +367,73 @@ pub trait Projection<S: Store> {
 ///
 /// Every contract entity is an `aep.entity` instance under its own id, with its body flat and its
 /// metadata under [`METADATA_KEY`]; relations, audit records and applied commands are instances of
-/// their own types; opening hydrates all four. The shape a SQLite or Postgres plan takes.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Identity;
+/// their own types; opening hydrates all four. The shape a SQLite or Postgres plan takes. With
+/// [`Identity::with_lifecycles`], `describe_type` reports the ladder of every planning kind.
+///
+/// **An observation is an event on the entity it is about.** A relation is a record of its own and
+/// evidence changes nothing, so the contract names no affected entity for either — but the entity
+/// the edge starts at, and the entity the evidence is about, each get an event at their current
+/// revision saying so. That is what lets a history read from the entity's log say what a plan's
+/// journal says (`protocol artifact history` over SQLite), and what lets a second process count the
+/// evidence on hand from the log alone.
+#[derive(Debug, Clone, Default)]
+pub struct Identity {
+    lifecycles: Option<aep_domain::artifact::LifecycleRegistry>,
+    /// The entity the command in flight is an observation about, noted in `before` and written in
+    /// `placements`: a relation's source, evidence's target.
+    observing: Option<EntityId>,
+}
+
+impl Identity {
+    /// The identity shape, reporting `lifecycles` through `describe_type`.
+    #[must_use]
+    pub fn with_lifecycles(lifecycles: aep_domain::artifact::LifecycleRegistry) -> Self {
+        Self {
+            lifecycles: Some(lifecycles),
+            observing: None,
+        }
+    }
+}
+
+/// One placement for `id` as the contract holds it now — an observation: same state, same revision,
+/// the fields as they stand, written regardless.
+fn observation_of(inner: &MemoryBackend, id: &EntityId) -> Result<Placement, CommandError> {
+    let stored = inner
+        .with_store(|store| store.entity(id).cloned())
+        .ok_or_else(|| CommandError::Conflict {
+            reason: format!("the entity `{id}` could not be read back after the command"),
+        })?;
+    Ok(Placement {
+        entity: STORED_AS.to_owned(),
+        id: id.to_string(),
+        state: status_of(&stored.data),
+        revision: stored.metadata.revision.get(),
+        fields: pack(&stored),
+        note: None,
+        always: true,
+    })
+}
 
 impl<S: Store> Projection<S> for Identity {
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
         hydrate(store, inner)
     }
 
-    fn before(&mut self, _envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
+    fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
+        self.observing = match &envelope.payload {
+            Command::CreateRelation(create) => Some(create.source.id.clone()),
+            Command::RecordEvidence(record) => Some(record.target.id.clone()),
+            _ => None,
+        };
         Ok(())
     }
 
     fn coordinates(&self, _inner: &MemoryBackend, id: &EntityId) -> Option<(String, String)> {
         Some((STORED_AS.to_owned(), id.to_string()))
+    }
+
+    fn lifecycles(&self) -> Option<&aep_domain::artifact::LifecycleRegistry> {
+        self.lifecycles.as_ref()
     }
 
     fn placements(
@@ -384,29 +442,20 @@ impl<S: Store> Projection<S> for Identity {
         inner: &MemoryBackend,
         result: &CommandResult,
     ) -> Result<Vec<Placement>, CommandError> {
-        result
+        let mut placements = result
             .affected
             .iter()
-            .map(|reference| {
-                let stored = inner
-                    .with_store(|store| store.entity(&reference.id).cloned())
-                    .ok_or_else(|| CommandError::Conflict {
-                        reason: format!(
-                            "the entity `{}` could not be read back after the command",
-                            reference.id
-                        ),
-                    })?;
-                Ok(Placement {
-                    entity: STORED_AS.to_owned(),
-                    id: reference.id.to_string(),
-                    state: status_of(&stored.data),
-                    revision: reference.revision.get(),
-                    fields: pack(&stored),
-                    note: None,
-                    always: true,
-                })
-            })
-            .collect()
+            .map(|reference| observation_of(inner, &reference.id))
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(observed) = self.observing.take() {
+            if !placements
+                .iter()
+                .any(|placement| placement.id == observed.to_string())
+            {
+                placements.push(observation_of(inner, &observed)?);
+            }
+        }
+        Ok(placements)
     }
 
     fn records(
@@ -574,11 +623,30 @@ impl<S: Store> EntityBackend<S, Identity> {
     ///
     /// As [`EntityBackend::with_projection`].
     pub fn over(store: S) -> Result<Self, CommandError> {
-        Self::shaped(store, Identity)
+        Self::shaped(store, Identity::default())
     }
 }
 
 impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
+    /// The event log of one entity, at the coordinates the projection gave it.
+    ///
+    /// What `protocol artifact history` reads over a plan without a journal: the same events the
+    /// adapter rebuilds a history from, whichever shape the store holds them in — `aep.entity`
+    /// under the contract's id for [`Identity`], the kind and the name for a plan. Empty for an
+    /// entity the projection does not write.
+    ///
+    /// # Errors
+    ///
+    /// If the provider cannot read its log.
+    pub fn events_of(&self, id: &EntityId) -> Result<Vec<DomainEvent>, entity_store::StoreError> {
+        let Some((entity, key)) =
+            self.with_projection(|projection| projection.coordinates(&self.inner, id))
+        else {
+            return Ok(Vec::new());
+        };
+        self.with_store(|store| store.events(&entity, &key))
+    }
+
     /// The contract over `store`, shaped by `projection`, holding everything the store holds.
     ///
     /// Hydrates through the projection: the [`Identity`] shape installs every record under its
@@ -1201,8 +1269,31 @@ impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
         Ok(page)
     }
 
+    /// # The ladder, from the definition the kernel decides with
+    ///
+    /// Wave H, story 2 (D-P5): the in-memory backend describes a kind's commands and relations and
+    /// leaves `lifecycle` empty, because ladders are plan data it does not hold. The projection
+    /// holds them, and the descriptor is [`kernel::describe`] over the same [`EntityDefinition`]
+    /// a move is decided against — so a harness that reads which statuses a story may hold reads
+    /// what the store will enforce.
+    ///
+    /// [`EntityDefinition`]: entity_core::EntityDefinition
     #[allow(clippy::unused_async_trait_impl)]
     async fn describe_type(&self, entity_type: &EntityType) -> Result<TypeDescriptor, QueryError> {
-        block_on(self.inner.describe_type(entity_type))
+        let mut descriptor = block_on(self.inner.describe_type(entity_type))?;
+        if descriptor.lifecycle.is_none() {
+            let kind = aep_domain::artifact::ArtifactKind::NAMED
+                .iter()
+                .find(|kind| &kind.entity_type() == entity_type);
+            if let Some(kind) = kind {
+                descriptor.lifecycle = self.with_projection(|projection| {
+                    projection
+                        .lifecycles()
+                        .and_then(|ladders| ladders.for_kind(kind))
+                        .map(|lifecycle| kernel::describe(Some(kind), lifecycle))
+                });
+            }
+        }
+        Ok(descriptor)
     }
 }

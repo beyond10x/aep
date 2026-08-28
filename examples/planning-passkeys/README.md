@@ -37,6 +37,39 @@ The entity surface reads this store as readily as it reads a manifest:
 protocol entity list --planning .engineering/planning
 ```
 
+## The same plan, kept in SQLite
+
+`.engineering/project.sqlite.yaml` is this project with one line changed:
+
+```yaml
+store:
+  sqlite: plan.sqlite3
+```
+
+Copy it over `project.yaml` and every verb above opens `.engineering/plan.sqlite3` instead of the
+documents — same commands, same output, same history. The store is a line in the project file, not a
+different tool; `docs/guide/backend.md` § *Choosing the store* has the three forms.
+
+## The same plan, kept twice
+
+`.engineering/project.hybrid.yaml` keeps the markdown **and** a SQLite replica, under the four words
+a hybrid store cannot work without:
+
+```yaml
+store:
+  hybrid:
+    authority: local
+    read: local-first
+    on_unreachable: refuse
+    on_divergence: record
+    local: markdown
+    replica: { sqlite: replica.sqlite3 }
+```
+
+Every verb writes both. When the replica would not take a write, `protocol artifact divergences`
+says so and which side is authoritative; `protocol artifact catch-up` replays it. The record lives in
+`planning/divergences.jsonl` between commands.
+
 ## The contrast with `development-passkeys` is the point
 
 `examples/development-passkeys` keeps the *same* stories in Linear and points at them from
@@ -70,4 +103,7 @@ other without the protocol noticing.
 
 `crates/protocol-cli/tests/planning_cli.rs` drives the real binary against it: that the store
 validates clean, that `list --format json` is byte-identical across two runs, and that
-`protocol entity list --planning` counts what is here.
+`protocol entity list --planning` counts what is here. `crates/protocol-cli/tests/store_selection.rs`
+seeds the seven artifacts into a markdown copy, into the SQLite variant and into the hybrid variant,
+runs every `protocol artifact` verb over all three, each as its own process, asserting the output is
+the same — and makes the hybrid's replica refuse a write, to list the divergence and catch it up.

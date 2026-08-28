@@ -340,7 +340,7 @@ Invariant 16 says nothing is physically deleted, and the CLI keeps that line: th
 artifacts are files, and `rm` is a program. This is inherent to a file store and is not closed by
 anything at this layer; it is closed, to the extent it can be, by the files being in git.
 
-**D-P5 — `describe_type` still reports no lifecycle. STILL OPEN**, and an acceptance line in `story:journal-backed-store` claimed otherwise until a review caught it on 2026-08-26.
+**D-P5 — `describe_type` still reports no lifecycle. CLOSED 2026-08-28** (wave H, `story:describe-type-reports-the-ladder`): the adapter fills `TypeDescriptor::lifecycle` from the same `EntityDefinition` the kernel decides a move with — initial, states, edges, and the rungs that cost evidence — so the memory, SQLite and markdown backends report identically and the edges equal `protocol artifact lifecycle`'s output for every kind, pinned by a test. Until then it was still open, and an acceptance line in `story:journal-backed-store` claimed otherwise until a review caught it on 2026-08-26. The paragraph that follows is what the deviation was.
 `QueryService::describe_type` (`crates/aep-contract/src/query.rs:345`) exists so a harness can ask
 what a design *is* rather than hard-coding it, and `TypeDescriptor` has a `lifecycle` field. The
 in-memory backend never populates it (`crates/aep-backend-memory/src/query.rs:189`), so a harness

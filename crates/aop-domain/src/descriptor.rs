@@ -72,6 +72,8 @@ pub fn release_transitions() -> Vec<(ReleaseStatus, Vec<ReleaseStatus>)> {
 /// is the one to open at 3am, not how recently it was edited.
 fn runbook_lifecycle() -> LifecycleDescriptor {
     LifecycleDescriptor {
+        // A ladder that only says which moves are legal costs no evidence.
+        requires: Vec::new(),
         initial: ArtifactStatus::Draft,
         statuses: vec![
             ArtifactStatus::Draft,

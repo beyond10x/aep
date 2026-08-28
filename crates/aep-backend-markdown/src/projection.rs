@@ -5,7 +5,8 @@
 //! that a plan is one document per artifact with its prose in the body and its edges in frontmatter,
 //! that a `status` arriving on a plain update has to be checked against the kind's ladder, or that
 //! this store's journal spells a move, an edge and a recorded observation in its own words. That is
-//! this type — the `Projection` the adapter runs with over [`MarkdownProvider`].
+//! this type — the `Projection` the adapter runs with over [`crate::provider::MarkdownProvider`],
+//! or over any store shaped like a plan ([`PlanStore`]) — a hybrid of it and a replica.
 //!
 //! # What is projected, and what is not
 //!
@@ -46,16 +47,15 @@ use aep_domain::ids::IdempotencyKey;
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 use aep_domain::workspace::MemberName;
-use entity_store::StateProvider as _;
 
 use crate::backend::{BODY_KEY, ORGANISATION, SPACE};
 use crate::document::PlanningDocument;
 use crate::frontmatter::PlanningFrontmatter;
 use crate::journal;
-use crate::provider::{document_of, instance_of, MarkdownProvider};
-use crate::store::MarkdownStore;
+use crate::provider::{document_of, instance_of, PlanStore};
+use crate::store::{StoreReport, StoredDocument};
 
-/// The plan's shape over [`MarkdownProvider`].
+/// The plan's shape over a [`PlanStore`].
 #[derive(Debug)]
 pub struct MarkdownProjection {
     members: Vec<MemberName>,
@@ -65,7 +65,7 @@ pub struct MarkdownProjection {
     /// Which file each entity came from, so a write lands where the document was read.
     ///
     /// Kept rather than derived: a document filed under an accepted alias is rewritten where it
-    /// lives, which is the same reason [`MarkdownStore::update`] takes a path.
+    /// lives, which is the same reason [`crate::store::MarkdownStore::update`] takes a path.
     paths: Vec<(EntityId, ArtifactId, String)>,
     /// Entities accepted by the contract that this store has no document shape for.
     unprojected: Vec<EntityId>,
@@ -172,8 +172,8 @@ impl MarkdownProjection {
     }
 
     /// The document `directory/name.md` holds now, if any.
-    fn existing(
-        store: &MarkdownProvider,
+    fn existing<S: PlanStore>(
+        store: &S,
         directory: &str,
         name: &str,
     ) -> Result<Option<PlanningDocument>, CommandError> {
@@ -192,9 +192,9 @@ impl MarkdownProjection {
 
     /// The placement for one entity's document: the fields the entity carries applied to the
     /// document as it stands, the ladder consulted, the edges added, the prose kept.
-    fn place(
+    fn place<S: PlanStore>(
         &mut self,
-        store: &MarkdownProvider,
+        store: &S,
         inner: &MemoryBackend,
         id: &EntityId,
     ) -> Result<Option<Placement>, CommandError> {
@@ -271,9 +271,9 @@ impl MarkdownProjection {
     /// The placement an observation about an artifact makes: the document as it stands, at its
     /// current revision, with the observation as the change — an event at the same revision, and
     /// the count the evidence-gated move reads.
-    fn observe(
+    fn observe<S: PlanStore>(
         &mut self,
-        store: &MarkdownProvider,
+        store: &S,
         inner: &MemoryBackend,
         target: &EntityId,
         kind: &str,
@@ -398,30 +398,61 @@ impl MarkdownProjection {
     }
 }
 
-impl Projection<MarkdownProvider> for MarkdownProjection {
+/// Every document a plan-shaped store holds, read through its `Store` traits.
+///
+/// Public for the shell that reads a hybrid plan without opening the contract over it — the
+/// driver's per-iteration rebuild, a read-only verb — and wants what the declared read path answers.
+///
+/// The report a `MarkdownStore::load` would build over the same directory, without touching the
+/// directory: for a hybrid, what this reads is what its read path answers. `files_read` counts the
+/// instances read; there are no failures, because a document that does not read refuses the whole
+/// hydration here rather than being set aside — the adapter cannot open a plan it can only half
+/// read.
+pub fn documents_of<S: PlanStore>(store: &S) -> Result<StoreReport, CommandError> {
+    let unreadable = |what: String| CommandError::Conflict {
+        reason: format!(
+            "the store at {} could not be read: {what}",
+            store.root().display()
+        ),
+    };
+    let mut report = StoreReport::default();
+    for kind in store
+        .kinds()
+        .map_err(|error| unreadable(error.to_string()))?
+    {
+        for name in store
+            .ids(&kind)
+            .map_err(|error| unreadable(error.to_string()))?
+        {
+            let relative = format!("{kind}/{name}.md");
+            let instance = store
+                .load(&kind, &name)
+                .map_err(|error| unreadable(format!("{relative}: {error}")))?
+                .ok_or_else(|| unreadable(format!("{relative}: listed, and absent when read")))?;
+            let document = document_of(&instance)
+                .map_err(|error| unreadable(format!("{relative}: {error}")))?;
+            report.files_read += 1;
+            report.documents.insert(
+                document.frontmatter.id.clone(),
+                StoredDocument {
+                    relative_path: relative,
+                    document,
+                },
+            );
+        }
+    }
+    Ok(report)
+}
+
+impl<S: PlanStore> Projection<S> for MarkdownProjection {
     /// Hydration goes through `CreateEntity` commands, not through a side door: the entities exist
     /// because commands created them, which is what the audit trail then says.
-    fn hydrate(
-        &mut self,
-        store: &MarkdownProvider,
-        inner: &MemoryBackend,
-    ) -> Result<(), CommandError> {
-        let files = MarkdownStore::open(store.root());
-        let report = files.load();
-        if !report.is_clean() {
-            let detail = report
-                .failures
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("; ");
-            return Err(CommandError::Conflict {
-                reason: format!(
-                    "the store at {} could not be read: {detail}",
-                    store.root().display()
-                ),
-            });
-        }
+    ///
+    /// Read through the store's own traits — kinds, then ids, then each instance — and not from the
+    /// files directly, so a hybrid plan hydrates by its declared read path. A document that does not
+    /// read is a refusal naming it, as an unclean `MarkdownStore` was.
+    fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
+        let report = documents_of(store)?;
         let graph = report
             .graph_in_workspace(self.members.clone())
             .map_err(|errors| CommandError::Conflict {
@@ -499,6 +530,10 @@ impl Projection<MarkdownProvider> for MarkdownProjection {
         Ok(())
     }
 
+    fn lifecycles(&self) -> Option<&aep_domain::artifact::LifecycleRegistry> {
+        Some(&self.lifecycles)
+    }
+
     fn coordinates(&self, inner: &MemoryBackend, id: &EntityId) -> Option<(String, String)> {
         let relative = match self.file_for(id) {
             Some((_, relative)) => relative,
@@ -511,7 +546,7 @@ impl Projection<MarkdownProvider> for MarkdownProjection {
 
     fn placements(
         &mut self,
-        store: &MarkdownProvider,
+        store: &S,
         inner: &MemoryBackend,
         result: &CommandResult,
     ) -> Result<Vec<Placement>, CommandError> {
@@ -541,13 +576,42 @@ impl Projection<MarkdownProvider> for MarkdownProjection {
     /// before there was a contract, and the one `protocol artifact history` reads.
     fn records(
         &mut self,
-        _store: &MarkdownProvider,
+        _store: &S,
         _inner: &MemoryBackend,
         _before: &Snapshot,
         _key: &IdempotencyKey,
     ) -> Result<Vec<Record>, CommandError> {
         Ok(Vec::new())
     }
+}
+
+/// The document a contract entity stands for, for a store that keeps no documents.
+///
+/// `protocol artifact list`, `board`, `graph` and `validate` read a plan as documents. A SQLite or
+/// Postgres plan has none, so this builds the document the markdown projection *would* have written
+/// for the entity: the frontmatter fields the entity body carries, its edges, its prose under
+/// [`BODY_KEY`], its revision — the same mapping [`MarkdownProjection`] applies on a write, so the
+/// two stores answer alike (wave H, story 1).
+#[must_use]
+pub fn document_from_entity(
+    artifact: ArtifactId,
+    data: &Node,
+    revision: u64,
+    relations: &[aep_domain::artifact::ArtifactRelation],
+) -> Option<PlanningDocument> {
+    let kind: aep_domain::artifact::ArtifactKind = artifact.namespace().parse().ok()?;
+    let mut frontmatter = PlanningFrontmatter::new(artifact, kind, "draft".parse().ok()?);
+    apply_body(&mut frontmatter, data);
+    frontmatter.relations = relations.to_vec();
+    frontmatter.revision = revision;
+    let body = match data {
+        Node::Map(fields) => match fields.get(BODY_KEY) {
+            Some(Node::Text(prose)) => prose.clone(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    };
+    Some(PlanningDocument { frontmatter, body })
 }
 
 /// Which change the journal should record.

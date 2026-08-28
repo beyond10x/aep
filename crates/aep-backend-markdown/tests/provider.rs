@@ -43,7 +43,7 @@ fn the_markdown_provider_conforms() {
     let mut provider = MarkdownProvider::open(scratch("conforms"));
     let report = conformance::run(&mut provider);
     assert!(report.is_clean(), "MarkdownProvider:\n{}", report.summary());
-    assert_eq!(report.outcomes.len(), 9, "the whole suite ran");
+    assert_eq!(report.outcomes.len(), 10, "the whole suite ran");
 }
 
 /// A copy of the provider that ignores the revision it was given — the runtime's `Broken`, written

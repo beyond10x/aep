@@ -11,6 +11,84 @@ belongs in the commit message or in `docs/design/`.
 
 Nothing yet.
 
+## [0.30.0] — 2026-08-28
+
+### Added
+
+* **`project.yaml` names the store, and every verb opens it** (H1). `aep.project/1` gains `store:`
+  — `markdown` (the default, so no existing project changes meaning), `sqlite: <path>` (relative to
+  `.engineering/`, as every project path is), `postgres: <url>`, and `hybrid: {authority, read,
+  on_unreachable, on_divergence, local, replica}`, whose words are carried and checked — a hybrid
+  missing one is refused by name at `protocol validate`, which now validates the discovered
+  `project.yaml` too — and not yet opened (`story:hybrid-backend`). Every `protocol artifact` verb,
+  `protocol drive` (through `aep_driver::PlanSource`, which the driver now reads its plan from) and
+  `protocol conformance --backend project` open through it; `--store <dir>` remains the markdown
+  override. `protocol artifact history` over a SQLite or Postgres plan reads the entity's event log
+  back as journal entries, so the same history prints over every store.
+  `examples/planning-passkeys/.engineering/project.sqlite.yaml` is the example on SQLite, and
+  `store_selection.rs` runs every verb over both, each as its own process, and compares the output.
+  Two things were found by that comparison and written down rather than hidden: an edge moves a
+  document's revision and not an entity's
+  (`story:relation-bumps-a-document-revision-but-not-an-entity`), and `validate`'s drift lines
+  have no counterpart where there is no second record.
+
+* **An observation is an event on the entity it is about.** The `Identity` projection — the shape
+  of a SQLite or Postgres plan — writes an event at the entity's unchanged revision for a relation
+  (on its source) and for recorded evidence (on its target), where before it wrote nothing: a
+  relation is a record of its own and evidence changes nothing, so the contract named no affected
+  entity. That is what a rebuilt history and a second process's evidence count read. The pin moved
+  to `entity-runtime` 0.13.0: 0.12.2's providers accept an observation at a reached revision
+  (SQLite and Postgres previously failed the second one on the primary key; the file store dropped
+  it silently) and its provider suite has a tenth case holding them to it; 0.13.0 adds the
+  serialisable `Divergence` and `Hybrid::remember` the hybrid plan's verbs need.
+
+* **`store: hybrid` — the plan kept twice, under four declared words** (H4,
+  `story:hybrid-backend`). `aep-backend-hybrid` is the adapter, shaped by the plan's own projection,
+  over `entity-runtime`'s `Hybrid<MarkdownProvider, R>`: markdown for pull requests and a SQLite or
+  Postgres replica for tooling, with `authority`, `read`, `on_unreachable` and `on_divergence` typed
+  in `project.yaml` and none defaulted. The atomicity guarantee is the runtime's, cited rather than
+  chosen (`store-v0.1.md` § 10). Two verbs are ours: `protocol artifact divergences` lists what one
+  side took and the other did not and says which side is authoritative (exit 1 while anything is
+  outstanding); `protocol artifact catch-up` replays them at the side that missed them and writes
+  back what it could not. Divergences live in `divergences.jsonl` beside the plan between commands,
+  because every verb is its own process — which is what `entity-runtime` 0.13.0's serialisable
+  `Divergence` and `Hybrid::remember` exist for. The sixteen suites run against the composite with
+  either side as authority; `protocol conformance --backend hybrid` runs them from the command line,
+  and `--backend project` resolves a hybrid project to that. `MarkdownProjection` now hydrates any
+  plan-shaped store (`PlanStore`) through its `Store` traits rather than reading the directory, so
+  a hybrid's declared read path governs hydration too. `examples/planning-passkeys/.engineering/
+  project.hybrid.yaml` is the example kept twice, and `store_selection.rs` runs every verb over it
+  beside the other two stores, then makes the replica refuse a write, lists the divergence from a
+  second process and catches it up from a third.
+
+### Fixed
+
+* **A seeded plan kept its tags.** `seed::from_manifest` carried title, summary and owner and not
+  tags, so a plan seeded into SQLite answered `list --kind` and a board with untagged artifacts.
+
+* **`describe_type` reports the ladder** (D-P5 closed). `TypeDescriptor::lifecycle` is filled for
+  every planning kind — the initial status, every status, every `from -> [to]` edge, and, new on the
+  descriptor, `requires`: which rungs cost evidence, of which kind, how many. Rendered from the same
+  `EntityDefinition` the kernel decides a move with, so what a harness reads and what the store
+  enforces cannot drift; the memory, SQLite and markdown backends report identically, and the edges
+  equal `protocol artifact lifecycle <kind>`'s output for every kind.
+
+* **`aep-backend-postgres`: the contract over PostgreSQL** (P5, as a type). `PostgresBackend` is
+  `EntityBackend<entity_postgres::PostgresStore>` — the runtime's provider with a server, one
+  transaction per commit, writers of one instance serialised by a row lock. Two processes writing
+  one artifact resolve to one accepted write and one refusal naming the revision it lost to; the
+  loser latches and reopens. The sixteen suites and the faulty-backend guard run against a server
+  when `ENTITY_POSTGRES_URL` names one; the gate's new `postgres-check` step prints
+  `postgres-check: skipped, ENTITY_POSTGRES_URL unset` when it does not, and CI runs them against a
+  `postgres:16` service. `protocol conformance --backend postgres --store <url>` runs them from the
+  command line. The pin moved to `entity-runtime` 0.12.1.
+
+### Changed
+
+* The ladder bridge (`kernel`) moved from `aep-backend-markdown` into `aep-backend-entity`, where
+  the adapter renders and decides with it; the markdown crate re-exports it under the same path.
+  `Identity::with_lifecycles` gives a SQLite plan its ladders.
+
 ## [0.29.0] — 2026-08-28
 
 **Wave G of `docs/plan/store-waves-f-g-h.md`: the plan's own store is a provider.** The markdown

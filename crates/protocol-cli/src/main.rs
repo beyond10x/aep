@@ -233,6 +233,19 @@ enum ConformanceBackend {
     /// The SQLite backend, `aep-backend-sqlite`, at `--store <file>` — or an in-memory database
     /// when none is given.
     Sqlite,
+    /// The Postgres backend, `aep-backend-postgres`, at `--store <url>` — required, because there
+    /// is no scratch server to invent. The suites write; give it a database of their own.
+    Postgres,
+    /// The hybrid, `aep-backend-hybrid`: the markdown plan at `--store <dir>` — or a scratch
+    /// directory — with an in-memory SQLite replica, the markdown side the authority, divergences
+    /// recorded. The composite held to the same sixteen suites (`story:hybrid-backend`).
+    Hybrid,
+    /// The kind of store the project this is run in configured (`store:` in `project.yaml`), held
+    /// to the suites on a scratch instance of it: a scratch directory for `markdown`, an in-memory
+    /// database for `sqlite`, a schema of its own on the configured server for `postgres`, a
+    /// scratch directory with an in-memory replica under the project's own policy for `hybrid`.
+    /// The suites write, and the project's plan is not theirs to write into.
+    Project,
 }
 
 /// The available subcommands.
@@ -507,7 +520,8 @@ enum Command {
         /// Which backend to hold to the suites.
         #[arg(long, value_enum, default_value_t = ConformanceBackend::Memory)]
         backend: ConformanceBackend,
-        /// Where a durable backend lives: a directory for `markdown`, a file for `sqlite`.
+        /// Where a durable backend lives: a directory for `markdown`, a file for `sqlite`, a URL
+        /// for `postgres`. Not with `project`, whose store `project.yaml` names.
         #[arg(long)]
         store: Option<PathBuf>,
         /// How to render the result.
@@ -921,23 +935,20 @@ fn conformance(
     store: Option<&Path>,
     format: Format,
 ) -> Result<ExitCode> {
-    use aep_conformance::Level;
-
-    let level = Level::parse(level).with_context(|| {
-        format!(
-            "`{level}` is not a conformance level; expected one of {}",
-            Level::ALL
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    })?;
+    let level = conformance_level(level)?;
 
     let fault = match inject {
         None => None,
         Some(name) => Some(parse_fault(name)?),
     };
+
+    let ConformanceTarget {
+        backend,
+        store,
+        scratch_schema,
+        hybrid_policy,
+    } = conformance_target(backend, store)?;
+    let store = store.as_deref();
 
     // One arm per backend, each saying in the report what it ran against. The durable ones without
     // `--store` get a scratch store rather than a refusal, because the suites write and a person
@@ -973,32 +984,43 @@ fn conformance(
                     .ran_against("sqlite (in-memory database)")
             }
         }
-        ConformanceBackend::Markdown => {
-            let root = if let Some(path) = store {
-                path.to_path_buf()
-            } else {
-                let scratch = std::env::temp_dir()
-                    .join(format!("protocol-conformance-{}", std::process::id()));
-                std::fs::create_dir_all(&scratch).with_context(|| {
-                    format!("creating a scratch store at {}", scratch.display())
-                })?;
-                scratch
+        ConformanceBackend::Postgres => {
+            let Some(url) = store.and_then(Path::to_str) else {
+                anyhow::bail!(
+                    "`--backend postgres` needs `--store <url>`: there is no scratch server to \
+                     invent, and the suites write — give them a database of their own"
+                );
             };
-            // Permissive ladders and no workspace members: the suites are about the contract and
-            // durability, not about any particular ladder, and a real ladder would refuse moves the
-            // suites are entitled to make — the same choice `aep-backend-markdown`'s own conformance
-            // test takes.
-            let backend = aep_backend_markdown::backend::MarkdownBackend::open(
-                &root,
-                std::iter::empty(),
-                planning::clock_at_the_edge(),
-                planning::command_actor()?,
-                aep_domain::artifact::LifecycleRegistry::default(),
-            )
-            .map_err(|error| anyhow::anyhow!("{error}"))
-            .with_context(|| format!("opening the markdown store at {}", root.display()))?;
+            let (backend, where_) = match &scratch_schema {
+                Some(schema) => (
+                    aep_backend_postgres::PostgresBackend::connect_in_schema(url, schema),
+                    format!("postgres ({}, schema {schema})", planning::redact(url)),
+                ),
+                None => (
+                    aep_backend_postgres::PostgresBackend::connect(url),
+                    format!("postgres ({})", planning::redact(url)),
+                ),
+            };
+            let backend = backend
+                .map_err(|error| anyhow::anyhow!("{error}"))
+                .with_context(|| "connecting to the Postgres store".to_owned())?;
+            run_against(backend, fault, level, suite)?.ran_against(where_)
+        }
+        ConformanceBackend::Markdown => {
+            let (backend, root) = markdown_conformance_backend(store)?;
             run_against(backend, fault, level, suite)?
                 .ran_against(format!("markdown ({})", root.display()))
+        }
+        ConformanceBackend::Hybrid => {
+            let (backend, root, policy) =
+                hybrid_conformance_backend(store, hybrid_policy.as_ref())?;
+            run_against(backend, fault, level, suite)?.ran_against(format!(
+                "hybrid ({}, in-memory SQLite replica, authority {policy})",
+                root.display()
+            ))
+        }
+        ConformanceBackend::Project => {
+            unreachable!("`project` was resolved to the store the project names above")
         }
     };
 
@@ -1017,6 +1039,176 @@ fn conformance(
     }
 
     Ok(exit_code(report.passed()))
+}
+
+/// The markdown backend the suites run against: at `store`, or a scratch directory when none was
+/// given, because the suites write.
+///
+/// Permissive ladders and no workspace members: the suites are about the contract and durability,
+/// not about any particular ladder, and a real ladder would refuse moves the suites are entitled to
+/// make — the same choice `aep-backend-markdown`'s own conformance test takes.
+fn markdown_conformance_backend(
+    store: Option<&Path>,
+) -> Result<(aep_backend_markdown::backend::MarkdownBackend, PathBuf)> {
+    let root = scratch_or(store)?;
+    let backend = aep_backend_markdown::backend::MarkdownBackend::open(
+        &root,
+        std::iter::empty(),
+        planning::clock_at_the_edge(),
+        planning::command_actor()?,
+        aep_domain::artifact::LifecycleRegistry::default(),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+    .with_context(|| format!("opening the markdown store at {}", root.display()))?;
+    Ok((backend, root))
+}
+
+/// A conformance level by name, or every name it could have been.
+fn conformance_level(level: &str) -> Result<aep_conformance::Level> {
+    use aep_conformance::Level;
+
+    Level::parse(level).with_context(|| {
+        format!(
+            "`{level}` is not a conformance level; expected one of {}",
+            Level::ALL
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// The backend the suites run against, with `project` resolved to the store `project.yaml` names.
+///
+/// On a scratch instance of it: the suites write, and the question is whether the *kind* of store
+/// the project chose conforms, not whether its plan survives being written into. For `postgres`
+/// that is a schema of this process's own on the configured server, returned as the third element.
+fn conformance_target(
+    backend: ConformanceBackend,
+    store: Option<&Path>,
+) -> Result<ConformanceTarget> {
+    let ConformanceBackend::Project = backend else {
+        return Ok(ConformanceTarget {
+            backend,
+            store: store.map(Path::to_path_buf),
+            scratch_schema: None,
+            hybrid_policy: None,
+        });
+    };
+    if let Some(path) = store {
+        anyhow::bail!(
+            "`--backend project` reads the store from `project.yaml`, so `--store {}` would be a \
+             second answer; drop it, or name the backend",
+            path.display()
+        );
+    }
+    let mut target = ConformanceTarget {
+        backend: ConformanceBackend::Markdown,
+        store: None,
+        scratch_schema: None,
+        hybrid_policy: None,
+    };
+    match planning::Plan::discovered()? {
+        planning::Plan::Markdown { .. } => {}
+        planning::Plan::Sqlite { .. } => target.backend = ConformanceBackend::Sqlite,
+        planning::Plan::Postgres { url } => {
+            target.backend = ConformanceBackend::Postgres;
+            target.store = Some(PathBuf::from(url));
+            target.scratch_schema = Some(format!("aep_conformance_{}", std::process::id()));
+        }
+        planning::Plan::Hybrid { policy, .. } => {
+            target.backend = ConformanceBackend::Hybrid;
+            target.hybrid_policy = Some(policy);
+        }
+    }
+    Ok(target)
+}
+
+/// What `conformance_target` resolved: the backend, where it lives, and what only some kinds carry.
+struct ConformanceTarget {
+    backend: ConformanceBackend,
+    /// A directory, a file or a URL, as the backend reads it.
+    store: Option<PathBuf>,
+    /// A Postgres schema of this process's own, when the project's server is being borrowed.
+    scratch_schema: Option<String>,
+    /// The project's four words, for a hybrid.
+    hybrid_policy: Option<aep_domain::project::HybridPolicy>,
+}
+
+/// The hybrid the suites run against: the markdown plan at `store` or a scratch directory, an
+/// in-memory SQLite replica, under `policy` or — when none was configured — the markdown side as
+/// the authority with divergences recorded. Returns the authority word for the report.
+fn hybrid_conformance_backend(
+    store: Option<&Path>,
+    policy: Option<&aep_domain::project::HybridPolicy>,
+) -> Result<(
+    aep_backend_hybrid::HybridBackend<entity_sqlite::SqliteStore>,
+    PathBuf,
+    String,
+)> {
+    let root = scratch_or(store)?;
+    let default = aep_domain::project::HybridPolicy {
+        authority: "local".to_owned(),
+        read: "local-first".to_owned(),
+        on_unreachable: "refuse".to_owned(),
+        on_divergence: "record".to_owned(),
+    };
+    let configured = policy.unwrap_or(&default);
+    let policy =
+        aep_backend_hybrid::policy_from(configured).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let authority = configured.authority.clone();
+    let replica =
+        entity_sqlite::SqliteStore::in_memory().map_err(|error| anyhow::anyhow!("{error}"))?;
+    let backend = aep_backend_hybrid::HybridBackend::open(
+        &root,
+        replica,
+        policy,
+        std::iter::empty(),
+        planning::clock_at_the_edge(),
+        planning::command_actor()?,
+        aep_domain::artifact::LifecycleRegistry::default(),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+    .with_context(|| format!("opening the hybrid plan at {}", root.display()))?;
+    Ok((backend, root, authority))
+}
+
+/// `store`, or a scratch directory of this process's own, because the suites write.
+fn scratch_or(store: Option<&Path>) -> Result<PathBuf> {
+    if let Some(path) = store {
+        return Ok(path.to_path_buf());
+    }
+    let scratch = std::env::temp_dir().join(format!("protocol-conformance-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch)
+        .with_context(|| format!("creating a scratch store at {}", scratch.display()))?;
+    Ok(scratch)
+}
+
+/// What is wrong with the `project.yaml` of the project this was run in, when there is one.
+///
+/// `protocol validate` is where a project's configuration is refused as a whole — a `store: hybrid`
+/// missing one of its four policy words names the word here (`aep.project/1`, runtime R-106
+/// enforced at our edge), rather than at the first verb that happened to open the plan. No project
+/// found is no problem: the document tree is what was asked about.
+fn project_file_problems() -> Vec<String> {
+    let Ok(here) = std::env::current_dir() else {
+        return Vec::new();
+    };
+    let Some(project) = aep_engine::project::discover(&here) else {
+        return Vec::new();
+    };
+    let path = project
+        .join(aep_engine::project::project_directory())
+        .join(aep_domain::project::PROJECT_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) => return vec![format!("{}: {error}", path.display())],
+    };
+    match aep_schema::parse::project(&text, Some(&path.display().to_string())) {
+        Ok(_) => Vec::new(),
+        Err(error) => vec![error.to_string()],
+    }
 }
 
 /// Runs the suites against `backend`, with `fault` injected when one was asked for.
@@ -3396,6 +3588,7 @@ fn generated_tree(root: &Path) -> Result<ess_diff::GeneratedTree> {
 fn validate(root: &Path, artifacts: Option<&Path>, format: Format) -> Result<ExitCode> {
     let outcome = load_tree_report(root);
     let mut problems: Vec<String> = outcome.failures.iter().map(ToString::to_string).collect();
+    problems.extend(project_file_problems());
 
     if let Some(path) = artifacts {
         let graph = read_artifacts(path)?;

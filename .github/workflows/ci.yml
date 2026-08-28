@@ -27,6 +27,21 @@ jobs:
     # A hung job holds a runner for six hours on GitHub's default. Nothing here takes more than a few
     # minutes, so these ceilings are only ever reached by a hang, never by honest work.
     timeout-minutes: 30
+    # The one backend that needs a server gets one here, and nowhere else.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aep
+          POSTGRES_PASSWORD: aep
+          POSTGRES_DB: aep
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aep"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +81,12 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+      # The one backend that needs a server, against the service below. Mirrors `task postgres-check`.
+      - name: Postgres backend
+        env:
+          ENTITY_POSTGRES_URL: postgres://aep:aep@127.0.0.1:5432/aep
+        run: scripts/postgres-check.sh
 
       # A step, not a job — the opposite call from `schemas` and `projections` below, and for a
       # reason. Those two check committed artifacts for drift and are fixed by rerunning a generator,

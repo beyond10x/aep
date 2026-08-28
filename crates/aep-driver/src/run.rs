@@ -54,6 +54,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use aep_backend_markdown::store::StoreReport;
 use aep_backend_markdown::MarkdownStore;
 use aep_domain::action::ActionRequest;
 use aep_domain::artifact::ArtifactGraph;
@@ -288,15 +289,40 @@ impl RunReport {
     }
 }
 
+/// Where the artifact graph is rebuilt from at the top of every iteration.
+///
+/// The driver reads a plan and decides nothing about where it is kept: a markdown store is one, and
+/// `protocol drive` hands it whichever store the project's `project.yaml` names
+/// (`story:store-selection-in-project-yaml`). One method, because the loop asks one question —
+/// *what does the plan say now* — and `StoreReport` is the answer in every store's terms,
+/// failures included, so a store that stopped reading stops the run the same way a broken file does.
+pub trait PlanSource {
+    /// The plan's documents, read now.
+    fn load(&self) -> StoreReport;
+
+    /// Where the plan is, for a note in the run's report.
+    fn describe(&self) -> String;
+}
+
+impl PlanSource for MarkdownStore {
+    fn load(&self) -> StoreReport {
+        Self::load(self)
+    }
+
+    fn describe(&self) -> String {
+        self.root().display().to_string()
+    }
+}
+
 /// Starts a new run, or continues one whose cursor is on disk.
 ///
 /// Continuing is not resuming: [`resume`] checks the three pins and refuses when any moved, and a
 /// caller that means *pick this run up again* should call it. This one continues a run in the same
 /// invocation's terms, which is what a fresh `drive` over a directory it just wrote wants.
-pub fn drive<C, X>(
+pub fn drive<C, S, X>(
     engine: &Engine<C>,
     task: &Task,
-    store: &MarkdownStore,
+    store: &S,
     map: &StepMap,
     run: &RunDirectory,
     executors: &mut X,
@@ -304,6 +330,7 @@ pub fn drive<C, X>(
 ) -> Result<RunReport, DriveError>
 where
     C: Clock,
+    S: PlanSource + ?Sized,
     X: StepExecutors,
 {
     let (cursor, snapshot) = if run.has_cursor() {
@@ -330,10 +357,10 @@ where
 /// rewrote every guard restores cleanly and silently re-governs the run. The cursor is what closes
 /// that — which is why the test for this refusal also asserts `Engine::restore` *would* have
 /// accepted the same snapshot.
-pub fn resume<C, X>(
+pub fn resume<C, S, X>(
     engine: &Engine<C>,
     task: &Task,
-    store: &MarkdownStore,
+    store: &S,
     map: &StepMap,
     run: &RunDirectory,
     executors: &mut X,
@@ -341,6 +368,7 @@ pub fn resume<C, X>(
 ) -> Result<RunReport, DriveError>
 where
     C: Clock,
+    S: PlanSource + ?Sized,
     X: StepExecutors,
 {
     let cursor = run.read_cursor()?;
@@ -363,10 +391,10 @@ where
 }
 
 /// Everything one call was given, so the loop can be a sequence of short steps.
-struct Session<'a, C: Clock> {
+struct Session<'a, C: Clock, S: PlanSource + ?Sized> {
     engine: &'a Engine<C>,
     task: &'a Task,
-    store: &'a MarkdownStore,
+    store: &'a S,
     map: &'a StepMap,
     directory: &'a RunDirectory,
     options: &'a DriverOptions,
@@ -453,7 +481,7 @@ impl Streak {
     }
 }
 
-impl<C: Clock> Session<'_, C> {
+impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     /// The loop.
     fn run<X: StepExecutors>(
         &self,
@@ -904,7 +932,7 @@ impl<C: Clock> Session<'_, C> {
             "the planning store stopped parsing, so no evaluation could be trusted; {} file(s) \
              below {} are reported verbatim",
             failures.len(),
-            self.store.root().display()
+            self.store.describe()
         ));
         progress.reasons.extend(failures);
         cursor.status = RunStatus::StoreBroken;

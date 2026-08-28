@@ -58,6 +58,8 @@ fn specification() -> TypeDescriptor {
     // than invented: review is the only way out of draft, so a specification cannot become approved
     // by being edited.
     descriptor.lifecycle = Some(LifecycleDescriptor {
+        // A ladder that only says which moves are legal costs no evidence.
+        requires: Vec::new(),
         initial: ArtifactStatus::Draft,
         statuses: vec![
             ArtifactStatus::Draft,

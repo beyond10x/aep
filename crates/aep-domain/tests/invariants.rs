@@ -49,6 +49,8 @@ const DOCUMENT_TYPES: &[(&str, &str)] = &[
     ("RawArtifactManifest", "ArtifactGraph"),
     ("RawWorkspace", "Workspace"),
     ("RawMember", "Member"),
+    // Wave H: a hybrid store's four policy words, typed, never defaulted.
+    ("RawHybrid", "HybridPolicy"),
 ];
 
 /// Every `.rs` file of the crate, as `(file name, contents)`, in a stable order.

@@ -86,10 +86,12 @@ Each of these was learned by building the thing it names. They are enforced wher
 * **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
   that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
   appears in one here.
-* **`entity-runtime` is a dependency — three crates, one tag — and the arrow only points this way.**
-  `crates/aep-backend-markdown` takes `entity-core` by git tag so the status ladder is decided as
-  data rather than by a lookup written here (`src/kernel.rs`); `crates/aep-backend-sqlite` takes
-  `entity-core`, `entity-store` and `entity-sqlite` at the **same** tag, and `dep-check` in the gate
+* **`entity-runtime` is a dependency — five crates, one tag — and the arrow only points this way.**
+  `crates/aep-backend-entity` takes `entity-core` and `entity-store` by git tag so the status ladder
+  is decided as data rather than by a lookup written here (`src/kernel.rs`, re-exported by
+  `aep-backend-markdown`); `crates/aep-backend-sqlite` and `crates/aep-backend-postgres` take
+  `entity-sqlite` and `entity-postgres`, and `crates/aep-backend-hybrid` takes `entity-remote` for
+  its `Hybrid`, all at the **same** tag, and `dep-check` in the gate
   (`cargo xtask deps`) fails, naming both, when any `entity-*` crate resolves at two versions or from
   two pins — two kernels were compiled side by side for two releases before it existed. Nothing of
   ours appears in a manifest of `entity-runtime`'s, at any
@@ -356,10 +358,12 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Seventeen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
-other five are source-only and sub-second — `version-check`, `dep-check` (`cargo xtask deps`: every
-`entity-*` crate resolves once, from one `entity-runtime` pin), `guard-check` and `claim-check`
-between `status-check` and `clippy`, and `lab-check` before `msrv`:
+Eighteen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
+other six are `version-check`, `dep-check` (`cargo xtask deps`: every `entity-*` crate resolves
+once, from one `entity-runtime` pin), `guard-check` and `claim-check` between `status-check` and
+`clippy` — source-only and sub-second — then `postgres-check` after `test` (the Postgres backend's
+tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying they did not run),
+and `lab-check` before `msrv`:
 
 1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
    `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since
@@ -422,7 +426,7 @@ between `status-check` and `clippy`, and `lab-check` before `msrv`:
    covers less than the gate it claims to be is worse than one that admits its scope; that is why
    this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
 
-Land nothing that does not pass all seventeen.
+Land nothing that does not pass all eighteen.
 
 **A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
 *toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a
@@ -460,7 +464,8 @@ surfaces.
 * **A horizon cannot be extended, only re-observed** (invariant 17). There is deliberately no
   `extend`: if extending were as easy to call as re-checking, it is the one that gets called by
   whoever is trying to get a gate green.
-* **Nothing in `task check` reaches the network**, and no gate step spends money. Paid runs are
+* **Nothing in `task check` reaches the network** except `postgres-check`, opted into by
+  `ENTITY_POSTGRES_URL` and silent-by-name without it, and no gate step spends money. Paid runs are
   governed by the rules in *Rules the components carry* § *Paid runs* and are not part of any gate.
 * **Never commit a credential, a token, a real transcript that carries one, or anything
   adopter-internal.**
@@ -528,14 +533,17 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 Written down because it is already practised, and an unwritten standard is one the next agent meets
 only by violating it.
 
-* **The workspace has thirteen direct third-party crates.** Ten are declared once in
+* **The workspace has fourteen direct third-party crates.** Eleven are declared once in
   `[workspace.dependencies]`: seven from crates.io — `serde`, `serde_json`, `serde_yaml`,
-  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s three by **git tag** —
-  `entity-core`, `entity-store`, `entity-sqlite` — the only dependencies not taken by version: they
-  are not on crates.io, a ladder's verdicts are a published surface that must not move under us,
-  and **one tag, declared once,** is what `dep-check` enforces after two kernels were compiled side
-  by side for two releases (`aep-backend-markdown` takes `entity-core`; `aep-backend-entity` takes
-  `entity-core` and `entity-store`; `aep-backend-sqlite` takes `entity-sqlite`). Three are
+  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s four by **git tag** —
+  `entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote` — the only
+  dependencies not taken by version: they are not on crates.io, a ladder's verdicts are a published surface that must
+  not move under us, and **one tag, declared once,** is what `dep-check` enforces after two kernels
+  were compiled side by side for two releases (`aep-backend-markdown` takes `entity-core`;
+  `aep-backend-entity` takes `entity-core` and `entity-store`; `aep-backend-sqlite` takes
+  `entity-sqlite`; `aep-backend-postgres` takes `entity-postgres`, which brings `postgres` 0.19
+  without default features and no TLS backend — the connection is the caller's, by URL;
+  `aep-backend-hybrid` takes `entity-remote` for `Hybrid`, which brings nothing further). Three are
   crate-local: `sha2` wherever a document is content-addressed (`ess-gen`, `trace-domain`,
   `infra-domain`, `infra-compiler`, `aep-driver-spec`), `jsonschema` as a dev-dependency of
   `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a dev-dependency of
@@ -555,9 +563,10 @@ only by violating it.
   have cost; `crates/ess-compiler/tests/billing.rs` scans its own sources on the same reasoning. Where
   a crate is taken, its surface is cut to what is used — `jsonschema` runs with
   `default-features = false`, which drops `resolve-http`, `resolve-file` and the TLS backend.
-* **Nothing in `task check` reaches the network.** No step downloads a schema, resolves a remote
-  `$ref` or calls an API — `jsonschema` is built with `default-features = false` for exactly that
-  reason. The Go steps hold the same line by construction: the generated module has no
+* **Nothing in `task check` reaches the network**, with one exception opted into by name:
+  `postgres-check` talks to the server `ENTITY_POSTGRES_URL` names and to nothing when it is
+  unset, and prints which. No other step downloads a schema, resolves a remote `$ref` or calls an
+  API — `jsonschema` is built with `default-features = false` for exactly that reason. The Go steps hold the same line by construction: the generated module has no
   dependencies, and every `go` invocation runs with `GOPROXY=off` and `GOTOOLCHAIN=local`, so
   neither a dependency nor a `go` directive can make the toolchain fetch anything. The browser
   target holds it the same way, and it is the reason that target has **no `wasm-bindgen`**: that

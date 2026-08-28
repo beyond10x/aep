@@ -1,0 +1,18 @@
+version: aep.project/1
+
+# The same project, keeping its plan in SQLite instead of under `planning/`. Copy this file over
+# `project.yaml` and every `protocol artifact` verb opens the database — one line decides the
+# store, and nothing else about the project changes (`story:store-selection-in-project-yaml`).
+#
+# The protocol tree is this repository itself, three levels up from `.engineering`, exactly as in
+# `project.yaml`. The database path is relative to `.engineering/`, as every other project path is.
+protocol: adp/1
+profile: development.standard
+protocols: ../../..
+
+store:
+  sqlite: plan.sqlite3
+
+summary: >-
+  The passkeys work, planned in the repository: one initiative, one epic, three stories and two
+  tasks, kept in .engineering/plan.sqlite3.

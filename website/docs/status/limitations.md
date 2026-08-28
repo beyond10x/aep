@@ -48,10 +48,11 @@ closed. It stayed open because the vocabulary was missing two words: a planning 
 data with an open status vocabulary, and an evidence record is the input to the evidence-gated move.
 `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 
-*What is still limited:* `describe_type` still reports no lifecycle (**D-P5**), so a harness cannot
-ask the contract which statuses a story may hold — it has to read the lifecycle document itself.
-(`protocol conformance --backend memory|markdown|sqlite` runs the suites against the backend you
-name since wave F, and its report says which one answered.)
+**`describe_type` reports the ladder** (wave H, **D-P5** closed): a harness asks the contract which
+statuses a story may hold, what may follow what, and which rungs cost evidence, and gets the answer
+rendered from the same definition the kernel enforces a move with — identically from every backend.
+`protocol conformance --backend memory|markdown|sqlite` runs the suites against the backend you
+name since wave F, and its report says which one answered.
 
 **A SQLite plan reopens.** Since wave F, `aep-backend-sqlite` reads a populated file back on open —
 entities with their history, relations, audit records, applied commands — under the identities the
@@ -66,8 +67,13 @@ reports **drift** (an edit made in an editor) and **deletion** (`rm`), naming th
 — D-P2 and D-P4 closed by detection, prevention refused on the record. A document with no events
 predates the log and is counted, not blamed.
 
+**Postgres is a type** (wave H): `aep-backend-postgres` is the same adapter over the runtime's
+Postgres provider; two processes writing one artifact resolve to one accepted write and one refusal
+naming the revision it lost to. Its tests need a server, run when `ENTITY_POSTGRES_URL` names one,
+and the gate prints when they did not.
+
 What remains: `protocol artifact` verbs open the markdown store only; every verb opening through a
-`store:` in `project.yaml` is wave H.
+`store:` in `project.yaml` is wave H's first story.
 
 The `entity-core` dependency does not change this and cannot: that kernel performs no IO of any kind
 — no filesystem, no clock, no network, asserted by a scan over its own sources — so it stores

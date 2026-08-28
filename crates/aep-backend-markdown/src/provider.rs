@@ -76,6 +76,55 @@ use crate::store::MarkdownStore;
 /// The field a document's markdown body travels under.
 pub const BODY_FIELD: &str = "body";
 
+/// A store shaped like a plan: kinds as entity types, names as ids, documents as instances.
+///
+/// What [`crate::projection::MarkdownProjection`] hydrates from and writes to. [`MarkdownProvider`]
+/// is one; a hybrid of it and a replica (`aep-backend-hybrid`) is another, and the projection does
+/// not know which it has — every read goes through the `Store` traits, so a hybrid's declared read
+/// path governs hydration as it governs everything else. The two things a `Store` cannot say are
+/// asked here: which kinds there are (the SPI enumerates ids under one entity type, never the
+/// types), and where the documents are, for a message.
+pub trait PlanStore: Store {
+    /// The directory the plan's documents are in — the local side, for a hybrid.
+    fn root(&self) -> &Path;
+
+    /// Every kind that has a directory, sorted.
+    ///
+    /// # Errors
+    ///
+    /// If the directory cannot be listed.
+    fn kinds(&self) -> Result<Vec<String>, StoreError>;
+}
+
+impl PlanStore for MarkdownProvider {
+    fn root(&self) -> &Path {
+        Self::root(self)
+    }
+
+    fn kinds(&self) -> Result<Vec<String>, StoreError> {
+        let root = self.store.root();
+        let entries = match fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(backend("listing", root, &error)),
+        };
+        let mut kinds = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|error| backend("listing", root, &error))?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            if name.starts_with('.') || !entry.path().is_dir() {
+                continue;
+            }
+            kinds.push(name.to_owned());
+        }
+        kinds.sort();
+        Ok(kinds)
+    }
+}
+
 /// A directory of planning documents, answering as an `entity_store::Store`.
 #[derive(Debug, Clone)]
 pub struct MarkdownProvider {

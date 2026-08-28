@@ -545,12 +545,21 @@ fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
         stderr(&output)
     );
 
-    let unknown = protocol(&["conformance", "--backend", "postgres"]);
+    let unknown = protocol(&["conformance", "--backend", "oracle"]);
     assert_eq!(code(&unknown), 2, "an unknown backend is a usage error");
     assert!(
         stderr(&unknown).contains("memory") && stderr(&unknown).contains("sqlite"),
         "and the usage error names the backends that exist: {}",
         stderr(&unknown)
+    );
+
+    // The one backend with no scratch to invent: a server has to be named.
+    let unaddressed = protocol(&["conformance", "--backend", "postgres"]);
+    assert_eq!(code(&unaddressed), 1);
+    assert!(
+        stderr(&unaddressed).contains("needs `--store <url>`"),
+        "{}",
+        stderr(&unaddressed)
     );
 }
 

@@ -67,5 +67,7 @@ pub use executor::{
 };
 pub use lock::{Liveness, LockState};
 pub use route::{next_step, steps_remaining, NextStep};
-pub use run::{drive, resume, DriveError, DriverOptions, RunDirectory, RunReport, ENGINE_VERSION};
+pub use run::{
+    drive, resume, DriveError, DriverOptions, PlanSource, RunDirectory, RunReport, ENGINE_VERSION,
+};
 pub use tool::{tool_config, TOOL_CANDIDATES};

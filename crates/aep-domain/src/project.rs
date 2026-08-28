@@ -279,11 +279,272 @@ pub struct ProjectConfig {
     pub protocols: ProtocolSource,
     /// Where project-owned inputs live.
     pub paths: ProjectLocalPaths,
+    /// Where the plan is kept.
+    #[serde(default)]
+    pub store: StoreConfig,
 }
 
 impl fmt::Display for ProjectConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} under {}", self.profile, self.protocol)
+    }
+}
+
+/// Where a project keeps its plan, as written in `project.yaml` (wave H, story 1).
+///
+/// ```yaml
+/// store: markdown                    # the default: `.engineering/planning/`
+/// store: { sqlite: plan.sqlite3 }    # one file, relative to `.engineering/`
+/// store: { postgres: "postgres://…" }
+/// store:
+///   hybrid:
+///     authority: local               # local | replica
+///     read: local-first              # local-first | replica-first | replica-only
+///     on_unreachable: refuse         # refuse | serve-stale
+///     on_divergence: record          # refuse | record
+///     local: markdown
+///     replica: { sqlite: plan.sqlite3 }
+/// ```
+///
+/// A hybrid's four policy words are **required** — the runtime's R-106 says a default here is a
+/// policy nobody chose being applied to somebody's data — and a document missing one is refused
+/// naming the word, by the parser.
+#[derive(Debug, Clone, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(untagged)]
+pub enum RawStore {
+    /// `markdown`, the only bare word.
+    Named(String),
+    /// `sqlite: <path>`.
+    Sqlite {
+        /// The database file, relative to `.engineering/`.
+        sqlite: PathBuf,
+    },
+    /// `postgres: <url>`.
+    Postgres {
+        /// A libpq connection string or URL.
+        postgres: String,
+    },
+    /// `hybrid: {…}`.
+    Hybrid {
+        /// The composite's policy and its two halves.
+        hybrid: Box<RawHybrid>,
+    },
+}
+
+/// Hand-written rather than `#[serde(untagged)]`, for the refusal's sake: an untagged enum that
+/// fails to match reports *"did not match any variant"* and loses the reason, and the reason is the
+/// whole point — a hybrid missing `on_divergence` must be refused **naming `on_divergence`**.
+impl<'de> serde::Deserialize<'de> for RawStore {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(name) => Ok(Self::Named(name)),
+            serde_json::Value::Object(map) if map.len() == 1 => {
+                let (key, inner) = map.into_iter().next().expect("one entry");
+                match key.as_str() {
+                    "sqlite" => serde_json::from_value(inner)
+                        .map(|sqlite| Self::Sqlite { sqlite })
+                        .map_err(|error| D::Error::custom(format!("store.sqlite: {error}"))),
+                    "postgres" => serde_json::from_value(inner)
+                        .map(|postgres| Self::Postgres { postgres })
+                        .map_err(|error| D::Error::custom(format!("store.postgres: {error}"))),
+                    "hybrid" => serde_json::from_value::<RawHybrid>(inner)
+                        .map(|hybrid| Self::Hybrid {
+                            hybrid: Box::new(hybrid),
+                        })
+                        .map_err(|error| D::Error::custom(format!("store.hybrid: {error}"))),
+                    other => Err(D::Error::custom(format!(
+                        "`{other}` is not a store form; write `markdown`, `sqlite: <path>`, \
+                         `postgres: <url>` or `hybrid: {{…}}`"
+                    ))),
+                }
+            }
+            other => Err(D::Error::custom(format!(
+                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>` or `hybrid: {{…}}`, \
+                 not {other}"
+            ))),
+        }
+    }
+}
+
+/// A hybrid store as written: four policy words and two stores, none defaulted.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawHybrid {
+    /// Whose copy is the record of truth: `local` or `replica`.
+    pub authority: String,
+    /// Where a read goes first: `local-first`, `replica-first` or `replica-only`.
+    pub read: String,
+    /// What a read does when the replica does not answer: `refuse` or `serve-stale`.
+    pub on_unreachable: String,
+    /// What happens to a write that lost: `refuse` or `record`.
+    pub on_divergence: String,
+    /// The local half.
+    pub local: RawStore,
+    /// The replica.
+    pub replica: RawStore,
+}
+
+/// Where a project keeps its plan, validated.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StoreConfig {
+    /// Markdown documents under `.engineering/planning/`. The default.
+    #[default]
+    Markdown,
+    /// One SQLite file, at a path relative to `.engineering/`.
+    Sqlite {
+        /// The database file.
+        path: PathBuf,
+    },
+    /// A PostgreSQL database the caller connects to.
+    Postgres {
+        /// A libpq connection string or URL.
+        url: String,
+    },
+    /// Two stores and a declared rule for when they disagree.
+    Hybrid {
+        /// The four words, every one typed.
+        policy: HybridPolicy,
+        /// The local half.
+        local: Box<StoreConfig>,
+        /// The replica.
+        replica: Box<StoreConfig>,
+    },
+}
+
+impl StoreConfig {
+    /// The same configuration with every relative file path resolved against `engineering`.
+    #[must_use]
+    pub fn resolved(&self, engineering: &Path) -> Self {
+        match self {
+            Self::Markdown => Self::Markdown,
+            Self::Sqlite { path } => Self::Sqlite {
+                path: engineering.join(path),
+            },
+            Self::Postgres { url } => Self::Postgres { url: url.clone() },
+            Self::Hybrid {
+                policy,
+                local,
+                replica,
+            } => Self::Hybrid {
+                policy: policy.clone(),
+                local: Box::new(local.resolved(engineering)),
+                replica: Box::new(replica.resolved(engineering)),
+            },
+        }
+    }
+}
+
+/// A hybrid's policy: the runtime's four required words, as this configuration spells them.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct HybridPolicy {
+    /// `local` or `replica`.
+    pub authority: String,
+    /// `local-first`, `replica-first` or `replica-only`.
+    pub read: String,
+    /// `refuse` or `serve-stale`.
+    pub on_unreachable: String,
+    /// `refuse` or `record`.
+    pub on_divergence: String,
+}
+
+/// The words each policy field accepts.
+const HYBRID_WORDS: &[(&str, &[&str])] = &[
+    ("authority", &["local", "replica"]),
+    ("read", &["local-first", "replica-first", "replica-only"]),
+    ("on_unreachable", &["refuse", "serve-stale"]),
+    ("on_divergence", &["refuse", "record"]),
+];
+
+impl RawStore {
+    /// Validates a store configuration, accumulating every refusal under `at`.
+    fn validate(self, at: &str, errors: &mut ValidationErrors) -> StoreConfig {
+        match self {
+            Self::Named(name) if name == "markdown" => StoreConfig::Markdown,
+            Self::Named(name) => {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        at,
+                        format!(
+                            "`{name}` is not a store; write `markdown`, `sqlite: <path>`, \
+                             `postgres: <url>` or `hybrid: {{…}}`"
+                        ),
+                    )
+                    .with_hint("the bare word form has one value, `markdown`"),
+                );
+                StoreConfig::Markdown
+            }
+            Self::Sqlite { sqlite } => {
+                if let Some(reason) = absolute_path_reason(&sqlite.to_string_lossy()) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("{at}.sqlite"),
+                            format!("`{}` is an absolute path ({reason})", sqlite.display()),
+                        )
+                        .with_hint("a store path is relative to `.engineering`, like every other"),
+                    );
+                }
+                StoreConfig::Sqlite { path: sqlite }
+            }
+            Self::Postgres { postgres } => {
+                if postgres.trim().is_empty() {
+                    errors.push(ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("{at}.postgres"),
+                        "a Postgres store needs a connection URL",
+                    ));
+                }
+                StoreConfig::Postgres { url: postgres }
+            }
+            Self::Hybrid { hybrid } => {
+                let RawHybrid {
+                    authority,
+                    read,
+                    on_unreachable,
+                    on_divergence,
+                    local,
+                    replica,
+                } = *hybrid;
+                for (field, value) in [
+                    ("authority", &authority),
+                    ("read", &read),
+                    ("on_unreachable", &on_unreachable),
+                    ("on_divergence", &on_divergence),
+                ] {
+                    let accepted = HYBRID_WORDS
+                        .iter()
+                        .find(|(name, _)| *name == field)
+                        .map_or(&[][..], |(_, words)| *words);
+                    if !accepted.contains(&value.as_str()) {
+                        errors.push(
+                            ValidationError::new(
+                                ValidationCode::TypeMismatch,
+                                format!("{at}.hybrid.{field}"),
+                                format!("`{value}` is not a `{field}`; one of {}", accepted.join(", ")),
+                            )
+                            .with_hint(
+                                "a hybrid's four words are required and never defaulted: a default \
+                                 here is a policy nobody chose applied to somebody's data",
+                            ),
+                        );
+                    }
+                }
+                StoreConfig::Hybrid {
+                    policy: HybridPolicy {
+                        authority,
+                        read,
+                        on_unreachable,
+                        on_divergence,
+                    },
+                    local: Box::new(local.validate(&format!("{at}.hybrid.local"), errors)),
+                    replica: Box::new(replica.validate(&format!("{at}.hybrid.replica"), errors)),
+                }
+            }
+        }
     }
 }
 
@@ -322,6 +583,9 @@ pub struct RawProjectConfig {
     /// Where project-owned JSON Schema contracts are.
     #[serde(default)]
     pub schemas: Option<PathBuf>,
+    /// Where the plan is kept. Absent means `markdown`.
+    #[serde(default)]
+    pub store: Option<RawStore>,
 }
 
 /// Serde default for the format version.
@@ -401,12 +665,17 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             }
         }
 
+        let store = raw.store.map_or(StoreConfig::Markdown, |store| {
+            store.validate("project.store", &mut errors)
+        });
+
         let config = Self {
             protocol: raw.protocol,
             profile: raw.profile,
             summary: raw.summary,
             protocols,
             paths,
+            store,
         };
         errors.into_result(config)
     }
@@ -415,6 +684,79 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BASE: &str = "protocol: adp/1\nprofile: development.standard\n";
+
+    #[test]
+    fn a_project_that_names_no_store_keeps_its_plan_in_markdown() {
+        let parsed = config(BASE).expect("valid");
+        assert_eq!(parsed.store, StoreConfig::Markdown);
+    }
+
+    #[test]
+    fn a_sqlite_store_is_a_relative_path_resolved_against_engineering() {
+        let parsed = config(&format!("{BASE}store:\n  sqlite: plan.sqlite3\n")).expect("valid");
+        assert_eq!(
+            parsed.store.resolved(Path::new("/repo/.engineering")),
+            StoreConfig::Sqlite {
+                path: PathBuf::from("/repo/.engineering/plan.sqlite3")
+            }
+        );
+        let absolute = config(&format!("{BASE}store:\n  sqlite: /var/plan.sqlite3\n"))
+            .expect_err("an absolute path is refused");
+        assert_eq!(absolute.as_slice()[0].location, "project.store.sqlite");
+    }
+
+    #[test]
+    fn a_hybrid_missing_a_word_is_refused_naming_the_word() {
+        // The parser refuses it: the four words are required fields, not defaulted ones.
+        let text = format!(
+            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
+             on_unreachable: refuse\n    local: markdown\n    replica:\n      sqlite: plan.sqlite3\n"
+        );
+        let error = serde_yaml::from_str::<RawProjectConfig>(&text)
+            .expect_err("a hybrid without `on_divergence` does not parse");
+        assert!(error.to_string().contains("on_divergence"), "{error}");
+    }
+
+    #[test]
+    fn a_hybrid_word_the_runtime_does_not_know_is_refused_naming_the_field_and_the_words() {
+        let text = format!(
+            "{BASE}store:\n  hybrid:\n    authority: local\n    read: sometimes\n    \
+             on_unreachable: refuse\n    on_divergence: record\n    local: markdown\n    \
+             replica:\n      sqlite: plan.sqlite3\n"
+        );
+        let errors = config(&text).expect_err("`sometimes` is not a read path");
+        let error = &errors.as_slice()[0];
+        assert_eq!(error.location, "project.store.hybrid.read");
+        assert!(error.message.contains("local-first"), "{}", error.message);
+    }
+
+    #[test]
+    fn a_complete_hybrid_carries_its_words_and_both_halves() {
+        let text = format!(
+            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
+             on_unreachable: serve-stale\n    on_divergence: record\n    local: markdown\n    \
+             replica:\n      sqlite: plan.sqlite3\n"
+        );
+        let parsed = config(&text).expect("valid");
+        let StoreConfig::Hybrid {
+            policy,
+            local,
+            replica,
+        } = parsed.store
+        else {
+            panic!("a hybrid");
+        };
+        assert_eq!(policy.on_unreachable, "serve-stale");
+        assert_eq!(*local, StoreConfig::Markdown);
+        assert_eq!(
+            *replica,
+            StoreConfig::Sqlite {
+                path: PathBuf::from("plan.sqlite3")
+            }
+        );
+    }
 
     fn config(yaml: &str) -> Result<ProjectConfig, ValidationErrors> {
         let raw: RawProjectConfig = serde_yaml::from_str(yaml).expect("document parses");

@@ -29,6 +29,7 @@ tasks:
       - task: claim-check
       - task: clippy
       - task: test
+      - task: postgres-check
       - task: doc-check
       - task: schema-check
       - task: generate-check
@@ -241,6 +242,14 @@ tasks:
     desc: Fail if the committed schemas differ from the Rust types.
     cmds:
       - cargo xtask schema --check
+
+  postgres-check:
+    desc: >-
+      The Postgres backend's tests against the server ENTITY_POSTGRES_URL names, or one printed line
+      saying they did not run. The one gate step that reaches a network, opted into by name; a
+      laptop without a database stays green and stays honest.
+    cmds:
+      - scripts/postgres-check.sh
 
   doc:
     desc: Build the API documentation.

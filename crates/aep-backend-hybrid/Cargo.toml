@@ -1,0 +1,37 @@
+[package]
+name = "aep-backend-hybrid"
+description = "The AEP interaction contract over a plan kept twice: markdown for review and a replica for tooling, under a declared policy — aep-backend-entity over entity-remote's Hybrid."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aep-contract.workspace = true
+aep-domain.workspace = true
+# **This crate is an instantiation, not an implementation.** `HybridBackend<R>` is
+# `aep_backend_entity::EntityBackend<Composite<R>, MarkdownProjection>`: the plan's own projection
+# over the runtime's `Hybrid<MarkdownProvider, R>`. The contract logic lives once in
+# `aep-backend-memory`, the durability logic once in the adapter, the plan's shape once in
+# `aep-backend-markdown`, and whose copy wins once in `entity-remote`. What is left here is the
+# newtype the orphan rule asks for, the policy words as `project.yaml` spells them, and the one
+# thing a one-process-per-command shell needs that a long-running one does not: divergences written
+# beside the plan so the next command can act on them.
+aep-backend-entity.workspace = true
+aep-backend-markdown.workspace = true
+entity-core.workspace = true
+# `Hybrid`: two stores and the four required words for when they disagree (`store-v0.1.md` § 10).
+# Same tag as every other `entity-*` crate, declared once in the workspace manifest.
+entity-remote.workspace = true
+entity-store.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+aep-conformance.workspace = true
+# The replica the tests hold the composite with: SQLite in memory for the suites, a file for the
+# two-process divergence round trip.
+entity-sqlite.workspace = true
+
+[lints]
+workspace = true

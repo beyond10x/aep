@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:sqlite-backend
 kind: story
-status: draft
+status: archived
 title: 'P4: aep-backend-sqlite'
 summary: The first database backend — one file, no server — passing the same sixteen suites the markdown store passes.
 owner: store
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:journal-backed-store
-revision: 1
+revision: 2
 ---
 # Story: P4 — `aep-backend-sqlite`
 

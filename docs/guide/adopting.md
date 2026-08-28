@@ -150,6 +150,11 @@ verdict everywhere. Every other path in the file — `artifacts`, `task`, `princ
 Two ways to name a tree that is not inside your repository: a relative path that climbs out of it,
 or a pinned locator. Prefer the locator for anything other people will clone.
 
+`store:` names where the plan is kept — `markdown` (the default, one document per artifact under
+`.engineering/planning/`), `sqlite: <file>`, `postgres: <url>`, or `hybrid:` (markdown and a replica,
+under four declared words) — and every `protocol artifact` verb opens through it; a relative file is
+relative to `.engineering/`. See [`backend.md` § Choosing the store](backend.md#choosing-the-store).
+
 `schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
 defaults to `schemas`, so `.engineering/schemas/` needs no explicit entry. The path locates the
 registry while each schema's absolute `$id` identifies its contract. `protocol schema validate`

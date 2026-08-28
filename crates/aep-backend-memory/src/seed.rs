@@ -177,6 +177,19 @@ fn body(artifact: &Artifact) -> Node {
             fields.insert(key.to_owned(), Node::from(value));
         }
     }
+    if !artifact.metadata.tags.is_empty() {
+        fields.insert(
+            "tags".to_owned(),
+            Node::Seq(
+                artifact
+                    .metadata
+                    .tags
+                    .iter()
+                    .map(|tag| Node::from(tag.as_str()))
+                    .collect(),
+            ),
+        );
+    }
     if let Some(version) = &artifact.version {
         fields.insert("version".to_owned(), Node::from(version.as_str()));
     }
@@ -401,6 +414,50 @@ mod tests {
         assert!(
             !fields.contains_key("title"),
             "the manifest states no title for the design, so the entity claims none"
+        );
+        assert!(
+            !fields.contains_key("tags"),
+            "the manifest states no tags for the design, so the entity claims none"
+        );
+    }
+
+    #[test]
+    fn tags_travel_with_the_artifact() {
+        // A planning document's tags are what `list --kind` and a board group by; a seed that
+        // dropped them would hand a SQLite plan seven untagged artifacts and call it the same plan
+        // (`story:store-selection-in-project-yaml`).
+        let mut graph = example();
+        let id: aep_domain::artifact::ArtifactId =
+            "design:passkeys-auth".parse().expect("artifact id");
+        let mut tagged = graph.get(&id).expect("the design is declared").clone();
+        tagged.metadata.tags = ["identity", "security"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        graph.insert(tagged);
+
+        let backend = MemoryBackend::new();
+        let report = from_manifest(
+            &backend,
+            &graph,
+            "acme",
+            "platform",
+            aep_domain::time::Timestamp::from_epoch_millis(1_700_000_000_000),
+            &actor(),
+        )
+        .expect("seeding succeeds");
+        let design = report.by_id.get(&id).expect("seeded").clone();
+        let entity = block_on(backend.get(&EntityRef::new(design), QueryConsistency::Current))
+            .expect("the design is readable");
+        let Node::Map(fields) = &entity.data else {
+            panic!("the body is a mapping");
+        };
+        assert_eq!(
+            fields.get("tags"),
+            Some(&Node::Seq(vec![
+                Node::from("identity"),
+                Node::from("security")
+            ]))
         );
     }
 

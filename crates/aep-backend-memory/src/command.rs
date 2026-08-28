@@ -405,7 +405,14 @@ fn apply_valid(
         occurred_at: at,
         actor: actor.clone(),
         executor: executor.clone(),
-        subject: affected.first().map(VersionedEntityRef::unversioned),
+        // An observation changes no entity, so `affected` is empty — but a record *about* an
+        // artifact that names no artifact cannot be found again by the artifact, and evidence that
+        // cannot be found for its subject counts for nothing at a gated move. The subject is the
+        // target the command named.
+        subject: match &envelope.payload {
+            Command::RecordEvidence(record) => Some(record.target.clone()),
+            _ => affected.first().map(VersionedEntityRef::unversioned),
+        },
         request_id: Some(envelope.context.request_id.clone()),
         command_id: Some(envelope.command_id.clone()),
         event_id: None,

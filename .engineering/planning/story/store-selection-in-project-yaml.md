@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:store-selection-in-project-yaml
 kind: story
-status: draft
+status: implemented
 title: project.yaml names the store, and every verb opens it
 summary: 'aep.project/1 gains store: markdown | sqlite: <path> | hybrid: {four policy words, local, replica}; every protocol artifact verb opens through it; a hybrid missing a word is refused by name.'
 owner: store
@@ -13,7 +13,8 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:sqlite-hydrates-on-open
 - depends_on: story:markdown-backend-is-the-adapter
-revision: 5
+- supersedes: story:sqlite-backend
+revision: 9
 ---
 # Story: `project.yaml` names the store, and every verb opens it
 

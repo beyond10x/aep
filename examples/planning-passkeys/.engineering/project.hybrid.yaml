@@ -1,0 +1,24 @@
+version: aep.project/1
+
+# The same project, keeping its plan twice: the markdown under `planning/` for pull requests, and a
+# SQLite replica for tooling — under four words nobody may leave out. Copy this file over
+# `project.yaml`; every `protocol artifact` verb opens both, `protocol artifact divergences` says
+# when one side took a write the other did not, and `protocol artifact catch-up` replays it
+# (`story:hybrid-backend`).
+protocol: adp/1
+profile: development.standard
+protocols: ../../..
+
+store:
+  hybrid:
+    authority: local          # the markdown decides; the replica follows
+    read: local-first         # reads go to the documents, to the replica only when they hold nothing
+    on_unreachable: refuse    # a silent replica is not an answer
+    on_divergence: record     # a write the replica refused is recorded, never swallowed
+    local: markdown
+    replica:
+      sqlite: replica.sqlite3
+
+summary: >-
+  The passkeys work, planned in the repository: one initiative, one epic, three stories and two
+  tasks, kept as markdown under .engineering/planning/ and replicated into .engineering/replica.sqlite3.

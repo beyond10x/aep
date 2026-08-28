@@ -341,7 +341,8 @@ implementor — [`aep-backend-memory`](../../crates/aep-backend-memory/) — and
 suites runs against that and nothing else. A backend that survives a process exit has never been held
 to them.
 
-Two durable backends exist, both implement the contract, and both are **one shape**: the adapter
+Three durable backends exist and a composite of two of them; all implement the contract, and all
+are **one shape**: the adapter
 [`aep-backend-entity`](../../crates/aep-backend-entity/) — the contract over any
 `entity_store::Store` from `entity-runtime` — instantiated over a provider.
 [`aep-backend-sqlite`](../../crates/aep-backend-sqlite/) is that adapter over
@@ -350,8 +351,11 @@ Two durable backends exist, both implement the contract, and both are **one shap
 own provider — the markdown files under `.engineering/planning/` as a `Store`, one artifact per
 file, `journal.jsonl` as the event log — with a *projection* that keeps what a plan keeps and an
 entity does not carry: the prose, the edges in frontmatter, the ladder a status is checked against.
-This repository plans its own work in it. The next durable backend is the same adapter over the
-next provider.
+This repository plans its own work in it. [`aep-backend-postgres`](../../crates/aep-backend-postgres/)
+is the adapter over `entity_postgres::PostgresStore` — the store an organisation actually runs, two
+processes writing one artifact resolving to one accepted write and one refusal naming the revision
+it lost to; its tests run when `ENTITY_POSTGRES_URL` names a server. The next durable backend is the
+same adapter over the next provider.
 
 The sixteen suites run against both, each beside a **deliberately faulty** version of itself — a
 suite that has never failed is not evidence that it can. The adapter runs them over `SqliteStore`
@@ -369,9 +373,76 @@ Deviation **D-P1** — the CLI writing through the store rather than through `Co
 ladders are data with an open status vocabulary, and an evidence record is the input to the
 evidence-gated move. `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 
-What is still true: `protocol conformance` runs only against the in-memory backend, so a durable
-store's conformance is shown by a Rust test rather than from the command line
-(`story:conformance-verb-takes-a-backend`).
+`protocol conformance --backend memory|markdown|sqlite|postgres` runs the suites from the command
+line against the store a person actually has; `--backend project` runs them against the *kind* of
+store the project's `project.yaml` names, on a scratch instance of it — a scratch directory, an
+in-memory database, a schema of its own on the configured server — because the suites write and a
+plan is not theirs to write into.
+
+## Choosing the store
+
+One line in `.engineering/project.yaml` says where the plan is kept, and every `protocol artifact`
+verb, `protocol drive` and `protocol conformance --backend project` open through it
+(`story:store-selection-in-project-yaml`):
+
+```yaml
+store: markdown                    # the default: one document per artifact under planning/
+store: { sqlite: plan.sqlite3 }    # one file, relative to .engineering/ like every project path
+store: { postgres: "postgres://user:secret@db.internal/plans" }
+```
+
+Nothing else about the project changes. `--store <dir>` stays the override for the markdown form.
+The verbs answer alike whichever store is named — `crates/protocol-cli/tests/store_selection.rs`
+runs every one of them, each as its own process, over `examples/planning-passkeys/` on files and on
+`project.sqlite.yaml`, and compares the output — with two differences recorded rather than hidden:
+
+| What | Markdown | SQLite, Postgres | Where it is written down |
+|---|---|---|---|
+| `validate` | also reconciles the documents against the event log: drift, deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
+| an edge's effect on a revision | the document's revision moves — its frontmatter was written | the entity's does not — a relation is a record of its own | `story:relation-bumps-a-document-revision-but-not-an-entity` |
+
+A SQLite or Postgres plan keeps what the journal keeps as the runtime's events: who, when, which
+revision, and — because the command travels as the event's `args` (`entity-runtime` R-110) — what
+changed. `protocol artifact history` reads them back as journal entries, so the history printed over
+one store is the history printed over another. Evidence recorded about an artifact and an edge
+starting at one are *observations*: an event on that entity at its unchanged revision, which is what
+lets a second process count the evidence on hand from the log alone, and what `entity-runtime`
+0.12.2's providers were fixed to accept.
+
+### The plan kept twice
+
+`store: hybrid` keeps the plan in markdown for pull requests **and** in a replica for tooling, under
+four words nobody may leave out — a missing one is refused by name at `protocol validate`:
+
+```yaml
+store:
+  hybrid:
+    authority: local          # or replica: whose copy is the record of truth
+    read: local-first         # or replica-first, replica-only: where a read goes first
+    on_unreachable: refuse    # or serve-stale: what a silent replica does
+    on_divergence: record     # or refuse: what a write one side would not take becomes
+    local: markdown
+    replica: { sqlite: replica.sqlite3 }     # or { postgres: "postgres://…" }
+```
+
+This is [`aep-backend-hybrid`](../../crates/aep-backend-hybrid/): the same adapter, the plan's own
+projection, over `entity-runtime`'s `Hybrid<MarkdownProvider, R>` (`story:hybrid-backend`). The
+atomicity guarantee is the runtime's, cited rather than chosen (`store-v0.1.md` § 10): a write one
+side took and the other refused is a **divergence**, recorded and never swallowed; under
+`on_divergence: refuse` the replica is asked first so a refusal there leaves the authority untouched;
+`catch_up` replays what the authority holds now and merges nothing. The rejected alternative — a
+two-phase commit with a durable intent log — is rejected there, for the reason its module doc gives.
+
+Two verbs are ours. `protocol artifact divergences` lists what one side took and the other did not,
+says which side is authoritative, and exits 1 while anything is outstanding. `protocol artifact
+catch-up` replays them at the side that missed them and writes back what it could not — a replica
+that moved on its own stays listed, for a person. Because every `protocol artifact` verb is its own
+process, divergences live in `divergences.jsonl` beside the plan: written after every command, read
+back on the next open. The sixteen suites run against the composite with either side as authority
+(`protocol conformance --backend hybrid`), and `store_selection.rs` runs every verb over the hybrid
+example (`examples/planning-passkeys/.engineering/project.hybrid.yaml`) beside the other two stores —
+and makes the replica refuse a write, lists the divergence from a second process, catches it up from
+a third.
 
 ## The reference to diff against
 

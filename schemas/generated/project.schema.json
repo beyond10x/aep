@@ -72,6 +72,17 @@
         "null"
       ]
     },
+    "store": {
+      "description": "Where the plan is kept. Absent means `markdown`.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawStore"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "summary": {
       "description": "A one-line description.",
       "default": null,
@@ -105,6 +116,105 @@
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
       "pattern": "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$"
+    },
+    "RawHybrid": {
+      "description": "A hybrid store as written: four policy words and two stores, none defaulted.",
+      "type": "object",
+      "required": [
+        "authority",
+        "local",
+        "on_divergence",
+        "on_unreachable",
+        "read",
+        "replica"
+      ],
+      "properties": {
+        "authority": {
+          "description": "Whose copy is the record of truth: `local` or `replica`.",
+          "type": "string"
+        },
+        "local": {
+          "description": "The local half.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawStore"
+            }
+          ]
+        },
+        "on_divergence": {
+          "description": "What happens to a write that lost: `refuse` or `record`.",
+          "type": "string"
+        },
+        "on_unreachable": {
+          "description": "What a read does when the replica does not answer: `refuse` or `serve-stale`.",
+          "type": "string"
+        },
+        "read": {
+          "description": "Where a read goes first: `local-first`, `replica-first` or `replica-only`.",
+          "type": "string"
+        },
+        "replica": {
+          "description": "The replica.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawStore"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawStore": {
+      "description": "Where a project keeps its plan, as written in `project.yaml` (wave H, story 1).\n\n```yaml store: markdown                    # the default: `.engineering/planning/` store: { sqlite: plan.sqlite3 }    # one file, relative to `.engineering/` store: { postgres: \"postgres://…\" } store: hybrid: authority: local               # local | replica read: local-first              # local-first | replica-first | replica-only on_unreachable: refuse         # refuse | serve-stale on_divergence: record          # refuse | record local: markdown replica: { sqlite: plan.sqlite3 } ```\n\nA hybrid's four policy words are **required** — the runtime's R-106 says a default here is a policy nobody chose being applied to somebody's data — and a document missing one is refused naming the word, by the parser.",
+      "anyOf": [
+        {
+          "description": "`markdown`, the only bare word.",
+          "type": "string"
+        },
+        {
+          "description": "`sqlite: <path>`.",
+          "type": "object",
+          "required": [
+            "sqlite"
+          ],
+          "properties": {
+            "sqlite": {
+              "description": "The database file, relative to `.engineering/`.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "`postgres: <url>`.",
+          "type": "object",
+          "required": [
+            "postgres"
+          ],
+          "properties": {
+            "postgres": {
+              "description": "A libpq connection string or URL.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "`hybrid: {…}`.",
+          "type": "object",
+          "required": [
+            "hybrid"
+          ],
+          "properties": {
+            "hybrid": {
+              "description": "The composite's policy and its two halves.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RawHybrid"
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

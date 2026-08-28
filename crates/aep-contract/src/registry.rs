@@ -16,6 +16,7 @@
 
 use aep_domain::artifact::{ArtifactStatus, RelationKind};
 use aep_domain::entity::EntityType;
+use aep_domain::evidence::EvidenceKind;
 
 /// What a type's lifecycle allows.
 #[derive(
@@ -29,6 +30,13 @@ pub struct LifecycleDescriptor {
     pub statuses: Vec<ArtifactStatus>,
     /// Which moves are legal, as `from -> [to]`.
     pub transitions: Vec<(ArtifactStatus, Vec<ArtifactStatus>)>,
+    /// Which rungs cost evidence, and of which kind, how many — `to -> [(kind, at_least)]`.
+    ///
+    /// Empty for a ladder that only says which moves are legal. A harness that reads this knows
+    /// before it asks that `implemented` needs a `test_result`, which is the whole of gap-register
+    /// `:39` read from the far side.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<(ArtifactStatus, Vec<(EvidenceKind, usize)>)>,
 }
 
 /// A command this type accepts.

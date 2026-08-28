@@ -86,8 +86,21 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
     )
     .expect("the markdown backend opens");
 
+    // A document this repository has since written through the contract has a journal of its own —
+    // the events of its `new`, `move`, `relate` — which no seed can replay: the seed knows the
+    // document as it stands, not how it got there. Those are compared by what they hold; the ones
+    // that predate the log are compared by history too, and there must be enough of them for the
+    // comparison to still be evidence.
+    let mut predating = 0;
     for (artifact, id) in &seeded.by_id {
         let reference = EntityRef::new(id.clone());
+        if !aep_backend_markdown::journal::history(&planning, artifact)
+            .0
+            .is_empty()
+        {
+            continue;
+        }
+        predating += 1;
         let ours = block_on(reopened.history(&reference)).expect("history from SQLite");
         let theirs = block_on(markdown.history(&reference))
             .unwrap_or_else(|error| panic!("{artifact}: the markdown backend holds {id}: {error}"));
@@ -103,6 +116,11 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
             "{artifact}: metadata differs between the two backends"
         );
     }
+
+    assert!(
+        predating >= 20,
+        "only {predating} documents predate the event log; the comparison has stopped being evidence"
+    );
 
     // Written down for the story rather than asserted: a threshold here would turn a slow CI box
     // into a red gate about a number nobody chose.

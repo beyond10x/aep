@@ -1,0 +1,30 @@
+[package]
+name = "aep-backend-postgres"
+description = "The AEP interaction contract over PostgreSQL: aep-backend-entity instantiated over entity-postgres."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aep-contract.workspace = true
+aep-domain.workspace = true
+# **This crate is an instantiation, not an implementation** — the same shape as `aep-backend-sqlite`.
+# `PostgresBackend` is `aep_backend_entity::EntityBackend<entity_postgres::PostgresStore>` with the
+# two constructors a server needs; the contract logic lives once in `aep-backend-memory` and the
+# durability logic once in the adapter. What is left here is what only a server has: a URL, a schema,
+# and the tests that need `ENTITY_POSTGRES_URL` to name one.
+aep-backend-entity.workspace = true
+# The runtime's provider with a server: one transaction per commit, writers of one instance
+# serialised by a row lock (their R-111). Pinned once, in the workspace manifest, to the same tag as
+# every other `entity-*` crate. It brings `postgres` 0.19 without default features and no TLS
+# backend — the connection is the caller's, by URL.
+entity-postgres.workspace = true
+
+[dev-dependencies]
+aep-conformance.workspace = true
+entity-store.workspace = true
+
+[lints]
+workspace = true

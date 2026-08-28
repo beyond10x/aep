@@ -44,7 +44,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, ExitCode, Stdio};
 
-use aep_backend_markdown::store::MarkdownStore;
 use aep_domain::action::{
     Action, ActionRequest, CommandExecute, NetworkIntent, NetworkRequest, RepositoryRead,
     RepositoryWrite,
@@ -168,7 +167,8 @@ pub(crate) struct DriveLocation {
     /// The task document. Comes from the project when omitted.
     #[arg(long)]
     task: Option<PathBuf>,
-    /// The planning store. Defaults to `<project>/.engineering/planning`.
+    /// The planning store, as a markdown directory. Defaults to the store `project.yaml` names —
+    /// `.engineering/planning/` unless it says `store: sqlite` or `store: postgres`.
     #[arg(long)]
     store: Option<PathBuf>,
     /// The step map: a file, or the id of one in the document tree.
@@ -274,7 +274,7 @@ struct Inputs {
     /// The task being driven.
     task: Task,
     /// The planning store the artifact graph is rebuilt from every iteration.
-    store: MarkdownStore,
+    store: crate::planning::DrivenPlan,
     /// The step map driving the run.
     map: StepMap,
     /// Where the step map came from, for a report.
@@ -313,10 +313,7 @@ impl DriveLocation {
                 .context("the project names no task, and no `--task` was given")?,
         };
 
-        let store = MarkdownStore::open(match &self.store {
-            Some(path) => path.clone(),
-            None => project.join(project_directory()).join("planning"),
-        });
+        let store = crate::planning::DrivenPlan::for_project(self.store.as_deref(), &project)?;
 
         let (map, map_origin) = self.step_map(&registry, &task)?;
 

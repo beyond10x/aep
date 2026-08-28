@@ -13,8 +13,8 @@ gated by `task check`.
 
 | Missing | Consequence for you |
 |---|---|
-| A durable backend | A durable store exists — [`aep-backend-markdown`](../../crates/aep-backend-markdown/) keeps planning artifacts as files — but it is not an implementation of the storage contract, so the only thing the suites have ever certified is [`aep-backend-memory`](../../crates/aep-backend-memory/), which forgets everything when the process exits. [`backend.md`](backend.md) is about writing one that does not, and proving it. |
-| A remote conformance runner | `protocol conformance` runs the suites against the in-memory backend. Proving *your* backend means calling `aep_conformance::run` from your own test suite. |
+| A durable backend of your own | Three exist and all are one adapter — [`aep-backend-entity`](../../crates/aep-backend-entity/) over a provider from `entity-runtime`: markdown files, SQLite, PostgreSQL — and `store:` in `project.yaml` picks one. The next is the same adapter over the next provider; [`backend.md`](backend.md) is about writing one and proving it. |
+| A remote conformance runner | `protocol conformance --backend memory\|markdown\|sqlite\|postgres\|project` runs the suites from the command line; proving a backend the CLI does not know means calling `aep_conformance::run` from your own test suite. |
 | Federated artifact graphs | An artifact manifest describes one project. Cross-repository architecture ([`consolidated-design-v0.2.md`](../design/consolidated-design-v0.2.md) §92) resolves references by hand today. |
 | An attestation behind `independent: true` | The engine checks that the producer is not the agent under review. Nothing signs the record, so which producers you let write one is your harness's decision, not the protocol's. |
 
