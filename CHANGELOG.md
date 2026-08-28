@@ -49,6 +49,18 @@ belongs in the commit message or in `docs/design/`.
 
 ### Removed
 
+* **A generated artefact no longer says which build made it.** `compiler_version` and
+  `generator_version` are gone from every projection's provenance block, from the three conformance
+  suites (with `synthesizer_version`), from the synthesised trees (`planner_version`) and from the
+  compiled cluster IR. `source_digest` and `contract_digest` are untouched and still answer what the
+  artefact was made *from*. Every stamp was the release tag copied into 115 files, so a version bump
+  rewrote all of them with nothing else changed — and a release cut without regenerating failed the
+  gate at the tag. An `ess_conformance` record written before this still reads: both fields stay
+  declared on the published schema and accepted on input, never written, and neither was ever
+  `required`, so nothing that validated stops validating. If you parsed a build version out of a
+  generated file, read the tag the file shipped under instead. Held by
+  `a_version_bump_rewrites_no_generated_file` (`story:generator-version-stamp`).
+
 * **`task plugin-eval` and `task driven-eval` are gone.** Both invoked
   `integrations/claude-code/eval/`, which `epic:metaharness-migration` deleted on 2026-08-22 — the
   agent-eval checks and their recorded transcripts live at metaharness
