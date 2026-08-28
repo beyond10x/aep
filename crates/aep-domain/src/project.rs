@@ -28,7 +28,12 @@ use std::path::{Path, PathBuf};
 use crate::error::{ValidationCode, ValidationError, ValidationErrors};
 use crate::version::{ProfileVersionedRef, ProtocolRef};
 
-/// The directory a project keeps its machine-readable metadata in.
+/// The default name of the directory a project keeps its machine-readable metadata in.
+///
+/// A default, not a fixed name: `AEP_PROJECT_DIR` renames it, and a repository whose team already
+/// calls this directory something else is discovered under the name they use. The variable is read
+/// once per process at the discovery edge — `aep_engine::project::project_directory` — because this
+/// crate reads no ambient state, so the constant here is what that edge falls back to.
 pub const PROJECT_DIRECTORY: &str = ".engineering";
 /// The file naming the protocol, the profile and where the documents are.
 pub const PROJECT_FILE: &str = "project.yaml";
