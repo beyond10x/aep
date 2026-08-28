@@ -21,7 +21,7 @@ internal document key no guide mentions is not an adopter-facing declaration, an
 would turn this into a list of the repository's YAML keys.
 
 The corpus is exactly what these three globs produce — `docs/guide/*.md`, `website/docs/**/*.md` and
-`docs/plan/document-authoring-brief.md` — which is 33 files:
+`docs/plan/document-authoring-brief.md` — which is 34 files:
 
 - `docs/guide/README.md`
 - `docs/guide/adopting.md`
@@ -34,6 +34,7 @@ The corpus is exactly what these three globs produce — `docs/guide/*.md`, `web
 - `website/docs/concepts/design-principles.md`
 - `website/docs/concepts/ess.md`
 - `website/docs/concepts/evidence.md`
+- `website/docs/concepts/lifecycles.md`
 - `website/docs/concepts/overview.md`
 - `website/docs/examples/governed-task.md`
 - `website/docs/examples/specification-to-contracts.md`
@@ -93,9 +94,9 @@ Both layers are open now. The pair is kept as two rows anyway, because the *reas
 differs — one is a document you write, the other is a value that document may carry, and a single
 averaged verdict would tell you neither.
 
-The rows **A relation document under `artifacts/relations/`** and **Relation names a relations
-document may use** are the same shape, and the pair was the one still owed an explanation. It has
-one now, and the answer is **not** the same as artifact status:
+The rows **A relation document under `artifacts/relations/`** and
+**Relation names a relations document may use** are the same shape, and the pair was the one still
+owed an explanation. It has one now, and the answer is **not** the same as artifact status:
 
 - The store layer is open: you write `artifacts/relations/relations.yaml` in your own tree.
 - The value layer stays **closed, deliberately**, and this is the guarantee. A relation name is
@@ -118,6 +119,33 @@ What remains genuinely advisory is the `source`/`target` pairings — the file s
 header, and nothing in `crates/` reads them. That is a different gap from this one and is not closed
 by this decision.
 
+The reason is written where an adopter reads it — [`adopting.md`](adopting.md#relation-names) — and
+not only in the cell below, and it says how to ask: a kind that is not on the list of thirteen is a
+change to the engine's graph rules, so it arrives as a story in this repository's planning store
+naming the rule the new edge should get. That is what moves this row from unsettled to settled.
+`story:ova-relation-vocabulary` asked for a stated guarantee or a recorded decision to open; this is
+the guarantee.
+
+## Predicate operators, the other row that was owed one
+
+`Predicate operators in mapping form` was the weaker of the two cases. Not only was no reason
+written for adopters — no guarantee was claimed for the closure either, and unlike every other row
+in this table there is no document key anywhere under `protocols/` an adopter could extend even in
+their own tree.
+
+The set stays closed, for the same class of reason as relations rather than for convenience. An
+operator is the step the engine *performs*, and it performs it three-valued: `gte` on `risk: medium`
+is decided by the `scales:` the protocol declares rather than by string ordering, and `exists` is
+the one operator allowed to read an unobserved fact without collapsing it to False. A
+document-declared operator would arrive with a name and no answer to either question, and *Unknown
+is not False* is the rule the evaluator is built to keep. The ten are `eq ne lt lte gt gte any_of
+none_of exists truthy`, published with that reason in
+[`adopting.md`](adopting.md#predicate-operators).
+
+Worth stating in the form an adopter meets it: a substring match, a set intersection and a regular
+expression are **not** expressible, and that is a boundary rather than an omission. Needing one is a
+change to the evaluator and a story in this store, not a key you can add to your own tree.
+
 ## The table
 
 | Declaration | Invited at | Verdict | Decided by | Guarantee | Reason for adopters at | Follow-up |
@@ -127,19 +155,19 @@ by this decision.
 | A protocol document's `evidence_kinds:` block | `website/docs/reference/vocabulary.md:39` — "adds two more, each minted by the verb that ran the check" | open | `protocols/aep/1.yaml:evidence_kinds` | — | — | — |
 | A protocol document's `verifiers:` block | `website/docs/reference/vocabulary.md:57` — "the producers of the two evidence kinds it" | open | `protocols/aep/1.yaml:verifiers` | — | — | — |
 | A protocol document's `artifact_kinds:` block | `docs/plan/document-authoring-brief.md:47` — "is satisfied by any design subkind" | open | `protocols/aep/1.yaml:artifact_kinds` | — | — | — |
-| A protocol document's `phases:` block | `website/docs/reference/vocabulary.md:78` — "decomposition verification-setup adversarial-verification" | open | `protocols/aep/1.yaml:phases` | — | — | — |
-| A protocol document's `observables:` block | `website/docs/reference/vocabulary.md:84` — "A predicate may only read these" | open | `protocols/aep/1.yaml:observables` | — | — | — |
-| A protocol document's `scales:` block | `website/docs/reference/vocabulary.md:100` — "on non-numeric values" | open | `protocols/aep/1.yaml:scales` | — | — | — |
+| A protocol document's `phases:` block | `website/docs/reference/vocabulary.md:92` — "decomposition verification-setup adversarial-verification" | open | `protocols/aep/1.yaml:phases` | — | — | — |
+| A protocol document's `observables:` block | `website/docs/reference/vocabulary.md:98` — "A predicate may only read these" | open | `protocols/aep/1.yaml:observables` | — | — | — |
+| A protocol document's `scales:` block | `website/docs/reference/vocabulary.md:114` — "on non-numeric values" | open | `protocols/aep/1.yaml:scales` | — | — | — |
 | An artifact kind document under `artifacts/kinds/` | `website/docs/reference/documents.md:210` — "one per kind, beside" | open | `artifacts/kinds/design.yaml:required_sections` | — | — | — |
 | A status ladder under `artifacts/lifecycles/` | `docs/guide/adopting.md:94` — "what statuses each artifact kind may hold" | open | `artifacts/lifecycles/story.yaml:transitions` | — | — | — |
 | A relation document under `artifacts/relations/` | `website/docs/reference/documents.md:211` — "`artifacts/relations/` and" | open | `artifacts/relations/relations.yaml:relations` | — | — | — |
 | An artifact template under `artifacts/templates/` | `website/docs/reference/documents.md:211` — "and `artifacts/templates/`" | open | `artifacts/templates/story.md:1` | — | — | — |
-| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:729` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
-| Relation names a relations document may use | `website/docs/reference/documents.md:224` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:1095` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | this table's row below | — |
+| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:741` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
+| Relation names a relations document may use | `website/docs/reference/documents.md:224` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:1107` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | docs/guide/adopting.md#relation-names | — |
 | Capability value names the engine accepts | `docs/plan/document-authoring-brief.md:13` — "nothing else may be mentioned in any" | closed | `crates/aep-domain/src/capability.rs:144` | a capability name resolves to the same authorisation decision in every harness, which is what lets a profile be read by one and enforced by another | website/docs/reference/vocabulary.md#capabilities | — |
 | Evidence kind names the engine accepts | `docs/plan/document-authoring-brief.md:29` — "**Evidence kinds**:" | closed | `crates/aep-domain/src/evidence.rs:1181` | an evidence kind carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one cannot be satisfied by a record that means something else | website/docs/reference/vocabulary.md#evidence-kinds | — |
-| Predicate operators in mapping form | `website/docs/reference/vocabulary.md:172` — "Operators in mapping form" | closed | `crates/aep-domain/src/predicate.rs:132` | none | none | story:ova-predicate-operator-vocabulary |
-| Test suite names in a tests fact path | `website/docs/reference/vocabulary.md:111` — "unit integration contract property regression mutation fuzz differential e2e smoke" | open | `crates/aep-domain/src/evidence.rs:60` | — | — | — |
+| Predicate operators in mapping form | `website/docs/reference/vocabulary.md:186` — "Operators in mapping form" | closed | `crates/aep-domain/src/predicate.rs:132` | an operator is the step the engine *performs*, and it performs it three-valued: `gte` is decided by the `scales:` the protocol declares rather than by string ordering, and `exists` is the one operator that may read an unobserved fact without collapsing it to False. A document-declared operator would arrive with a name and no answer to either question | docs/guide/adopting.md#predicate-operators | — |
+| Test suite names in a tests fact path | `website/docs/reference/vocabulary.md:125` — "unit integration contract property regression mutation fuzz differential e2e smoke" | open | `crates/aep-domain/src/evidence.rs:60` | — | — | — |
 
 An `open` row's last three cells are an em dash, always — never blank. A blank cell reads as *not
 applicable* to one person and *not filled in yet* to the next, and both of them stop asking.
@@ -160,7 +188,7 @@ leaving a row here about a page nobody writes any more.
 
 ## How this round was produced
 
-Round taken at commit `14a87ee`, against the corpus rule above.
+Round taken at commit `1419f1c`, against the corpus rule above.
 
 1. The corpus: `docs/guide/*.md`, `website/docs/**/*.md` and
    `docs/plan/document-authoring-brief.md`.
@@ -171,6 +199,32 @@ Round taken at commit `14a87ee`, against the corpus rule above.
 4. The verdicts, each attached to a path in this tree. No cell in `Decided by` is prose: a verdict
    that cannot be attached to a file was not entered.
 
+This round was a diff and not a rewrite, which is the property the list above exists to buy. What it
+found, in the order the suite reported it:
+
+- one corpus file the list had not caught up with, `website/docs/concepts/lifecycles.md`, and the
+  stated count that goes with it;
+- five citations into the vocabulary reference that had drifted by fourteen lines and two into the
+  artifact type that had drifted by twelve — every one of them still resolving *somewhere* in its
+  file, which is why the line is checked and not only the fragment;
+- the two rows that carried no reason an adopter could read. Both are settled above, and neither by
+  opening the vocabulary: in both cases the guarantee was there to be written down and had not been.
+
+The reading pass over the corpus produced **no new rows** this round, and refusing the two candidates
+it did consider is the part worth recording:
+
+- *the spellings a predicate may read* — closed, and already argued in the vocabulary reference, but
+  there is no single item to attach the verdict to, because four separate types project facts. A
+  verdict with no path is one this table does not enter.
+- *the producer of an evidence record* — what an adopter writes there is a verifier class, and
+  verifier classes are declared in a protocol document. That is the open row this table already
+  carries, not a second one.
+
+The project directory is the third instance the adopter's report named, and it is deliberately **not**
+a row: it is a path rather than a vocabulary a document declares, it is set by AEP_PROJECT_DIR, and
+it stopped being the compile-time constant the report found. A row would have to call it open on the
+strength of an environment variable, which is not what any other cell in this table means.
+
 The next round is a diff, not a rewrite. Re-run `bash .engineering/checks/run.sh` and it says which
 citations no longer resolve, which candidates are new, and which closed rows are still unexplained.
 
@@ -179,16 +233,22 @@ discriminates rather than merely agrees:
 
 - deleting the table row that carries a derived candidate, which must orphan that candidate;
 - downgrading a settled row's guarantee to `none`, which must demand a follow-up;
-- pointing a follow-up at an id that is not in the planning store;
+- pointing a follow-up at an id that is not in the planning store, on a row first downgraded to
+  need one;
 - deleting a quoted fragment from the corpus file the row cites;
 - inserting a line above a cited fragment, which leaves the row's line number pointing past it;
 - renaming the heading a reason's anchor names, which leaves the link resolving to nothing;
 - repointing a reason at this page, so that the row cites its own cell as the place you read why;
+  this one is expected to redden *two* checks — the row loses its reason and is left with no
+  follow-up — and both are named rather than tolerated;
 - repointing a verdict from the declaration that settles it to a use site that does not;
 - repointing an `open` verdict onto the enum head, where a reader would read it as closed.
 
 Each is applied alone, to a fresh copy, and a mutation that reddens nothing is itself a failure —
-because a suite that cannot be made to fail is not evidence that anything passed.
+because a suite that cannot be made to fail is not evidence that anything passed. Two of them are
+applied to state this round had to **construct**: once every closed row carries a reason, there is
+no unsettled row left lying around to repoint, and a mutation that can no longer be applied is a
+proof that quietly stopped running. Both now downgrade a settled row first and mutate that.
 
 The last five are here because they were once invisible. The suite ran green under every one of
 them, which is worth saying plainly: the first four showed it catches what it was written to catch,

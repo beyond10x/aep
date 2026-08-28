@@ -15,7 +15,7 @@ open-cells	task:ova-open-cells	every open row's three trailing cells hold an em 
 closed-cells	task:ova-closed-cells	every closed row states a guarantee and an anchor an adopter can follow somewhere other than here
 followups	task:ova-followups	every unsettled closed row names a planning artifact that resolves in the store
 citations	task:ova-citations	every Invited at fragment is at the line it cites, and every Decided by line settles its verdict
-layered-rows	task:ova-layered-rows	the artifact-status vocabulary gets one row per layer, never one averaged verdict
+layered-rows	task:ova-layered-rows	the relation vocabulary gets one row per layer, never one averaged verdict
 scan-loop	task:ova-scan-loop	every scan candidate has a row, every non-scanned row has a resolving citation, and the limit is stated
 repeatability	task:ova-repeatability	the audit states how it was produced, and every command it names runs
 surface-hygiene	task:ova-surface-hygiene	writes stay under docs/ and .engineering/, and no check reads a planning body

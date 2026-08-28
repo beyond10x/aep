@@ -507,7 +507,62 @@ the tree, asserts it has no failures, and resolves a task against every profile 
 could never fire cannot be committed. Its own gate is `task check`, twelve steps, and a step whose
 toolchain is missing fails and names it rather than skipping.
 
+## What is fixed in the engine, and why
+
+Most of what this page invites you to declare is open: artifact kinds, phases, verifiers,
+capabilities, evidence kinds, observables and the statuses a lifecycle names are all read from
+documents, and [`open-vocabulary.md`](open-vocabulary.md) carries the table of which is which and
+why. Two of them are not open, and both refusals arrive from `validate` as a message rather than in
+a design review, so the reason is worth having before you write the document.
+
+### Relation names
+
+An `artifacts/relations/` document declares which pairings your tree means — that part is yours. The
+names an edge may carry are the engine's, and there are thirteen:
+
+```text
+informed_by  derived_from  decomposes  specifies  designs  implements  decides
+reviews  verifies  blocks  depends_on  supersedes  delivers
+```
+
+A relation name is something the engine *acts on*, not only something it records. `supersedes` gates
+a status: an artifact that reads `superseded` must have a successor declaring it. `reviews` is
+mandatory on a `review-result`. `decomposes` is the edge the artifact tree is built from, and
+`depends_on` is the one coverage and validation walk. Cycles are checked once per kind. None of that
+can move into a document, because a document can say what an edge *means* and not what the engine
+*does* about it — so an adopter-declared name would be an edge that looks like it should mean
+something and that no rule will ever read. Being told `frobnicates` is not a relation is the better
+failure of the two.
+
+This is the opposite answer from artifact statuses, and the difference is where the guarantee could
+live. *A status name means the same rung to every tool* survived being moved into the kind's
+lifecycle ladder, so the status vocabulary opened and the guarantee stayed bought. A relation's
+semantics have nowhere to go.
+
+If you need a kind that is not on that list, it is a change to the engine and its graph rules rather
+than a document you can write: ask for it with a story in this repository's planning store, naming
+the rule you want the engine to apply to the new edge.
+
+### Predicate operators
+
+`eq ne lt lte gt gte any_of none_of exists truthy` — the mapping form takes these ten and no others.
+The parser accepts aliases for most of them (`equals` and `==`, `not_equals` and `!=`, `in` and
+`one_of`, `not_in`, `defined`), and it refuses an unknown operator by name rather than reading it as
+false.
+
+An operator is the step the engine *performs*, and it has to perform it three-valued. `gte` on
+`risk: medium` is decided by the `scales:` the protocol declares, not by string ordering; `exists`
+is the one operator that may read an unobserved fact without collapsing it to False. An operator
+declared in a document would arrive with a name and no answer to either question — the engine would
+know what to call it and not what it means when nobody has looked, and *Unknown is not False* is the
+rule this evaluator is built to keep.
+
+So the set is a boundary and not an omission. A comparison it does not carry — a substring match, a
+set intersection, a regular expression — is a change to the evaluator, and asking for one is a story
+in this repository's planning store rather than a key in your own tree.
+
 ## Next
 
 * [`harness.md`](harness.md) — wiring an agent to the engine so these rules actually govern it.
 * [`backend.md`](backend.md) — storing the entities the manifest points at.
+* [`open-vocabulary.md`](open-vocabulary.md) — for each thing this page invited you to declare, whether the vocabulary is open or fixed in the engine, and what a closure buys.

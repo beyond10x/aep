@@ -161,13 +161,21 @@ row C8 "$R"
 
 # ---- C9 -----------------------------------------------------------------------------------------
 # This unit's declared write surface. The whole-tree version is H3; this one is narrower: the audit
-# task touches two files under docs/ and nothing else under docs/.
+# task touches three files under docs/ and nothing else under docs/.
+#
+# **It was two.** Settling a closed row needs a reason an adopter reads, and R9 refuses the audit's
+# own cell as that place (K10) — so a round that settles one has to write prose into a corpus file
+# that is neither this page nor the README that routes to it. Inside H3's surface the only corpus
+# files are `docs/guide/*.md` and the authoring brief, and `adopting.md` is the page that already
+# tells an adopter what they may declare. The surface grew by exactly the one file that made the
+# relation and predicate-operator rows settleable; every other path under docs/ still reddens this
+# row.
 R=0
 while IFS= read -r line; do
   [ -z "$line" ] && continue
   path="${line:3}"
   case "$path" in
-    docs/guide/open-vocabulary.md|docs/guide/README.md) ;;
+    docs/guide/open-vocabulary.md|docs/guide/README.md|docs/guide/adopting.md) ;;
     *) R=1; why "this unit changed $path, which is not one of its two declared files" ;;
   esac
 done < <(git -C "$REPO" status --porcelain -- docs/)

@@ -31,7 +31,7 @@ declare_row M8 "a mutation that reddens no check at all is a failed row naming t
 declare_row M9 "the nine mutations are described in the audit's method section"
 declare_row M10 "mutation 5 — a line inserted above a citation — reddens citations, naming the stale row"
 declare_row M11 "mutation 6 — the heading an anchor names, renamed — reddens closed-cells"
-declare_row M12 "mutation 7 — a reason repointed at this audit — reddens closed-cells, naming the row"
+declare_row M12 "mutation 7 — a reason repointed at this audit — reddens closed-cells and followups"
 declare_row M13 "mutation 8 — a verdict repointed at a use site — reddens citations, naming the line"
 declare_row M14 "mutation 9 — an open verdict repointed at the enum head — reddens citations"
 
@@ -120,15 +120,27 @@ mutate_2() { # a settled closed row's Guarantee downgraded to `none`, Follow-up 
 }
 
 mutate_3() { # a Follow-up cell pointed at an id that is not in the store
-  local root="$1" audit="$1/$AUDIT_REL" line ln f decl
+  #
+  # It used to take an existing unsettled row and repoint the id it already carried. That worked
+  # only while the table had one, and the round that settled the last two closed rows left this
+  # mutation with nothing to find — a mutation that cannot be applied is a proof that stopped
+  # running, and it reports as one. So the state is now **constructed**: a settled row is downgraded
+  # to need a follow-up and given one that resolves nowhere. F2's store lookup is the assertion
+  # either way; only the setup moved from found to made.
+  local root="$1" audit="$1/$AUDIT_REL" line ln g decl
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    f="$(cell "$line" "$COL_FOLLOWUP")"
-    case "$f" in story:*|architecture-decision-record:*) ;; *) continue ;; esac
+    g="$(cell "$line" "$COL_GUARANTEE")"
+    [ -n "$g" ] && [ "$g" != "none" ] || continue
+    [ "$(cell "$line" "$COL_FOLLOWUP")" = "$EMDASH" ] || continue
     ln="$(row_lineno "$line")"; decl="$(cell "$line" "$COL_DECLARATION")"
-    awk -v n="$ln" -v old="$f" 'NR == n { i = index($0, old); if (i) $0 = substr($0, 1, i - 1) "story:ova-nowhere" substr($0, i + length(old)) } { print }' \
-      "$audit" > "$audit.new" && mv "$audit.new" "$audit"
-    printf '%s' "row '$decl' follow-up -> story:ova-nowhere"
+    awk -v n="$ln" -v g="$g" -v em="| $EMDASH |" -v repl="| story:ova-nowhere |" '
+      NR == n {
+        i = index($0, g); if (i) $0 = substr($0, 1, i - 1) "none" substr($0, i + length(g))
+        j = index($0, em); if (j) $0 = substr($0, 1, j - 1) repl substr($0, j + length(em))
+      }
+      { print }' "$audit" > "$audit.new" && mv "$audit.new" "$audit"
+    printf '%s' "row '$decl' follow-up -> story:ova-nowhere, on a row downgraded to need one"
     return 0
   done <<< "$(rows_with_verdict "$audit" closed)"
   return 1
@@ -199,17 +211,21 @@ mutate_6() { # the heading a Reason for adopters at anchor names, renamed
 }
 
 mutate_7() { # a closed row's reason repointed at this audit — the cell citing its own page
+  #
+  # It used to pick an already-unsettled row, so that the partition did not move and `followups`
+  # stayed out of it. There is no such row once every closure is explained, and the honest version
+  # is louder anyway: repointing a **settled** row's reason at this page takes its reason away, and
+  # a row with no reason and no follow-up is exactly the state R10 refuses. So this one is expected
+  # to redden two checks, and both are named in EXPECTED rather than tolerated by M7.
   local root="$1" audit="$1/$AUDIT_REL" line ln reason decl
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     reason="$(cell "$line" "$COL_REASON")"
-    # An already-unsettled row, so the partition does not move and `followups` stays out of it: this
-    # mutation is about the citation being self-referential, not about the settled rule.
-    [ "$(cell "$line" "$COL_GUARANTEE")" = "none" ] || continue
-    [ "$reason" = "none" ] || continue
+    [ -n "$reason" ] && [ "$reason" != "none" ] || continue
+    case "$reason" in "$AUDIT_REL"*) continue ;; esac
     ln="$(row_lineno "$line")"; decl="$(cell "$line" "$COL_DECLARATION")"
-    awk -v n="$ln" -v a="$AUDIT_REL" '
-      NR == n { i = index($0, "| none | none |"); if (i) $0 = substr($0, 1, i - 1) "| none | " a " |" substr($0, i + length("| none | none |")) }
+    awk -v n="$ln" -v old="$reason" -v new="$AUDIT_REL" '
+      NR == n { i = index($0, old); if (i) $0 = substr($0, 1, i - 1) new substr($0, i + length(old)) }
       { print }' "$audit" > "$audit.new" && mv "$audit.new" "$audit"
     printf '%s' "row '$decl' reason -> $AUDIT_REL"
     return 0
@@ -222,9 +238,10 @@ mutate_8() { # a Decided by repointed from the declaration to a line that merely
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     decl="$(cell "$line" "$COL_DECLARATION")"
-    # Not the artifact-status row: `layered-rows` resolves that one's line for itself, and a
-    # mutation that reddens two units cannot be attributed to either.
-    case "$(printf '%s' "$decl" | tr '[:upper:]' '[:lower:]')" in *status*) continue ;; esac
+    # Not a relation row: `layered-rows` resolves that one's line for itself, and a mutation that
+    # reddens two units cannot be attributed to either. (It was the artifact-status row until that
+    # pair opened at both layers and the layer check re-anchored onto relations.)
+    case "$(printf '%s' "$decl" | tr '[:upper:]' '[:lower:]')" in *relation*) continue ;; esac
     by="$(cell "$line" "$COL_DECIDED")"
     token="$(printf '%s' "$by" | tr -d '`' | grep -oE 'crates/[A-Za-z0-9._/-]+:[0-9]+' | head -1)"
     [ -n "$token" ] || continue
@@ -267,7 +284,10 @@ mutate_9() { # an open row's crates/ citation moved off the escape hatch onto th
 }
 
 MUTATIONS=(mutate_1 mutate_2 mutate_3 mutate_4 mutate_5 mutate_6 mutate_7 mutate_8 mutate_9)
-EXPECTED=(scan-loop followups followups citations citations closed-cells closed-cells citations citations)
+# One entry per mutation, and an entry may name **more than one** unit: a mutation whose real
+# consequence is two red checks is described that way rather than trimmed to one, because the
+# alternative is M7 reporting the second as over-reach every run until somebody silences it.
+EXPECTED=(scan-loop followups followups citations citations closed-cells "closed-cells followups" citations citations)
 ROWS_FOR=(M3 M4 M5 M6 M10 M11 M12 M13 M14)
 M7_R=0
 M8_R=0
@@ -292,17 +312,19 @@ while [ "$i" -lt "${#MUTATIONS[@]}" ]; do
     else
       note "mutation $n: $DESC"
       AFTER_V="$(verdicts "$COPY")"
-      got="$(verdict_of "$AFTER_V" "$want")"
-      if [ "$got" != "FAIL" ]; then
-        R=1; M8_R=1
-        why "mutation $n left $want at '${got:-<no row>}' — the mutation is invisible to the suite"
-      fi
+      for unit_wanted in $want; do
+        got="$(verdict_of "$AFTER_V" "$unit_wanted")"
+        if [ "$got" != "FAIL" ]; then
+          R=1; M8_R=1
+          why "mutation $n left $unit_wanted at '${got:-<no row>}' — the mutation is invisible to the suite"
+        fi
+      done
       # M7: over-reach. Any unit that was PASS in the baseline and FAIL here, other than the named
       # one, is reported with both names.
       while IFS= read -r entry; do
         [ -z "$entry" ] && continue
         unit="${entry%%=*}"; verdict="${entry##*=}"
-        [ "$unit" = "$want" ] && continue
+        case " $want " in *" $unit "*) continue ;; esac
         [ "$verdict" = "FAIL" ] || continue
         [ "$(verdict_of "$BASE_VERDICTS" "$unit")" = "PASS" ] || continue
         M7_R=1
