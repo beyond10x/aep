@@ -218,6 +218,23 @@ struct BackendArgs {
     format: Format,
 }
 
+/// Which backend `protocol conformance` holds to the suites.
+///
+/// Its own enum rather than a free string so an unknown backend is a usage error naming the three
+/// that exist, and so the report can say which one answered in the words the caller typed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ConformanceBackend {
+    /// The in-memory reference implementation. The default, so no existing invocation changes
+    /// meaning; it keeps nothing, so it takes no `--store`.
+    Memory,
+    /// The markdown planning store, `aep-backend-markdown`, at `--store <dir>` — or a scratch
+    /// directory when none is given, because the suites write.
+    Markdown,
+    /// The SQLite backend, `aep-backend-sqlite`, at `--store <file>` — or an in-memory database
+    /// when none is given.
+    Sqlite,
+}
+
 /// The available subcommands.
 #[derive(Debug, Subcommand)]
 enum Command {
@@ -467,9 +484,16 @@ enum Command {
     /// calls this one contract conformance and that one semantic conformance; neither subsumes the
     /// other, and a backend passing here says nothing about a system passing there.
     ///
-    /// Runs against the in-memory reference backend. `--inject` deliberately breaks one property, to
-    /// show that the suite responsible for it actually fails — a suite that passes everything tells
-    /// you nothing.
+    /// Runs against the backend `--backend` names — `memory`, the reference implementation, unless
+    /// told otherwise — and the report's first line says which one answered, because a report that
+    /// does not name what it ran against is a report somebody will attribute to the wrong thing:
+    /// this verb was hard-coded to `memory` for two releases while a story ticked "runs against the
+    /// markdown store". `--store` says where a durable backend lives. **The suites write**, so a
+    /// durable backend given no `--store` gets a scratch store, and one pointed at a plan you keep
+    /// will append the suites' commands to that plan's journal.
+    ///
+    /// `--inject` deliberately breaks one property, to show that the suite responsible for it
+    /// actually fails — a suite that passes everything tells you nothing.
     Conformance {
         /// How much of the contract to check: core, audited or full.
         #[arg(long, default_value = "full")]
@@ -480,6 +504,12 @@ enum Command {
         /// Break one property on purpose, to see which suite catches it.
         #[arg(long)]
         inject: Option<String>,
+        /// Which backend to hold to the suites.
+        #[arg(long, value_enum, default_value_t = ConformanceBackend::Memory)]
+        backend: ConformanceBackend,
+        /// Where a durable backend lives: a directory for `markdown`, a file for `sqlite`.
+        #[arg(long)]
+        store: Option<PathBuf>,
         /// How to render the result.
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
@@ -789,8 +819,17 @@ fn run() -> Result<ExitCode> {
             level,
             suite,
             inject,
+            backend,
+            store,
             format,
-        } => conformance(&level, suite.as_deref(), inject.as_deref(), format),
+        } => conformance(
+            &level,
+            suite.as_deref(),
+            inject.as_deref(),
+            backend,
+            store.as_deref(),
+            format,
+        ),
     }
 }
 
@@ -878,9 +917,11 @@ fn conformance(
     level: &str,
     suite: Option<&str>,
     inject: Option<&str>,
+    backend: ConformanceBackend,
+    store: Option<&Path>,
     format: Format,
 ) -> Result<ExitCode> {
-    use aep_conformance::{FaultyBackend, Level};
+    use aep_conformance::Level;
 
     let level = Level::parse(level).with_context(|| {
         format!(
@@ -898,12 +939,66 @@ fn conformance(
         Some(name) => Some(parse_fault(name)?),
     };
 
-    let backend = aep_backend_memory::MemoryBackend::new();
-    let report = match fault {
-        None => run_conformance(&backend, level, suite)?,
-        Some(fault) => {
-            let faulty = FaultyBackend::new(backend, fault);
-            run_conformance(&faulty, level, suite)?
+    // One arm per backend, each saying in the report what it ran against. The durable ones without
+    // `--store` get a scratch store rather than a refusal, because the suites write and a person
+    // asking "does this backend conform?" should not first have to invent a place for it to write.
+    let report = match backend {
+        ConformanceBackend::Memory => {
+            if let Some(path) = store {
+                anyhow::bail!(
+                    "`--backend memory` keeps nothing, so `--store {}` would have no effect; drop \
+                     it, or name a durable backend (`markdown`, `sqlite`)",
+                    path.display()
+                );
+            }
+            run_against(
+                aep_backend_memory::MemoryBackend::new(),
+                fault,
+                level,
+                suite,
+            )?
+            .ran_against("memory")
+        }
+        ConformanceBackend::Sqlite => {
+            if let Some(path) = store {
+                let backend = aep_backend_sqlite::SqliteBackend::open(path)
+                    .map_err(|error| anyhow::anyhow!("{error}"))
+                    .with_context(|| format!("opening the SQLite store at {}", path.display()))?;
+                run_against(backend, fault, level, suite)?
+                    .ran_against(format!("sqlite ({})", path.display()))
+            } else {
+                let backend = aep_backend_sqlite::SqliteBackend::in_memory()
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                run_against(backend, fault, level, suite)?
+                    .ran_against("sqlite (in-memory database)")
+            }
+        }
+        ConformanceBackend::Markdown => {
+            let root = if let Some(path) = store {
+                path.to_path_buf()
+            } else {
+                let scratch = std::env::temp_dir()
+                    .join(format!("protocol-conformance-{}", std::process::id()));
+                std::fs::create_dir_all(&scratch).with_context(|| {
+                    format!("creating a scratch store at {}", scratch.display())
+                })?;
+                scratch
+            };
+            // Permissive ladders and no workspace members: the suites are about the contract and
+            // durability, not about any particular ladder, and a real ladder would refuse moves the
+            // suites are entitled to make — the same choice `aep-backend-markdown`'s own conformance
+            // test takes.
+            let backend = aep_backend_markdown::backend::MarkdownBackend::open(
+                &root,
+                std::iter::empty(),
+                planning::clock_at_the_edge(),
+                planning::command_actor()?,
+                aep_domain::artifact::LifecycleRegistry::default(),
+            )
+            .map_err(|error| anyhow::anyhow!("{error}"))
+            .with_context(|| format!("opening the markdown store at {}", root.display()))?;
+            run_against(backend, fault, level, suite)?
+                .ran_against(format!("markdown ({})", root.display()))
         }
     };
 
@@ -922,6 +1017,22 @@ fn conformance(
     }
 
     Ok(exit_code(report.passed()))
+}
+
+/// Runs the suites against `backend`, with `fault` injected when one was asked for.
+fn run_against<B: aep_conformance::Backend>(
+    backend: B,
+    fault: Option<aep_conformance::Fault>,
+    level: aep_conformance::Level,
+    suite: Option<&str>,
+) -> Result<aep_conformance::ConformanceReport> {
+    match fault {
+        None => run_conformance(&backend, level, suite),
+        Some(fault) => {
+            let faulty = aep_conformance::FaultyBackend::new(backend, fault);
+            run_conformance(&faulty, level, suite)
+        }
+    }
 }
 
 /// Runs a level, or one named suite within it.
@@ -946,6 +1057,7 @@ fn run_conformance<B: aep_conformance::Backend>(
             Ok(aep_conformance::ConformanceReport {
                 level,
                 suites: vec![report],
+                ran_against: None,
             })
         }
     }

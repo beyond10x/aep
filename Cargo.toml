@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/aep-domain",
     "crates/aep-contract",
+    "crates/aep-backend-entity",
     "crates/aep-backend-markdown",
     "crates/aep-backend-memory",
     "crates/aep-backend-sqlite",
@@ -62,6 +63,7 @@ authors = ["Beyond10x contributor <1379383+beyond10x@users.noreply.github.com>"]
 [workspace.dependencies]
 aep-domain = { path = "crates/aep-domain", version = "0.27.3" }
 aep-contract = { path = "crates/aep-contract", version = "0.27.3" }
+aep-backend-entity = { path = "crates/aep-backend-entity", version = "0.27.3" }
 aep-backend-markdown = { path = "crates/aep-backend-markdown", version = "0.27.3" }
 aep-backend-memory = { path = "crates/aep-backend-memory", version = "0.27.3" }
 aep-backend-sqlite = { path = "crates/aep-backend-sqlite", version = "0.27.3" }
@@ -95,6 +97,17 @@ schemars = "0.8"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
+
+# `entity-runtime`, by git tag — see AGENTS.md § *Dependencies*. Declared **once**, here, because two
+# manifests each naming a tag is how two kernels came to be compiled into this workspace (0.5.2 under
+# the markdown backend, 0.8.0 under the SQLite one) for two releases. One line per crate, one tag for
+# all three; `cargo xtask deps` (the gate's `dep-check`) fails if the lockfile ever says otherwise.
+# `git` rather than a version because these crates are not on crates.io; a tag rather than `main`
+# because a ladder's verdicts are a published surface here and must not move under us — the pin is
+# the reversible half of `atlas/architecture/adr/0002`.
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

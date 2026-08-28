@@ -143,6 +143,12 @@ jobs:
       - name: Check the workspace version against the newest tag
         run: cargo xtask version
 
+      # Reads only `Cargo.lock`. Two versions of `entity-core` were compiled into this workspace for
+      # two releases — one deciding every status move, one under the SQLite backend — and nothing in
+      # the gate said so. Mirrors `task dep-check`.
+      - name: Check the entity-runtime pin is one
+        run: cargo xtask deps
+
       # Cheap, and it reads only source. A test body that appears in two crates is either a shared
       # behaviour that belongs in a shared suite, or a test named for a property it does not assert.
       - name: Check no test body is duplicated across crates

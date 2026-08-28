@@ -748,33 +748,10 @@ impl MarkdownBackend {
 
 /// One instant, as a date a person can read.
 ///
-/// The civil date from a Unix millisecond, without a date library: days since the epoch, then the
-/// proleptic Gregorian calendar. A dependency whose only job is this would be one more thing to
-/// audit for a clock of its own.
+/// The calendar arithmetic lives on the type now (`Timestamp::iso_8601`), so this backend and the
+/// entity adapter stamp the same spelling rather than each carrying a copy of it.
 fn iso_8601(at: Timestamp) -> String {
-    let millis = i64::try_from(at.epoch_millis()).unwrap_or(i64::MAX);
-    let seconds = millis.div_euclid(1000);
-    let days = seconds.div_euclid(86_400);
-    let time = seconds.rem_euclid(86_400);
-
-    // Howard Hinnant's civil_from_days, which is the standard way to do this without a library.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-
-    format!(
-        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
-        time / 3600,
-        (time % 3600) / 60,
-        time % 60
-    )
+    at.iso_8601()
 }
 
 /// The key an entity carries its document's prose under.

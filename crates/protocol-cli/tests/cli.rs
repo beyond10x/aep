@@ -483,6 +483,78 @@ fn output_survives_a_reader_that_stops_reading() {
 }
 
 #[test]
+fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_which() {
+    // `story:conformance-verb-takes-a-backend`: the verb was hard-coded to the reference backend
+    // while a story ticked "runs against the markdown store". Now the caller names the backend and
+    // the first line of the report names it back.
+    let sqlite = protocol(&["conformance", "--backend", "sqlite"]);
+    assert_eq!(code(&sqlite), 0, "{}", stderr(&sqlite));
+    let text = stdout(&sqlite);
+    assert!(
+        text.starts_with("ran against: sqlite (in-memory database)\n"),
+        "{text}"
+    );
+    assert!(text.contains("conformance full"), "{text}");
+    assert!(text.contains("properties hold"), "{text}");
+
+    let dir = std::env::temp_dir().join(format!(
+        "aep-cli-conformance-markdown-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a scratch store");
+    let markdown = protocol(&[
+        "conformance",
+        "--backend",
+        "markdown",
+        "--store",
+        printable(&dir),
+    ]);
+    assert_eq!(code(&markdown), 0, "{}", stderr(&markdown));
+    assert!(
+        stdout(&markdown).starts_with(&format!("ran against: markdown ({})\n", dir.display())),
+        "{}",
+        stdout(&markdown)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // The default did not move, and it says so too.
+    let memory = protocol(&["conformance", "--level", "core"]);
+    assert_eq!(code(&memory), 0, "{}", stderr(&memory));
+    assert!(
+        stdout(&memory).starts_with("ran against: memory\n"),
+        "{}",
+        stdout(&memory)
+    );
+
+    // Machine formats carry the same answer as a field.
+    let json = protocol(&["conformance", "--backend", "sqlite", "--format", "json"]);
+    assert_eq!(code(&json), 0, "{}", stderr(&json));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
+    assert_eq!(parsed["ran_against"], "sqlite (in-memory database)");
+}
+
+#[test]
+fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
+    // A flag that does nothing is a lie the next reader believes.
+    let output = protocol(&["conformance", "--backend", "memory", "--store", "somewhere"]);
+    assert_eq!(code(&output), 1);
+    assert!(
+        stderr(&output).contains("would have no effect"),
+        "{}",
+        stderr(&output)
+    );
+
+    let unknown = protocol(&["conformance", "--backend", "postgres"]);
+    assert_eq!(code(&unknown), 2, "an unknown backend is a usage error");
+    assert!(
+        stderr(&unknown).contains("memory") && stderr(&unknown).contains("sqlite"),
+        "and the usage error names the backends that exist: {}",
+        stderr(&unknown)
+    );
+}
+
+#[test]
 fn conformance_rejects_an_unknown_level_or_fault() {
     let level = protocol(&["conformance", "--level", "thorough"]);
     assert_eq!(code(&level), 1);

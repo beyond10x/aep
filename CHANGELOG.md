@@ -9,7 +9,51 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+* **`aep-backend-entity`: the contract over any `entity_store::Store`.** `EntityBackend<S>` is what
+  `SqliteBackend` was — apply in `aep-backend-memory`, then `commit` to the provider with a **read**
+  expectation, latch on failure, latch covers reads — with the provider as a type parameter. The
+  sixteen suites and the faulty-backend guard run against it over `SqliteStore` and over the
+  runtime's `MemoryStore`. The next durable backend is a line: `EntityBackend<TheirStore>`.
+
+* **A SQLite plan file now holds its own history.** Every accepted command writes one event per
+  affected entity into the store, in the same transaction as the instance: the command's type as the
+  event type, the status before and after, the fields written, and — in the event's `payload` — who
+  issued it, when, in which flow, what caused it, and what a status move was decided on. A second
+  process reading the file gets the history; before this it got the instances and an empty log. A
+  refused command writes nothing, a replayed one writes nothing, and the stored events fold back to
+  the stored instance through the runtime's own `rehydrate`.
+
+* **`protocol conformance --backend memory|markdown|sqlite [--store <path>]`.** The verb ran the
+  sixteen suites against the in-memory reference backend and nothing else, while its help said so
+  and a story said otherwise. It now runs them against the backend you name — `--store` says where a
+  durable one lives; without it `sqlite` gets an in-memory database and `markdown` a scratch
+  directory, because the suites write — and the report's first line says `ran against: …`, with a
+  `ran_against` field in JSON and YAML. The default stays `memory`, so no existing invocation changes
+  meaning; `--backend memory --store …` is refused rather than ignored.
+
+### Changed
+
+* **`aep-backend-sqlite` is an instantiation.** `SqliteBackend` is `EntityBackend<SqliteStore>`
+  behind the same `open`, `in_memory`, `latched`, `len` and `is_empty`; nothing a caller writes
+  changes. Its conformance tests moved to the adapter's crate — `cargo xtask guards` is what says
+  they moved rather than copied — and what stays in `aep-backend-sqlite` is what only a file can
+  show: the row read back through a second handle, and the foreign-row refusal.
+
+
+* **One `entity-runtime`, at `0.9.1`.** Two were compiled into this workspace: `entity-core` 0.5.2
+  under `aep-backend-markdown`, which decides every `protocol artifact move`, and 0.8.0 under
+  `aep-backend-sqlite` — `cargo tree -i entity-core` answered *"specification is ambiguous"*. The
+  tag is now declared **once**, in `[workspace.dependencies]`, for all three `entity-*` crates, and a
+  new gate step, `dep-check` (`cargo xtask deps`), fails naming both versions if that ever splits
+  again.
+
+  What the move-deciding kernel gains from 0.5.2 → 0.9.1: `DomainEvent` records `from_state`,
+  `to_state` and the fields it `changed` (their R-89), and `entity_core::rehydrate` folds an instance
+  from its events, refusing any event whose transition the definition does not declare — including a
+  forged creation event, closed in their 0.8.0 (R-97). Every ladder verdict is unchanged:
+  `tests/kernel_equivalence.rs` passes against the single version, and nothing you type changes.
 
 ## [0.27.3] — 2026-08-26
 

@@ -41,7 +41,11 @@ pub fn run<B: Backend>(backend: &B, level: Level) -> ConformanceReport {
         .iter()
         .map(|suite| (suite.run)(backend))
         .collect();
-    ConformanceReport { level, suites }
+    ConformanceReport {
+        level,
+        suites,
+        ran_against: None,
+    }
 }
 
 /// Runs one suite by name, for a targeted re-check.

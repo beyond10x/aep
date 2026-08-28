@@ -86,9 +86,13 @@ Each of these was learned by building the thing it names. They are enforced wher
 * **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
   that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
   appears in one here.
-* **`entity-core` is a dependency, and the arrow only points this way.** `crates/aep-backend-markdown`
-  takes it by git revision so the status ladder is decided as data rather than by a lookup written
-  here (`src/kernel.rs`). Nothing of ours appears in a manifest of `entity-runtime`'s, at any
+* **`entity-runtime` is a dependency — three crates, one tag — and the arrow only points this way.**
+  `crates/aep-backend-markdown` takes `entity-core` by git tag so the status ladder is decided as
+  data rather than by a lookup written here (`src/kernel.rs`); `crates/aep-backend-sqlite` takes
+  `entity-core`, `entity-store` and `entity-sqlite` at the **same** tag, and `dep-check` in the gate
+  (`cargo xtask deps`) fails, naming both, when any `entity-*` crate resolves at two versions or from
+  two pins — two kernels were compiled side by side for two releases before it existed. Nothing of
+  ours appears in a manifest of `entity-runtime`'s, at any
   version, ever — that is `atlas/architecture/adr/0002`, and it is the reason the arrow is safe: a
   kernel that never depends on its adopter cannot be shaped by one. The verdicts are held identical
   by `tests/kernel_equivalence.rs`, which is what makes the dependency reversible: delete the module
@@ -161,11 +165,14 @@ Each of these was learned by building the thing it names. They are enforced wher
 * **`trace_conformance` still gates nothing.** Do not describe it as if it does.
 * **A claim the suites do not support is not made.** As of 2026-08-26 the contract has **three**
   implementors: `aep-backend-memory`, `aep-backend-markdown` and `aep-backend-sqlite`. The sixteen
-  suites run against all three, and each crate also runs them against a deliberately faulty version
-  of itself — a suite that has never failed is not evidence that it can.
-  `aep-backend-markdown` and `aep-backend-sqlite` do not reimplement the contract: each hands every
-  command to `aep-backend-memory` and adds durability, so idempotency, revision conflicts and the
-  audit a refusal still leaves are decided in one place.
+  suites run against all three, each beside a deliberately faulty version of itself — a suite that
+  has never failed is not evidence that it can. `aep-backend-sqlite` is
+  `aep-backend-entity::EntityBackend<SqliteStore>` — the one adapter over any `entity_store::Store`,
+  whose suites run in that crate over `SqliteStore` **and** `MemoryStore` — and wave G makes the
+  markdown backend the same type over a provider of its own (`docs/plan/store-waves-f-g-h.md`).
+  Neither durable backend reimplements the contract: each hands every command to
+  `aep-backend-memory` and adds durability, so idempotency, revision conflicts and the audit a
+  refusal still leaves are decided in one place.
   **D-P1 is closed** — `docs/plan/gap-register.md` carries what that took.
 
 ### The driver and the engine
@@ -349,7 +356,10 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Twelve steps, all twelve of which CI also runs, in this order:
+Seventeen steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
+other five are source-only and sub-second — `version-check`, `dep-check` (`cargo xtask deps`: every
+`entity-*` crate resolves once, from one `entity-runtime` pin), `guard-check` and `claim-check`
+between `status-check` and `clippy`, and `lab-check` before `msrv`:
 
 1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
    `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since
@@ -412,7 +422,7 @@ Twelve steps, all twelve of which CI also runs, in this order:
    covers less than the gate it claims to be is worse than one that admits its scope; that is why
    this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
 
-Land nothing that does not pass all twelve.
+Land nothing that does not pass all seventeen.
 
 **A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
 *toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a
@@ -518,17 +528,25 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 Written down because it is already practised, and an unwritten standard is one the next agent meets
 only by violating it.
 
-* **The workspace has eleven direct third-party crates.** Seven are declared once in
-  `[workspace.dependencies]` — `serde`, `serde_json`, `serde_yaml`, `schemars`, `thiserror`, `clap`,
-  `anyhow` — and three are crate-local: `sha2` wherever a document is content-addressed
-  (`ess-gen`, `trace-domain`, `infra-domain`, `infra-compiler`, `aep-driver-spec`), `jsonschema` as
-  a dev-dependency of `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a
-  dev-dependency of `ess-compiler` (`default-features = false`, and every property runs under a
-  fixed seed so the gate cannot be flaky — the seed and the way to widen locally are documented
-  where each is used). The eleventh is `entity-core` in `aep-backend-markdown`, the only dependency
-  taken by **git revision** rather than by version: it is not on crates.io yet, and a ladder's
-  verdicts are a published surface that must not move under us. Reach for the workspace list before
-  adding to it.
+* **The workspace has thirteen direct third-party crates.** Ten are declared once in
+  `[workspace.dependencies]`: seven from crates.io — `serde`, `serde_json`, `serde_yaml`,
+  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s three by **git tag** —
+  `entity-core`, `entity-store`, `entity-sqlite` — the only dependencies not taken by version: they
+  are not on crates.io, a ladder's verdicts are a published surface that must not move under us,
+  and **one tag, declared once,** is what `dep-check` enforces after two kernels were compiled side
+  by side for two releases (`aep-backend-markdown` takes `entity-core`; `aep-backend-entity` takes
+  `entity-core` and `entity-store`; `aep-backend-sqlite` takes `entity-sqlite`). Three are
+  crate-local: `sha2` wherever a document is content-addressed (`ess-gen`, `trace-domain`,
+  `infra-domain`, `infra-compiler`, `aep-driver-spec`), `jsonschema` as a dev-dependency of
+  `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a dev-dependency of
+  `ess-compiler` (`default-features = false`, and every property runs under a fixed seed so the gate
+  cannot be flaky — the seed and the way to widen locally are documented where each is used).
+  `entity-sqlite` brings **`rusqlite` with the `bundled` feature — SQLite compiled from
+  vendored C** — the one C build in the workspace. Considered and refused: linking the host's
+  SQLite (two machines could then disagree about one store), a pure-Rust database (none is the
+  transactional store next door that is already tested against a torn write), and a second
+  hand-written transactional store here (`crates/aep-backend-sqlite/src/lib.rs` § *Why
+  `entity-sqlite`*). Reach for the workspace list before adding to it.
 * **A non-workspace dependency carries its justification in the manifest**, beside the line that adds
   it: what it buys, which features are dropped and why that is safe here, and why the version matches
   the other crate that uses it. `crates/ess-gen/Cargo.toml` is the model.

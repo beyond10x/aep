@@ -463,7 +463,7 @@ pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
 ///
 /// Read here and handed in, never inside a crate that decides anything: a record that dated itself
 /// could not be replayed.
-fn clock_at_the_edge() -> aep_domain::time::Timestamp {
+pub(crate) fn clock_at_the_edge() -> aep_domain::time::Timestamp {
     let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| {
@@ -476,7 +476,7 @@ fn clock_at_the_edge() -> aep_domain::time::Timestamp {
 ///
 /// `human:` because a person typed it. The store cannot verify an identity, and a field that looks
 /// verified and is not is worse than one that plainly is not.
-fn command_actor() -> Result<aep_domain::entity::ActorRef> {
+pub(crate) fn command_actor() -> Result<aep_domain::entity::ActorRef> {
     let name = actor_of(None);
     let sanitised: String = name
         .chars()

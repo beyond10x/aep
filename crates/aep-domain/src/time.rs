@@ -53,6 +53,25 @@ impl Timestamp {
     pub const fn epoch_millis(self) -> u64 {
         self.0
     }
+
+    /// The instant as ISO-8601 in UTC, to the second: `2026-08-28T14:03:07Z`.
+    ///
+    /// The date half is [`CivilDate::from_timestamp`] — Hinnant's `civil_from_days`, pure integer
+    /// arithmetic, no date library — and the time half is the remainder of the day. Sub-second
+    /// precision is dropped: this is the spelling a journal, an event envelope or a person reads,
+    /// and every backend that stamps an instant should stamp the same one rather than each carrying
+    /// its own copy of the calendar.
+    #[must_use]
+    pub fn iso_8601(self) -> String {
+        let seconds_into_day = (self.0 / 1000) % 86_400;
+        format!(
+            "{}T{:02}:{:02}:{:02}Z",
+            CivilDate::from_timestamp(self),
+            seconds_into_day / 3600,
+            (seconds_into_day % 3600) / 60,
+            seconds_into_day % 60
+        )
+    }
 }
 
 impl fmt::Display for Timestamp {
@@ -584,6 +603,20 @@ impl fmt::Display for ObservedAt {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_instant_is_spelled_as_iso_8601_in_utc() {
+        // 2023-11-14T22:13:20Z — the epoch millisecond count every backend test in this workspace
+        // uses, so the spelling here is the one the journals and event logs carry.
+        let at = super::Timestamp::from_epoch_millis(1_700_000_000_000);
+        assert_eq!(at.iso_8601(), "2023-11-14T22:13:20Z");
+        assert_eq!(super::Timestamp::EPOCH.iso_8601(), "1970-01-01T00:00:00Z");
+        // Milliseconds are dropped, never rounded up into the next second.
+        assert_eq!(
+            super::Timestamp::from_epoch_millis(1_700_000_000_999).iso_8601(),
+            "2023-11-14T22:13:20Z"
+        );
+    }
+
     use super::*;
 
     #[test]

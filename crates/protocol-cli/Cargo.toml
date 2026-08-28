@@ -19,6 +19,9 @@ path = "src/main.rs"
 # and `PlanningDocument::move_status` gets the same refusal, naming the same legal targets.
 aep-backend-markdown.workspace = true
 aep-backend-memory.workspace = true
+# `protocol conformance --backend sqlite`: the suites from the command line against the store a
+# person actually has, not only the in-memory reference (`story:conformance-verb-takes-a-backend`).
+aep-backend-sqlite.workspace = true
 aep-conformance.workspace = true
 aep-contract.workspace = true
 aep-domain.workspace = true

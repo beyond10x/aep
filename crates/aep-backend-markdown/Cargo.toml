@@ -23,12 +23,11 @@ aep-backend-memory.workspace = true
 # An IO-free kernel with no clock, no filesystem and no network: it takes an entity type as data
 # and answers whether a move is permitted, which is the whole of what this crate asks of it.
 # Pinned to a release tag rather than tracked, because a ladder's verdicts are a published surface
-# here and must not change under us; `git` rather than a version, because `entity-core` is not on
-# crates.io — its release workflow publishes binaries and a GitHub Release, not a crate — and a git
-# pin is the reversible half of `atlas/architecture/adr/0002`. Default features: it has none, and it
-# declares exactly one dependency of its own (`serde_json`, already in this workspace).
-# `cargo tree -p aep-backend-markdown` is the check.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.5.2", default-features = false }
+# here and must not change under us; the tag itself is declared once, in the workspace manifest, so
+# this crate and `aep-backend-sqlite` cannot drift to two kernels again. Default features: it has
+# none, and it declares exactly one dependency of its own (`serde_json`, already in this workspace).
+# `cargo xtask deps` is the check.
+entity-core.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true

@@ -34,8 +34,10 @@ class, and that acceptance is the operator's to make.
 **Two durable backends implement the contract, as of `0.27.0`.** Planning artifacts live as markdown
 under `.engineering/planning/` and survive a restart — this repository's own plan is 101 of them —
 and `aep-backend-sqlite` keeps whatever the contract holds in one file with no server. The 16
-`aep-conformance` suites run against both, and each crate also runs them against a **deliberately
-faulty** version of itself, because a suite that has never failed is not evidence that it can.
+`aep-conformance` suites run against both, each beside a **deliberately faulty** version of itself,
+because a suite that has never failed is not evidence that it can. Since wave F the SQLite backend
+is `aep-backend-entity::EntityBackend<SqliteStore>` — one adapter over any `entity_store::Store`,
+so the next durable backend is a type rather than a crate of logic.
 
 Neither reimplements the contract: each hands every command to the in-memory reference backend and
 adds durability. Idempotency, revision conflicts and the audit a refusal still leaves are decided in
@@ -46,10 +48,10 @@ closed. It stayed open because the vocabulary was missing two words: a planning 
 data with an open status vocabulary, and an evidence record is the input to the evidence-gated move.
 `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 
-*What is still limited:* `protocol conformance` runs only against the in-memory backend, so a durable
-store's conformance is shown by a Rust test rather than from the command line. And `describe_type`
-still reports no lifecycle (**D-P5**), so a harness cannot ask the contract which statuses a story
-may hold — it has to read the lifecycle document itself.
+*What is still limited:* `describe_type` still reports no lifecycle (**D-P5**), so a harness cannot
+ask the contract which statuses a story may hold — it has to read the lifecycle document itself.
+(`protocol conformance --backend memory|markdown|sqlite` runs the suites against the backend you
+name since wave F, and its report says which one answered.)
 
 **Hydration is deferred, and `aep-backend-sqlite` refuses rather than guesses.** It does not read a
 database back on open, so a second run against a populated file would mint identities from a fresh

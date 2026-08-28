@@ -1,0 +1,33 @@
+[package]
+name = "aep-backend-entity"
+description = "The AEP interaction contract over any entity-store provider: one adapter, every durable backend an instantiation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+aep-contract.workspace = true
+aep-domain.workspace = true
+# **The contract logic lives once.** This crate is the durability half of the interaction contract
+# over an `entity_store::Store`, not a second implementation of it: every command is handed to
+# `aep-backend-memory`, and what it decided is written to the provider. Idempotency, revision
+# conflicts and the audit a refusal still leaves are decided in one place, by the implementation the
+# sixteen conformance suites already police.
+aep-backend-memory.workspace = true
+# The store SPI and the instance/event types it is written in, from `entity-runtime`. Pinned once,
+# in the workspace manifest, for every `entity-*` crate — `cargo xtask deps` is what keeps it one.
+entity-core.workspace = true
+entity-store.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+aep-conformance.workspace = true
+# The transactional provider, so the suites run through this adapter over the store the SQLite
+# backend is an instantiation of — and not only over `MemoryStore`, which cannot lose a write.
+entity-sqlite.workspace = true
+
+[lints]
+workspace = true

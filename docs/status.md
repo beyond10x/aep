@@ -262,6 +262,8 @@ crates/
   aep-schema/       document reading and JSON Schema generation
   aep-backend-memory/ in-memory reference implementation of the contract
   aep-backend-markdown/ the durable planning store: artifacts as markdown under .engineering/planning/
+  aep-backend-entity/ the contract over any entity_store::Store from entity-runtime; every durable backend but markdown is an instantiation
+  aep-backend-sqlite/ EntityBackend<SqliteStore>: the contract in one file, no server
   aep-conformance/  black-box conformance suites for backends
   adp-domain/       development-specific types (ADP)
   aop-domain/       operations-specific types (AOP)

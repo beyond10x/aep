@@ -24,6 +24,7 @@ tasks:
       - task: fmt-check
       - task: status-check
       - task: version-check
+      - task: dep-check
       - task: guard-check
       - task: claim-check
       - task: clippy
@@ -114,6 +115,15 @@ tasks:
       is — which is how a stale install writes nothing and looks like it worked.
     cmds:
       - cargo xtask version
+
+  dep-check:
+    desc: >-
+      Fail when any `entity-*` crate resolves to two versions, or the `entity-*` crates come from
+      two `entity-runtime` pins. Two kernels were compiled into this workspace for two releases —
+      `entity-core` 0.5.2 under the markdown backend, deciding every status move, and 0.8.0 under
+      the SQLite one — and `cargo tree -i entity-core` was the only thing that said so.
+    cmds:
+      - cargo xtask deps
 
   clippy:
     desc: Lint every target, warnings are errors.

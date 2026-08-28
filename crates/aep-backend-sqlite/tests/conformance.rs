@@ -1,56 +1,24 @@
-//! P4 held to the same sixteen suites as every other backend, and to the promise only it makes.
+//! What only SQLite can show: the file, read back through a second handle.
+//!
+//! The sixteen suites and the faulty-backend guard moved to `aep-backend-entity` (wave F, story 2),
+//! where they run over this store and over `MemoryStore` through the one adapter. What stays here is
+//! the promise only a file makes, and one check that the newtype forwards the whole contract.
 
 use aep_backend_sqlite::SqliteBackend;
 
 #[test]
-fn the_sqlite_backend_conforms() {
-    let store = SqliteBackend::in_memory().expect("a database");
-    let report = aep_conformance::run(&store, aep_conformance::Level::Full);
+fn the_newtype_forwards_the_whole_contract() {
+    // Not a copy of the adapter's conformance test: that one asserts the adapter; this one asserts
+    // that `SqliteBackend`'s hand-written forwarding of `CommandService` and `QueryService` reaches
+    // every method, which a forwarding mistake would fail and a type alias could not have.
+    let backend = SqliteBackend::in_memory().expect("a database");
+    let report = aep_conformance::run(&backend, aep_conformance::Level::Full);
     assert!(
         report.passed(),
-        "SqliteBackend failed {} of {} checks:\n{}",
+        "SqliteBackend forwards incompletely; {} of {} checks failed",
         report.failures(),
-        report.checks(),
-        report
-            .failing_suites()
-            .flat_map(
-                |suite| suite
-                    .checks
-                    .iter()
-                    .filter(|check| !check.passed)
-                    .map(|check| format!(
-                        "  {}: {}",
-                        check.name,
-                        check.detail.as_deref().unwrap_or("")
-                    ))
-            )
-            .collect::<Vec<_>>()
-            .join("\n")
+        report.checks()
     );
-}
-
-#[test]
-fn the_suites_that_pass_here_catch_a_backend_that_is_wrong() {
-    // The guard. A suite that passes proves nothing until something proves the suite can fail — the
-    // lesson of 2026-08-26, when a "rolls back both halves" test that asserted a pre-check refusal
-    // was cited as evidence for two releases.
-    //
-    // If this test ever starts passing, `the_sqlite_backend_conforms` has stopped being evidence.
-    for fault in [
-        aep_conformance::Fault::ReplayApplies,
-        aep_conformance::Fault::IgnoreExpectedRevision,
-        aep_conformance::Fault::DropRejectionAudit,
-    ] {
-        let faulty = aep_conformance::FaultyBackend::new(
-            SqliteBackend::in_memory().expect("a database"),
-            fault,
-        );
-        let report = aep_conformance::run(&faulty, aep_conformance::Level::Full);
-        assert!(
-            !report.passed(),
-            "the suites passed a backend injected with {fault:?}, so they are not evidence"
-        );
-    }
 }
 
 #[test]

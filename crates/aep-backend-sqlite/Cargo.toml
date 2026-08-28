@@ -1,5 +1,6 @@
 [package]
 name = "aep-backend-sqlite"
+description = "The AEP interaction contract over one SQLite file: aep-backend-entity instantiated over entity-sqlite."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,22 +10,27 @@ repository.workspace = true
 [dependencies]
 aep-contract.workspace = true
 aep-domain.workspace = true
-# **The contract logic lives once.** Same argument as `aep-backend-markdown`: this crate is the
-# durability half, not a second implementation of idempotency, revision conflicts and the audit a
-# refusal still leaves. Two implementations of those drift in exactly the ways a suite run months
-# apart discovers.
-aep-backend-memory.workspace = true
+# **This crate is an instantiation, not an implementation.** `SqliteBackend` is
+# `aep_backend_entity::EntityBackend<entity_sqlite::SqliteStore>` with the two constructors a file
+# needs; the contract logic lives once in `aep-backend-memory` and the durability logic once in the
+# adapter. What is left here is what only SQLite has: a path, an in-memory mode, and the tests that
+# read the file back through a second handle.
+aep-backend-entity.workspace = true
 # The transactional store from `entity-runtime`: one `BEGIN`, both writes, one `COMMIT`, with a busy
 # timeout so a second writer waits rather than being told the system is broken. Writing a second
 # transactional store here by hand would be building, badly, the thing next door that is already
-# tested against a torn write. Pinned to a release tag for the same reason `entity-core` is.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.8.0" }
-serde_json.workspace = true
+# tested against a torn write. Pinned once, in the workspace manifest, to the same tag as every other
+# `entity-*` crate — `cargo xtask deps` (the gate's `dep-check`) refuses two versions, because two
+# kernels were compiled here for two releases. `entity-sqlite` brings `rusqlite` with `bundled` —
+# SQLite compiled from vendored C, the one C build in this workspace. Refused alternatives: the
+# host's SQLite (two machines could disagree about one store), a pure-Rust database (none is the
+# tested transactional store next door), and a second transactional store written here.
+entity-sqlite.workspace = true
 
 [dev-dependencies]
 aep-conformance.workspace = true
+# The tests read the file back through the provider's own trait, not through the backend under test.
+entity-store.workspace = true
 
 [lints]
 workspace = true

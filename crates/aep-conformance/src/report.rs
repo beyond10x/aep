@@ -206,9 +206,24 @@ pub struct ConformanceReport {
     pub level: Level,
     /// What each suite found.
     pub suites: Vec<SuiteReport>,
+    /// What the suites ran against, when the caller said — `sqlite (/path/plan.sqlite3)`, say.
+    ///
+    /// A report that does not name what it ran against is a report somebody will attribute to the
+    /// wrong thing: `protocol conformance` was hard-coded to the in-memory backend for two releases
+    /// while a story ticked "runs against the markdown store" (`story:conformance-verb-takes-a-backend`).
+    /// Absent when nobody said, never defaulted to a guess.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ran_against: Option<String>,
 }
 
 impl ConformanceReport {
+    /// The same report, saying what it ran against.
+    #[must_use]
+    pub fn ran_against(mut self, what: impl Into<String>) -> Self {
+        self.ran_against = Some(what.into());
+        self
+    }
+
     /// `true` when every property in every suite holds.
     pub fn passed(&self) -> bool {
         self.suites.iter().all(SuiteReport::passed)
@@ -235,6 +250,9 @@ impl ConformanceReport {
 
 impl fmt::Display for ConformanceReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(what) = &self.ran_against {
+            writeln!(f, "ran against: {what}")?;
+        }
         for suite in &self.suites {
             write!(f, "{suite}")?;
         }
@@ -311,6 +329,7 @@ mod tests {
         let report = ConformanceReport {
             level: Level::Full,
             suites: vec![first, second],
+            ran_against: None,
         };
         assert!(!report.passed());
         assert_eq!(report.checks(), 2);

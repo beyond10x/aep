@@ -372,6 +372,8 @@ enum Command {
     },
     /// Check the workspace version against the newest release tag.
     Version,
+    /// Check that every `entity-*` crate resolves to one version, from one `entity-runtime` pin.
+    Deps,
     /// Check that every uniqueness claim in a test name has a guard beside it.
     Guards,
     /// Check that each released `### Fixed` entry names something that existed to be broken.
@@ -601,6 +603,7 @@ fn main() -> Result<()> {
         Command::Fmt { check } => fmt(check),
         Command::Status { check } => status(&workspace_root(), check),
         Command::Version => version_check(&workspace_root()),
+        Command::Deps => deps(&workspace_root()),
         Command::Guards => guards(&workspace_root()),
         Command::Claims => claims(&workspace_root()),
         Command::Synth { check } => {
@@ -698,6 +701,162 @@ fn version_check(root: &Path) -> Result<()> {
     println!("version {declared} matches the newest release tag");
     Ok(())
 }
+
+/// Every `entity-*` crate in the lockfile resolves to one version, and all of them to one pin.
+///
+/// # The consequence for a person
+///
+/// Two kernels compiled into one workspace means a story that says *"the runtime does X"* is about
+/// one of them and silent about the other. That was the state on 2026-08-28: `aep-backend-markdown`
+/// pinned `entity-core` at `0.5.2` — the kernel that decides every `protocol artifact move` — and
+/// `aep-backend-sqlite` pinned `0.8.0`, four releases on, with fixes to the store the markdown
+/// side's kernel predated. `cargo tree -i entity-core` answered *"specification is ambiguous"*, and
+/// nothing in the gate noticed for two releases.
+///
+/// # What is checked, and from where
+///
+/// `Cargo.lock`, not the manifests. The lockfile is what is actually compiled, and a manifest that
+/// names a tag is only a request. Two rules, each with the offending lines in the message:
+///
+/// 1. no `entity-*` package appears at two versions;
+/// 2. every `entity-*` package comes from the same source — one tag, one commit.
+///
+/// The prefix is `entity-` because that is what `entity-runtime` publishes; the check would fire
+/// for any crate somebody added under that name, which is the right answer — a crate that is not
+/// theirs under a name that looks like theirs is a question for a reviewer either way.
+///
+/// # Errors
+///
+/// If `Cargo.lock` cannot be read, or if either rule is broken.
+fn deps(root: &Path) -> Result<()> {
+    let lock = fs::read_to_string(root.join("Cargo.lock")).context("reading Cargo.lock")?;
+    let packages = locked_packages(&lock, ENTITY_RUNTIME_PREFIX);
+    if packages.is_empty() {
+        bail!(
+            "no `{ENTITY_RUNTIME_PREFIX}*` package is in Cargo.lock, so there is no pin to check — \
+             the backends depend on `entity-runtime` and the lockfile should say so"
+        );
+    }
+
+    let mut by_name: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut sources: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for package in &packages {
+        by_name
+            .entry(package.name.as_str())
+            .or_default()
+            .insert(package.version.as_str());
+        sources
+            .entry(package.source.as_str())
+            .or_default()
+            .insert(package.name.as_str());
+    }
+
+    let duplicated: Vec<String> = by_name
+        .iter()
+        .filter(|(_, versions)| versions.len() > 1)
+        .map(|(name, versions)| {
+            format!(
+                "  {name} at {}",
+                versions.iter().copied().collect::<Vec<_>>().join(" and ")
+            )
+        })
+        .collect();
+    if !duplicated.is_empty() {
+        bail!(
+            "`entity-runtime` is compiled into this workspace at two versions:\n{}\n\
+             One kernel decides every `protocol artifact move` and another sits under the SQLite \
+             backend, so a claim about \"the runtime\" is about one of them and silent about the \
+             other. Every `entity-*` dependency must name the same tag \
+             (`crates/aep-backend-markdown/Cargo.toml`, `crates/aep-backend-sqlite/Cargo.toml`), \
+             then `cargo update -p <crate>` until `cargo tree -i entity-core` is unambiguous.",
+            duplicated.join("\n")
+        );
+    }
+
+    if sources.len() > 1 {
+        let listed: Vec<String> = sources
+            .iter()
+            .map(|(source, names)| {
+                format!(
+                    "  {} from {source}",
+                    names.iter().copied().collect::<Vec<_>>().join(", ")
+                )
+            })
+            .collect();
+        bail!(
+            "the `entity-*` crates come from more than one `entity-runtime` pin:\n{}\n\
+             One tag for all of them, so \"the runtime at this commit\" is one sentence a review can \
+             check.",
+            listed.join("\n")
+        );
+    }
+
+    let names: Vec<&str> = by_name.keys().copied().collect();
+    let (source, _) = sources.iter().next().expect("at least one source");
+    println!(
+        "entity-runtime is pinned once: {} at {} ({source})",
+        names.join(", "),
+        packages[0].version
+    );
+    Ok(())
+}
+
+/// The lockfile packages whose name starts with `prefix`.
+///
+/// A `[[package]]` block in `Cargo.lock` is flat `key = "value"` lines up to the next block; three of
+/// them are read. A package with no `source` line is a workspace member, and its source is recorded
+/// as `path`, so a local crate under the prefix would be reported as a second pin rather than
+/// slipping past as "no source".
+fn locked_packages(lock: &str, prefix: &str) -> Vec<LockedPackage> {
+    let mut packages = Vec::new();
+    let mut current: Option<LockedPackage> = None;
+    let mut push = |current: &mut Option<LockedPackage>| {
+        if let Some(package) = current.take() {
+            if package.name.starts_with(prefix) {
+                packages.push(package);
+            }
+        }
+    };
+    for line in lock.lines() {
+        let line = line.trim();
+        if line == "[[package]]" {
+            push(&mut current);
+            current = Some(LockedPackage {
+                name: String::new(),
+                version: String::new(),
+                source: "path".to_owned(),
+            });
+            continue;
+        }
+        let Some(package) = current.as_mut() else {
+            continue;
+        };
+        if let Some(value) = line.strip_prefix("name = ") {
+            value.trim_matches('"').clone_into(&mut package.name);
+        } else if let Some(value) = line.strip_prefix("version = ") {
+            value.trim_matches('"').clone_into(&mut package.version);
+        } else if let Some(value) = line.strip_prefix("source = ") {
+            value.trim_matches('"').clone_into(&mut package.source);
+        } else if line.starts_with('[') {
+            // A new table that is not a package — `[metadata]`, say — ends the current block.
+            push(&mut current);
+        }
+    }
+    push(&mut current);
+    packages
+}
+
+/// One resolved package, as `Cargo.lock` records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockedPackage {
+    name: String,
+    version: String,
+    /// The `source` line, or `path` for a workspace member.
+    source: String,
+}
+
+/// What `entity-runtime` publishes its crates as.
+const ENTITY_RUNTIME_PREFIX: &str = "entity-";
 
 /// A test asserting the same thing as one in another crate is not evidence of a difference.
 ///
@@ -4402,5 +4561,176 @@ mod drift_tests {
             !prose.contains(&drifted),
             "the figure that drifted must not come back"
         );
+    }
+}
+
+#[cfg(test)]
+mod dep_tests {
+    use super::{deps, locked_packages, ENTITY_RUNTIME_PREFIX};
+
+    const ONE_PIN: &str = r#"
+[[package]]
+name = "anyhow"
+version = "1.0.99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "entity-core"
+version = "0.9.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.9.1#dc5b25a"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "entity-sqlite"
+version = "0.9.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.9.1#dc5b25a"
+
+[[package]]
+name = "entity-store"
+version = "0.9.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.9.1#dc5b25a"
+
+[[package]]
+name = "xtask"
+version = "0.27.3"
+"#;
+
+    /// The lockfile as it stood on 2026-08-28, reduced to the lines that matter.
+    const TWO_KERNELS: &str = r#"
+[[package]]
+name = "entity-core"
+version = "0.5.2"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.5.2#1bfad9f"
+
+[[package]]
+name = "entity-core"
+version = "0.8.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
+
+[[package]]
+name = "entity-store"
+version = "0.8.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
+"#;
+
+    fn lockfile_in_a_root(lock: &str) -> tempdir::Root {
+        let root = tempdir::Root::new("xtask-deps");
+        std::fs::write(root.path().join("Cargo.lock"), lock).expect("writing the lockfile");
+        root
+    }
+
+    #[test]
+    fn the_entity_crates_are_read_out_of_the_lockfile_and_nothing_else_is() {
+        let packages = locked_packages(ONE_PIN, ENTITY_RUNTIME_PREFIX);
+        let names: Vec<&str> = packages.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["entity-core", "entity-sqlite", "entity-store"]);
+        assert!(packages.iter().all(|p| p.version == "0.9.1"));
+        assert!(packages.iter().all(|p| p.source.contains("tag=0.9.1")));
+    }
+
+    #[test]
+    fn a_workspace_member_under_the_prefix_reads_as_its_own_source() {
+        let lock = "[[package]]\nname = \"entity-local\"\nversion = \"0.1.0\"\n";
+        let packages = locked_packages(lock, ENTITY_RUNTIME_PREFIX);
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].source, "path");
+    }
+
+    #[test]
+    fn one_version_from_one_tag_passes() {
+        let root = lockfile_in_a_root(ONE_PIN);
+        deps(root.path()).expect("one pin is what the rule asks for");
+    }
+
+    #[test]
+    fn two_versions_of_one_entity_crate_are_refused_and_both_are_named() {
+        let root = lockfile_in_a_root(TWO_KERNELS);
+        let error = deps(root.path())
+            .expect_err("two kernels must not pass")
+            .to_string();
+        assert!(
+            error.contains("entity-core at 0.5.2 and 0.8.0"),
+            "the message names both versions: {error}"
+        );
+        assert!(
+            error.contains("two versions"),
+            "and says what the finding is: {error}"
+        );
+    }
+
+    #[test]
+    fn two_tags_across_the_entity_crates_are_refused_even_when_no_crate_is_duplicated() {
+        let lock = r#"
+[[package]]
+name = "entity-core"
+version = "0.9.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.9.1#dc5b25a"
+
+[[package]]
+name = "entity-store"
+version = "0.8.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
+"#;
+        let root = lockfile_in_a_root(lock);
+        let error = deps(root.path())
+            .expect_err("two pins must not pass")
+            .to_string();
+        assert!(
+            error.contains("more than one `entity-runtime` pin"),
+            "the message names the finding: {error}"
+        );
+        assert!(
+            error.contains("tag=0.9.1") && error.contains("tag=0.8.0"),
+            "and both pins: {error}"
+        );
+    }
+
+    #[test]
+    fn a_lockfile_with_no_entity_crate_is_a_finding_not_a_pass() {
+        let root = lockfile_in_a_root("[[package]]\nname = \"anyhow\"\nversion = \"1\"\n");
+        let error = deps(root.path())
+            .expect_err("nothing to check is not a pass")
+            .to_string();
+        assert!(error.contains("no pin to check"), "{error}");
+    }
+
+    #[test]
+    fn the_committed_lockfile_passes() {
+        // The gate step itself, so a pin that drifts fails `cargo test` as well as `task check`.
+        deps(&super::workspace_root()).expect("the committed Cargo.lock names one entity-runtime");
+    }
+
+    /// A scratch directory that is removed on drop. Under this repository's `target/`, as the
+    /// tag-reachability test does, rather than the system temporary directory.
+    mod tempdir {
+        use std::path::{Path, PathBuf};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+        pub struct Root(PathBuf);
+
+        impl Root {
+            pub fn new(label: &str) -> Self {
+                let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+                let path = super::super::workspace_root()
+                    .join("target/xtask-tests")
+                    .join(format!("{label}-{}-{n}", std::process::id()));
+                std::fs::create_dir_all(&path).expect("creating the scratch directory");
+                Self(path)
+            }
+
+            pub fn path(&self) -> &Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Root {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
     }
 }
