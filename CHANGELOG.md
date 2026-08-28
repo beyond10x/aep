@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.29.0] — 2026-08-28
+
+**Wave G of `docs/plan/store-waves-f-g-h.md`: the plan's own store is a provider.** The markdown
+documents are an `entity-store` provider held to the runtime's own suite, `MarkdownBackend` is the
+one adapter over it, history and audit come from the event log, and `validate` reports an edit made
+in an editor or an `rm`. Deviations D-P2, D-P3 and D-P4 close. Four stories, accepted, implemented
+and moved to `implemented` on recorded evidence the same day.
+
 ### Added
 
 * **The plan's documents are an `entity-store` provider.** `aep_backend_markdown::provider::MarkdownProvider`

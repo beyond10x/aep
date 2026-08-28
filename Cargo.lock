@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "adp-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -15,7 +15,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-entity"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-memory",
  "aep-conformance",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-markdown"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-memory",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-memory"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-sqlite"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-entity",
  "aep-conformance",
@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "aep-conformance"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-memory",
  "aep-contract",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "aep-contract"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "aep-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "proptest",
  "schemars",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-domain",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver-spec"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -132,7 +132,7 @@ dependencies = [
 
 [[package]]
 name = "aep-engine"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "aep-render"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "serde_yaml",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "aep-schema"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-domain",
@@ -257,7 +257,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aop-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -274,7 +274,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "billing-realization"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -504,7 +504,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "ess-compiler"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "ess-domain",
@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "ess-conformance"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "ess-diff"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "ess-compiler",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "ess-gen"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "ess-compiler",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "ess-synth"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "gatepass-realization"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "gatepass-server",
  "gatepass-system",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "infra-analyze"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "infra-compiler",
  "infra-domain",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "infra-compiler"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "infra-domain",
  "serde",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "infra-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -796,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "infra-project"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "infra-analyze",
  "infra-compiler",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "infra-spec"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "infra-analyze",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "protocol-cli"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-backend-memory",
@@ -1308,7 +1308,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "schema-contract"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "jsonschema",
  "serde_json",
@@ -1521,7 +1521,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "trace-domain"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "schemars",
  "serde",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "trace-spec"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-domain",
  "serde",
@@ -1708,7 +1708,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "aep-schema",
  "anyhow",
