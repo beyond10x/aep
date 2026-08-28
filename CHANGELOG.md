@@ -11,6 +11,15 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+* **A quoted metacharacter is an argument, not a composition.** The rule refusing `&&`, `|`, `;`,
+  `>` and `$(…)` scanned the bare characters, so `grep -n "StolenLock\|took_lock_from" crates/` —
+  one invocation whose `|` belongs to grep — was refused. It surfaced within minutes of the readers
+  being admitted, three times in one state of a live run: a tool admitted and then refused the
+  natural way to use it, which tells a session two things and lets it believe neither. The check now
+  tracks single quotes, double quotes and a backslash escape, and asks whether the metacharacter is
+  outside both. `$(` and a backtick still compose inside **double** quotes, because there they still
+  substitute; inside single quotes they are literal. It is not a shell parser and does not try to be.
+
 * **A driven state that admits reading can now read at scale.** `repository.read` renders `Glob` and
   `Grep`; Claude Code 2.1.247 offers neither, and its own error tells the model to *search file
   contents with `grep` via the Bash tool instead* — which the driver refused. So a session was told

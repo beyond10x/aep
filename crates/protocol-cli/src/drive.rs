@@ -1653,6 +1653,40 @@ fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
 
 /// The harness's tool names for an admitted capability set.
 ///
+/// The shell metacharacter this command composes with, if any — **respecting quotes**.
+///
+/// A scan for the bare characters refused `grep -n "StolenLock\|took_lock_from" crates/`, which is
+/// one invocation whose `|` is an *argument* to grep. Run `A3` hit it three times in one state, and
+/// it was a defect of the same hour: the readers were admitted, and then the most natural way to use
+/// the most useful one was refused. A rule that forbids what it was written to allow is worse than
+/// no rule, because the session cannot tell which half to believe.
+///
+/// Deliberately not a shell parser. It tracks three things — single quotes, double quotes and a
+/// backslash escape — and asks whether a metacharacter is *outside* both quotes. `$(` and a backtick
+/// substitute inside **double** quotes, so those are refused there too; inside single quotes they
+/// are literal and are not. That is the whole of the grammar this rule needs, and every case it
+/// decides is one a reader can check by eye.
+fn composes(command: &str) -> Option<char> {
+    let (mut single, mut double, mut escaped) = (false, false, false);
+    let mut chars = command.chars().peekable();
+    while let Some(c) = chars.next() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match c {
+            '\\' if !single => escaped = true,
+            '\'' if !double => single = !single,
+            '"' if !single => double = !double,
+            '`' if !single => return Some('`'),
+            '$' if !single && chars.peek() == Some(&'(') => return Some('$'),
+            ';' | '&' | '|' | '>' | '<' | '\n' if !single && !double => return Some(c),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Programs a driven step may run because they only ever **read**, and the state admits reading.
 ///
 /// **A driven session had no way to search, and the harness told it to use the one thing the driver
@@ -2061,14 +2095,12 @@ fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Resul
         ));
     }
     let command = input["command"].as_str().unwrap_or_default();
-    if command.contains("$(")
-        || command
-            .chars()
-            .any(|c| matches!(c, ';' | '&' | '|' | '`' | '>' | '<' | '\n'))
-    {
+    if let Some(found) = composes(command) {
         return Err(format!(
             "the command composes or redirects, and this run admits one simple invocation at a \
-             time: `{command}`. Run the `protocol` verbs one call per Bash tool use."
+             time: `{command}` — the `{found}` is unquoted. Run one call per Bash tool use; a \
+             metacharacter inside quotes is an argument and is fine, so `grep -n \"a\\|b\" file` \
+             is one invocation."
         ));
     }
     let mut words = command.split_whitespace();
@@ -3287,6 +3319,47 @@ mod tests {
             assert!(
                 !prompt.contains(vendor),
                 "{vendor} is Claude Code's name and no b10x session has one: {prompt}"
+            );
+        }
+    }
+
+    /// A metacharacter inside quotes is an argument; outside them it composes.
+    ///
+    /// **Found by run `A3` within minutes of admitting the readers, and it was my own defect.**
+    /// `grep -n "StolenLock\|took_lock_from" crates/` is one invocation whose `|` belongs to grep,
+    /// and the bare-character scan refused it three times in one state. Admitting a tool and then
+    /// refusing the natural way to use it is worse than not admitting it: the session is told two
+    /// things and cannot tell which to believe.
+    #[test]
+    fn a_metacharacter_inside_quotes_is_an_argument_and_outside_them_it_composes() {
+        for one_invocation in [
+            r#"grep -n "StolenLock\|took_lock_from" crates/"#,
+            r#"grep -n 'a;b' file"#,
+            r#"grep -E "fn (drive|resume)" src/run.rs"#,
+            r#"rg 'x > y' crates"#,
+            r#"grep -n '$(whoami)' file"#,
+            r#"grep -n '`date`' file"#,
+            "protocol artifact list",
+        ] {
+            assert_eq!(
+                composes(one_invocation),
+                None,
+                "`{one_invocation}` is one invocation: its metacharacters are quoted"
+            );
+        }
+
+        for composed in [
+            "protocol artifact list && protocol artifact graph",
+            "protocol artifact list | head",
+            "grep -rn x . > out.txt",
+            "cat a; rm b",
+            r#"echo "$(whoami)""#,
+            r#"echo "`date`""#,
+            r#"grep -n "a\|b" file | wc -l"#,
+        ] {
+            assert!(
+                composes(composed).is_some(),
+                "`{composed}` composes and must be refused"
             );
         }
     }
