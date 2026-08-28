@@ -142,6 +142,10 @@ fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
 }
 
 /// Where the plugin lives, when no `--plugin-dir` said.
+/// Where a project keeps its own Claude Code plugin, tried last when no flag and no
+/// environment variable named one.
+const PROJECT_PLUGIN_DIR: &str = "integrations/claude-code";
+
 const PLUGIN_DIR_ENV: &str = "AEP_DRIVE_PLUGIN_DIR";
 
 /// What can be done with a driven run.
@@ -317,7 +321,7 @@ impl DriveLocation {
 
         let (map, map_origin) = self.step_map(&registry, &task)?;
 
-        let plugin_dirs = self.plugin_dirs();
+        let plugin_dirs = self.plugin_dirs(&project);
 
         Ok(Inputs {
             project,
@@ -330,18 +334,34 @@ impl DriveLocation {
         })
     }
 
-    /// The plugin directories a session loads: the flags, then the environment.
+    /// The plugin directories a session loads: the flags, then the environment, then the project's own.
     ///
     /// The environment is a fallback and never an addition — a caller that named directories meant
     /// those directories, and silently appending one from the ambient environment is how a run
     /// ends up enforcing something its own command line does not mention.
-    fn plugin_dirs(&self) -> Vec<PathBuf> {
+    ///
+    /// **The project's own plugin is the last fallback, and run `W4-3/1` is why.** Started without
+    /// the flag, its sessions loaded *no* plugin and answered `Unknown skill: planning` to the very
+    /// first thing the step map asks for — while offering the operator's personal skills and tools,
+    /// because a session with no plugin is not a session with no inventory. A driven run of *this*
+    /// repository that has to be told where *this* repository's plugin lives is a flag nobody will
+    /// remember, and forgetting it does not fail: it produces a run that walks, spends and records
+    /// the wrong thing.
+    ///
+    /// It is a fallback rather than an addition for the same reason the environment is: a caller
+    /// who named directories meant those, and the run report says which were loaded either way.
+    fn plugin_dirs(&self, project: &Path) -> Vec<PathBuf> {
         if !self.plugin_dir.is_empty() {
             return self.plugin_dir.clone();
         }
-        std::env::var_os(PLUGIN_DIR_ENV)
-            .map(|value| vec![PathBuf::from(value)])
-            .unwrap_or_default()
+        if let Some(value) = std::env::var_os(PLUGIN_DIR_ENV) {
+            return vec![PathBuf::from(value)];
+        }
+        let own = project.join(PROJECT_PLUGIN_DIR);
+        if own.is_dir() {
+            return vec![own];
+        }
+        Vec::new()
     }
 
     /// The step map: the file named by `--map`, the map with that id, or the only one that fits.
@@ -458,6 +478,13 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     if let Some(refusal) = metaharness_preflight(&inputs.map) {
         outln!("{refusal}");
         return Ok(ExitCode::from(1));
+    }
+
+    if has_llm_steps(&inputs.map) {
+        if let Some(refusal) = protocol_on_the_session_path() {
+            outln!("{refusal}");
+            return Ok(ExitCode::from(1));
+        }
     }
 
     // D3(c): the headless pre-flight, static and decidable and run before anything executes.
@@ -1743,13 +1770,22 @@ const METAHARNESS_BINARY: &str = "metaharness";
 ///
 /// The refusal answers the question it creates, which is this repository's posture for every
 /// refusal — it names the one command that installs the binary.
-fn metaharness_preflight(map: &StepMap) -> Option<String> {
-    let llm_steps = map
-        .states
+/// Whether the map has any step that spawns a model, which is what both launch pre-flights are about.
+fn has_llm_steps(map: &StepMap) -> bool {
+    llm_step_count(map) > 0
+}
+
+/// How many, for a refusal that says how much is at stake.
+fn llm_step_count(map: &StepMap) -> usize {
+    map.states
         .values()
         .flat_map(|state| state.steps.iter())
         .filter(|step| matches!(step, Step::Llm(_)))
-        .count();
+        .count()
+}
+
+fn metaharness_preflight(map: &StepMap) -> Option<String> {
+    let llm_steps = llm_step_count(map);
     if llm_steps == 0 || on_path(METAHARNESS_BINARY) {
         return None;
     }
@@ -1764,6 +1800,69 @@ fn metaharness_preflight(map: &StepMap) -> Option<String> {
          \n\
          Install it with `cargo install --path crates/metaharness-cli` from a metaharness checkout, \
          or drive a map whose steps are all `command` and `operator` steps, which needs neither."
+    ))
+}
+
+/// The `PATH` a driven session will actually have, which is **not** this process's.
+///
+/// metaharness constructs the child environment rather than inheriting it — `env_clear()` then an
+/// allowlist, plus a `PATH` computed as `$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`
+/// (`metaharness-claude`'s `child_path`, which that crate makes public precisely so a pre-flight
+/// can resolve a binary *the way the spawn will*). So a `target/debug` on the operator's `PATH`
+/// reaches this process and never the session, and exporting one before `protocol drive` changes
+/// nothing about what the model can run.
+///
+/// Replicated here rather than depended on: this repository takes `entity-runtime` and nothing
+/// else, and one shared constant across that boundary would be a dependency in the direction
+/// `adr/0002` refuses. `a_session_path_matches_what_metaharness_constructs` pins the two together,
+/// so a change on that side fails here rather than in a paid run.
+fn session_path() -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() => {
+            format!("{home}/.local/bin:/usr/local/bin:/usr/bin:/bin")
+        }
+        _ => "/usr/local/bin:/usr/bin:/bin".to_owned(),
+    }
+}
+
+/// Refuses a run whose `llm` steps are told to use `protocol` when the session will not have it.
+///
+/// **Run `W4-3/1`, 2026-08-28, is why, and it cost $1.03 to find out.** The map's steps say *record
+/// it in the planning store*, and the store's only route is the `protocol` CLI — the state's shell
+/// exists for that and admits nothing else. The session ran `protocol artifact --help` and got
+/// `exit 127, command not found`, four times across two states, because the constructed `PATH`
+/// holds no `target/debug`. Every guard held and the run was simply unable to do its work.
+///
+/// It is the same shape as the metaharness pre-flight above and sits beside it for the same reason:
+/// a run that cannot do its work should not own a run id, a lock and a model bill to discover that.
+fn protocol_on_the_session_path() -> Option<String> {
+    let path = session_path();
+    let found = path.split(':').any(|directory| {
+        let candidate = Path::new(directory).join("protocol");
+        candidate.is_file()
+    });
+    if found {
+        return None;
+    }
+    Some(format!(
+        "a driven `llm` step reaches the planning store through the `protocol` CLI, and the \n\
+         session's `PATH` does not hold it.\n\
+         \n\
+         That `PATH` is `{path}` — **constructed by metaharness, not inherited**, so exporting \n\
+         `target/debug` before this command changes what *this* process can run and nothing about \n\
+         what the model can. A run started anyway walks its states, is refused `protocol` by the \n\
+         shell with `exit 127`, and submits nothing: run `W4-3/1` did exactly that on 2026-08-28 \n\
+         for $1.03.\n\
+         \n\
+         Install this build where the session will find it — `--root ~/.local`, because cargo's \n\
+         own default is `$CARGO_HOME/bin` and that directory is **not** on the constructed \n\
+         `PATH` either:\n\
+         \n\
+             cargo install --path crates/protocol-cli --root ~/.local\n\
+         \n\
+         Install rather than symlink `target/debug`: a later `cargo build` replaces that binary \n\
+         with a different version than the one this run is recorded against, and a run whose \n\
+         evidence was produced by a build nobody can name is the defect `version-check` exists for."
     ))
 }
 
@@ -2210,6 +2309,39 @@ mod tests {
             preceding_llm: None,
         };
         prompt_for(&step, &context)
+    }
+
+    /// The session's `PATH` is metaharness's constructed one, and this pre-flight resolves on it.
+    ///
+    /// Pinned against that crate's `child_path` by construction rather than by dependency — the
+    /// arrow in `adr/0002` runs one way and metaharness is not on it. If they drift, a driven run
+    /// is refused when it would have worked, or worse, started when it cannot: both are cheaper to
+    /// find here than at $1 a state.
+    #[test]
+    fn a_session_path_matches_what_metaharness_constructs() {
+        let path = session_path();
+        assert!(
+            path.ends_with("/usr/local/bin:/usr/bin:/bin"),
+            "metaharness's BASE_PATH is the tail of the constructed PATH: {path}"
+        );
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                assert!(
+                    path.starts_with(&format!("{home}/.local/bin:")),
+                    "and `$HOME/.local/bin` is the head, which is the only directory an operator \
+                     can install into without root: {path}"
+                );
+            }
+        }
+        assert!(
+            !path.contains("target/debug"),
+            "the session never sees this repository's build directory, which is the whole point: \
+             {path}"
+        );
+        assert!(
+            !path.contains(".cargo/bin"),
+            "nor cargo's own install root — which is why the refusal says `--root ~/.local`: {path}"
+        );
     }
 
     /// The session is told which task the run drives, before it is told anything else.

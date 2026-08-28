@@ -11,6 +11,24 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **`protocol drive` refuses a run whose sessions could not reach the `protocol` CLI, instead of
+  spending on one.** A driven `llm` step reaches the planning store through that CLI and nothing
+  else — the state's shell exists for it and admits no other program. metaharness **constructs** the
+  child environment rather than inheriting it, so the session's `PATH` is
+  `$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin` and a `target/debug` exported before the command
+  reaches the driver and never the model. Run `W4-3/1` walked two states being answered `exit 127,
+  command not found` and submitted nothing, for $1.03. The refusal names the constructed `PATH` and
+  the one install that lands on it — `cargo install --path crates/protocol-cli --root ~/.local`,
+  because cargo's own default is `$CARGO_HOME/bin`, which the session does not search either.
+
+* **A driven run of a project loads that project's own plugin without being asked.** Started
+  without `--plugin-dir`, `W4-3/1`'s sessions loaded **no** plugin and answered `Unknown skill:
+  planning` to the first thing the step map asks for — while offering the operator's personal
+  skills and tools, because a session with no plugin is not a session with no inventory.
+  `<project>/integrations/claude-code` is now the last fallback after the flag and the environment
+  variable. A flag nobody remembers does not fail loudly; it produces a run that walks, spends and
+  records the wrong thing.
+
 * **A driven session is told which task the run drives.** A step map is written once and driven
   many times, so its prompt can only say *read the task under `.engineering/`* — and a repository
   that has driven more than one run has several sitting there. Run `W4-3/1` read `task.yaml`, which
