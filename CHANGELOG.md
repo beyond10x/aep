@@ -9,7 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Removed
+
+* **`task plugin-eval` and `task driven-eval` are gone.** Both invoked
+  `integrations/claude-code/eval/`, which `epic:metaharness-migration` deleted on 2026-08-22 — the
+  agent-eval checks and their recorded transcripts live at metaharness
+  `evals/engineering-protocols/`, and `run.sh` retired with the hooks it inspected. Neither was a
+  step of `check`, so nothing was failing and nothing noticed for six days. Removed rather than
+  repointed: the eval is no longer this repository's to run. `task codex-eval` is unaffected
+  (`story:driven-eval-acceptance`, archived).
+
+### Changed
+
+* **`story-completion-evidence-design-v0.1.md` is accepted in part.** A story still cannot reach
+  `implemented` without a `test_result`, and that is unchanged; what the verdict settles is what
+  comes next. The principle that would demand a `trace_conformance` record for the run that did the
+  work is accepted **and not written**, because measured on this store on the day of the verdict it
+  would put 38 of 38 implemented stories in deviation: no artifact here carries such a record yet.
+  It ships when the first driven run has closed a story. The engine judging a producer's
+  *independence* from what it reports on is **refused** as part of this rule and carried by
+  `story:evidence-producers-for-the-driven-map`. Gap-register row 39 closes on the verdict
+  (`story:completion-needs-evidence`).
+
 
 ## [0.31.0] — 2026-08-28
 
