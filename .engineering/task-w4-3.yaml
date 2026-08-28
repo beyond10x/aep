@@ -1,0 +1,54 @@
+# The third governed run — the first one whose product is Rust, and therefore the first that walks
+# `development/default` rather than `development/checks`.
+#
+# `story:operator-resume-ux` is chosen against `story:governed-dogfood-run`'s own stated default —
+# *one whose acceptance is already mechanical and whose blast radius is one crate* — after the
+# 2026-08-28 audit of `epic:reference-driver` closed the previous candidate. `story:retry-budgets`
+# was the candidate this plan named; it turned out to be shipped and closed that day on
+# `crates/aep-driver/tests/driving.rs` and `routing.rs`. What is left in `operator-resume-ux` is one
+# real defect and three assertions:
+#
+#   * `--take-lock` builds a `StolenLock`, prints it, and never persists it. The cursor field
+#     `took_lock_from` is assigned `None` in two places and nowhere else, so `protocol drive status`
+#     has a printer for a field that is always empty and *the theft is not in the record*;
+#   * the lock refusal cannot name the holder's cursor state, because `LockState` has no state field
+#     and `take_lock` bails before reading a cursor;
+#   * three assertions the behaviour already has and no test names: `--resume` against a store
+#     another run holds, the lock's absence on the *pause* path, and the host in the refusal.
+#
+# One crate and one CLI module, no published format outside the run directory, and an acceptance a
+# reader can check without arguing about it.
+id: W4-3
+kind: feature
+objective: operator-resume-ux
+
+protocol: adp/1
+profile: development.driven
+
+derived_from:
+  - story:operator-resume-ux
+
+constraints:
+  facts:
+    # The run directory's `cursor.json` gains a field that is already declared in the type and
+    # already printed; nothing a published schema describes moves.
+    change.public_contract: false
+    change.architectural: false
+    # True, and the opposite of W4-2's: this task's product is Rust. It is declared so the plan
+    # demands the evidence kinds a code change owes — which is what
+    # `story:evidence-producers-for-the-driven-map` exists to make producible without
+    # `--allow-evidence-gap`.
+    change.code: true
+  notes:
+    - The story is `story:operator-resume-ux` in `.engineering/planning/story/`; its Acceptance
+      section, as re-scoped on 2026-08-28, is the specification this run is measured against. The
+      re-scoping table in its body names exactly which lines are already held and by which test.
+    - Implementation surface is `crates/aep-driver/` and `crates/protocol-cli/src/drive.rs`. Do not
+      modify anything under `website/`, `integrations/`, `drivers/`, `.engineering/planning/`, or
+      the workspace `Cargo.toml`.
+    - >-
+      The defect to fix first is the one with a user-visible consequence — a stolen lock leaves no
+      record that it was stolen. Thread the `StolenLock` into the cursor and read it back from the
+      run directory in a test.
+    - The tests belong in `crates/aep-driver/tests/routing.rs` and
+      `crates/protocol-cli/tests/drive_cli.rs`; both already hold the neighbouring cases.
