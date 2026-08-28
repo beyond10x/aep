@@ -179,8 +179,22 @@ impl Pair {
         )
     }
 
-    /// Asserts a verb answers alike in every store.
-    fn alike(&self, args: &[&str]) {
+    /// Asserts a verb answers alike in every store, and exits with `code` — because two stores
+    /// that fail the same way are alike too, and that is not what this test is for.
+    fn alike_with(&self, args: &[&str], code: i32) {
+        let markdown = self.alike(args);
+        assert_eq!(
+            markdown.code,
+            Some(code),
+            "`protocol {}`: {}{}",
+            args.join(" "),
+            markdown.stdout,
+            markdown.stderr
+        );
+    }
+
+    /// Asserts a verb answers alike in every store, running it once in each; the markdown answer.
+    fn alike(&self, args: &[&str]) -> Answer {
         let (markdown, sqlite) = self.both(args);
         assert_eq!(
             markdown,
@@ -195,6 +209,7 @@ impl Pair {
             "`protocol {}` differs between markdown and the hybrid",
             args.join(" ")
         );
+        markdown
     }
 }
 
@@ -217,11 +232,10 @@ impl Answer {
     }
 }
 
-/// The store's location as `<store>`, in the two ways the verbs spell it; and revision numbers as
-/// `#`, because the two stores count them differently for one reason that is recorded rather than
-/// hidden: a markdown document's revision moves when an edge is written into its frontmatter, an
-/// entity's does not move when a relation is created beside it
-/// (`story:relation-bumps-a-document-revision-but-not-an-entity`). Every other number is compared.
+/// The store's location as `<store>`, in the two ways the verbs spell it, and wall-clock instants
+/// as `<instant>`. Every number is compared — revisions included, since
+/// `story:relation-bumps-a-document-revision-but-not-an-entity` made every store count an edge the
+/// same way.
 fn normalise(project: &Path, text: &str) -> String {
     let engineering = project.join(".engineering");
     let markdown_root = engineering.join("planning").display().to_string();
@@ -252,9 +266,6 @@ fn normalise(project: &Path, text: &str) -> String {
             }
             _ => line,
         };
-        let line = blank_number_after(&line, "(revision ");
-        let line = blank_number_after(&line, "\"revision\": ");
-        let line = blank_number_after(&line, "\"version\": \"");
         let line = blank_instants(&line);
         out.push_str(&line);
         out.push('\n');
@@ -288,25 +299,6 @@ fn blank_instants(line: &str) -> String {
             at += next.len_utf8();
         }
     }
-    out
-}
-
-/// `line` with the digits following every `prefix` replaced by `#`.
-fn blank_number_after(line: &str, prefix: &str) -> String {
-    let mut out = String::new();
-    let mut rest = line;
-    while let Some(index) = rest.find(prefix) {
-        let after = index + prefix.len();
-        out.push_str(&rest[..after]);
-        let digits = rest[after..]
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(rest.len() - after);
-        if digits > 0 {
-            out.push('#');
-        }
-        rest = &rest[after + digits..];
-    }
-    out.push_str(rest);
     out
 }
 
@@ -427,13 +419,18 @@ fn every_verb_answers_alike_over_markdown_and_sqlite() {
     let body = body.to_str().expect("a printable path");
 
     for args in READS_BEFORE {
-        pair.alike(args);
+        pair.alike_with(args, 0);
     }
-    for args in writes(body) {
-        pair.alike(&args);
+    let writes = writes(body);
+    let (accepted, refused) = writes.split_at(writes.len() - 1);
+    for args in accepted {
+        pair.alike_with(args, 0);
+    }
+    for args in refused {
+        pair.alike_with(args, 1);
     }
     for args in READS_AFTER {
-        pair.alike(args);
+        pair.alike_with(args, 0);
     }
     let (markdown, _) = pair.both(&["artifact", "validate"]);
     assert_eq!(markdown.code, Some(0), "{}", markdown.stdout);
@@ -625,4 +622,54 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     let output = protocol_in(&pair.sqlite, &["artifact", "divergences"]);
     assert_ne!(output.status.code(), Some(0));
     assert!(text(&output.stderr).contains("not a hybrid plan"));
+}
+
+#[test]
+fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
+    // `story:evidence-verb-refuses-its-own-default-instant`: the default was produced to the second
+    // and refused by the reader that only knew a date — every recording had to type `--at`.
+    let pair = Pair::new("evidence-now");
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        let output = protocol_in(
+            project,
+            &[
+                "artifact",
+                "evidence",
+                "story:passkey-login",
+                "--kind",
+                "test_result",
+                "--source",
+                "task check",
+            ],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let history = protocol_in(project, &["artifact", "history", "story:passkey-login"]);
+        assert!(
+            text(&history.stdout).contains("test_result"),
+            "{}",
+            text(&history.stdout)
+        );
+    }
+
+    // And an instant nothing can read is still refused, naming it.
+    let output = protocol_in(
+        &pair.markdown,
+        &[
+            "artifact",
+            "evidence",
+            "story:passkey-login",
+            "--kind",
+            "test_result",
+            "--source",
+            "task check",
+            "--at",
+            "yesterday-ish",
+        ],
+    );
+    assert_ne!(output.status.code(), Some(0));
+    assert!(
+        text(&output.stderr).contains("`yesterday-ish` is not an instant this build can read"),
+        "{}",
+        text(&output.stderr)
+    );
 }

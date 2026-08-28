@@ -657,7 +657,7 @@ impl Opened {
                 store.root(),
                 id,
             )),
-            None => evidence_from_audit(self.backend()?, id),
+            None => evidence_from_events(self.backend()?, id),
         }
     }
 }
@@ -787,20 +787,22 @@ fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> {
     Ok(report)
 }
 
-/// Evidence about `id`, counted from the audit trail: every accepted `aep.evidence.record/v1` whose
-/// record names the artifact, by the kind its operation summary names.
+/// How much evidence is on hand about `id`, in a plan without a journal: counted from the entity's
+/// own events, as `history` reads them.
 ///
-/// A store that keeps no journal keeps its observations as audit records; the memory backend writes
-/// the target as the record's subject and `Command::summary` spells the operation as
-/// `record <kind> about <target>`, which is what is read here — one spelling, in `aep-domain`, that
-/// this counts against.
-fn evidence_from_audit(
+/// Not from the audit trail: an accepted command's record names its subject and nothing about what
+/// kind of evidence it recorded — the contract keeps `decision` for refusals — so the trail could
+/// only ever say *something* was recorded. The event carries the command's `args` (`kind`,
+/// `source`), or the projection's note, and the `Identity` shape writes one on the target at its
+/// unchanged revision precisely so this count survives the process that recorded it.
+fn evidence_from_events(
     backend: &PlanBackend,
     id: &ArtifactId,
 ) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
-    use aep_contract::query::{AuditQuery, QueryService};
+    use aep_backend_markdown::journal::Change;
+    use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
-    use aep_domain::entity::{EntityLocator, EntityRef};
+    use aep_domain::entity::EntityLocator;
 
     let locator = EntityLocator::new(
         aep_backend_markdown::backend::ORGANISATION,
@@ -811,31 +813,12 @@ fn evidence_from_audit(
     .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
-    let records = block_on(backend.audit(&AuditQuery {
-        entity: Some(EntityRef::new(target)),
-        ..AuditQuery::default()
-    }))
-    .map_err(|error| anyhow::anyhow!("reading the audit trail: {error}"))?;
     let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for record in &records.items {
-        if record.is_rejection() {
-            continue;
-        }
-        let Some(operation) = record
-            .decision
-            .as_ref()
-            .map(|decision| decision.operation.as_str())
-        else {
-            continue;
-        };
-        let Some(rest) = operation.strip_prefix("record ") else {
-            continue;
-        };
-        let Some((kind, _)) = rest.split_once(" about ") else {
-            continue;
-        };
-        if let Ok(kind) = kind.parse::<aep_domain::evidence::EvidenceKind>() {
-            *counted.entry(kind).or_default() += 1;
+    for event in backend.events_of(&target)? {
+        if let Some(entry) = entry_from_event(backend, id, &event) {
+            if let Change::Evidence { kind, .. } = entry.change {
+                *counted.entry(kind).or_default() += 1;
+            }
         }
     }
     Ok(counted)
@@ -2297,12 +2280,38 @@ fn artifact_id(value: &str) -> Result<ArtifactId> {
 fn instant(text: &str) -> Result<aep_domain::time::Timestamp> {
     aep_domain::time::CivilDate::parse(text)
         .map(aep_domain::time::CivilDate::to_timestamp)
-        .or_else(|_| {
+        .or_else(|_| second_instant(text).ok_or(()))
+        .or_else(|()| {
             text.parse::<u64>()
                 .map(aep_domain::time::Timestamp::from_epoch_millis)
                 .map_err(|_| ())
         })
         .map_err(|()| anyhow::anyhow!("`{text}` is not an instant this build can read"))
+}
+
+/// `YYYY-MM-DDTHH:MM:SSZ` — the form `now_at_the_edge` writes — as a timestamp.
+///
+/// `story:evidence-verb-refuses-its-own-default-instant`: the edge produced an instant to the
+/// second and every reader accepted a date or epoch milliseconds, so `protocol artifact evidence`
+/// without `--at` refused the very value it had just defaulted to.
+fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
+    let (date, time) = text.split_once('T')?;
+    let time = time.strip_suffix('Z')?;
+    let mut parts = time.split(':');
+    let (hours, minutes, seconds) = (
+        parts.next()?.parse::<u64>().ok()?,
+        parts.next()?.parse::<u64>().ok()?,
+        parts.next()?.parse::<u64>().ok()?,
+    );
+    if parts.next().is_some() || hours > 23 || minutes > 59 || seconds > 60 {
+        return None;
+    }
+    let day = aep_domain::time::CivilDate::parse(date)
+        .ok()?
+        .to_timestamp();
+    Some(aep_domain::time::Timestamp::from_epoch_millis(
+        day.epoch_millis() + (hours * 3600 + minutes * 60 + seconds) * 1000,
+    ))
 }
 
 /// Issues the `RecordEvidence` command that records one observation.

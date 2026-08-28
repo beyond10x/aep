@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:evidence-verb-refuses-its-own-default-instant
 kind: story
-status: draft
+status: implemented
 title: protocol artifact evidence refuses the instant it defaults to
 summary: Without --at the verb stamps now_at_the_edge() as an ISO datetime and instant() reads only YYYY-MM-DD or epoch millis, so every undated evidence record is refused in 0.27.3; the flag that exists to replace move --evidence cannot be used as documented.
 relations:
 - decomposes: epic:evidence-gated-completion
-revision: 3
+revision: 7
 ---
 # Story: `protocol artifact evidence` refuses the instant it defaults to
 
@@ -45,3 +45,16 @@ Sub-second precision; a timezone other than UTC.
 ## Open Questions
 
 None.
+
+## Delivered 2026-08-28
+
+- `fn instant` reads `YYYY-MM-DDTHH:MM:SSZ` beside a date and epoch milliseconds
+  (`second_instant`, `crates/protocol-cli/src/planning.rs`).
+- `store_selection.rs::evidence_without_at_is_recorded_at_the_instant_the_edge_read` records with
+  no `--at` on all three stores and finds the entry in `history`; `yesterday-ish` is still refused
+  naming the text.
+- Two things this defect had hidden, fixed with it: `store_selection.rs` had compared identical
+  *failures* across stores and called them alike — every write now asserts its exit code — and a
+  SQLite or Postgres plan counted no evidence on hand (an accepted audit record carries no
+  `decision`, so the kind was never there to count). Evidence on hand is counted from the entity's
+  events, as `history` is, and the evidence-gated move over SQLite is decided on what was recorded.
