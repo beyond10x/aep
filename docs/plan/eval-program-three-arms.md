@@ -89,6 +89,7 @@ to the same bytes twice, and a clock in it would make every re-ingest a diff.
 | step | content | spend cap |
 |---|---|---|
 | R4.1 pilot | 1 workflow (`workflows/development/default.yaml`) × 2 harnesses × 3 arms × 2 tasks = 12 runs | $10 |
+| R4.1b **pilot 2** | **owed.** Pilot 1 ran 4 of the 12 cells, arm `c` refused before start, and its numbers cannot be compared with anything made after 2026-08-23: the corpus went 10 rows → 12, and the streams went to a scratchpad that no longer exists. Re-run every cell, freeze the corpus first, commit the streams — `story:three-arm-pilot-2` | ~$10 |
 | R4.2 freeze | read the pilot, fix instrument faults only (never expectations and instrument in one change), freeze the corpus | — |
 | R4.3 sweep | all workflows × 2 harnesses × 3 arms × K tasks (4 workflows, K=3 → 72 runs) | $25 |
 | R4.4 the report | the matrix, from committed transcripts, delivered as the answer to "how well do they behave" | — |

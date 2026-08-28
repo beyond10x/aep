@@ -1,5 +1,29 @@
 # Three-arm evaluation — pilot 1, 2026-08-23
 
+> **Superseded for comparison, 2026-08-28 — the numbers below cannot be compared with any run made
+> after this date, and cannot be recomputed.** Two things happened to them.
+>
+> **The corpus grew.** These cells were scored against a **10-row** `expectations.trace.yaml`; it
+> has **12** rows now, changed three times since — `2f7498f` (2026-08-23) added
+> `the-implementation-was-changed`, the row this very pilot's § *claude / plugin* finding argued
+> for; `24e8d6a` (2026-08-24) made the write selectors vendor-neutral, which is what the codex cells'
+> `unobservable` counts were about; `9a2853e` (2026-08-26) added `the-scope-was-actually-tested`.
+> A held-count against 10 rows and one against 12 are not the same measurement.
+>
+> **The streams are gone.** They lived under a session scratchpad (`…/scratchpad/r4/`), which no
+> longer exists; searched 2026-08-28. Only *synthetic* streams are committed
+> (`crates/protocol-cli/fixtures/eval-run/`, whose README says so in its first line), so the free
+> re-ingest path `eval_dry_run.rs` proves cannot be pointed at these four runs. **Nobody can
+> re-score them, now or later.**
+>
+> What survives is everything in this page that is prose rather than a count: the four qualitative
+> findings, the codex instrument limit, and the observation that a run which built nothing outscored
+> the two that worked. Those are why the corpus changed.
+>
+> A like-for-like comparison therefore needs **every cell re-run**, not just the driven one — and
+> the streams committed rather than left in a scratchpad. Tracked as
+> `story:three-arm-pilot-2` under `epic:self-evaluation`.
+
 Status: **measured** (R4.1 of `docs/plan/eval-program-three-arms.md`). One workflow (`adp/default`),
 one case (`case:development-honest` — add a `--json` flag to `protocol artifact board`, worked
 through the development workflow), two harnesses, all three arms attempted. Judged by the committed
