@@ -9,6 +9,10 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.31.0] — 2026-08-28
+
 ### Changed
 
 * **An edge no longer moves its source document's revision.** `protocol artifact relate` (and
