@@ -2,16 +2,16 @@
 format: aep.planning-md/1
 id: story:evidence-producers-for-the-driven-map
 kind: story
-status: draft
+status: implemented
 title: Every kind the plan demands has a producer the map can name
 summary: A driven run under development/default reaches review without --allow-evidence-gap, because a verifier exists for each of the four kinds the coverage pre-flight names — and none of the four is minted from an exit status it cannot honestly come from.
 owner: protocol
 tags:
-- evidence
 - driver
+- evidence
 relations:
 - decomposes: epic:evidence-gated-completion
-revision: 1
+revision: 4
 ---
 # Story: Every kind the plan demands has a producer the map can name
 

@@ -11,6 +11,22 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A driven run of the cargo map produces every kind its plan demands.** `protocol drive run --map
+  drivers/development/default.yaml` on a `kind: feature` task starts with **no
+  `--allow-evidence-gap`**: the refusal that named `contract_result`, `property_test_result`,
+  `verification` and `specification` now names none. Each is minted by a `command` step the driver
+  ran, carrying `producer: verifier` — never a producer a model could forge — and a record that is
+  missing or unreadable submits nothing and says why, rather than being fabricated. Three producers
+  are new verbs; the `property_test_result` one is an exhaustive checker over all 27 `Truth`
+  assignments rather than a sampled suite (`story:evidence-producers-for-the-driven-map`).
+
+* **The eleven ladders `entity-runtime` re-expresses are held equal to ours by a test.** 77 edges,
+  compared in both directions against a pinned copy of their definitions — an edge invented there
+  fails, and an edge our ladder grows and theirs does not express fails too. The mapping is
+  **accepted in part**: states, initial states and edges accepted; the eleven operation names stay
+  theirs and unendorsed, because `move --to implemented` and `execute --operation implement` are
+  different published surfaces (`story:entity-runtime-mapping`).
+
 * **`task plan-check` is a step of the gate.** `protocol artifact validate` over this repository's
   own planning store, third of nineteen steps: an unparseable document, a relation into a repository
   the workspace manifest does not declare, or a status no lifecycle permits now fails `task check`.
@@ -27,6 +43,13 @@ belongs in the commit message or in `docs/design/`.
   (`story:completion-audit-join`).
 
 ### Fixed
+
+* **`protocol drive` reads a crossing relation the way `validate` does.** A relation into another
+  repository that `.engineering/workspace.yaml` declares was a dangling edge to the driver and a
+  declared one to `validate`, so `drive` refused to start — *the planning store cannot be trusted* —
+  on a store the other verb had just called valid. One edge in this repository's own store was
+  enough to stop every driven run before its first step. A store with no manifest beside it still
+  refuses, unchanged.
 
 * **`protocol artifact validate` is green from anywhere inside a project.** It resolved the
   workspace manifest against the *working directory*, so the same store validated at the repository

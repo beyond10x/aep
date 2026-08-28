@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:entity-runtime-mapping
 kind: story
-status: draft
+status: implemented
 title: Another repository has already expressed our eight ladders as data, and asks for a verdict
 summary: entity-runtime carries artifacts/lifecycles/*.yaml as eight entity definitions with an equivalence test pinned at 79b641c. Phase 0 of its adoption design asks whether the reading is faithful, and whether entity-core becomes an ordinary dependency here.
 owner: protocol
@@ -10,7 +10,7 @@ tags:
 - adoption
 - lifecycle
 - protocol
-revision: 6
+revision: 9
 ---
 # Story: Another repository has already expressed our eight ladders as data, and asks for a verdict
 
