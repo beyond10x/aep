@@ -188,7 +188,7 @@ leaving a row here about a page nobody writes any more.
 
 ## How this round was produced
 
-Round taken at commit `1419f1c`, against the corpus rule above.
+Round taken at commit `23a213f`, against the corpus rule above.
 
 1. The corpus: `docs/guide/*.md`, `website/docs/**/*.md` and
    `docs/plan/document-authoring-brief.md`.
@@ -221,9 +221,13 @@ it did consider is the part worth recording:
   carries, not a second one.
 
 The project directory is the third instance the adopter's report named, and it is deliberately **not**
-a row: it is a path rather than a vocabulary a document declares, it is set by AEP_PROJECT_DIR, and
-it stopped being the compile-time constant the report found. A row would have to call it open on the
-strength of an environment variable, which is not what any other cell in this table means.
+a row. It is a path rather than a vocabulary a document declares; it is set by AEP_PROJECT_DIR, read
+once per process, and covered by `crates/aep-engine/tests/project_directory_env.rs`; and it stopped
+being the compile-time constant the report found. A row would have to call it open on the strength
+of an environment variable, and every other `Decided by` cell in this table names the declaration
+that decides the verdict — for an open row, the variant that admits a value of the adopter's own.
+There is no such line here, so the finding is recorded in prose instead of asserted in a cell that
+would mean something different from every cell beside it.
 
 The next round is a diff, not a rewrite. Re-run `bash .engineering/checks/run.sh` and it says which
 citations no longer resolve, which candidates are new, and which closed rows are still unexplained.
