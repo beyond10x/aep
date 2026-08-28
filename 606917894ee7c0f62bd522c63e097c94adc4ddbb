@@ -1,0 +1,4 @@
+This commit also carries wave H stories 2 and 3, implemented after 0.29.0 and uncommitted until here:
+- `story:describe-type-reports-the-ladder` (D-P5 closed): `TypeDescriptor::lifecycle` incl. `requires`, rendered from the kernel definition; `kernel` moved to aep-backend-entity.
+- `story:postgres-backend`: `crates/aep-backend-postgres` = `EntityBackend<PostgresStore>`, `postgres-check` gate step, `protocol conformance --backend postgres`.
+The title names H1 and H4 only; the CHANGELOG 0.30.0 section lists all four.
