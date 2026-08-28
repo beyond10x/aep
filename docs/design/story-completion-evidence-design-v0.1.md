@@ -1,11 +1,15 @@
 # Story completion, evidence-gated — Design v0.1
 
 > **Repository:** `beyond10x/engineering-protocols`
-> **Status:** **proposed, not accepted.** Nothing here is a work order. It is proposed by
-> [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md) § W4.3, whose
-> acceptance criterion is *a verdict on this document* — accepted, accepted in part, or refused —
-> and not a build. Per [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative*, a proposal
-> is not a work order however recent it is.
+> **Status: accepted in part, 2026-08-28.** The verdict
+> [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md) § W4.3 asked for
+> is **§ 10** of this document, and is repeated on that page and on
+> `story:completion-needs-evidence` in the store. Only § 10.1's rows are shipped; § 10.2 is accepted
+> and sequenced behind the first driven run; § 10.3 is refused by name. Nothing outside § 10.1 is a
+> work order. Per [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative*, the unaccepted
+> remainder stays a proposal however recent it is.
+> **Was, until 2026-08-28:** *proposed, not accepted* — proposed by that page's § W4.3, whose
+> acceptance criterion is a verdict on this document and not a build.
 > **Audience:** whoever takes that verdict, and whoever would build it afterwards.
 > **Relationship to existing design:** it is `principles/verification/ess-conformance.yaml` applied
 > one layer up. That principle joins evidence to a **task's** completion; this one asks what it would
@@ -473,3 +477,83 @@ one so that the first rule to need it can be ignored is how a check becomes deco
 * **Not a claim that a driven story is a better story.** The rule is about whether a status records
   something. Whether driving produces better work is a measurement nobody has taken, and harness
   wave 4 says so on its own page.
+
+## 10. Verdict — accepted in part, 2026-08-28
+
+**For somebody closing a story in this repository today, nothing changes.** The two halves of § 4
+this document proposed are already in the binary and already decide moves; the rest of the rule is
+accepted as written and does not come into force until there is a driven run that can satisfy it. No
+`protocol artifact move` starts failing on the strength of this verdict.
+
+Taken against `harness-wave-4-governed-dogfood.md` § W4.3's acceptance criterion, and recorded in
+three places because all three are acceptance surfaces (`AGENTS.md` § *Which documents are
+normative*): this section, that page, and `story:completion-needs-evidence` in the store.
+
+### 10.1 Accepted, and already shipped
+
+| what | where it landed |
+|---|---|
+| § 4.2 — **enforce at the move**: a lifecycle document declares what a rung costs, and the engine decides the move against the evidence presented, three-valued | `StatusRequirement`, `crates/aep-domain/src/artifact.rs`; decided through `entity-core`; `crates/aep-backend-markdown/tests/evidence.rs` |
+| § 4.2 — **audit at `validate`**: a status reached on an assertion is named, by artifact | `protocol artifact validate` → `closed_on_an_assertion`; 4 named on this store on 2026-08-28 |
+| § 4.2's provenance half — a record with a subject, a source, an actor and an instant, found by `move` rather than typed at it | `protocol artifact evidence`; counted from the entity's own events in every store since 0.31.0 |
+| § 3 — the `delivers` row, advisory as § 3 writes it (**S2**'s default) | `artifacts/relations/relations.yaml`, added 2026-08-25 |
+
+### 10.2 Accepted as written, sequenced behind the first driven run
+
+§ 2's principle and § 6.3's option B are accepted as **the rule this repository intends**, and are
+not built now, for the reason this document gives itself in **D-S7**: § 2's `artifacts:` clause
+cannot be satisfied until a driven run creates the first `task` artifact and relates it.
+
+The measurement § 6.4 asks for was taken on this store on the day of the verdict, and it is the
+argument rather than an illustration:
+
+| `.engineering/planning`, 2026-08-28, `protocol artifact validate --format json` | |
+|---|---|
+| artifacts read / problems | 125 / 0 |
+| stories at `implemented` | 38 |
+| of those, reached on an assertion rather than a record | 4 |
+| artifacts carrying a `trace_conformance` record | 0 |
+| stories closed by a route the driver drove | 0 |
+
+Option B's condition — `artifact.story.exists` — would therefore put **38 of 38** implemented
+stories in deviation today, because not one of them can hold the `trace_conformance` half. That is
+**D-S1**'s coarse condition meeting a store built before the driver, not the rule failing. So
+**S1**'s default stands, with one added condition: the principle document ships at
+`principles/verification/story-completion-evidence.yaml` **listed by no profile**, and is listed in
+`development.standard` when — and only when — `story:governed-dogfood-run` has closed one story by a
+driven run. Until then the file is not written at all: a principle no profile names and no run can
+satisfy is a document with nothing to say, and shipping it early would be the decorative check
+**S5** refuses.
+
+Option A — a new `released` rung — stays **sequenced, not refused**, exactly as § 6.3 argues.
+
+### 10.3 Refused: the independence judgement, as part of this rule
+
+§ 2 requires `independent: true` on both evidence requirements, and **D-S4** is honest that this
+means only *the producer is not `Producer::Agent`*. Making the engine judge whether a producer was
+genuinely independent of the thing it reports on is engine work with its own design surface, and
+accepting it here would make this rule the place where that question is answered by a boolean.
+
+It is refused here and kept where the producers are actually built:
+`story:evidence-producers-for-the-driven-map`, whose acceptance is a step map every one of whose
+demanded evidence kinds has a producer that mints it as `producer: verifier` — the driver ran the
+tool, and the model had no field to put a verdict in. **D-S4** stays as this document's standing
+limit rather than becoming a requirement it cannot keep.
+
+### 10.4 The rest of § 8
+
+| | verdict |
+|---|---|
+| **S1** — where the principle lives, which profile lists it | default taken, plus § 10.2's condition: no profile, and no file, until the first driven run |
+| **S2** — the `delivers` row | done, 2026-08-25 |
+| **S3** — how a story points at the run that delivered it | default taken: the delivering `task`'s `location` is `.engineering/runs/<run-id>/`; no frontmatter change |
+| **S4** — a story whose run wedged | default taken: nothing happens, it stays `active` |
+| **S5** — `validate`'s rule an error or a warning | default taken — an error, accumulated with the others. The **shipped** behaviour is deliberately narrower and is not this rule: the assertion *count* does not move the exit code, because naming the four is what the store needed first |
+
+### 10.5 What this closes
+
+[`gap-register.md`](../plan/gap-register.md)'s row *"a story's `implemented` is a claim nothing
+checks"* closes on this verdict, as its own closing condition says a verdict does — accepted and
+refused close it alike. What replaces the claim is narrower and true: **no move can be mistaken for
+proven.** `validate` names every status reached on an assertion, and whether the producer was
+independent of what it reports on is an open row of its own, not this one.

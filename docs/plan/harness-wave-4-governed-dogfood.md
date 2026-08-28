@@ -536,6 +536,28 @@ story is a query against a history the store does not keep (deviation **D-P3**).
 first half only, and the design's **D-S3** says why the join is a statement in a file rather than a
 binding.
 
+**Verdict, 2026-08-28: accepted in part.** Recorded here because this page's acceptance says the
+wave records it here; written out in full as
+[`story-completion-evidence-design-v0.1.md`](../design/story-completion-evidence-design-v0.1.md) § 10,
+and in the store as `story:completion-needs-evidence`.
+
+* **Accepted and already shipped** — § 4.2's two halves (the engine decides a move against evidence
+  presented; `validate` names every status reached on an assertion) and § 3's `delivers` row.
+* **Accepted as written, sequenced behind the first driven run** — § 2's principle and § 6.3's
+  option B. § 6.4's measurement was taken on this store on the day of the verdict: 125 artifacts,
+  0 problems, 38 stories at `implemented`, 4 of them on an assertion, and **0 artifacts carrying a
+  `trace_conformance` record**. Option B's condition would put 38 of 38 in deviation today, which is
+  **D-S1**'s coarse condition meeting a store older than the driver. The principle file is therefore
+  not written, and is listed in `development.standard` only once `story:governed-dogfood-run` has
+  closed one story by a driven run.
+* **Refused by name** — the engine judging whether a producer was *independent* of what it reports
+  on, as part of this rule. That is engine work with its own surface and is kept under
+  `story:evidence-producers-for-the-driven-map`; **D-S4** stays this design's standing limit.
+* § 8's other open decisions take their stated defaults, with S1 carrying the added condition above.
+
+This closes [`gap-register.md`](gap-register.md)'s row *a story's `implemented` is a claim nothing
+checks*, which its own closing condition says a verdict closes whichever way it goes.
+
 ## W4.4 — a second real harness: Codex on the same step map
 
 The first time the harness-neutrality claim meets a harness somebody else built. Two of the three

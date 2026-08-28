@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:evidence-gated-completion
-revision: 1
+revision: 2
 ---
 # Story: A story cannot reach `implemented` on somebody's word
 
@@ -40,6 +40,29 @@ is done, and what did it*; it has no consumers.
 - Reported, not refused. Refusing an assertion outright would stop anybody closing a story on the
   day a runner is down, which is the day it matters most; what it must not be is invisible. The
   count does not affect the exit code, and that is deliberate.
+
+## Verdict — accepted in part, 2026-08-28
+
+The design this story asked a verdict on,
+[`story-completion-evidence-design-v0.1.md`](../../../docs/design/story-completion-evidence-design-v0.1.md),
+is **accepted in part**; the full text is its § 10, and it is recorded on
+[`harness-wave-4-governed-dogfood.md`](../../../docs/plan/harness-wave-4-governed-dogfood.md) § W4.3
+as that page's acceptance requires.
+
+- **Shipped and accepted:** the two lines above, plus the `delivers` row in
+  `artifacts/relations/relations.yaml`.
+- **Accepted, not yet in force:** the principle over facts and the evidence gate on the existing
+  terminal move (option B). Measured on this store on the day of the verdict — 125 artifacts, 0
+  problems, 38 stories at `implemented`, 4 of them reached on an assertion, and **0 artifacts
+  carrying a `trace_conformance` record** — option B would put 38 of 38 in deviation today. So the
+  principle file is not written, and it is listed in `development.standard` only when
+  `story:governed-dogfood-run` has closed one story by a driven run.
+- **Refused:** the engine judging whether a producer was *independent* of what it reports on, as
+  part of this rule. It is engine work with its own surface, and it is carried by
+  `story:evidence-producers-for-the-driven-map`.
+
+*Still open* below is unchanged by the verdict: admitting a recorded result automatically is what
+the driven run adds, not what this decision settles.
 
 ## Still open
 
