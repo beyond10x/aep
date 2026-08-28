@@ -62,6 +62,7 @@ from, default `.`).
 | `protocol artifact board [--kind …]` | the same plan as status columns |
 | `protocol artifact graph [--format dot\|json]` | the plan's graph — `dot` for `dot -Tsvg`, `json` for a consumer that would otherwise parse a diagram |
 | `protocol artifact history <id> [--format text\|yaml\|json]` | what happened to one artifact, oldest first, out of the store's append-only journal: creations, moves, and every evidence record. A corrupt journal line is skipped **and counted**, never silently dropped |
+| `protocol artifact explain <id> [--format text\|yaml\|json]` | what made this what it is: per status it reached, the move and every evidence record admitted since the previous one — each named against the revision the artifact was at when it was admitted, so a later edit cannot re-date an old record onto the new text. A status reached on nobody's record is marked rather than left blank. Not `protocol explain`, which is how a policy decided |
 | `protocol artifact evidence <id> --kind <k> --source <s> [--ref <url>] [--at <iso8601>]` | records an observation about an artifact, so a later move can be decided on it. `--at` defaults to now, read at the edge |
 | `protocol artifact validate` | every file, every edge, every status, accumulated into one list: a file where its id does not put it, an edge pointing at nothing, a cycle, a duplicate id, a status the lifecycle does not have |
 | `protocol artifact kinds` | the 26 artifact kinds, marking which are planning rather than output |

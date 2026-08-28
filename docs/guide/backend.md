@@ -413,6 +413,35 @@ starting at one are *observations*: an event on that entity at its unchanged rev
 lets a second process count the evidence on hand from the log alone, and what `entity-runtime`
 0.12.2's providers were fixed to accept.
 
+### What made this done
+
+`protocol artifact explain <id>` answers the audit question three months later out of the store
+rather than out of the repository's log (`story:completion-audit-join`). Per status the artifact
+reached: the move, the instant, the revision it left the artifact at, and every evidence record
+admitted since the previous move.
+
+```console
+$ protocol artifact explain story:passkey-login
+story:passkey-login in .engineering/planning: implemented, revision 8
+  active -> implemented  2026-08-28T19:51:50Z  (revision 8)
+    test_result from task check (run-4711), observed 2026-08-28T12:00:00Z, admitted at revision 7
+    review from alice, observed 2026-08-28T12:00:00Z, admitted at revision 7
+```
+
+Three things it is careful about. Each record is named against **the revision the artifact was at
+when it was admitted**, not the one it is at now, so a later edit to the body cannot make an old
+record look like it was about the new text. The join is one-to-**many**: a story satisfied by a
+suite and by a review shows both, because forcing a choice between them would lose one. And the
+join is a stored fact rather than a path — deleting the file `--ref` pointed at leaves the record
+exactly where it was.
+
+A status reached with no record is marked rather than left blank, in the words `validate` uses —
+`asserted — no record: the evidence was claimed, not held` for a move on a bare `--evidence` count,
+`no record: nothing was recorded about how this was decided` for a rung that asked for nothing. It
+reads through the contract in every store, so the answer over markdown, SQLite, Postgres and a
+hybrid is one answer. `--format json` carries the same fields. `protocol explain` is a different
+question — how a policy decided — and this is deliberately not it.
+
 ### The plan kept twice
 
 `store: hybrid` keeps the plan in markdown for pull requests **and** in a replica for tooling, under

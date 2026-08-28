@@ -334,6 +334,15 @@ const READS_AFTER: &[&[&str]] = &[
         "json",
     ],
     &["artifact", "history", "story:passkey-login"],
+    &["artifact", "explain", "story:passkey-login"],
+    &[
+        "artifact",
+        "explain",
+        "story:passkey-login",
+        "--format",
+        "json",
+    ],
+    &["artifact", "explain", "story:passkey-audit-trail"],
     &["artifact", "validate"],
 ];
 
@@ -377,6 +386,19 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             "task check",
             "--ref",
             "run-4711",
+            "--at",
+            AT,
+        ],
+        vec![
+            "artifact",
+            "evidence",
+            "story:passkey-login",
+            "--kind",
+            "review",
+            "--source",
+            "alice",
+            "--ref",
+            "https://example.invalid/review/9",
             "--at",
             AT,
         ],
@@ -672,4 +694,220 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
         "{}",
         text(&output.stderr)
     );
+}
+
+/// Records two observations about `story:passkey-login` and moves it, in `project`.
+///
+/// Its own function because three tests need the same fixture and the difference between them is
+/// what they then ask of it, not how it was built.
+fn closed_on_two_records(project: &Path, reference: &str) {
+    for (kind, source) in [("test_result", "task check"), ("review", "alice")] {
+        let output = protocol_in(
+            project,
+            &[
+                "artifact",
+                "evidence",
+                "story:passkey-login",
+                "--kind",
+                kind,
+                "--source",
+                source,
+                "--ref",
+                reference,
+                "--at",
+                AT,
+            ],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    }
+    let output = protocol_in(
+        project,
+        &[
+            "artifact",
+            "move",
+            "--to",
+            "implemented",
+            "story:passkey-login",
+            "--at",
+            AT,
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+}
+
+#[test]
+fn what_made_a_story_done_names_the_revision_each_record_was_admitted_at() {
+    // `story:completion-audit-join`. The join is worth nothing unless it is pinned to the text the
+    // record was about: an answer that named the artifact's *current* revision would read correctly
+    // on the day it was written and be a lie every day after, because a later edit would silently
+    // re-date every old record onto the new body.
+    let pair = Pair::new("explain-revisions");
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        closed_on_two_records(project, "run-4711");
+
+        let output = protocol_in(
+            project,
+            &[
+                "artifact",
+                "explain",
+                "story:passkey-login",
+                "--format",
+                "json",
+            ],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let report: serde_json::Value =
+            serde_json::from_str(&text(&output.stdout)).expect("a JSON explanation");
+
+        let reached = report["reached"]
+            .as_array()
+            .expect("the statuses it reached");
+        let moved = reached
+            .iter()
+            .find(|step| step["to"] == "implemented")
+            .unwrap_or_else(|| panic!("the move to implemented: {reached:#?}"));
+        let records = moved["rested_on"]
+            .as_array()
+            .expect("the records the move rested on");
+
+        // One-to-many, which is the story's own default: a suite and a review are two records and
+        // forcing a choice between them would lose one.
+        assert_eq!(records.len(), 2, "{records:#?}");
+        assert_eq!(records[0]["kind"], "test_result");
+        assert_eq!(records[1]["kind"], "review");
+        assert_eq!(records[0]["reference"], "run-4711");
+
+        // The fixture reached the state where the rule is load-bearing: the move left the artifact
+        // at a later revision than the records were admitted at, so naming the wrong one is a
+        // difference this test can see at all.
+        let admitted = records[0]["revision"].as_u64().expect("a revision");
+        let after_the_move = moved["revision"].as_u64().expect("a revision");
+        assert!(
+            after_the_move > admitted,
+            "the move must leave the artifact past the revision the records were admitted at, or \
+             the two revisions are indistinguishable: {admitted} -> {after_the_move}"
+        );
+        assert_eq!(
+            report["revision"].as_u64(),
+            Some(after_the_move),
+            "the artifact stands at the revision the move left it at"
+        );
+        for record in records {
+            assert_eq!(
+                record["revision"].as_u64(),
+                Some(admitted),
+                "a record is named against the revision the artifact was at when it was admitted, \
+                 never the one it is at now: {record:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_joined_record_outlives_the_file_its_reference_names() {
+    // The join is a stored fact, not a path. A CI log rotates away and a scratch file is cleaned
+    // up; the record of what closed the story must not go with it, which is the difference between
+    // an audit trail and a directory listing.
+    let pair = Pair::new("explain-deleted-reference");
+    let log = Path::new(env!("CARGO_TARGET_TMPDIR")).join("explain-deleted-reference.log");
+    std::fs::write(&log, "1 suite, 0 failures\n").expect("the run's log is written");
+    let reference = log.to_str().expect("a printable path").to_owned();
+
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        closed_on_two_records(project, &reference);
+    }
+
+    // The fixture reached the state the rule is about: the reference named a file that was there,
+    // and now names one that is not.
+    assert!(log.is_file(), "the reference named a file that existed");
+    std::fs::remove_file(&log).expect("the log goes");
+    assert!(!log.exists(), "and now names one that does not");
+
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        let output = protocol_in(project, &["artifact", "explain", "story:passkey-login"]);
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let said = text(&output.stdout);
+        assert!(
+            said.contains("test_result") && said.contains("review"),
+            "both records are still joined to the story: {said}"
+        );
+        assert!(
+            said.contains(&reference),
+            "and the reference is still named though nothing is there to read: {said}"
+        );
+    }
+}
+
+#[test]
+fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
+    // Mirroring `protocol artifact validate`: a status reached on somebody's word is legal — a
+    // runner is down on the day it matters most — and what it must not be is indistinguishable
+    // from one the store holds a record for.
+    let pair = Pair::new("explain-assertions");
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        // A rung that asks for nothing: nothing was recorded about how it was decided.
+        let output = protocol_in(
+            project,
+            &[
+                "artifact",
+                "move",
+                "--to",
+                "active",
+                "story:passkey-recovery",
+                "--at",
+                AT,
+            ],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        // A rung that asks for a test result, answered by a number nobody can go and check.
+        let output = protocol_in(
+            project,
+            &[
+                "artifact",
+                "move",
+                "--to",
+                "implemented",
+                "story:passkey-login",
+                "--evidence",
+                "test_result=1",
+                "--at",
+                AT,
+            ],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+
+        let output = protocol_in(project, &["artifact", "explain", "story:passkey-login"]);
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let said = text(&output.stdout);
+        assert!(
+            said.contains("asserted — no record"),
+            "a move on a bare count is marked as one: {said}"
+        );
+
+        let output = protocol_in(project, &["artifact", "explain", "story:passkey-recovery"]);
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let said = text(&output.stdout);
+        assert!(
+            said.contains("no record"),
+            "a move that rested on nothing says so: {said}"
+        );
+        assert!(
+            !said.contains("asserted"),
+            "and does not claim somebody asserted something they did not: {said}"
+        );
+    }
+}
+
+#[test]
+fn explaining_an_artifact_no_store_holds_is_refused_naming_it() {
+    let pair = Pair::new("explain-unknown");
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        let output = protocol_in(project, &["artifact", "explain", "story:no-such-story"]);
+        assert_ne!(output.status.code(), Some(0), "{}", text(&output.stdout));
+        assert!(
+            text(&output.stderr).contains("story:no-such-story"),
+            "{}",
+            text(&output.stderr)
+        );
+    }
 }

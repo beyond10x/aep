@@ -936,6 +936,28 @@ pub(crate) enum ArtifactCommand {
         /// The artifact, such as `story:passkey-login`.
         id: String,
     },
+    /// Explain a status: what the store admitted before each move, and what it was about.
+    ///
+    /// The audit question three months later — *what made this done* — answered out of the store
+    /// rather than out of the repository's log (`story:completion-audit-join`). Per status the
+    /// artifact reached: the move, the instant, the revision it left the artifact at, and every
+    /// evidence record admitted since the previous move, each named against **the revision the
+    /// artifact was at when the record was admitted** — so a later edit to the body cannot make an
+    /// old record look like it was about the new text.
+    ///
+    /// A status reached with no record is marked rather than left blank, in the words
+    /// `protocol artifact validate` uses: a move on somebody's assertion is legal, and what it must
+    /// not be is indistinguishable from one the store holds a record for.
+    ///
+    /// `protocol explain` is a different question — how a policy decided — and this is deliberately
+    /// not it.
+    Explain {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+    },
     /// List the divergences a hybrid plan has recorded: writes one side took and the other did not.
     ///
     /// Only a `store: hybrid` plan has any. The list is what `catch-up` replays, and the exit code
@@ -1082,6 +1104,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate { store } => validate(&store),
         ArtifactCommand::History { store, id } => history(&store, &id),
+        ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
         ArtifactCommand::CatchUp { store } => catch_up(&store),
         ArtifactCommand::Evidence {
@@ -2591,11 +2614,25 @@ fn catch_up(args: &StoreArgs) -> Result<ExitCode> {
 /// history printed over another (`story:store-selection-in-project-yaml`). An event this cannot
 /// read as an entry is counted and said, as an unreadable journal line is.
 fn history_from_the_contract(args: &StoreArgs, id: &ArtifactId) -> Result<ExitCode> {
+    let opened = open(&args.location, true)?;
+    let (entries, unreadable) = entries_from_the_contract(&opened, id)?;
+    print_history(args.format, id, &entries, unreadable)
+}
+
+/// Every journal entry one artifact's event log stands for, oldest first, and how many events this
+/// build could not read as one.
+///
+/// The **only** reading path `explain` has, in every store, and the one `history` takes wherever
+/// there is no journal file to read instead. A question the store answers must have one answer: a
+/// second way of reading the same events is a second answer waiting to drift from the first.
+fn entries_from_the_contract(
+    opened: &Opened,
+    id: &ArtifactId,
+) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
 
-    let opened = open(&args.location, true)?;
     let backend = opened.backend()?;
     let locator = EntityLocator::new(
         aep_backend_markdown::backend::ORGANISATION,
@@ -2605,17 +2642,171 @@ fn history_from_the_contract(args: &StoreArgs, id: &ArtifactId) -> Result<ExitCo
     )
     .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
     let entity = block_on(backend.resolve(&locator)).with_context(|| opened.missing(id))?;
-    let events = backend.events_of(&entity)?;
 
     let mut entries = Vec::new();
     let mut unreadable = 0;
-    for event in &events {
+    for event in &backend.events_of(&entity)? {
         match entry_from_event(backend, id, event) {
             Some(entry) => entries.push(entry),
             None => unreadable += 1,
         }
     }
-    print_history(args.format, id, &entries, unreadable)
+    Ok((entries, unreadable))
+}
+
+/// `protocol artifact explain`
+///
+/// The question a reviewer asks three months later — *what made this done* — answered by the store
+/// rather than by commit archaeology (`story:completion-audit-join`). Every store answers it the
+/// same way, because it is read through the contract in all of them and never from the files.
+fn explain(args: &StoreArgs, id: &str) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let opened = open(&args.location, true)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let (entries, unreadable) = entries_from_the_contract(&opened, &id)?;
+    let (reached, recorded_since) = joined(&entries);
+    let explained = Explained {
+        artifact: id,
+        store: opened.plan.describe(),
+        status: stored.document.frontmatter.status.to_string(),
+        revision: stored.document.frontmatter.revision,
+        reached,
+        recorded_since,
+        unreadable,
+    };
+    print_explanation(args.format, &explained)
+}
+
+/// The statuses `entries` account for, each joined to the records admitted since the previous one,
+/// and whatever has been recorded since the last of them.
+///
+/// The join is **log order**, deliberately, and not a comparison of instants: `at` is when the
+/// caller says they looked, which a caller may legitimately back-date, and a record back-dated
+/// behind a move it was written after did not make that move. What a move rested on is what the
+/// store had already admitted when the move was made.
+///
+/// One-to-many, which is `story:completion-audit-join`'s own default: a story satisfied by a suite
+/// and by a review has two records, and forcing a choice between them would lose one.
+fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Vec<Admitted>) {
+    use aep_backend_markdown::journal::Change;
+
+    let mut reached = Vec::new();
+    let mut since: Vec<Admitted> = Vec::new();
+    for entry in entries {
+        match &entry.change {
+            Change::Evidence {
+                kind,
+                source,
+                reference,
+            } => since.push(Admitted {
+                kind: kind.as_str().to_owned(),
+                source: source.clone(),
+                reference: reference.clone(),
+                at: entry.at.clone(),
+                revision: entry.revision,
+            }),
+            Change::Moved {
+                from,
+                to,
+                decided_on,
+            } => {
+                let rested_on = std::mem::take(&mut since);
+                let on_nothing_recorded = rested_on
+                    .is_empty()
+                    .then(|| nothing_recorded(decided_on).to_owned());
+                reached.push(Reached {
+                    from: from.to_string(),
+                    to: to.to_string(),
+                    at: entry.at.clone(),
+                    revision: entry.revision,
+                    rested_on,
+                    on_nothing_recorded,
+                });
+            }
+            Change::Created { .. } | Change::Related { .. } | Change::BodyReplaced => {}
+        }
+    }
+    (reached, since)
+}
+
+/// What a move rested on when the store holds no record for it, in the words `validate` uses.
+///
+/// Both readings are legal and neither is invisible. A move on a bare count is one somebody claimed
+/// and nothing can check; a move on nothing at all is a rung that asked for nothing, and reporting
+/// it as an assertion would put words in a caller's mouth.
+fn nothing_recorded(decided_on: &aep_backend_markdown::journal::Provenance) -> &'static str {
+    if decided_on.leans_on_an_assertion() {
+        "asserted — no record: the evidence was claimed, not held"
+    } else {
+        "no record: nothing was recorded about how this was decided"
+    }
+}
+
+/// Prints an explanation: the same lines whichever store answered it.
+fn print_explanation(format: Format, explained: &Explained) -> Result<ExitCode> {
+    match format {
+        Format::Text => {
+            // Said out loud rather than folded into the answer, exactly as `history` says it: a
+            // shorter account reported as if it were complete is the quiet failure this verb exists
+            // against.
+            if explained.unreadable > 0 {
+                outln!(
+                    "{} event(s) could not be read and are not accounted for below",
+                    explained.unreadable
+                );
+            }
+            outln!(
+                "{} in {}: {}, revision {}",
+                explained.artifact,
+                explained.store,
+                explained.status,
+                explained.revision
+            );
+            if explained.reached.is_empty() {
+                outln!("  no status move is recorded");
+            }
+            for step in &explained.reached {
+                outln!(
+                    "  {} -> {}  {}  (revision {})",
+                    step.from,
+                    step.to,
+                    step.at,
+                    step.revision
+                );
+                if let Some(note) = &step.on_nothing_recorded {
+                    outln!("    {note}");
+                }
+                for record in &step.rested_on {
+                    outln!("    {}", describe_record(record));
+                }
+            }
+            if !explained.recorded_since.is_empty() {
+                outln!("  recorded since, and not yet the reason for a move:");
+                for record in &explained.recorded_since {
+                    outln!("    {}", describe_record(record));
+                }
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(explained, format)?,
+    }
+    Ok(crate::exit_code(true))
+}
+
+/// One record on one line: what it is, where it came from, when it was observed — and the revision
+/// the artifact was at when it was admitted, which is the text it was actually about.
+fn describe_record(record: &Admitted) -> String {
+    let reference = record
+        .reference
+        .as_deref()
+        .map_or_else(String::new, |reference| format!(" ({reference})"));
+    format!(
+        "{} from {}{}, observed {}, admitted at revision {}",
+        record.kind, record.source, reference, record.at, record.revision
+    )
 }
 
 /// The journal entry a plan's event stands for, when the command it carries is one a plan issues.
@@ -2624,7 +2815,7 @@ fn entry_from_event(
     id: &ArtifactId,
     event: &entity_core::DomainEvent,
 ) -> Option<aep_backend_markdown::journal::Entry> {
-    use aep_backend_markdown::journal::{Change, Entry, Provenance};
+    use aep_backend_markdown::journal::{Change, Entry};
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::{EntityId, EntityRef};
@@ -2663,10 +2854,8 @@ fn entry_from_event(
             to: event.to_state.parse().ok()?,
             decided_on: args
                 .get("decided_on")
-                .cloned()
-                .map_or_else(Provenance::default, |account| {
-                    serde_json::from_value(account).unwrap_or_default()
-                }),
+                .map(provenance_of)
+                .unwrap_or_default(),
         },
         "create-relation" => {
             let target: EntityId = args.get("target")?.as_str()?.parse().ok()?;
@@ -2693,6 +2882,26 @@ fn entry_from_event(
         _ => return None,
     };
     entry(change)
+}
+
+/// The account a move's `decided_on` argument carries, in either shape it travels in.
+///
+/// It travels as **JSON text**: `Node`'s numbers are floating point and a count of `1` that comes
+/// back as `1.0` is not a count, so the command carries a string rather than a map (the markdown
+/// projection reads it with `from_str` for exactly that reason). A store whose events are the
+/// command's `args` therefore hands a `Value::String` back here.
+///
+/// Reading only the object shape defaulted every one of those to *nothing was recorded*, so over a
+/// SQLite or Postgres plan a move made on somebody's bare `--evidence` count was indistinguishable
+/// from a move the store held a record for — the one distinction `Provenance` exists to keep, lost
+/// in the store that has no journal file to fall back on. Both shapes are read now, and neither is
+/// guessed at: an account that parses as neither is no account, which is the honest reading of a
+/// line this build does not understand.
+fn provenance_of(account: &serde_json::Value) -> aep_backend_markdown::journal::Provenance {
+    match account {
+        serde_json::Value::String(text) => serde_json::from_str(text).unwrap_or_default(),
+        other => serde_json::from_value(other.clone()).unwrap_or_default(),
+    }
 }
 
 /// Prints a history: the same lines whichever store answered it.
@@ -3009,6 +3218,54 @@ struct Moved {
     to: String,
     revision: u64,
     path: String,
+}
+
+/// One evidence record, joined to an artifact through that artifact's event log.
+///
+/// The join is a **stored fact**, not a path: `reference` is a string the recorder wrote down, and
+/// deleting whatever it points at leaves this record exactly where it was. A CI log that rotates
+/// away must not take the account of what closed a story with it.
+#[derive(Debug, serde::Serialize)]
+struct Admitted {
+    kind: String,
+    source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference: Option<String>,
+    /// When the observation was made, as the recorder gave it.
+    at: String,
+    /// The revision the artifact was at **when the record was admitted** — so a later edit cannot
+    /// make an old record look like it was about the new text.
+    revision: u64,
+}
+
+/// One status an artifact reached, and what the store holds about why.
+#[derive(Debug, serde::Serialize)]
+struct Reached {
+    from: String,
+    to: String,
+    at: String,
+    /// The revision the artifact was at after the move.
+    revision: u64,
+    /// The records admitted before this move and after the previous one. Possibly several: a story
+    /// satisfied by a suite and by a review rested on both.
+    rested_on: Vec<Admitted>,
+    /// Present exactly when `rested_on` is empty, saying which kind of claim the move rested on
+    /// instead. A status reached on nobody's record is legal and must not be invisible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_nothing_recorded: Option<String>,
+}
+
+/// What `explain` answers: what made this artifact what it is.
+#[derive(Debug, serde::Serialize)]
+struct Explained {
+    artifact: ArtifactId,
+    store: String,
+    status: String,
+    revision: u64,
+    reached: Vec<Reached>,
+    /// Records admitted after the last move: held, and not yet the reason for anything.
+    recorded_since: Vec<Admitted>,
+    unreadable: usize,
 }
 
 /// What `relate` did.
