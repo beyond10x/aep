@@ -30,6 +30,20 @@ fn protocol(args: &[&str]) -> Output {
         .expect("the protocol binary runs")
 }
 
+/// Runs one verb with a `PATH` that holds nothing, so no machine can have `metaharness` on it.
+///
+/// An empty directory rather than `/usr/bin:/bin`: the point is a *guaranteed* absence, and a
+/// machine that happened to install the binary into a system directory would otherwise turn this
+/// test green for the wrong reason.
+fn protocol_without_metaharness(args: &[&str], empty_dir: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(args)
+        .current_dir(root())
+        .env("PATH", empty_dir)
+        .output()
+        .expect("the protocol binary runs")
+}
+
 /// Standard output as a string.
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
@@ -605,6 +619,74 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
             "no step of the cargo map was executed:\n{said}"
         );
     }
+}
+
+/// A map with **both** defects reports the one that will not go away by installing something.
+///
+/// The two static pre-flights answer different questions: coverage says *this map can never finish
+/// this plan*, on every machine; the metaharness check says *this machine cannot run it today*.
+/// Until 2026-08-28 the machine check ran first, and the consequence was not merely a worse
+/// message — on any machine without that binary the coverage gap was **never looked for**, so the
+/// test asserting the committed map's gap was closed passed in CI while guarding nothing.
+///
+/// Nothing pinned the order for a map with both problems, so a future edit could swap them back and
+/// only the single-defect tests would notice. This is that pin, and it asserts the order in both
+/// directions: coverage first while it has something to say, and the machine check still reached
+/// once coverage is waived.
+#[test]
+fn a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travels() {
+    let fixture = Fixture::new("both-defects", false);
+    // The fixture map declares `test_result`, `diff` and `static_analysis` and the plan demands more
+    // — that is why `Fixture::drive` passes `--allow-evidence-gap` for every other test in this
+    // file. Here the gap is the subject. One `llm` step is added so the map also needs a harness to
+    // spawn, which is the second defect.
+    let map = fixture.directory.join("steps.yaml");
+    let with_an_llm_step = format!(
+        "{}\x20 review:\n\x20   steps:\n\x20     - kind: llm\n\
+         \x20       description: a step that needs a harness this machine has not got\n\
+         \x20       prompt: judge the change\n",
+        std::fs::read_to_string(&map).expect("the fixture map")
+    );
+    write(&map, &with_an_llm_step);
+
+    let nowhere = fixture.directory.join("an-empty-path");
+    std::fs::create_dir_all(&nowhere).expect("the empty PATH directory is writable");
+
+    let mut args: Vec<String> = vec!["drive".to_owned(), "run".to_owned()];
+    args.extend(fixture.location());
+    args.extend(["--max-iterations".to_owned(), "0".to_owned()]);
+    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+
+    let refused = protocol_without_metaharness(&borrowed, &nowhere);
+    let said = format!("{}{}", stdout(&refused), stderr(&refused));
+    assert_ne!(
+        code(&refused),
+        0,
+        "a map with a coverage gap does not start:\n{said}"
+    );
+    assert!(
+        said.contains("cannot produce evidence"),
+        "the coverage gap is what the operator is told about:\n{said}"
+    );
+    assert!(
+        !said.contains("is not on PATH"),
+        "and not the machine check, which runs second on purpose — this map's coverage gap is true \
+         on every machine, and the missing binary is true only on this one:\n{said}"
+    );
+
+    // The other direction: waive the gap, and the machine check is reached. Without this the test
+    // would also pass if the metaharness pre-flight had simply been deleted.
+    let waived: Vec<&str> = borrowed
+        .iter()
+        .copied()
+        .chain(["--allow-evidence-gap"])
+        .collect();
+    let machine = protocol_without_metaharness(&waived, &nowhere);
+    let complaint = format!("{}{}", stdout(&machine), stderr(&machine));
+    assert!(
+        complaint.contains("is not on PATH"),
+        "the machine check still runs, second:\n{complaint}"
+    );
 }
 
 /// A crossing relation the workspace manifest declares is not a reason to refuse the run.
