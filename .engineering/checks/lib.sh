@@ -24,7 +24,30 @@ AUDIT="$REPO/$AUDIT_REL"
 GUIDE_README_REL="docs/guide/README.md"
 GUIDE_README="$REPO/$GUIDE_README_REL"
 SCAN="$CHECKS_DIR/scan-declarations.sh"
-MODEL_RUNNER_REL="integrations/claude-code/eval/checks/run-checks.sh"
+# The model this suite was written against left the repository on 2026-08-22: the agent-eval
+# checks and their recorded transcripts moved to metaharness `evals/engineering-protocols/` with
+# `epic:metaharness-migration`, and nothing under `integrations/claude-code/eval/` survives here.
+# The variable stays, empty, so H4 reports *the model is in another repository* rather than *the
+# model is gone*, which are different facts and only one of them is a defect.
+MODEL_RUNNER_REL=""
+
+# The `protocol` a check must use is the one this tree builds, never whatever a shell happens to
+# have on PATH. On 2026-08-28 the PATH binary here was **0.28.0** against a 0.31.0 store, and H2
+# read five stories as drifted that had not drifted — a stale install cannot be told from a current
+# one by looking at it, which is the defect `version-check` exists for one layer up.
+protocol_bin() {
+  local built
+  for built in "$REPO/target/debug/protocol" "$REPO/target/release/protocol"; do
+    [ -x "$built" ] && { printf '%s' "$built"; return 0; }
+  done
+  command -v protocol >/dev/null 2>&1 || return 1
+  printf '%s' "$(command -v protocol)"
+}
+
+# The workspace version, so a check can say which build answered it.
+workspace_version() {
+  sed -n 's/^version = "\(.*\)"/\1/p' "$REPO/Cargo.toml" | head -1
+}
 
 # The seven columns, in the order the specification fixes. The checks parse by header, so this array
 # is the contract between R3 and every column-reading sibling.

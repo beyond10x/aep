@@ -44,15 +44,26 @@ row H1 "$R"
 
 # ---- H2 -----------------------------------------------------------------------------------------
 R=0
-if ! have protocol; then
-  R=1; why "protocol is not on PATH"
+BIN="$(protocol_bin)"
+if [ -z "$BIN" ]; then
+  R=1; why "no protocol binary: neither target/debug, target/release, nor PATH"
 else
-  OUT="$( ( cd "$REPO" && protocol artifact validate ) 2>&1 )"
-  if [ $? -ne 0 ]; then
+  # The build has to match the tree, or this row reports the binary's age as the store's drift.
+  WANT="$(workspace_version)"
+  GOT="$("$BIN" --version 2>/dev/null | awk '{print $2}')"
+  if [ "$GOT" != "$WANT" ]; then
     R=1
-    while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
+    why "$BIN is $GOT and this tree is $WANT — build it before reading the store, or every"
+    why "answer below is that binary's opinion of a store it predates"
   else
-    note "$(head -1 <<< "$OUT")"
+    OUT="$( ( cd "$REPO" && "$BIN" artifact validate ) 2>&1 )"
+    if [ $? -ne 0 ]; then
+      R=1
+      while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
+    else
+      note "$(head -1 <<< "$OUT")"
+      note "read by $BIN ($GOT)"
+    fi
   fi
 fi
 row H2 "$R"
@@ -76,11 +87,23 @@ note "$CHANGED changed path(s) in the working tree"
 row H3 "$R"
 
 # ---- H4 -----------------------------------------------------------------------------------------
+# The model left this repository on 2026-08-22 with `epic:metaharness-migration` — it is metaharness
+# `evals/engineering-protocols/checks/run-checks.sh` now, and no check here can read a file in
+# another repository. So the row asserts what is still assertable: that this suite has not grown its
+# own copy of the model under the deleted path, which is how a migrated model comes back as a fork.
 R=0
-if [ ! -f "$REPO/$MODEL_RUNNER_REL" ]; then
-  R=1; why "$MODEL_RUNNER_REL does not exist — the model this suite was written against is gone"
-elif ! git -C "$REPO" diff --quiet -- "$MODEL_RUNNER_REL" 2>/dev/null; then
-  R=1; why "$MODEL_RUNNER_REL has been modified; it is read as a model and never edited"
+if [ -n "$MODEL_RUNNER_REL" ]; then
+  if [ ! -f "$REPO/$MODEL_RUNNER_REL" ]; then
+    R=1; why "$MODEL_RUNNER_REL does not exist — the model this suite was written against is gone"
+  elif ! git -C "$REPO" diff --quiet -- "$MODEL_RUNNER_REL" 2>/dev/null; then
+    R=1; why "$MODEL_RUNNER_REL has been modified; it is read as a model and never edited"
+  fi
+elif [ -e "$REPO/integrations/claude-code/eval" ]; then
+  R=1
+  why "integrations/claude-code/eval/ is back — the model moved to metaharness"
+  why "evals/engineering-protocols/ on 2026-08-22 and a second copy here is a fork of it"
+else
+  note "the model is metaharness evals/engineering-protocols/checks/run-checks.sh, read there"
 fi
 row H4 "$R"
 
