@@ -394,12 +394,16 @@ store: { postgres: "postgres://user:secret@db.internal/plans" }
 Nothing else about the project changes. `--store <dir>` stays the override for the markdown form.
 The verbs answer alike whichever store is named — `crates/protocol-cli/tests/store_selection.rs`
 runs every one of them, each as its own process, over `examples/planning-passkeys/` on files and on
-`project.sqlite.yaml`, and compares the output — with two differences recorded rather than hidden:
+`project.sqlite.yaml`, and compares the output — with one difference recorded rather than hidden:
 
 | What | Markdown | SQLite, Postgres | Where it is written down |
 |---|---|---|---|
 | `validate` | also reconciles the documents against the event log: drift, deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
-| an edge's effect on a revision | the document's revision moves — its frontmatter was written | the entity's does not — a relation is a record of its own | `story:relation-bumps-a-document-revision-but-not-an-entity` |
+
+An edge used to be a second difference — a markdown document's revision moved when a relation was
+written into its frontmatter, an entity's did not — until every store counted it the contract's way:
+a relation is a record of its own, the source's document changes at its **current** revision, and the
+event says `depends_on …` at that revision (`story:relation-bumps-a-document-revision-but-not-an-entity`).
 
 A SQLite or Postgres plan keeps what the journal keeps as the runtime's events: who, when, which
 revision, and — because the command travels as the event's `args` (`entity-runtime` R-110) — what

@@ -192,11 +192,17 @@ impl MarkdownProjection {
 
     /// The placement for one entity's document: the fields the entity carries applied to the
     /// document as it stands, the ladder consulted, the edges added, the prose kept.
+    ///
+    /// `observing` is a source whose document a relation changed without the entity changing:
+    /// the edge is written into its frontmatter and the event lands at its **current** revision,
+    /// as the contract counts it — a relation is a record of its own, and neither endpoint's
+    /// revision moves (`story:relation-bumps-a-document-revision-but-not-an-entity`).
     fn place<S: PlanStore>(
         &mut self,
         store: &S,
         inner: &MemoryBackend,
         id: &EntityId,
+        observing: bool,
     ) -> Result<Option<Placement>, CommandError> {
         let Some((artifact, directory, name)) = self.locate(inner, id)? else {
             return Ok(None);
@@ -247,7 +253,7 @@ impl MarkdownProjection {
         if !creating && updated == existing {
             return Ok(None);
         }
-        if !creating {
+        if !creating && !observing {
             updated.frontmatter.revision = existing.frontmatter.revision.saturating_add(1);
         }
         let change = change_for(
@@ -552,12 +558,12 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
     ) -> Result<Vec<Placement>, CommandError> {
         let mut placements = Vec::new();
         for reference in &result.affected {
-            if let Some(placement) = self.place(store, inner, &reference.id)? {
+            if let Some(placement) = self.place(store, inner, &reference.id, false)? {
                 placements.push(placement);
             }
         }
         for id in std::mem::take(&mut self.current.touched) {
-            if let Some(placement) = self.place(store, inner, &id)? {
+            if let Some(placement) = self.place(store, inner, &id, true)? {
                 placements.push(placement);
             }
         }

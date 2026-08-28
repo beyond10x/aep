@@ -9,7 +9,32 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+* **An edge no longer moves its source document's revision.** `protocol artifact relate` (and
+  `new --relate`) wrote the edge into the source's frontmatter and counted that as a revision, so
+  the same plan answered `revision 2` on markdown and `revision 1` on SQLite. The contract never
+  counted a relation as a revision of either endpoint, and now no store does: the document changes,
+  the event lands at the revision the document already had, and `store_selection.rs` compares
+  revision numbers exactly again. The golden fixture was re-recorded with this build; `expected/`
+  and `reads/` are no longer 0.28.0's bytes for that one verb, and `golden_plan.rs` says so
+  (`story:relation-bumps-a-document-revision-but-not-an-entity`).
+
+### Fixed
+
+* **`protocol artifact evidence` accepts the instant it defaults to.** Without `--at` the verb
+  produced `YYYY-MM-DDTHH:MM:SSZ` and its own reader knew only a date or epoch milliseconds, so
+  every recording had to type `--at`. The reader now takes the second-resolution form too
+  (`story:evidence-verb-refuses-its-own-default-instant`). Fixing it exposed two more things the
+  same defect had hidden: `store_selection.rs` had compared two identical *failures* and called
+  the stores alike — it now asserts every write's exit code — and a SQLite or Postgres plan counted
+  no evidence on hand at all, because an accepted command's audit record names its subject and not
+  the kind of evidence it recorded (the contract keeps `decision` for refusals). Evidence on hand is
+  now counted from the entity's events, the same source `history` reads, so an evidence-gated move
+  over SQLite is decided on what was recorded.
+
+* **`epic:planning-store-as-backend` is `implemented`**: fifteen stories implemented, one archived
+  as superseded (`story:sqlite-backend`), one follow-on filed and delivered above.
 
 ## [0.30.0] — 2026-08-28
 

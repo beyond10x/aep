@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:relation-bumps-a-document-revision-but-not-an-entity
 kind: story
-status: draft
+status: implemented
 title: An edge moves a document's revision and leaves an entity's alone
 summary: 'protocol artifact relate answers revision 3 over markdown and revision 1 over SQLite for one plan: the markdown projection counts a frontmatter write as a revision, the contract does not count a relation as one. Decide which is right and make the other store say it.'
 owner: store
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:store-selection-in-project-yaml
-revision: 4
+revision: 8
 ---
 # Story: an edge moves a document's revision and leaves an entity's alone
 
@@ -49,3 +49,16 @@ decided, and says so in its own doc comment.
 ## Out of Scope
 
 Anything about relations other than the revision they cost.
+
+## Delivered 2026-08-28
+
+Decided: the markdown projection stops counting. The contract is the reference and three stores
+already agreed; the golden fixture's 0.28.0 byte-compatibility ends for that one verb, and
+`golden_plan.rs` says so.
+
+- `MarkdownProjection::place(…, observing)`: a relation's source is written at its **current**
+  revision with the edge in its frontmatter and the `Related` event at that revision.
+- `store_selection.rs` compares revision numbers exactly; `blank_number_after` is gone.
+- `fixtures/golden-plan/expected` and `reads/` re-recorded with this build (`story:golden-one` ends
+  at revision 3, `story:golden-three` at 1); `drift.rs` expects the epic alone to predate the log.
+- `docs/guide/backend.md` § *Choosing the store* records the change as the note this story asked for.

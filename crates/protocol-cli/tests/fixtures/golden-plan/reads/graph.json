@@ -33,7 +33,7 @@
   "story:golden-three": {
     "id": "story:golden-three",
     "kind": "story",
-    "version": "3",
+    "version": "1",
     "status": "draft",
     "location": {
       "path": "story/golden-three.md"

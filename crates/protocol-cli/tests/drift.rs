@@ -1,7 +1,8 @@
 //! Wave G, story 4: an out-of-band edit, and a deleted document, are reported by `validate`.
 //!
-//! The fixture is the golden plan after one move made through this binary — so one document has an
-//! event to be compared with and three predate the log.
+//! The fixture is the golden plan after one move made through this binary. Since the fixture was
+//! re-recorded (2026-08-28, `golden_plan.rs`) the three stories carry events from their own
+//! recording and the epic alone predates the log.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -122,7 +123,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
     assert_eq!(parsed["drift"].as_array().map(Vec::len), Some(1));
     assert!(parsed.get("deleted").is_none(), "nothing was deleted");
-    assert_eq!(parsed["pre_provider"], 3, "the other three predate the log");
+    assert_eq!(parsed["pre_provider"], 1, "the epic alone predates the log");
 }
 
 #[test]
@@ -152,7 +153,7 @@ fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
     assert!(parsed.get("drift").is_none());
     assert!(parsed.get("deleted").is_none());
-    assert_eq!(parsed["pre_provider"], 3);
+    assert_eq!(parsed["pre_provider"], 1);
 
     // The store as 0.28.0 left it: four documents, no events, exit 0, and the count says so.
     let untouched = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drift-untouched");
@@ -164,7 +165,7 @@ fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not
     let output = protocol(&untouched, &["artifact", "validate"]);
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     assert!(
-        stdout(&output).contains("4 document(s) predate the event log"),
+        stdout(&output).contains("1 document(s) predate the event log"),
         "{}",
         stdout(&output)
     );

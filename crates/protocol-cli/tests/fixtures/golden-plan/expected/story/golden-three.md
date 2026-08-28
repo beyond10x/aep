@@ -7,7 +7,7 @@ title: Golden three
 relations:
 - decomposes: epic:golden
 - depends_on: story:golden-one
-revision: 3
+revision: 1
 ---
 <!-- Starting point for a `story` artifact, seeded by `protocol artifact new story <name>`.
      No frontmatter here on purpose: the `---` block is written by the CLI from the id, kind, status

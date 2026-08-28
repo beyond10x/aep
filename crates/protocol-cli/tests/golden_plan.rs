@@ -1,5 +1,5 @@
-//! Nobody can tell: the write verbs leave exactly the documents `protocol 0.28.0` left, and the read
-//! verbs print exactly what it printed.
+//! Nobody can tell: the write verbs leave exactly the documents the recorded binary left, and the
+//! read verbs print exactly what it printed.
 //!
 //! `story:markdown-backend-is-the-adapter`'s golden test. The fixture under
 //! `fixtures/golden-plan/` was recorded with the released 0.28.0 binary — the last one whose
@@ -9,9 +9,13 @@
 //! printed over it. This binary applies the same five verbs to a copy of `store/` and must produce
 //! the same bytes in every document, and the same output for every read.
 //!
-//! One recording was amended after wave G's story 4: `validate` now says how many documents predate
-//! the event log (`4 document(s) predate the event log`, `pre_provider` in JSON), which 0.28.0 could
-//! not print; everything else in `reads/` is 0.28.0's bytes.
+//! Two amendments since. After wave G's story 4, `validate` says how many documents predate the
+//! event log (`4 document(s) predate the event log`, `pre_provider` in JSON), which 0.28.0 could not
+//! print. On 2026-08-28 (`story:relation-bumps-a-document-revision-but-not-an-entity`) an edge
+//! stopped moving its source document's revision — the contract never counted a relation as one,
+//! and every store now agrees — so `expected/` and `reads/` were re-recorded with that build:
+//! `story:golden-one` ends at revision 3 rather than 4, and the `depends_on` event sits at the
+//! revision the document already had. Everything else is still 0.28.0's bytes.
 //!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
@@ -92,7 +96,7 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 #[test]
-fn the_write_verbs_leave_exactly_the_documents_0_28_0_left() {
+fn the_write_verbs_leave_exactly_the_documents_recorded() {
     let store = scratch("writes");
     let body = fixture().join("body.md");
     let body = body.to_str().expect("a printable path");
@@ -148,14 +152,14 @@ fn the_write_verbs_leave_exactly_the_documents_0_28_0_left() {
     for (path, wanted) in &expected {
         assert_eq!(
             &actual[path], wanted,
-            "{path} differs from what 0.28.0 wrote"
+            "{path} differs from what was recorded"
         );
     }
 
     // The journal, by what it says. Five writes on three documents plus one observation: the same
     // entries, in the same order, about the same artifacts, with the same changes and revisions.
     let (recorded, unreadable) = aep_backend_markdown::journal::read(&fixture().join("expected"));
-    assert_eq!(unreadable, 0, "0.28.0's journal reads cleanly");
+    assert_eq!(unreadable, 0, "the recorded journal reads cleanly");
     let (ours, unreadable) = aep_backend_markdown::journal::read(&store);
     assert_eq!(unreadable, 0, "and so does one with event lines in it");
     let shape = |entries: &[aep_backend_markdown::journal::Entry]| {
@@ -173,7 +177,7 @@ fn the_write_verbs_leave_exactly_the_documents_0_28_0_left() {
 }
 
 #[test]
-fn the_read_verbs_print_exactly_what_0_28_0_printed() {
+fn the_read_verbs_print_exactly_what_was_recorded() {
     let expected = fixture().join("expected");
     let store_path = expected.to_string_lossy().into_owned();
     let reads: [(&[&str], &str); 10] = [
@@ -213,7 +217,7 @@ fn the_read_verbs_print_exactly_what_0_28_0_printed() {
         assert_eq!(
             printed,
             wanted,
-            "`protocol {}` differs from 0.28.0",
+            "`protocol {}` differs from the recording",
             args.join(" ")
         );
     }
