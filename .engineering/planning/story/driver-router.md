@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-spec-crate
-revision: 3
+revision: 4
 ---
 # Story: `aep-driver` — the three-valued router
 
@@ -40,6 +40,23 @@ so it is held by a test rather than by a sentence.
 - The router is handed a `LockState` and never probes for one; a source scan finds no process or
   filesystem access in the crate.
 - No `Producer::Human` and no `Evidence::Approval` is constructible anywhere in the crate.
+
+## Re-scoped on evidence — 2026-08-28
+
+`cargo test -p aep-driver --test determinism --test tool_config --test routing --test evidence_scan`
+→ 2 / 4 / 7 / 2 passed, 2026-08-28. Two lines hold; one is **falsified by a shipped profile**; two
+are narrower than they read.
+
+| line | state | what remains |
+|---|---|---|
+| `determinism.rs` refuses a clock, a random source **and an ambient environment read** | **partial** — `tests/determinism.rs:21-29` bans `SystemTime`, `Instant::now`, `rand::`, `getrandom`, and the unordered collections, and bans **no** environment token | add `std::env` / `env::var` to `BANNED`, and watch it fail once on a planted read |
+| an approval-gated capability never appears in a step's tool set, asserted against a fixture whose capability is in `allow`, `approval_required` **and** `deny` at once | **partial** — `a_wide_allow_entry_does_not_hand_out_a_narrowly_gated_deploy` (`tests/tool_config.rs:32`) uses three *different* capabilities across the three sets. The one-capability-in-all-three fixture lives in `crates/aep-domain/src/capability.rs:719` and asserts `decide`, not the tool set | one fixture, one capability, in all three sets, asserted through `tool_config` |
+| no development profile grants `command.execute`, so an `llm` step holds no shell | **false as written.** `profiles/development-driven.yaml:60,78` grants `command.execute`, and `AGENTS.md:461` says so | reword to the mechanism the code actually holds and the tests actually assert: *a shell is rendered exactly when `command.execute` is admitted, and never otherwise* (`tests/shell_echo.rs:735`). A profile that grants it gets a shell on purpose |
+| handed a `LockState`, never probes for one; a source scan finds no process or filesystem access | **half false.** The `LockState` half holds (`src/lock.rs:3,66`). The crate **does** touch the filesystem: `src/run.rs:53,216,982,999,1003` create, read, write and rename the run directory — which this story's *Out of Scope* places in `protocol-cli`. No scan exists | decide which is true and make the other match: either the run directory moves, or the purity claim is narrowed to *no clock, no randomness, no ambient environment* and the story says the run directory is the crate's one impurity, with a scan that bans process spawning only |
+| no `Producer::Human`, no `Evidence::Approval` constructible | **holds** — `tests/evidence_scan.rs:119`, `:158` | — |
+
+The fourth row is the one that matters: it is a claim in a published story contradicted by the
+crate's own source, and it is written down here rather than left for a reader to discover.
 
 ## Out of Scope
 

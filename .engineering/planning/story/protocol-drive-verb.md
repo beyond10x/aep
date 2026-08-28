@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-router
 - depends_on: story:default-step-map
-revision: 2
+revision: 3
 ---
 # Story: `protocol drive` — the run that touches the world
 
@@ -46,6 +46,24 @@ evaluate against a store one write behind.
 - A run that reaches an approval under `--pause-on-approval` persists, exits 0, releases the lock, and
   resumes.
 - Two `Engine` values in one process do not collide on a run directory.
+
+## Re-scoped on evidence — 2026-08-28
+
+The verb ships and two real runs have used it (`W4-1/1`, `W4-2/1`). `cargo test -p protocol-cli
+--test drive_cli` → 11 passed; `cargo test -p protocol-cli --bin protocol drive::` → 24 passed;
+`cargo test -p aep-driver --test driving` → 12 passed.
+
+| line | state | what remains |
+|---|---|---|
+| the lock is taken with `create_new` before a run id is allocated | **holds** — `crates/protocol-cli/src/drive.rs:923`, order at `:474-475`; `a_second_driver_is_refused_by_name_and_writes_nothing` | note: the lock is one path per **project** (`.engineering/runs/lock.json`), not per store — `--store` does not move it. Either the story says project, or the path follows the store |
+| a second `drive` exits non-zero and prints run id, pid, host **and the cursor's state**, writing nothing | **partial** — the refusal names run id, pid and both routes; it can**not** name the state, because `LockState` has no state field (`crates/aep-driver/src/lock.rs:66-75`) and `take_lock` bails before reading a cursor. Host is unasserted | read the holder's cursor and put its state in the refusal; assert host |
+| an unclean store report stops the run, errors verbatim, fact store unchanged | **holds** — `crates/aep-driver/src/run.rs:858-866`; `a_store_with_one_unparseable_file_stops_the_run_with_its_fact_base_unchanged` | — |
+| an artifact created by a step changes `artifact.<kind>.count` in the next evaluation | **partial** — the graph is rebuilt at the top of every loop iteration (`run.rs:498-500`) and one iteration is one step, so the behaviour is there; no test has a step **create** an artifact and re-read the count | one test that does exactly that |
+| `--pause-on-approval` persists, exits 0, releases the lock, resumes | **partial** — exit 0 and resume are asserted; the lock release **on the pause path** is not | one assertion on an existing test |
+| two `Engine` values in one process do not collide on a run directory | **partial** — run ids are allocated by counting up and never reused (`drive.rs:801-820`); no test constructs two | one test |
+
+`--restart` does not exist, which takes its Open Question's default by omission: a run directory is
+never reused.
 
 ## Out of Scope
 

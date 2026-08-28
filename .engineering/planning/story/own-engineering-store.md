@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:reference-driver
-revision: 3
+revision: 4
 ---
 # Story: The repository's own `.engineering/`, holding this backlog
 
@@ -38,6 +38,38 @@ to evaluate a gate against, so the store has to exist before a real story can be
   the file states: paths are resolved against `.engineering`, so the tree is `..`.
 - The store holds this wave's own stories, so the first thing the repository governs with it is the
   wave that built it.
+
+## Re-scoped on evidence — 2026-08-28
+
+The store is real and is the repository's own: 125 artifacts, 0 problems, `protocol artifact list`
+from `crates/aep-domain/` with no `--store` answers 125 lines, exit 0. Two things are not true yet.
+
+**1. `validate` is red from exactly the position this story promises.** With no `--store`,
+`repository_root()` (`crates/protocol-cli/src/planning.rs:97-106`) returns the *current directory*
+rather than the discovered project root, so `declared_members` (`:1113`) looks for
+`.engineering/workspace.yaml` beside the cwd and misses it. Measured 2026-08-28:
+
+```console
+$ cd crates/aep-domain && protocol artifact validate
+[undeclared_reference] artifacts.story:assemble-across-sources.relations[2] …
+  entity-runtime/story:typed-references, which the manifest does not declare
+exit 1
+```
+
+From the root the same command exits 0 and prints `valid`. Discovery finds the store from anywhere
+and the manifest is resolved against the cwd, so *anywhere inside it* and *green* cannot both hold
+today. The fix is one function: resolve the manifest against the discovered project root, plus a
+test that runs `validate` from a subdirectory. Until then the acceptance line **the command and its
+output are recorded rather than the claim** is recorded here, red.
+
+**2. The Open Question's default was not taken.** *Does `artifact validate` join the project gate?*
+— default **yes**. `Taskfile.yml` has 18 steps and none of them is `artifact validate`; `AGENTS.md`
+§ *Gate* still says eighteen and does not list it. Taking the default is: the step, the AGENTS.md
+row, in one change — and it cannot be taken before defect 1 is fixed, because the gate runs from the
+repository root but a contributor does not.
+
+Also recorded: the output this story cites (`harness-wave-4-governed-dogfood.md:77-91`) is over
+**33** artifacts; the store is now **125**.
 
 ## Out of Scope
 

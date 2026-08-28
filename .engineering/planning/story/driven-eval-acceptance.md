@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:driven-eval-acceptance
 kind: story
-status: proposed
+status: archived
 title: One real task, driven end to end, with a denial on purpose
 summary: A paid run under adp/default whose transcripts are checked and submitted as trace_conformance, including a case that trips a hook deny so permission.denied audits something.
 owner: eval
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:plugin-enforcement-hooks
-revision: 2
+revision: 5
 ---
 # Story: One real task, driven end to end, with a denial on purpose
 
@@ -41,6 +41,29 @@ that only a run can close.
 - The gap-register row is closed by naming what was observed, not by disappearing.
 - The run is reproducible from what is committed: the step map, the specification and the task, with
   only credentials supplied by the operator.
+
+## Superseded, both halves — 2026-08-28
+
+**Neither half of this story is this story's any more, and one of them is not this repository's.**
+
+- *One real task driven end to end, transcripts checked, records admitted* is
+  `story:governed-dogfood-run`, which has since been attempted twice — `W4-1/1` (2026-08-21, blocked
+  in `establish_verifiers`) and `W4-2/1` (blocked in `adversarial_verify`), both recorded on
+  `docs/plan/harness-wave-4-governed-dogfood.md`.
+- *A case that deliberately trips a `PreToolUse` deny* went with the hooks. `epic:metaharness-migration`
+  (implemented) deleted `integrations/claude-code/hooks/` and moved the agent evals, their recorded
+  transcripts and the deliberate-denial case to metaharness `evals/engineering-protocols/` on
+  2026-08-22. The `run.sh` this story's Context names retired with its subject; `task plugin-eval`
+  and `task driven-eval` were removed on 2026-08-28 for pointing at a deleted script.
+
+Its Open Question — *do plugin-supplied hooks need a per-invocation consent step?* — is answered by
+the architecture rather than by a run: the driver ships no hooks and no settings file and is itself
+the per-call decider, in-process, through `metaharness --decisions ask`.
+
+**`story:governed-dogfood-run` still carries `depends_on: story:driven-eval-acceptance`, and that
+edge is stale.** It cannot be removed: `protocol artifact` has `relate` and no `unrelate`, which
+invariant 16 makes deliberate. It is recorded here instead, and it is a live example for
+`story:entity-runtime-mapping`'s register row about mistyped edges.
 
 ## Out of Scope
 

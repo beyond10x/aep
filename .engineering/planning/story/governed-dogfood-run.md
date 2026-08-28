@@ -14,7 +14,8 @@ relations:
 - depends_on: story:own-engineering-store
 - depends_on: story:protocol-drive-verb
 - depends_on: story:driven-eval-acceptance
-revision: 1
+- supersedes: story:driven-eval-acceptance
+revision: 2
 ---
 # Story: One story from this backlog, driven end to end
 
@@ -46,6 +47,36 @@ the lock and exits 0.
   inspecting the store afterwards, with the write-guard hook as enforcement and `validate` as audit.
 - A run that wedges is a **recorded result**: where it stopped, what the cursor said, and which
   decision was wrong. Quietly retrying until it works does not close this.
+
+## Read against two real runs — 2026-08-28
+
+**This story has been attempted twice and has never reached `complete`.** Both attempts are
+recorded on `docs/plan/harness-wave-4-governed-dogfood.md`, which is the acceptance line *a run that
+wedges is a recorded result* holding:
+
+| run | story driven | stopped in | cost |
+|---|---|---|---|
+| `W4-1/1`, 2026-08-21 | `story:agent-eval-cases` | `establish_verifiers` | $15.42 |
+| `W4-2/1` | `story:open-vocabulary-audit` | `adversarial_verify` | $31.46 |
+
+| line | state | what remains |
+|---|---|---|
+| no state entered except through a `Moved`; refusals carry one reason per unmet requirement | **holds** — `crates/aep-driver/src/run.rs:695-711`; `W4-1/1` `cursor.json` carries both unmet reasons; `W4-2/1` 25 events, 2 blocked | — |
+| the gate is green before the review step; the `test_result` and `static_analysis` submitted are the ones the run produced | **partial** — `drivers/development/checks.yaml:195-225` mints all three from `command` steps and `W4-2/1` produced them, but **`review` was never entered**. The "gate" is `.engineering/checks/run.sh`, not `task check` | reach the review step; and say which gate the line means |
+| each `llm` step's transcript is checked and submitted as `trace_conformance`, and the completion gate **reads** it | **missing on the gate half** — `checks.yaml:59-65` says so itself: *"it does not block the run, because nothing gates on `trace_conformance` yet"*. Only `implement`'s transcript is checked; `W4-2/1` submitted one record | the completion gate that reads it — the thing that makes this line more than a submission |
+| every status move went through `protocol artifact move`, with the write-guard hook as enforcement and `validate` as audit | **partial, and the mechanism changed** — the audit half runs (`checks.yaml:220-225`); the *hook* named as enforcement no longer exists. It is the metaharness policy seam (`decide_tool`, `store_integrity` in `crates/protocol-cli/src/drive.rs`), and `W4-2/1` ran with **0 hook decisions** | reword to the seam that enforces today, and assert the store afterwards |
+| a run that wedges is a recorded result | **holds**, twice | — |
+
+**The story to drive next is no longer `story:retry-budgets`.** That story closed on 2026-08-28
+(`implemented`, on `crates/aep-driver/tests/driving.rs` and `routing.rs`). The candidate that fits
+this story's own default — *mechanical acceptance, blast radius one crate* — is now
+`story:operator-resume-ux` as re-scoped on the same day: one field threaded into the cursor
+(`took_lock_from`, built and printed today but never persisted), the holder's state added to the
+lock refusal, and three assertions. One crate, two files, nothing to argue about.
+
+`depends_on: story:driven-eval-acceptance` is **stale**: that story is superseded, half of it by this
+one and half of it by metaharness. The edge cannot be removed — there is no `unrelate` — so it is
+named here.
 
 ## Out of Scope
 

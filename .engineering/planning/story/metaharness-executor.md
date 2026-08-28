@@ -6,6 +6,7 @@ status: implemented
 title: 'The metaharness executor: one policy, one enforcer'
 relations:
 - decomposes: epic:metaharness-migration
+- supersedes: story:plugin-enforcement-hooks
 revision: 6
 ---
 # Story: The metaharness executor — one policy, one enforcer
