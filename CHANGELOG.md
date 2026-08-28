@@ -9,7 +9,23 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+* **`task audit-check` is a step of the gate**, fourth of twenty: seven units of
+  `.engineering/checks/`, four seconds, re-resolving every `file:line`
+  `docs/guide/open-vocabulary.md` cites. A commit that shifts a cited declaration now fails the gate
+  instead of leaving a *closed* verdict pointing at a serde attribute — which is what had happened:
+  eight doc-comment lines landed above `pub enum EvidenceKind` and the audit's citation rotted
+  silently, because the suite that catches exactly this was not in the gate.
+
+### Fixed
+
+* **The audit's own checks read the store with this tree's build, not the ambient `protocol`.**
+  Four store helpers, `H1` and `F2` still resolved whatever was on `PATH` — here a **0.28.0** binary
+  against a 0.32.x store, which is how five stories were reported as drifted that had not drifted.
+  One resolved binary now, version-checked against the workspace, and exported so an inner run on a
+  copy with no `target/` reads with the same build rather than falling back to the stale one.
+
 
 ## [0.32.1] — 2026-08-28
 
