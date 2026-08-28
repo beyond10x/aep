@@ -62,6 +62,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.28.0` | 0.28.0 — wave F: the storage layer starts becoming entity-runtime's |
 | `0.29.0` | 0.29.0 — wave G: the plan's own store is a provider |
 | `0.30.0` | 0.30.0 — wave H: every store the runtime has |
+| `0.31.0` | 0.31.0 — every store counts an edge the same way, and evidence records as documented |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
