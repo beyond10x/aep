@@ -64,6 +64,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.30.0` | 0.30.0 — wave H: every store the runtime has |
 | `0.31.0` | 0.31.0 — every store counts an edge the same way, and evidence records as documented |
 | `0.32.0` | 0.32.0 — the plan tells the truth, and a release stops rewriting itself |
+| `0.32.1` | 0.32.1 — the coverage pre-flight runs before the machine check |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
