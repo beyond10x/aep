@@ -61,6 +61,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.27.3` | 0.27.3 — a release cut later no longer fails the gate of a release cut earlier |
 | `0.28.0` | 0.28.0 — wave F: the storage layer starts becoming entity-runtime's |
 | `0.29.0` | 0.29.0 — wave G: the plan's own store is a provider |
+| `0.30.0` | 0.30.0 — wave H: every store the runtime has |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
