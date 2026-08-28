@@ -53,10 +53,11 @@ ask the contract which statuses a story may hold — it has to read the lifecycl
 (`protocol conformance --backend memory|markdown|sqlite` runs the suites against the backend you
 name since wave F, and its report says which one answered.)
 
-**Hydration is deferred, and `aep-backend-sqlite` refuses rather than guesses.** It does not read a
-database back on open, so a second run against a populated file would mint identities from a fresh
-counter and overwrite what is there. It refuses a row it did not write, by name. Deferring hydration
-is a decision (`P5`); destroying data is not, and the refusal is what keeps the two apart.
+**A SQLite plan reopens.** Since wave F, `aep-backend-sqlite` reads a populated file back on open —
+entities with their history, relations, audit records, applied commands — under the identities the
+first process stored, and a second process continues past them. The refusal that stood in for this
+(*"a row this backend did not write"*) is retired. What remains: `protocol artifact` verbs open the
+markdown store only; every verb opening through a `store:` in `project.yaml` is wave H.
 
 The `entity-core` dependency does not change this and cannot: that kernel performs no IO of any kind
 — no filesystem, no clock, no network, asserted by a scan over its own sources — so it stores

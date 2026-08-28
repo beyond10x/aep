@@ -9,6 +9,15 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.28.0] — 2026-08-28
+
+**Wave F of `docs/plan/store-waves-f-g-h.md`: the storage layer starts becoming `entity-runtime`'s.**
+One runtime version instead of two, one adapter over any of its stores, events that reach the file,
+a SQLite plan that reopens, and a conformance verb that names what it ran against. The plan and its
+five stories were accepted, implemented and moved to `implemented` on recorded evidence the same day.
+
 ### Added
 
 * **`aep-backend-entity`: the contract over any `entity_store::Store`.** `EntityBackend<S>` is what
@@ -25,6 +34,9 @@ belongs in the commit message or in `docs/design/`.
   refused command writes nothing, a replayed one writes nothing, and the stored events fold back to
   the stored instance through the runtime's own `rehydrate`.
 
+* **The pin moved to `entity-runtime` 0.10.0**, which carries `StateProvider::ids` — what
+  hydration enumerates with. `EntityBackend::over` is fallible now, because opening reads.
+
 * **`protocol conformance --backend memory|markdown|sqlite [--store <path>]`.** The verb ran the
   sixteen suites against the in-memory reference backend and nothing else, while its help said so
   and a story said otherwise. It now runs them against the backend you name — `--store` says where a
@@ -32,6 +44,17 @@ belongs in the commit message or in `docs/design/`.
   directory, because the suites write — and the report's first line says `ran against: …`, with a
   `ran_against` field in JSON and YAML. The default stays `memory`, so no existing invocation changes
   meaning; `--backend memory --store …` is refused rather than ignored.
+
+* **A populated SQLite plan is read back on open.** `SqliteBackend::open` hydrates: every entity
+  with its metadata and history, every relation not since removed, every audit record — a
+  refusal's too — and every applied command, all under the identities the first process stored.
+  A second process sees what the first wrote, continues past it with fresh identities, and
+  recognises a replayed command. The refusal *"the database already holds `…`, and this backend
+  did not write it"* is gone with the defect it guarded against. A store holding a row the backend
+  cannot read back refuses to open, naming the row, rather than answering about part of it.
+  Measured over this repository's own plan: 124 artifacts and 241 relations reopen in about
+  120 ms (debug build); seeding them through the contract took 11.5 s, three SQLite transactions
+  per command.
 
 ### Changed
 

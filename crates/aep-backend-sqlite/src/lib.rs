@@ -14,7 +14,8 @@
 //! with a **read** expectation, latch on failure, latch covers reads — lives once in the adapter;
 //! the sixteen suites and the faulty-backend guard run against the adapter over this store in
 //! `aep-backend-entity`'s own tests. What this crate keeps is what only SQLite has: a path, an
-//! in-memory mode, and the tests that open the file a second time to see what landed.
+//! in-memory mode, and the tests that open the file a second time to see what landed — and, since
+//! wave F story 4, a second *process* opening the file and continuing where the first stopped.
 //!
 //! # Why `entity-sqlite` and not a second hand-written store
 //!
@@ -54,19 +55,21 @@ pub use aep_backend_entity::STORED_AS;
 pub struct SqliteBackend(EntityBackend<SqliteStore>);
 
 impl SqliteBackend {
-    /// Opens the database at `path`.
+    /// Opens the database at `path`, hydrating the contract from everything it holds.
     ///
-    /// Nothing is read back yet — hydration is F4 (`story:sqlite-hydrates-on-open`). Until then a
-    /// populated file is protected by the adapter's foreign-row refusal, not by hydration.
+    /// A second process against a populated file sees every entity, relation and audit record the
+    /// first wrote, with the same identities, and a replayed command is recognised
+    /// (`story:sqlite-hydrates-on-open`).
     ///
     /// # Errors
     ///
-    /// If the database cannot be opened.
+    /// If the database cannot be opened, or holds a row the adapter cannot read back — refused by
+    /// name rather than skipped.
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, CommandError> {
         let durable = SqliteStore::open(path).map_err(|error| CommandError::Conflict {
             reason: format!("the database could not be opened: {error}"),
         })?;
-        Ok(Self(EntityBackend::over(durable)))
+        Ok(Self(EntityBackend::over(durable)?))
     }
 
     /// An in-memory database, for a test that wants the same code path without a file.
@@ -78,7 +81,7 @@ impl SqliteBackend {
         let durable = SqliteStore::in_memory().map_err(|error| CommandError::Conflict {
             reason: format!("the database could not be created: {error}"),
         })?;
-        Ok(Self(EntityBackend::over(durable)))
+        Ok(Self(EntityBackend::over(durable)?))
     }
 
     /// The fault that made this backend untrustworthy, if one has happened.

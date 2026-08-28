@@ -9,10 +9,14 @@
 //! * **Time comes from the caller.** Every command carries `issued_at`, so the store needs no clock
 //!   and a replay produces identical timestamps. A backend that stamped its own would make an
 //!   audit trail that cannot be reproduced.
-//! * **Identifiers are generated from a counter.** They satisfy the opacity rule and are
-//!   deterministic, which is what lets a conformance run be compared byte for byte.
+//! * **Identifiers are generated from a counter, past whatever is already held.** They satisfy the
+//!   opacity rule and are deterministic, which is what lets a conformance run be compared byte for
+//!   byte. A store that was *hydrated* — filled from a durable provider with identities another
+//!   process minted — holds ids the counter has not reached, so a mint that lands on a held id
+//!   moves on rather than reusing it. Nothing parses an id to find out where the counter should
+//!   be (invariant 13): the check is a lookup, and the cost is one extra tick per collision.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use aep_contract::consistency::ConsistencyToken;
 use aep_contract::query::{Relation, RevisionRecord};
@@ -50,6 +54,8 @@ pub struct Store {
     relations: BTreeMap<RelationId, Relation>,
     history: BTreeMap<EntityId, Vec<RevisionRecord>>,
     audit: Vec<AuditRecord>,
+    /// The audit ids held, so a mint can tell a taken one; `audit` is in write order and stays so.
+    audit_ids: BTreeSet<AuditId>,
     events: Vec<DomainEventEnvelope>,
     applied: BTreeMap<String, AppliedCommand>,
     sequence: u64,
@@ -85,24 +91,40 @@ impl Store {
             .is_some_and(|sequence| sequence <= self.sequence)
     }
 
-    /// Generates an opaque entity identifier.
+    /// Generates an opaque entity identifier that no held entity carries.
     pub fn next_entity_id(&mut self) -> EntityId {
-        let sequence = self.tick();
-        EntityId::new(format!("01MEM{sequence:016}"))
-            .expect("a generated identifier is well formed")
+        loop {
+            let sequence = self.tick();
+            let id = EntityId::new(format!("01MEM{sequence:016}"))
+                .expect("a generated identifier is well formed");
+            if !self.entities.contains_key(&id) {
+                return id;
+            }
+        }
     }
 
-    /// Generates a relation identifier.
+    /// Generates a relation identifier that no held relation carries.
     pub fn next_relation_id(&mut self) -> RelationId {
-        let sequence = self.tick();
-        RelationId::new(format!("rel-{sequence:012}"))
-            .expect("a generated identifier is well formed")
+        loop {
+            let sequence = self.tick();
+            let id = RelationId::new(format!("rel-{sequence:012}"))
+                .expect("a generated identifier is well formed");
+            if !self.relations.contains_key(&id) {
+                return id;
+            }
+        }
     }
 
-    /// Generates an audit identifier.
+    /// Generates an audit identifier that no held record carries.
     pub fn next_audit_id(&mut self) -> AuditId {
-        let sequence = self.tick();
-        AuditId::new(format!("aud-{sequence:012}")).expect("a generated identifier is well formed")
+        loop {
+            let sequence = self.tick();
+            let id = AuditId::new(format!("aud-{sequence:012}"))
+                .expect("a generated identifier is well formed");
+            if !self.audit_ids.contains(&id) {
+                return id;
+            }
+        }
     }
 
     /// Generates an event identifier.
@@ -172,6 +194,7 @@ impl Store {
 
     /// Appends an audit record.
     pub fn record_audit(&mut self, record: AuditRecord) {
+        self.audit_ids.insert(record.audit_id.clone());
         self.audit.push(record);
     }
 

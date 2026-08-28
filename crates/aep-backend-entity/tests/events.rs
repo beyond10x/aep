@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use aep_backend_entity::{EntityBackend, STORED_AS};
+use aep_backend_entity::{EntityBackend, METADATA_KEY, STORED_AS};
 use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
 use aep_contract::testing::block_on;
 use aep_domain::command::{Command, CreateEntity, MoveStatus, UpdateEntity};
@@ -88,7 +88,8 @@ fn fresh_file(name: &str) -> std::path::PathBuf {
 #[test]
 fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle() {
     let path = fresh_file("events-land");
-    let backend = EntityBackend::over(SqliteStore::open(&path).expect("a database"));
+    let backend =
+        EntityBackend::over(SqliteStore::open(&path).expect("a database")).expect("opens");
     let id = a_story_moved_three_times(&backend);
     drop(backend);
 
@@ -124,16 +125,29 @@ fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle()
         "from/to are the status before and after; a creation has no before"
     );
 
+    // Every command also moves the contract's metadata — revision, `updated_at`, provenance — which
+    // rides in the reserved `$aep` field so a second process can rebuild the envelope. Beside it,
+    // `changed` is exactly the fields the command wrote.
+    let mut renamed = events[1].changed.clone();
+    assert!(
+        renamed.remove(METADATA_KEY).is_some(),
+        "the metadata moved too"
+    );
     assert_eq!(
-        events[1].changed,
+        renamed,
         serde_json::json!({ "title": "One, renamed" })
             .as_object()
             .cloned()
             .expect("an object"),
         "an update's `changed` is exactly the fields the command wrote"
     );
+    let mut proposed = events[2].changed.clone();
+    assert!(
+        proposed.remove(METADATA_KEY).is_some(),
+        "the metadata moved too"
+    );
     assert_eq!(
-        events[2].changed,
+        proposed,
         serde_json::json!({ "status": "proposed" })
             .as_object()
             .cloned()
@@ -167,7 +181,8 @@ fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle()
 #[test]
 fn a_refused_command_writes_no_event_and_the_file_says_so() {
     let path = fresh_file("events-refused");
-    let backend = EntityBackend::over(SqliteStore::open(&path).expect("a database"));
+    let backend =
+        EntityBackend::over(SqliteStore::open(&path).expect("a database")).expect("opens");
     let id = a_story_moved_three_times(&backend);
 
     // Renaming an entity nobody created is refused by the contract; the refusal is audited in
@@ -202,7 +217,8 @@ fn a_refused_command_writes_no_event_and_the_file_says_so() {
 #[test]
 fn a_replayed_command_writes_no_event_as_it_writes_no_instance() {
     let path = fresh_file("events-replayed");
-    let backend = EntityBackend::over(SqliteStore::open(&path).expect("a database"));
+    let backend =
+        EntityBackend::over(SqliteStore::open(&path).expect("a database")).expect("opens");
     let id = a_story_moved_three_times(&backend);
 
     let replay =
@@ -247,7 +263,7 @@ fn the_stored_events_fold_back_to_the_stored_instance() {
     }))
     .expect("the definition parses");
 
-    let backend = EntityBackend::over(entity_store::MemoryStore::new());
+    let backend = EntityBackend::over(entity_store::MemoryStore::new()).expect("opens");
     let id = a_story_moved_three_times(&backend);
 
     let (events, stored) = backend.with_store(|store| {

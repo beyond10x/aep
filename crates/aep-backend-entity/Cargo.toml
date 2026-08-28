@@ -21,6 +21,9 @@ aep-backend-memory.workspace = true
 # in the workspace manifest, for every `entity-*` crate — `cargo xtask deps` is what keeps it one.
 entity-core.workspace = true
 entity-store.workspace = true
+# The contract's records — metadata, relations, audit, applied commands — round-trip through the
+# provider as JSON fields, and the one struct that carries metadata beside a body derives its shape.
+serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

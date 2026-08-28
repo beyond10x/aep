@@ -2,12 +2,12 @@
   generated from billing v3
   model digest 13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861
   contract digest d2b48060b7ee32e8f23b1e28972fea39921a25fdcacd635fdf7bbb538e94f367
-  compiler 0.27.3 · generator 0.27.3
+  compiler 0.28.0 · generator 0.28.0
   do not edit: regenerate with `protocol ess synthesize`
 -->
 # Synthesis plan — billing v3
 
-Scope: `component-skeletons`, planner `ess-synth 0.27.3`. Regenerate with `protocol ess synthesize`.
+Scope: `component-skeletons`, planner `ess-synth 0.28.0`. Regenerate with `protocol ess synthesize`.
 
 45 capabilities: **33 generated**, **8 obligations**, **4 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 

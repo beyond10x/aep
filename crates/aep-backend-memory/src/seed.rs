@@ -35,7 +35,6 @@ use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 
 use crate::command::STATUS_KEY;
-use crate::MemoryBackend;
 
 /// The activity every seeding command belongs to.
 ///
@@ -63,8 +62,8 @@ pub struct SeedReport {
 /// Fails — rather than dropping an edge — when a relation points at an artifact the manifest does
 /// not declare. A dangling edge means the manifest is describing a graph it does not contain, and
 /// seeding a partial graph would make the missing artifact look like a deliberate absence.
-pub fn from_manifest(
-    backend: &MemoryBackend,
+pub fn from_manifest<B: CommandService<Command = Command>>(
+    backend: &B,
     graph: &ArtifactGraph,
     organisation: &str,
     space: &str,
@@ -127,8 +126,8 @@ pub fn from_manifest(
 }
 
 /// Issues the `CreateEntity` command for one artifact and returns the identity it was stored under.
-fn create_entity(
-    backend: &MemoryBackend,
+fn create_entity<B: CommandService<Command = Command>>(
+    backend: &B,
     artifact: &Artifact,
     organisation: &str,
     space: &str,
@@ -260,6 +259,7 @@ fn locator_key(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::MemoryBackend;
     use aep_contract::consistency::QueryConsistency;
     use aep_contract::query::{QueryService, RelationQuery};
     use aep_domain::artifact::{

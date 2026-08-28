@@ -4,7 +4,7 @@
     "context": "k3d-dev-cluster",
     "scanned_at": "2026-08-20T22:30:30Z",
     "scout_version": "0.1.0",
-    "compiler_version": "0.27.3"
+    "compiler_version": "0.28.0"
   },
   "digest": "9ed0e8608fd69c43c3b0405a7a5fd599fad61a6246b42e2cdd4cffd1e29c8e75",
   "model": {

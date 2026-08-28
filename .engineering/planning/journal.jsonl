@@ -134,3 +134,7 @@
 {"at":"2026-08-28T14:55:08Z","actor":"human:operator","artifact":"story:evidence-verb-refuses-its-own-default-instant","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
 {"at":"2026-08-28T14:55:08Z","actor":"human:operator","artifact":"story:evidence-verb-refuses-its-own-default-instant","kind":"story","revision":2,"change":{"change":"related","relation":"decomposes","target":"epic:evidence-gated-completion"}}
 {"at":"2026-08-28T14:55:08Z","actor":"human:operator","artifact":"story:evidence-verb-refuses-its-own-default-instant","kind":"story","revision":3,"change":{"change":"body_replaced"}}
+{"at":"2026-08-28T15:21:59Z","actor":"human:operator","artifact":"story:sqlite-hydrates-on-open","kind":"story","revision":7,"change":{"change":"moved","from":"proposed","to":"active","decided_on":{}}}
+{"at":"2026-08-28T15:21:59Z","actor":"human:operator","artifact":"story:sqlite-hydrates-on-open","kind":"story","revision":8,"change":{"change":"body_replaced"}}
+{"at":"2026-08-28T00:00:00Z","actor":"human:operator","artifact":"story:sqlite-hydrates-on-open","kind":"story","revision":8,"change":{"change":"evidence","kind":"test_result","source":"task check, full gate, exit 0, 2026-08-28","reference":"crates/aep-backend-entity/tests/hydration.rs"}}
+{"at":"2026-08-28T15:23:46Z","actor":"human:operator","artifact":"story:sqlite-hydrates-on-open","kind":"story","revision":9,"change":{"change":"moved","from":"active","to":"implemented","decided_on":{"recorded":{"test_result":1}}}}

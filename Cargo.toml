@@ -53,7 +53,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.27.3"
+version = "0.28.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -61,34 +61,34 @@ repository = "https://github.com/beyond10x/engineering-protocols"
 authors = ["Beyond10x contributor <1379383+beyond10x@users.noreply.github.com>"]
 
 [workspace.dependencies]
-aep-domain = { path = "crates/aep-domain", version = "0.27.3" }
-aep-contract = { path = "crates/aep-contract", version = "0.27.3" }
-aep-backend-entity = { path = "crates/aep-backend-entity", version = "0.27.3" }
-aep-backend-markdown = { path = "crates/aep-backend-markdown", version = "0.27.3" }
-aep-backend-memory = { path = "crates/aep-backend-memory", version = "0.27.3" }
-aep-backend-sqlite = { path = "crates/aep-backend-sqlite", version = "0.27.3" }
-aep-engine = { path = "crates/aep-engine", version = "0.27.3" }
-aep-conformance = { path = "crates/aep-conformance", version = "0.27.3" }
-aep-driver-spec = { path = "crates/aep-driver-spec", version = "0.27.3" }
-aep-driver = { path = "crates/aep-driver", version = "0.27.3" }
-aep-render = { path = "crates/aep-render", version = "0.27.3" }
-ess-compiler = { path = "crates/ess-compiler", version = "0.27.3" }
-ess-conformance = { path = "crates/ess-conformance", version = "0.27.3" }
-ess-diff = { path = "crates/ess-diff", version = "0.27.3" }
-ess-domain = { path = "crates/ess-domain", version = "0.27.3" }
-ess-gen = { path = "crates/ess-gen", version = "0.27.3" }
-ess-synth = { path = "crates/ess-synth", version = "0.27.3" }
-infra-analyze = { path = "crates/infra-analyze", version = "0.27.3" }
-infra-compiler = { path = "crates/infra-compiler", version = "0.27.3" }
-infra-domain = { path = "crates/infra-domain", version = "0.27.3" }
-infra-project = { path = "crates/infra-project", version = "0.27.3" }
-infra-spec = { path = "crates/infra-spec", version = "0.27.3" }
-trace-domain = { path = "crates/trace-domain", version = "0.27.3" }
-trace-spec = { path = "crates/trace-spec", version = "0.27.3" }
-schema-contract = { path = "crates/schema-contract", version = "0.27.3" }
-aep-schema = { path = "crates/aep-schema", version = "0.27.3" }
-adp-domain = { path = "crates/adp-domain", version = "0.27.3" }
-aop-domain = { path = "crates/aop-domain", version = "0.27.3" }
+aep-domain = { path = "crates/aep-domain", version = "0.28.0" }
+aep-contract = { path = "crates/aep-contract", version = "0.28.0" }
+aep-backend-entity = { path = "crates/aep-backend-entity", version = "0.28.0" }
+aep-backend-markdown = { path = "crates/aep-backend-markdown", version = "0.28.0" }
+aep-backend-memory = { path = "crates/aep-backend-memory", version = "0.28.0" }
+aep-backend-sqlite = { path = "crates/aep-backend-sqlite", version = "0.28.0" }
+aep-engine = { path = "crates/aep-engine", version = "0.28.0" }
+aep-conformance = { path = "crates/aep-conformance", version = "0.28.0" }
+aep-driver-spec = { path = "crates/aep-driver-spec", version = "0.28.0" }
+aep-driver = { path = "crates/aep-driver", version = "0.28.0" }
+aep-render = { path = "crates/aep-render", version = "0.28.0" }
+ess-compiler = { path = "crates/ess-compiler", version = "0.28.0" }
+ess-conformance = { path = "crates/ess-conformance", version = "0.28.0" }
+ess-diff = { path = "crates/ess-diff", version = "0.28.0" }
+ess-domain = { path = "crates/ess-domain", version = "0.28.0" }
+ess-gen = { path = "crates/ess-gen", version = "0.28.0" }
+ess-synth = { path = "crates/ess-synth", version = "0.28.0" }
+infra-analyze = { path = "crates/infra-analyze", version = "0.28.0" }
+infra-compiler = { path = "crates/infra-compiler", version = "0.28.0" }
+infra-domain = { path = "crates/infra-domain", version = "0.28.0" }
+infra-project = { path = "crates/infra-project", version = "0.28.0" }
+infra-spec = { path = "crates/infra-spec", version = "0.28.0" }
+trace-domain = { path = "crates/trace-domain", version = "0.28.0" }
+trace-spec = { path = "crates/trace-spec", version = "0.28.0" }
+schema-contract = { path = "crates/schema-contract", version = "0.28.0" }
+aep-schema = { path = "crates/aep-schema", version = "0.28.0" }
+adp-domain = { path = "crates/adp-domain", version = "0.28.0" }
+aop-domain = { path = "crates/aop-domain", version = "0.28.0" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -105,9 +105,9 @@ anyhow = "1"
 # `git` rather than a version because these crates are not on crates.io; a tag rather than `main`
 # because a ladder's verdicts are a published surface here and must not move under us — the pin is
 # the reversible half of `atlas/architecture/adr/0002`.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.9.1" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.10.0", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.10.0" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.10.0" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

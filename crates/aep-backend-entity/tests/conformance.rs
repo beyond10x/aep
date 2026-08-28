@@ -56,7 +56,7 @@ fn assert_the_suites_catch_a_faulty<S: Store>(fresh: impl Fn() -> EntityBackend<
 #[test]
 fn the_adapter_over_a_memory_store_conforms() {
     assert_conforms(
-        &EntityBackend::over(entity_store::MemoryStore::new()),
+        &EntityBackend::over(entity_store::MemoryStore::new()).expect("an empty store opens"),
         "MemoryStore",
     );
 }
@@ -64,20 +64,24 @@ fn the_adapter_over_a_memory_store_conforms() {
 #[test]
 fn the_adapter_over_a_sqlite_store_conforms() {
     assert_conforms(
-        &EntityBackend::over(entity_sqlite::SqliteStore::in_memory().expect("a database")),
+        &EntityBackend::over(entity_sqlite::SqliteStore::in_memory().expect("a database"))
+            .expect("an empty store opens"),
         "SqliteStore",
     );
 }
 
 #[test]
 fn the_suites_that_pass_over_a_memory_store_catch_an_adapter_that_is_wrong() {
-    assert_the_suites_catch_a_faulty(|| EntityBackend::over(entity_store::MemoryStore::new()));
+    assert_the_suites_catch_a_faulty(|| {
+        EntityBackend::over(entity_store::MemoryStore::new()).expect("an empty store opens")
+    });
 }
 
 #[test]
 fn the_suites_that_pass_over_a_sqlite_store_catch_an_adapter_that_is_wrong() {
     assert_the_suites_catch_a_faulty(|| {
         EntityBackend::over(entity_sqlite::SqliteStore::in_memory().expect("a database"))
+            .expect("an empty store opens")
     });
 }
 
@@ -103,6 +107,9 @@ fn a_latched_adapter_refuses_reads_as_well_as_writes() {
         ) -> Result<Option<entity_core::EntityInstance>, entity_store::StoreError> {
             self.0.load(entity, id)
         }
+        fn ids(&self, entity: &str) -> Result<Vec<String>, entity_store::StoreError> {
+            self.0.ids(entity)
+        }
     }
     impl entity_store::EventProvider for Unwritable {
         fn events(
@@ -125,7 +132,7 @@ fn a_latched_adapter_refuses_reads_as_well_as_writes() {
         }
     }
 
-    let backend = EntityBackend::over(Unwritable::default());
+    let backend = EntityBackend::over(Unwritable::default()).expect("an empty store opens");
     let context = CommandContext::new(
         "req-1".parse().expect("a request id"),
         "key-1".parse().expect("an idempotency key"),

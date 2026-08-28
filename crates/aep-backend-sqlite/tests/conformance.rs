@@ -4,7 +4,7 @@
 //! where they run over this store and over `MemoryStore` through the one adapter. What stays here is
 //! the promise only a file makes, and one check that the newtype forwards the whole contract.
 
-use aep_backend_sqlite::SqliteBackend;
+use aep_backend_sqlite::{SqliteBackend, STORED_AS};
 
 #[test]
 fn the_newtype_forwards_the_whole_contract() {
@@ -75,13 +75,12 @@ fn what_the_contract_accepted_is_in_the_database() {
 }
 
 #[test]
-fn a_second_run_refuses_to_overwrite_what_the_first_one_stored() {
-    // The defect this closes destroyed data silently. `MemoryBackend` mints identities from a
-    // per-process counter, so run 2's first `CreateEntity` reuses run 1's identity; `persist` reads
-    // the durable revision immediately before committing, so the expectation matched by
-    // construction and `ON CONFLICT … DO UPDATE` overwrote the row. No conflict, no latch, exit 0.
-    //
-    // Hydration is P5 and is deliberately deferred. Deferring it does not license destruction.
+fn a_second_run_reads_the_first_back_and_continues_past_it() {
+    // The refusal this replaces ("the database already holds `…`, and this backend did not write
+    // it") existed because `open` read nothing back and minted identities from a fresh counter,
+    // so run 2's first entity collided with run 1's. Hydration makes run 2 see run 1's entity under
+    // its own identity and mint the next one past it. The file, read through a second handle, holds
+    // both.
     use aep_contract::command::CommandService;
     use aep_contract::testing::block_on;
     use entity_store::StateProvider as _;
@@ -90,28 +89,29 @@ fn a_second_run_refuses_to_overwrite_what_the_first_one_stored() {
     let _ = std::fs::remove_file(&path);
 
     let first = SqliteBackend::open(&path).expect("a database");
-    block_on(first.execute(create("one", "req-1", "key-1", "cmd-1"))).expect("run 1 writes");
+    let one = block_on(first.execute(create("one", "req-1", "key-1", "cmd-1")))
+        .expect("run 1 writes")
+        .affected[0]
+        .id
+        .clone();
     drop(first);
 
     let second = SqliteBackend::open(&path).expect("the file reopens");
-    let error = block_on(second.execute(create("two", "req-2", "key-2", "cmd-2")))
-        .expect_err("run 2 must not write over run 1");
-    assert!(
-        error.to_string().contains("did not write it"),
-        "and it says why: {error}"
-    );
-    assert!(
-        second.latched().is_some(),
-        "the backend latches rather than carrying on against a database it disagrees with"
-    );
+    assert_eq!(second.len(), 1, "run 2 sees what run 1 wrote");
+    let two = block_on(second.execute(create("two", "req-2", "key-2", "cmd-2")))
+        .expect("run 2 continues")
+        .affected[0]
+        .id
+        .clone();
+    assert_ne!(one, two, "a fresh identity, not run 1's reused");
+    assert!(second.latched().is_none());
 
-    // What run 1 stored is still there.
     let durable = entity_sqlite::SqliteStore::open(&path).expect("the file reopens");
-    let held = durable
-        .load("aep.entity", "01MEM0000000000000001")
-        .expect("answers")
-        .expect("run 1's entity is still there");
-    assert_eq!(held.revision, 1);
+    assert_eq!(
+        durable.ids(STORED_AS).expect("answers"),
+        [one.to_string(), two.to_string()],
+        "both runs' entities are in the file"
+    );
 }
 
 /// One `CreateEntity` command at `name`, with identifiers of its own.
