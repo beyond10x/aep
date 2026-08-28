@@ -341,19 +341,23 @@ implementor — [`aep-backend-memory`](../../crates/aep-backend-memory/) — and
 suites runs against that and nothing else. A backend that survives a process exit has never been held
 to them.
 
-Two durable backends exist, and both implement the contract.
-[`aep-backend-markdown`](../../crates/aep-backend-markdown/) keeps planning artifacts as markdown
-files under `.engineering/planning/`, one artifact per file, and this repository plans its own work
-in it. [`aep-backend-sqlite`](../../crates/aep-backend-sqlite/) keeps whatever the contract holds in
-one file, with no server — and it is a *type*, not a crate of logic:
-[`aep-backend-entity`](../../crates/aep-backend-entity/) is the contract over any
-`entity_store::Store` from `entity-runtime`, and `SqliteBackend` is that adapter over
-`entity_sqlite::SqliteStore`. The next durable backend is the same adapter over the next provider.
+Two durable backends exist, both implement the contract, and both are **one shape**: the adapter
+[`aep-backend-entity`](../../crates/aep-backend-entity/) — the contract over any
+`entity_store::Store` from `entity-runtime` — instantiated over a provider.
+[`aep-backend-sqlite`](../../crates/aep-backend-sqlite/) is that adapter over
+`entity_sqlite::SqliteStore`: whatever the contract holds, in one file, no server.
+[`aep-backend-markdown`](../../crates/aep-backend-markdown/) is the same adapter over the plan's
+own provider — the markdown files under `.engineering/planning/` as a `Store`, one artifact per
+file, `journal.jsonl` as the event log — with a *projection* that keeps what a plan keeps and an
+entity does not carry: the prose, the edges in frontmatter, the ladder a status is checked against.
+This repository plans its own work in it. The next durable backend is the same adapter over the
+next provider.
 
 The sixteen suites run against both, each beside a **deliberately faulty** version of itself — a
-suite that has never failed is not evidence that it can. For the adapter they run twice, over
-`SqliteStore` and over the runtime's `MemoryStore`, which is what makes "any provider" a tested
-sentence.
+suite that has never failed is not evidence that it can. The adapter runs them over `SqliteStore`
+and over the runtime's `MemoryStore` too, which is what makes "any provider" a tested sentence; and
+the markdown provider passes `entity-runtime`'s own provider suite, a suite written by somebody who
+has never seen a planning document.
 
 **Neither reimplements the contract.** Each hands every command to `aep-backend-memory` and adds
 durability around it. Idempotency, revision conflicts, "a refusal still leaves an audit record",

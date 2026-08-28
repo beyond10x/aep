@@ -1,0 +1,27 @@
+{
+  "kind": "story",
+  "declared": true,
+  "initial": "draft",
+  "transitions": {
+    "active": [
+      "implemented",
+      "archived"
+    ],
+    "archived": [],
+    "draft": [
+      "proposed",
+      "archived"
+    ],
+    "implemented": [
+      "archived"
+    ],
+    "proposed": [
+      "draft",
+      "rejected",
+      "active"
+    ],
+    "rejected": [
+      "archived"
+    ]
+  }
+}

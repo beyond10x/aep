@@ -22,7 +22,17 @@
 //! against the case that matters. The dependency arrow is the one `atlas/architecture/adr/0002`
 //! already points: this workspace takes from `entity-runtime` and gives nothing back.
 //!
-//! # What the provider holds, and how a second process gets it back
+//! # The projection seam
+//!
+//! What a provider holds for a contract entity is a [`Projection`]'s decision. The default,
+//! [`Identity`], keeps every record the contract has under four entity types (below) and hydrates
+//! from them — the shape a SQLite or Postgres plan takes. `aep-backend-markdown`'s projection keeps
+//! the plan's own shape — one document per artifact, relations in frontmatter, the history in the
+//! journal — and seeds from the documents on open. The adapter is the same type over both: apply in
+//! [`MemoryBackend`], ask the projection where the result lands, diff against what the provider
+//! held, seal the event, `commit`.
+//!
+//! # What the [`Identity`] projection holds, and how a second process gets it back
 //!
 //! Four entity types, all the contract's records:
 //!
@@ -58,8 +68,9 @@
 //! [`Recording`] into an [`entity_store::Envelope`], but its providers store the bare `DomainEvent`
 //! a `Decision` carries (`entity-runtime` `story:the-store-keeps-the-envelope`). So the seal's
 //! fields are written into `payload`, with the contract's own instant (`at`, epoch milliseconds —
-//! the seal's `recorded_at` is to the second) and the executor, and a `MoveStatus`'s `decided_on`
-//! account under `decided_on`. That is what a rebuilt history is made of.
+//! the seal's `recorded_at` is to the second) and the executor. That is what a rebuilt history is
+//! made of. **What the command was decided on is the event's `args`** (`entity-runtime` 0.11.0,
+//! R-110): the command's payload, verbatim — a `MoveStatus`'s `decided_on` account included.
 //!
 //! The record types carry no events of their own. R-83 is about an instance whose *state* moves;
 //! a relation, an audit record and an idempotency entry are records of something that already
@@ -88,12 +99,12 @@ use aep_contract::query::{
 use aep_contract::registry::TypeDescriptor;
 use aep_contract::testing::block_on;
 use aep_contract::QueryConsistency;
-use aep_domain::audit::AuditRecord;
+use aep_domain::audit::{AuditKind, AuditRecord, ChangeRecord};
 use aep_domain::command::Command;
 use aep_domain::entity::{
     ActorRef, EntityId, EntityLocator, EntityMetadata, EntityRef, EntityRevision, EntityType,
 };
-use aep_domain::ids::{IdempotencyKey, RelationId};
+use aep_domain::ids::{AuditId, EventId, IdempotencyKey, RelationId};
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 use entity_core::{Decision, DomainEvent, EntityInstance};
@@ -144,15 +155,21 @@ struct Provenance {
     executor: Option<ActorRef>,
     /// The idempotency key, so the applied-command record can be found and persisted.
     key: IdempotencyKey,
-    /// A `MoveStatus`'s account of what the move rested on, when it carried one.
-    decided_on: Option<Value>,
+    /// The command's payload — what the operation was decided on — which becomes the event's
+    /// `args` (`entity-runtime` R-110). For a `MoveStatus` that is the target, the status moved
+    /// to, the revision expected and the `decided_on` account; for an update, the fields written.
+    args: Map<String, Value>,
 }
 
 impl Provenance {
     fn of(envelope: &CommandEnvelope<Command>) -> Self {
-        let decided_on = match &envelope.payload {
-            Command::MoveStatus(move_status) => move_status.decided_on.as_ref().map(account_of),
-            _ => None,
+        let args = match serde_json::to_value(&envelope.payload) {
+            Ok(Value::Object(map)) => map,
+            Ok(other) => object(json!({ "payload": other })),
+            // Serialising a command does not fail in practice; if it ever does, the failure is
+            // written down rather than swallowed — `.ok()` on this value is how a provenance was
+            // silently lost once already (`story:journal-backed-store`).
+            Err(error) => object(json!({ "unserialisable": error.to_string() })),
         };
         Self {
             command_type: envelope.command_type.clone(),
@@ -165,64 +182,49 @@ impl Provenance {
             at: envelope.context.issued_at,
             executor: envelope.context.executor.clone(),
             key: envelope.context.idempotency_key.clone(),
-            decided_on,
+            args,
         }
     }
 
-    /// One event for one affected entity, sealed, with the seal written into its payload.
+    /// One event for one placement, sealed, with the seal written into its payload.
     fn event(
         &self,
-        id: &str,
-        revision: u64,
+        placement: &Placement,
         from_state: Option<String>,
-        to_state: String,
         changed: Map<String, Value>,
     ) -> DomainEvent {
         let mut event = DomainEvent {
-            entity: STORED_AS.to_owned(),
+            entity: placement.entity.clone(),
             version: 1,
-            id: id.to_owned(),
-            revision,
+            id: placement.id.clone(),
+            revision: placement.revision,
             event_type: self.command_type.clone(),
             from_state,
-            to_state,
+            to_state: placement.state.clone(),
             changed,
+            args: self.args.clone(),
             payload: Value::Null,
         };
         // Sealed by the runtime's own `Recording`, so the event id is the derived
-        // `<entity>:<id>@<revision>#<index>` every other shell would derive — and then the seal is
-        // written into the event, because the seal is the only part of an envelope the providers
-        // do not keep (see the module doc).
+        // `<entity>:<id>@<revision>#<index>~<args>` every other shell would derive — and then the
+        // seal is written into the event, because the seal is the only part of an envelope the
+        // providers do not keep (see the module doc).
         let sealed = self.recording.seal(std::slice::from_ref(&event));
-        event.payload = recorded(
-            &sealed[0],
-            self.at,
-            self.executor.as_ref(),
-            self.decided_on.as_ref(),
-        );
+        let mut payload = recorded(&sealed[0], self.at, self.executor.as_ref());
+        if let (Value::Object(payload), Some(note)) = (&mut payload, &placement.note) {
+            payload.insert("change".to_owned(), note.clone());
+        }
+        event.payload = payload;
         event
     }
 }
 
-/// A move's account as JSON. Serialising a `Node` does not fail in practice; if it ever does, the
-/// failure is written down rather than swallowed — `.ok()` on this value is how a provenance was
-/// silently lost once already (`story:journal-backed-store`).
-fn account_of(node: &Node) -> Value {
-    serde_json::to_value(node)
-        .unwrap_or_else(|error| json!({ "unserialisable": error.to_string() }))
-}
-
-/// The sealed envelope's fields, the contract's instant and executor, and the move's account, as
-/// the event's payload.
+/// The sealed envelope's fields and the contract's instant and executor, as the event's payload.
 ///
-/// `decided_on` and `executor` are always written — `null` when absent — because an absent key and
-/// *nothing was decided on* would otherwise read alike, and only one of them is a claim.
-fn recorded(
-    sealed: &Envelope<DomainEvent>,
-    at: Timestamp,
-    executor: Option<&ActorRef>,
-    decided_on: Option<&Value>,
-) -> Value {
+/// `executor` is always written — `null` when absent — because an absent key and *nothing else
+/// ran* would otherwise read alike, and only one of them is a claim. What the command was decided
+/// on is not here: that is the event's own `args`.
+fn recorded(sealed: &Envelope<DomainEvent>, at: Timestamp, executor: Option<&ActorRef>) -> Value {
     json!({
         "event_id": sealed.event_id,
         "recorded_at": sealed.recorded_at,
@@ -231,7 +233,6 @@ fn recorded(
         "causation": sealed.causation,
         "actor": sealed.actor,
         "executor": executor.map(ToString::to_string),
-        "decided_on": decided_on.cloned().unwrap_or(Value::Null),
     })
 }
 
@@ -258,20 +259,235 @@ struct StoredMetadata {
 
 /// What the memory store held before a command, so what the command added can be found afterwards
 /// without teaching this adapter which commands create relations or audit records.
-struct Snapshot {
-    relations: BTreeSet<RelationId>,
-    audit: usize,
-    applied: bool,
+#[derive(Debug, Clone)]
+pub struct Snapshot {
+    /// Every relation held before.
+    pub relations: BTreeSet<RelationId>,
+    /// How many audit records were held before.
+    pub audit: usize,
+    /// Whether the command's idempotency key was already remembered.
+    pub applied: bool,
 }
 
-/// The contract, over a provider `S`.
-pub struct EntityBackend<S> {
+/// One instance a command's result lands as, in the provider's own coordinates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placement {
+    /// The provider's entity type — `aep.entity` for [`Identity`], the kind for a plan.
+    pub entity: String,
+    /// The provider's identity — the contract's id for [`Identity`], the name for a plan.
+    pub id: String,
+    /// The lifecycle state written.
+    pub state: String,
+    /// The revision written — and the event's.
+    pub revision: u64,
+    /// The instance's fields, whole.
+    pub fields: Map<String, Value>,
+    /// What the projection wants recorded about this write, carried in the event's payload under
+    /// `change` — a plan's journal spells a move, a relation and a recorded observation differently.
+    pub note: Option<Value>,
+    /// Write even when the fields and state did not change: an observation *about* a document
+    /// appends an event at the document's current revision.
+    pub always: bool,
+}
+
+/// One record written beside the placements: a relation, an audit record, an applied command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Record {
+    /// The provider's entity type.
+    pub entity: String,
+    /// The provider's identity.
+    pub id: String,
+    /// The lifecycle state written.
+    pub state: String,
+    /// The fields, or `None` for "what is held, marked removed" — the one update a record gets.
+    pub fields: Option<Map<String, Value>>,
+}
+
+/// How a contract entity lands in a provider, and how memory is filled from one on open.
+///
+/// The adapter owns the contract logic, the latch, the seal and the commit; the projection owns
+/// the shape. [`Identity`] is the shape of a store that holds the contract's records as they are.
+/// A plan-shaped projection lives beside the plan's own provider, in `aep-backend-markdown`.
+pub trait Projection<S: Store> {
+    /// Fills `inner` from `store` — a second process's view of what the first wrote.
+    ///
+    /// # Errors
+    ///
+    /// If the store cannot be read, or holds something this projection cannot read back — refused
+    /// rather than skipped, naming the row.
+    fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError>;
+
+    /// Notes what a command is before the contract consumes it.
+    ///
+    /// # Errors
+    ///
+    /// If the command carries something the projection cannot write — a move's account that is not
+    /// a provenance, say.
+    fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError>;
+
+    /// Where an accepted command's result lands: one placement per instance to write.
+    ///
+    /// # Errors
+    ///
+    /// A refusal the projection makes on its own account — a status the plan's ladder does not
+    /// permit — is returned as it is, not latched: nothing durable disagrees yet.
+    fn placements(
+        &mut self,
+        store: &S,
+        inner: &MemoryBackend,
+        result: &CommandResult,
+    ) -> Result<Vec<Placement>, CommandError>;
+
+    /// The provider's coordinates for an entity — where its instance and its events are — when
+    /// the store has a shape for it. `None` for an entity this projection does not write (a
+    /// conformance suite's, in a plan), whose history is then the in-memory one.
+    fn coordinates(&self, inner: &MemoryBackend, id: &EntityId) -> Option<(String, String)>;
+
+    /// The records to write beside the placements, from what changed since `before`.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Projection::placements`].
+    fn records(
+        &mut self,
+        store: &S,
+        inner: &MemoryBackend,
+        before: &Snapshot,
+        key: &IdempotencyKey,
+    ) -> Result<Vec<Record>, CommandError>;
+}
+
+/// The projection that keeps the contract's records as they are, under four entity types.
+///
+/// Every contract entity is an `aep.entity` instance under its own id, with its body flat and its
+/// metadata under [`METADATA_KEY`]; relations, audit records and applied commands are instances of
+/// their own types; opening hydrates all four. The shape a SQLite or Postgres plan takes.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Identity;
+
+impl<S: Store> Projection<S> for Identity {
+    fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
+        hydrate(store, inner)
+    }
+
+    fn before(&mut self, _envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
+        Ok(())
+    }
+
+    fn coordinates(&self, _inner: &MemoryBackend, id: &EntityId) -> Option<(String, String)> {
+        Some((STORED_AS.to_owned(), id.to_string()))
+    }
+
+    fn placements(
+        &mut self,
+        _store: &S,
+        inner: &MemoryBackend,
+        result: &CommandResult,
+    ) -> Result<Vec<Placement>, CommandError> {
+        result
+            .affected
+            .iter()
+            .map(|reference| {
+                let stored = inner
+                    .with_store(|store| store.entity(&reference.id).cloned())
+                    .ok_or_else(|| CommandError::Conflict {
+                        reason: format!(
+                            "the entity `{}` could not be read back after the command",
+                            reference.id
+                        ),
+                    })?;
+                Ok(Placement {
+                    entity: STORED_AS.to_owned(),
+                    id: reference.id.to_string(),
+                    state: status_of(&stored.data),
+                    revision: reference.revision.get(),
+                    fields: pack(&stored),
+                    note: None,
+                    always: true,
+                })
+            })
+            .collect()
+    }
+
+    fn records(
+        &mut self,
+        _store: &S,
+        inner: &MemoryBackend,
+        before: &Snapshot,
+        key: &IdempotencyKey,
+    ) -> Result<Vec<Record>, CommandError> {
+        let (created, removed, audit, applied) = inner.with_store(|store| {
+            let now: BTreeMap<RelationId, Relation> = store
+                .relations()
+                .map(|relation| (relation.id.clone(), relation.clone()))
+                .collect();
+            let created: Vec<Relation> = now
+                .values()
+                .filter(|relation| !before.relations.contains(&relation.id))
+                .cloned()
+                .collect();
+            let removed: Vec<RelationId> = before
+                .relations
+                .iter()
+                .filter(|id| !now.contains_key(*id))
+                .cloned()
+                .collect();
+            let audit: Vec<AuditRecord> = store.audit()[before.audit..].to_vec();
+            let applied = if before.applied {
+                None
+            } else {
+                store.applied(key).cloned()
+            };
+            (created, removed, audit, applied)
+        });
+        let mut records = Vec::new();
+        for relation in created {
+            records.push(Record {
+                entity: RELATIONS_AS.to_owned(),
+                id: relation.id.to_string(),
+                state: RECORDED.to_owned(),
+                fields: Some(object(json!({ "relation": relation, "removed": false }))),
+            });
+        }
+        for id in removed {
+            records.push(Record {
+                entity: RELATIONS_AS.to_owned(),
+                id: id.to_string(),
+                state: REMOVED.to_owned(),
+                fields: None,
+            });
+        }
+        for record in audit {
+            records.push(Record {
+                entity: AUDIT_AS.to_owned(),
+                id: record.audit_id.to_string(),
+                state: RECORDED.to_owned(),
+                fields: Some(object(json!({ "record": record }))),
+            });
+        }
+        if let Some(applied) = applied {
+            records.push(Record {
+                entity: APPLIED_AS.to_owned(),
+                id: key.to_string(),
+                state: RECORDED.to_owned(),
+                fields: Some(object(
+                    json!({ "command_id": applied.command_id, "result": applied.result }),
+                )),
+            });
+        }
+        Ok(records)
+    }
+}
+
+/// The contract, over a provider `S`, shaped by a projection `P`.
+pub struct EntityBackend<S, P = Identity> {
     inner: MemoryBackend,
     durable: Mutex<S>,
+    projection: Mutex<P>,
     latched: Mutex<Option<String>>,
 }
 
-impl<S> fmt::Debug for EntityBackend<S> {
+impl<S, P> fmt::Debug for EntityBackend<S, P> {
     /// Hand-written because a provider may hold a connection and not derive `Debug`.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -282,7 +498,7 @@ impl<S> fmt::Debug for EntityBackend<S> {
     }
 }
 
-impl<S> EntityBackend<S> {
+impl<S, P> EntityBackend<S, P> {
     /// The fault that made this backend untrustworthy, if one has happened.
     pub fn latched(&self) -> Option<String> {
         self.latched
@@ -301,6 +517,11 @@ impl<S> EntityBackend<S> {
         self.inner.is_empty()
     }
 
+    /// The backend the contract logic lives in, for a caller that needs to look.
+    pub const fn inner(&self) -> &MemoryBackend {
+        &self.inner
+    }
+
     /// Runs `read` against the provider.
     ///
     /// For a test that wants to see what landed without opening a second handle — which a
@@ -313,6 +534,19 @@ impl<S> EntityBackend<S> {
     pub fn with_store<T>(&self, read: impl FnOnce(&S) -> T) -> T {
         let durable = self.durable.lock().expect("the provider is not poisoned");
         read(&durable)
+    }
+
+    /// Runs `read` against the projection, for what only it knows — a plan's unprojected entities.
+    ///
+    /// # Panics
+    ///
+    /// If the projection's lock is poisoned.
+    pub fn with_projection<T>(&self, read: impl FnOnce(&P) -> T) -> T {
+        let projection = self
+            .projection
+            .lock()
+            .expect("the projection is not poisoned");
+        read(&projection)
     }
 }
 
@@ -333,24 +567,35 @@ fn unreadable(entity: &str, id: &str, detail: impl fmt::Display) -> CommandError
     }
 }
 
-impl<S: Store> EntityBackend<S> {
-    /// The contract over `store`, holding everything the store holds.
-    ///
-    /// Hydrates: every `aep.entity` with its history, every relation not since removed, every audit
-    /// record and every applied command are installed in memory with their stored identities. A
-    /// second process opening the same store sees what the first wrote.
+impl<S: Store> EntityBackend<S, Identity> {
+    /// The contract over `store`, holding everything the store holds, in the [`Identity`] shape.
     ///
     /// # Errors
     ///
-    /// If the store cannot be read, or holds a row this adapter cannot read back — a listed id that
-    /// does not load, an entity with no [`METADATA_KEY`], metadata disagreeing with the instance, an
-    /// event with no seal. Refused rather than skipped, naming the row.
+    /// As [`EntityBackend::with_projection`].
     pub fn over(store: S) -> Result<Self, CommandError> {
+        Self::shaped(store, Identity)
+    }
+}
+
+impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
+    /// The contract over `store`, shaped by `projection`, holding everything the store holds.
+    ///
+    /// Hydrates through the projection: the [`Identity`] shape installs every record under its
+    /// stored identity; a plan's shape seeds from its documents. A second process opening the same
+    /// store sees what the first wrote.
+    ///
+    /// # Errors
+    ///
+    /// If the store cannot be read, or holds something the projection cannot read back — refused
+    /// rather than skipped, naming the row.
+    pub fn shaped(store: S, mut projection: P) -> Result<Self, CommandError> {
         let inner = MemoryBackend::new();
-        hydrate(&store, &inner)?;
+        projection.hydrate(&store, &inner)?;
         Ok(Self {
             inner,
             durable: Mutex::new(store),
+            projection: Mutex::new(projection),
             latched: Mutex::new(None),
         })
     }
@@ -396,29 +641,13 @@ impl<S: Store> EntityBackend<S> {
         })
     }
 
-    /// Writes every entity a command touched into the provider, each with the event that explains
-    /// the write.
-    fn persist(&self, result: &CommandResult, provenance: &Provenance) -> Result<(), CommandError> {
-        // A replay changed nothing, so there is nothing to write. Writing anyway would push the
-        // same revision at a store that already holds it, which its own optimistic check would
-        // rightly refuse — and this backend would latch over a command that did no harm.
-        if result.outcome == CommandOutcome::Replayed {
-            return Ok(());
-        }
-        for reference in &result.affected {
-            let stored = self
-                .inner
-                .with_store(|store| store.entity(&reference.id).cloned())
-                .ok_or_else(|| {
-                    self.latch(format!(
-                        "the entity `{}` could not be read back after the command",
-                        reference.id
-                    ))
-                })?;
-            let to_state = status_of(&stored.data);
-            let fields = pack(&stored);
-            let key = reference.id.to_string();
-
+    /// Writes every placement the projection named, each with the event that explains the write.
+    fn persist(
+        &self,
+        placements: &[Placement],
+        provenance: &Provenance,
+    ) -> Result<(), CommandError> {
+        for placement in placements {
             // The expectation is **read**, not assumed. Deriving it from the contract's revision
             // ("it must be at mine minus one") assumes every command bumps by exactly one and that
             // nothing else ever writes — and the first assumption is already false for a command
@@ -427,8 +656,18 @@ impl<S: Store> EntityBackend<S> {
             // write, which is what `Expect` is for.
             let mut durable = self.durable.lock().expect("the provider is not poisoned");
             let held = durable
-                .load(STORED_AS, &key)
+                .load(&placement.entity, &placement.id)
                 .map_err(|error| self.latch(error.to_string()))?;
+
+            // Nothing to write when nothing changed: a command whose result is the document as it
+            // already stood must not bump a revision and journal a change that did not happen.
+            if !placement.always
+                && held.as_ref().is_some_and(|held| {
+                    held.fields == placement.fields && held.lifecycle_state == placement.state
+                })
+            {
+                continue;
+            }
 
             // The event is built from what the store held a moment ago and what the contract holds
             // now: `from_state` and `changed` are the difference, and for a creation there is no
@@ -437,25 +676,19 @@ impl<S: Store> EntityBackend<S> {
             let (from_state, changed) = match &held {
                 Some(before) => (
                     Some(before.lifecycle_state.clone()),
-                    changed_between(&before.fields, &fields),
+                    changed_between(&before.fields, &placement.fields),
                 ),
-                None => (None, fields.clone()),
+                None => (None, placement.fields.clone()),
             };
-            let event = provenance.event(
-                &key,
-                reference.revision.get(),
-                from_state,
-                to_state.clone(),
-                changed,
-            );
+            let event = provenance.event(placement, from_state, changed);
             let decision = Decision {
                 instance: EntityInstance {
-                    entity: STORED_AS.to_owned(),
+                    entity: placement.entity.clone(),
                     version: 1,
-                    id: key,
-                    lifecycle_state: to_state,
-                    revision: reference.revision.get(),
-                    fields,
+                    id: placement.id.clone(),
+                    lifecycle_state: placement.state.clone(),
+                    revision: placement.revision,
+                    fields: placement.fields.clone(),
                 },
                 events: vec![event],
             };
@@ -468,94 +701,36 @@ impl<S: Store> EntityBackend<S> {
         Ok(())
     }
 
-    /// Writes what a command added beside the entities: relations created or removed, audit
-    /// records (a refusal's too), and the applied-command entry a replay is recognised by.
-    fn persist_records(&self, before: &Snapshot, key: &IdempotencyKey) -> Result<(), CommandError> {
-        let (created, removed, audit, applied) = self.inner.with_store(|store| {
-            let now: BTreeMap<RelationId, Relation> = store
-                .relations()
-                .map(|relation| (relation.id.clone(), relation.clone()))
-                .collect();
-            let created: Vec<Relation> = now
-                .values()
-                .filter(|relation| !before.relations.contains(&relation.id))
-                .cloned()
-                .collect();
-            let removed: Vec<RelationId> = before
-                .relations
-                .iter()
-                .filter(|id| !now.contains_key(*id))
-                .cloned()
-                .collect();
-            let audit: Vec<AuditRecord> = store.audit()[before.audit..].to_vec();
-            let applied = if before.applied {
-                None
-            } else {
-                store.applied(key).cloned()
-            };
-            (created, removed, audit, applied)
-        });
-
+    /// Writes the records the projection named beside the placements.
+    fn persist_records(&self, records: &[Record]) -> Result<(), CommandError> {
         let mut durable = self.durable.lock().expect("the provider is not poisoned");
-        // `fields: None` means "what is held, marked removed" — the one update a record ever gets.
-        let mut write =
-            |entity: &str, id: String, state: &str, fields: Option<Map<String, Value>>| {
-                let held = durable
-                    .load(entity, &id)
-                    .map_err(|error| self.latch(error.to_string()))?;
-                let (expect, revision) = match &held {
-                    Some(held) => (Expect::Revision(held.revision), held.revision + 1),
-                    None => (Expect::Absent, 1),
-                };
-                let fields = fields.unwrap_or_else(|| {
-                    let mut fields = held.map(|held| held.fields).unwrap_or_default();
-                    fields.insert("removed".to_owned(), Value::Bool(true));
-                    fields
-                });
-                let decision = Decision {
-                    instance: EntityInstance {
-                        entity: entity.to_owned(),
-                        version: 1,
-                        id,
-                        lifecycle_state: state.to_owned(),
-                        revision,
-                        fields,
-                    },
-                    events: Vec::new(),
-                };
-                durable
-                    .commit(&decision, expect)
-                    .map_err(|error| self.latch(error.to_string()))
+        for record in records {
+            let held = durable
+                .load(&record.entity, &record.id)
+                .map_err(|error| self.latch(error.to_string()))?;
+            let (expect, revision) = match &held {
+                Some(held) => (Expect::Revision(held.revision), held.revision + 1),
+                None => (Expect::Absent, 1),
             };
-
-        for relation in created {
-            write(
-                RELATIONS_AS,
-                relation.id.to_string(),
-                RECORDED,
-                Some(object(json!({ "relation": relation, "removed": false }))),
-            )?;
-        }
-        for id in removed {
-            write(RELATIONS_AS, id.to_string(), REMOVED, None)?;
-        }
-        for record in audit {
-            write(
-                AUDIT_AS,
-                record.audit_id.to_string(),
-                RECORDED,
-                Some(object(json!({ "record": record }))),
-            )?;
-        }
-        if let Some(applied) = applied {
-            write(
-                APPLIED_AS,
-                key.to_string(),
-                RECORDED,
-                Some(object(
-                    json!({ "command_id": applied.command_id, "result": applied.result }),
-                )),
-            )?;
+            let fields = record.fields.clone().unwrap_or_else(|| {
+                let mut fields = held.map(|held| held.fields).unwrap_or_default();
+                fields.insert("removed".to_owned(), Value::Bool(true));
+                fields
+            });
+            let decision = Decision {
+                instance: EntityInstance {
+                    entity: record.entity.clone(),
+                    version: 1,
+                    id: record.id.clone(),
+                    lifecycle_state: record.state.clone(),
+                    revision,
+                    fields,
+                },
+                events: Vec::new(),
+            };
+            durable
+                .commit(&decision, expect)
+                .map_err(|error| self.latch(error.to_string()))?;
         }
         Ok(())
     }
@@ -733,6 +908,108 @@ fn revision_record(event: &DomainEvent) -> Result<RevisionRecord, String> {
     })
 }
 
+/// The history a log stands for: one record per revision, the first event that reached it.
+///
+/// An observation about an entity is an event at the entity's current revision (a plan's evidence
+/// record); it is a fact about the entity, not a revision of it, so it does not add a record.
+fn history_of(events: &[DomainEvent]) -> Result<Vec<RevisionRecord>, String> {
+    let mut by_revision: BTreeMap<u64, RevisionRecord> = BTreeMap::new();
+    for event in events {
+        if by_revision.contains_key(&event.revision) {
+            continue;
+        }
+        by_revision.insert(event.revision, revision_record(event)?);
+    }
+    Ok(by_revision.into_values().collect())
+}
+
+/// The accepted-command record an event stands for, about `subject`.
+///
+/// Identities are derived from the seal's event id, digested into the identifier charset; a record
+/// rebuilt twice from one event has one identity. An observation (no change, same state before and
+/// after) carries no change record, as the contract's own rule for a record that changed nothing.
+fn audit_of(event: &DomainEvent, subject: &EntityId) -> Option<AuditRecord> {
+    let seal = event.payload.as_object()?;
+    let event_id = seal.get("event_id")?.as_str()?;
+    let digest = format!("{:016x}", digest(event_id));
+    let at = Timestamp::from_epoch_millis(seal.get("at")?.as_u64()?);
+    let actor = ActorRef::parse(seal.get("actor")?.as_str()?).ok()?;
+    let correlation = seal.get("correlation")?.as_str()?.parse().ok()?;
+    let mut record = AuditRecord::new(
+        AuditId::new(format!("aud-log-{digest}")).ok()?,
+        AuditKind::CommandAccepted,
+        at,
+        actor,
+        correlation,
+    );
+    record.executor = match seal.get("executor") {
+        Some(Value::String(executor)) => ActorRef::parse(executor).ok(),
+        _ => None,
+    };
+    record.subject = Some(EntityRef::new(subject.clone()));
+    record.command_id = seal
+        .get("causation")
+        .and_then(Value::as_str)
+        .and_then(|causation| causation.parse().ok());
+    record.event_id = EventId::new(format!("evt-log-{digest}")).ok();
+    let observation =
+        event.changed.is_empty() && event.from_state.as_deref() == Some(event.to_state.as_str());
+    if !observation {
+        record.change = Some(ChangeRecord {
+            entity: EntityRef::new(subject.clone()),
+            before: event
+                .from_state
+                .as_ref()
+                .and_then(|_| EntityRevision::new(event.revision.saturating_sub(1)).ok()),
+            after: EntityRevision::new(event.revision).ok(),
+            command: Some(event.event_type.clone()),
+            payload: None,
+            redacted: false,
+            redaction_reason: None,
+        });
+    }
+    Some(record)
+}
+
+/// The same filters `aep-backend-memory` applies, so a record from the log is held to the query the
+/// way a record from memory is.
+fn audit_matches(record: &AuditRecord, query: &AuditQuery) -> bool {
+    query.entity.as_ref().is_none_or(|entity| {
+        record
+            .subject
+            .as_ref()
+            .is_some_and(|subject| subject.id == entity.id)
+    }) && query
+        .correlation_id
+        .as_ref()
+        .is_none_or(|correlation| &record.correlation_id == correlation)
+        && query
+            .command_id
+            .as_ref()
+            .is_none_or(|command| record.command_id.as_ref() == Some(command))
+        && query
+            .actor
+            .as_ref()
+            .is_none_or(|actor| &record.actor == actor)
+        && query
+            .kind
+            .as_ref()
+            .is_none_or(|kind| record.kind.as_str() == kind)
+        && query.since.is_none_or(|since| record.occurred_at >= since)
+        && query.until.is_none_or(|until| record.occurred_at < until)
+        && (!query.rejected_only || record.is_rejection())
+}
+
+/// FNV-1a, 64-bit — an identity component, not a security boundary, and not worth a dependency.
+fn digest(text: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in text.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
 /// A JSON object, or an empty one — the value handed in is always built as an object here.
 fn object(value: Value) -> Map<String, Value> {
     match value {
@@ -765,7 +1042,7 @@ fn as_fields(body: &Node) -> Map<String, Value> {
     }
 }
 
-impl<S: Store> CommandService for EntityBackend<S> {
+impl<S: Store, P: Projection<S>> CommandService for EntityBackend<S, P> {
     type Command = Command;
 
     // The `async` belongs to the contract. This body completes without awaiting: every provider
@@ -778,19 +1055,42 @@ impl<S: Store> CommandService for EntityBackend<S> {
     ) -> Result<CommandResult, CommandError> {
         self.check_latch()?;
         let provenance = Provenance::of(&envelope);
+        self.projection
+            .lock()
+            .expect("the projection is not poisoned")
+            .before(&envelope)?;
         let before = self.snapshot(&provenance.key);
         let outcome = block_on(self.inner.execute(envelope));
         if let Ok(result) = &outcome {
-            self.persist(result, &provenance)?;
+            // A replay changed nothing, so there is nothing to write. Writing anyway would push the
+            // same revision at a store that already holds it, which its own optimistic check would
+            // rightly refuse — and this backend would latch over a command that did no harm.
+            if result.outcome != CommandOutcome::Replayed {
+                let placements = {
+                    let durable = self.durable.lock().expect("the provider is not poisoned");
+                    self.projection
+                        .lock()
+                        .expect("the projection is not poisoned")
+                        .placements(&durable, &self.inner, result)?
+                };
+                self.persist(&placements, &provenance)?;
+            }
         }
         // Whatever the contract decided, the records it wrote about deciding reach the store: a
         // refusal is recorded (invariant 15), so its record is too.
-        self.persist_records(&before, &provenance.key)?;
+        let records = {
+            let durable = self.durable.lock().expect("the provider is not poisoned");
+            self.projection
+                .lock()
+                .expect("the projection is not poisoned")
+                .records(&durable, &self.inner, &before, &provenance.key)?
+        };
+        self.persist_records(&records)?;
         outcome
     }
 }
 
-impl<S: Store> QueryService for EntityBackend<S> {
+impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
     type AuditRecord = AuditRecord;
 
     #[allow(clippy::unused_async_trait_impl)]
@@ -822,14 +1122,83 @@ impl<S: Store> QueryService for EntityBackend<S> {
         block_on(self.inner.relations(query))
     }
 
+    /// # From the log, not from this process
+    ///
+    /// The events the provider holds for the entity are the history (wave G, story 3): a second
+    /// process answers the same records the first does, and the in-memory `RevisionRecord`s are a
+    /// cache of the log rather than its source. An entity the projection has no coordinates for,
+    /// or one with no events yet — a plan's document that predates its provider — answers from
+    /// memory, which is what it answered before.
     #[allow(clippy::unused_async_trait_impl)]
     async fn history(&self, reference: &EntityRef) -> Result<Vec<RevisionRecord>, QueryError> {
+        self.refuse_when_latched()?;
+        if let Some((entity, id)) =
+            self.with_projection(|projection| projection.coordinates(&self.inner, &reference.id))
+        {
+            let events = self
+                .with_store(|store| store.events(&entity, &id))
+                .map_err(|error| QueryError::Unavailable {
+                    reason: format!("the event log could not be read: {error}"),
+                })?;
+            let records = history_of(&events).map_err(|detail| QueryError::Unavailable {
+                reason: format!("the event log could not be read back as a history: {detail}"),
+            })?;
+            if !records.is_empty() {
+                return Ok(records);
+            }
+        }
         block_on(self.inner.history(reference))
     }
 
+    /// # From the log as well
+    ///
+    /// What this process recorded, and — for every entity the projection can locate — an accepted
+    /// record for each event in the log whose command this process did not see. A refusal leaves
+    /// no event, so refusals are this process's; the [`Identity`] projection hydrates every audit
+    /// record on open, so for it the log adds nothing.
     #[allow(clippy::unused_async_trait_impl)]
     async fn audit(&self, query: &AuditQuery) -> Result<Page<Self::AuditRecord>, QueryError> {
-        block_on(self.inner.audit(query))
+        self.refuse_when_latched()?;
+        let mut page = block_on(self.inner.audit(query))?;
+        let known: BTreeSet<_> = page
+            .items
+            .iter()
+            .filter_map(|record| record.command_id.clone())
+            .collect();
+        let subjects: Vec<EntityId> = match &query.entity {
+            Some(entity) => vec![entity.id.clone()],
+            None => self
+                .inner
+                .with_store(|store| store.entities().map(|e| e.metadata.id.clone()).collect()),
+        };
+        let mut extra = Vec::new();
+        for subject in subjects {
+            let Some((entity, id)) =
+                self.with_projection(|projection| projection.coordinates(&self.inner, &subject))
+            else {
+                continue;
+            };
+            let events = self
+                .with_store(|store| store.events(&entity, &id))
+                .map_err(|error| QueryError::Unavailable {
+                    reason: format!("the event log could not be read: {error}"),
+                })?;
+            for event in &events {
+                let Some(record) = audit_of(event, &subject) else {
+                    continue;
+                };
+                let seen = record
+                    .command_id
+                    .as_ref()
+                    .is_some_and(|command| known.contains(command));
+                if !seen && audit_matches(&record, query) {
+                    extra.push(record);
+                }
+            }
+        }
+        extra.sort_by_key(|record| record.occurred_at);
+        page.items.extend(extra);
+        Ok(page)
     }
 
     #[allow(clippy::unused_async_trait_impl)]

@@ -1268,6 +1268,59 @@ fn dot(graph: &ArtifactGraph) -> String {
     rendered
 }
 
+/// What the log says about the documents, for `validate`.
+struct LogFindings {
+    /// Reconciliation and drift findings, each a problem.
+    problems: Vec<String>,
+    /// The drift findings alone, for the report's own field.
+    drift: Vec<String>,
+    /// The deletion findings alone.
+    deleted: Vec<String>,
+    /// Documents with no events at all.
+    pre_provider: usize,
+}
+
+/// The documents against the event log (wave G, story 4), and the journal against the files.
+///
+/// A frontmatter field that disagrees with what the events say is **drift** — an edit made in an
+/// editor; events with no document are a **deletion**; a document with no events predates the
+/// provider and is neither. The journal's older reconciliation covers the same log's status and
+/// revision by entry, so a document the drift check names is not named twice, and an orphan the
+/// log knows as deleted is said once, as that.
+fn log_findings(
+    root: &Path,
+    report: &aep_backend_markdown::store::StoreReport,
+    held: &std::collections::BTreeMap<ArtifactId, (aep_domain::artifact::ArtifactStatus, u64)>,
+) -> LogFindings {
+    let drift = aep_backend_markdown::drift::detect(root, &report.documents);
+    let drifted: std::collections::BTreeSet<_> =
+        drift.drift.iter().map(|d| d.artifact.clone()).collect();
+    let deleted: std::collections::BTreeSet<_> =
+        drift.deleted.iter().map(|d| d.artifact.clone()).collect();
+    let mut problems: Vec<String> = aep_backend_markdown::journal::reconcile(root, held)
+        .iter()
+        .filter(|finding| match finding {
+            aep_backend_markdown::journal::Drift::Disagrees { artifact, .. } => {
+                !drifted.contains(artifact)
+            }
+            aep_backend_markdown::journal::Drift::Orphan { artifact, .. } => {
+                !deleted.contains(artifact)
+            }
+        })
+        .map(ToString::to_string)
+        .collect();
+    let drift_findings: Vec<String> = drift.drift.iter().map(ToString::to_string).collect();
+    let deleted_findings: Vec<String> = drift.deleted.iter().map(ToString::to_string).collect();
+    problems.extend(drift_findings.iter().cloned());
+    problems.extend(deleted_findings.iter().cloned());
+    LogFindings {
+        problems,
+        drift: drift_findings,
+        deleted: deleted_findings,
+        pre_provider: drift.pre_provider,
+    }
+}
+
 /// `protocol artifact validate`
 fn validate(args: &StoreArgs) -> Result<ExitCode> {
     let store = args.store()?;
@@ -1303,11 +1356,10 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
             )
         })
         .collect();
-    problems.extend(
-        aep_backend_markdown::journal::reconcile(store.root(), &held)
-            .iter()
-            .map(ToString::to_string),
-    );
+    let log = log_findings(store.root(), &report, &held);
+    problems.extend(log.problems);
+    let (drift_findings, deleted_findings, pre_provider) =
+        (log.drift, log.deleted, log.pre_provider);
 
     // Closed on somebody's word, and the store knows the difference. A move whose provenance is
     // `asserted` reached this status because a caller said the evidence existed; one that is
@@ -1334,6 +1386,9 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
         artifacts: report.documents.len(),
         problems: problems.clone(),
         closed_on_an_assertion: asserted.clone(),
+        drift: drift_findings,
+        deleted: deleted_findings,
+        pre_provider,
     };
 
     match args.format {
@@ -1344,6 +1399,11 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
                 summary.store,
                 summary.artifacts
             );
+            // A normal condition, said out loud: a document with no events cannot be checked
+            // against its log, and a reader should know how many of those there are.
+            if summary.pre_provider > 0 {
+                outln!("{} document(s) predate the event log", summary.pre_provider);
+            }
             // Reported, and deliberately **not** counted as a problem. Refusing an assertion
             // outright would stop anybody closing a story on the day a runner is down, which is the
             // day it matters most. What it must not be is invisible.
@@ -1985,6 +2045,14 @@ struct Summary {
     /// it must not be is invisible.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     closed_on_an_assertion: Vec<String>,
+    /// Documents whose frontmatter disagrees with their last event. Counted as problems.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    drift: Vec<String>,
+    /// Documents the event log knows and the store no longer holds. Counted as problems.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    deleted: Vec<String>,
+    /// Documents with no events at all — they predate the provider, which is not a defect.
+    pre_provider: usize,
 }
 
 /// One kind in the vocabulary.

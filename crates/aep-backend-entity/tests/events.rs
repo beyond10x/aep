@@ -162,19 +162,23 @@ fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle()
     assert_eq!(seal["correlation"], "corr-1", "correlation is the flow");
     assert_eq!(seal["actor"], "human:operator");
     assert_eq!(seal["recorded_at"], "2023-11-14T22:13:20Z");
-    assert_eq!(
-        seal["event_id"],
-        format!("{STORED_AS}:{id}@3#0"),
-        "the id is the runtime's own derived one"
+    assert!(
+        seal["event_id"]
+            .as_str()
+            .is_some_and(|event_id| event_id.starts_with(&format!("{STORED_AS}:{id}@3#0~"))),
+        "the id is the runtime's own derived one: {}",
+        seal["event_id"]
     );
+    // What the move was decided on is the event's own `args` — the command's payload — where the
+    // runtime's fold can check it (R-110).
     assert_eq!(
-        seal["decided_on"],
+        events[2].args["decided_on"],
         serde_json::json!({ "recorded": "test_result=1" })
     );
+    assert_eq!(events[2].args["to"], "proposed");
     assert_eq!(
-        events[0].payload["decided_on"],
-        serde_json::Value::Null,
-        "a command with no account writes `null`, never an absent key"
+        events[1].args["changes"]["title"], "One, renamed",
+        "an update's args are the changes it carried"
     );
 }
 

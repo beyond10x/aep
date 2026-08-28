@@ -521,9 +521,11 @@ fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
 fn the_only_write_path_out_of_this_crate_is_a_command() {
     // P3's other half: "a source scan finds no other write path in the crate". `MarkdownStore`
     // still *has* `create` and `update` — they are how a file gets written — but nothing inside
-    // this crate may reach them except `MarkdownBackend::persist`, which exists only to be called
-    // by `execute`. Anything else would be a second write path, and a second write path is a second
-    // place for idempotency, revision checks and the audit record to be forgotten.
+    // this crate may reach them except `MarkdownProvider::commit`, the one door the adapter in
+    // `aep-backend-entity` writes through (wave G, story 2; until then it was
+    // `MarkdownBackend::persist_document`). Anything else would be a second write path, and a
+    // second write path is a second place for idempotency, revision checks and the audit record to
+    // be forgotten.
     //
     // A scan, because that is the only thing that can see an omission: a module added next year
     // that calls `store.update` directly would compile, pass every test, and quietly reopen D-P1.
@@ -540,6 +542,10 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
         // scan claimed all eight modules and read seven; a helper added beside `create`/`update`
         // calling the private `write` was invisible to it.
         ("store.rs", include_str!("../src/store.rs")),
+        // Wave G: the provider holds the one permitted write, and the projection beside it must
+        // hold none. Both listed, for the reason `store.rs` is.
+        ("provider.rs", include_str!("../src/provider.rs")),
+        ("projection.rs", include_str!("../src/projection.rs")),
     ];
 
     let mut offenders = Vec::new();
@@ -555,7 +561,7 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
             // The one permitted site, bounded by the function itself rather than by a fixed
             // window. A window is a guess about how long `persist` is, and the first time it grew
             // this scan reported its own crate — right answer, wrong reason.
-            if *name == "backend.rs" && within_persist_document(source, number) {
+            if *name == "provider.rs" && within_the_write_site(source, number) {
                 continue;
             }
             offenders.push(format!("{name}:{}: {}", number + 1, line.trim()));
@@ -564,7 +570,7 @@ fn the_only_write_path_out_of_this_crate_is_a_command() {
 
     assert!(
         offenders.is_empty(),
-        "a write outside `MarkdownBackend::persist` is a second write path, which invariant 14 \
+        "a write outside `MarkdownProvider::commit` is a second write path, which invariant 14 \
          exists to forbid — model the change as a command and let `execute` carry it:\n  {}",
         offenders.join("\n  ")
     );
@@ -605,16 +611,13 @@ fn the_scan_sees_a_write_it_should_refuse() {
     );
 }
 
-/// Whether line `number` (0-based) falls inside `fn persist_document`.
+/// Whether line `number` (0-based) falls inside `fn commit` — the provider's one write.
 ///
 /// Bounded by the next item at the same indentation, so the answer does not depend on how long the
 /// function happens to be today.
-fn within_persist_document(source: &str, number: usize) -> bool {
+fn within_the_write_site(source: &str, number: usize) -> bool {
     let lines: Vec<&str> = source.lines().collect();
-    let Some(start) = lines
-        .iter()
-        .position(|line| line.contains("fn persist_document("))
-    else {
+    let Some(start) = lines.iter().position(|line| line.contains("fn commit(")) else {
         return false;
     };
     if number < start {

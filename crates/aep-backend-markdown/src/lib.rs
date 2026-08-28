@@ -22,16 +22,22 @@
 //!
 //! # Where this sits relative to the contract
 //!
-//! This crate is the store **and** the backend. [`backend::MarkdownBackend`] implements
-//! `CommandService` and `QueryService`, the sixteen `aep-conformance` suites run against it, and
-//! they are shown to fail it under injected faults — a suite that has never failed is not evidence
-//! that it can.
+//! This crate is the store, a **provider** and a **projection** — and the backend is the one
+//! adapter over both. [`provider::MarkdownProvider`] is the documents as an `entity_store::Store`:
+//! frontmatter as instance, body as a field, `journal.jsonl` as the event log, held to
+//! `entity-runtime`'s own provider suite. [`projection::MarkdownProjection`] is the plan's shape for
+//! `aep_backend_entity::EntityBackend` — where an entity lands, what a document keeps that an
+//! entity does not carry, which ladder a status is checked against. [`backend::MarkdownBackend`]
+//! is `EntityBackend<MarkdownProvider, MarkdownProjection>` behind the same constructor as before;
+//! the sixteen `aep-conformance` suites run against it, and they are shown to fail it under
+//! injected faults — a suite that has never failed is not evidence that it can.
 //!
-//! **The contract logic is not written twice.** Every command is handed to `aep-backend-memory` and
-//! this crate adds durability around it: idempotency, revision conflicts, "a refusal still leaves an
-//! audit record", "nothing is ever physically deleted" — each is a decision whose wrong version
-//! looks right, and two implementations drift in exactly the ways a suite run months apart
-//! discovers.
+//! **Neither the contract logic nor the durability logic is written twice.** Every command is
+//! handed to `aep-backend-memory`; the adapter seals the event and commits it with the document;
+//! the provider writes. Idempotency, revision conflicts, "a refusal still leaves an audit record",
+//! "nothing is ever physically deleted", the latch — each is a decision whose wrong version looks
+//! right, and two implementations drift in exactly the ways a suite run months apart discovers.
+//! Until wave G this crate carried the second one.
 //!
 //! **Deviation D-P1 is closed** (2026-08-26). It existed because the CLI wrote through this crate's
 //! [`create`](store::MarkdownStore::create) and [`update`](store::MarkdownStore::update) rather than
@@ -82,9 +88,12 @@ pub mod assembly;
 pub mod backend;
 pub mod claim;
 pub mod document;
+pub mod drift;
 pub mod frontmatter;
 pub mod journal;
 pub mod kernel;
+pub mod projection;
+pub mod provider;
 pub mod store;
 
 pub use claim::{

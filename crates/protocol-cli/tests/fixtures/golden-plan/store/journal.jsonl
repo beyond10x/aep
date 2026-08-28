@@ -1,0 +1,5 @@
+{"at":"2026-08-28T15:49:13Z","actor":"human:operator","artifact":"epic:golden","kind":"epic","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-28T15:49:13Z","actor":"human:operator","artifact":"story:golden-one","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-28T15:49:13Z","actor":"human:operator","artifact":"story:golden-one","kind":"story","revision":2,"change":{"change":"related","relation":"decomposes","target":"epic:golden"}}
+{"at":"2026-08-28T15:49:13Z","actor":"human:operator","artifact":"story:golden-two","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}
+{"at":"2026-08-28T15:49:13Z","actor":"human:operator","artifact":"story:golden-two","kind":"story","revision":2,"change":{"change":"related","relation":"decomposes","target":"epic:golden"}}

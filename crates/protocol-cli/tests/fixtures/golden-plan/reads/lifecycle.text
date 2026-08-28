@@ -1,0 +1,7 @@
+story starts at draft
+  active -> implemented, archived
+  archived -> nothing
+  draft -> proposed, archived
+  implemented -> archived
+  proposed -> draft, rejected, active
+  rejected -> archived

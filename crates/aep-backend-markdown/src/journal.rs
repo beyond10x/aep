@@ -20,6 +20,16 @@
 //! markdown out of a patch. The journal records the change the store actually made, in the shape
 //! the protocol reasons about.
 //!
+//! # Two shapes of line, one history
+//!
+//! Since wave G the plan's documents are an `entity-store` provider, and what a command does to a
+//! document is appended here as the runtime's `DomainEvent` — one JSON object per line, sealed in
+//! its payload with who and when, and carrying under `payload.change` exactly the [`Change`] this
+//! module would have written. [`read`] understands both shapes and answers [`Entry`]s for both, so
+//! `protocol artifact history` prints a move made before the provider and one made after it the
+//! same way. The older lines are left exactly as they were: the boundary between the two is the
+//! first event the provider ever wrote.
+//!
 //! # Append-only, and what that costs
 //!
 //! Entries are appended and never rewritten. That is invariant 16 — *nothing is physically
@@ -236,12 +246,42 @@ pub fn read(root: &Path) -> (Vec<Entry>, usize) {
         if line.trim().is_empty() {
             continue;
         }
-        match serde_json::from_str(line) {
-            Ok(entry) => entries.push(entry),
-            Err(_) => unreadable += 1,
+        if let Ok(entry) = serde_json::from_str::<Entry>(line) {
+            entries.push(entry);
+            continue;
+        }
+        match serde_json::from_str::<entity_core::DomainEvent>(line)
+            .ok()
+            .and_then(|event| entry_of(&event))
+        {
+            Some(entry) => entries.push(entry),
+            None => unreadable += 1,
         }
     }
     (entries, unreadable)
+}
+
+/// The entry an event line stands for, when it was written by the plan's own projection.
+///
+/// The seal in the payload says who and when; `payload.change` says what, in this module's own
+/// vocabulary; the event's coordinates say which artifact. An event without those — a provider's
+/// event about something that is not a plan document — is not an entry, and reads as unreadable
+/// rather than as a guess.
+fn entry_of(event: &entity_core::DomainEvent) -> Option<Entry> {
+    let payload = event.payload.as_object()?;
+    let at = payload.get("recorded_at")?.as_str()?.to_owned();
+    let actor = payload.get("actor")?.as_str()?.to_owned();
+    let change: Change = serde_json::from_value(payload.get("change")?.clone()).ok()?;
+    let artifact = ArtifactId::new(format!("{}:{}", event.entity, event.id)).ok()?;
+    let kind: ArtifactKind = event.entity.parse().ok()?;
+    Some(Entry {
+        at,
+        actor,
+        artifact,
+        kind,
+        revision: event.revision,
+        change,
+    })
 }
 
 /// Every entry about one artifact, oldest first.

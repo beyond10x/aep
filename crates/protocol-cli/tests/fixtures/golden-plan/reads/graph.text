@@ -1,0 +1,4 @@
+error: invalid value 'text' for '--format <FORMAT>'
+  [possible values: dot, json]
+
+For more information, try '--help'.

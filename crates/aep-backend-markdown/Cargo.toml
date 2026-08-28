@@ -19,6 +19,11 @@ aep-contract.workspace = true
 # expected to agree. The name says "memory" because that is where its store lives; what this crate
 # takes from it is the contract, not the storage.
 aep-backend-memory.workspace = true
+# **The durability logic lives once too.** `MarkdownBackend` is `EntityBackend<MarkdownProvider,
+# MarkdownProjection>`: the adapter applies, seals and commits; this crate keeps what is plan-shaped —
+# the projection into a document, the ladder, the journal's vocabulary — and the provider that writes
+# the files (wave G, story 2).
+aep-backend-entity.workspace = true
 # The status ladder, decided as data rather than by a hand-written lookup — see `src/kernel.rs`.
 # An IO-free kernel with no clock, no filesystem and no network: it takes an entity type as data
 # and answers whether a move is permitted, which is the whole of what this crate asks of it.
@@ -28,6 +33,9 @@ aep-backend-memory.workspace = true
 # none, and it declares exactly one dependency of its own (`serde_json`, already in this workspace).
 # `cargo xtask deps` is the check.
 entity-core.workspace = true
+# The store SPI, so the plan's own documents answer as an `entity_store::Store` — the provider the
+# adapter in `aep-backend-entity` runs over (wave G). Same tag as `entity-core`, declared once.
+entity-store.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true

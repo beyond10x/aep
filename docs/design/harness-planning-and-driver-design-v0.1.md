@@ -299,7 +299,13 @@ verb writes a file by any other route. **P3 reroutes those two functions through
 and the deviation ends. Building the envelope surface first would mean building the journal first,
 and the store would not exist until three milestones from now.
 
-**D-P2 — an out-of-band file edit is not tracked.**
+**D-P2 — an out-of-band file edit is not tracked. CLOSED BY DETECTION 2026-08-28** (wave G,
+`story:out-of-band-edit-is-drift`): `protocol artifact validate` compares every document's
+frontmatter with the fold of its events and reports **drift** per document, naming the fields and
+the event — exit 1. Prevention was considered and refused on the record: a hook is bypassed by
+`Bash` (§ 3.3) and a lock on a directory of markdown is a lock somebody deletes; a check in the gate
+cannot be routed around. A document with no events predates the provider and is reported as such,
+not as drift. The paragraph that follows is what the deviation was.
 Somebody opens `story/credential-store.md` in an editor and changes `status: draft` to
 `status: active`. The store finds out the next time something reads the file, and cannot tell that
 edit from a legal move. This is a **permanent property of a file store**, not a wave-1 shortcut: any
@@ -309,7 +315,14 @@ argument is that it stays readable and editable. The compensating control is `va
 thing that catches an illegal status, a broken edge or a mismatched id whenever it runs, and the
 plugin's guardrails and the CI step are what make it run.
 
-**D-P3 — there is no history and no audit; `revision` counts writes.**
+**D-P3 — there is no history and no audit; `revision` counts writes. CLOSED 2026-08-28** (wave G,
+`story:history-from-the-event-log`): `journal.jsonl` is the store's event log — every command
+through the provider appends the runtime's `DomainEvent`, sealed with who and when and carrying
+what it was decided on — and `EntityBackend::history()` and `audit()` answer from it, identically
+from a fresh process; `protocol artifact history` reads the same log and prints a move made before
+the provider and one made after it the same way; `journal-reconciliation`'s asserted-versus-recorded
+distinction is decided from the event's account. The paragraph that follows is what the deviation
+was.
 `revision` is incremented when the machine-owned half of a file changes. It is not a version
 history: the store cannot say what the artifact looked like at revision 2, who moved it, or why.
 Git is the history — `git log -p` on the file answers all three, better than a sidecar would. What
@@ -317,7 +330,11 @@ git does not give is a *queryable* trail joined with the protocol's own audit re
 what the journal at **P3** is for. Recording this here so the `revision` field is not mistaken for
 an audit trail by anything downstream: it is a stale-write guard and nothing else.
 
-**D-P4 — `rm` deletes an artifact, and nothing prevents it.**
+**D-P4 — `rm` deletes an artifact, and nothing prevents it. CLOSED BY DETECTION 2026-08-28** (wave
+G, `story:out-of-band-edit-is-drift`): a document the event log holds events for and the store does
+not hold is reported by `protocol artifact validate` as **deleted**, naming the last event — exit 1.
+Nothing prevents the `rm`, by the same decision as D-P2; the gate catches it. The paragraph that
+follows is what the deviation was.
 Invariant 16 says nothing is physically deleted, and the CLI keeps that line: there is no
 `protocol artifact delete`, `archived` is a status, and archiving is how an artifact leaves. But the
 artifacts are files, and `rm` is a program. This is inherent to a file store and is not closed by

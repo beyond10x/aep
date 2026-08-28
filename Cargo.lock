@@ -32,11 +32,13 @@ dependencies = [
 name = "aep-backend-markdown"
 version = "0.28.0"
 dependencies = [
+ "aep-backend-entity",
  "aep-backend-memory",
  "aep-conformance",
  "aep-contract",
  "aep-domain",
  "entity-core",
+ "entity-store",
  "schemars",
  "serde",
  "serde_json",
@@ -466,8 +468,8 @@ dependencies = [
 
 [[package]]
 name = "entity-core"
-version = "0.10.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.10.0#ffdb956923fee2bacc91a72ef34a51704eb40c42"
+version = "0.11.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.11.0#41bcdc687946e23a81fdb09b0484e810faae8491"
 dependencies = [
  "serde",
  "serde_json",
@@ -475,8 +477,8 @@ dependencies = [
 
 [[package]]
 name = "entity-sqlite"
-version = "0.10.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.10.0#ffdb956923fee2bacc91a72ef34a51704eb40c42"
+version = "0.11.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.11.0#41bcdc687946e23a81fdb09b0484e810faae8491"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -486,8 +488,8 @@ dependencies = [
 
 [[package]]
 name = "entity-store"
-version = "0.10.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.10.0#ffdb956923fee2bacc91a72ef34a51704eb40c42"
+version = "0.11.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.11.0#41bcdc687946e23a81fdb09b0484e810faae8491"
 dependencies = [
  "entity-core",
  "serde",

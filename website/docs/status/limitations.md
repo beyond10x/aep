@@ -56,15 +56,25 @@ name since wave F, and its report says which one answered.)
 **A SQLite plan reopens.** Since wave F, `aep-backend-sqlite` reads a populated file back on open —
 entities with their history, relations, audit records, applied commands — under the identities the
 first process stored, and a second process continues past them. The refusal that stood in for this
-(*"a row this backend did not write"*) is retired. What remains: `protocol artifact` verbs open the
-markdown store only; every verb opening through a `store:` in `project.yaml` is wave H.
+(*"a row this backend did not write"*) is retired.
+
+**The markdown store is the same adapter over its own provider** (wave G). The documents answer as
+an `entity_store::Store` and pass the runtime's provider suite; `journal.jsonl` is the event log;
+`history()` and `audit()` answer from it, so a second process answers what the first wrote (D-P3
+closed). `protocol artifact validate` compares every document with the fold of its events and
+reports **drift** (an edit made in an editor) and **deletion** (`rm`), naming the field and the event
+— D-P2 and D-P4 closed by detection, prevention refused on the record. A document with no events
+predates the log and is counted, not blamed.
+
+What remains: `protocol artifact` verbs open the markdown store only; every verb opening through a
+`store:` in `project.yaml` is wave H.
 
 The `entity-core` dependency does not change this and cannot: that kernel performs no IO of any kind
 — no filesystem, no clock, no network, asserted by a scan over its own sources — so it stores
 nothing. It decides whether a status move is permitted, and every byte written here is written here.
 See [Lifecycles, decided as data](../concepts/lifecycles.md). Writing a durable one means implementing two traits and
 proving the result against the shipped conformance suites — `docs/guide/backend.md` in the
-repository covers it. Register rows D-P1 and D-P3.
+repository covers it. Register row D-P1; D-P2, D-P3 and D-P4 are closed above.
 
 ## The driver, and what a governed run does not yet prove
 

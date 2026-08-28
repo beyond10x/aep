@@ -9,7 +9,50 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+* **The plan's documents are an `entity-store` provider.** `aep_backend_markdown::provider::MarkdownProvider`
+  implements `StateProvider`, `EventProvider` and `Store` over `.engineering/planning/`: a document's
+  frontmatter is the instance's fields, `status` its state, `revision` its revision, the body a
+  `body` field; `journal.jsonl` is the event log, one event per line beside the entries already
+  there. It passes `entity-runtime`'s own provider suite — nine cases written by somebody who has
+  never seen a planning document — and the suite is shown to catch a deliberately wrong copy of it.
+  A refused commit changes neither file; a document a person wrote by hand loads with an empty log;
+  every one of this repository's own documents round-trips byte for byte.
+
+* **History and audit are answered from the event log** (D-P3 closed in full). `history()` and
+  `audit()` on every `EntityBackend` read the provider's events — a second process answers exactly
+  what the first wrote — and the in-memory records are a cache of the log, not its source. For a
+  plan, the accepted commands another process ran arrive in `audit()` with their command ids and
+  the revision they produced; a document with no events yet answers what it answered before.
+
+* **`protocol artifact validate` reports drift and deletion** (D-P2 and D-P4 closed by detection). A
+  document whose frontmatter disagrees with the fold of its events is **drift**, per document, naming
+  the fields and the event; a document the log has events for and the store no longer holds is
+  **deleted**, naming the last event; both exit 1. A document with no events at all predates the log
+  and is counted (`N document(s) predate the event log`; `pre_provider` in JSON), not blamed.
+  Prevention — a hook, a lock — was considered and refused on the record: a check in the gate cannot
+  be routed around.
+
+### Changed
+
+* **`MarkdownBackend` is the adapter over that provider.** It is
+  `aep_backend_entity::EntityBackend<MarkdownProvider, MarkdownProjection>` behind the same `open`;
+  its hand-written `persist`, latch and `journal::append` are gone — `backend.rs` went from 883
+  lines to 196, and what left is not kept beside the new path. What stays is the plan's shape, in
+  `projection.rs`: the prose preserved, relations added into frontmatter and never removed, the
+  ladder consulted on a status that arrives on a plain update, and the journal's own vocabulary
+  noted on every event. **Nobody can tell**: a fixture recorded with 0.28.0 pins that `new`,
+  `relate`, `body`, `move` and `evidence` leave byte-identical documents and that `list`, `board`,
+  `graph`, `validate`, `lifecycle` and `history` print the same bytes. `journal::read` answers the
+  same entries for a line written before the provider and one written after it.
+
+* **The adapter has a projection seam.** `EntityBackend<S, P = Identity>`: `Identity` is the shape
+  a SQLite plan takes — every record under its own type, hydrated on open; a plan-shaped projection
+  lives beside the plan's provider. Nothing changes for `SqliteBackend`.
+
+* The pin moved to `entity-runtime` 0.11.0; every event the adapter writes carries `args` — the
+  command's payload, which is what the operation was decided on.
 
 ## [0.28.0] — 2026-08-28
 
