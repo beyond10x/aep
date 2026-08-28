@@ -36,6 +36,59 @@ observed by the command step after it, so `producer: verifier` is a fact about w
 rather than the model's opinion of a suite it says it ran. That is a type doing the work a rule
 would otherwise have to.
 
+### How a `command` step declares what it establishes
+
+A `command` step's `evidence:` block names the kind, the verifier and — this is the fork — either
+nothing else, or a `record:`. The two are different claims about where the record came from.
+
+**Without `record:`, the driver mints the record from the exit status**, and the set of kinds that
+admits is closed and short (`EvidenceMapping::MINTABLE`): `test_result`, `static_analysis`,
+`contract_result` and `diff`. An exit status carries *did the verifier produce a verdict, and was it
+yes or no*, and nothing else — so a kind whose payload holds names, digests or counts is refused at
+load rather than minted with invented values. A fabricated count is worse than a missing record: the
+engine cannot tell it apart from an observed one.
+
+**With `record:`, the verifier wrote its own document and the driver only reads it.** Every kind the
+protocol declares is admissible this way, the exit status is not consulted at all, and three things
+make the step submit nothing and say why — D5's `Unknown`, never a failing verdict:
+
+* the document is missing or does not parse;
+* it holds more than one record, because a step establishes one thing;
+* it is an approval, or anything a person is recorded as having produced (invariant 7 at the layer a
+  file path opens).
+
+`drivers/development/default.yaml` uses both. Its suite, diff, static-analysis and contract steps are
+minted from an exit status; four verbs write their own record and are read back through `record:`:
+
+| kind | the step runs | writes |
+|---|---|---|
+| `trace_conformance` (`checks.yaml`) | `protocol trace evidence` | what the checker measured against a trace specification |
+| `property_test_result` | `protocol property evidence` | the property, the case count and the seed — or the honest absence of one, for an exhaustive checker |
+| `verification` | `protocol validate --evidence` | claim `document-tree-valid`, and every problem it found |
+| `specification` | `protocol specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
+
+The last of those makes a decision the format does not: **a requirement is a list item under a
+`Requirements` or `Acceptance` heading of the specification artifact, and it is satisfied when the
+predicate it names in backticks is observed `True`.** A requirement that names no predicate is
+reported unmet rather than assumed met, and a ticked checkbox is deliberately not the rule — the
+party that writes the specification is the party being checked.
+
+### The launch check, and the flag that waives it
+
+Before the first step runs, the driver compares every evidence kind the **plan** will demand against
+every kind the **map** declares, and refuses a run that could not finish
+(`crates/aep-driver/src/coverage.rs`). It is an economic check and not a protocol one: the run would
+otherwise walk every state and block at the guard that wanted the record, which cost one measured run
+$31.46 and 76 minutes. `--allow-evidence-gap` prints the gap and starts anyway, which is the position
+somebody driving to a `--pause-on-approval` stop and supplying the record by hand is legitimately in.
+
+Two demands the check deliberately does **not** refuse over, because no map could satisfy them: an
+`approval` or a `review`, and anything pinned to a human verifier. Those arrive from a person, at an
+`operator` step or between runs. One it cannot see at all: a **predicate** obligation such as
+`regression_suite.result == passed`, which is not written as an evidence requirement — so a map can
+pass this check and still block at completion, and the shipped cargo map carries a
+`suite: regression` step for exactly that reason.
+
 Enforcement is one policy with one enforcer, since `epic:metaharness-migration` (2026-08-22):
 every `llm` step is spawned through `metaharness run claude` in ask mode, and the driver's own
 per-call policy — `decide_tool` in `crates/protocol-cli/src/drive.rs`, the retired shell hooks

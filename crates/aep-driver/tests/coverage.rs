@@ -118,59 +118,92 @@ fn the_gap_that_cost_thirty_one_dollars_is_named_before_a_single_step_runs() {
 
 #[test]
 fn a_task_that_declares_no_code_change_is_not_refused_for_contract_or_property_evidence() {
-    // W4.2's applicability fix, seen from the launch check. Neither map declares a
-    // `contract_result` or a `property_test_result` and neither ever will — no contract runner and
-    // no property tester can observe a document — so if applicability were ignored here, every
+    // W4.2's applicability fix, seen from the launch check. `development/checks` declares no
+    // `contract_result` and no `property_test_result` and never will — no contract runner and no
+    // property tester can observe a document — so if applicability were ignored here, every
     // documentation task in this repository would be refused for two rules that do not apply to it.
-    for name in ["default.yaml", "checks.yaml"] {
-        let scoped = evidence_coverage(&driven_plan(NO_CODE_CHANGE), &shipped(name));
-        for absent in ["contract_result", "property_test_result"] {
-            assert!(
-                !missing_kinds(&scoped).contains(&absent),
-                "`change.code: false` removes the principle that wants `{absent}`, so {name} must \
-                 not be refused for it: {scoped:#?}"
-            );
-        }
+    //
+    // The map is `checks.yaml` and not both, because `default.yaml` now declares every kind
+    // (`story:evidence-producers-for-the-driven-map`): a map that can produce a `contract_result`
+    // cannot be refused for one, so it would pass the assertion below whether or not applicability
+    // was honoured, and a test that passes whether or not the rule holds is not a test of the rule.
+    let scoped = evidence_coverage(&driven_plan(NO_CODE_CHANGE), &shipped("checks.yaml"));
+    for absent in ["contract_result", "property_test_result"] {
+        assert!(
+            !missing_kinds(&scoped).contains(&absent),
+            "`change.code: false` removes the principle that wants `{absent}`, so `checks.yaml` \
+             must not be refused for it: {scoped:#?}"
+        );
+    }
 
-        // The other half, and the reason the assertion above is a test of the rule rather than of
-        // the map: with the fact *undeclared* the principles stay in force — Unknown is not False —
-        // and the same map is refused for exactly those two kinds. Without this, commenting the
-        // applicability walk out entirely would leave the test above green.
-        let silent = evidence_coverage(&driven_plan(""), &shipped(name));
-        for owed in ["contract_result", "property_test_result"] {
-            assert!(
-                missing_kinds(&silent).contains(&owed),
-                "a task declaring nothing still owes `{owed}`, and {name} cannot produce it: \
-                 {silent:#?}"
-            );
-        }
+    // The other half, and the reason the assertion above is a test of the rule rather than of the
+    // map: with the fact *undeclared* the principles stay in force — Unknown is not False — and the
+    // same map is refused for exactly those two kinds. Without this, commenting the applicability
+    // walk out entirely would leave the test above green.
+    let silent = evidence_coverage(&driven_plan(""), &shipped("checks.yaml"));
+    for owed in ["contract_result", "property_test_result"] {
+        assert!(
+            missing_kinds(&silent).contains(&owed),
+            "a task declaring nothing still owes `{owed}`, and `checks.yaml` cannot produce it: \
+             {silent:#?}"
+        );
     }
 }
 
 #[test]
-fn both_shipped_maps_report_the_gap_the_governed_run_measured_and_nothing_more() {
-    // Recorded as a fact about the tree at this commit, not as an aspiration. Neither shipped map
-    // can finish a run under `adp/default`, and the two kinds are the same for both: `W4-2/1`'s
-    // `evidence.missing = 2` with the fact declared, and `= 4` without it. Closing the gap means
-    // adding steps to the maps, which is a documents change and a decision, not this check's job.
-    for name in ["default.yaml", "checks.yaml"] {
+fn the_cargo_map_can_produce_every_kind_a_feature_tasks_plan_demands() {
+    // `story:evidence-producers-for-the-driven-map`. The task declares nothing, so every principle
+    // the profile carries stays in force — invariant 5, and the harder of the two readings: this is
+    // the shape arm c of pilot 1 was refused in, with `contract_result`, `property_test_result`,
+    // `verification` and `specification` all owed and none of them declared.
+    let report = evidence_coverage(&driven_plan(""), &shipped("default.yaml"));
+
+    assert_eq!(
+        missing_kinds(&report),
+        Vec::<&str>::new(),
+        "every kind a `kind: feature` task's plan demands has a step of `development/default` \
+         that produces it, so `protocol drive run --map drivers/development/default.yaml` starts \
+         without `--allow-evidence-gap`: {report:#?}"
+    );
+    assert!(report.is_covered(), "{report:#?}");
+}
+
+#[test]
+fn the_checks_map_still_reports_the_gap_the_governed_run_measured_and_nothing_more() {
+    // Recorded as a fact about the tree at this commit, not as an aspiration. `development/checks`
+    // cannot finish a run under `adp/default`: `W4-2/1`'s `evidence.missing = 2` with the fact
+    // declared, and `= 4` without it. Closing *its* gap means adding steps to that map, which is a
+    // documents change and a decision, not this check's job — and a different decision from the one
+    // its cargo sibling took, because `protocol property evidence` and `cargo test` are not things
+    // a map written for documents-and-shell work is entitled to run.
+    assert_eq!(
+        missing_kinds(&evidence_coverage(
+            &driven_plan(NO_CODE_CHANGE),
+            &shipped("checks.yaml")
+        )),
+        ["verification", "specification"],
+        "checks.yaml, with `change.code: false`"
+    );
+    assert_eq!(
+        missing_kinds(&evidence_coverage(&driven_plan(""), &shipped("checks.yaml"))),
+        [
+            "contract_result",
+            "property_test_result",
+            "verification",
+            "specification"
+        ],
+        "checks.yaml, with nothing declared"
+    );
+
+    // And its sibling, which `story:evidence-producers-for-the-driven-map` closed: no gap on either
+    // reading of the task. Asserted here beside the map that still has one, because the pair is
+    // what says the check itself still discriminates — a coverage walk that had silently stopped
+    // finding anything would pass the half of this test above it and fail this half.
+    for facts in [NO_CODE_CHANGE, ""] {
         assert_eq!(
-            missing_kinds(&evidence_coverage(
-                &driven_plan(NO_CODE_CHANGE),
-                &shipped(name)
-            )),
-            ["verification", "specification"],
-            "{name}, with `change.code: false`"
-        );
-        assert_eq!(
-            missing_kinds(&evidence_coverage(&driven_plan(""), &shipped(name))),
-            [
-                "contract_result",
-                "property_test_result",
-                "verification",
-                "specification"
-            ],
-            "{name}, with nothing declared"
+            missing_kinds(&evidence_coverage(&driven_plan(facts), &shipped("default.yaml"))),
+            Vec::<&str>::new(),
+            "default.yaml, with `{facts}`"
         );
     }
 }

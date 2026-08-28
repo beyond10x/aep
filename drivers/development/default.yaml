@@ -153,6 +153,28 @@ states:
           kind: test_result
           suite: unit
           verifier: test-runner
+      # A person, and the step this map did not have. `spec-driven.before_implementation` wants a
+      # specification whose status is `approved`, `protocol artifact new` leaves `draft`, and no
+      # prompt in this map used to ask for the move — so a run under it walked into `implement`
+      # only because nothing had looked, or did not walk in at all. It is an `operator` step and
+      # not an `llm` one because approving a specification is a person's act: a run that approved
+      # its own specification would satisfy the principle by writing to the document the principle
+      # is about, which is invariant 7 one layer up.
+      #
+      # Last in the state, after the suite has run red, so the person is asked once with the
+      # state's mechanical work already done — the same order `checks.yaml` takes.
+      - kind: operator
+        description: Approve the specification, or say what is wrong with it.
+        prompt: >-
+          Read the specification this run wrote and the suite it just ran red. If it states the
+          required behaviour well enough for those tests to decide it, move it to `approved` —
+          `protocol artifact move <id> in_review` then `protocol artifact move <id> approved`. If
+          it does not, leave it in `draft` and say so: the transition into `implement` is guarded
+          on an approved specification, so the run stops here either way and nothing is implemented
+          against a specification nobody agreed to. Write each requirement so that a fact decides
+          it — `protocol specification evidence` reads a list item under `## Acceptance` and
+          resolves the predicate it names in backticks, so `the suite is green` states nothing and
+          `` `tests.unit.failed == 0` `` states a requirement.
 
   implement:
     steps:
@@ -210,6 +232,78 @@ states:
         evidence:
           kind: static_analysis
           verifier: static-analyzer
+      # `contracts.breaking_changes == 0` is what `contract-testing` owes **before review**, and it
+      # is the one fact only a `contract_result` projects — `tests.contract.failed`, which the step
+      # above fills, is an alias any test runner satisfies. So this is a different question from the
+      # conformance suite and needs its own record.
+      #
+      # The consumer/provider contract this repository actually publishes is the sealed
+      # `metaharness.frame/1` document and the `contract_result` shape it reads back: two suites,
+      # both against the one external consumer, both of which fail when what a consumer was told is
+      # no longer true. That is what a contract runner is for, and `aep-conformance` is not it —
+      # that suite asks whether a *backend* implements the storage contract, which is a different
+      # question sharing a word.
+      #
+      # Minted from the exit status rather than read from a document, and this is the one of the
+      # four kinds where that is honest: `contract_result` is in `EvidenceMapping::MINTABLE`
+      # because *did the runner produce a verdict, and was it yes or no* is the whole of what the
+      # counts need here. The committed records under
+      # `crates/protocol-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
+      # used: they are the provider's captured bytes from 2026-08-23, they describe metaharness's
+      # adapters rather than the change under review, and `protocol contract evidence` requires an
+      # `--observed-at` that a committed map could only supply as a literal — a map claiming a fresh
+      # observation of a run made months ago, every day, for ever, which is exactly what evidence
+      # horizons exist to catch.
+      - kind: command
+        description: The contracts the one external consumer was told about still hold.
+        run:
+          - cargo
+          - test
+          - -p
+          - protocol-cli
+          - --test
+          - metaharness_frame_contract
+          - --test
+          - metaharness_contract_result
+        evidence:
+          kind: contract_result
+          verifier: contract-runner
+      # `property-based-testing` owes an independent `property_test_result` from a
+      # `property-tester`, and the kind is not mintable: the payload names a property, a case count
+      # and a seed, and an exit status holds none of them. So the checker writes its own record and
+      # the driver reads it — `record:`, the same route `checks.yaml` takes for `trace_conformance`.
+      - kind: command
+        description: The three-valued core's algebra, over every input there is.
+        run:
+          - protocol
+          - property
+          - evidence
+          - --out
+          - "{run_directory}/property.yaml"
+        evidence:
+          kind: property_test_result
+          verifier: property-tester
+          record: "{run_directory}/property.yaml"
+      # `provenance-tracking` owes an independent `verification` record before completion, and the
+      # kind is not mintable either: a `verification` names a claim and a verifier, and an exit
+      # status names neither. `protocol validate` is the verifier — it reads every protocol,
+      # workflow, profile, lifecycle and step map and cross-validates them against each other — and
+      # `--evidence` is it writing down what it found. The claim is `document-tree-valid` and
+      # deliberately not `invariant`: `verification.invariant.passed` is read by three shipped
+      # documents that mean something else by it.
+      - kind: command
+        description: The document tree still loads and still cross-validates.
+        run:
+          - protocol
+          - validate
+          - --root
+          - "."
+          - --evidence
+          - "{run_directory}/verification.yaml"
+        evidence:
+          kind: verification
+          verifier: protocol
+          record: "{run_directory}/verification.yaml"
 
   adversarial_verify:
     steps:
@@ -240,6 +334,59 @@ states:
           kind: test_result
           suite: unit
           verifier: test-runner
+      # The same command, asked a different question, and the duplication is the point rather than
+      # an oversight. `tests.unit.failed == 0` is *this change's tests pass*;
+      # `regression_suite.result == passed` is *everything that already worked still works* — and
+      # `test-driven` owes the second before completion. The coverage pre-flight cannot see that
+      # obligation at all, because it is a predicate rather than an evidence requirement
+      # (`crates/aep-driver/src/coverage.rs`, § "What this cannot see"), so a map without this step
+      # passes the launch check and then blocks at completion with nothing to say why.
+      #
+      # A step declares one evidence mapping, so one suite label per run of the command. Relabelling
+      # the step above instead would be cheaper and wrong: the run would then carry no `unit` result
+      # from the state where the adversary's cases ran.
+      - kind: command
+        description: The existing suite, as a regression check on what the adversary added.
+        run: [cargo, test, --workspace]
+        evidence:
+          kind: test_result
+          suite: regression
+          verifier: test-runner
+      # Last, and last on purpose: it reads the run's own snapshot, so every record the states
+      # before it produced is in front of it. `spec-driven` owes `specification.satisfied` before
+      # completion and only a `specification` record projects it — a record that names, requirement
+      # by requirement, what is not met. An exit status names none of them, so the checker writes
+      # the document and the driver reads it.
+      #
+      # What counts as a requirement is `protocol specification evidence`'s own decision and its
+      # module documentation states it in full: a list item under a `Requirements` or `Acceptance`
+      # heading, satisfied when the predicate it names in backticks is observed `True`. A ticked
+      # checkbox is deliberately not the rule — the party that writes the specification is the party
+      # being checked.
+      #
+      # The verb refuses, and submits nothing, when it cannot tell which specification the run is
+      # about: more than one in force and none of them the one the task references is D5's
+      # `Unknown`, not a guess.
+      - kind: command
+        description: Decide the specification's requirements against what this run observed.
+        run:
+          - protocol
+          - specification
+          - evidence
+          - --store
+          - .engineering/planning
+          - --snapshot
+          - "{run_directory}/snapshot.json"
+          - --out
+          - "{run_directory}/specification.yaml"
+        evidence:
+          kind: specification
+          # `protocol`, the external tool, and not `artifact-validator`: the protocol joins
+          # `specification` to `test-runner` and `human-review`, and neither is what this is. A
+          # verifier the protocol has never heard of is admitted and checked at run start, which is
+          # the honest shape — the record says which tool decided the document.
+          verifier: protocol
+          record: "{run_directory}/specification.yaml"
 
   # A person, and there is no route around them. `review → complete` is guarded on
   # `review.approved`, which is a record a human review produces: the driver constructs no approval

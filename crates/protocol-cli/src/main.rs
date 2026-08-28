@@ -262,6 +262,18 @@ enum Command {
         /// How to render the result.
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
+        /// Also write what this validation found as a `verification` evidence document.
+        ///
+        /// The claim is [`DOCUMENT_TREE_VALID`] and the verifier is this tool. It is the same walk
+        /// the report above describes, written in the shape `protocol evaluate --evidence` reads,
+        /// so a driven step can declare `kind: verification` with a `record:` and submit what the
+        /// validator found rather than a verdict minted from an exit status.
+        ///
+        /// A tree with problems still writes a record — one saying `failed`, naming what it found.
+        /// The verdict belongs in the document; refusing to write one would be the validator
+        /// deciding that bad news is not an observation.
+        #[arg(long, value_name = "PATH")]
+        evidence: Option<PathBuf>,
     },
     /// Work with an executable system specification.
     Ess {
@@ -375,6 +387,30 @@ enum Command {
         /// What to do with a record.
         #[command(subcommand)]
         command: contract::ContractCommand,
+    },
+    /// Check the properties this repository's own decisions rest on, and write the record.
+    ///
+    /// `principles/verification/property-based-testing.yaml` owes every code task an independent
+    /// `property_test_result` from a `property-tester`, and a `property_test_result` carries a
+    /// property name, a case count and a seed — none of which an exit status holds. So the check
+    /// runs in this process and writes its own document, which a step map reads back through
+    /// `evidence.record:`.
+    Property {
+        /// What to do with them.
+        #[command(subcommand)]
+        command: property::PropertyCommand,
+    },
+    /// Decide a specification's requirements against the evidence a run has admitted.
+    ///
+    /// `principles/development/spec-driven.yaml` owes `specification.satisfied` before completion,
+    /// and only a `specification` record projects it. What counts as a requirement in a markdown
+    /// artifact is this verb's own decision and is stated in full in its module documentation: a
+    /// list item under a `Requirements` or `Acceptance` heading, satisfied when the predicate it
+    /// names is observed `True`.
+    Specification {
+        /// What to do with one.
+        #[command(subcommand)]
+        command: specification::SpecificationCommand,
     },
     /// Assemble what many checked runs said into one table of facts.
     ///
@@ -747,6 +783,22 @@ mod schema;
 // stated in it rather than assumed from the rest.
 mod reverse;
 
+// Not a verb family: the envelope every producer added after
+// `story:evidence-producers-for-the-driven-map` puts around a record, said once. See the module for
+// why the three older minting verbs are deliberately not migrated onto it.
+mod evidence_doc;
+
+// The ninth verb family. Its input is the workspace's own three-valued core, its vocabulary is
+// `property_test_result`, and it shares nothing with the rest: a property checker that runs in this
+// process and writes down what it measured, because a `property_test_result` minted from an exit
+// status would state a case count nobody read.
+mod property;
+
+// The tenth. Its inputs are a specification artifact's body and the evidence a run has admitted,
+// its vocabulary is `specification`, and it shares nothing with the rest. It is the one producer
+// here that decides a *document* against a run rather than code against a suite.
+mod specification;
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -765,7 +817,8 @@ fn run() -> Result<ExitCode> {
             root,
             artifacts,
             format,
-        } => validate(&root, artifacts.as_deref(), format),
+            evidence,
+        } => validate(&root, artifacts.as_deref(), format, evidence.as_deref()),
         Command::Ess { command } => run_ess(command),
         Command::Infra { command } => run_infra(&command),
         Command::Resolve(args) => resolve(&args),
@@ -779,6 +832,8 @@ fn run() -> Result<ExitCode> {
         Command::Artifact { command } => planning::run(command),
         Command::Trace { command } => trace::run(command),
         Command::Contract { command } => contract::run(command),
+        Command::Property { command } => property::run(command),
+        Command::Specification { command } => specification::run(command),
         Command::Eval { command } => eval::run(command),
         Command::Drive { command } => drive::run(command),
         Command::Workflow { command } => render::run(command),
@@ -3585,7 +3640,96 @@ fn generated_tree(root: &Path) -> Result<ess_diff::GeneratedTree> {
 }
 
 /// `protocol validate`
-fn validate(root: &Path, artifacts: Option<&Path>, format: Format) -> Result<ExitCode> {
+/// The claim `protocol validate --evidence` establishes.
+///
+/// A claim of its own rather than one of the eleven the convention lists (AGENTS.md § *Conventions*:
+/// reuse before inventing), and the reason is that reusing `invariant` would be a false claim:
+/// `verification.invariant.passed` is what `principles/verification/invariant-checking.yaml`,
+/// `principles/development/design-by-contract.yaml` and `profiles/development-critical.yaml` read,
+/// and none of them means *the document tree loads and cross-validates*. A validator that answered
+/// those three by walking YAML would satisfy an obligation nobody discharged, which is the failure
+/// mode the whole evidence programme exists to prevent. The claim is singular, as the convention
+/// requires.
+const DOCUMENT_TREE_VALID: &str = "document-tree-valid";
+
+/// The verifier class `protocol validate` signs its record as.
+///
+/// An external tool named `protocol`, the same spelling `drivers/development/checks.yaml` already
+/// uses for this binary's own verbs. `EvidenceKind::Verification::default_verifiers` names
+/// `policy-engine` and `model-checker`, and this is neither: `default_verifiers` is a table of
+/// defaults rather than of constraints, and claiming to be a model checker would be a stronger
+/// statement about method than a document walk supports.
+fn validator() -> aep_domain::verification::Verifier {
+    aep_domain::verification::Verifier::ExternalTool(
+        aep_domain::ids::ToolRef::new("protocol").expect("`protocol` is a tool reference"),
+    )
+}
+
+/// Writes what a validation found as a `verification` evidence document.
+///
+/// Extracted from [`validate`] rather than inlined because the payload has one rule worth reading
+/// on its own: the counterexamples are the problems **as the validator wrote them**, capped, and a
+/// tree with no problems carries none. Nothing here re-words a refusal — a validation error that
+/// reads differently in an evidence record than it does on the terminal is a second opinion about
+/// the same walk.
+fn write_validation_evidence(
+    root: &Path,
+    problems: &[String],
+    format: Format,
+    out: &Path,
+) -> Result<()> {
+    // Enough to act on, and not the whole list: a record is read by a person deciding what to fix,
+    // and a tree with four hundred problems hands back four hundred lines of YAML nobody reads.
+    // The count is not lost — `status` says it failed and the report on the terminal has them all.
+    const NAMED: usize = 10;
+
+    let counterexamples = problems
+        .iter()
+        .take(NAMED)
+        .map(|problem| aep_domain::verification::Counterexample {
+            verifier: validator(),
+            property: aep_domain::ids::ClaimId::new(DOCUMENT_TREE_VALID).ok(),
+            note: Some(problem.clone()),
+            ..aep_domain::verification::Counterexample::default()
+        })
+        .collect();
+
+    let record = aep_domain::evidence::VerificationRecord {
+        claim: aep_domain::ids::ClaimId::new(DOCUMENT_TREE_VALID)
+            .context("`document-tree-valid` is a claim id")?,
+        verifier: validator(),
+        status: if problems.is_empty() {
+            aep_domain::verification::VerificationStatus::Passed
+        } else {
+            aep_domain::verification::VerificationStatus::Failed
+        },
+        subject: None,
+        counterexamples,
+    };
+
+    let minted = evidence_doc::MintedEvidence::new(
+        aep_domain::evidence::Evidence::Verification(record),
+        validator(),
+        // The walk happened in this process, in this second, which is the one case where a default
+        // of *now* is the honest value rather than a freshness claim nobody made.
+        now_observed(),
+    )
+    .obtained_by(format!(
+        "protocol validate --root {} --evidence {}",
+        root.display(),
+        out.display()
+    ))
+    .from_input(root.display().to_string());
+
+    evidence_doc::emit(&minted, format, Some(out))
+}
+
+fn validate(
+    root: &Path,
+    artifacts: Option<&Path>,
+    format: Format,
+    evidence: Option<&Path>,
+) -> Result<ExitCode> {
     let outcome = load_tree_report(root);
     let mut problems: Vec<String> = outcome.failures.iter().map(ToString::to_string).collect();
     problems.extend(project_file_problems());
@@ -3630,6 +3774,14 @@ fn validate(root: &Path, artifacts: Option<&Path>, format: Format) -> Result<Exi
             }
         }
         Format::Yaml | Format::Json => print_serialised(&summary, format)?,
+    }
+
+    if let Some(out) = evidence {
+        // Written whatever the verdict, and before the exit code is decided: a step that declares
+        // `record:` has its document read and its exit status ignored, so a validator that wrote no
+        // record on a red tree would leave the run with nothing observed instead of with a `failed`
+        // record naming what it found.
+        write_validation_evidence(root, &problems, format, out)?;
     }
 
     Ok(exit_code(problems.is_empty()))
@@ -4278,7 +4430,7 @@ fn load(root: &Path) -> Result<Registry> {
 }
 
 /// Reads a task document.
-fn read_task(path: &Path) -> Result<Task> {
+pub(crate) fn read_task(path: &Path) -> Result<Task> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let origin = path.display().to_string();
     aep_schema::parse::task(&text, Some(&origin)).map_err(|error| anyhow::anyhow!("{error}"))

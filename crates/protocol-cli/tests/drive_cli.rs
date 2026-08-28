@@ -533,6 +533,71 @@ fn a_map_that_cannot_produce_demanded_evidence_is_refused_before_the_first_step(
     );
 }
 
+/// The cargo map starts a `kind: feature` run with no `--allow-evidence-gap`, which is the whole of
+/// `story:evidence-producers-for-the-driven-map`.
+///
+/// This is the one test here that uses `drivers/development/default.yaml` rather than a fixture,
+/// and it is safe for the reason the module header gives for avoiding it: `--max-iterations 0`
+/// means the loop body never runs, so no step of that map is executed and nothing runs
+/// `cargo test --workspace` inside a test. What is exercised is everything *before* the loop — the
+/// map loading, `check_run`, the approval pre-flight and F-W4.2-4's coverage pre-flight — which is
+/// exactly where arm c of pilot 1 was refused.
+#[test]
+fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
+    let directory = std::env::temp_dir().join("protocol-drive-cargo-map-preflight");
+    std::fs::remove_dir_all(&directory).ok();
+    std::fs::create_dir_all(directory.join(".engineering/planning"))
+        .expect("the temporary tree is writable");
+    let task = directory.join("task.yaml");
+    write(
+        &task,
+        "id: PRE-1\nkind: feature\nobjective: exercise-the-pre-flight\nprotocol: adp/1\n\
+         profile: development.driven\n",
+    );
+
+    let map = root().join("drivers/development/default.yaml");
+    let output = protocol(&[
+        "drive",
+        "run",
+        "--project",
+        printable(&directory),
+        "--root",
+        printable(&root()),
+        "--task",
+        printable(&task),
+        "--map",
+        printable(&map),
+        // Nothing runs. The pre-flights are what this test is about.
+        "--max-iterations",
+        "0",
+        // The map has two `operator` steps, and a headless start refuses over them before it
+        // refuses over anything else. That refusal has its own test; this flag gets past it so the
+        // coverage pre-flight is the thing being observed.
+        "--pause-on-approval",
+    ]);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+
+    assert!(
+        !said.contains("--allow-evidence-gap"),
+        "the coverage pre-flight named no gap, so nothing should offer the flag that waives one. \
+         Before `story:evidence-producers-for-the-driven-map` this run was refused for \
+         `contract_result`, `property_test_result`, `verification` and `specification`:\n{said}"
+    );
+    assert!(
+        said.contains("run        PRE-1/1"),
+        "the run was allocated, which only happens after the pre-flight passed:\n{said}"
+    );
+    assert!(
+        directory.join(".engineering/runs/PRE-1").exists(),
+        "the run directory exists:\n{said}"
+    );
+    assert_eq!(
+        stdout(&output).matches("steps      0 run").count(),
+        1,
+        "no step of the cargo map was executed:\n{said}"
+    );
+}
+
 /// The checks map plans against this repository's own task, which is the check `drive run` makes
 /// before it executes anything.
 ///
