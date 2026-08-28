@@ -2374,6 +2374,78 @@ mod tests {
         );
     }
 
+    /// A record the verifier was to write and did not is D5's `Unknown`, and so is one that does
+    /// not read.
+    ///
+    /// The case `story:evidence-producers-for-the-driven-map` made load-bearing. Three of the four
+    /// kinds that map now produces arrive through `record:`, and the failure mode a producer has
+    /// that a `cargo test` step does not is *the verb ran and wrote nothing usable*: a store the
+    /// checker refused to choose from, a path a rename broke, a half-written file. None of those is
+    /// a failing verdict — the run has observed nothing — and submitting a `failed` record for one
+    /// would be the driver inventing an observation, which is invariant 7 a layer above the engine.
+    ///
+    /// Both roads are checked because they fail at different depths: a missing file never reaches
+    /// the parser, and a malformed one fails inside it.
+    #[test]
+    fn a_record_that_is_missing_or_does_not_read_submits_nothing_and_says_why() {
+        let directory = scratch("absent-record");
+        let mapping = EvidenceMapping {
+            kind: EvidenceKind::Specification,
+            verifier: Verifier::ExternalTool("protocol".parse().expect("a tool reference")),
+            suite: None,
+            subject: None,
+            tool: None,
+            record: Some("{run_directory}/specification.yaml".to_owned()),
+        };
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "adversarial_verify".parse().expect("a state id");
+        let empty: Vec<String> = Vec::new();
+        let context = StepContext {
+            state: &state,
+            index: 3,
+            attempt: 1,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        let read = || {
+            read_record(
+                mapping.record.as_deref().expect("a declared record"),
+                &mapping,
+                "protocol specification evidence",
+                &context,
+            )
+        };
+
+        // Nothing was written: the verb refused to choose between two specifications in force, or
+        // the path in the map no longer names what the verb writes.
+        let StepOutcome::NoVerdict { reason } = read() else {
+            panic!("a record that is not there is not a verdict");
+        };
+        assert!(
+            reason.contains("specification") && reason.contains("nothing was observed"),
+            "the refusal names the kind that is owed and says nothing was observed, so a person \
+             reading the run knows the step did not fail — it did not run: {reason}"
+        );
+
+        // Written, and not a document. Half a file is the shape a killed verb leaves behind.
+        std::fs::write(
+            directory.join("specification.yaml"),
+            "- kind: specification\n  satisfied: ",
+        )
+        .expect("the record is writable");
+        let StepOutcome::NoVerdict { reason } = read() else {
+            panic!("a record that does not parse is not a verdict");
+        };
+        assert!(
+            reason.contains("does not read"),
+            "the refusal says the document is unreadable rather than reporting a failed \
+             specification: {reason}"
+        );
+    }
+
     /// A step map's `skills:` list is a request to the model, not a command-line flag.
     ///
     /// The skill reaches the session by being asked for, and the `Skill` tool answers; nothing

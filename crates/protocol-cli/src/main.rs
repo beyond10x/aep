@@ -3719,7 +3719,7 @@ fn write_validation_evidence(
         root.display(),
         out.display()
     ))
-    .from_input(root.display().to_string());
+    .reading(root.display().to_string());
 
     evidence_doc::emit(&minted, format, Some(out))
 }

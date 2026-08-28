@@ -124,7 +124,9 @@ const LAWS: &[Law] = &[
     },
     Law {
         name: "de Morgan holds in both directions",
-        holds: |a, b, _| a.and(b).not() == a.not().or(b.not()) && a.or(b).not() == a.not().and(b.not()),
+        holds: |a, b, _| {
+            a.and(b).not() == a.not().or(b.not()) && a.or(b).not() == a.not().and(b.not())
+        },
     },
     Law {
         name: "conjunction and disjunction commute",
@@ -227,7 +229,7 @@ fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
         crate::now_observed(),
     )
     .obtained_by(invocation(args))
-    .from_input(format!("{PROPERTY} over aep_domain::predicate::Truth"));
+    .reading(format!("{PROPERTY} over aep_domain::predicate::Truth"));
 
     emit(&minted, args.format, args.out.as_deref())?;
     // Exit 0 for a run that found a counterexample as well. The verdict is in the record.
@@ -283,9 +285,9 @@ mod tests {
             let minted = MintedEvidence::new(
                 Evidence::PropertyTestResult(record),
                 PRODUCER,
-                aep_domain::time::ObservedAt::new(
-                    aep_domain::time::Timestamp::from_epoch_millis(1_699_920_000_000),
-                ),
+                aep_domain::time::ObservedAt::new(aep_domain::time::Timestamp::from_epoch_millis(
+                    1_699_920_000_000,
+                )),
             )
             .obtained_by(invocation(&args));
             serde_yaml::to_string(&[&minted]).expect("it renders")

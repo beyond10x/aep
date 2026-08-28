@@ -185,7 +185,10 @@ fn the_checks_map_still_reports_the_gap_the_governed_run_measured_and_nothing_mo
         "checks.yaml, with `change.code: false`"
     );
     assert_eq!(
-        missing_kinds(&evidence_coverage(&driven_plan(""), &shipped("checks.yaml"))),
+        missing_kinds(&evidence_coverage(
+            &driven_plan(""),
+            &shipped("checks.yaml")
+        )),
         [
             "contract_result",
             "property_test_result",
@@ -201,7 +204,10 @@ fn the_checks_map_still_reports_the_gap_the_governed_run_measured_and_nothing_mo
     // finding anything would pass the half of this test above it and fail this half.
     for facts in [NO_CODE_CHANGE, ""] {
         assert_eq!(
-            missing_kinds(&evidence_coverage(&driven_plan(facts), &shipped("default.yaml"))),
+            missing_kinds(&evidence_coverage(
+                &driven_plan(facts),
+                &shipped("default.yaml")
+            )),
             Vec::<&str>::new(),
             "default.yaml, with `{facts}`"
         );

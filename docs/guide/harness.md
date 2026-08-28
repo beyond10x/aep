@@ -58,14 +58,15 @@ make the step submit nothing and say why — D5's `Unknown`, never a failing ver
   file path opens).
 
 `drivers/development/default.yaml` uses both. Its suite, diff, static-analysis and contract steps are
-minted from an exit status; four verbs write their own record and are read back through `record:`:
+minted from an exit status; three of its steps read a record a verb wrote, and a fourth verb does the
+same job in its sibling `checks.yaml`:
 
-| kind | the step runs | writes |
-|---|---|---|
-| `trace_conformance` (`checks.yaml`) | `protocol trace evidence` | what the checker measured against a trace specification |
-| `property_test_result` | `protocol property evidence` | the property, the case count and the seed — or the honest absence of one, for an exhaustive checker |
-| `verification` | `protocol validate --evidence` | claim `document-tree-valid`, and every problem it found |
-| `specification` | `protocol specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
+| kind | map | the step runs | what the verb writes |
+|---|---|---|---|
+| `property_test_result` | `default` | `protocol property evidence` | the property, the case count, and the seed — or its honest absence, for an exhaustive checker |
+| `verification` | `default` | `protocol validate --evidence` | claim `document-tree-valid`, and every problem the walk found |
+| `specification` | `default` | `protocol specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
+| `trace_conformance` | `checks` | `protocol trace evidence` | what the checker measured against a trace specification |
 
 The last of those makes a decision the format does not: **a requirement is a list item under a
 `Requirements` or `Acceptance` heading of the specification artifact, and it is satisfied when the

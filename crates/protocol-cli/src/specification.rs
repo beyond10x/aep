@@ -497,9 +497,9 @@ fn unmet(requirement: &Requirement, decided_by: Option<&str>, verdict: Truth) ->
         (Some(written), Truth::Unknown) => {
             Some(format!("{text} — nothing has observed `{written}`"))
         }
-        (None, _) if requirement.spans.is_empty() => {
-            Some(format!("{text} — states no predicate a verifier could decide"))
-        }
+        (None, _) if requirement.spans.is_empty() => Some(format!(
+            "{text} — states no predicate a verifier could decide"
+        )),
         (None, _) => Some(format!(
             "{text} — states no predicate a verifier could decide; `{}` {}",
             requirement.spans.join("`, `"),
@@ -527,17 +527,24 @@ const COMPARISONS: [&str; 6] = ["==", "!=", ">=", "<=", ">", "<"];
 /// what the specification asked for. Both readings are unmet, so this changes no verdict; it
 /// changes what the record tells the person who has to act on it.
 fn decided_by(requirement: &Requirement) -> Option<(&str, Predicate)> {
-    fn parsed(span: &String) -> Option<(&str, Predicate)> {
+    fn parsed(span: &str) -> Option<(&str, Predicate)> {
         Predicate::parse_expression(span)
             .ok()
-            .map(|predicate| (span.as_str(), predicate))
+            .map(|predicate| (span, predicate))
     }
     requirement
         .spans
         .iter()
+        .map(std::string::String::as_str)
         .filter(|span| COMPARISONS.iter().any(|operator| span.contains(operator)))
         .find_map(parsed)
-        .or_else(|| requirement.spans.iter().find_map(parsed))
+        .or_else(|| {
+            requirement
+                .spans
+                .iter()
+                .map(std::string::String::as_str)
+                .find_map(parsed)
+        })
 }
 
 /// Every requirement, decided.
@@ -588,9 +595,9 @@ fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
         crate::now_observed(),
     )
     .obtained_by(invocation(args))
-    .from_input(args.store.display().to_string());
+    .reading(args.store.display().to_string());
     if let Some(path) = &args.snapshot {
-        minted = minted.from_input(path.display().to_string());
+        minted = minted.reading(path.display().to_string());
     }
 
     emit(&minted, args.format, args.out.as_deref())?;
@@ -600,15 +607,20 @@ fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
 
 /// The command line, as the record's provenance reports it.
 fn invocation(args: &EvidenceArgs) -> String {
-    let mut line = format!("protocol specification evidence --store {}", args.store.display());
+    use std::fmt::Write as _;
+
+    let mut line = format!(
+        "protocol specification evidence --store {}",
+        args.store.display()
+    );
     if let Some(path) = &args.snapshot {
-        line.push_str(&format!(" --snapshot {}", path.display()));
+        let _ = write!(line, " --snapshot {}", path.display());
     }
     if let Some(id) = &args.artifact {
-        line.push_str(&format!(" --artifact {id}"));
+        let _ = write!(line, " --artifact {id}");
     }
     if let Some(path) = &args.task {
-        line.push_str(&format!(" --task {}", path.display()));
+        let _ = write!(line, " --task {}", path.display());
     }
     line
 }
@@ -768,8 +780,9 @@ Some prose that states nothing checkable.\n\
     /// the requirement they actually wrote.
     #[test]
     fn a_quoted_filename_does_not_outrank_the_comparison_beside_it() {
-        let found =
-            requirements("## Acceptance\n\n- `scan-declarations.sh` is clean: `tests.unit.failed == 0`\n");
+        let found = requirements(
+            "## Acceptance\n\n- `scan-declarations.sh` is clean: `tests.unit.failed == 0`\n",
+        );
         assert_eq!(
             decided_by(&found[0]).map(|(span, _)| span),
             Some("tests.unit.failed == 0"),

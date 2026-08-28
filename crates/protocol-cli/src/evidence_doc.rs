@@ -75,7 +75,12 @@ impl MintedEvidence {
     }
 
     /// Records one file the check read.
-    pub(crate) fn from_input(mut self, input: impl Into<String>) -> Self {
+    ///
+    /// `reading` and not `from_input`: the same builder shape `protocol trace evidence` uses spells
+    /// it the second way, and clippy's `wrong_self_convention` refuses a `from_*` that takes `self`
+    /// — a rule worth keeping, because `Foo::from_x` reading as a constructor everywhere else is
+    /// what makes a builder method with that name misread at every call site.
+    pub(crate) fn reading(mut self, input: impl Into<String>) -> Self {
         self.provenance.inputs.push(input.into());
         self
     }
@@ -120,7 +125,8 @@ pub(crate) fn emit(record: &MintedEvidence, format: Format, out: Option<&Path>) 
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
-        std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
     }
     std::fs::write(file, &document).with_context(|| format!("writing {}", file.display()))?;
     outln!("{} — {}", file.display(), record.summary());
