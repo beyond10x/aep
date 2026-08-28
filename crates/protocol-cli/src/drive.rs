@@ -1476,6 +1476,47 @@ fn prompt_for(step: &LlmStep, context: &StepContext<'_>) -> String {
             prompt.push('\n');
         }
     }
+    // **The surface, stated rather than discovered.** `decide_tool` refuses a call outside this set
+    // and prints exactly this list in the refusal — so a session that is not told it up front
+    // learns its own surface by being refused, one wasted turn at a time. Run `W4-3/1` spent a turn
+    // per session doing precisely that, and its first attempt was a `ToolSearch` for `Grep` and
+    // `Glob`: it was not guessing, it was trying to *load* what nothing had told it it did not have.
+    //
+    // Rendered from `context.tools`, the same value `decide_tool` reads, so the prompt and the
+    // policy cannot disagree. Two lists that could drift would be worse than one list nobody has:
+    // the model would trust the wrong one.
+    let offered = allowed_tools(context.tools);
+    if !offered.is_empty() {
+        prompt.push_str("\nThe tools this state admits, and there are no others: ");
+        prompt.push_str(&offered.join(", "));
+        prompt.push_str(
+            ".\nA call outside that set is refused by the driver before it runs. Do not search for \
+             a tool that is not on the list — it is not hidden, it does not exist here.\n",
+        );
+    }
+    // **The shell's two rules, stated rather than discovered.** `driven_surface` refuses on both,
+    // and a session not told either learns them by being refused: measured over run `W4-3/1`, 21 of
+    // 174 calls — 12% of everything the run did — were one of these two, in every state, from the
+    // first to the last. They are the cheapest possible thing to say and the most expensive thing
+    // to find out.
+    if context.tools.shell_offered() {
+        prompt.push_str(
+            "\n`Bash` runs **one simple invocation per call**. No `&&`, no `|`, no `;`, no `$(…)`, \
+             no redirect — a composed command is refused whole, so two things you want are two \
+             calls.\n\
+             The only program it will run is `protocol`, and only `protocol artifact …` and \
+             `protocol trace …`. Not `ls`, not `cat`, not `git`, not `grep`, not `cargo`, not \
+             `protocol --help`: read files with `Read` and search with the tools listed above. \
+             Building and testing are `command` steps the driver runs itself, so that their records \
+             carry a verifier's provenance instead of yours — running them here would produce \
+             nothing the engine can admit.\n",
+        );
+    } else {
+        prompt.push_str(
+            "\nThis state holds **no shell**. Anything a suite must observe is run by the driver as \
+             a `command` step, recorded with a verifier's provenance rather than yours.\n",
+        );
+    }
     prompt.push_str(
         "\nYou cannot submit evidence, and nothing you say is evidence. What you achieve is \
          observed by the verifier the driver runs after this step.\n",
@@ -1654,6 +1695,35 @@ fn answer_events(
         let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) else {
             continue;
         };
+        // **The driver audits its own claim.** The per-state tool set is the primary enforcement
+        // mechanism, and the standard this repository sets for itself is that an enforcement
+        // mechanism nobody audits is a claim. Until now nothing compared the set the driver
+        // *renders* against the set the session was actually given — so `tool_config` named `Glob`
+        // and `Grep` to a Claude Code that offers neither, and every session of run `W4-3/1` spent
+        // a turn finding that out for itself.
+        //
+        // Reported and never fatal: a harness offering *more* than the state admits is normal and
+        // is what `decide_tool` is for; a harness offering *less* is a rendering this repository
+        // owns and should fix. Only the second is printed.
+        if event["event"] == "session.started" {
+            if let Some(offered) = event["offered_tools"].as_array() {
+                let present: Vec<&str> = offered.iter().filter_map(|v| v.as_str()).collect();
+                let missing: Vec<String> = allowed_tools(context.tools)
+                    .into_iter()
+                    .filter(|named| named != "Bash" && !present.contains(&named.as_str()))
+                    .collect();
+                if !missing.is_empty() {
+                    outln!(
+                        "note: state `{}` admits {} the session was not offered — {}. The step map \
+                         and this harness disagree about the tool set; the model will be refused by \
+                         the vendor rather than by the policy, and the turn is spent either way.",
+                        context.state,
+                        if missing.len() == 1 { "a tool" } else { "tools" },
+                        missing.join(", ")
+                    );
+                }
+            }
+        }
         if event["event"] == "tool.requested" && event["decision_required"] == true {
             let call_id = event["call_id"].as_str().unwrap_or_default();
             let name = event["name"].as_str().unwrap_or_default();
@@ -2446,6 +2516,148 @@ mod tests {
         assert!(
             !path.contains(".cargo/bin"),
             "nor cargo's own install root — which is why the refusal says `--root ~/.local`: {path}"
+        );
+    }
+
+    /// The prompt names the state's tools, from the same value the policy refuses on.
+    ///
+    /// **Run `W4-3/1`, 2026-08-29.** Every session spent a turn calling a tool it did not have —
+    /// and the first attempt was a `ToolSearch` for `Grep` and `Glob`, which is a session trying to
+    /// *load* what it had been told existed. Nothing told it. `decide_tool` prints the admitted set
+    /// in its refusal, so the surface was knowable the whole time and only reachable by being
+    /// refused: an allowlist a session learns by trial is an allowlist that costs a turn per state.
+    ///
+    /// Rendered from `context.tools` rather than from a second list, because two lists drift and
+    /// the model would then trust the wrong one.
+    #[test]
+    fn the_prompt_names_the_tools_the_state_admits_and_the_policy_agrees() {
+        let step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
+            description: None,
+            harness: LlmStep::DEFAULT_HARNESS.to_owned(),
+            skills: Vec::new(),
+            prompt: "do the thing".to_owned(),
+        };
+        let tools = config(&[Capability::RepositoryRead, Capability::RepositoryWrite]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let requirements: Vec<String> = Vec::new();
+        let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            task: &task,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+
+        let prompt = prompt_for(&step, &context);
+        let admitted = allowed_tools(&tools);
+        assert!(!admitted.is_empty(), "the fixture admits something to name");
+        for tool in &admitted {
+            assert!(
+                prompt.contains(tool.as_str()),
+                "`{tool}` is admitted and the session is not told: {prompt}"
+            );
+        }
+        assert!(
+            prompt.contains("there are no others"),
+            "the list is stated as closed, or it reads as a suggestion: {prompt}"
+        );
+
+        // The two must come from one source. A tool the prompt names and the policy refuses would
+        // be worse than saying nothing — it would be an instruction to do what will be denied.
+        for tool in &admitted {
+            assert!(
+                decide_tool(&context, tool, &serde_json::json!({})).is_ok()
+                    || tool == "Bash"
+                    || matches!(tool.as_str(), "Edit" | "Write" | "NotebookEdit"),
+                "the prompt names `{tool}` and the policy refuses it"
+            );
+        }
+    }
+
+    /// The prompt states every rule the shell will refuse on, and the policy agrees with it.
+    ///
+    /// **Measured on run `W4-3/1`, 2026-08-29: 28 of 174 tool calls — 16% of everything the run did
+    /// — were refused, and every one was a rule the session could have been told.** Eleven were a
+    /// program outside the surface, ten were a composed command, four were a tool the harness does
+    /// not have, three were a tool the state does not admit. They recurred in every state from the
+    /// first to the last, because being refused teaches one call and the next session starts fresh.
+    ///
+    /// This asserts the prompt names both shell rules, and — the part that matters — that the
+    /// *examples it gives* are genuinely refused by `driven_surface`. A prompt that warned about a
+    /// command the policy allows would train the session out of something it may do.
+    #[test]
+    fn the_prompt_states_the_shell_rules_the_policy_will_refuse_on() {
+        let step = LlmStep {
+            context: Vec::new(),
+            scope: Vec::new(),
+            description: None,
+            harness: LlmStep::DEFAULT_HARNESS.to_owned(),
+            skills: Vec::new(),
+            prompt: "do the thing".to_owned(),
+        };
+        let tools = config(&[Capability::RepositoryRead, Capability::CommandExecution]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let requirements: Vec<String> = Vec::new();
+        let reaching: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            task: &task,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+        let prompt = prompt_for(&step, &context);
+
+        assert!(
+            prompt.contains("one simple invocation per call"),
+            "the composed-command rule is stated: {prompt}"
+        );
+        assert!(
+            prompt.contains("protocol artifact") && prompt.contains("protocol trace"),
+            "and the two verb families the surface admits: {prompt}"
+        );
+
+        // Everything the prompt tells the session not to do must actually be refused. Otherwise the
+        // instruction is a superstition the run pays for in capability.
+        let refused = |command: &str| {
+            decide_tool(&context, "Bash", &serde_json::json!({ "command": command })).is_err()
+        };
+        for forbidden in [
+            "protocol artifact list && protocol artifact graph",
+            "protocol artifact list | head",
+            "ls -a",
+            "cat README.md",
+            "git status",
+            "cargo test --workspace",
+            "protocol --help",
+        ] {
+            assert!(
+                refused(forbidden),
+                "the prompt warns against `{forbidden}` and the policy permits it"
+            );
+        }
+        // And the one thing it tells the session it *may* do has to work.
+        assert!(
+            decide_tool(
+                &context,
+                "Bash",
+                &serde_json::json!({ "command": "protocol artifact list" })
+            )
+            .is_ok(),
+            "the prompt's own example is refused by the policy"
         );
     }
 
