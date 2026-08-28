@@ -3137,6 +3137,15 @@ fn check_generated_module(module: &Path) -> Result<()> {
 /// reach a network (the module has no dependencies, and this makes that a rule rather than a
 /// coincidence), and `GOTOOLCHAIN=local` so a `go` directive can never make the toolchain download
 /// another one.
+///
+/// `GOFLAGS=-buildvcs=false` is the third, and it is about **where** the gate can run rather than
+/// what it checks. Go stamps the building repository's VCS state into a binary, and in a linked
+/// `git worktree` the `.git` entry is a file rather than a directory, so the stamp fails with
+/// `error obtaining VCS status: exit status 128` and takes `synth-check` down with it — in every
+/// worktree, on a tree identical to the one where it passes. Two agents hit it independently on
+/// 2026-08-28 and each spent a gate run proving it was not their diff. Nothing here wants the
+/// stamp: this module is synthesised from a specification, its identity is the specification's
+/// digest, and no binary built by this step is kept.
 fn go_tool(
     program: &str,
     arguments: &[&str],
@@ -3148,6 +3157,7 @@ fn go_tool(
         .current_dir(module)
         .env("GOPROXY", "off")
         .env("GOTOOLCHAIN", "local")
+        .env("GOFLAGS", "-buildvcs=false")
         .output()
         .map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
