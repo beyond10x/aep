@@ -912,6 +912,23 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, value_name = "PATH")]
         from: PathBuf,
     },
+    /// Print one artifact: its frontmatter fields, then its body.
+    ///
+    /// The verb for an id in hand, and the one this family did not have. `list` prints the whole
+    /// plan, `board` arranges it, `history` prints the event log, `explain` answers what made a
+    /// status happen — and `body` *writes*. Somebody holding `story:passkey-login` and wanting to
+    /// read it had nothing to type, and reached for `show`, because that is what every other tool
+    /// calls it.
+    ///
+    /// The body is printed **verbatim**. A verb that summarised the prose would be a second and
+    /// worse `explain`, and the reason to run this is to see what the document actually says.
+    Show {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+    },
     /// List the plan, one line per artifact.
     List {
         /// Where the plan is and how to render.
@@ -1116,6 +1133,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             target,
         } => relate(&store, &id, &relation, &target),
         ArtifactCommand::Body { store, id, from } => replace_body(&store, &id, &from),
+        ArtifactCommand::Show { store, id } => show(&store, &id),
         ArtifactCommand::List {
             store,
             kind,
@@ -1872,6 +1890,94 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
             },
             args.format,
         )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `protocol artifact show`
+///
+/// One artifact, printed: the frontmatter fields a reader asks about, then the body as the store
+/// holds it. Read through [`open`] like every other read, so markdown, SQLite, Postgres and a
+/// hybrid answer the same way and nothing here goes near a file.
+///
+/// The plan is opened **without** a backend, as `list` and `board` are: this verb answers from the
+/// documents, and building the contract would refuse a markdown plan on account of some *other*
+/// document being unreadable — a refusal that has nothing to do with the id that was asked for.
+///
+/// What it does not print is `extra`, the frontmatter keys this format does not name. They are a
+/// markdown document's own, kept so a round trip loses nothing, and a plan that keeps no documents
+/// has never been told about them — so printing them would make this verb answer differently
+/// depending on where the plan is kept, which is the one thing every verb here refuses to do.
+fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let opened = open(&args.location, false)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let frontmatter = &stored.document.frontmatter;
+    let shown = Shown {
+        id: frontmatter.id.to_string(),
+        kind: frontmatter.kind.to_string(),
+        status: frontmatter.status.as_str().to_owned(),
+        title: frontmatter.title.clone(),
+        summary: frontmatter.summary.clone(),
+        owner: frontmatter.owner.clone(),
+        tags: frontmatter.tags.iter().cloned().collect(),
+        relations: frontmatter
+            .relations
+            .iter()
+            .map(|relation| ShownRelation {
+                relation: relation.kind.as_str(),
+                target: relation.target.to_string(),
+            })
+            .collect(),
+        revision: frontmatter.revision,
+        body: stored.document.body.clone(),
+    };
+
+    match args.format {
+        Format::Text => {
+            let mut rows = vec![
+                vec!["id".to_owned(), shown.id.clone()],
+                vec!["kind".to_owned(), shown.kind.clone()],
+                vec!["status".to_owned(), shown.status.clone()],
+            ];
+            // Absent is not empty. A label with nothing after it reads as a field set to the empty
+            // string, which is a different document from one that never set it.
+            for (label, value) in [
+                ("title", shown.title.as_deref()),
+                ("summary", shown.summary.as_deref()),
+                ("owner", shown.owner.as_deref()),
+            ] {
+                if let Some(value) = value {
+                    rows.push(vec![label.to_owned(), value.to_owned()]);
+                }
+            }
+            if !shown.tags.is_empty() {
+                rows.push(vec!["tags".to_owned(), shown.tags.join(", ")]);
+            }
+            // One edge per line, labelled once: a document with six relations on one line is a line
+            // nobody reads to the end.
+            for (index, relation) in shown.relations.iter().enumerate() {
+                let label = if index == 0 { "relations" } else { "" };
+                rows.push(vec![
+                    label.to_owned(),
+                    format!("{} {}", relation.relation, relation.target),
+                ]);
+            }
+            rows.push(vec!["revision".to_owned(), shown.revision.to_string()]);
+            crate::print_table(&rows);
+
+            if !shown.body.is_empty() {
+                outln!();
+                // `out!`, not `outln!`: the body is the document's own bytes and this verb adds
+                // none to them. A body written without a closing newline prints without one.
+                out!("{}", shown.body);
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(&shown, args.format)?,
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -3211,6 +3317,34 @@ struct Listed {
     status: String,
     title: Option<String>,
     path: String,
+}
+
+/// One artifact, whole: what `show` prints.
+///
+/// Every field is serialised whether or not it is set, which is the opposite of what the text
+/// rendering does and deliberate: a machine format whose keys come and go is one every consumer has
+/// to write a branch for, while a person reading a labelled block is served by the absent labels
+/// being absent.
+#[derive(Debug, serde::Serialize)]
+struct Shown {
+    id: String,
+    kind: String,
+    status: String,
+    title: Option<String>,
+    summary: Option<String>,
+    owner: Option<String>,
+    tags: Vec<String>,
+    relations: Vec<ShownRelation>,
+    revision: u64,
+    /// The markdown body, exactly as the store holds it.
+    body: String,
+}
+
+/// One outgoing edge, as `show` prints it.
+#[derive(Debug, serde::Serialize)]
+struct ShownRelation {
+    relation: &'static str,
+    target: String,
 }
 
 /// One status column of the board.

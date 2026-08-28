@@ -320,11 +320,24 @@ const READS_BEFORE: &[&[&str]] = &[
 ];
 
 /// The reads, after: the writes landed the same way, and the history says the same things.
+///
+/// `show` is here and not in [`READS_BEFORE`] on purpose: the artifact it names is the one whose
+/// prose arrived **through the contract**, and prose is the one thing seeding from the example's
+/// manifest does not carry — so before the writes the markdown project would print a body the
+/// other two have never been told about, and the difference would be the seed's, not the verb's.
 const READS_AFTER: &[&[&str]] = &[
     &["artifact", "list"],
     &["artifact", "list", "--format", "json"],
     &["artifact", "board"],
     &["artifact", "graph"],
+    &["artifact", "show", "story:passkey-audit-trail"],
+    &[
+        "artifact",
+        "show",
+        "story:passkey-audit-trail",
+        "--format",
+        "json",
+    ],
     &["artifact", "history", "story:passkey-audit-trail"],
     &[
         "artifact",
@@ -456,6 +469,143 @@ fn every_verb_answers_alike_over_markdown_and_sqlite() {
     }
     let (markdown, _) = pair.both(&["artifact", "validate"]);
     assert_eq!(markdown.code, Some(0), "{}", markdown.stdout);
+}
+
+/// The prose `show` is asked to print back, spacing and blank line included.
+///
+/// Deliberately not tidy: two spaces inside a line and a trailing blank one are exactly what a
+/// verb that "cleaned up" the body would lose, and losing them is the failure this asserts against.
+const SHOWN_BODY: &str = "# Audit trail\n\nEvery ceremony,  verbatim.\n\n";
+
+/// `protocol artifact show <id>` prints one artifact, and the same one in every store.
+///
+/// The gap it closes: with an id in hand there was no verb at all. `list` prints the whole plan,
+/// `explain` answers what made a status happen, `history` prints the event log and `body` *writes* —
+/// so a driven session asked for `show` five times in one run and got `unrecognized subcommand`
+/// every time. The artifact is created and given its prose here rather than taken from the example,
+/// because a body seeded from the manifest exists only in the markdown copy.
+/// `story:passkey-audit-trail`, with a title, a summary, a tag, an edge and [`SHOWN_BODY`], written
+/// into all three stores through the contract so that what `show` prints back is comparable.
+fn a_story_carrying_prose(pair: &Pair) {
+    let body = Path::new(env!("CARGO_TARGET_TMPDIR")).join("store-selection-show-body.md");
+    std::fs::write(&body, SHOWN_BODY).expect("body written");
+    let body = body.to_str().expect("a printable path");
+
+    for args in [
+        &[
+            "artifact",
+            "new",
+            "story",
+            "passkey-audit-trail",
+            "--title",
+            "Every passkey ceremony is audited",
+            "--summary",
+            "One artifact, printed.",
+            "--tag",
+            "webauthn",
+        ][..],
+        &[
+            "artifact",
+            "relate",
+            "story:passkey-audit-trail",
+            "decomposes",
+            "epic:passkey-sign-in",
+        ][..],
+        &[
+            "artifact",
+            "body",
+            "story:passkey-audit-trail",
+            "--from",
+            body,
+        ][..],
+    ] {
+        pair.alike_with(args, 0);
+    }
+}
+
+#[test]
+fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
+    let pair = Pair::new("show");
+    a_story_carrying_prose(&pair);
+
+    // Text: the frontmatter fields the reader asked for, then the body, unaltered and last.
+    let shown = pair.alike(&["artifact", "show", "story:passkey-audit-trail"]);
+    assert_eq!(shown.code, Some(0), "{}{}", shown.stdout, shown.stderr);
+    for expected in [
+        "story:passkey-audit-trail",
+        "story",
+        "draft",
+        "Every passkey ceremony is audited",
+        "One artifact, printed.",
+        "webauthn",
+        "decomposes epic:passkey-sign-in",
+    ] {
+        assert!(
+            shown.stdout.contains(expected),
+            "`artifact show` does not print {expected:?}:\n{}",
+            shown.stdout
+        );
+    }
+    assert!(
+        shown.stdout.ends_with(SHOWN_BODY),
+        "the body is not printed verbatim, last and whole:\n{}",
+        shown.stdout
+    );
+
+    // YAML and JSON carry the same artifact, and the body byte for byte.
+    let yaml = pair.alike(&[
+        "artifact",
+        "show",
+        "story:passkey-audit-trail",
+        "--format",
+        "yaml",
+    ]);
+    assert_eq!(yaml.code, Some(0), "{}{}", yaml.stdout, yaml.stderr);
+    let json = pair.alike(&[
+        "artifact",
+        "show",
+        "story:passkey-audit-trail",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(json.code, Some(0), "{}{}", json.stdout, json.stderr);
+    let document: serde_json::Value =
+        serde_json::from_str(&json.stdout).expect("`show --format json` is JSON");
+    assert_eq!(document["id"], "story:passkey-audit-trail");
+    assert_eq!(document["kind"], "story");
+    assert_eq!(document["status"], "draft");
+    assert_eq!(document["title"], "Every passkey ceremony is audited");
+    assert_eq!(document["summary"], "One artifact, printed.");
+    assert_eq!(document["tags"][0], "webauthn");
+    assert_eq!(document["relations"][0]["relation"], "decomposes");
+    assert_eq!(document["relations"][0]["target"], "epic:passkey-sign-in");
+    assert_eq!(
+        document["body"], SHOWN_BODY,
+        "`show --format json` altered the body"
+    );
+
+    // An id the plan does not hold is refused, naming it, in every store — the way `explain` and
+    // `history` refuse one. The wording differs by store because the stores name themselves
+    // differently; that the id is in it does not.
+    for (label, project) in [
+        ("markdown", &pair.markdown),
+        ("sqlite", &pair.sqlite),
+        ("hybrid", &pair.hybrid),
+    ] {
+        let output = protocol_in(project, &["artifact", "show", "story:not-in-this-plan"]);
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "the {label} plan did not refuse an unknown id: {}{}",
+            text(&output.stdout),
+            text(&output.stderr)
+        );
+        let said = format!("{}{}", text(&output.stdout), text(&output.stderr));
+        assert!(
+            said.contains("story:not-in-this-plan"),
+            "the {label} plan's refusal does not name the id: {said}"
+        );
+    }
 }
 
 #[test]

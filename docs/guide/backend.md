@@ -413,6 +413,52 @@ starting at one are *observations*: an event on that entity at its unchanged rev
 lets a second process count the evidence on hand from the log alone, and what `entity-runtime`
 0.12.2's providers were fixed to accept.
 
+### One artifact, printed
+
+`protocol artifact show <id>` prints the artifact an id names: its frontmatter fields, then its
+markdown body verbatim.
+
+```console
+$ protocol artifact show story:passkey-login
+id         story:passkey-login
+kind       story
+status     active
+title      Sign in with a passkey
+summary    A returning user signs in with a passkey instead of a password.
+owner      identity
+tags       webauthn
+relations  decomposes epic:passkey-sign-in
+           depends_on story:passkey-registration
+revision   7
+
+# Story: Sign in with a passkey
+
+## Outcome
+
+A returning user is signed in by their device: no password typed, no code copied out of an email.
+…
+```
+
+A field the document does not set is not a row: `owner` above is there because that story names one,
+and a story that does not gets no `owner` line rather than an empty one. `--format json` and
+`--format yaml` are the other way round — every key is present whether or not it is set, because a
+machine format whose shape moves is one every consumer has to write a branch for.
+
+It exists because the verb an agent reaches for did not: `list` prints every artifact, `board`
+arranges them, `history` prints the event log, `explain` answers what made a status happen, and
+`body` *writes*. Somebody holding an id and wanting to read that one artifact had nothing to type —
+a driven session asked for `show` five times in one run and got `unrecognized subcommand` each time,
+about three percent of everything that run did.
+
+Two things it is careful about. The body is printed **verbatim**, because a verb that summarised it
+would be a second and worse `explain`; and an id the plan does not hold is refused, naming it, the
+way `explain` and `history` refuse one. It reads through the contract like every other read, so the
+markdown, SQLite, Postgres and hybrid answers are one answer — held to that by
+`show_prints_one_artifact_with_its_body_verbatim_in_every_store` in
+`crates/protocol-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
+keys this format does not name: they are a markdown document's own, and a plan that keeps no
+documents has never been told about them.
+
 ### What made this done
 
 `protocol artifact explain <id>` answers the audit question three months later out of the store

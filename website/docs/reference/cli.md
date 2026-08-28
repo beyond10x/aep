@@ -58,6 +58,7 @@ from, default `.`).
 | `protocol artifact move <id> --to <status>` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead — or, when the rung is on the ladder but its evidence has not been recorded, says **which kind** is missing and how many. See [Lifecycles, decided as data](../concepts/lifecycles.md) |
 | `protocol artifact relate <id> <relation> <target>` | adds one edge |
 | `protocol artifact body <id> --from <path\|->` | replaces the complete markdown body while preserving CLI-owned frontmatter; changed bytes bump one revision, identical bytes do nothing |
+| `protocol artifact show <id> [--format text\|yaml\|json]` | one artifact, printed: id, kind, status, title, summary, owner, tags, relations and revision, then the markdown body **verbatim**. The verb for an id in hand — `list` prints the whole plan, `explain` answers what made a status happen and `body` writes. An id the plan does not hold is refused, naming it |
 | `protocol artifact list [--kind …] [--status …]` | the plan, one line per artifact |
 | `protocol artifact board [--kind …]` | the same plan as status columns |
 | `protocol artifact graph [--format dot\|json]` | the plan's graph — `dot` for `dot -Tsvg`, `json` for a consumer that would otherwise parse a diagram |
