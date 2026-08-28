@@ -29,16 +29,39 @@ if not TTY:
 W = 100
 
 
-def candidate_roots(start):
-    """Every tree a run could be in: the one named, and every worktree of its repository.
+def running_projects():
+    """Where a live `protocol drive` is actually working, asked of the process table.
 
-    A driven run happens in whichever checkout the operator pointed the driver at, and there are
-    usually several — the repository, a dogfood worktree, a measurement worktree, one per fixer. The
-    first version of this tool searched only the directory it was launched from, so it followed a
-    run finished a week earlier and printed nothing, twice, and the operator had to notice for it.
-    Looking in one place is what made that possible.
+    The exact answer, and the cheapest: a driver's own working directory is the project it was
+    pointed at. Searching for it was the wrong instinct — run from a home directory, or any
+    directory that is not a checkout, there was nowhere to search and this tool said *waiting for a
+    run* while one was writing a transcript a second at a time.
     """
-    roots = [start]
+    found = []
+    try:
+        listed = subprocess.run(
+            ["pgrep", "-f", "protocol drive run|protocol drive resume"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return found
+    for pid in listed:
+        try:
+            found.append(os.readlink(f"/proc/{pid}/cwd"))
+        except OSError:
+            continue
+    return found
+
+
+def candidate_roots(start):
+    """Every tree a run could be in: what is running, the one named, its worktrees, then the usual
+    places.
+
+    A driven run happens in whichever checkout the driver was pointed at, and there are usually
+    several — the repository, a dogfood worktree, a measurement worktree, one per fixer. Looking in
+    one place is what made this tool follow a run finished a week earlier and print nothing.
+    """
+    roots = running_projects() + [start]
     try:
         listed = subprocess.run(
             ["git", "-C", start, "worktree", "list", "--porcelain"],
@@ -47,6 +70,13 @@ def candidate_roots(start):
         roots += [l.split(" ", 1)[1].strip() for l in listed.splitlines() if l.startswith("worktree ")]
     except (OSError, subprocess.SubprocessError):
         pass
+    # The usual places, so a tool run from a home directory still answers.
+    home = os.path.expanduser("~")
+    for parent in (os.path.join(home, "beyond10x"), os.path.join(home, ".cache")):
+        try:
+            roots += [os.path.join(parent, name) for name in os.listdir(parent)]
+        except OSError:
+            pass
     seen, unique = set(), []
     for r in roots:
         r = os.path.abspath(r)
