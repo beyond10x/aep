@@ -53,6 +53,7 @@ states:
   receive:
     steps:
       - kind: llm
+        harness: b10x
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
         # What this step is given rather than has to find. Paid on every turn of a stateless loop,
@@ -79,6 +80,7 @@ states:
   specify:
     steps:
       - kind: llm
+        harness: b10x
         description: State the required behaviour as a specification artifact.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
@@ -103,6 +105,7 @@ states:
   decompose:
     steps:
       - kind: llm
+        harness: b10x
         description: Break the specification into units that can each be verified alone.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
@@ -126,6 +129,7 @@ states:
   establish_verifiers:
     steps:
       - kind: llm
+        harness: b10x
         description: Write the tests before there is an implementation to shape them around.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
@@ -179,6 +183,7 @@ states:
   implement:
     steps:
       - kind: llm
+        harness: b10x
         description: Make the smallest change that satisfies the unit and its verifiers.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
@@ -308,6 +313,7 @@ states:
   adversarial_verify:
     steps:
       - kind: llm
+        harness: b10x
         description: Try to break what the previous state just declared working.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
