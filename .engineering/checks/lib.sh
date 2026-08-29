@@ -309,7 +309,18 @@ artifact_ids() {
     | sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 
-artifact_exists() { artifact_ids | grep -Fxq "$1"; }
+# artifact_exists <id>  — is this id in the store.
+#
+# The list lands in a variable rather than feeding `grep -q` through a pipe, for the reason
+# `artifact_relates` below spells out: `grep -q` closes its input on the first match, and under
+# `pipefail` the SIGPIPE that sends upstream becomes the pipeline's exit status. The piped form
+# therefore answered 141 — false — for ids that *are* in the store, and only for those near the
+# front of the list, so it passed until the store grew and moved one of them up.
+artifact_exists() {
+  local ids
+  ids="$(artifact_ids)"
+  grep -Fxq -- "$1" <<< "$ids"
+}
 
 # artifact_field <id> <field>  — id, kind, status or title, out of the same JSON. A hand-rolled
 # reader and not `jq`, because the map declares three programs on PATH and `jq` is not one of them.
