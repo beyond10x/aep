@@ -141,11 +141,16 @@ fn a_cursor_pointing_past_the_end_of_a_shortened_list_reports_no_steps_left() {
 
 #[test]
 fn a_live_holder_is_refused_and_take_lock_is_refused_with_it() {
+    // `state: None` here rather than a value: this case predates the field and asserts nothing
+    // about it. Every construction site supplies it explicitly, because a `Default` or a builder
+    // would make *forgetting the holder's state* the silent path — which is the defect the field
+    // exists to close.
     let held = LockState {
         run: "AUTH-142/2".to_owned(),
         pid: 4711,
         host: "workbench".to_owned(),
         liveness: Liveness::Alive,
+        state: None,
     };
     assert!(!held.is_stale());
 
@@ -173,6 +178,7 @@ fn a_dead_holder_is_stale_and_still_refused_until_a_person_says_take_it() {
         pid: 4711,
         host: "workbench".to_owned(),
         liveness: Liveness::Dead,
+        state: None,
     };
     assert!(stale.is_stale());
 
@@ -194,6 +200,7 @@ fn a_lock_held_on_another_host_is_never_stale_whatever_the_local_pid_table_says(
         pid: 4711,
         host: "ci-runner-3".to_owned(),
         liveness: Liveness::OtherHost,
+        state: None,
     };
     assert!(
         !elsewhere.is_stale(),
@@ -204,5 +211,207 @@ fn a_lock_held_on_another_host_is_never_stale_whatever_the_local_pid_table_says(
     assert!(
         refusal.contains("never stale"),
         "the reason has to travel with the refusal: {refusal}"
+    );
+}
+
+/// Every liveness, both `taking` values.
+const COMBINATIONS: [(Liveness, bool); 6] = [
+    (Liveness::Alive, false),
+    (Liveness::Alive, true),
+    (Liveness::Dead, false),
+    (Liveness::Dead, true),
+    (Liveness::OtherHost, false),
+    (Liveness::OtherHost, true),
+];
+
+/// A holder with the state the caller says it has, or none.
+fn holder(liveness: Liveness, state: Option<&str>) -> LockState {
+    LockState {
+        run: "AUTH-142/2".to_owned(),
+        pid: 4711,
+        host: "workbench".to_owned(),
+        liveness,
+        state: state.map(ToOwned::to_owned),
+    }
+}
+
+/// **R2, R4 of `specification:operator-resume-ux`.** The fifth fact is the one that decides what
+/// the operator types.
+///
+/// Who holds the lock does not decide between `--resume` and waiting; *what that run is doing*
+/// does. So the state travels in the same line as the run, the pid, the host and the liveness — in
+/// **every** branch, which is what asserting over all six combinations is for. A clause written into
+/// five arms instead of the one shared holder fragment passes today and loses the state the first
+/// time somebody adds a sixth arm.
+#[test]
+fn every_refusal_names_the_holders_state_beside_its_run_pid_host_and_liveness() {
+    for (liveness, taking) in COMBINATIONS {
+        let refusal = holder(liveness, Some("awaiting-operator")).refusal(taking);
+        for fact in [
+            "AUTH-142/2",
+            "4711",
+            "workbench",
+            liveness.as_str(),
+            "state awaiting-operator",
+        ] {
+            assert!(
+                refusal.contains(fact),
+                "`{fact}` is missing from the {liveness}/taking={taking} line:\n{refusal}"
+            );
+        }
+    }
+}
+
+/// **R3, R5.** A state nobody could read is said in words, and no message loses its route out.
+///
+/// A missing clause reads as *there is no state*. The true fact is *this machine could not read
+/// one*, and only one of those is a reason to go and look — so the clause is the literal
+/// `state unknown` rather than an omission.
+///
+/// The second half is a floor rather than a new claim: adding a field to a line must not cost that
+/// line its answer. Every route the five branches name today is asserted here **with the state
+/// absent**, which is the arrangement in which a rewrite of the shared fragment is most likely to
+/// drop one.
+#[test]
+fn a_holder_whose_state_could_not_be_read_is_said_to_be_unknown_rather_than_left_out() {
+    for (liveness, taking) in COMBINATIONS {
+        let refusal = holder(liveness, None).refusal(taking);
+        assert!(
+            refusal.contains("state unknown"),
+            "the {liveness}/taking={taking} line omits the clause instead of wording it:\n{refusal}"
+        );
+    }
+
+    for (liveness, taking, route) in [
+        (Liveness::Alive, true, "refused while the holder is alive"),
+        (Liveness::Alive, false, "--resume"),
+        (Liveness::Alive, false, "--take-lock"),
+        (Liveness::Dead, true, "supersedes"),
+        (Liveness::Dead, false, "--take-lock"),
+        (Liveness::Dead, false, "--resume"),
+        (Liveness::OtherHost, true, "never stale"),
+        (Liveness::OtherHost, false, "never stale"),
+    ] {
+        let refusal = holder(liveness, None).refusal(taking);
+        assert!(
+            refusal.contains(route),
+            "the {liveness}/taking={taking} line no longer names `{route}`, so a refusal that told \
+             an operator what to do now tells them only no:\n{refusal}"
+        );
+    }
+}
+
+/// **R4.** The field is serde-optional in both directions.
+///
+/// A `LockState` serialised before this change still deserialises, and one with no state gains no
+/// key — so a document written by either side of the change reads on the other.
+#[test]
+fn a_lock_state_written_before_the_state_field_still_reads_and_an_absent_state_writes_no_key() {
+    let before = r#"{"run":"AUTH-142/2","pid":4711,"host":"workbench","liveness":"alive"}"#;
+    let read: LockState = serde_json::from_str(before).expect("a lock state without a state key");
+    assert_eq!(
+        read.state, None,
+        "an absent key is an undetermined state, not a failure to parse"
+    );
+
+    let written = serde_json::to_string(&read).expect("it serialises");
+    assert!(
+        !written.contains("state"),
+        "an absent state writes no key, so `null` and absent are not two spellings of it: {written}"
+    );
+
+    let known = holder(Liveness::Alive, Some("implement"));
+    let text = serde_json::to_string(&known).expect("it serialises");
+    let back: LockState = serde_json::from_str(&text).expect("it deserialises");
+    assert_eq!(back, known, "a known state round-trips: {text}");
+}
+
+/// Every line of `text` that is code rather than a comment, as `(line number, line)`.
+///
+/// The same shape `tests/determinism.rs` uses, and for the same reason: this crate's rules are
+/// about what its **code** does, and a module documenting the rule it keeps would otherwise trip
+/// its own scan.
+fn code_lines(text: &str) -> Vec<(usize, &str)> {
+    text.lines()
+        .enumerate()
+        .map(|(number, line)| (number + 1, line))
+        .filter(|(_, line)| !line.trim_start().starts_with("//"))
+        .collect()
+}
+
+/// **R1, and the placement rule L8 of `task:orx-lock-state-carries-state`.**
+///
+/// `crates/aep-driver/src/lock.rs` is handed a [`LockState`] and probes nothing: no pid table, no
+/// hostname, no clock, no filesystem. `tests/determinism.rs` cannot catch a probe — one reads
+/// ambient OS state and uses none of that scan's banned tokens (review finding **F19**) — so
+/// placement is the guard, and this is the scan that keeps it.
+///
+/// It matters most *now*: the obvious way to satisfy "the refusal names the holder's state" is to
+/// read the holder's cursor right where the `LockState` is built, and the whole of R1 is that the
+/// state is **supplied by the caller** instead.
+#[test]
+fn the_lock_module_still_reads_nothing_about_the_machine_it_runs_on() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lock.rs");
+    let text = std::fs::read_to_string(&path).expect("the lock module is readable");
+    let probes = [
+        "std::fs",
+        "fs::",
+        "std::process",
+        "std::env",
+        "Path::",
+        "PathBuf",
+        "/proc",
+        "hostname",
+        "read_to_string",
+        "SystemTime",
+        "Command",
+    ];
+    let mut found = Vec::new();
+    for (number, line) in code_lines(&text) {
+        for probe in probes {
+            if line.contains(probe) {
+                found.push(format!("{}:{number}: `{probe}`", path.display()));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "this crate is handed a `LockState` and probes nothing; these lines probe:\n{}",
+        found.join("\n")
+    );
+}
+
+/// **S1 of `task:orx-theft-in-the-record`.** The driver learns the stolen lock from its caller.
+///
+/// `lock.json` belongs to `protocol-cli`, along with the run directory it grants. Threading the
+/// superseded lock through `DriverOptions` or an argument satisfies R14; opening the lock file here
+/// does not, and this is what says so — the crate never names the file at all outside its prose.
+#[test]
+fn the_driver_crate_never_opens_the_lock_file_it_is_told_about() {
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut checked = 0;
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(&directory).expect("the crate has sources") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_none_or(|it| it != "rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("a readable source file");
+        for (number, line) in code_lines(&text) {
+            if line.contains("lock.json") {
+                found.push(format!("{}:{number}", path.display()));
+            }
+        }
+        checked += 1;
+    }
+    assert!(
+        checked >= 6,
+        "only {checked} source files were read; the scan is looking in the wrong place"
+    );
+    assert!(
+        found.is_empty(),
+        "the lock file belongs to `protocol-cli`, and this crate is told about it rather than \
+         reading it:\n{}",
+        found.join("\n")
     );
 }

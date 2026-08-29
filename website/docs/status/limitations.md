@@ -114,11 +114,14 @@ The reference driver exists and has walked a real story. What it has not yet don
   path now has two harnesses under one step map, Claude Code and the b10x loop (`harness: b10x`),
   which answers *can the driver drive something else* and not *can a stranger's harness read these
   documents*: no second **vendor** harness has been driven.
-* **A story's `implemented` is a claim nothing checks *by default*.** Since `0.15.0` a ladder rung
-  *may* declare what it costs — `requires: [{ evidence: test_result, at_least: 1 }]` — and the move
-  is then refused until the observation is recorded. The shipped `story` ladder does not declare one,
-  so out of the box a story's status is still whatever was typed. The mechanism exists; this
-  repository has not yet spent it on its own `story` kind.
+* **A story's `implemented` costs one `test_result` record, and nothing checks what that record
+  says.** Since `0.15.0` a ladder rung *may* declare what it costs — `requires: [{ evidence:
+  test_result, at_least: 1 }]` — and the shipped `story` ladder declares exactly that on
+  `implemented`: `protocol artifact move --to implemented` is refused until one observation of that
+  kind is recorded against the story (`story:operator-resume-ux is active; implemented is on the
+  ladder and not yet earned: reaching implemented needs at least 1 test_result record(s)`,
+  2026-08-29). What the record *contains* is not checked — a `test_result` that says `failed`
+  satisfies the count — so the rung costs an observation, not a verdict.
 
 ## Evidence horizons: what decay does not yet reach
 

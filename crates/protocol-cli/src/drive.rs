@@ -735,6 +735,10 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         headless: true,
         approver: args.approver.clone(),
         task_document: Some(inputs.task_document.clone()),
+        // The theft travels into the cursor the driver writes, rather than only onto stdout below:
+        // a note in the terminal lives exactly as long as the scrollback, which is not where
+        // anybody looks a week later when two runs turn out to have overlapped.
+        stolen_lock: lock.stolen().cloned(),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -858,6 +862,10 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         headless: true,
         approver: approver.clone(),
         task_document: Some(task_document),
+        // A resume re-takes the lock through the same `take_lock`, so it can supersede one too. The
+        // most recent supersession is the answer to *which lock did this run take*; a resume that
+        // stole nothing carries `None`, and the driver leaves any earlier theft where it is.
+        stolen_lock: lock.stolen().cloned(),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -1284,6 +1292,8 @@ impl HeldLock {
 /// A lock somebody else holds.
 struct Holder {
     file: LockFile,
+    /// The runs directory the lock sits in, so the holding run's own cursor can be found.
+    runs: PathBuf,
 }
 
 impl Holder {
@@ -1298,7 +1308,28 @@ impl Holder {
             pid: self.file.pid,
             host: self.file.host.clone(),
             liveness: liveness(&self.file),
+            state: self.holder_state(),
         }
+    }
+
+    /// What the holding run is doing, read from **its own** `cursor.json`.
+    ///
+    /// The state comes from the cursor and never from `lock.json`. A lock file is written once when
+    /// the lock is taken; the state changes after every step of the run it describes, so a state in
+    /// the lock file would be wrong for most of that run's life — and a stale copy of a live fact is
+    /// worse than no copy, because it is a fact the operator will act on.
+    ///
+    /// Every way this can fail answers `None`, and none of them is an error: no run id allocated yet
+    /// (the window between `create_new` and [`HeldLock::record_run`]), no run directory, no cursor,
+    /// or a cursor that will not parse. This process is reading **somebody else's** file, a refusal
+    /// is the answer either way, and a `bail!` here would let one corrupt document in one run
+    /// directory end every subsequent invocation against the store.
+    fn holder_state(&self) -> Option<String> {
+        let run: RunId = self.file.run.as_deref()?.parse().ok()?;
+        RunDirectory::at(run_path(&self.runs, &run))
+            .read_cursor()
+            .ok()
+            .map(|cursor| cursor.state.to_string())
     }
 }
 
@@ -1310,7 +1341,10 @@ fn read_lock(runs: &Path) -> Result<Option<Holder>> {
     };
     let file: LockFile =
         serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
-    Ok(Some(Holder { file }))
+    Ok(Some(Holder {
+        file,
+        runs: runs.to_path_buf(),
+    }))
 }
 
 /// Takes the store lock, or refuses and names the holder.

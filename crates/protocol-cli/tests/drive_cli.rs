@@ -168,12 +168,62 @@ impl Fixture {
 
     /// The cursor of one run.
     fn cursor(&self, run: &str) -> serde_json::Value {
+        serde_json::from_str(&self.cursor_text(run)).expect("the cursor is JSON")
+    }
+
+    /// The cursor of one run as it is written on disk.
+    ///
+    /// The bytes rather than the parsed document, because `serde` maps an absent key and an
+    /// explicit `null` to the same `None`: an invariant about what the document *holds* has to be
+    /// asserted on the document.
+    fn cursor_text(&self, run: &str) -> String {
         let (task, ordinal) = run.rsplit_once('/').expect("a run id");
         let path = self.runs().join(task).join(ordinal).join("cursor.json");
-        let text = std::fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
-        serde_json::from_str(&text).expect("the cursor is JSON")
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()))
     }
+
+    /// The one lock file per store.
+    fn lock(&self) -> PathBuf {
+        self.runs().join("lock.json")
+    }
+}
+
+/// Everything one invocation said, on either stream.
+///
+/// A lock refusal travels as an error rather than a report, so it arrives on stderr; the same
+/// refusal about a coverage gap is printed to stdout. Which stream a line is on is not what any of
+/// these tests are about.
+fn said(output: &Output) -> String {
+    format!("{}{}", stdout(output), stderr(output))
+}
+
+/// A pid that is certainly not running: a child spawned here and reaped.
+///
+/// Reaped rather than merely exited, so no zombie keeps `/proc/<pid>` alive and the driver's
+/// liveness probe answers `Dead`. A pid that merely *looks* implausible is a flake waiting for a
+/// machine that recycled it.
+fn dead_pid() -> u32 {
+    let mut child = Command::new("sh")
+        .args(["-c", "exit 0"])
+        .spawn()
+        .expect("a shell runs");
+    let pid = child.id();
+    child.wait().expect("the child is reaped");
+    pid
+}
+
+/// Writes a `lock.json` the way a holder would have, with `run` unallocated when it is `None`.
+///
+/// The shape is `LockFile`'s, written as text rather than through the type: a fixture built from
+/// the struct under test would move with it, and half of what these tests assert is that a lock
+/// written by the pre-change shape is still read.
+fn write_lock(runs: &Path, run: Option<&str>, pid: u32, host: &str) {
+    let run = run.map_or_else(|| "null".to_owned(), |id| format!("\"{id}\""));
+    write(
+        &runs.join("lock.json"),
+        &format!("{{\"run\":{run},\"pid\":{pid},\"host\":\"{host}\",\"driver\":\"the test\"}}\n"),
+    );
 }
 
 /// The fixture step map: the same states as `adp/default`, with commands that cost nothing.
@@ -1351,4 +1401,494 @@ fn a_resume_expands_the_task_document_the_run_was_started_from() {
         record.contains("specification:billing"),
         "the resumed step is about the task the run was started from, not the project's:\n{record}"
     );
+}
+// ---------------------------------------------------------------------------------------------
+// `specification:operator-resume-ux`: the refusal names the holder's state, and a stolen lock is
+// in the record.
+//
+// Everything below drives the real binary against a real directory and reads a file or a stream
+// back. That is not a stylistic choice here: the defect being fixed is a `StolenLock` that is
+// built, printed to stdout and dropped, so a library-level assertion is exactly the assertion that
+// passed while the value never left the CLI.
+// ---------------------------------------------------------------------------------------------
+
+/// **R6, C3.** The refusal carries what the holding run is doing, read from the holder's own cursor.
+///
+/// The state comes from the holder's `cursor.json` and never from `lock.json`. A lock file is
+/// written once when the lock is taken; the state changes after every step of the run it describes,
+/// so a state in the lock file would be wrong for most of that run's life — and a stale copy of a
+/// live fact is worse than no copy, because it is a fact the operator will act on.
+#[test]
+fn a_refusal_names_what_the_holding_run_is_doing() {
+    let fixture = Fixture::new("holder-state", false);
+    fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let holder = fixture.cursor("DRIVE-1/1");
+    let state = holder["state"]
+        .as_str()
+        .expect("the holder's cursor records a state")
+        .to_owned();
+
+    // That run is now the live holder: this test process is a pid that is certainly running here.
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/1"),
+        std::process::id(),
+        &host(),
+    );
+
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    assert!(
+        text.contains(&format!("state {state}")),
+        "the operator is told who holds the lock but not what that run is doing, which is the fact \
+         that decides between waiting and `--resume`:\n{text}"
+    );
+    assert!(text.contains("DRIVE-1/1"), "{text}");
+    assert!(
+        text.contains("--resume") && text.contains("--take-lock"),
+        "a refusal always names a route out:\n{text}"
+    );
+}
+
+/// **R7, C4–C6.** Three ways to have no readable holder cursor, one answer.
+///
+/// A holder with no run id yet is the window between `create_new` and `record_run`; the other two
+/// are a run directory that is not there and a cursor that is not there. Each produces
+/// `state unknown` and a refusal that still names its routes — never an error, because a refusal is
+/// the answer either way and somebody else's absent file is not this process's failure.
+#[test]
+fn a_holder_whose_cursor_cannot_be_read_is_refused_with_state_unknown() {
+    for (name, holder, prepare) in [
+        ("holder-unallocated", None, None::<fn(&Fixture)>),
+        ("holder-no-directory", Some("DRIVE-1/9"), None),
+        (
+            "holder-no-cursor",
+            Some("DRIVE-1/9"),
+            Some(
+                (|fixture: &Fixture| {
+                    std::fs::create_dir_all(fixture.runs().join("DRIVE-1/9"))
+                        .expect("the run directory is writable");
+                }) as fn(&Fixture),
+            ),
+        ),
+    ] {
+        let fixture = Fixture::new(name, false);
+        std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+        if let Some(prepare) = prepare {
+            prepare(&fixture);
+        }
+        write_lock(&fixture.runs(), holder, std::process::id(), &host());
+
+        let output = fixture.drive(&["run"], &[]);
+        let text = said(&output);
+        assert_eq!(code(&output), 1, "[{name}] {text}");
+        assert!(
+            text.contains("state unknown"),
+            "[{name}] a missing clause reads as *there is no state*; the true fact is that this \
+             machine could not read one:\n{text}"
+        );
+        assert!(
+            text.contains("--resume") && text.contains("--take-lock"),
+            "[{name}] no input produces a refusal that tells the operator only no:\n{text}"
+        );
+    }
+}
+
+/// **R7, C7.** Somebody else's malformed cursor is not this invocation's failure.
+///
+/// The load-bearing half is the exit code. A `bail!` on a cursor that will not parse would also
+/// exit non-zero and would still be wrong: it would blame the operator's own invocation for another
+/// run's corrupt file, and one corrupt file in one run directory would take down every subsequent
+/// invocation against that store.
+#[test]
+fn a_holder_cursor_that_will_not_parse_is_a_refusal_and_never_a_crash() {
+    let fixture = Fixture::new("holder-unparseable", false);
+    write(
+        &fixture.runs().join("DRIVE-1/9/cursor.json"),
+        "{ this is not a cursor, and it is not JSON either",
+    );
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/9"),
+        std::process::id(),
+        &host(),
+    );
+
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(
+        code(&output),
+        1,
+        "a refusal exits 1; 101 is a panic, and a panic here is a corrupt file in one run \
+         directory ending every invocation against the store:\n{text}"
+    );
+    assert!(text.contains("state unknown"), "{text}");
+    assert!(
+        !text.contains("panicked"),
+        "reading somebody else's file is not an unwrap:\n{text}"
+    );
+    for diagnostic in ["expected value", "trailing characters", "EOF while parsing"] {
+        assert!(
+            !text.contains(diagnostic),
+            "the operator is told the holder's state is unknown, not handed a parse error about a \
+             file they did not write:\n{text}"
+        );
+    }
+}
+
+/// **R8–R10, S3–S4.** The one real defect: a stolen lock reaches the record and `status` prints it.
+///
+/// Today `take_lock` builds the `StolenLock`, `run` prints *"this run took the lock from pid …"* to
+/// stdout, and drops it. `DriverCursor.took_lock_from` exists, is serialised and has a printer, and
+/// is assigned `None` in both places that assign it — so a person who steals a lock leaves no record
+/// that they stole it, and the note on stdout lives exactly as long as the terminal scrollback.
+///
+/// The cursor is read **from disk**, not from a return value, for the same reason.
+#[test]
+fn a_stolen_lock_is_in_the_taking_runs_cursor_and_status_prints_it() {
+    let fixture = Fixture::new("stolen-lock", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    // Stale means the holder is provably dead **on this host**, which is what `--take-lock`
+    // supersedes and the only thing it supersedes.
+    let dead = dead_pid();
+    write_lock(&fixture.runs(), Some("DRIVE-1/7"), dead, &host());
+
+    let output = fixture.drive(&["run"], &["--take-lock", "--max-iterations", "2"]);
+    let text = said(&output);
+    assert!(
+        fixture.runs().join("DRIVE-1/1").is_dir(),
+        "the stale lock was superseded and the run allocated:\n{text}"
+    );
+
+    let cursor = fixture.cursor("DRIVE-1/1");
+    let stolen = &cursor["took_lock_from"];
+    assert_eq!(
+        stolen["run"], "DRIVE-1/7",
+        "the superseded run is not in the taking run's cursor: {cursor}"
+    );
+    assert_eq!(
+        stolen["pid"].as_u64(),
+        Some(u64::from(dead)),
+        "the pid `take_lock` put on `HeldLock.stolen` is the pid recorded: {cursor}"
+    );
+    assert_eq!(stolen["host"], host(), "{cursor}");
+
+    let status = fixture.drive(&["status"], &[]);
+    let printed = stdout(&status);
+    assert_eq!(code(&status), 0, "{}", said(&status));
+    assert!(
+        printed.contains("took lock"),
+        "`status` reads the cursor back and prints the theft; that printer has never been \
+         reached:\n{printed}"
+    );
+    for fact in [dead.to_string(), "DRIVE-1/7".to_owned(), host()] {
+        assert!(
+            printed.contains(&fact),
+            "`{fact}` is missing from what `status` printed:\n{printed}"
+        );
+    }
+}
+
+/// **R9, S5.** The record is not contingent on the run finishing well.
+///
+/// A theft recorded only on the happy path is a record that is missing in precisely the case
+/// somebody goes looking: the run that stole a lock and then broke. `--max-iterations 0` is one such
+/// ending — the loop body never runs, the run is `budget-exhausted`, and no step was executed.
+#[test]
+fn a_run_that_supersedes_a_lock_and_stops_without_a_step_still_records_the_theft() {
+    let fixture = Fixture::new("stolen-lock-budget", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    let dead = dead_pid();
+    write_lock(&fixture.runs(), Some("DRIVE-1/7"), dead, &host());
+
+    let output = fixture.drive(&["run"], &["--take-lock", "--max-iterations", "0"]);
+    let text = said(&output);
+    assert!(
+        text.contains("steps      0 run"),
+        "this run is supposed to end without running a step:\n{text}"
+    );
+
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_eq!(
+        cursor["took_lock_from"]["run"], "DRIVE-1/7",
+        "a run that took a lock and then went nowhere still took the lock: {cursor}"
+    );
+    assert_eq!(
+        cursor["took_lock_from"]["pid"].as_u64(),
+        Some(u64::from(dead)),
+        "{cursor}"
+    );
+}
+
+/// **R13, S6.** Absent means *took nothing*, and `null` is not a second spelling of it.
+///
+/// Asserted on the bytes: `serde` maps an absent key and an explicit `null` to the same `None`, so
+/// a test that deserialised would pass on a document that says something different.
+#[test]
+fn a_run_that_took_nobodys_lock_writes_no_took_lock_from_key() {
+    let fixture = Fixture::new("clean-acquisition", false);
+    fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let text = fixture.cursor_text("DRIVE-1/1");
+    assert!(
+        !text.contains("took_lock_from"),
+        "this run acquired a free lock and took nothing from anybody:\n{text}"
+    );
+}
+
+/// **R11, R1 of `task:orx-resume-records-its-theft`.** The last supersession is the answer.
+///
+/// A resume re-takes the lock through the same `take_lock`, so it can steal one too. The field
+/// answers *which lock did this run take*, and a run can take two — so a later theft overwrites an
+/// earlier one. The earlier one is not lost to the world; it is in that run's own history.
+#[test]
+fn a_resume_that_supersedes_a_lock_records_that_theft_over_an_earlier_one() {
+    let fixture = Fixture::new("resume-steals", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    write_lock(&fixture.runs(), Some("DRIVE-1/7"), dead_pid(), &host());
+    fixture.drive(&["run"], &["--take-lock", "--max-iterations", "2"]);
+    assert_eq!(
+        fixture.cursor("DRIVE-1/1")["took_lock_from"]["run"],
+        "DRIVE-1/7",
+        "the first theft is the premise of this test, not its subject"
+    );
+
+    // The run released its lock when it stopped. A second stale one is now in the way.
+    let second = dead_pid();
+    write_lock(&fixture.runs(), Some("DRIVE-1/8"), second, &host());
+    let output = fixture.drive(
+        &["resume", "DRIVE-1/1"],
+        &["--take-lock", "--max-iterations", "1"],
+    );
+    let text = said(&output);
+
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_eq!(
+        cursor["took_lock_from"]["run"], "DRIVE-1/8",
+        "the most recent supersession is the true answer to *which lock did this run take*: \
+         {cursor}\n{text}"
+    );
+    assert_eq!(
+        cursor["took_lock_from"]["pid"].as_u64(),
+        Some(u64::from(second)),
+        "{cursor}"
+    );
+}
+
+/// **R12, R2 of `task:orx-resume-records-its-theft`.** A theft already recorded is never erased.
+///
+/// The other direction of the same branch, and it is not symmetrical with the one above. A theft
+/// that happened is a fact about the run, and a later clean acquisition does not unmake it — if the
+/// field could be cleared, the record would be erasable by the cheapest possible action: resume the
+/// run once more, on a free lock, and the theft is gone.
+///
+/// The failure mode this catches is one line: a `took_lock_from = options.stolen` that runs
+/// unconditionally on the resume path.
+#[test]
+fn a_resume_that_stole_nothing_leaves_a_theft_already_in_the_record() {
+    let fixture = Fixture::new("resume-keeps-theft", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    let dead = dead_pid();
+    write_lock(&fixture.runs(), Some("DRIVE-1/7"), dead, &host());
+    fixture.drive(&["run"], &["--take-lock", "--max-iterations", "2"]);
+    assert!(
+        !fixture.lock().exists(),
+        "the stopped run released its lock, so the resume below acquires a free one"
+    );
+
+    let output = fixture.drive(&["resume", "DRIVE-1/1"], &["--max-iterations", "1"]);
+    let text = said(&output);
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_eq!(
+        cursor["took_lock_from"]["run"], "DRIVE-1/7",
+        "a clean acquisition erased a theft that happened: {cursor}\n{text}"
+    );
+    assert_eq!(
+        cursor["took_lock_from"]["pid"].as_u64(),
+        Some(u64::from(dead)),
+        "{cursor}"
+    );
+}
+
+/// **R13 on the resume path, R3 of `task:orx-resume-records-its-theft`.**
+///
+/// A run that stole nothing and a resume that stole nothing leave a document with no key, not a
+/// document with a `null`.
+#[test]
+fn a_run_and_a_resume_that_stole_nothing_write_no_took_lock_from_key() {
+    let fixture = Fixture::new("resume-clean", false);
+    fixture.drive(&["run"], &["--max-iterations", "2"]);
+    fixture.drive(&["resume", "DRIVE-1/1"], &["--max-iterations", "1"]);
+    let text = fixture.cursor_text("DRIVE-1/1");
+    assert!(
+        !text.contains("took_lock_from"),
+        "neither the run nor the resume took a lock from anybody:\n{text}"
+    );
+}
+
+/// **R15.** A resume against a lock another live run holds is refused, and writes nothing.
+///
+/// A paused run holds no lock, because an `operator` step waiting for a person has no bound and any
+/// age threshold would break exactly the runs that paused correctly. That makes re-acquisition on
+/// resume load-bearing: **a resume that writes without re-taking the lock is how two live runs
+/// happen.** The code path exists and has never had a test.
+///
+/// The cursor comparison is what makes this a test of the invariant rather than of a message: a
+/// refusal that printed correctly and then ran a step would satisfy everything above it.
+#[test]
+fn a_resume_against_another_live_runs_lock_is_refused_and_writes_nothing() {
+    let fixture = Fixture::new("resume-refused", false);
+    fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let before = fixture.cursor("DRIVE-1/1");
+
+    // A different run, live, on this host.
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/9"),
+        std::process::id(),
+        &host(),
+    );
+    let lock_before = std::fs::read_to_string(fixture.lock()).expect("the fixture wrote a lock");
+
+    let refused = fixture.drive(&["resume", "DRIVE-1/1"], &[]);
+    let text = said(&refused);
+    assert_eq!(code(&refused), 1, "{text}");
+    assert!(
+        text.contains("DRIVE-1/9"),
+        "the holder's run is not named:\n{text}"
+    );
+    assert!(
+        text.contains(&std::process::id().to_string()),
+        "the holder's pid is not named:\n{text}"
+    );
+    assert!(
+        text.contains("--resume") && text.contains("--take-lock"),
+        "both routes out are named:\n{text}"
+    );
+    assert_eq!(
+        fixture.cursor("DRIVE-1/1"),
+        before,
+        "the refused resume wrote to the run's cursor, so the refusal came after something ran"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.lock()).expect("the lock is still there"),
+        lock_before,
+        "`release` removes a file by path, and a refusal that reached one would hand a live run's \
+         lock away silently"
+    );
+
+    // `--take-lock` is not a way past a running process, and it is the same refusal.
+    let forced = fixture.drive(&["resume", "DRIVE-1/1"], &["--take-lock"]);
+    let complaint = said(&forced);
+    assert_eq!(code(&forced), 1, "{complaint}");
+    assert!(
+        complaint.contains("refused while the holder is alive"),
+        "{complaint}"
+    );
+    assert_eq!(fixture.cursor("DRIVE-1/1"), before, "{complaint}");
+    assert_eq!(
+        std::fs::read_to_string(fixture.lock()).expect("the lock is still there"),
+        lock_before,
+        "{complaint}"
+    );
+}
+
+/// **R16.** The pause is exactly *lock released, pointer kept* — asserted as one set.
+///
+/// The pause is the case the lock design was shaped around: an `operator` step waiting for a person
+/// has no bound, so a run that held its lock while paused would hold it for as long as nobody was
+/// looking. Release so nobody is blocked; keep the pointer so resuming is one word.
+///
+/// The three assertions are in one test on purpose. Separately they are three facts, and each has a
+/// way of passing while the pause is broken: a run that released the lock and forgot which run it
+/// was, or one that parked and held it. Together they are the definition.
+#[test]
+fn a_pause_is_the_lock_released_and_the_pointer_kept() {
+    let fixture = Fixture::new("pause-release", true);
+    let paused = fixture.drive(&["run"], &["--pause-on-approval"]);
+    let text = stdout(&paused);
+    assert_eq!(
+        code(&paused),
+        0,
+        "with the flag, a green exit means finished or waiting:\n{}",
+        said(&paused)
+    );
+
+    assert!(
+        !fixture.lock().exists(),
+        "a paused run holds a lock nobody can put a bound on:\n{text}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.runs().join("current"))
+            .expect("a current pointer")
+            .trim(),
+        "DRIVE-1/1",
+        "the pointer is what makes resuming one word:\n{text}"
+    );
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_eq!(
+        cursor["status"], "awaiting_operator",
+        "exit 0 under this flag means finished *or* waiting, and the status is what says which: \
+         {cursor}"
+    );
+    assert!(
+        text.contains("status     awaiting-operator"),
+        "and the report says so too:\n{text}"
+    );
+}
+
+/// **R17.** The host rule, asserted against the binary rather than only against `LockState`.
+///
+/// `Liveness::OtherHost` is not a third shade of alive: a pid on another machine is a number about
+/// a process this one cannot see, and treating an unanswerable question as *dead* is how two runs
+/// end up sharing a store.
+///
+/// The rule holds in `LockState` and is tested there. What had no test is that the CLI reaches it:
+/// `liveness()` compares the lock's host against this one **before** it consults `/proc`, and a
+/// regression that reordered those two would leave every unit test green while a foreign lock
+/// became stealable on any machine that happened to have that pid running. So the fixture's pid is
+/// one that certainly *is* running here — this test process — which makes the reordered check say
+/// `Alive` and a missing check say `Dead`. Neither is the expected answer.
+#[test]
+fn a_lock_naming_another_host_is_refused_at_the_binary_and_take_lock_does_not_pass_it() {
+    const ELSEWHERE: &str = "ci-runner-3";
+    assert_ne!(
+        host(),
+        ELSEWHERE,
+        "this test needs a host name that is not this machine's"
+    );
+
+    let fixture = Fixture::new("other-host", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/4"),
+        std::process::id(),
+        ELSEWHERE,
+    );
+    let written = std::fs::read_to_string(fixture.lock()).expect("the fixture wrote a lock");
+
+    for extra in [Vec::new(), vec!["--take-lock"]] {
+        let output = fixture.drive(&["run"], &extra);
+        let text = said(&output);
+        assert_eq!(code(&output), 1, "{extra:?}: {text}");
+        assert!(
+            text.contains(ELSEWHERE),
+            "{extra:?}: the refusal names the host the lock claims:\n{text}"
+        );
+        assert!(
+            text.contains("never stale"),
+            "{extra:?}: whatever this machine's pid table says:\n{text}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(fixture.lock()).expect("the lock is still there"),
+            written,
+            "{extra:?}: the refused start rewrote a lock held on another host"
+        );
+        assert!(
+            !fixture.runs().join("DRIVE-1").exists(),
+            "{extra:?}: the lock is taken before a run id is allocated, so a refusal that left a \
+             run directory behind means that order has moved:\n{text}"
+        );
+    }
 }
