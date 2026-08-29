@@ -456,8 +456,20 @@ mod tests {
     use super::*;
 
     /// An empty scratch store, named after the test that owns it.
+    /// A scratch tree this process alone owns.
+    ///
+    /// **The pid is not decoration.** `temp_dir()/aep-markdown-store/<name>` is one path for the
+    /// whole machine, and the first thing this function does is `remove_dir_all` it. Every
+    /// checkout of this repository shares it — `TMPDIR` is one directory for every session and
+    /// every worktree — so two gates running at once delete each other's fixtures mid-test. The
+    /// failure surfaces as `Io { NotFound }` on a file the test just wrote, in whichever process
+    /// lost, and it looks like a regression in the code under test rather than in the harness
+    /// around it. Demonstrated by running this crate's suite twice concurrently: one process 52
+    /// passed, the other 50 passed and 2 failed.
     fn scratch(name: &str) -> MarkdownStore {
-        let root = std::env::temp_dir().join("aep-markdown-store").join(name);
+        let root = std::env::temp_dir()
+            .join("aep-markdown-store")
+            .join(format!("{}-{}", std::process::id(), name));
         std::fs::remove_dir_all(&root).ok();
         std::fs::create_dir_all(&root).expect("the scratch tree is writable");
         MarkdownStore::open(root)
