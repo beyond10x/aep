@@ -713,6 +713,13 @@ that was made, not a principle that sounded good.
 document is the wrong one, is spending real money to produce a record nobody wants. Diagnosing it
 and letting it continue is the worst of both.
 
+**Test the constraint you already suspect, first.** On 2026-08-29 the native arm was written off
+after two hours of plumbing — endpoint paths, cgroup delegation, program allowlists, sandbox `PATH`
+— by a `400 Bad Request: maximum context length is 32768 tokens`. That the model's window might not
+hold the task had been written down *before the first fix*, and never measured. One request sizing
+the smallest state's prompt against the window would have ended it in a minute. A suspicion you do
+not test is a suspicion you will confirm expensively.
+
 **Prove the environment before the model.** Every launch-time fact is decidable for free: the
 binaries on the constructed `PATH`, the endpoint, the workspace, the allowlist. Run the pre-flight
 with `--max-iterations 0` first, every time. Four of the eight defects found tonight were launch
