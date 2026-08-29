@@ -4600,3 +4600,73 @@ fn a_reference_two_members_both_hold_is_refused_with_both_spellings() {
     assert_eq!(report["member"], "two");
     assert_eq!(report["title"], "Passkey login, elsewhere");
 }
+
+/// Every group below `root` by id, and every leaf as `(id, run.state)`, in document order.
+fn sections_and_leaves(
+    node: &serde_yaml::Value,
+    sections: &mut Vec<String>,
+    leaves: &mut Vec<(String, String)>,
+) {
+    let id = node["id"].as_str().unwrap_or_default().to_owned();
+    if let Some(nodes) = node["nodes"].as_sequence() {
+        if id != "root" {
+            sections.push(id);
+        }
+        for inner in nodes {
+            sections_and_leaves(inner, sections, leaves);
+        }
+    } else {
+        let state = node["run"]["state"].as_str().unwrap_or_default().to_owned();
+        leaves.push((id, state));
+    }
+}
+
+/// The shape the b10x loop is governed by: it asks its `transition` hook at a group boundary and
+/// nowhere else, so a state that is not a group is a state the governor is never asked about. With
+/// and without a map, every non-terminal state of `adp/default` comes out as a group named for
+/// it, and the leaves inside are numbered from the state.
+#[test]
+fn workflow_flow_makes_every_state_a_section() {
+    for extra in [&[][..], &["--map", "development/default"][..]] {
+        let mut args = vec!["workflow", "flow", "--id", "adp/default"];
+        args.extend_from_slice(extra);
+        let output = protocol(&args);
+        assert_eq!(code(&output), 0, "{extra:?}: {}", stderr(&output));
+        let text = stdout(&output);
+        assert!(
+            text.contains("# Every state is a section"),
+            "{extra:?}: the header says so:\n{text}"
+        );
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&text).expect("valid YAML");
+
+        let mut sections: Vec<String> = Vec::new();
+        let mut leaves: Vec<(String, String)> = Vec::new();
+        sections_and_leaves(&parsed["root"], &mut sections, &mut leaves);
+
+        for state in [
+            "receive",
+            "specify",
+            "decompose",
+            "establish_verifiers",
+            "implement",
+            "verify",
+            "adversarial_verify",
+            "review",
+        ] {
+            assert!(
+                sections.iter().any(|id| id == state),
+                "{extra:?}: `{state}` is not a section: {sections:?}"
+            );
+        }
+        assert!(
+            sections.iter().any(|id| id == "implement-to-review"),
+            "{extra:?}: the retreat is still a section of sections: {sections:?}"
+        );
+        for (id, state) in &leaves {
+            assert!(
+                !state.is_empty() && id.starts_with(&format!("{state}-")),
+                "{extra:?}: leaf `{id}` is not numbered from the state it says it is in"
+            );
+        }
+    }
+}

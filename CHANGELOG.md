@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+* **`protocol workflow flow` emits every state as a section.** Each non-terminal state is a group
+  named for the state, holding its steps as `<state>-1`, `<state>-2`, … in the map's order — one
+  node when the map gave it one step or none — and a retreat is a group of those groups. It was a
+  bare node for a state with one step or none, and `b10x-harness workflow run` asks its
+  `transition` hook at a group boundary and nowhere else (harness design 0003 § 3): the fifth paid
+  native walk of 2026-08-29 was consulted four times, all at `root`, and never about `receive`,
+  `specify` or `decompose`. Now `protocol drive transition` is asked on both sides of every state.
+  The document's header says so; `b10x-harness workflow plan` shows every state as a section, and
+  the harness's committed fixture `adp-default.projected.yaml` is refreshed from this verb. A
+  reader keyed on node ids sees `receive-1` where it saw `receive`; the state a node is in has
+  always been `run.state`, and still is.
+
 ### Added
 
 * **`regex:` matchers work in a `trace-spec/1` document; they used to be refused by name.** Write

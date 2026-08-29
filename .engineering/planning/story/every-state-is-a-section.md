@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:every-state-is-a-section
 kind: story
-status: proposed
+status: active
 title: workflow flow makes every state a section, so the governor is asked at every state boundary
 summary: The projection groups only multi-step states and retreats; a single-step state is a bare node and the transition hook never fires for it, so a bare-workflow native walk was governed at the root only
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:cross-harness-portability
 - serves: vision:O3
-revision: 3
+revision: 4
 ---
 # Story: `workflow flow` makes every state a section
 

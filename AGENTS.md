@@ -2,7 +2,7 @@
 
 The contract for changing **this** repository. Read it before changing anything.
 
-Org-wide rules — the naming convention, the former-brand rule (atlas ADR 0001) and its four
+Org-wide rules — the naming convention, the language rule (anything that runs is Rust, not Python), the former-brand rule (atlas ADR 0001) and its four
 exemption categories, and the rule that renaming anything another repo verifies is a coordinated
 migration with an ADR — live in `atlas/AGENTS.md` and are not restated here.
 
