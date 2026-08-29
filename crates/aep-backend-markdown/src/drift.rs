@@ -6,13 +6,35 @@
 //! R-89 says an event records the state before and after and the fields written, so the last event
 //! of an instance says what its document should contain.
 //!
-//! Three findings, kept apart because they send a person to three different places:
+//! Four findings, kept apart because they send a person to four different places:
 //!
 //! | finding | what it means | exit |
 //! |---|---|---|
 //! | **drift** | the document's frontmatter disagrees with its last event — somebody edited `status:`, `title:`, an edge, in an editor | 1 |
+//! | **forged revision** | the document claims a revision no logged write produced — higher than any event for it records | 1 |
 //! | **deleted** | the log holds events for a document that is not there — somebody `rm`ed it | 1 |
 //! | **pre-provider** | the document has no events at all — it predates the provider, a normal condition and not a defect | 0 |
+//!
+//! # A revision nothing wrote
+//!
+//! An event carries the revision the instance was at *after* the write that emitted it, so the
+//! highest revision the log holds for a document is the revision the last command left behind. A
+//! document claiming more than that is claiming a write that never happened — `revision: 99` beside
+//! a log whose last event is revision 1. Ordinary drift already reported the disagreement, but as
+//! *somebody edited a field*, which is the wrong place to send the reader: nothing recovers the
+//! state a forged revision claims, because there is no such state. It is its own finding for that
+//! reason, and only that reason.
+//!
+//! It is **not** the same test as *fewer events than the revision*. A store's history predates the
+//! provider — the journal's older entries are another shape entirely — and an evidence record is an
+//! event at the current revision that writes nothing, so counting events answers neither question.
+//! The comparison is against the highest revision **recorded**, and a document at or below it is
+//! not forged however many events sit under it.
+//!
+//! This detects and does **not** enforce. Nothing here refuses a write, and `protocol artifact
+//! validate` grew no refusal: a forged revision is reported after the fact, exactly as an
+//! out-of-band edit is. Enforcement needs to know who wrote a document, which is gap register
+//! **D-3** (attestation by signature) and is still proposed.
 //!
 //! # Detection, and the prevention that was refused
 //!
@@ -63,6 +85,38 @@ impl fmt::Display for Drift {
     }
 }
 
+/// A document claiming a revision no logged write produced.
+///
+/// Separate from [`Drift`] because it sends the reader somewhere else. Drift says *the document and
+/// the log disagree about a field*, and the log is the record to trust; this says *the document
+/// claims a write that is not in the log at all*, and there is no earlier state to restore it to.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ForgedRevision {
+    /// Which artifact.
+    pub artifact: ArtifactId,
+    /// The revision the frontmatter claims.
+    pub claimed: u64,
+    /// The highest revision any event for it records — what the last logged write left behind.
+    pub logged: u64,
+    /// How many events the log holds for it, said out loud so the reader can see how thin the
+    /// record is without opening it.
+    pub events: usize,
+    /// The last event that changed anything, by its id.
+    pub event: String,
+}
+
+impl fmt::Display for ForgedRevision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} claims revision {}, and no write produced it: {} event(s) logged, the highest at \
+             revision {} (event {}) — a revision above the log's own was written by hand, not by a \
+             command",
+            self.artifact, self.claimed, self.events, self.logged, self.event
+        )
+    }
+}
+
 /// A document the log has events for and the store does not hold.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Deleted {
@@ -88,6 +142,8 @@ impl fmt::Display for Deleted {
 pub struct Report {
     /// Documents disagreeing with their last event.
     pub drift: Vec<Drift>,
+    /// Documents claiming a revision no logged write produced.
+    pub forged: Vec<ForgedRevision>,
     /// Documents the log knows and the store no longer holds.
     pub deleted: Vec<Deleted>,
     /// Documents with no events at all.
@@ -140,7 +196,28 @@ pub fn detect(root: &Path, documents: &BTreeMap<ArtifactId, StoredDocument>) -> 
         if instance.lifecycle_state != last.to_state {
             fields.push("status".to_owned());
         }
-        if instance.revision != last.revision {
+        // The revision the last logged write left behind. An event carries the revision *after*
+        // its operation, so nothing a command did can put the document above this number.
+        let logged = events
+            .iter()
+            .map(|event| event.revision)
+            .max()
+            .unwrap_or(last.revision);
+        if instance.revision > logged {
+            // Said once, and as the thing it is: a revision nothing wrote is not a field somebody
+            // edited, and reporting it as ordinary drift would send the reader to the log for a
+            // state that was never in it.
+            report.forged.push(ForgedRevision {
+                artifact: stored.document.frontmatter.id.clone(),
+                claimed: instance.revision,
+                logged,
+                events: events.len(),
+                event: event_id(last),
+            });
+        } else if instance.revision != logged {
+            // Against the highest revision the log records, not against `last`: a write that
+            // changed nothing — `artifact body` handed an empty body — is still a write, at a
+            // revision the log holds, and a document standing at it is where its log left it.
             fields.push("revision".to_owned());
         }
         // The fold of the events: every field any event wrote, the latest value winning. A field
@@ -201,4 +278,210 @@ fn event_id(event: &DomainEvent) -> String {
             || format!("{}:{}@{}", event.entity, event.id, event.revision),
             ToOwned::to_owned,
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::store::MarkdownStore;
+
+    /// A scratch tree this process alone owns.
+    ///
+    /// **The pid is not decoration** — the reason is written out on `store.rs`'s own `scratch`:
+    /// `temp_dir()` is one directory for every session and every worktree on a machine, and the
+    /// first thing this function does is delete it.
+    fn scratch(name: &str) -> MarkdownStore {
+        let root = std::env::temp_dir()
+            .join("aep-markdown-drift")
+            .join(format!("{}-{}", std::process::id(), name));
+        std::fs::remove_dir_all(&root).ok();
+        std::fs::create_dir_all(&root).expect("the scratch tree is writable");
+        MarkdownStore::open(root)
+    }
+
+    /// One document, with whatever revision and status the test needs it to claim.
+    fn document(store: &MarkdownStore, name: &str, status: &str, revision: u64) {
+        let path = store.root().join("story").join(format!("{name}.md"));
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("writable");
+        std::fs::write(
+            path,
+            format!(
+                "---\nformat: aep.planning-md/1\nid: story:{name}\nkind: story\nstatus: \
+                 {status}\ntitle: A story\nrevision: {revision}\n---\n# A story\n"
+            ),
+        )
+        .expect("writable");
+    }
+
+    /// One event line, in the runtime's shape, appended to the journal.
+    fn event(
+        store: &MarkdownStore,
+        name: &str,
+        revision: u64,
+        from_state: Option<&str>,
+        changed: &serde_json::Value,
+    ) {
+        let line = serde_json::json!({
+            "entity": "story",
+            "version": 1,
+            "id": name,
+            "revision": revision,
+            "type": "aep.entity.update/v1",
+            "from_state": from_state,
+            "to_state": "draft",
+            "changed": changed.clone(),
+            "args": {},
+            "payload": { "event_id": format!("story:{name}@{revision}") },
+        });
+        let path = store.root().join(JOURNAL);
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&line.to_string());
+        text.push('\n');
+        std::fs::write(path, text).expect("writable");
+    }
+
+    fn report(store: &MarkdownStore) -> Report {
+        detect(store.root(), &store.load().documents)
+    }
+
+    #[test]
+    fn a_revision_above_every_event_is_forged_and_is_not_reported_as_ordinary_drift() {
+        let store = scratch("forged");
+        document(&store, "one", "draft", 99);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+
+        let found = report(&store);
+        assert_eq!(found.forged.len(), 1, "{found:?}");
+        let forged = &found.forged[0];
+        assert_eq!(forged.claimed, 99);
+        assert_eq!(forged.logged, 1, "the one event the log holds");
+        assert_eq!(forged.events, 1);
+        assert!(
+            found.drift.is_empty(),
+            "said once, as a revision nothing wrote: {found:?}"
+        );
+        assert_eq!(found.pre_provider, 0);
+        let said = forged.to_string();
+        assert!(
+            said.contains("no write produced it"),
+            "the finding says what it is: {said}"
+        );
+        assert!(
+            said.contains("1 event(s) logged"),
+            "and how thin the record is: {said}"
+        );
+    }
+
+    #[test]
+    fn a_document_at_the_revision_its_events_record_is_not_forged() {
+        let store = scratch("at-the-revision");
+        document(&store, "one", "draft", 2);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+        event(
+            &store,
+            "one",
+            2,
+            Some("draft"),
+            &serde_json::json!({ "title": "A story" }),
+        );
+
+        let found = report(&store);
+        assert!(found.forged.is_empty(), "{found:?}");
+        assert!(found.drift.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn a_document_at_the_revision_of_a_write_that_changed_nothing_is_not_drift() {
+        // Seen on a driven run, 2026-08-29: `protocol artifact body` handed an empty body wrote
+        // an `update` event at revision 2 with `changed: {}`, the document stood at revision 2,
+        // and `validate` reported the revision as disagreeing with the *create* event at 1 —
+        // because the last event that changed something was the create. A revision the log
+        // records is not a revision somebody typed.
+        let store = scratch("write-that-changed-nothing");
+        document(&store, "one", "draft", 2);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+        event(&store, "one", 2, Some("draft"), &serde_json::json!({}));
+
+        let found = report(&store);
+        assert!(found.forged.is_empty(), "{found:?}");
+        assert!(found.drift.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn more_events_than_the_revision_is_not_forged_because_an_evidence_record_writes_nothing() {
+        // The test the count-of-events reading would fail: three events, revision 1, and every one
+        // of them legitimate — an observation is an event at the current revision that wrote
+        // nothing, and a store's history predates the provider besides.
+        let store = scratch("evidence-records");
+        document(&store, "one", "draft", 1);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+        event(&store, "one", 1, Some("draft"), &serde_json::json!({}));
+        event(&store, "one", 1, Some("draft"), &serde_json::json!({}));
+
+        let found = report(&store);
+        assert!(found.forged.is_empty(), "{found:?}");
+        assert!(found.drift.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn a_document_with_no_events_predates_the_log_and_is_not_forged() {
+        // `pre_provider` keeps its meaning: a document the log has never heard of cannot be
+        // compared with anything, whatever revision it claims. Whether a driven run's scratch store
+        // should read it differently is open (native-arm-store-integrity design § 8, OQ5) and is
+        // not decided here.
+        let store = scratch("no-events");
+        document(&store, "one", "draft", 99);
+
+        let found = report(&store);
+        assert_eq!(found.pre_provider, 1);
+        assert!(found.forged.is_empty(), "{found:?}");
+        assert!(found.drift.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn a_forged_revision_beside_an_edited_status_is_two_findings_and_not_one() {
+        let store = scratch("forged-and-edited");
+        document(&store, "one", "active", 99);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+
+        let found = report(&store);
+        assert_eq!(found.forged.len(), 1, "{found:?}");
+        assert_eq!(found.drift.len(), 1, "{found:?}");
+        assert_eq!(
+            found.drift[0].fields,
+            vec!["status".to_owned()],
+            "the revision is the other finding's, and is not repeated here: {found:?}"
+        );
+    }
 }

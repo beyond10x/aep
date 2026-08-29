@@ -1,7 +1,7 @@
 ---
 title: CLI reference
 sidebar_position: 1
-description: Every subcommand of the reference CLI, grouped by surface — protocol, planning, adoption, driver, evidence, entity, ESS, infrastructure, trace and contract — with exit codes.
+description: Every subcommand of the reference CLI, grouped by surface — protocol, planning, adoption, driver, evidence, entity, ESS, infrastructure, trace, contract and evaluation — with exit codes.
 ---
 
 # CLI reference
@@ -65,7 +65,7 @@ from, default `.`).
 | `protocol artifact history <id> [--format text\|yaml\|json]` | what happened to one artifact, oldest first, out of the store's append-only journal: creations, moves, and every evidence record. A corrupt journal line is skipped **and counted**, never silently dropped |
 | `protocol artifact explain <id> [--format text\|yaml\|json]` | what made this what it is: per status it reached, the move and every evidence record admitted since the previous one — each named against the revision the artifact was at when it was admitted, so a later edit cannot re-date an old record onto the new text. A status reached on nobody's record is marked rather than left blank. Not `protocol explain`, which is how a policy decided |
 | `protocol artifact evidence <id> --kind <k> --source <s> [--ref <url>] [--at <iso8601>]` | records an observation about an artifact, so a later move can be decided on it. `--at` defaults to now, read at the edge |
-| `protocol artifact validate` | every file, every edge, every status, accumulated into one list: a file where its id does not put it, an edge pointing at nothing, a cycle, a duplicate id, a status the lifecycle does not have |
+| `protocol artifact validate` | every file, every edge, every status, accumulated into one list: a file where its id does not put it, an edge pointing at nothing, a cycle, a duplicate id, a status the lifecycle does not have. Over a markdown plan it reads the event log too: a document edited outside a command is **drift**, and a `revision:` higher than any event for it records is a **forged revision** — a number no write produced, reported and never refused |
 | `protocol artifact kinds` | the 26 artifact kinds, marking which are planning rather than output |
 | `protocol artifact relations` | the 13 relations, with what each edge means |
 | `protocol artifact lifecycle <kind>` | where a kind starts, and what may follow what |
@@ -353,6 +353,40 @@ rather than a record that says something bad:
 
 A record reporting failures is written down and exits `0`. The verdict belongs in the record, and
 `protocol evaluate` is what decides on it.
+
+## Evaluation surface
+
+How well a harness follows these workflows, under four treatments — `raw` instructions, the shipped
+`plugin`, a `driven` run whose every tool call is answered at a seam, and a `native` run whose
+published toolset *is* the policy. `metaharness` is a tool here, the way `git` is: found on `PATH`,
+and a machine without it is told so by name and exits `2` rather than reddening a gate.
+
+| Command | Does |
+|---|---|
+| `protocol eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
+| `protocol eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; `--stream` ingests a run somebody already recorded and spends nothing |
+
+`eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
+an exit code that moved with the counts would be the single number it refuses to compute — there is
+no score, no ranking and no percentage in the output. Nothing spawns without `METAHARNESS_LIVE=1`
+and `--budget-usd`. Arms `driven` and `native` are not launched from here and the refusal says what
+launches each: `protocol drive run` and `b10x-harness`.
+
+### Reading a native cell
+
+The arm word is the enforcement model, and there is no column for it. So a clean store-integrity
+row — no `store_broken`, `census.denied = 0` — does not mean the same thing in every row:
+
+| arm | what a clean row means |
+|---|---|
+| `raw` | **compliance.** Nothing on that arm was in a position to refuse |
+| `plugin` | compliance, except where the vendor hook saw the call — a refusal there is the hook's |
+| `driven` | **enforced.** The call was put to the driver and answered before it ran, and the refusal is in the run's own record |
+| `native` | **compliance, or not observable — never enforced**, unless the run carried a `scope:` or a loop hook that could refuse |
+
+`denied: 0` is *nobody asked me*, not *nothing was refused*; the driver already prints those as two
+different sentences, and only one of them is about the run. Why this is a reading rule and not a
+column: [the native arm and store integrity](https://github.com/beyond10x/engineering-protocols/blob/main/docs/design/native-arm-store-integrity-design-v0.1.md).
 
 ## Repository automation (`cargo xtask`)
 

@@ -109,6 +109,34 @@ expectations:
         args: {command: {contains: "protocol artifact new"}}
         count: {at_least: 1}
 
+  - id: the-creating-call-succeeded
+    statement: at least one of those creating calls came back clean
+    # The gate on the row above, which counts calls and can say nothing about what came back.
+    # `tool.called` is satisfied by a run whose only `protocol artifact new` exited non-zero —
+    # the store got nothing, the agent reported anyway, and the eval passed. *Reached for the CLI*
+    # and *created through it* are different findings, so they are different rows.
+    #
+    # **The rate form, deliberately, and not `tool.failed: {count: {exactly: 0}}`.** A refusal
+    # followed by a clean re-issue is normal here and is correct behaviour: the model writes
+    # `protocol artifact kinds && … && protocol artifact new …`, the surface refuses the chained
+    # line, and the model sends the create again on its own. A zero bound reads that run as a
+    # `gap`, which would be this document reporting the guardrail working as a defect — the same
+    # mistake `the-cli-never-refused-a-shell-call` documents one screen up. `at_most: 0.99` says
+    # the single thing this row is for: **not every** such call failed.
+    #
+    # `tools:` and `operations:` together because the two vocabularies **union**, so the row
+    # decides on the native arm rather than going `unk` there: `stream-json` names `Bash` and
+    # nothing else, a three-verb surface names its catalogue entry and resolves the call to an
+    # operation, and a record answers with whichever it carries. The argument matcher reads the
+    # joined argv where a harness records one instead of a `command`, so the scope is the same
+    # calls the row above selects.
+    expect:
+      tool.error_rate:
+        tools: [Bash, run]
+        operations: [command.execute, shell]
+        args: {command: {contains: "protocol artifact new"}}
+        rate: {at_most: 0.99}
+
   - id: validated-its-own-work
     statement: the agent ran the store's own validator before reporting
     expect:

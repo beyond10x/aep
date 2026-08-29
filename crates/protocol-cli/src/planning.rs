@@ -2148,6 +2148,8 @@ struct LogFindings {
     problems: Vec<String>,
     /// The drift findings alone, for the report's own field.
     drift: Vec<String>,
+    /// The forged-revision findings alone — a revision no logged write produced.
+    forged: Vec<String>,
     /// The deletion findings alone.
     deleted: Vec<String>,
     /// Documents with no events at all.
@@ -2157,18 +2159,25 @@ struct LogFindings {
 /// The documents against the event log (wave G, story 4), and the journal against the files.
 ///
 /// A frontmatter field that disagrees with what the events say is **drift** — an edit made in an
-/// editor; events with no document are a **deletion**; a document with no events predates the
-/// provider and is neither. The journal's older reconciliation covers the same log's status and
-/// revision by entry, so a document the drift check names is not named twice, and an orphan the
-/// log knows as deleted is said once, as that.
+/// editor; a revision higher than any event records is a **forged revision**, which no write could
+/// have produced; events with no document are a **deletion**; a document with no events predates
+/// the provider and is none of them. The journal's older reconciliation covers the same log's
+/// status and revision by entry, so a document either check names is not named twice, and an
+/// orphan the log knows as deleted is said once, as that.
 fn log_findings(
     root: &Path,
     report: &aep_backend_markdown::store::StoreReport,
     held: &std::collections::BTreeMap<ArtifactId, (aep_domain::artifact::ArtifactStatus, u64)>,
 ) -> LogFindings {
     let drift = aep_backend_markdown::drift::detect(root, &report.documents);
-    let drifted: std::collections::BTreeSet<_> =
-        drift.drift.iter().map(|d| d.artifact.clone()).collect();
+    // A forged revision is a revision finding too, so the journal's own reconciliation must not
+    // report it a second time in its older words.
+    let drifted: std::collections::BTreeSet<_> = drift
+        .drift
+        .iter()
+        .map(|d| d.artifact.clone())
+        .chain(drift.forged.iter().map(|f| f.artifact.clone()))
+        .collect();
     let deleted: std::collections::BTreeSet<_> =
         drift.deleted.iter().map(|d| d.artifact.clone()).collect();
     let mut problems: Vec<String> = aep_backend_markdown::journal::reconcile(root, held)
@@ -2184,12 +2193,15 @@ fn log_findings(
         .map(ToString::to_string)
         .collect();
     let drift_findings: Vec<String> = drift.drift.iter().map(ToString::to_string).collect();
+    let forged_findings: Vec<String> = drift.forged.iter().map(ToString::to_string).collect();
     let deleted_findings: Vec<String> = drift.deleted.iter().map(ToString::to_string).collect();
     problems.extend(drift_findings.iter().cloned());
+    problems.extend(forged_findings.iter().cloned());
     problems.extend(deleted_findings.iter().cloned());
     LogFindings {
         problems,
         drift: drift_findings,
+        forged: forged_findings,
         deleted: deleted_findings,
         pre_provider: drift.pre_provider,
     }
@@ -2232,13 +2244,13 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
         .collect();
     // The journal and the event log are a markdown plan's; a SQLite or Postgres plan keeps its
     // history in the store and the contract answers it, so there is no second record to reconcile.
-    let (drift_findings, deleted_findings, pre_provider) = match &opened.files {
+    let (drift_findings, forged_findings, deleted_findings, pre_provider) = match &opened.files {
         Some(store) => {
             let log = log_findings(store.root(), report, &held);
             problems.extend(log.problems);
-            (log.drift, log.deleted, log.pre_provider)
+            (log.drift, log.forged, log.deleted, log.pre_provider)
         }
-        None => (Vec::new(), Vec::new(), 0),
+        None => (Vec::new(), Vec::new(), Vec::new(), 0),
     };
 
     // Closed on somebody's word, and the store knows the difference. A move whose provenance is
@@ -2271,6 +2283,7 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
         problems: problems.clone(),
         closed_on_an_assertion: asserted.clone(),
         drift: drift_findings,
+        forged: forged_findings,
         deleted: deleted_findings,
         pre_provider,
     };
@@ -3496,6 +3509,12 @@ struct Summary {
     /// Documents whose frontmatter disagrees with their last event. Counted as problems.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     drift: Vec<String>,
+    /// Documents claiming a revision no logged write produced. Counted as problems.
+    ///
+    /// Detection, not enforcement: nothing here refuses the write that made one, because refusing
+    /// it needs to know who wrote the document, which is gap register **D-3** and still proposed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    forged: Vec<String>,
     /// Documents the event log knows and the store no longer holds. Counted as problems.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     deleted: Vec<String>,

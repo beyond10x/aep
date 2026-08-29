@@ -11,6 +11,21 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **`protocol artifact validate` now says when a document claims a revision no write produced.**
+  A `revision:` higher than anything the event log records for that document is reported as its own
+  finding — `story:x claims revision 99, and no write produced it: 3 event(s) logged, the highest at
+  revision 4 (event …)` — with a `forged` list in `--format json` beside `drift` and `deleted`, and
+  exit 1. Until now such a document was reported as ordinary drift, which reads as *somebody edited
+  a field* and sends you to the log for a state that was never in it. The test is against the
+  highest revision the log **records**, not against the number of events it holds: a store's
+  history predates the event log, and an observation is an event at the current revision that
+  writes nothing, so a document sitting under more events than its revision is not a forgery.
+  **This detects; it does not enforce.** No write path refuses a forged revision and `validate`
+  grew no refusal — refusing one means knowing who wrote the document, which is gap register **D-3**
+  (attestation by signature) and is still proposed. Unchanged: a document with no events at all is
+  still only counted as predating the log (`N document(s) predate the event log`, `pre_provider` in
+  JSON), whatever revision it claims.
+
 * **A `command` step can name the task document its run was started from: `{task}`.** It joins
   `{run_directory}` and `{transcript}` as the third and last placeholder a step map may write, and
   the driver expands it to the absolute path of the task the run was launched with — the one
@@ -64,7 +79,41 @@ belongs in the commit message or in `docs/design/`.
   `cargo install --root ~/.local` puts the binary where a *session* looks, while a driver-side
   `PATH` is the operator's own shell, so putting `~/.local/bin` first in it is part of the answer.
 
+### Changed
+
+* **A green cell in `protocol eval`'s table does not mean the same thing on every arm, and the arm
+  word now says which.** A clean store-integrity row — no `store_broken`, `census.denied = 0` —
+  means *the call was refused* on arm `driven`, where every tool call is answered at a seam, and
+  only *the model did not do it* on arms `raw` and `native`, where nothing adjudicates a call at
+  all. The two were printed in one column, in the same words, and read as the stronger of them.
+  The rule is written where a reader of the table meets it: as a table of the four arms under the
+  new **Evaluation surface** section of the CLI reference (which is also the first time
+  `protocol eval` is documented there), as a line the text rendering prints under any table
+  holding a `native` cell, and on `--arm`'s own help. **There is no new column** — a column is a
+  change to a printed table's format, and that is the operator's decision, not this release's
+  (`docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1 and § 8 OQ4). The same note
+  states the other half: `denied: 0` is *nobody asked me*, not *nothing was refused*, and only one
+  of those is a fact about the run.
+
 ### Fixed
+
+* **A logged write that changed nothing no longer reads as a hand-edited revision.** `protocol
+  artifact body` handed an empty body records an `update` event at the next revision with
+  `changed: {}`; `validate` compared the document's revision against the last event that *changed
+  something* — the create, one revision back — and reported `revision disagrees with event …@1`
+  on a store nobody had touched by hand. Seen on a driven native run on 2026-08-29, where the
+  driver's own validator step then exited 1 on every attempt and the run spent its budget in
+  `receive`. Drift's revision check now reads the highest revision the log records, which is
+  what the `forged` check already read; `status` and the written fields still fold from the last
+  event that wrote them. `crates/aep-backend-markdown/src/drift.rs`.
+* **`protocol eval` no longer tells you `native` is not an arm.** A run manifest naming an arm this
+  build does not have is refused by name, and the refusal lists the arms there are — but that list
+  was written when there were three arms, and the commit that added the fourth never reached it. So
+  a manifest with a typo in `arm:` was answered with ``is not one of the three arms this evaluation
+  has: `raw`, `plugin`, `driven` `` while `arm: native` was, and had been, perfectly readable. The
+  refusal now lists all four and states no count, so the next arm cannot make it wrong again, and a
+  test checks the list against the enum's own variants rather than against a second hand-written
+  one.
 
 * **An approved specification of somebody else's story no longer lets your task start
   implementing.** `spec-driven` and `clean-room` asked for `kind: specification, status: approved`
@@ -127,6 +176,19 @@ belongs in the commit message or in `docs/design/`.
   entry as missing: a run whose record published `file.read`, `dir.list`, `search`, `file.write` and
   `file.edit` was told, once per state, that it lacked all five. An audit that fires on a session
   holding exactly what it needs is worse than no audit, because the next true one is read as noise.
+
+* **A shipped conformance spec now gates the *outcome* of the call it counts.**
+  `conformance/trace/expectations.trace.yaml`'s `created-through-the-cli` is a `tool.called` row:
+  it says a `protocol artifact new` was reached for, and nothing at all about what came back — so
+  a recorded run whose only creating call errored satisfied it, and the eval passed on a store
+  that got nothing. A second row beside it, `the-creating-call-succeeded`, decides the outcome
+  over the same selector. It is a `tool.error_rate` at `at_most: 0.99` — *not every such call
+  failed*, deliberately not *none did*: a refused chained command line followed by a clean
+  re-issue is correct behaviour under the plugin's own guardrails, and a zero bound would report
+  the guardrail working as a `gap`. The scope names `tools: [Bash, run]` **and**
+  `operations: [command.execute, shell]`, which union, so the row decides on the native arm
+  instead of going `unk` there. Against the committed fixtures it reads `ok` on both plugin-eval
+  transcripts (0 of 2 calls failed) and `ok` on the driven honest step (1 of 2, rate 0.500).
 
 ### Added
 
