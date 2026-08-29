@@ -262,6 +262,31 @@ pub(crate) struct B10xOptions {
     #[arg(long = "b10x-cgroup-root", value_name = "DIR")]
     #[serde(default)]
     cgroup_root: Option<PathBuf>,
+    /// Which model API the loop speaks under `--b10x-endpoint`.
+    ///
+    /// The loop reaches two different endpoints under one root — `openai-responses` at
+    /// `{root}/responses` and `anthropic-messages` at `{root}/messages` — and infers neither from
+    /// the URL. Left unset, the loop keeps its own default, which is the Responses wire.
+    #[arg(long = "b10x-wire", value_name = "WIRE")]
+    #[serde(default)]
+    wire: Option<String>,
+    /// A file holding a subscription token for the b10x arm, instead of an API key.
+    ///
+    /// **This is what lets the native arm run against a model with a window the protocol fits
+    /// in.** With only `--b10x-api-key` the arm could reach a gateway and whatever that gateway
+    /// served; run `b10x-32k` died at turn 37 on `maximum context length is 32768 tokens` with
+    /// the state half finished, which is a fact about the endpoint and not about the harness, and
+    /// no scorer can tell the two apart afterwards.
+    ///
+    /// Named and never read here: the path travels into an argv and the token enters neither this
+    /// process nor metaharness.
+    #[arg(long = "b10x-oauth-token-file", value_name = "FILE")]
+    #[serde(default)]
+    oauth_token_file: Option<PathBuf>,
+    /// A JSON pointer to the token inside that file, when the file is a JSON document.
+    #[arg(long = "b10x-oauth-token-pointer", value_name = "POINTER")]
+    #[serde(default)]
+    oauth_token_pointer: Option<String>,
 }
 
 impl B10xOptions {
@@ -3082,6 +3107,21 @@ fn b10x_argv(
         // rather than launching a run with no credential under a flag that claims one.
         if options.api_key { "api-key" } else { "none" }.to_owned(),
     ];
+    // The dialect and the subscription source, when the arm was pointed at one. Both are
+    // metaharness flags rather than loop flags here: the driver names what the run is, metaharness
+    // renders it as the loop's argv, and the token is read by neither.
+    if let Some(wire) = &options.wire {
+        argv.push("--model-wire".to_owned());
+        argv.push(wire.clone());
+    }
+    if let Some(path) = &options.oauth_token_file {
+        argv.push("--subscription-token-file".to_owned());
+        argv.push(path.display().to_string());
+        if let Some(pointer) = &options.oauth_token_pointer {
+            argv.push("--subscription-token-pointer".to_owned());
+            argv.push(pointer.clone());
+        }
+    }
     // **Confinement and execution, or neither.** Substrate represents a workspace only when its
     // directory name starts with `ws_`, so a run over an ordinary checkout is read-only whatever
     // is asked for — and asking anyway would turn every driven step into a launch refusal. When the
@@ -4841,6 +4881,66 @@ mod tests {
         assert!(authenticated
             .windows(2)
             .any(|pair| pair[0] == "--credentials" && pair[1] == "api-key"));
+    }
+
+    /// The native arm reaches a subscription model, and the token stays out of both processes.
+    ///
+    /// Without this the arm could only be pointed at a gateway, and the gateway on hand served a
+    /// 32k window: run `b10x-32k` died at turn 37 on `maximum context length is 32768 tokens`
+    /// mid-state. A run that fails on the endpoint's window measures the endpoint, not the
+    /// harness, so a comparison drawn from it says nothing about either arm.
+    #[test]
+    fn a_subscription_source_and_a_dialect_reach_metaharness_as_flags_and_the_token_does_not() {
+        let argv = b10x_argv(
+            &B10xOptions {
+                endpoint: Some("https://api.anthropic.com/v1".to_owned()),
+                model: Some("claude-haiku-4-5-20251001".to_owned()),
+                wire: Some("anthropic-messages".to_owned()),
+                oauth_token_file: Some(PathBuf::from("/operator/.store.json")),
+                oauth_token_pointer: Some("/claudeAiOauth/accessToken".to_owned()),
+                ..B10xOptions::default()
+            },
+            Path::new("/operator/repo"),
+            &[],
+            &[],
+            "do the thing",
+            &config(&[Capability::RepositoryRead]),
+        );
+        let after = |flag: &str| {
+            argv.windows(2)
+                .find(|pair| pair[0] == flag)
+                .map(|pair| pair[1].clone())
+        };
+        assert_eq!(after("--model-wire").as_deref(), Some("anthropic-messages"));
+        assert_eq!(
+            after("--subscription-token-file").as_deref(),
+            Some("/operator/.store.json")
+        );
+        assert_eq!(
+            after("--subscription-token-pointer").as_deref(),
+            Some("/claudeAiOauth/accessToken")
+        );
+        // `none` is what a subscription run declares: the token is the loop's to read, so there is
+        // nothing for metaharness to copy and nothing of the operator's in the child's home.
+        assert_eq!(after("--credentials").as_deref(), Some("none"));
+        // The pointer never travels without the source it points into.
+        let sourceless = b10x_argv(
+            &B10xOptions {
+                oauth_token_pointer: Some("/claudeAiOauth/accessToken".to_owned()),
+                ..B10xOptions::default()
+            },
+            Path::new("/operator/repo"),
+            &[],
+            &[],
+            "do the thing",
+            &config(&[Capability::RepositoryRead]),
+        );
+        assert!(
+            !sourceless
+                .iter()
+                .any(|word| word == "--subscription-token-pointer"),
+            "{sourceless:?}"
+        );
     }
 
     /// One capability decision, two naming tables, and no second decision anywhere.
