@@ -25,6 +25,33 @@ belongs in the commit message or in `docs/design/`.
   the same reason `{glob: "*"}` always was; `{regex: "^$"}` — *the final message is empty* — is
   not, because a run can fail it.
 
+* **Parked on a credential no longer reads as actively worked.** A blocker is typed by *what would
+  clear it* and the type is the kind — `credential-blocker`, `decision-blocker`,
+  `third-party-blocker` — so it costs a name and no release. `protocol artifact list` and
+  `protocol artifact board` mark an artifact a blocker still stops with `blocked: <type>`, so a
+  parked item and a moving one stop looking alike without anybody opening a file, and
+  `--format json` carries a `blocked_by` list on every row. **New verb**
+  `protocol artifact blocked [--type <type>]` answers the question a backlog cannot: what is
+  stopped, by what type, and on which single item — grouped by the blocker, so five stories waiting
+  on one decision arrive as one row with five lines under it rather than as five separate
+  conversations. A blocker stops blocking when it reaches the end of its own ladder
+  (`protocol artifact move <blocker> --to cleared`), which leaves the record in the journal instead
+  of editing away the fact that anything was ever stuck. The six starting types — `decision`,
+  `review`, `credential`, `third-party`, `capacity`, `deploy` — are written down in
+  `artifacts/kinds/blocker.yaml` with what clears each, and the list is **open**: a
+  `procurement-blocker` of your own works with nothing added to it.
+
+* **A blocker can say which evidence it is withholding, and `explain` names it.** A new optional
+  `withholds:` key on a planning document takes an evidence kind — `protocol artifact new
+  credential-blocker ci-token --withholds test_result --relate blocks:story:x` — and records *why a
+  required fact does not exist*: the gate wants a `test_result`, the job that would produce one
+  cannot mint a read-scope token. `protocol artifact explain story:x` prints
+  `blocked by credential-blocker:ci-token (credential), withholding test_result` above the status
+  history, so the audit question *why is there no record* is answered out of the store.
+  `protocol artifact validate` refuses a `withholds` on an artifact that blocks nothing
+  (`missing_declaration`) and a spelling outside the evidence vocabulary
+  (`undeclared_evidence_kind`).
+
 * **A story says which objective it serves, and `validate` holds it to that.** A fourteenth
   relation, `serves`, points at an objective — a `vision` artifact — and nothing else (`validate`
   refuses a `serves` into any other kind). Where a store declares at least one `vision`, every

@@ -12,3 +12,32 @@ required_sections:
   - What Would Clear It
   - Who Can Clear It
   - What We Are Doing Meanwhile
+
+# The blocker type vocabulary: a **starting set, not a boundary**.
+#
+# The type is the *kind* — `credential-blocker`, `decision-blocker` — because
+# `ArtifactKind::parent` reads the last hyphen segment, so every one of these resolves to the one
+# `blocker` ladder. `protocol artifact blocked` reads the type back off the kind and groups by it.
+#
+# This list is **open**. Nothing in `crates/` checks a type against it: `procurement-blocker` is
+# accepted by the same rule that accepts the six below, with no document, no enum and no release.
+# The six are the ones an early adopter reported, written down so a team has somewhere to start and
+# a shared spelling to converge on — a seventh is a line here and a name, and a team that wants
+# theirs governed adds it to their own copy of this file.
+#
+# Why type at all: five items blocked on one decision is one meeting; five items blocked on five
+# different things is five conversations, and a backlog that records neither cannot tell them apart.
+# The type is the field that turns a list of stuck items into an action.
+types:
+  - type: decision
+    cleared_by: Somebody with the authority to choose deciding, and the decision being recorded.
+  - type: review
+    cleared_by: A review being done — the work exists and nobody has looked at it.
+  - type: credential
+    cleared_by: An account, token, key or permission being issued to whoever needs it.
+  - type: third-party
+    cleared_by: Somebody outside this organisation doing something, on their clock and not ours.
+  - type: capacity
+    cleared_by: A person becoming available. Nothing is wrong; there is nobody to do it.
+  - type: deploy
+    cleared_by: A release reaching an environment the work needs it in.

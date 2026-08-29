@@ -25,6 +25,7 @@ or relations. Ask for them at the moment you need them:
 | What statuses does this kind have, and what moves where? | `protocol artifact lifecycle <kind>` |
 | What is already in the store? | `protocol artifact list [--kind k] [--status s] [--format json]` |
 | What does it look like as a board? | `protocol artifact board [--kind k]` |
+| What is stopped, on what type of thing, and on which item? | `protocol artifact blocked [--type t]` |
 | How is it wired together? | `protocol artifact graph` |
 
 The reason is the reason this project exists. Lifecycle and relation documents are validated and
@@ -36,7 +37,7 @@ lifecycle story` costs one command and cannot be wrong.
 When a store is present but you have not looked at it yet in this session, start with `protocol
 artifact list` and `protocol artifact kinds`. Two commands buy you the whole vocabulary.
 
-## 3. Five guardrails
+## 3. Six guardrails
 
 These are inlined because they hold whatever the store's vocabulary is.
 
@@ -99,6 +100,25 @@ This is not licence to argue with the request. Build what was asked for unless y
 is already there or actively wrong, put that evidence in the artifact, and leave the decision where
 § 4 leaves every other one — with the operator, who can now read what you found instead of
 answering a question.
+
+**6. Something parked is recorded, not described.** A blocker is an artifact of its own, typed by
+what would clear it — `credential-blocker`, `decision-blocker`, `third-party-blocker`, whatever the
+store's `artifacts/kinds/blocker.yaml` names, and the list is open — with a `blocks` edge to the
+work it is stopping. Never leave the fact in a status field or in prose: an item parked for nine
+days on a credential and an item somebody is working on today are both `active`, and only the
+blocker tells them apart. Unblocking is `protocol artifact move <blocker> --to cleared`, a move like
+any other, which is why the record survives it.
+
+```console
+$ protocol artifact new credential-blocker api-token-scope \
+    --title "CI cannot mint a read-scope API token" \
+    --withholds test_result --relate blocks:story:ci-evidence
+created credential-blocker:api-token-scope (open) at .engineering/planning/credential-blocker/api-token-scope.md
+```
+
+`--withholds` is optional and names the evidence kind nobody can produce while this is open, so
+`protocol artifact explain <blocked-id>` answers *why is there no record for the next move*. It only
+means something beside `blocks:`, and `validate` says so.
 
 ## 4. Who decides
 

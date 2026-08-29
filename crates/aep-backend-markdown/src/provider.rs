@@ -206,6 +206,9 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
             serde_json::to_value(&frontmatter.relations).unwrap_or(Value::Null),
         );
     }
+    if let Some(withholds) = frontmatter.withholds {
+        fields.insert("withholds".to_owned(), Value::from(withholds.as_str()));
+    }
     for (key, node) in &frontmatter.extra {
         fields.insert(
             key.clone(),
@@ -273,6 +276,19 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             .map_err(|error| refuse(format!("the `relations` field: {error}")))?,
     };
 
+    let withholds = match fields.remove("withholds") {
+        None => None,
+        Some(Value::String(value)) => Some(
+            aep_domain::evidence::EvidenceKind::parse(&value)
+                .map_err(|error| refuse(format!("the `withholds` field: {error}")))?,
+        ),
+        Some(other) => {
+            return Err(refuse(format!(
+                "the `withholds` field is {other}, not an evidence kind"
+            )))
+        }
+    };
+
     if instance.revision == 0 {
         return Err(refuse(
             "revision 0 names a state before the document was written".to_owned(),
@@ -296,6 +312,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             owner,
             tags,
             relations,
+            withholds,
             revision: instance.revision,
             extra,
         },

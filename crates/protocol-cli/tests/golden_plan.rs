@@ -17,6 +17,13 @@
 //! `story:golden-one` ends at revision 3 rather than 4, and the `depends_on` event sits at the
 //! revision the document already had. Everything else is still 0.28.0's bytes.
 //!
+//! On 2026-08-29 (`story:blocker-relation`) every row of `list --format json` and `board --format
+//! json` gained a `blocked_by` list, always written and empty where nothing stops the artifact —
+//! `active` and `active but parked on a credential` have to be two documents to a machine as well
+//! as to a reader. `reads/list.json` and `reads/board.json` carry the new key; the text renderings
+//! are unchanged, because this plan holds no blocker and an unblocked row prints exactly what it
+//! printed in 0.28.0.
+//!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
 //! than the 0.19.0 entry — `journal::read` answers the same entries for both, which is what

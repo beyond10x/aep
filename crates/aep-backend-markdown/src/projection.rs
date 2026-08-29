@@ -679,6 +679,14 @@ fn apply_body(frontmatter: &mut PlanningFrontmatter, body: &Node) {
             *slot = Some(value.clone());
         }
     }
+    // The withheld evidence kind, same rule: present replaces, absent leaves alone. An
+    // unrecognised spelling is left off rather than written through, because the frontmatter's own
+    // validator would then refuse the file this command just wrote.
+    if let Some(Node::Text(withholds)) = fields.get("withholds") {
+        if let Ok(kind) = withholds.parse() {
+            frontmatter.withholds = Some(kind);
+        }
+    }
     // Tags, same rule as everything else here: present replaces, absent leaves alone. A command
     // that says nothing about tags is not a command that removed them.
     if let Some(Node::Seq(tags)) = fields.get("tags") {

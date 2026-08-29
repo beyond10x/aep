@@ -17,10 +17,11 @@
 //! revision: 1
 //! ```
 //!
-//! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags` and `relations` are
-//! optional; `format` and `revision` default. Everything else a document carries is **kept** — see
-//! [`PlanningFrontmatter::extra`] — because a store that silently drops the field somebody's own
-//! tooling writes is a store they will stop trusting after the first round trip.
+//! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags`, `relations` and
+//! `withholds` are optional; `format` and `revision` default. Everything else a document carries
+//! is **kept** — see [`PlanningFrontmatter::extra`] — because a store that silently drops the
+//! field somebody's own tooling writes is a store they will stop trusting after the first round
+//! trip.
 //!
 //! What is deliberately absent is a timestamp. See the crate documentation: git carries
 //! authorship, and a second answer beside it is one that goes stale.
@@ -32,6 +33,7 @@ use aep_domain::artifact::{
     ArtifactStatus, ArtifactVersion, RelationKind,
 };
 use aep_domain::error::{ValidationCode, ValidationError, ValidationErrors};
+use aep_domain::evidence::EvidenceKind;
 use aep_domain::node::Node;
 
 /// The frontmatter format version this build reads and writes.
@@ -85,6 +87,12 @@ pub struct RawPlanningFrontmatter {
     /// Its outgoing edges, each a single-entry mapping such as `{derived_from: epic:passwordless}`.
     #[serde(default)]
     pub relations: Vec<ArtifactRelation>,
+    /// The evidence kind this artifact is stopping anybody from producing, as written.
+    ///
+    /// Text here and an [`EvidenceKind`] after validation, so a misspelling is reported beside
+    /// every other defect in the document rather than aborting the parse of the whole file.
+    #[serde(default)]
+    pub withholds: Option<String>,
     /// Which revision of this document this is. Bumped by every mutating operation.
     #[serde(default = "default_revision")]
     pub revision: u64,
@@ -116,6 +124,16 @@ pub struct PlanningFrontmatter {
     pub tags: BTreeSet<String>,
     /// Its outgoing edges.
     pub relations: Vec<ArtifactRelation>,
+    /// The evidence kind this artifact is stopping anybody from producing.
+    ///
+    /// **The join between a blocker and an evidence gate.** A rung asks for a `test_result`; the
+    /// job that would produce one cannot mint a read-scope token; so the record of *why the fact
+    /// does not exist* is a `credential-blocker` that `blocks` the work and names `test_result`
+    /// here. `protocol artifact explain` reads it, which is what makes the missing record
+    /// answerable out of the store instead of out of somebody's memory.
+    ///
+    /// Only meaningful beside a `blocks` edge, and graph validation says so.
+    pub withholds: Option<EvidenceKind>,
     /// Which revision of this document this is.
     pub revision: u64,
     /// Every key this format does not name, kept so a round trip loses nothing.
@@ -147,6 +165,7 @@ impl PlanningFrontmatter {
             owner: None,
             tags: BTreeSet::new(),
             relations: Vec::new(),
+            withholds: None,
             revision: default_revision(),
             extra: BTreeMap::new(),
         }
@@ -206,6 +225,7 @@ impl PlanningFrontmatter {
         // model to hash.
         artifact.version = Some(ArtifactVersion::new(self.revision.to_string()));
         artifact.relations.clone_from(&self.relations);
+        artifact.withholds = self.withholds;
         artifact.metadata = ArtifactMetadata {
             title: self.title.clone(),
             summary: self.summary.clone(),
@@ -234,6 +254,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(self.owner.is_some())
             + usize::from(!self.tags.is_empty())
             + usize::from(!self.relations.is_empty())
+            + usize::from(self.withholds.is_some())
             + self.extra.len();
 
         let mut map = serializer.serialize_map(Some(length))?;
@@ -255,6 +276,9 @@ impl serde::Serialize for PlanningFrontmatter {
         }
         if !self.relations.is_empty() {
             map.serialize_entry("relations", &self.relations)?;
+        }
+        if let Some(withholds) = &self.withholds {
+            map.serialize_entry("withholds", withholds.as_str())?;
         }
         map.serialize_entry("revision", &self.revision)?;
         // Last, and in `BTreeMap` order: an unrecognised key keeps its value and loses only its
@@ -301,6 +325,32 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             );
         }
 
+        // Refused by name, not defaulted and not carried through as text: a withheld kind
+        // nothing recognises would read to a person as a fact the engine is tracking, and the
+        // engine tracks only the kinds it knows the semantics of.
+        let withholds = match raw.withholds.as_deref() {
+            None => None,
+            Some(value) => match EvidenceKind::parse(value) {
+                Ok(kind) => Some(kind),
+                Err(error) => {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::UndeclaredEvidenceKind,
+                            "planning.withholds",
+                            format!("`withholds: {value}` names no evidence kind: {error}"),
+                        )
+                        .with_hint(
+                            "`withholds` names the kind of proof this artifact is stopping, and \
+                             the engine's evidence vocabulary is closed on purpose: an invented \
+                             kind would be the sort of proof a gate is asking for, named by \
+                             whoever is trying to get past it",
+                        ),
+                    );
+                    None
+                }
+            },
+        };
+
         errors.into_result(Self {
             id: raw.id,
             kind: raw.kind,
@@ -310,6 +360,7 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             owner: raw.owner,
             tags: raw.tags,
             relations: raw.relations,
+            withholds,
             revision: raw.revision,
             extra: raw.extra,
         })
@@ -325,6 +376,46 @@ mod tests {
     }
 
     const MINIMAL: &str = "id: story:passkey-login\nkind: story\nstatus: draft\n";
+
+    #[test]
+    fn a_withheld_evidence_kind_survives_a_round_trip_and_a_misspelling_does_not() {
+        // The join a blocker makes to an evidence gate is only worth writing down if it comes back
+        // out of the file unchanged — this key is written by a command and read by `explain`.
+        let front =
+            PlanningFrontmatter::try_from(raw(&format!("{MINIMAL}withholds: test_result\n")))
+                .expect("a known evidence kind is accepted");
+        assert_eq!(front.withholds, Some(EvidenceKind::TestResult));
+        assert_eq!(
+            front.to_artifact("story/passkey-login.md").withholds,
+            Some(EvidenceKind::TestResult),
+            "and it reaches the artifact the graph validates"
+        );
+
+        let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
+        assert!(written.contains("withholds: test_result"), "{written}");
+        let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
+        assert_eq!(again.withholds, front.withholds);
+        assert!(
+            !again.extra.contains_key("withholds"),
+            "a named key must not also land in `extra`: {:?}",
+            again.extra
+        );
+
+        // A spelling outside the engine's closed vocabulary is refused by name, and refused
+        // *here*, so the message names the key rather than the whole document.
+        let errors =
+            PlanningFrontmatter::try_from(raw(&format!("{MINIMAL}withholds: green_build\n")))
+                .expect_err("an invented evidence kind is refused");
+        assert_eq!(
+            errors
+                .as_slice()
+                .iter()
+                .map(|error| error.code)
+                .collect::<Vec<_>>(),
+            vec![ValidationCode::UndeclaredEvidenceKind],
+            "{errors}"
+        );
+    }
 
     #[test]
     fn a_document_without_a_format_key_is_read_as_the_current_format() {
