@@ -756,6 +756,10 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         outln!("{refusal}");
         return Ok(ExitCode::from(1));
     }
+    if let Some(refusal) = protocol_command_preflight(&inputs.map) {
+        outln!("{refusal}");
+        return Ok(ExitCode::from(1));
+    }
 
     // A paused run holds no lock, because the pause has no bound — so a resume must **re-take** it,
     // and must refuse when another run now holds it. The first draft said a pause releases and
@@ -1556,6 +1560,139 @@ impl CliExecutors {
     }
 }
 
+/// This CLI's own name, which is what a `command` step writes when it means *this build*.
+const PROTOCOL_BINARY: &str = "protocol";
+
+/// The run's record of which binary each `command` step attempt actually spawned.
+///
+/// Beside the cursor rather than inside it, for [`Launch`]'s reason: the cursor is
+/// `aep.driver-cursor/1`, a published document about **where a run is**, and which binary answered
+/// a step is not that. One JSON object per line and append-only, so an attempt that took the
+/// process down with it still left its line behind — which is the attempt a reader is looking for.
+const COMMANDS_FILE: &str = "commands.jsonl";
+
+/// How a `command` step's program was turned into something to spawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum Resolution {
+    /// Spawned exactly as the map wrote it — every program that is not this CLI.
+    AsWritten,
+    /// `protocol`, spawned as the binary this driver **is**.
+    Driver,
+    /// `protocol`, and this process could not name its own binary, so `PATH` decided.
+    PathFallback,
+}
+
+/// One `command` step attempt, as the map wrote it and as it was spawned.
+#[derive(Debug, serde::Serialize)]
+struct CommandRun<'a> {
+    /// The workflow state the step belongs to.
+    state: String,
+    /// Which step of that state's list it is.
+    index: usize,
+    /// Which attempt at it this was, counting from `1`.
+    attempt: u32,
+    /// The program the map wrote.
+    program: &'a str,
+    /// The program that was spawned.
+    ran: &'a str,
+    /// How the second was got from the first.
+    resolved: Resolution,
+}
+
+/// What a `command` step's program resolves to, and the line that says so.
+struct Resolved {
+    /// The program to spawn.
+    program: String,
+    /// How it was arrived at.
+    resolution: Resolution,
+    /// What a reader has to be told, when the answer is not simply what the map wrote.
+    note: Option<String>,
+}
+
+/// Resolves a `command` step's program: `protocol` is the binary this driver **is**.
+///
+/// **Run `W4-3/1`, 2026-08-28, is why.** Step 4 of `verify` was
+/// `protocol property evidence --out …/property.yaml`. A `command` step is spawned by the driver
+/// with the *driver's* environment, so the name resolved against the operator's own `PATH`, where
+/// the first `protocol` was a 0.28.0 install predating the `property` verb. The step ran a binary
+/// older than the map executing it, wrote no record, and the driver correctly reported *nothing
+/// was observed* — three times, for real money, with the cause invisible in the message.
+///
+/// [`std::env::current_exe`] removes the failure rather than reporting it, and it buys the
+/// agreement the run's whole evidence trail is recorded against: a record produced by a binary
+/// nobody can name is the defect `version-check` exists for. It is keyed on the **file name**, so
+/// `/usr/local/bin/protocol` is the same request written longer, and on nothing else — `cargo`,
+/// `bash` and `git` are tools the driver finds the way it always did.
+///
+/// A process that cannot name its own binary falls back to the old behaviour and says so rather
+/// than refusing: a run that cannot introspect itself is not a run that should stop. The refusal
+/// for the case where that fallback is *known* to be wrong is [`protocol_command_preflight`], and
+/// it happens before the run owns a run id.
+fn resolve_program(written: &str) -> Resolved {
+    let names_this_cli = Path::new(written)
+        .file_name()
+        .is_some_and(|name| name == PROTOCOL_BINARY);
+    if !names_this_cli {
+        return Resolved {
+            program: written.to_owned(),
+            resolution: Resolution::AsWritten,
+            note: None,
+        };
+    }
+    match std::env::current_exe() {
+        Ok(executable) => {
+            let program = executable.display().to_string();
+            let note = Some(format!(
+                "`{written}` is this driver's own build, {program} ({}); the driver's PATH was \
+                 not consulted",
+                env!("CARGO_PKG_VERSION")
+            ));
+            Resolved {
+                program,
+                resolution: Resolution::Driver,
+                note,
+            }
+        }
+        Err(error) => Resolved {
+            program: written.to_owned(),
+            resolution: Resolution::PathFallback,
+            note: Some(format!(
+                "`{written}` was resolved on the driver's PATH: this process cannot name its own \
+                 binary ({error}), so the build that answered may not be the {} this run is \
+                 recorded against",
+                env!("CARGO_PKG_VERSION")
+            )),
+        },
+    }
+}
+
+impl CliExecutors {
+    /// Appends this attempt's line to the run's record of which binary answered.
+    ///
+    /// Best-effort, for [`Launch::write`]'s reason: a run that walks and cannot write down which
+    /// binary it used leaves a reader worse off and is not wrong *now*, and a step refused because
+    /// its bookkeeping file would not open is a refusal about nothing the protocol cares about.
+    fn record_command(&self, context: &StepContext<'_>, written: &str, resolved: &Resolved) {
+        let entry = CommandRun {
+            state: context.state.to_string(),
+            index: context.index,
+            attempt: context.attempt,
+            program: written,
+            ran: &resolved.program,
+            resolved: resolved.resolution,
+        };
+        let Ok(line) = serde_json::to_string(&entry) else {
+            return;
+        };
+        let path = self.run_directory.join(COMMANDS_FILE);
+        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+            use std::io::Write as _;
+            let _ = writeln!(file, "{line}");
+        }
+    }
+}
+
 impl CommandStepExecutor for CliExecutors {
     fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
         // Expanded before anything is spawned, and a placeholder that cannot be filled is D5's
@@ -1565,8 +1702,15 @@ impl CommandStepExecutor for CliExecutors {
             Ok(words) => words,
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
-        let rendered = words.join(" ");
-        let outcome = Process::new(&words[0])
+        let resolved = resolve_program(&words[0]);
+        // The argv as **spawned**, not as written, because every message below quotes it and the
+        // whole defect this closes was a message that named `protocol` while a namesake ran.
+        let rendered = std::iter::once(resolved.program.as_str())
+            .chain(words[1..].iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.record_command(context, &words[0], &resolved);
+        let outcome = Process::new(&resolved.program)
             .args(&words[1..])
             .current_dir(&self.working_directory)
             .stdin(Stdio::null())
@@ -1588,7 +1732,15 @@ impl CommandStepExecutor for CliExecutors {
             "{}-{}-{}.log",
             context.state, context.index, context.attempt
         ));
-        let mut body = String::new();
+        // The step's own note, above its output: which binary answered, and — when that is not
+        // simply what the map wrote — why. A reader of one log can tell a step that ran the
+        // driver's own build from one that ran something it found.
+        let mut body = format!("# ran: {rendered}\n");
+        if let Some(note) = &resolved.note {
+            body.push_str("# ");
+            body.push_str(note);
+            body.push('\n');
+        }
         body.push_str(&String::from_utf8_lossy(&output.stdout));
         body.push_str(&String::from_utf8_lossy(&output.stderr));
         let _ = fs::write(&log, body);
@@ -2609,10 +2761,16 @@ fn metaharness_preflight(map: &StepMap) -> Option<String> {
 
 /// Every *this machine cannot run it today* pre-flight, in the order they are answered.
 ///
-/// Three checks, and the order is the one a person can act on: the seam's binary, then the CLI a
-/// driven session reaches the store through, then everything a `harness: b10x` step needs. Each is
-/// decidable before a run id, a lock, a snapshot or a model bill exists, which is the whole
-/// argument for them being here rather than at the first `llm` step.
+/// Four checks, and the order is the one a person can act on: the seam's binary, then the CLI a
+/// driven session reaches the store through, then everything a `harness: b10x` step needs, then
+/// the binary a `command` step saying `protocol` would spawn. Each is decidable before a run id, a
+/// lock, a snapshot or a model bill exists, which is the whole argument for them being here rather
+/// than at the first `llm` step.
+///
+/// Two `PATH`s. The session checks are about the one metaharness constructs for an `llm` step; the
+/// `command` check is about the **driver's** own, which is the operator's shell. That they are
+/// different is why `W4-3/1`'s `command` step ran a binary four releases stale while a guard that
+/// looked like it covered this was passing.
 ///
 /// The evidence-coverage check is deliberately **not** folded in and runs before this: it is
 /// decidable from the two documents alone and says *this map can never finish this plan* on every
@@ -2630,6 +2788,9 @@ fn machine_preflights(map: &StepMap, project: &Path, b10x: &B10xOptions) -> Opti
         }
     }
     if let Some(refusal) = b10x_preflight(map, b10x) {
+        return Some(refusal);
+    }
+    if let Some(refusal) = protocol_command_preflight(map) {
         return Some(refusal);
     }
     if let Some(note) = b10x_read_only_note(map, project, b10x) {
@@ -2927,6 +3088,104 @@ fn protocol_on_the_session_path() -> Option<String> {
          with a different version than the one this run is recorded against, and a run whose \n\
          evidence was produced by a build nobody can name is the defect `version-check` exists for."
     ))
+}
+
+/// Refuses a run whose `command` steps say `protocol` when this driver cannot guarantee they get it.
+///
+/// The third pre-flight, and it answers a question the other two do not.
+/// [`protocol_on_the_session_path`] is about the **session's** `PATH` — the one metaharness
+/// constructs for an `llm` step. A `command` step is spawned by the *driver*, with the *driver's*
+/// environment, and that difference is exactly why run `W4-3/1`'s failure got past a guard that
+/// looked like it covered this: two `PATH`s, one of them checked.
+///
+/// [`resolve_program`] normally removes the question — a step that says `protocol` gets
+/// `current_exe()`. This fires only on the branch where that is unavailable, because then the
+/// fallback is the very lookup that produced the defect, and whether it is safe is decidable here:
+/// if the `PATH` `protocol` *is* this build, nothing is at stake and the run proceeds.
+fn protocol_command_preflight(map: &StepMap) -> Option<String> {
+    let steps = protocol_command_steps(map);
+    if steps == 0 || std::env::current_exe().is_ok() {
+        return None;
+    }
+    protocol_command_refusal(steps, protocol_version_on_path().as_deref())
+}
+
+/// How many `command` steps of the map invoke this CLI, by the same file-name rule the executor uses.
+fn protocol_command_steps(map: &StepMap) -> usize {
+    map.states
+        .values()
+        .flat_map(|state| state.steps.iter())
+        .filter(|step| match step {
+            Step::Command(command) => Path::new(command.program())
+                .file_name()
+                .is_some_and(|name| name == PROTOCOL_BINARY),
+            _ => false,
+        })
+        .count()
+}
+
+/// The refusal itself, given what this process could learn about the `protocol` it would fall back to.
+///
+/// Separated from the two lookups because neither is reachable from a test: `current_exe()` does
+/// not fail on a machine a test suite runs on, so the *message* — which is the whole product of a
+/// pre-flight — would otherwise be checked by nobody. `installed` is `None` when there is no
+/// `protocol` on the driver's `PATH` at all, which is the same finding with no version to quote.
+fn protocol_command_refusal(steps: usize, installed: Option<&str>) -> Option<String> {
+    let ours = env!("CARGO_PKG_VERSION");
+    let disagreement = match installed {
+        // Agreement is not a finding: the fallback would spawn this very build.
+        Some(version) if version == ours => return None,
+        Some(version) => format!("that one reports `{version}` and this build is `{ours}`"),
+        None => format!("there is no `protocol` on that `PATH` at all, and this build is `{ours}`"),
+    };
+    Some(format!(
+        "this map has {steps} `command` step(s) that invoke `protocol`, and this driver cannot \n\
+         name its own binary: `current_exe()` is unavailable here, so such a step falls back to \n\
+         the first `protocol` on the driver's `PATH` — and {disagreement}.\n\
+         \n\
+         A `command` step is spawned **by the driver, with the driver's environment**, so the \n\
+         `PATH` that decides is the shell you typed `protocol drive` in — *not* the session \n\
+         `PATH` metaharness constructs for an `llm` step. \n\
+         `cargo install --path crates/protocol-cli --root ~/.local` is the fix for that other \n\
+         `PATH`, which looks in `$HOME/.local/bin`; it fixes this one only if that directory \n\
+         comes first in your own.\n\
+         \n\
+         A step that runs a binary older than the map executing it writes nothing and is recorded \n\
+         as *no verdict*, with the cause invisible in the message: run `W4-3/1` spent a step's \n\
+         whole retry budget on exactly that on 2026-08-28, against a `protocol` four releases \n\
+         stale.\n\
+         \n\
+         Put this build first on the `PATH` you drive from:\n\
+         \n\
+             cargo install --path crates/protocol-cli --root ~/.local\n\
+             export PATH=\"$HOME/.local/bin:$PATH\"\n\
+         \n\
+         or drive a map whose `command` steps name no `protocol`."
+    ))
+}
+
+/// What the first `protocol` on the driver's own `PATH` says it is, when there is one.
+///
+/// A spawn, where [`on_path`] is deliberately only a lookup — because the question is different.
+/// *Does a file exist* is decidable without running it; *which build is it* is not, and
+/// `--version` is the one question this CLI answers by printing and exiting. It is asked only on
+/// the branch where this process could not name its own binary, which is the branch where the
+/// answer decides whether the run can be trusted at all.
+fn protocol_version_on_path() -> Option<String> {
+    let paths = std::env::var_os("PATH")?;
+    let candidate = std::env::split_paths(&paths)
+        .map(|directory| directory.join(PROTOCOL_BINARY))
+        .find(|candidate| candidate.is_file())?;
+    let output = Process::new(candidate).arg("--version").output().ok()?;
+    let printed = String::from_utf8_lossy(&output.stdout);
+    // `clap`'s `--version` is `protocol <semver>`; the last word is the number, and a line that
+    // has no words at all is a binary that answered nothing rather than a version.
+    printed
+        .lines()
+        .next()?
+        .split_whitespace()
+        .next_back()
+        .map(ToOwned::to_owned)
 }
 
 /// Whether `program` is on `PATH` as a file that is there to be executed.
@@ -5941,6 +6200,126 @@ profile: test.reading
             ),
             None,
             "only the execution family `<task>.<ordinal>` is the run's own"
+        );
+    }
+
+    /// A `command` step that says `protocol` is spawned as the binary this process **is**.
+    ///
+    /// The unit half of the rule: keyed on the file name and on nothing else, so a path spelling
+    /// of the same request is the same request, and every other program a map can name is left
+    /// exactly where it was. The end-to-end half — that the substituted binary really is the one
+    /// that answers, proved by a version string only this build prints — is
+    /// `a_command_step_that_says_protocol_runs_the_build_that_is_driving_it` in
+    /// `tests/drive_cli.rs`.
+    #[test]
+    fn a_command_step_naming_this_cli_is_resolved_to_the_binary_this_process_is() {
+        let executable = std::env::current_exe().expect("a running process can name itself");
+        let expected = executable.display().to_string();
+
+        for spelling in [
+            "protocol",
+            "/usr/local/bin/protocol",
+            "./target/debug/protocol",
+        ] {
+            let resolved = resolve_program(spelling);
+            assert_eq!(
+                resolved.resolution,
+                Resolution::Driver,
+                "`{spelling}` names this CLI and was left to PATH"
+            );
+            assert_eq!(resolved.program, expected);
+            let note = resolved
+                .note
+                .expect("substituting a binary is never done silently");
+            assert!(
+                note.contains(&expected) && note.contains(env!("CARGO_PKG_VERSION")),
+                "the note names neither the binary nor the build: {note}"
+            );
+        }
+
+        for other in ["cargo", "bash", "git", "/bin/sh", "protocolol", "sh"] {
+            let untouched = resolve_program(other);
+            assert_eq!(
+                untouched.resolution,
+                Resolution::AsWritten,
+                "`{other}` is not this CLI and was rewritten anyway"
+            );
+            assert_eq!(untouched.program, other);
+            assert!(
+                untouched.note.is_none(),
+                "`{other}` resolved as written and still carried a note"
+            );
+        }
+    }
+
+    /// The third pre-flight: which maps it looks at, and what it says when it fires.
+    ///
+    /// The two lookups it sits behind are unreachable from a test — `current_exe()` does not fail
+    /// on a machine a suite runs on — so the scan and the message are checked directly. That is
+    /// also the honest scope of this test, and it is why the `PathFallback` note above exists: on
+    /// the machine where this refusal is wrong to fire, the step still says what it did.
+    #[test]
+    fn a_driver_that_cannot_name_itself_refuses_a_map_whose_commands_say_protocol() {
+        let elsewhere = aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/elsewhere\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: command\n        run: [cargo, test]\n",
+            None,
+        )
+        .expect("the map validates");
+        assert_eq!(
+            protocol_command_steps(&elsewhere),
+            0,
+            "a map that names no `protocol` is not this check's business"
+        );
+        assert!(protocol_command_preflight(&elsewhere).is_none());
+
+        let ours = aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/ours\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: command\n        run: [cargo, test]\n\
+             \x20     - kind: command\n        run: [protocol, artifact, validate]\n\
+             \x20     - kind: command\n        run: [/usr/local/bin/protocol, property, evidence]\n",
+            None,
+        )
+        .expect("the map validates");
+        assert_eq!(
+            protocol_command_steps(&ours),
+            2,
+            "both spellings of this CLI count and `cargo` does not"
+        );
+        assert!(
+            protocol_command_preflight(&ours).is_none(),
+            "this process can name its own binary, so there is nothing to refuse"
+        );
+
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(
+            protocol_command_refusal(2, Some(version)).is_none(),
+            "the PATH binary is this build, so the fallback would spawn it and nothing is at stake"
+        );
+
+        let stale = protocol_command_refusal(4, Some("0.28.0"))
+            .expect("a PATH binary of another version is refused");
+        assert!(
+            stale.contains("0.28.0") && stale.contains(version),
+            "a refusal over two versions names both: {stale}"
+        );
+        assert!(
+            stale.contains("4 `command` step(s)"),
+            "and how much of the map is at stake: {stale}"
+        );
+        assert!(
+            stale.contains("cargo install --path crates/protocol-cli --root ~/.local")
+                && stale.contains("export PATH="),
+            "the fix is named, and named correctly: an install alone puts the binary where a \
+             *session* looks, and a driver-side PATH is the operator's own shell: {stale}"
+        );
+
+        let absent = protocol_command_refusal(1, None)
+            .expect("nothing to fall back to is refused for the same reason");
+        assert!(
+            absent.contains("no `protocol` on that `PATH` at all"),
+            "and says that is what it found rather than quoting a version it does not have: \
+             {absent}"
         );
     }
 }

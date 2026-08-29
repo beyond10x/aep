@@ -895,3 +895,176 @@ fn the_checks_map_plans_against_the_repositorys_own_task() {
         .expect("`implement` reads a record a verifier wrote");
     assert_eq!(record, "{run_directory}/trace-implement.yaml");
 }
+
+/// The fixture map's `establish_verifiers`, rewritten to invoke `protocol` and one other program.
+///
+/// `--version` is the argument, because the version string is the one thing only *this* build
+/// prints: a namesake on the operator's `PATH` answers with its own number, and four releases of
+/// drift is exactly what run `W4-3/1` spent a retry budget on. `/bin/sh` is spelled absolutely so
+/// the step still runs with the empty `PATH` the test spawns the driver with — which is what makes
+/// the proof machine-independent rather than a fact about this laptop.
+///
+/// **`/bin/sh` is first on purpose.** A step whose program cannot be spawned produces no verdict
+/// and spends the state's retry budget, so with `protocol` first a driver that had stopped
+/// substituting would stop the run before the other step ever ran — and the test asserting *other
+/// programs are untouched* would fail for the substitution's reason rather than its own.
+fn map_invoking_protocol() -> String {
+    "format: aep.driver-steps/1\n\
+     id: fixture/drive\n\
+     workflow: adp/default/2\n\
+     states:\n\
+    \x20 establish_verifiers:\n\
+    \x20   steps:\n\
+    \x20     - kind: command\n\
+    \x20       description: a program that is not this CLI\n\
+    \x20       run: [/bin/sh, -c, \"echo resolved as written\"]\n\
+    \x20     - kind: command\n\
+    \x20       description: the build that is driving says which build it is\n\
+    \x20       run: [protocol, --version]\n\
+    \x20       evidence:\n\
+    \x20         kind: test_result\n\
+    \x20         suite: unit\n\
+    \x20         verifier: test-runner\n\
+    \x20 implement:\n\
+    \x20   steps:\n\
+    \x20     - kind: command\n\
+    \x20       run: [/bin/sh, -c, \"exit 0\"]\n\
+    \x20       evidence:\n\
+    \x20         kind: diff\n\
+    \x20         verifier: git\n"
+        .to_owned()
+}
+
+/// Every line of a run's `commands.jsonl`, parsed.
+fn command_record(run_directory: &Path) -> Vec<serde_json::Value> {
+    let path = run_directory.join("commands.jsonl");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
+    text.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).expect("each line of the record is JSON"))
+        .collect()
+}
+
+/// A `command` step that says `protocol` runs the binary the driver **is**, not a namesake.
+///
+/// **Run `W4-3/1`, 2026-08-28.** `protocol property evidence --out …` was step 4 of `verify`; the
+/// first `protocol` on the driver's own `PATH` was a 0.28.0 install that predates the `property`
+/// verb, so the step wrote nothing, the driver correctly reported *nothing was observed*, and the
+/// step burned its whole retry budget three times with the cause invisible in the message.
+///
+/// The driver is `protocol`, so `current_exe()` is the binary a step asking for `protocol` means.
+/// Spawned here with an **empty** `PATH`, which is what makes this a test of the substitution and
+/// not of this machine: without it the step cannot be run at all, and with it the step prints a
+/// version string only this build prints.
+#[test]
+fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
+    let fixture = Fixture::new("protocol-command", false);
+    write(
+        &fixture.directory.join("steps.yaml"),
+        &map_invoking_protocol(),
+    );
+    let nowhere = fixture.directory.join("an-empty-path");
+    std::fs::create_dir_all(&nowhere).expect("the empty PATH directory is writable");
+
+    let mut args: Vec<String> = vec!["drive".to_owned(), "run".to_owned()];
+    args.extend(fixture.location());
+    args.extend([
+        "--allow-evidence-gap".to_owned(),
+        "--max-iterations".to_owned(),
+        "8".to_owned(),
+    ]);
+    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = protocol_without_metaharness(&borrowed, &nowhere);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+
+    let run_directory = fixture.runs().join("DRIVE-1").join("1");
+
+    // The step ran and printed what only this build prints. A namesake would answer with its own
+    // number, and an unresolvable `protocol` would not have produced a log at all.
+    let banner = format!("protocol {}", env!("CARGO_PKG_VERSION"));
+    let log = std::fs::read_to_string(run_directory.join("establish_verifiers-1-1.log"))
+        .unwrap_or_else(|error| panic!("the step wrote no log: {error}\n{said}"));
+    assert!(
+        log.contains(&banner),
+        "the step did not run this build, which is the only one that prints `{banner}`:\n{log}\n{said}"
+    );
+
+    // Visible, on the step's own note: substituting a binary silently is its own kind of lie.
+    let header = log.lines().next().expect("the log opens with its header");
+    assert!(
+        header.starts_with("# ran:") && header.contains("/protocol"),
+        "the step's log does not name the binary that ran:\n{header}"
+    );
+
+    // And on the run's record, where a reader can tell one step's binary from another's.
+    let record = command_record(&run_directory);
+    let substituted = record
+        .iter()
+        .find(|entry| entry["state"] == "establish_verifiers" && entry["index"] == 1)
+        .expect("the record holds the step that said `protocol`");
+    assert_eq!(substituted["program"], "protocol");
+    assert_eq!(substituted["resolved"], "driver");
+    assert!(
+        substituted["ran"]
+            .as_str()
+            .expect("the record names a path")
+            .ends_with("/protocol"),
+        "the record does not name the binary that ran: {substituted}"
+    );
+}
+
+/// A `command` step naming any other program resolves exactly as it always did.
+///
+/// The substitution is keyed on the name `protocol` and nothing else — `cargo`, `bash` and `git`
+/// are tools the driver finds the way it always did, and a driver that rewrote one of those would
+/// be a second, undeclared thing to reason about.
+///
+/// This step is the state's **first**, so the assertion does not depend on the substitution
+/// working: a build that never substituted and a build that substituted everything both fail here,
+/// and only the second is what this test is for.
+#[test]
+fn a_command_step_naming_another_program_is_resolved_as_written() {
+    let fixture = Fixture::new("other-program", false);
+    write(
+        &fixture.directory.join("steps.yaml"),
+        &map_invoking_protocol(),
+    );
+    let nowhere = fixture.directory.join("an-empty-path");
+    std::fs::create_dir_all(&nowhere).expect("the empty PATH directory is writable");
+
+    let mut args: Vec<String> = vec!["drive".to_owned(), "run".to_owned()];
+    args.extend(fixture.location());
+    args.extend([
+        "--allow-evidence-gap".to_owned(),
+        "--max-iterations".to_owned(),
+        "8".to_owned(),
+    ]);
+    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = protocol_without_metaharness(&borrowed, &nowhere);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+
+    let run_directory = fixture.runs().join("DRIVE-1").join("1");
+    let record = command_record(&run_directory);
+    let untouched = record
+        .iter()
+        .find(|entry| entry["state"] == "establish_verifiers" && entry["index"] == 0)
+        .unwrap_or_else(|| panic!("the record holds the step that named another program:\n{said}"));
+    assert_eq!(untouched["program"], "/bin/sh");
+    assert_eq!(untouched["ran"], "/bin/sh");
+    assert_eq!(
+        untouched["resolved"], "as-written",
+        "a program that is not this CLI was rewritten: {untouched}"
+    );
+
+    let log = std::fs::read_to_string(run_directory.join("establish_verifiers-0-1.log"))
+        .unwrap_or_else(|error| panic!("that step wrote no log: {error}\n{said}"));
+    assert!(
+        log.contains("resolved as written"),
+        "that step did not run:\n{log}"
+    );
+    assert!(
+        !log.contains(&format!("protocol {}", env!("CARGO_PKG_VERSION"))),
+        "that step ran this CLI, which is not what it named:\n{log}"
+    );
+}
