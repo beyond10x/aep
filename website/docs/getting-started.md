@@ -141,7 +141,10 @@ directory `examples/development-passkeys/evidence/` holds all five, and
 ## 5. Ask how old the facts are
 
 Every evidence record states when somebody looked. `observed_at` is required, it is the caller's to
-supply, and a date in the future is refused (`observation_in_future`) rather than stored:
+supply, and an observation time in the future is refused (`observation_in_future`) rather than
+stored — a calendar date only once that day has begun in no timezone, an epoch value exactly. The
+refusal is per record and names the file and the position in it; the rest of the document is still
+submitted.
 
 ```console
 $ $B evidence inspect examples/development-passkeys/evidence/01-red-test.yaml

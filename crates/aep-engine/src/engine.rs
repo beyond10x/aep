@@ -358,6 +358,11 @@ impl<C: Clock> ProtocolEngine for Engine<C> {
         // decaying observation: stored as one, it reads as the freshest record in the log — a
         // negative age inflates the remaining horizon — and the model can no longer answer *has
         // anyone ever looked at this?*.
+        //
+        // The comparison is the caller's spelling's, not the engine's: `ObservedAt::is_after`
+        // refuses an instant exactly and a calendar day only once that day has not begun in any
+        // timezone. The engine still does not decide when the observation happened (invariant 7) —
+        // it decides nothing here except whether what the caller wrote can already have been true.
         if submission.observed_at.is_after(now) {
             return Err(ProtocolError::ObservationInFuture {
                 observed_at: submission.observed_at,

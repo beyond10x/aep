@@ -43,18 +43,55 @@ A record carries two dates and they answer different questions.
 three weeks old — the filing tells you nothing about the code. So the engine will not infer the
 observation date from the moment of submission, and it does not accept a record without one.
 
-A date in the future is **refused outright**, with the code `observation_in_future`. The reason is
-narrow and worth stating: a scheduled-but-never-performed check, stored as an observation, reads as
-the freshest record in the log, and once one is in there the store can no longer answer whether
-anybody has ever actually looked.
+An observation time in the future is **refused outright**, with the code
+`observation_in_future`. The reason is narrow and worth stating: a scheduled-but-never-performed
+check, stored as an observation, reads as the freshest record in the log, and once one is in there
+the store can no longer answer whether anybody has ever actually looked.
 
-`protocol evidence inspect` reads a record file and reports the ages without evaluating anything:
+### A day is not an instant, and the refusal knows which you wrote
+
+`observed_at` accepts two spellings, and they are two different claims:
+
+```yaml
+observed_at: 2026-08-30        # a day
+observed_at: 1788134400000     # an instant — that day's midnight UTC
+```
+
+A **day** is only a day somewhere. `2026-08-30` written at UTC+2 at 00:30 local is
+`2026-08-29T22:30Z`, so a store east of Greenwich writes tomorrow's UTC date for the last hours of
+every UTC day, and the date is correct. A day is therefore refused only once it has begun in **no**
+timezone — the boundary is its midnight in the most-ahead zone in use, UTC+14, fourteen hours before
+its midnight UTC.
+
+An **instant** is an instant everywhere and keeps the exact comparison, because a caller who wrote
+one meant one. The two records above can get opposite answers from one clock, and that is the point:
+the spelling a document was written in survives to the comparison.
+
+Nothing is clamped. The engine does not move a caller's date to its own clock — that would be the
+engine deciding when the observation happened, which is the one thing it may not do. A date that has
+begun nowhere stays refused, and the refusal is not a warning.
+
+**A future record refuses itself, not the file.** `protocol evaluate --evidence` submits every other
+record in the document, prints its evaluation, and exits `1` with one line per refused record naming
+the file, the position in it, and the date as the writer wrote it:
+
+```console
+verify.yaml: record 12: the observation time 2026-08-30 has not happened yet; the clock reads 2026-08-28T22:27:33Z (1787956053626ms)
+```
+
+A document whose every record is future-dated still fails.
+
+`protocol evidence inspect` reads a record file and reports the ages without evaluating anything. It
+puts every record to the same comparison, so the two verbs answer identically about one file:
 
 ```console
 $ protocol evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
 ```
+
+`examples/evidence-horizons-corpus/writers-day.yaml` is the corpus case: five records at one
+reference date, two of which name the same instant and get opposite answers.
 
 ## Horizons: a fact that gets old reads `Unknown`, never `False`
 

@@ -239,6 +239,27 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **A date written east of Greenwich is no longer a claim about the future, and one bad record no
+  longer discards the whole evidence file.** `observed_at: 2026-08-30` is a *day*, and it meant
+  midnight UTC — so a store at UTC+2 writing local calendar dates wrote a future instant for the
+  last two hours of every UTC day: 20 of one adopter's 215 records, refused, and one refused record
+  refused the entire document. A bare calendar date is now compared against the moment that day
+  begins in the most-ahead timezone in use, UTC+14, so it is refused only once it is in the future
+  for every writer on earth; the epoch-millisecond spelling keeps the exact comparison it always
+  had, because a caller who wrote an instant meant one. The two spellings of one instant are
+  therefore no longer the same value. **Nothing is relaxed and nothing is clamped**: a date that has
+  begun in no timezone is still refused, no observation time is rewritten to the engine's clock, and
+  the refusal is not downgraded to a warning. What changed is what it refuses — *that record*, named
+  by file, by position in the file (`record 12`) and by the date as the writer wrote it, instead of
+  an epoch pair and the document. `protocol evaluate` submits the file's other records, prints its
+  evaluation and exits 1; a document whose every record is future-dated still fails.
+  `protocol evidence inspect` puts every record to the same comparison, so the two verbs answer
+  identically about one file — `--at`, which pins the comparison to the end of the named day rather
+  than the wall clock, is the one place they still differ and the help now says so.
+  `examples/evidence-horizons-corpus/writers-day.yaml` is the case, with the pair that carries it:
+  two records naming one instant, one written as a day and admitted, one written as an instant and
+  refused.
+
 * **A `review-result` can be recorded with its body, and retired.** Found by the second adopter
   (`story:review-result-cannot-be-authored`): `protocol artifact new` took no body, `body` refused
   the kind as immutable, and `move --to archived` — the one transition

@@ -133,9 +133,13 @@ report's construction (narrowing only); and refusal codes across every validator
 An evidence record states when somebody looked, and `observed_at` is required — the engine will not
 infer it from the moment of submission, because a green suite from three weeks ago filed today is
 three weeks old. A requirement may declare a horizon; past it the requirement reads `Unknown`, so a
-stale gate says *go look again* rather than *this is broken*. A date in the future is refused, not
-stored: a scheduled-but-never-performed check filed as an observation is the newest record in the
-log, and after one of those the store can no longer say whether anybody has ever looked.
+stale gate says *go look again* rather than *this is broken*. An observation time in the future is
+refused, not stored: a scheduled-but-never-performed check filed as an observation is the newest
+record in the log, and after one of those the store can no longer say whether anybody has ever
+looked. A date and an instant are refused on different boundaries — a bare calendar date is a day
+somewhere, so it is refused only once it has begun in no timezone, while an epoch value is compared
+exactly. The refusal is per record: the rest of the document is still submitted, and the refusal
+names the file, the position and the date as written.
 
 **Enforced by:** the required field with no default; the `observation_in_future` refusal; the
 withholding of a lapsed record's facts under the plan's strictest horizon for that kind; and a

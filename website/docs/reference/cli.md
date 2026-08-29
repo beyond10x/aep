@@ -276,8 +276,12 @@ expired record is a normal finding; a corpus with none is a corpus nobody has ke
 `inspect`'s `--horizon` is report-only: a what-if applied to a printed table. It reaches no
 requirement and no evaluation, and nothing it prints can extend the life of a record. The horizon
 that decides a gate is declared on a requirement, in a reviewed document. `inspect` exits `1` on a
-record whose observation time is in the future — the same refusal the engine applies, available
-before anything is submitted.
+record whose observation time is in the future, naming the file and the record's position in it —
+the engine's own comparison, available before anything is submitted, so `inspect` and
+`protocol evaluate --evidence` answer identically about one file. A calendar date is refused only
+once that day has begun in no timezone (its midnight at UTC+14); an epoch value is compared exactly.
+`--at` is the one place the two verbs differ: it pins the comparison to the **end** of the named day
+instead of the wall clock, so reading a record on the day it was written keeps working.
 
 ## Entity surface
 

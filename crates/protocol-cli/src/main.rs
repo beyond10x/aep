@@ -611,14 +611,25 @@ enum EvidenceCommand {
     },
     /// Read an evidence file and report, per record, when somebody last looked.
     ///
-    /// Reads the same document `protocol evaluate --evidence` submits, and applies the same refusal
-    /// to a future observation time — so the check that makes a scheduled re-check unwritable is
-    /// available before anything is submitted to an engine.
+    /// Reads the same document `protocol evaluate --evidence` submits and puts every record to the
+    /// engine's own future-observation comparison, so the two verbs answer identically about one
+    /// file: an observation written as a calendar date is refused only once that day has begun in
+    /// no timezone, one written as epoch milliseconds is compared exactly, and either refusal
+    /// names the record rather than the document. The check that makes a scheduled re-check
+    /// unwritable is therefore available before anything is submitted to an engine.
+    ///
+    /// The one place the two verbs differ is `--at`, which pins the comparison to a chosen day
+    /// instead of the wall clock.
     Inspect {
         /// The evidence files to read.
         #[arg(required = true)]
         evidence: Vec<PathBuf>,
         /// The day to age the records against. Defaults to today.
+        ///
+        /// It also pins the future-observation check, to the **end** of that day — reading a
+        /// record the day it was written is the verb's primary use, and a record stamped 14:07 is
+        /// inside its day rather than ahead of its first millisecond. Without it the check runs
+        /// against the wall clock, which is the instant `protocol evaluate` submits against.
         #[arg(long, value_name = "DATE")]
         at: Option<String>,
         /// A horizon to apply for the report, such as `7d`.
@@ -876,12 +887,16 @@ fn run() -> Result<ExitCode> {
                 at,
                 horizon,
                 format,
-            } => evidence_inspect(
-                &evidence,
-                observation_day(at.as_deref())?,
-                horizon.as_deref(),
-                format,
-            ),
+            } => {
+                let day = observation_day(at.as_deref())?;
+                evidence_inspect(
+                    &evidence,
+                    day,
+                    future_reference(at.as_deref(), day),
+                    horizon.as_deref(),
+                    format,
+                )
+            }
         },
         Command::Reverse { command } => reverse::run(command),
         Command::Workspace { command } => workspace::run(command),
@@ -3987,12 +4002,32 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
             .context("initialising the execution")?,
     };
 
+    // One record two hours ahead used to discard the other 214: the first failure propagated with
+    // `?` and the run produced no evaluation at all. A future observation is still a refusal — it
+    // is invariant 7 and nothing here downgrades it to a warning — but it refuses *that record*,
+    // by file position and by the date as written, and the rest of the document is still
+    // submitted. Every other refusal the engine can make is a fact about the document as a whole
+    // and still stops the run.
+    let mut refused: Vec<String> = Vec::new();
     for path in &args.evidence {
-        for submission in read_evidence(path)? {
-            engine
-                .submit_evidence(&mut execution, submission)
-                .map_err(|error| anyhow::anyhow!("{error}"))
-                .with_context(|| format!("submitting evidence from {}", path.display()))?;
+        let origin = path.display().to_string();
+        for (ordinal, submission) in read_evidence(path)?.into_iter().enumerate() {
+            let observed_at = submission.observed_at;
+            match engine.submit_evidence(&mut execution, submission) {
+                Ok(_) => {}
+                Err(aep_engine::error::ProtocolError::ObservationInFuture { now, .. }) => {
+                    refused.push(future_observation_refusal(
+                        &origin,
+                        ordinal + 1,
+                        observed_at,
+                        now,
+                    ));
+                }
+                Err(error) => {
+                    return Err(anyhow::anyhow!("{error}"))
+                        .with_context(|| format!("submitting evidence from {origin}"));
+                }
+            }
         }
     }
 
@@ -4018,7 +4053,8 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
             Format::Text => outln!("{explanation}"),
             Format::Yaml | Format::Json => print_serialised(&explanation, args.format)?,
         }
-        return Ok(exit_code(decision.is_allowed()));
+        report_refusals(&refused);
+        return Ok(exit_code(decision.is_allowed() && refused.is_empty()));
     }
 
     let evaluation = engine.evaluate(&execution);
@@ -4059,7 +4095,19 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
     // Exit 0: the report was produced. Whether the execution is blocked is in the report, and a
     // harness that wants to branch on it reads `blocked` or `is_complete` from the JSON — a blocked
     // execution is the normal case, not an error.
-    Ok(ExitCode::SUCCESS)
+    //
+    // A refused record is not that case. The evaluation is still printed, because an evaluation
+    // missing one fact is worth more than no evaluation at all, and the exit code still says the
+    // run did not read everything it was given.
+    report_refusals(&refused);
+    Ok(exit_code(refused.is_empty()))
+}
+
+/// Prints per-record refusals where a person reading a report will still see them.
+fn report_refusals(refusals: &[String]) {
+    for refusal in refusals {
+        eprintln!("{refusal}");
+    }
 }
 
 /// `protocol entity`
@@ -4583,6 +4631,51 @@ fn print_serialised<T: serde::Serialize>(value: &T, format: Format) -> Result<()
     Ok(())
 }
 
+/// The instant a future-observation refusal is decided against.
+///
+/// Two verbs read one evidence document and must answer identically about it, so both put the
+/// caller's `observed_at` to [`aep_domain::time::ObservedAt::is_after`] — the engine's own
+/// comparison — rather than each carrying a rule of its own. What differs is only which instant
+/// they compare against:
+///
+/// * **no `--at`**: the wall clock, which is exactly what `protocol evaluate` submits against;
+/// * **`--at <day>`**: the last millisecond of that day. A pinned day is a what-if, and the
+///   permissive end of it is the one that keeps the verb's primary use working — reading a record
+///   the day it was written, whose instant is somewhere inside the day, not at its first
+///   millisecond.
+fn future_reference(written: Option<&str>, day: aep_domain::time::CivilDate) -> Timestamp {
+    /// One day, less a millisecond: the last instant that belongs to a pinned day.
+    const LAST_MILLISECOND_OF_A_DAY: u64 = 86_400_000 - 1;
+
+    match written {
+        Some(_) => Timestamp::from_epoch_millis(
+            day.to_timestamp()
+                .epoch_millis()
+                .saturating_add(LAST_MILLISECOND_OF_A_DAY),
+        ),
+        None => now_observed().timestamp(),
+    }
+}
+
+/// One record's refusal, in the words both verbs print.
+///
+/// The position is the point. The message an adopter pasted named an epoch pair and nothing else,
+/// so the record it was about was not identifiable among 215 — and the file it came from produced
+/// no evaluation at all. This names the file, which record in it, and the observation *as the
+/// caller wrote it*.
+fn future_observation_refusal(
+    origin: &str,
+    ordinal: usize,
+    observed_at: aep_domain::time::ObservedAt,
+    now: Timestamp,
+) -> String {
+    format!(
+        "{origin}: record {ordinal}: the observation time {observed_at} has not happened yet; \
+         the clock reads {} ({now})",
+        now.iso_8601()
+    )
+}
+
 /// `0` when the answer is yes, `1` when it is no.
 /// The day a report classifies against: what was asked for, or today.
 fn observation_day(written: Option<&str>) -> Result<aep_domain::time::CivilDate> {
@@ -4818,9 +4911,15 @@ struct InspectedRecord {
 }
 
 /// `protocol evidence inspect`
+///
+/// Two references, and they answer different questions. `at` is the day the report **ages**
+/// against, so a horizon boundary reads in whole days exactly as a document scanner reads it.
+/// `reference` is the instant a **future** observation is refused against, and it is the engine's
+/// own comparison so that this verb and `protocol evaluate` cannot disagree about one file.
 fn evidence_inspect(
     paths: &[PathBuf],
     at: aep_domain::time::CivilDate,
+    reference: Timestamp,
     horizon: Option<&str>,
     format: Format,
 ) -> Result<ExitCode> {
@@ -4840,23 +4939,23 @@ fn evidence_inspect(
             fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let origin = path.display().to_string();
         let inputs = aep_schema::parse::evidence_list(&text, Some(&origin))?;
-        for input in inputs {
+        for (ordinal, input) in inputs.into_iter().enumerate() {
             let observed = input.observed_at;
-            // The reference is a civil date, so the future test runs at civil granularity: a
-            // record stamped 14:07 today is not "in the future" of today, and `at.to_timestamp()`
-            // is the start of the day — comparing millis against it would refuse every record the
-            // day it is written, which is the verb's primary use.
-            let observed_date = aep_domain::time::CivilDate::from_timestamp(observed.timestamp());
-            if observed_date > at {
-                future.push(format!(
-                    "{origin}: an observation on {observed_date} has not happened yet at {at}"
+            // The engine's comparison, made here so the two verbs cannot answer differently about
+            // one document: a calendar date is refused only once it has begun in no timezone, an
+            // epoch value is compared exactly, and the record that fails is named.
+            if observed.is_after(reference) {
+                future.push(future_observation_refusal(
+                    &origin,
+                    ordinal + 1,
+                    observed,
+                    reference,
                 ));
             }
             records.push(InspectedRecord {
                 file: origin.clone(),
                 kind: input.evidence.kind().to_string(),
-                observed_at: aep_domain::time::CivilDate::from_timestamp(observed.timestamp())
-                    .to_string(),
+                observed_at: observed.day().to_string(),
                 age_days: observed.age_days(now),
                 state: horizon.map(|horizon| {
                     if horizon.covers(observed.timestamp(), now) {

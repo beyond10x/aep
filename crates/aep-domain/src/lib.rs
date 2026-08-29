@@ -119,7 +119,7 @@ pub use requirement::{
 };
 pub use review::{Finding, ReviewDisposition, ReviewResult, Reviewer, Severity};
 pub use task::{Constraints, Objective, Task, TaskKind};
-pub use time::{CivilDate, Horizon, ObservedAt, Timestamp};
+pub use time::{CivilDate, Granularity, Horizon, ObservedAt, Timestamp};
 pub use verification::{Counterexample, Seed, VerificationResult, VerificationStatus, Verifier};
 pub use version::{MajorVersion, PrincipleRef, ProfileVersionedRef, ProtocolRef, WorkflowRef};
 pub use workflow::{State, StateKind, Transition, Workflow};

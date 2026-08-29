@@ -4196,6 +4196,225 @@ fn inspect_accepts_a_record_observed_on_the_reference_date_itself() {
     );
 }
 
+/// A document with one good record, one dated after any clock will read, and one more good record.
+///
+/// `2099-01-01` rather than a date computed from the clock: the property is *this record is in the
+/// future*, and a fixture that has to be regenerated to stay true is a fixture that goes stale.
+fn mixed_evidence_document(name: &str) -> PathBuf {
+    let directory = scratch(name);
+    let file = directory.join("verify.yaml");
+    write(
+        &file,
+        "- kind: test_result\n  observed_at: 2023-11-13\n  suite: unit\n  passed: 34\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n\n- kind: test_result\n  observed_at: 2099-01-01\n  suite: regression\n  passed: 812\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n\n- kind: test_result\n  observed_at: 2023-11-13\n  suite: integration\n  passed: 7\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
+    );
+    file
+}
+
+#[test]
+fn one_future_record_refuses_itself_by_position_and_the_document_is_still_evaluated() {
+    // The adopter's report: one record two hours ahead discarded the other 214, and the run
+    // produced no evaluation at all. The refusal stands — it is invariant 7 and nothing here
+    // downgrades it — but it is now about that record, and the rest of the file is submitted.
+    let file = mixed_evidence_document("protocol-cli-evaluate-future-record");
+    let output = protocol(&[
+        "evaluate",
+        "--task",
+        TASK,
+        "--artifacts",
+        ARTIFACTS,
+        "--evidence",
+        printable(&file),
+    ]);
+
+    assert_eq!(
+        code(&output),
+        1,
+        "a refused record is not a warning: {}",
+        stdout(&output)
+    );
+    let report = stdout(&output);
+    assert!(
+        report.contains("state       "),
+        "the evaluation is still produced — an evaluation missing one fact beats no evaluation: {report}"
+    );
+    assert!(
+        report.contains("\u{2713} tests.unit.failed == 0"),
+        "record 1 reached the engine, which is what `the rest of the document is submitted` means: {report}"
+    );
+    assert!(
+        report.contains("unobserved: regression_suite.result"),
+        "and record 2 did not: a refused record contributes no fact, only a refusal: {report}"
+    );
+    let refusals = stderr(&output);
+    assert!(
+        refusals.contains("record 2"),
+        "the refusal names which of the three records it is about: {refusals}"
+    );
+    assert!(
+        refusals.contains("2099-01-01"),
+        "and the date as the writer wrote it, not only an epoch pair: {refusals}"
+    );
+    assert!(
+        refusals.contains("verify.yaml"),
+        "and the file it is in: {refusals}"
+    );
+    assert_eq!(
+        refusals
+            .lines()
+            .filter(|line| line.contains("record "))
+            .count(),
+        1,
+        "the two dated records around it were submitted, not refused: {refusals}"
+    );
+}
+
+#[test]
+fn a_document_whose_every_record_is_future_dated_still_fails() {
+    // Nothing is downgraded to a warning by being common. A file of scheduled re-checks submits
+    // nothing and says so, with one line per record.
+    let directory = scratch("protocol-cli-evaluate-all-future");
+    let file = directory.join("scheduled.yaml");
+    write(
+        &file,
+        "- kind: test_result\n  observed_at: 2099-01-01\n  suite: unit\n  passed: 1\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n\n- kind: test_result\n  observed_at: 2099-01-02\n  suite: regression\n  passed: 2\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
+    );
+    let output = protocol(&[
+        "evaluate",
+        "--task",
+        TASK,
+        "--artifacts",
+        ARTIFACTS,
+        "--evidence",
+        printable(&file),
+    ]);
+
+    assert_eq!(code(&output), 1, "{}", stdout(&output));
+    let refusals = stderr(&output);
+    assert!(refusals.contains("record 1"), "{refusals}");
+    assert!(refusals.contains("record 2"), "{refusals}");
+}
+
+#[test]
+fn evaluate_and_inspect_answer_identically_about_one_file() {
+    // `evidence inspect`'s help says the two verbs apply one refusal to a future observation time.
+    // They did not: one refused an instant and the whole file, the other reported a day and the
+    // record. Both now put every record to the engine's own comparison and name the same one.
+    let file = mixed_evidence_document("protocol-cli-two-verbs-one-answer");
+
+    let evaluated = protocol(&[
+        "evaluate",
+        "--task",
+        TASK,
+        "--artifacts",
+        ARTIFACTS,
+        "--evidence",
+        printable(&file),
+    ]);
+    let inspected = protocol(&["evidence", "inspect", printable(&file)]);
+
+    assert_eq!(code(&evaluated), 1, "{}", stdout(&evaluated));
+    assert_eq!(code(&inspected), 1, "{}", stdout(&inspected));
+    for refusals in [stderr(&evaluated), stderr(&inspected)] {
+        assert!(refusals.contains("record 2"), "{refusals}");
+        assert!(refusals.contains("2099-01-01"), "{refusals}");
+        assert!(
+            !refusals.contains("record 1") && !refusals.contains("record 3"),
+            "neither verb refuses a record the other admits: {refusals}"
+        );
+    }
+}
+
+#[test]
+fn inspect_admits_a_date_that_is_today_at_utc_plus_fourteen_and_refuses_one_nowhere_yet() {
+    // The adopter's store sits at UTC+2 and writes local calendar dates, so between 22:00 and
+    // midnight local — the last two hours of every UTC day — the correct date parses to tomorrow
+    // at Greenwich. Measured in their tree at 22:27 UTC on 2026-08-28: 20 of 215 records refused.
+    // Pinned here with `--at`, whose reference is the end of the named day.
+    let directory = scratch("protocol-cli-inspect-writers-day");
+    let file = directory.join("local-dates.yaml");
+    write(
+        &file,
+        "- kind: test_result\n  observed_at: 2026-09-02\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
+    );
+    let admitted = protocol(&[
+        "evidence",
+        "inspect",
+        printable(&file),
+        "--at",
+        REFERENCE_DATE,
+    ]);
+    assert_eq!(
+        code(&admitted),
+        0,
+        "2026-09-02 had begun at UTC+14 while Greenwich was still on 2026-09-01: {}",
+        stderr(&admitted)
+    );
+
+    let nowhere_yet = directory.join("day-after.yaml");
+    write(
+        &nowhere_yet,
+        "- kind: test_result\n  observed_at: 2026-09-03\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
+    );
+    let refused = protocol(&[
+        "evidence",
+        "inspect",
+        printable(&nowhere_yet),
+        "--at",
+        REFERENCE_DATE,
+    ]);
+    assert_eq!(
+        code(&refused),
+        1,
+        "and a day that has begun in no timezone is still a plan, not an observation"
+    );
+    assert!(
+        stderr(&refused).contains("2026-09-03"),
+        "{}",
+        stderr(&refused)
+    );
+}
+
+/// The corpus's own case for *the writer's day is not the engine's day*.
+const WRITERS_DAY: &str = "examples/evidence-horizons-corpus/writers-day.yaml";
+
+#[test]
+fn the_corpus_case_admits_two_spellings_and_refuses_the_two_it_names() {
+    // Records 2 and 3 of the fixture name one instant — midnight UTC on 2026-09-02 — written as a
+    // day and as an epoch value. One is admitted and the other refused, which is the whole rule:
+    // the granularity a document was written in survives to the comparison. A fixture where the
+    // two spellings agreed would pass whether or not the rule held.
+    let output = protocol(&["evidence", "inspect", WRITERS_DAY, "--at", REFERENCE_DATE]);
+
+    assert_eq!(
+        code(&output),
+        1,
+        "two of the five have not happened yet: {}",
+        stdout(&output)
+    );
+    assert!(
+        stdout(&output).contains("5 record(s), aged at 2026-09-01"),
+        "the whole table is printed anyway: {}",
+        stdout(&output)
+    );
+    let refusals = stderr(&output);
+    assert!(
+        refusals.contains("record 3: the observation time 1788307200000ms"),
+        "the instant spelling of 2026-09-02 midnight is refused exactly: {refusals}"
+    );
+    assert!(
+        refusals.contains("record 4: the observation time 2026-09-03"),
+        "and a day that has begun in no timezone, named as the date it was written: {refusals}"
+    );
+    assert_eq!(
+        refusals
+            .lines()
+            .filter(|line| line.contains("record "))
+            .count(),
+        2,
+        "records 1, 2 and 5 are admitted — including 2026-09-02 written as a day: {refusals}"
+    );
+}
+
 #[test]
 fn an_evidence_document_without_an_observation_time_is_refused_by_name() {
     // The field is required, and the refusal has to say which field — a harness author who omits it

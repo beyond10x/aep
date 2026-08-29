@@ -490,6 +490,31 @@ impl<'de> serde::Deserialize<'de> for Horizon {
     }
 }
 
+/// How a caller spelled an observation time.
+///
+/// The distinction has to survive parsing, because it decides which comparison
+/// [`ObservedAt::is_after`] makes. An instant is the same instant everywhere. A day is only a day
+/// *somewhere*: `2026-08-30` written at UTC+2 at 00:30 local is `2026-08-29T22:30Z`, so a store
+/// east of Greenwich writes tomorrow's UTC date for the last hours of every UTC day. Collapsing
+/// both spellings to a [`Timestamp`] at parse time is what made a correct date read as a claim
+/// about the future.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Granularity {
+    /// A calendar date, as a person writes one in a document.
+    Day,
+    /// An instant, in epoch milliseconds.
+    Instant,
+}
+
+/// The furthest a civil timezone runs ahead of UTC, in milliseconds.
+///
+/// UTC+14 — the Line Islands, and Samoa on summer time — is the most-ahead zone in use, so a
+/// calendar day starts there fourteen hours before it starts at UTC. It is a constant rather than
+/// a lookup on purpose: this crate carries no zone database and is clock-free (invariant 8), and
+/// the question being answered is not *which zone was the writer in* but *has this day begun for
+/// anybody at all*.
+const MAX_UTC_OFFSET_MILLIS: u64 = 14 * 3_600_000;
+
 /// When somebody looked.
 ///
 /// The second of an evidence record's two times, and the one the protocol reasons about. The
@@ -517,41 +542,100 @@ impl<'de> serde::Deserialize<'de> for Horizon {
 /// instant, or the calendar date a person writes in a document:
 ///
 /// ```yaml
-/// observed_at: 2026-08-30        # midnight UTC on that day
-/// observed_at: 1788134400000     # the same instant, exactly
+/// observed_at: 2026-08-30        # a day, whose instant is midnight UTC
+/// observed_at: 1788134400000     # that instant, exactly
 /// ```
 ///
 /// The alias is deliberate and follows the convention this repository already keeps for
 /// `unit_tests.failed` beside `tests.unit.failed`: the canonical form is what the engine emits, the
 /// second spelling is only accepted on input. A hand-written evidence document whose observation
 /// time is a thirteen-digit number is a document nobody checks by reading.
+///
+/// The two are **not** the same value, and the difference is carried rather than discarded: a
+/// record keeps its [`Granularity`], so a date is still a day where the future comparison is made
+/// and where a refusal is printed. It is not the same value in the other direction either — a
+/// caller who wrote `1788134400000` gets the exact comparison, because they meant an instant.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, schemars::JsonSchema,
 )]
 #[serde(transparent)]
-pub struct ObservedAt(Timestamp);
+pub struct ObservedAt {
+    /// The instant: the day's midnight UTC where the caller wrote a day.
+    at: Timestamp,
+    /// Which of the two spellings the caller used. Not serialised: the wire form is the instant,
+    /// and the spelling is a fact about the document that produced it.
+    #[serde(skip)]
+    written_as: Granularity,
+}
 
 impl ObservedAt {
-    /// An observation made at `at`.
+    /// An observation made at the instant `at`.
+    ///
+    /// The result compares exactly in [`Self::is_after`]. Use [`Self::on_day`] for a date somebody
+    /// wrote in a document; the two are different claims and the type keeps them apart.
     pub const fn new(at: Timestamp) -> Self {
-        Self(at)
+        Self {
+            at,
+            written_as: Granularity::Instant,
+        }
     }
 
-    /// The instant itself.
+    /// An observation a document dated with a calendar day.
+    ///
+    /// The instant is that day's midnight UTC, exactly as before. What is new is that the value
+    /// remembers it was written as a day, which is what [`Self::is_after`] needs to avoid refusing
+    /// a date that is today for the writer and tomorrow at Greenwich.
+    #[must_use]
+    pub fn on_day(day: CivilDate) -> Self {
+        Self {
+            at: day.to_timestamp(),
+            written_as: Granularity::Day,
+        }
+    }
+
+    /// The instant itself — the day's midnight UTC where the caller wrote a day.
     pub const fn timestamp(self) -> Timestamp {
-        self.0
+        self.at
+    }
+
+    /// How the caller spelled it.
+    pub const fn written_as(self) -> Granularity {
+        self.written_as
+    }
+
+    /// The day this observation falls on, in UTC.
+    #[must_use]
+    pub fn day(self) -> CivilDate {
+        CivilDate::from_timestamp(self.at)
     }
 
     /// Whether this observation is claimed to have happened after `now`.
     ///
-    /// `true` is a refusal, never a fresh record.
+    /// `true` is a refusal, never a fresh record. The two spellings are refused on different
+    /// boundaries, and that is the whole reason [`Granularity`] is carried this far:
+    ///
+    /// * an **instant** is compared exactly, as it always was — a caller who wrote one meant one;
+    /// * a **day** is refused only once it has not begun anywhere on earth. The boundary is that
+    ///   day's own midnight in the most-ahead zone in use, UTC+14, which is fourteen hours before
+    ///   its midnight UTC. Below that boundary the date is unambiguously in the future for every
+    ///   writer there is; above it, somebody on earth is having that day right now and has written
+    ///   the correct date.
+    ///
+    /// What this does **not** do is decide when the observation happened (invariant 7). It widens
+    /// one comparison by the width of the timezone map and refuses everything past it; nothing is
+    /// clamped, defaulted or rewritten, and a record dated tomorrow everywhere is refused exactly
+    /// as it was.
     pub const fn is_after(self, now: Timestamp) -> bool {
-        self.0.epoch_millis() > now.epoch_millis()
+        let begins = match self.written_as {
+            Granularity::Instant => self.at.epoch_millis(),
+            Granularity::Day => self.at.epoch_millis().saturating_sub(MAX_UTC_OFFSET_MILLIS),
+        };
+        begins > now.epoch_millis()
     }
 
     /// How old the observation is at `now`, in milliseconds; zero when it is not yet past.
     pub const fn age_millis(self, now: Timestamp) -> u64 {
-        now.epoch_millis().saturating_sub(self.0.epoch_millis())
+        now.epoch_millis().saturating_sub(self.at.epoch_millis())
     }
 
     /// How old the observation is at `now`, in whole days.
@@ -564,16 +648,14 @@ impl<'de> serde::Deserialize<'de> for ObservedAt {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let written = crate::node::Node::deserialize(deserializer)?;
         match &written {
-            crate::node::Node::Text(text) => Ok(Self(
-                CivilDate::parse(text)
-                    .map_err(serde::de::Error::custom)?
-                    .to_timestamp(),
+            crate::node::Node::Text(text) => Ok(Self::on_day(
+                CivilDate::parse(text).map_err(serde::de::Error::custom)?,
             )),
             crate::node::Node::Number(number) => {
                 let millis = number.to_string();
                 millis
                     .parse::<u64>()
-                    .map(|millis| Self(Timestamp::from_epoch_millis(millis)))
+                    .map(|millis| Self::new(Timestamp::from_epoch_millis(millis)))
                     .map_err(|_| {
                         serde::de::Error::custom(format!(
                             "an observation time is a date such as 2026-08-30 or epoch \
@@ -591,13 +673,20 @@ impl<'de> serde::Deserialize<'de> for ObservedAt {
 
 impl From<Timestamp> for ObservedAt {
     fn from(at: Timestamp) -> Self {
-        Self(at)
+        Self::new(at)
     }
 }
 
 impl fmt::Display for ObservedAt {
+    /// The spelling the caller used: the date for a day, epoch milliseconds for an instant.
+    ///
+    /// A refusal that names `1787961600000ms` does not tell the author of 215 records which one it
+    /// is about. One that names `2026-08-30` names what they typed.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        match self.written_as {
+            Granularity::Day => write!(f, "{}", self.day()),
+            Granularity::Instant => write!(f, "{}", self.at),
+        }
     }
 }
 
@@ -790,20 +879,107 @@ mod tests {
     }
 
     #[test]
-    fn an_observation_time_is_written_as_a_date_or_as_an_instant_and_means_the_same_thing() {
+    fn the_two_spellings_name_one_instant_and_are_not_one_claim() {
+        // They used to be one value, and that is the defect: a date is a day somewhere, an epoch
+        // value is an instant everywhere, and the difference has to survive to `is_after`.
         let by_date: ObservedAt = serde_yaml::from_str("2026-08-30").expect("a date parses");
         let by_instant: ObservedAt =
             serde_yaml::from_str(&by_date.timestamp().epoch_millis().to_string())
                 .expect("an instant parses");
-        assert_eq!(by_date, by_instant, "the two spellings are one value");
+        assert_eq!(
+            by_date.timestamp(),
+            by_instant.timestamp(),
+            "the instant behind the two spellings is the same midnight UTC"
+        );
+        assert_eq!(by_date.written_as(), Granularity::Day);
+        assert_eq!(by_instant.written_as(), Granularity::Instant);
+        assert_ne!(
+            by_date, by_instant,
+            "and the spelling is part of the value, because the two are refused differently"
+        );
         assert_eq!(
             serde_yaml::to_string(&by_date).expect("serialises").trim(),
             by_date.timestamp().epoch_millis().to_string(),
-            "the canonical form is the instant"
+            "the canonical wire form is still the instant, for both"
+        );
+        assert_eq!(
+            by_date.to_string(),
+            "2026-08-30",
+            "a day prints as the date somebody typed"
+        );
+        assert_eq!(
+            by_instant.to_string(),
+            "1788048000000ms",
+            "an instant prints as the number somebody typed"
         );
         let refusal = serde_yaml::from_str::<ObservedAt>("last Tuesday")
             .expect_err("prose is not an observation time");
         assert!(refusal.to_string().contains("YYYY-MM-DD"), "{refusal}");
+    }
+
+    #[test]
+    fn a_date_that_is_today_at_utc_plus_fourteen_is_not_in_the_future_and_tomorrow_everywhere_is() {
+        // The adopter's case, in one test. Their store sits at UTC+2 and writes local calendar
+        // dates, so for the last two hours of every UTC day the correct date parses to tomorrow at
+        // Greenwich. Measured in their tree at 22:27 UTC on 2026-08-28: 20 of 215 records refused.
+        let now = Timestamp::from_epoch_millis(
+            CivilDate::parse("2026-08-28")
+                .expect("a date")
+                .to_timestamp()
+                .epoch_millis()
+                + 22 * 3_600_000
+                + 27 * 60_000,
+        );
+
+        let written_by_the_adopter =
+            ObservedAt::on_day(CivilDate::parse("2026-08-29").expect("a date"));
+        assert!(
+            !written_by_the_adopter.is_after(now),
+            "2026-08-29 began at UTC+14 fourteen hours before it began at Greenwich, so somebody \
+             is having that day while this is written"
+        );
+
+        let tomorrow_everywhere =
+            ObservedAt::on_day(CivilDate::parse("2026-08-30").expect("a date"));
+        assert!(
+            tomorrow_everywhere.is_after(now),
+            "and a day that has not begun in any timezone is still refused — the rule is widened \
+             by the width of the timezone map and by nothing else"
+        );
+
+        // The boundary itself, to the millisecond: 2026-08-29 starts at UTC+14 at 2026-08-28T10:00Z.
+        let begins = Timestamp::from_epoch_millis(
+            written_by_the_adopter.timestamp().epoch_millis() - 14 * 3_600_000,
+        );
+        assert!(
+            !written_by_the_adopter.is_after(begins),
+            "the first instant of that day anywhere is not in its own future"
+        );
+        assert!(
+            written_by_the_adopter
+                .is_after(Timestamp::from_epoch_millis(begins.epoch_millis() - 1)),
+            "and one millisecond before it, it is"
+        );
+    }
+
+    #[test]
+    fn the_epoch_spelling_keeps_the_exact_comparison_a_day_does_not_get() {
+        // A caller who wrote an instant meant one, so no timezone slack is given to it. The two
+        // values here are the same midnight; only the spelling differs.
+        let midnight = CivilDate::parse("2026-08-30")
+            .expect("a date")
+            .to_timestamp();
+        let one_second_earlier = Timestamp::from_epoch_millis(midnight.epoch_millis() - 1_000);
+
+        assert!(
+            ObservedAt::new(midnight).is_after(one_second_earlier),
+            "an instant one second ahead of the clock is in the future, exactly as before"
+        );
+        assert!(
+            !ObservedAt::on_day(CivilDate::parse("2026-08-30").expect("a date"))
+                .is_after(one_second_earlier),
+            "and the same midnight written as a day is not, because the day has begun elsewhere"
+        );
     }
 
     #[test]
