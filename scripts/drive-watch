@@ -194,6 +194,11 @@ def show(e, state):
         # its own wrapped paragraph turns a sentence into a column of fragments. They are written as
         # they arrive and closed by the next event of any other kind, which is where the turn ends.
         chunk = e.get("text") or ""
+        # A model that streams its reasoning emits runs of blank lines between thoughts, and one
+        # indented line per newline turns a paragraph break into half a screen. Two newlines is a
+        # paragraph; more than two is the same paragraph break said louder.
+        while "\n\n\n" in chunk:
+            chunk = chunk.replace("\n\n\n", "\n\n")
         if chunk:
             if not STREAM["open"]:
                 sys.stdout.write("\n  ")
@@ -241,10 +246,26 @@ def main():
         print(f"{C['yel']}    drive-watch <path-to-repo-or-worktree>{C['off']}")
     current, handle, offset = None, None, 0
     while True:
-        files = sorted(
-            (f for f in os.listdir(transcripts) if f.endswith(".jsonl")),
-            key=lambda f: os.path.getmtime(os.path.join(transcripts, f)),
-        )
+        # **The directory can vanish under us.** A run being restarted has its `runs/` removed, and
+        # the first version of this loop died with a traceback in the operator's terminal at exactly
+        # the moment a new run was starting. Re-discover instead: the next run is usually seconds
+        # away, and a viewer that crashes when the thing it watches restarts is a viewer that quits
+        # whenever it is most wanted.
+        try:
+            files = sorted(
+                (f for f in os.listdir(transcripts) if f.endswith(".jsonl")),
+                key=lambda f: os.path.getmtime(os.path.join(transcripts, f)),
+            )
+        except OSError:
+            if handle:
+                handle.close()
+            handle, current = None, None
+            found = newest_run(start)
+            if found and found != transcripts:
+                transcripts = found
+                print(f"{C['dim']}following {transcripts}{C['off']}")
+            time.sleep(1)
+            continue
         newest = files[-1] if files else None
         if newest and newest != current:
             current, offset = newest, 0

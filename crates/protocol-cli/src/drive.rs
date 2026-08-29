@@ -2332,7 +2332,16 @@ impl Harness {
 /// publishes a `run` that could start anything else. The second is the stronger of the two — a
 /// program not on the list has no tool to reach it — which is the whole argument for that loop.
 fn driven_programs(config: &ToolConfig) -> Vec<String> {
-    let mut programs = vec!["protocol".to_owned()];
+    // **The CLI by absolute path, because the confined exec has its own `PATH` and ours is not on
+    // it.** A confined session ran `protocol artifact list`, got `exit 127, env: 'protocol': No
+    // such file or directory`, and reasoned its way to writing the store's files directly — which
+    // the write scope then refused, so the step achieved nothing twice over. The driver *is*
+    // `protocol`, so it names itself, which also pins the build the run's evidence is recorded
+    // against. The bare name stays beside it for a sandbox whose `PATH` does carry one.
+    let mut programs = match std::env::current_exe() {
+        Ok(binary) => vec![binary.display().to_string(), "protocol".to_owned()],
+        Err(_) => vec!["protocol".to_owned()],
+    };
     if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
         programs.extend(READ_ONLY_PROGRAMS.iter().map(|name| (*name).to_owned()));
     }
