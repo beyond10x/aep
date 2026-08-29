@@ -118,9 +118,31 @@ Each of these is a file in `artifacts/lifecycles/`, added with no change to any 
 
 | kind | models | the rung that is the point |
 |---|---|---|
-| `blocker` | something stopping work, typed by what would clear it | it is cleared by naming the thing that cleared it, not by an edit |
+| `blocker` | something stopping work, typed by what would clear it | `cleared` is terminal and has no successor, which is what `list`, `board` and `blocked` read: while the rung is short of the end, everything the blocker points at with `blocks` is marked `blocked: <type>` |
 | `obligation` | a commitment on a clock nobody here controls | `slipped` — and it must never gate a transition, because a missed external deadline is a fact to report, not a permission |
 | `outbound-claim` | a statement that left the boundary — a number in a customer's inbox | `correction-owed`: *sent, known wrong, audience not yet told* |
+
+The **type** is where `blocker`'s value is, and it is the kind rather than a field:
+`credential-blocker`, `decision-blocker` and a team's own `procurement-blocker` all resolve to that
+one ladder by their last hyphen segment, so a new type costs a name and no release.
+`artifacts/kinds/blocker.yaml` writes down six as a starting set and checks nothing against them —
+see [blocker types](../reference/vocabulary.md).
+
+That is also what makes unblocking a *move* rather than an edit:
+
+```console
+$ protocol artifact blocked
+credential-blocker:api-token-scope  credential  open, withholding test_result  CI cannot mint a read-scope token
+  blocks story:ci-evidence      active  Evidence job for the contract suite
+  blocks story:contract-checks  active  Contract checks in CI
+
+$ protocol artifact move credential-blocker:api-token-scope --to cleared
+credential-blocker:api-token-scope moved open -> cleared (revision 2)
+```
+
+Nothing was edited out of a file: `protocol artifact history` still says the blocker was opened, and
+`cleared` is terminal, so being stuck again is a **new** blocker with its own date rather than this
+one reopened — otherwise *how long were we stuck* has no answer.
 
 `outbound-claim` is the one worth reading in full, because it runs the opposite way to everything
 else here. Every other ladder models evidence flowing **inward**. An outbound claim is an assertion

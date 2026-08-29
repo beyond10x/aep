@@ -4,27 +4,31 @@
     "kind": "epic",
     "status": "draft",
     "title": "Golden epic",
-    "path": "epic/golden.md"
+    "path": "epic/golden.md",
+    "blocked_by": []
   },
   {
     "id": "story:golden-one",
     "kind": "story",
     "status": "proposed",
     "title": "Golden one",
-    "path": "story/golden-one.md"
+    "path": "story/golden-one.md",
+    "blocked_by": []
   },
   {
     "id": "story:golden-three",
     "kind": "story",
     "status": "draft",
     "title": "Golden three",
-    "path": "story/golden-three.md"
+    "path": "story/golden-three.md",
+    "blocked_by": []
   },
   {
     "id": "story:golden-two",
     "kind": "story",
     "status": "draft",
     "title": "Golden two",
-    "path": "story/golden-two.md"
+    "path": "story/golden-two.md",
+    "blocked_by": []
   }
 ]

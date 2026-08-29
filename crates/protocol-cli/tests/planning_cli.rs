@@ -122,6 +122,7 @@ const VERBS: &[&str] = &[
     "body",
     "list",
     "board",
+    "blocked",
     "graph",
     "validate",
     "kinds",
@@ -1246,4 +1247,295 @@ fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
 
     let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+}
+
+/// The whole of `story:blocker-relation`, in the order a person meets it: a blocker typed by what
+/// would clear it, an item that reads as parked rather than as moving, one group per blocker, the
+/// join to the evidence a gate is waiting for, and an unblocking that is a move with a record.
+///
+/// One test rather than five, because every step is about the state the previous one left: a
+/// grouping is only interesting once two items share a blocker, and *unblocking leaves a record*
+/// is only a claim once there is something to lift.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
+    let store = scratch("aep-planning-blocked");
+    let at = printable(&store);
+    let root = root();
+    let root = printable(&root);
+
+    for name in ["ci-evidence", "contract-checks", "unrelated"] {
+        let made = protocol(&[
+            "artifact", "new", "story", name, "--title", name, "--store", at, "--root", root,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+
+    // The type is the kind, and nothing had to be released for it: `credential-blocker` reaches
+    // the one `blocker` ladder by its last hyphen segment.
+    let made = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "api-token-scope",
+        "--title",
+        "CI cannot mint a read-scope API token",
+        "--withholds",
+        "test_result",
+        "--relate",
+        "blocks:story:ci-evidence",
+        "--relate",
+        "blocks:story:contract-checks",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+    assert!(
+        stdout(&made).contains("credential-blocker:api-token-scope (open)"),
+        "the blocker starts on the blocker ladder: {}",
+        stdout(&made)
+    );
+
+    // 1. Distinguishable in `list` without opening the file — and by *type*, not by a bare flag.
+    let listed = protocol(&["artifact", "list", "--store", at, "--root", root]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    let text = stdout(&listed);
+    let line = |id: &str| {
+        text.lines()
+            .find(|line| line.starts_with(id))
+            .unwrap_or_else(|| panic!("no line for {id}: {text}"))
+    };
+    assert!(
+        line("story:ci-evidence").contains("blocked: credential"),
+        "{text}"
+    );
+    assert!(
+        !line("story:unrelated").contains("blocked"),
+        "an item nothing stops says nothing: {text}"
+    );
+
+    // The machine format carries the same fact, always written so `active` and `active but parked`
+    // are two documents to a consumer as well as to a reader.
+    let json = protocol(&[
+        "artifact", "list", "--store", at, "--root", root, "--format", "json",
+    ]);
+    assert_eq!(code(&json), 0, "{}", stderr(&json));
+    let json = stdout(&json);
+    assert_eq!(json.matches("\"blocked_by\"").count(), 4, "{json}");
+    assert!(json.contains("\"type\": \"credential\""), "{json}");
+
+    // 2. The board marks the card, and leaves it in the column its status puts it in: a blocked
+    // story is still `draft`, and a column of its own would be a status the ladder does not have.
+    let board = protocol(&["artifact", "board", "--store", at, "--root", root]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let board = stdout(&board);
+    assert!(board.contains("draft (3)"), "{board}");
+    assert!(
+        board.contains("story:ci-evidence  ci-evidence  [blocked: credential]"),
+        "{board}"
+    );
+
+    // 3. One group per blocker: two stories on one credential are one conversation.
+    let blocked = protocol(&["artifact", "blocked", "--store", at, "--root", root]);
+    assert_eq!(code(&blocked), 0, "{}", stderr(&blocked));
+    let blocked = stdout(&blocked);
+    assert_eq!(
+        blocked
+            .lines()
+            .filter(|line| line.starts_with("credential-blocker:api-token-scope"))
+            .count(),
+        1,
+        "two blocked stories, one row: {blocked}"
+    );
+    assert_eq!(
+        blocked
+            .lines()
+            .filter(|line| line.trim_start().starts_with("blocks "))
+            .count(),
+        2,
+        "{blocked}"
+    );
+    assert!(blocked.contains("withholding test_result"), "{blocked}");
+
+    // Narrowed by type, which is the whole reason the type exists.
+    let other = protocol(&[
+        "artifact", "blocked", "--type", "decision", "--store", at, "--root", root,
+    ]);
+    assert_eq!(code(&other), 0, "{}", stderr(&other));
+    assert!(
+        stdout(&other).contains("nothing is blocked"),
+        "{}",
+        stdout(&other)
+    );
+
+    // 4. `explain` names it, with the evidence kind nobody can produce. This is the join: the
+    // question *why is there no record* is answered out of the store.
+    let explained = protocol(&[
+        "artifact",
+        "explain",
+        "story:ci-evidence",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&explained), 0, "{}", stderr(&explained));
+    let explained = stdout(&explained);
+    assert!(
+        explained.contains(
+            "blocked by credential-blocker:api-token-scope (credential), withholding test_result"
+        ),
+        "{explained}"
+    );
+
+    // 5. Unblocking is a move, and the record survives it.
+    let cleared = protocol(&[
+        "artifact",
+        "move",
+        "credential-blocker:api-token-scope",
+        "--to",
+        "cleared",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&cleared), 0, "{}", stderr(&cleared));
+
+    let after = protocol(&["artifact", "blocked", "--store", at, "--root", root]);
+    assert!(
+        stdout(&after).contains("nothing is blocked"),
+        "a ladder's last rung lifts the edge: {}",
+        stdout(&after)
+    );
+    let listed = protocol(&["artifact", "list", "--store", at, "--root", root]);
+    assert!(
+        !stdout(&listed).contains("blocked: credential"),
+        "{}",
+        stdout(&listed)
+    );
+
+    // Not an edit that erases it: the journal still says it happened, and the rung is terminal, so
+    // being stuck again is a new blocker with its own date rather than this one reopened.
+    let history = protocol(&[
+        "artifact",
+        "history",
+        "credential-blocker:api-token-scope",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    let history = stdout(&history);
+    assert!(history.contains("created as open"), "{history}");
+    assert!(history.contains("moved open -> cleared"), "{history}");
+    assert!(history.contains("blocks story:ci-evidence"), "{history}");
+
+    let reopened = protocol(&[
+        "artifact",
+        "move",
+        "credential-blocker:api-token-scope",
+        "--to",
+        "open",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&reopened), 1, "{}", stdout(&reopened));
+    assert!(
+        stdout(&reopened).contains("at the end of its lifecycle"),
+        "{}",
+        stdout(&reopened)
+    );
+}
+
+/// Evidence withheld from nothing is refused, and the refusal reaches the store's own validator
+/// through the document — which is the part the domain's unit test cannot show.
+#[test]
+fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
+    let store = scratch("aep-planning-withholds");
+    let at = printable(&store);
+    let root = root();
+    let root = printable(&root);
+
+    let made = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "orphan",
+        "--title",
+        "Withholds a fact nobody is waiting for",
+        "--withholds",
+        "test_result",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+
+    let validated = protocol(&["artifact", "validate", "--store", at, "--root", root]);
+    let text = stdout(&validated);
+    assert_eq!(code(&validated), 1, "{text}");
+    assert!(text.contains("[missing_declaration]"), "{text}");
+    assert!(
+        text.contains("withholds test_result and blocks nothing"),
+        "{text}"
+    );
+
+    // Joined to the work it is stopping, the same record validates.
+    let related = protocol(&[
+        "artifact",
+        "new",
+        "story",
+        "ci-evidence",
+        "--title",
+        "Evidence job",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&related), 0, "{}", stderr(&related));
+    let related = protocol(&[
+        "artifact",
+        "relate",
+        "credential-blocker:orphan",
+        "blocks",
+        "story:ci-evidence",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&related), 0, "{}", stderr(&related));
+
+    let validated = protocol(&["artifact", "validate", "--store", at, "--root", root]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+
+    // And an evidence kind the engine does not know is refused where it is written, rather than
+    // carried through as text a reader would take for a fact something is tracking.
+    let refused = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "invented",
+        "--title",
+        "x",
+        "--withholds",
+        "green_build",
+        "--store",
+        at,
+        "--root",
+        root,
+    ]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    assert!(
+        stderr(&refused).contains("invalid evidence kind identifier"),
+        "{}",
+        stderr(&refused)
+    );
 }

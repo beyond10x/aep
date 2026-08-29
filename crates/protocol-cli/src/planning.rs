@@ -941,6 +941,27 @@ pub(crate) enum ArtifactCommand {
         #[arg(long)]
         status: Option<String>,
     },
+    /// Show what is blocked, grouped by the single thing blocking it.
+    ///
+    /// The question a backlog cannot answer: *what is stopped, on what type of thing, and on which
+    /// item*. Five stories waiting on one decision are one row here with five lines under it —
+    /// one conversation to have — where a list of five parked stories is five conversations
+    /// somebody has to start individually.
+    ///
+    /// A `blocks` edge counts until the artifact declaring it reaches the end of its own
+    /// lifecycle, so `protocol artifact move <blocker> --to cleared` is how something is
+    /// unblocked, and the journal keeps the record that it was ever stuck.
+    ///
+    /// Always exits 0. This is a report: an exit code that moved with the count would make every
+    /// plan holding a blocker a red build.
+    Blocked {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// Only blockers of this type, such as `credential`.
+        #[arg(long = "type", value_name = "TYPE")]
+        category: Option<String>,
+    },
     /// Show the plan as status columns.
     Board {
         /// Where the plan is and how to render.
@@ -1112,6 +1133,14 @@ pub(crate) struct NewArgs {
     /// record or never arrive at all, and this is how it arrives.
     #[arg(long, value_name = "PATH")]
     from: Option<PathBuf>,
+    /// The evidence kind this artifact is stopping anybody from producing, such as `test_result`.
+    ///
+    /// The join between a blocker and an evidence gate: a rung wants a `test_result`, the job that
+    /// would produce one cannot mint a token, and this is where the store records *which* fact is
+    /// missing and why. Only meaningful together with `--relate blocks:<id>`, and
+    /// `protocol artifact validate` says so.
+    #[arg(long, value_name = "EVIDENCE-KIND")]
+    withholds: Option<String>,
 }
 
 /// How to render the plan's graph.
@@ -1148,6 +1177,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             status,
         } => list(&store, kind.as_deref(), status.as_deref()),
         ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
+        ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate { store } => validate(&store),
         ArtifactCommand::History { store, id } => history(&store, &id),
@@ -1386,6 +1416,9 @@ fn entity_body(
             ),
         );
     }
+    if let Some(withholds) = front.withholds {
+        data.insert("withholds".to_owned(), Node::from(withholds.as_str()));
+    }
     data.insert(
         aep_backend_markdown::backend::BODY_KEY.to_owned(),
         Node::from(document.body.as_str()),
@@ -1501,6 +1534,12 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     frontmatter.summary.clone_from(&args.summary);
     frontmatter.owner.clone_from(&args.owner);
     frontmatter.tags = args.tag.iter().cloned().collect();
+    if let Some(value) = &args.withholds {
+        frontmatter.withholds = Some(
+            aep_domain::evidence::EvidenceKind::parse(value)
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+        );
+    }
     for value in &args.relate {
         let (relation, target) = parse_relation(value)?;
         frontmatter
@@ -1998,6 +2037,7 @@ fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
                 target: relation.target.to_string(),
             })
             .collect(),
+        withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
         revision: frontmatter.revision,
         body: stored.document.body.clone(),
     };
@@ -2015,6 +2055,7 @@ fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
                 ("title", shown.title.as_deref()),
                 ("summary", shown.summary.as_deref()),
                 ("owner", shown.owner.as_deref()),
+                ("withholds", shown.withholds.as_deref()),
             ] {
                 if let Some(value) = value {
                     rows.push(vec![label.to_owned(), value.to_owned()]);
@@ -2050,19 +2091,27 @@ fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
 /// `protocol artifact list`
 fn list(args: &StoreArgs, kind: Option<&str>, status: Option<&str>) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
-    let listed = select(&opened.report, kind, status)?;
+    let ladders = ladders_or_none(args);
+    let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
+    let listed = select(&opened.report, &blocked, kind, status)?;
 
     match args.format {
         Format::Text => crate::print_table(
             &listed
                 .iter()
                 .map(|entry| {
-                    vec![
+                    let mut row = vec![
                         entry.id.clone(),
                         entry.kind.clone(),
                         entry.status.clone(),
                         entry.title.clone().unwrap_or_default(),
-                    ]
+                    ];
+                    // A fifth cell only where there is something to say, so an unblocked row ends
+                    // at its title rather than in two spaces of nothing.
+                    if let Some(marker) = blocked_marker(&entry.blocked_by) {
+                        row.push(marker);
+                    }
+                    row
                 })
                 .collect::<Vec<_>>(),
         ),
@@ -2071,10 +2120,23 @@ fn list(args: &StoreArgs, kind: Option<&str>, status: Option<&str>) -> Result<Ex
     Ok(ExitCode::SUCCESS)
 }
 
+/// The lifecycles in force, or none of them.
+///
+/// A document tree that cannot be read is not a reason a *listing* should stop answering — `list`
+/// and `board` never needed one before. Without ladders every `blocks` edge reads as in force
+/// until the blocker is `archived`, which errs towards saying something is stuck: the failure this
+/// story exists against is a parked item that looks like a moving one, and the opposite mistake is
+/// visible the moment somebody reads it.
+fn ladders_or_none(args: &StoreArgs) -> aep_engine::Registry {
+    args.lifecycles().unwrap_or_default()
+}
+
 /// `protocol artifact board`
 fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
-    let listed = select(&opened.report, kind, None)?;
+    let ladders = ladders_or_none(args);
+    let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
+    let listed = select(&opened.report, &blocked, kind, None)?;
     // Every status, in the vocabulary's own order, and only the ones with something in them: an
     // empty column is a column a reader has to skip on every glance.
     let columns: Vec<Column> = ArtifactStatus::ALL
@@ -2098,15 +2160,107 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
                 }
                 outln!("{} ({})", column.status, column.artifacts.len());
                 for entry in &column.artifacts {
+                    // The marker rides on the card, not on the column: a blocked item is still
+                    // `active` — that is precisely the complaint — so moving it to a column of its
+                    // own would be inventing a status the ladder does not have.
+                    let marker = blocked_marker(&entry.blocked_by)
+                        .map_or_else(String::new, |marker| format!("  [{marker}]"));
                     outln!(
-                        "  {}  {}",
+                        "  {}  {}{}",
                         entry.id,
-                        entry.title.clone().unwrap_or_default()
+                        entry.title.clone().unwrap_or_default(),
+                        marker
                     );
                 }
             }
         }
         Format::Yaml | Format::Json => crate::print_serialised(&columns, args.format)?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `protocol artifact blocked`
+fn blocked(args: &StoreArgs, category: Option<&str>) -> Result<ExitCode> {
+    let opened = open(&args.location, false)?;
+    let ladders = ladders_or_none(args);
+    let by_target = blockers_by_target(&opened.report, ladders.lifecycles());
+
+    // Turned inside out: the map above answers *what is blocking this*, and the question here is
+    // *what is this blocking*. One pass, keyed by the blocker, so several artifacts stopped by one
+    // thing arrive as one group rather than as a list a reader has to collate by eye.
+    let mut grouped: BTreeMap<String, Vec<Stopped>> = BTreeMap::new();
+    for (target, blockers) in &by_target {
+        let Some(stored) = opened.report.documents.get(target) else {
+            continue;
+        };
+        let front = &stored.document.frontmatter;
+        for blocking in blockers {
+            grouped
+                .entry(blocking.blocker.clone())
+                .or_default()
+                .push(Stopped {
+                    id: front.id.to_string(),
+                    kind: front.kind.to_string(),
+                    status: front.status.as_str().to_owned(),
+                    title: front.title.clone(),
+                });
+        }
+    }
+
+    let mut blockages: Vec<Blockage> = Vec::new();
+    for (blocker, stopped) in grouped {
+        let id = artifact_id(&blocker)?;
+        let Some(stored) = opened.report.documents.get(&id) else {
+            continue;
+        };
+        let front = &stored.document.frontmatter;
+        let of_type = blocking_type(&front.kind);
+        if category.is_some_and(|wanted| wanted != of_type) {
+            continue;
+        }
+        blockages.push(Blockage {
+            blocker,
+            category: of_type,
+            kind: front.kind.to_string(),
+            status: front.status.as_str().to_owned(),
+            title: front.title.clone(),
+            withholds: front.withholds.map(|kind| kind.as_str().to_owned()),
+            blocks: stopped,
+        });
+    }
+
+    match args.format {
+        Format::Text => {
+            if blockages.is_empty() {
+                outln!("nothing is blocked");
+            }
+            for (index, blockage) in blockages.iter().enumerate() {
+                if index > 0 {
+                    outln!();
+                }
+                let withheld = blockage
+                    .withholds
+                    .as_ref()
+                    .map_or_else(String::new, |kind| format!(", withholding {kind}"));
+                outln!(
+                    "{}  {}  {}{}  {}",
+                    blockage.blocker,
+                    blockage.category,
+                    blockage.status,
+                    withheld,
+                    blockage.title.clone().unwrap_or_default()
+                );
+                for stopped in &blockage.blocks {
+                    outln!(
+                        "  blocks {}  {}  {}",
+                        stopped.id,
+                        stopped.status,
+                        stopped.title.clone().unwrap_or_default()
+                    );
+                }
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(&blockages, args.format)?,
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -2874,11 +3028,16 @@ fn explain(args: &StoreArgs, id: &str) -> Result<ExitCode> {
         .with_context(|| opened.missing(&id))?;
     let (entries, unreadable) = entries_from_the_contract(&opened, &id)?;
     let (reached, recorded_since) = joined(&entries);
+    let ladders = ladders_or_none(args);
+    let blocked_by = blockers_by_target(&opened.report, ladders.lifecycles())
+        .remove(&id)
+        .unwrap_or_default();
     let explained = Explained {
         artifact: id,
         store: opened.plan.describe(),
         status: stored.document.frontmatter.status.to_string(),
         revision: stored.document.frontmatter.revision,
+        blocked_by,
         reached,
         recorded_since,
         unreadable,
@@ -2971,6 +3130,20 @@ fn print_explanation(format: Format, explained: &Explained) -> Result<ExitCode> 
                 explained.status,
                 explained.revision
             );
+            // Before the history, not after it: what is stopping this *now* is the thing a
+            // reader came for, and a page of past moves is what they would have to scroll past.
+            for blocking in &explained.blocked_by {
+                let withheld = blocking
+                    .withholds
+                    .as_ref()
+                    .map_or_else(String::new, |kind| format!(", withholding {kind}"));
+                outln!(
+                    "  blocked by {} ({}){}",
+                    blocking.blocker,
+                    blocking.category,
+                    withheld
+                );
+            }
             if explained.reached.is_empty() {
                 outln!("  no status move is recorded");
             }
@@ -3283,8 +3456,88 @@ fn parse_relation(value: &str) -> Result<(RelationKind, ArtifactRef)> {
     ))
 }
 
+/// Every blocker still in force, keyed by the artifact it stops.
+///
+/// **What is still blocking is decided by the ladder, not by a status name written here.** A
+/// `blocks` edge holds until the artifact declaring it reaches the end of its own lifecycle — for
+/// a blocker that is `cleared`, because `artifacts/lifecycles/blocker.yaml` gives that rung no
+/// successor — or is `archived`, this vocabulary's retirement and the only answer available in a
+/// tree that declares no ladders at all. That is what makes unblocking *a move like any other*:
+/// `protocol artifact move <blocker> --to cleared` lifts it, the journal keeps the record that
+/// something was ever stuck, and nothing had to be edited out of a file.
+fn blockers_by_target(
+    report: &StoreReport,
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+) -> BTreeMap<ArtifactId, Vec<Blocking>> {
+    let mut found: BTreeMap<ArtifactId, Vec<Blocking>> = BTreeMap::new();
+    for stored in report.documents.values() {
+        let front = &stored.document.frontmatter;
+        if front.status == ArtifactStatus::Archived {
+            continue;
+        }
+        if lifecycles
+            .for_kind(&front.kind)
+            .is_some_and(|ladder| ladder.is_terminal(&front.status))
+        {
+            continue;
+        }
+        for relation in front.targets(RelationKind::Blocks) {
+            found
+                .entry(relation.target.id().clone())
+                .or_default()
+                .push(Blocking {
+                    blocker: front.id.to_string(),
+                    category: blocking_type(&front.kind),
+                    withholds: front.withholds.map(|kind| kind.as_str().to_owned()),
+                });
+        }
+    }
+    found
+}
+
+/// What a listing says about a blocker that carries no type.
+///
+/// Named rather than left blank: an empty cell reads as *not blocked* at a glance, which is the
+/// exact confusion the typed blocker exists to remove.
+const UNTYPED: &str = "untyped";
+
+/// What a listing calls the type of one blocking artifact.
+///
+/// A blocker's type is the part of its kind before `-blocker`. A bare `blocker` has none and reads
+/// [`UNTYPED`]. Anything else that happens to declare a `blocks` edge — a story, a task — reads as
+/// its **own kind**, because calling a story untyped would say it is a blocker whose author forgot
+/// to say which sort, and it is not a blocker at all.
+fn blocking_type(kind: &ArtifactKind) -> String {
+    if let Some(of_type) = kind.blocker_type() {
+        return of_type.to_owned();
+    }
+    if kind.is_blocker() {
+        return UNTYPED.to_owned();
+    }
+    kind.as_str().to_owned()
+}
+
+/// The `blocked: …` cell a listing shows, or nothing when the artifact is moving.
+fn blocked_marker(blockers: &[Blocking]) -> Option<String> {
+    if blockers.is_empty() {
+        return None;
+    }
+    let mut types: Vec<&str> = blockers
+        .iter()
+        .map(|blocking| blocking.category.as_str())
+        .collect();
+    types.sort_unstable();
+    types.dedup();
+    Some(format!("blocked: {}", types.join(", ")))
+}
+
 /// The artifacts a listing verb was asked for, in id order.
-fn select(report: &StoreReport, kind: Option<&str>, status: Option<&str>) -> Result<Vec<Listed>> {
+fn select(
+    report: &StoreReport,
+    blocked: &BTreeMap<ArtifactId, Vec<Blocking>>,
+    kind: Option<&str>,
+    status: Option<&str>,
+) -> Result<Vec<Listed>> {
     let kind = match kind {
         Some(value) => {
             Some(ArtifactKind::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?)
@@ -3315,6 +3568,10 @@ fn select(report: &StoreReport, kind: Option<&str>, status: Option<&str>) -> Res
             status: stored.document.frontmatter.status.as_str().to_owned(),
             title: stored.document.frontmatter.title.clone(),
             path: stored.relative_path.clone(),
+            blocked_by: blocked
+                .get(&stored.document.frontmatter.id)
+                .cloned()
+                .unwrap_or_default(),
         })
         .collect())
 }
@@ -3394,6 +3651,59 @@ struct Listed {
     status: String,
     title: Option<String>,
     path: String,
+    /// Every blocker still in force against it, empty for an artifact nothing stops.
+    ///
+    /// Always written, never omitted when empty: `active` and `active but parked on a credential`
+    /// have to be different documents to a machine as well as to a reader, and a key that
+    /// disappears is one every consumer writes a branch for.
+    blocked_by: Vec<Blocking>,
+}
+
+/// One blocker still in force against an artifact, as a listing shows it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct Blocking {
+    /// The artifact doing the blocking.
+    blocker: String,
+    /// What would clear it: the blocker kind's type, or [`UNTYPED`].
+    #[serde(rename = "type")]
+    category: String,
+    /// The evidence kind it is stopping anybody from producing, when it names one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    withholds: Option<String>,
+}
+
+/// One thing stopping work, with everything it is stopping — what `blocked` prints.
+///
+/// Grouped by the blocker rather than by the blocked, which is the whole point of the verb: five
+/// items waiting on one decision are one conversation to have, and a list keyed the other way makes
+/// a reader join them by eye.
+#[derive(Debug, serde::Serialize)]
+struct Blockage {
+    /// The artifact doing the blocking.
+    blocker: String,
+    /// What would clear it.
+    #[serde(rename = "type")]
+    category: String,
+    /// Its own kind, so an untyped blocker still says what it is.
+    kind: String,
+    /// Where its own lifecycle has got to.
+    status: String,
+    /// Its title.
+    title: Option<String>,
+    /// The evidence kind it is stopping anybody from producing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    withholds: Option<String>,
+    /// What it is stopping, in id order.
+    blocks: Vec<Stopped>,
+}
+
+/// One artifact a blocker is stopping.
+#[derive(Debug, serde::Serialize)]
+struct Stopped {
+    id: String,
+    kind: String,
+    status: String,
+    title: Option<String>,
 }
 
 /// One artifact, whole: what `show` prints.
@@ -3412,6 +3722,8 @@ struct Shown {
     owner: Option<String>,
     tags: Vec<String>,
     relations: Vec<ShownRelation>,
+    /// The evidence kind this artifact is stopping anybody from producing.
+    withholds: Option<String>,
     revision: u64,
     /// The markdown body, exactly as the store holds it.
     body: String,
@@ -3494,6 +3806,13 @@ struct Explained {
     store: String,
     status: String,
     revision: u64,
+    /// Every blocker still in force against it.
+    ///
+    /// The answer to the question the rest of this verb raises and cannot settle: *there is no
+    /// record for the next move — why not*. A blocker naming a withheld evidence kind says which
+    /// fact is missing and what would have to happen for it to exist, which is a thing a person
+    /// can go and do.
+    blocked_by: Vec<Blocking>,
     reached: Vec<Reached>,
     /// Records admitted after the last move: held, and not yet the reason for anything.
     recorded_since: Vec<Admitted>,

@@ -21,6 +21,12 @@ One directory per kind, one file per artifact, no nesting below the kind directo
 defaults to `.engineering/planning/` and moves with `--store <dir>` — a repository may keep more than
 one, and nothing in a file records which store it belongs to.
 
+A typed blocker is an ordinary artifact under a directory of its own —
+`credential-blocker/api-token-scope.md` — because the type of a blocker is its **kind**. Every
+`<type>-blocker` reaches the one `blocker` ladder by its last hyphen segment, so a store gets a new
+type by using the name; `artifacts/kinds/blocker.yaml` writes down the ones a tree has agreed on and
+checks nothing against them.
+
 ## Names and ids
 
 An artifact's id is `<kind>:<slug>`, and the path is `<kind>/<slug>.md`. The two are the same fact
@@ -45,7 +51,7 @@ No planning-store file is edited directly. One command surface owns every change
 | create an artifact, with its body when you have it | `protocol artifact new … [--from <path|->]` |
 | replace its complete markdown body | `protocol artifact body <id> --from <path|->` |
 | add a relation | `protocol artifact relate` |
-| move lifecycle status | `protocol artifact move` |
+| move lifecycle status, including lifting a blocker | `protocol artifact move` |
 
 This makes the store a single-writer system: every mutation loads and validates it before writing,
 and every changed document receives the same revision semantics.
@@ -64,6 +70,7 @@ Everything above the `---` is structured. Ownership is what decides whether you 
 | `title` | descriptive | set at creation; correcting a typo by hand is harmless |
 | `summary` | descriptive | one or two sentences; optional |
 | `format` | machine | optional; defaults to `aep.planning-md/1` when absent — a file may omit it |
+| `withholds` | machine | optional; set by `protocol artifact new --withholds <evidence-kind>`. The evidence kind this artifact is stopping anybody from producing, and only meaningful beside a `blocks:` relation — `validate` reports it otherwise |
 
 "Machine" means the CLI validates it against a document you do not control from the file. A
 hand-written `status` is not a faster move — it is an unvalidated one, and it looks identical to a

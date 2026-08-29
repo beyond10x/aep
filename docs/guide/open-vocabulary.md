@@ -155,19 +155,20 @@ change to the evaluator and a story in this store, not a key you can add to your
 | A protocol document's `evidence_kinds:` block | `website/docs/reference/vocabulary.md:39` — "adds two more, each minted by the verb that ran the check" | open | `protocols/aep/1.yaml:evidence_kinds` | — | — | — |
 | A protocol document's `verifiers:` block | `website/docs/reference/vocabulary.md:57` — "the producers of the two evidence kinds it" | open | `protocols/aep/1.yaml:verifiers` | — | — | — |
 | A protocol document's `artifact_kinds:` block | `docs/plan/document-authoring-brief.md:47` — "is satisfied by any design subkind" | open | `protocols/aep/1.yaml:artifact_kinds` | — | — | — |
-| A protocol document's `phases:` block | `website/docs/reference/vocabulary.md:92` — "decomposition verification-setup adversarial-verification" | open | `protocols/aep/1.yaml:phases` | — | — | — |
-| A protocol document's `observables:` block | `website/docs/reference/vocabulary.md:98` — "A predicate may only read these" | open | `protocols/aep/1.yaml:observables` | — | — | — |
-| A protocol document's `scales:` block | `website/docs/reference/vocabulary.md:114` — "on non-numeric values" | open | `protocols/aep/1.yaml:scales` | — | — | — |
+| A protocol document's `phases:` block | `website/docs/reference/vocabulary.md:121` — "decomposition verification-setup adversarial-verification" | open | `protocols/aep/1.yaml:phases` | — | — | — |
+| A protocol document's `observables:` block | `website/docs/reference/vocabulary.md:127` — "A predicate may only read these" | open | `protocols/aep/1.yaml:observables` | — | — | — |
+| A protocol document's `scales:` block | `website/docs/reference/vocabulary.md:143` — "on non-numeric values" | open | `protocols/aep/1.yaml:scales` | — | — | — |
 | An artifact kind document under `artifacts/kinds/` | `website/docs/reference/documents.md:230` — "one per kind, beside" | open | `artifacts/kinds/design.yaml:required_sections` | — | — | — |
 | A status ladder under `artifacts/lifecycles/` | `docs/guide/adopting.md:94` — "what statuses each artifact kind may hold" | open | `artifacts/lifecycles/story.yaml:transitions` | — | — | — |
 | A relation document under `artifacts/relations/` | `website/docs/reference/documents.md:231` — "`artifacts/relations/` and" | open | `artifacts/relations/relations.yaml:relations` | — | — | — |
 | An artifact template under `artifacts/templates/` | `website/docs/reference/documents.md:231` — "and `artifacts/templates/`" | open | `artifacts/templates/story.md:1` | — | — | — |
-| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:741` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
-| Relation names a relations document may use | `website/docs/reference/documents.md:244` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:1107` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | docs/guide/adopting.md#relation-names | — |
+| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:72` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/aep-domain/src/artifact.rs:776` — the `Other(String)` variant, gated by the kind's ladder at `crates/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
+| Relation names a relations document may use | `website/docs/reference/documents.md:244` — "artifact must have a successor declaring" | closed | `crates/aep-domain/src/artifact.rs:1142` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | docs/guide/adopting.md#relation-names | — |
 | Capability value names the engine accepts | `docs/plan/document-authoring-brief.md:13` — "nothing else may be mentioned in any" | closed | `crates/aep-domain/src/capability.rs:144` | a capability name resolves to the same authorisation decision in every harness, which is what lets a profile be read by one and enforced by another | website/docs/reference/vocabulary.md#capabilities | — |
 | Evidence kind names the engine accepts | `docs/plan/document-authoring-brief.md:29` — "**Evidence kinds**:" | closed | `crates/aep-domain/src/evidence.rs:1189` | an evidence kind carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one cannot be satisfied by a record that means something else | website/docs/reference/vocabulary.md#evidence-kinds | — |
-| Predicate operators in mapping form | `website/docs/reference/vocabulary.md:186` — "Operators in mapping form" | closed | `crates/aep-domain/src/predicate.rs:132` | an operator is the step the engine *performs*, and it performs it three-valued: `gte` is decided by the `scales:` the protocol declares rather than by string ordering, and `exists` is the one operator that may read an unobserved fact without collapsing it to False. A document-declared operator would arrive with a name and no answer to either question | docs/guide/adopting.md#predicate-operators | — |
-| Test suite names in a tests fact path | `website/docs/reference/vocabulary.md:125` — "unit integration contract property regression mutation fuzz differential e2e smoke" | open | `crates/aep-domain/src/evidence.rs:60` | — | — | — |
+| Predicate operators in mapping form | `website/docs/reference/vocabulary.md:215` — "Operators in mapping form" | closed | `crates/aep-domain/src/predicate.rs:132` | an operator is the step the engine *performs*, and it performs it three-valued: `gte` is decided by the `scales:` the protocol declares rather than by string ordering, and `exists` is the one operator that may read an unobserved fact without collapsing it to False. A document-declared operator would arrive with a name and no answer to either question | docs/guide/adopting.md#predicate-operators | — |
+| Blocker type names a blocker kind may carry | `website/docs/reference/vocabulary.md:100` — "decision  review  credential  third-party  capacity  deploy" | open | `crates/aep-domain/src/artifact.rs:408` — the `Other(String)` variant, which a `<type>-blocker` name lands in and resolves to the one `blocker` ladder through its last hyphen segment | — | — | — |
+| Test suite names in a tests fact path | `website/docs/reference/vocabulary.md:154` — "unit integration contract property regression mutation fuzz differential e2e smoke" | open | `crates/aep-domain/src/evidence.rs:60` | — | — | — |
 
 An `open` row's last three cells are an em dash, always — never blank. A blank cell reads as *not
 applicable* to one person and *not filled in yet* to the next, and both of them stop asking.
@@ -178,7 +179,16 @@ Twelve of these rows were derived: a script walks `protocols/*/*.yaml` for top-l
 and `artifacts/` for adopter-writable document families, and every candidate it emits must have a row
 here or the check goes red. That half is mechanical and it stays true as the tree changes.
 
-The other six were found by reading, and no script could have found them. **The derivation cannot discover a closed surface**,
+The other seven were found by reading, and no script could have found them. The seventh is
+**blocker types**, added 2026-08-29 with `story:blocker-relation`: the derivation walks *families*
+under `artifacts/`, not the keys inside a document, so the `types:` block in
+`artifacts/kinds/blocker.yaml` is invisible to it — and the verdict cannot be attached there anyway,
+because nothing reads that file. What decides it is the kind vocabulary: `credential-blocker` is an
+`ArtifactKind::Other` whose last hyphen segment reaches the `blocker` ladder, so a type of your own
+costs a name. The six shipped types are a starting set the check does not read and this repository
+does not enforce, which is the whole point of the row.
+
+**The derivation cannot discover a closed surface**,
 because a closed surface is precisely one with *no document key* to find: `ArtifactStatus` is closed
 exactly because nothing under `protocols/` declares `statuses:`. If
 you take the completeness check for proof that this table is complete, it has misled you. What holds

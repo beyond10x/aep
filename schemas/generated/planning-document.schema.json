@@ -85,6 +85,14 @@
         "string",
         "null"
       ]
+    },
+    "withholds": {
+      "description": "The evidence kind this artifact is stopping anybody from producing, as written.\n\nText here and an [`EvidenceKind`] after validation, so a misspelling is reported beside every other defect in the document rather than aborting the parse of the whole file.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "definitions": {

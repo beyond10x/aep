@@ -327,6 +327,13 @@ impl schemars::JsonSchema for ArtifactRef {
     }
 }
 
+/// The kind every typed blocker specialises, and the suffix its name is read from.
+///
+/// Not an [`ArtifactKind`] variant: the whole point of the typed blocker is that a type costs a
+/// name in a document and no change here. This is the one word the rule needs to know, written
+/// once so [`ArtifactKind::blocker_type`] and [`ArtifactKind::is_blocker`] cannot drift apart.
+pub const BLOCKER: &str = "blocker";
+
 /// What kind of artifact this is.
 ///
 /// The taxonomy is deliberately shallow and extensible: [`ArtifactKind::Other`] carries a kind
@@ -548,6 +555,34 @@ impl ArtifactKind {
                 .cloned()
                 .unwrap_or_else(|| Self::Other(suffix.to_owned())),
         )
+    }
+
+    /// What kind of blocker this is — the part of the name before `-blocker` — or `None`.
+    ///
+    /// **A blocker is typed by what would clear it**, and the type is the *kind*, not a field:
+    /// `credential-blocker`, `decision-blocker` and a team's own `procurement-blocker` all resolve
+    /// to the one `blocker` ladder through [`parent`](ArtifactKind::parent), so a new type costs a
+    /// name and nothing else — no document, no enum, no release. This reads that type back out, so
+    /// a listing can say *parked on a credential* where it used to say only *active*.
+    ///
+    /// The vocabulary is **open**: `artifacts/kinds/blocker.yaml` ships six types as a starting
+    /// set, and a seventh is accepted here without being on it. Nothing in this crate checks the
+    /// name against a list, which is what open means — closing it would be the defect the story
+    /// that asked for this was filed against.
+    ///
+    /// A bare `blocker` has no type and answers `None`: *something is stopping this* is a
+    /// complaint, and the type is what turns five of them into one conversation.
+    pub fn blocker_type(&self) -> Option<&str> {
+        let Self::Other(name) = self else {
+            return None;
+        };
+        let (prefix, suffix) = name.rsplit_once('-')?;
+        (suffix == BLOCKER && !prefix.is_empty()).then_some(prefix)
+    }
+
+    /// `true` when this kind is a blocker: the bare `blocker`, or any `<type>-blocker`.
+    pub fn is_blocker(&self) -> bool {
+        self.as_str() == BLOCKER || self.blocker_type().is_some()
     }
 
     /// `true` when this kind satisfies a requirement for `other`.
@@ -1448,6 +1483,20 @@ pub struct Artifact {
     /// How long it stays valid.
     #[serde(default, skip_serializing_if = "is_default_freshness")]
     pub freshness: FreshnessPolicy,
+    /// The evidence kind this artifact is stopping anybody from producing.
+    ///
+    /// **The join between a blocker and an evidence gate.** A requirement asks for a
+    /// `test_result`; the CI job that would produce one cannot mint a read-scope token; so the
+    /// record of *why the fact does not exist* is a `credential-blocker` that `blocks` the work
+    /// and names `test_result` here. Without it the store holds two unrelated facts — a missing
+    /// record and a parked item — and a reader has to join them by hand, which is exactly the
+    /// join a status field cannot make.
+    ///
+    /// Meaningful only alongside at least one [`RelationKind::Blocks`] edge, and
+    /// [`ArtifactGraph::validate_lifecycles`] says so: evidence withheld from nothing is a
+    /// sentence about nobody.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withholds: Option<crate::evidence::EvidenceKind>,
     /// The digest of the resolved model this record describes, for a kind that has one.
     ///
     /// The content identity of a compiled specification, as distinct from [`Self::version`], which
@@ -1506,6 +1555,7 @@ impl Artifact {
             metadata: ArtifactMetadata::default(),
             provenance: None,
             freshness: FreshnessPolicy::default(),
+            withholds: None,
             model_digest: None,
         }
     }
@@ -1719,6 +1769,21 @@ impl ArtifactLifecycle {
         self.transitions
             .get(from)
             .is_some_and(|targets| targets.contains(to))
+    }
+
+    /// `true` when `status` is the end of this ladder: a rung with nowhere left to go.
+    ///
+    /// The ladder decides, not a list of status names in this crate. That is what makes *lifting a
+    /// blocker* a move like any other: `blocker`'s `cleared` is terminal because
+    /// `artifacts/lifecycles/blocker.yaml` gives it no successor, and a tree that renames the rung
+    /// keeps the meaning without touching a line of Rust.
+    ///
+    /// [`permissive`](ArtifactLifecycle::permissive) has no terminal rung at all, deliberately: a
+    /// kind nobody wrote a ladder for has not declared any state to be the end, and reading one
+    /// into it would be this crate deciding what a document did not say.
+    #[must_use]
+    pub fn is_terminal(&self, status: &ArtifactStatus) -> bool {
+        self.transitions.get(status).is_some_and(BTreeSet::is_empty)
     }
 }
 
@@ -2218,6 +2283,30 @@ impl ArtifactGraph {
                         .with_hint("`serves` names an objective: a `vision` artifact"),
                     );
                 }
+            }
+
+            // Evidence is withheld *from* something. An artifact naming a kind of proof nobody
+            // can produce, while blocking nothing, is a sentence about nobody — and the reader it
+            // would mislead is the one asking why a required fact is missing.
+            if artifact.withholds.is_some()
+                && artifact.targets(RelationKind::Blocks).next().is_none()
+            {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::MissingDeclaration,
+                        format!("artifacts.{}.withholds", artifact.id),
+                        format!(
+                            "{} withholds {} and blocks nothing, so nothing is waiting for it",
+                            artifact.id,
+                            artifact
+                                .withholds
+                                .map_or("?", crate::evidence::EvidenceKind::as_str)
+                        ),
+                    )
+                    .with_hint(
+                        "add a `blocks` relation naming the work whose evidence this is stopping",
+                    ),
+                );
             }
         }
 
@@ -2835,6 +2924,121 @@ mod tests {
             .for_kind(&ArtifactKind::ArchitectureDecisionRecord)
             .expect("registered")
             .permits_transition(&ArtifactStatus::Proposed, &ArtifactStatus::Accepted));
+    }
+
+    #[test]
+    fn a_blockers_type_is_the_part_of_its_kind_before_blocker() {
+        // The type is what turns five stuck items into one conversation, and it costs a name:
+        // nothing here has heard of `procurement` and it still answers.
+        for (kind, expected) in [
+            ("credential-blocker", Some("credential")),
+            ("decision-blocker", Some("decision")),
+            ("third-party-blocker", Some("third-party")),
+            ("procurement-blocker", Some("procurement")),
+        ] {
+            let parsed = ArtifactKind::parse(kind).expect("kind");
+            assert_eq!(parsed.blocker_type(), expected, "{kind}");
+            assert!(parsed.is_blocker(), "{kind}");
+            assert!(
+                parsed.is_a(&ArtifactKind::Other(BLOCKER.to_owned())),
+                "{kind} must reach the one blocker ladder"
+            );
+        }
+
+        // A bare `blocker` is a blocker with no type: *something is stopping this*, which is the
+        // complaint the type exists to replace.
+        let bare = ArtifactKind::parse(BLOCKER).expect("kind");
+        assert!(bare.is_blocker());
+        assert_eq!(bare.blocker_type(), None);
+
+        // And a kind that merely ends in something else is not one.
+        let log = ArtifactKind::parse("observation-log").expect("kind");
+        assert!(!log.is_blocker());
+        assert_eq!(log.blocker_type(), None);
+        assert_eq!(ArtifactKind::Story.blocker_type(), None);
+    }
+
+    #[test]
+    fn the_end_of_a_ladder_is_the_rung_with_nowhere_to_go() {
+        // What lifts a blocker is decided by the document, not by a status name written here: a
+        // tree that calls the rung something else keeps the meaning.
+        let ladder = ArtifactLifecycle {
+            kind: Some(ArtifactKind::Other(BLOCKER.to_owned())),
+            initial: ArtifactStatus::Other("open".to_owned()),
+            transitions: [
+                (
+                    ArtifactStatus::Other("open".to_owned()),
+                    [ArtifactStatus::Other("cleared".to_owned())].into(),
+                ),
+                (ArtifactStatus::Other("cleared".to_owned()), BTreeSet::new()),
+            ]
+            .into(),
+            requires: BTreeMap::new(),
+            when: BTreeMap::new(),
+        };
+
+        assert!(
+            !ladder.is_terminal(&ArtifactStatus::Other("open".to_owned())),
+            "an open blocker is still blocking"
+        );
+        assert!(
+            ladder.is_terminal(&ArtifactStatus::Other("cleared".to_owned())),
+            "`cleared` has no successor, so it is the end"
+        );
+        assert!(
+            !ladder.is_terminal(&ArtifactStatus::Archived),
+            "a rung this ladder never mentions is not its end"
+        );
+        assert!(
+            !ArtifactLifecycle::permissive().is_terminal(&ArtifactStatus::Archived),
+            "a kind with no ladder has declared no end"
+        );
+    }
+
+    #[test]
+    fn evidence_withheld_from_nothing_is_refused_by_name() {
+        // The state the rule is load-bearing in: an artifact that names a withheld evidence kind
+        // and blocks nothing. Asserted first, so this cannot pass on a fixture that never got
+        // there.
+        let mut orphan = artifact(
+            "blocker:api-token",
+            "credential-blocker",
+            ArtifactStatus::Other("open".to_owned()),
+        );
+        orphan.withholds = Some(crate::evidence::EvidenceKind::TestResult);
+        assert!(
+            orphan.targets(RelationKind::Blocks).next().is_none(),
+            "the fixture must withhold and block nothing"
+        );
+
+        let ladders = LifecycleRegistry::new();
+        let graph = ArtifactGraph::build([
+            orphan.clone(),
+            artifact("story:ci-evidence", "story", ArtifactStatus::Active),
+        ])
+        .expect("the graph builds");
+        let errors = graph.validate_lifecycles(&ladders);
+        let codes: Vec<ValidationCode> = errors.as_slice().iter().map(|error| error.code).collect();
+        assert_eq!(codes, vec![ValidationCode::MissingDeclaration], "{errors}");
+        assert!(
+            errors.as_slice().iter().any(|error| error
+                .message
+                .contains("withholds test_result and blocks nothing")),
+            "{errors}"
+        );
+
+        // Joined to the work it is stopping, the same record is accepted.
+        let joined = orphan.with_relation(RelationKind::Blocks, reference("story:ci-evidence"));
+        let graph = ArtifactGraph::build([
+            joined,
+            artifact("story:ci-evidence", "story", ArtifactStatus::Active),
+        ])
+        .expect("the graph builds");
+        assert!(
+            graph.validate_lifecycles(&ladders).is_empty(),
+            "{}",
+            graph.validate_lifecycles(&ladders)
+        );
     }
 
     #[test]

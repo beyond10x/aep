@@ -93,6 +93,14 @@ choosing costs nothing.
 | `principles/`, `workflows/`, `profiles/` — the defaults, worth reading before replacing | your profiles, usually `extends:` one of theirs |
 | `artifacts/lifecycles/` — what statuses each artifact kind may hold | your `task.yaml` and `artifacts.yaml`, per task |
 
+One consequence worth knowing before you need it: **a kind's last hyphen segment names its parent**,
+so a family of kinds of yours shares one ladder. That is how the typed blocker works — a
+`credential-blocker`, a `decision-blocker` and your own `procurement-blocker` are all governed by
+`artifacts/lifecycles/blocker.yaml`, and a new type of blocker costs a name in a document and no
+change to any crate. `artifacts/kinds/blocker.yaml` writes down six types with what clears each,
+and nothing checks a type against that list; see
+[blocker types](../../website/docs/reference/vocabulary.md#blocker-types).
+
 ## Two shapes of adoption, and the one thing that decides between them
 
 You can point at somebody else's tree instead of owning one. A project does that with a small file,

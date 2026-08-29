@@ -113,6 +113,17 @@
             "string",
             "null"
           ]
+        },
+        "withholds": {
+          "description": "The evidence kind this artifact is stopping anybody from producing.\n\n**The join between a blocker and an evidence gate.** A requirement asks for a `test_result`; the CI job that would produce one cannot mint a read-scope token; so the record of *why the fact does not exist* is a `credential-blocker` that `blocks` the work and names `test_result` here. Without it the store holds two unrelated facts — a missing record and a parked item — and a reader has to join them by hand, which is exactly the join a status field cannot make.\n\nMeaningful only alongside at least one [`RelationKind::Blocks`] edge, and [`ArtifactGraph::validate_lifecycles`] says so: evidence withheld from nothing is a sentence about nobody.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EvidenceKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -358,6 +369,34 @@
       ],
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "EvidenceKind": {
+      "description": "A kind of evidence. The canonical names come first; the rest are older spellings still accepted.",
+      "type": "string",
+      "enum": [
+        "test_result",
+        "static_analysis",
+        "contract_result",
+        "property_test_result",
+        "deployment_result",
+        "metric_observation",
+        "health_observation",
+        "approval",
+        "diff",
+        "artifact",
+        "review",
+        "verification",
+        "specification",
+        "ess_conformance",
+        "trace_conformance",
+        "test_execution",
+        "source_diff",
+        "artifact_evidence",
+        "review_result",
+        "verification_record",
+        "specification_record",
+        "ess_conformance_result"
+      ]
     },
     "FreshnessPolicy": {
       "description": "How long an artifact stays valid.",
