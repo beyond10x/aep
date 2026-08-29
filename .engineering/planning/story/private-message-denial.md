@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:private-message-denial
 kind: story
-status: draft
+status: active
 title: A capability a profile can deny before an agent reads a direct message
 summary: network.read cannot separate a public channel from a DM, so the one control that stops a private conversation reaching a shared corpus is prose in a skill file.
 owner: protocol
@@ -11,7 +11,8 @@ tags:
 - protocol
 relations:
 - decomposes: epic:ingestion-vocabulary
-revision: 3
+- serves: vision:O1
+revision: 5
 ---
 # Story: A capability a profile can deny before an agent reads a direct message
 

@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:regex-matchers
 kind: story
-status: draft
+status: active
 title: regex matchers, or the recorded reason there are none
 summary: 'The dependency decision behind TRACE-SPEC-008: adopt a regular-expression engine, or keep refusing regex by name and say so where an author will read it.'
 owner: trace
@@ -10,7 +10,8 @@ tags:
 - trace
 relations:
 - decomposes: epic:checker-vocabulary-depth
-revision: 1
+- serves: vision:O3
+revision: 3
 ---
 # Story: `regex` matchers, or the recorded reason there are none
 

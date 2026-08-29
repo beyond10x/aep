@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:a-date-is-a-day-not-an-instant
 kind: story
-status: draft
+status: active
 title: A date written at UTC+2 is not a claim about the future
 summary: A bare observation date means midnight UTC, so 20 of an adopter's 215 records read as future-dated for the last two hours of every UTC day — and one future record refuses the whole evidence document.
 owner: protocol
@@ -14,7 +14,8 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
 - informed_by: story:per-record-horizons
-revision: 2
+- serves: vision:O2
+revision: 4
 ---
 # Story: A date written at UTC+2 is not a claim about the future
 
