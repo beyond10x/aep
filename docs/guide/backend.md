@@ -398,7 +398,7 @@ runs every one of them, each as its own process, over `examples/planning-passkey
 
 | What | Markdown | SQLite, Postgres | Where it is written down |
 |---|---|---|---|
-| `validate` | also reconciles the documents against the event log: drift, deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
+| `validate` | also reconciles the documents against the event log: drift, a forged revision (a `revision:` above anything the log records — reported, never refused), deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
 
 An edge used to be a second difference — a markdown document's revision moved when a relation was
 written into its frontmatter, an entity's did not — until every store counted it the contract's way:
