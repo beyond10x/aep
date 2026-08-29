@@ -41,12 +41,34 @@
 //!
 //! # Which specification, and why the verb refuses rather than chooses
 //!
-//! The one the run is being held to: a `specification` artifact in the store whose status is
-//! `approved` or later, which is exactly what `spec-driven.before_implementation` asks for. With
-//! none, or with more than one, this verb **writes nothing and says why** — a step establishes one
-//! thing, and picking one of several would be the tool deciding what the run is about. The driver
-//! reads that as D5's `Unknown`: nothing observed, and the run stops at the guard instead of moving
-//! on a record about the wrong document.
+//! The one the run is being held to, decided by **the guard's own rule**: an approved
+//! `specification` artifact whose `specifies` edge lands on the work this task declares —
+//! `spec-driven.before_implementation`'s `{kind: specification, status: approved, relation: {kind:
+//! specifies, target: task}}`, evaluated here by [`ArtifactRequirement::matches`] over
+//! [`Task::declared_work`], which is the same function and the same set the engine answers
+//! `RequirementContext::task_artifacts` with.
+//!
+//! That it is the same rule is the point. Until `story:task-scoped-artifact-requirements`' follow-up
+//! this verb took *any* in-force specification in the store, which after the guard was bound was
+//! **looser than the guard it serves**: a run could write a `specification` record about a document
+//! `before_implementation` would refuse, and the record's `satisfied` would then be about somebody
+//! else's story.
+//!
+//! With none, or with more than one, this verb **writes nothing and says why** — a step establishes
+//! one thing, and picking one of several would be the tool deciding what the run is about. The
+//! driver reads that as D5's `Unknown`: nothing observed, and the run stops at the guard instead of
+//! moving on a record about the wrong document.
+//!
+//! **`--artifact` names which specification, never whether the binding applies.** An id given on
+//! the command line that does not specify this task's work is refused, saying so: an escape hatch
+//! here would be a way to mint the record the guard exists to withhold. What it does lift is the
+//! *status* half — a person may legitimately ask this verb whether a `draft` specification is
+//! written so that anything could ever decide it.
+//!
+//! **The task is known from `--task <file>`, or from the project this was run inside** (the task
+//! `project.yaml` names), and from nothing else. With neither — a store handed to the verb from
+//! outside a project — the selection is unbound and falls back to what it always did: the store's
+//! one in-force specification, and a refusal naming them all when there is more than one.
 //!
 //! # What this cannot see, stated rather than implied
 //!
@@ -62,10 +84,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use aep_backend_markdown::document::PlanningDocument;
-use aep_domain::artifact::{ArtifactKind, ArtifactRef, ArtifactStatus};
+use aep_domain::artifact::{
+    Artifact, ArtifactGraph, ArtifactKind, ArtifactRef, ArtifactStatus, RelationKind,
+};
 use aep_domain::evidence::{Evidence, SpecificationRecord};
 use aep_domain::facts::FactStore;
 use aep_domain::predicate::{Predicate, Truth};
+use aep_domain::requirement::{ArtifactRequirement, RelationRequirement, RelationTarget};
+use aep_domain::task::Task;
 use aep_domain::verification::Verifier;
 use aep_engine::Snapshot;
 use anyhow::{bail, Context, Result};
@@ -120,13 +146,19 @@ pub(crate) struct EvidenceArgs {
     /// has produced a single record.
     #[arg(long)]
     snapshot: Option<PathBuf>,
-    /// Which specification to decide. Discovered from the store when omitted.
+    /// Which specification to decide. Selected from the store by the guard's own rule when omitted.
+    ///
+    /// It names *which*, not *whether*: an id that does not specify the task's work is refused —
+    /// see [`select`]. What it does lift is the status requirement, so a `draft` specification can
+    /// be asked whether it states anything decidable.
     #[arg(long, value_name = "ID")]
     artifact: Option<String>,
-    /// The task document, whose referenced artifacts say which specification the run is about.
+    /// The task document whose declared work the selection is bound to.
     ///
-    /// Discovered from the project when omitted. It is what makes discovery work in a store that
-    /// holds more than one in-force specification — see [`narrow`].
+    /// Discovered from the project when omitted — the task `project.yaml` names. It is what makes
+    /// the selection mean *this run's specification*: without a task in reach the verb falls back
+    /// to the store's one in-force specification, which is looser than the guard this record
+    /// serves. See [`select`].
     #[arg(long)]
     task: Option<PathBuf>,
     /// Where to write the document. Without it, it goes to standard output.
@@ -144,19 +176,59 @@ pub(crate) fn run(command: SpecificationCommand) -> Result<ExitCode> {
     }
 }
 
-/// `true` when a specification in this status is one a task may be implemented against.
+/// **The rule this verb selects by**, as a value: the artifact requirement
+/// `principles/development/spec-driven.yaml`'s `before_implementation` states, which
+/// `principles/development/clean-room.yaml` restates word for word.
 ///
-/// The same four `spec-driven` accepts: *"`approved` is also satisfied by `accepted`, `active` and
-/// `implemented`, so a specification already in force does not have to be re-approved for each task
-/// that implements it."* Read off that comment rather than invented here, so the two cannot drift.
-fn is_in_force(status: &ArtifactStatus) -> bool {
-    matches!(
-        status,
-        ArtifactStatus::Approved
-            | ArtifactStatus::Accepted
-            | ArtifactStatus::Active
-            | ArtifactStatus::Implemented
-    )
+/// A value rather than a description, because the selection is then made by
+/// [`ArtifactRequirement::matches`] — the engine's own function, over
+/// [`Task::declared_work`] — and there is no second reading of *whose specification is this* to
+/// drift from the first. `status: approved` accepts `accepted`, `active` and `implemented` too
+/// (`ArtifactStatus::satisfies`), so a specification already in force does not have to be
+/// re-approved for each task that implements it, and `fresh` refuses a superseded, rejected or
+/// archived one.
+///
+/// The two shipped declarations are pinned to this value by
+/// `crates/protocol-cli/tests/specification_task_binding.rs`, which parses them and compares: an
+/// edit to either principle that this verb has not followed fails a test rather than quietly
+/// making the verb looser than the guard again.
+fn specification_of_this_task() -> ArtifactRequirement {
+    ArtifactRequirement {
+        kind: ArtifactKind::Specification,
+        status: Some(ArtifactStatus::Approved),
+        at_least: 1,
+        relation: Some(RelationRequirement {
+            kind: RelationKind::Specifies,
+            target_kind: None,
+            target: Some(RelationTarget::Task),
+        }),
+        fresh: true,
+    }
+}
+
+/// The rule with its **relation** dropped: what the verb may still ask with no task in reach.
+///
+/// Not a weaker binding — no binding at all, and it is reached only when nothing named a task.
+/// `matches` with an empty work set refuses every artifact, which is the engine's fail-closed
+/// polarity and the wrong answer for a person pointing this verb at a store from outside a project.
+fn unbound(rule: &ArtifactRequirement) -> ArtifactRequirement {
+    ArtifactRequirement {
+        relation: None,
+        ..rule.clone()
+    }
+}
+
+/// The rule with its **status** dropped: what an id given as `--artifact` is checked against.
+///
+/// The binding half is kept, deliberately: naming a document does not make it this task's. The
+/// status half is lifted because asking whether a `draft` specification states requirements
+/// anything could ever decide is a legitimate question, and the answer is a record about a
+/// specification the caller named rather than one this verb chose.
+fn named(rule: &ArtifactRequirement) -> ArtifactRequirement {
+    ArtifactRequirement {
+        status: None,
+        ..rule.clone()
+    }
 }
 
 /// Every specification artifact in the store, with the file it came from.
@@ -197,126 +269,233 @@ fn specifications(store: &Path) -> Result<Vec<(PathBuf, PlanningDocument)>> {
     Ok(found)
 }
 
-/// Every artifact the task points at, as written.
+/// What the verb knows about the task, and where it learned it.
 ///
-/// `derived_from` and `context` both, because a task may name the story it decomposes *and* the
-/// specification it is written against, and either is a legitimate way to say which document this
-/// run is about.
-fn task_artifacts(task: &Path) -> Result<Vec<String>> {
-    let task = crate::read_task(task)?;
-    Ok(task
-        .artifacts
-        .all()
-        .into_iter()
-        .map(|reference| reference.id().to_string())
-        .collect())
+/// Absent means *no task document is in reach* — not *a task that declares nothing*, which is a
+/// different finding with a different refusal.
+struct Binding {
+    /// The task document, as the refusals name it.
+    ///
+    /// Printed because the wrong task is the failure a reader cannot otherwise see: a run driven
+    /// with `--task .engineering/task-native-1.yaml` reaches this verb through the project, which
+    /// names `.engineering/task.yaml`, and the refusal is only actionable if it says which one it
+    /// bound to.
+    source: String,
+    /// The work the task declares — [`Task::declared_work`], the same set the engine answers
+    /// `RequirementContext::task_artifacts` with, and the same call.
+    work: Vec<ArtifactRef>,
+}
+
+impl Binding {
+    /// What this task is about, in the words the refusals use.
+    ///
+    /// The clause `ArtifactRequirement::evaluate` puts on an unmet bound row, so a reader meets
+    /// one sentence whether the guard refused or the verb did.
+    fn work_line(&self) -> String {
+        if self.work.is_empty() {
+            "the task declares no work".to_owned()
+        } else {
+            format!(
+                "this task's work is {}",
+                self.work
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
+}
+
+/// The task the verb is bound to: the one `--task` names, or the one the project does.
+///
+/// A named path that cannot be read is a refusal — a caller who said which task must not be
+/// answered as though they had not. A *discovery* that finds nothing is not: this verb is also run
+/// by hand against a store outside any project, and the unbound path below is what answers that.
+fn binding(task: Option<&Path>) -> Result<Option<Binding>> {
+    if let Some(path) = task {
+        let task = crate::read_task(path)?;
+        return Ok(Some(Binding {
+            source: path.display().to_string(),
+            work: task.declared_work(),
+        }));
+    }
+    Ok(discovered())
 }
 
 /// The task the project names, when this was run inside one.
-///
-/// A convenience and never a requirement: a discovery that fails leaves the selection unnarrowed
-/// and the refusal below says the whole in-force set, which is a better failure than silently
-/// deciding the wrong document.
-fn discovered_task() -> Option<Vec<String>> {
+fn discovered() -> Option<Binding> {
     let here = std::env::current_dir().ok()?;
     let root = aep_engine::project::discover(&here)?;
     let project = aep_engine::project::load(&root).ok()?;
-    let task = project.task?;
-    Some(
-        task.artifacts
-            .all()
-            .into_iter()
-            .map(|reference| reference.id().to_string())
-            .collect(),
-    )
+    let task: Task = project.task?;
+    Some(Binding {
+        source: project.paths.task.display().to_string(),
+        work: task.declared_work(),
+    })
 }
 
-/// The specifications that are about what the task is about.
+/// The store's specifications as the artifacts a requirement is evaluated against.
 ///
-/// A specification created by a run under `adp/default` relates to the work it specifies —
-/// `specifies: story:…`, `derived_from: task:…` — and the task document names the same artifacts in
-/// its `derived_from`. That shared reference is the join, and it is the only non-arbitrary one
-/// available: the run's specification is created *during* the run, so no map can name it by id and
-/// the store's file order says nothing.
-///
-/// Returns the wider set unchanged when the narrowing finds nothing, so a task that references no
-/// artifact is no worse off than before — and the refusal that follows names every candidate rather
-/// than an empty list.
-fn narrow(candidates: Vec<PlanningDocument>, referenced: &[String]) -> Vec<PlanningDocument> {
-    if referenced.is_empty() {
-        return candidates;
-    }
-    let about: Vec<PlanningDocument> = candidates
+/// The graph holds only these, which is enough for this rule and honest about it: the relation
+/// declares no `target_kind`, so nothing here has to resolve the far end of an edge — the binding
+/// compares ids, exactly as `ArtifactRequirement::matches` does for the engine.
+fn described(found: &[(PathBuf, PlanningDocument)]) -> (Vec<Artifact>, ArtifactGraph) {
+    let artifacts: Vec<Artifact> = found
         .iter()
-        .filter(|document| {
-            document.frontmatter.relations.iter().any(|relation| {
-                referenced
-                    .iter()
-                    .any(|wanted| relation.target.id().to_string() == *wanted)
-            }) || referenced.contains(&document.frontmatter.id.to_string())
+        .map(|(path, document)| {
+            document
+                .frontmatter
+                .to_artifact(&path.display().to_string())
         })
-        .cloned()
         .collect();
-    if about.is_empty() {
-        candidates
-    } else {
-        about
+    let mut graph = ArtifactGraph::new();
+    for artifact in artifacts.iter().cloned() {
+        graph.insert(artifact);
     }
+    (artifacts, graph)
+}
+
+/// Every specification in the store, with its status, for a refusal that names what was there.
+fn declared(artifacts: &[Artifact]) -> String {
+    artifacts
+        .iter()
+        .map(|artifact| format!("{} ({})", artifact.id, artifact.status))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The one specification this run is being held to, or a refusal naming what it found instead.
 fn select(store: &Path, wanted: Option<&str>, task: Option<&Path>) -> Result<PlanningDocument> {
-    let found = specifications(store)?;
+    let mut found = specifications(store)?;
+    let (artifacts, graph) = described(&found);
+    let binding = binding(task)?;
+    let chosen = choose(store, &artifacts, &graph, binding.as_ref(), wanted)?;
+    Ok(found.swap_remove(chosen).1)
+}
+
+/// **The selection, decided** — everything `select` does that is not reading a directory.
+///
+/// Separate so the rule can be tested at every boundary it has without a store on disk, and so
+/// that what decides which document a record is about is one function of its arguments.
+fn choose(
+    store: &Path,
+    artifacts: &[Artifact],
+    graph: &ArtifactGraph,
+    binding: Option<&Binding>,
+    wanted: Option<&str>,
+) -> Result<usize> {
+    let rule = specification_of_this_task();
 
     if let Some(id) = wanted {
-        let Some((_, document)) = found
-            .into_iter()
-            .find(|(_, document)| document.frontmatter.id.to_string() == id)
+        let Some(index) = artifacts
+            .iter()
+            .position(|artifact| artifact.id.to_string() == id)
         else {
             bail!(
                 "no specification artifact `{id}` in {}. `--artifact` names one exactly; without \
-                 it the store's one in-force specification is used",
+                 it the specification of this task's work is used",
                 store.display()
             );
         };
-        return Ok(document);
+        if let Some(binding) = binding {
+            // `--artifact` says *which* document to decide, never *whether* the binding applies.
+            // A record about a specification `spec-driven.before_implementation` would refuse is a
+            // record about the wrong work, and a flag that produced one would be the way around
+            // the guard rather than the way through it.
+            if !named(&rule).matches(&artifacts[index], graph, &binding.work) {
+                bail!(
+                    "`{id}` is not a specification which {}, so a record about it would be a \
+                     record about work nobody said this run was about. {} (from {}). \
+                     `--artifact` names which specification to decide and does not lift the \
+                     binding; point `--task` at the task this specification is about, or give it \
+                     the edge — `protocol artifact relate {id} specifies <the artifact the task \
+                     is derived from>`",
+                    rule.relation.as_ref().expect("the rule binds"),
+                    binding.work_line(),
+                    binding.source
+                );
+            }
+        }
+        return Ok(index);
     }
 
-    let referenced = match task {
-        Some(path) => task_artifacts(path)?,
-        None => discovered_task().unwrap_or_default(),
+    let work: &[ArtifactRef] = binding.map_or(&[], |binding| &binding.work);
+    let requirement = if binding.is_some() {
+        rule
+    } else {
+        unbound(&rule)
     };
-    let mut in_force = narrow(
-        found
-            .into_iter()
-            .map(|(_, document)| document)
-            .filter(|document| is_in_force(&document.frontmatter.status))
-            .collect(),
-        &referenced,
-    );
+    let chosen: Vec<usize> = (0..artifacts.len())
+        .filter(|index| requirement.matches(&artifacts[*index], graph, work))
+        .collect();
 
-    match in_force.len() {
-        1 => Ok(in_force.remove(0)),
-        0 => bail!(
+    match chosen.len() {
+        1 => Ok(chosen[0]),
+        0 => bail!("{}", nothing_selected(store, artifacts, binding)),
+        held => bail!(
+            "{held} specifications in {} {} — {} — so a step here would establish something about \
+             one of several documents. {} `--artifact` names one exactly; it does not lift the \
+             binding",
+            store.display(),
+            match binding {
+                Some(_) => "are this task's".to_owned(),
+                None => format!("satisfy `{requirement}`"),
+            },
+            chosen
+                .iter()
+                .map(|index| artifacts[*index].id.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            match binding {
+                Some(binding) => format!("{} (from {}).", binding.work_line(), binding.source),
+                None => "No task document is in reach, so the selection is not bound to any work; \
+                         `--task <file>` names one."
+                    .to_owned(),
+            }
+        ),
+    }
+}
+
+/// Why nothing was selected, saying **which end is missing**.
+///
+/// Three different findings, and a reader acts on each differently: there is no specification here
+/// at all; there are specifications and none is in force; there are specifications in force and
+/// none of them is this task's. The last is the one the binding added, and it names both ends —
+/// what is declared, and what the task said it was about — for the reason the engine's own unmet
+/// row does: *two approved specifications are present and the rule is still unmet* reads as a
+/// defect in the tool until the sentence says whose they are.
+fn nothing_selected(store: &Path, artifacts: &[Artifact], binding: Option<&Binding>) -> String {
+    if artifacts.is_empty() {
+        return format!(
+            "no specification artifact is declared in {}. `spec-driven.before_implementation` \
+             asks for one before implementation, so a run with none has nothing to be decided \
+             against",
+            store.display()
+        );
+    }
+    let Some(binding) = binding else {
+        return format!(
             "no specification in {} is `approved`, `accepted`, `active` or `implemented`, so \
-             nothing here is a specification a task may be implemented against. \
+             nothing here is a specification a task may be implemented against — declared: {}. \
              `spec-driven.before_implementation` is the guard that says so, and an `operator` step \
              is where a person approves one",
-            store.display()
-        ),
-        held => bail!(
-            "{held} specifications in {} are in force — {} — and none of them is the only one the \
-             task references, so a step here would establish something about a document nobody \
-             said this run was about. `--artifact` names one exactly, and a specification that \
-             relates to what the task's `derived_from` names is found without it",
             store.display(),
-            in_force
-                .iter()
-                .map(|document| document.frontmatter.id.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
+            declared(artifacts)
+        );
+    };
+    format!(
+        "no specification in {} is `{}` — declared: {}; {} (from {}). This is the guard's own \
+         rule, so a record about any of these would be one `spec-driven.before_implementation` \
+         refuses. A specification of this task carries `specifies:` the artifact the task is \
+         derived from; `protocol artifact relate <id> specifies <target>` writes that edge, and an \
+         `operator` step is where a person approves the document",
+        store.display(),
+        specification_of_this_task(),
+        declared(artifacts),
+        binding.work_line(),
+        binding.source
+    )
 }
 
 /// One requirement, as written, with everything in it that might decide it.
@@ -812,17 +991,268 @@ Some prose that states nothing checkable.\n\
         );
     }
 
+    /// The store a selection is decided over, as a path a refusal can name.
+    fn store() -> &'static Path {
+        Path::new(".engineering/planning")
+    }
+
+    /// A specification artifact, with the edges a driven run's `specify` state writes.
+    fn specification(id: &str, status: ArtifactStatus, specifies: &[&str]) -> Artifact {
+        let mut artifact = Artifact::new(
+            aep_domain::artifact::ArtifactId::new(id).expect("an artifact id"),
+            ArtifactKind::Specification,
+            status,
+            aep_domain::artifact::ArtifactLocation::Inline,
+        );
+        for target in specifies {
+            artifact = artifact.with_relation(
+                RelationKind::Specifies,
+                ArtifactRef::parse(target).expect("an artifact reference"),
+            );
+        }
+        artifact
+    }
+
+    /// The store, as `choose` reads it.
+    fn graph_of(artifacts: &[Artifact]) -> ArtifactGraph {
+        let mut graph = ArtifactGraph::new();
+        for artifact in artifacts.iter().cloned() {
+            graph.insert(artifact);
+        }
+        graph
+    }
+
+    /// A binding from a task document, through the same [`Task::declared_work`] the engine calls.
+    ///
+    /// Parsed rather than constructed: what a task declares is what the document says, and a
+    /// hand-built work list would test this function against itself.
+    fn binding(task: &str) -> Binding {
+        Binding {
+            source: ".engineering/task.yaml".to_owned(),
+            work: aep_schema::parse::task(task, None)
+                .expect("the task parses")
+                .declared_work(),
+        }
+    }
+
+    /// The task a driven run walks: decomposed from a story, which is the edge the binding reads.
+    const TASK: &str = "id: AUTH-142\n\
+         kind: feature\n\
+         objective: add-passkey-support\n\
+         protocol: adp/1\n\
+         profile: development.fast\n\
+         derived_from:\n  - story:AUTH-141\n";
+
+    /// The selected specification is the one whose `specifies` edge lands on the task's work.
+    #[test]
+    fn the_specification_decided_is_the_one_that_specifies_this_tasks_work() {
+        let artifacts = [
+            specification("specification:sessions", ArtifactStatus::Approved, &[]),
+            specification(
+                "specification:passkeys",
+                ArtifactStatus::Approved,
+                &["story:AUTH-141"],
+            ),
+        ];
+        let chosen = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(TASK)),
+            None,
+        )
+        .expect("one specification is this task's");
+        assert_eq!(
+            artifacts[chosen].id.to_string(),
+            "specification:passkeys",
+            "the unrelated approved specification beside it does not decide anything"
+        );
+    }
+
+    /// Another story's approved specification is not this task's, and the refusal says which end
+    /// is missing rather than leaving the reader to guess.
+    ///
+    /// This is the defect the whole binding exists for: before it, the verb wrote a `specification`
+    /// record about exactly this document — a verdict about somebody else's story, carrying this
+    /// run's `specification.satisfied`.
+    #[test]
+    fn another_storys_approved_specification_is_not_this_tasks() {
+        let artifacts = [specification(
+            "specification:sessions",
+            ArtifactStatus::Approved,
+            &["story:AUTH-9"],
+        )];
+        let refusal = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(TASK)),
+            None,
+        )
+        .expect_err("an approved specification of another story decides nothing here")
+        .to_string();
+
+        for named in [
+            "specification:sessions (approved)",
+            "this task's work is story:AUTH-141, task:AUTH-142",
+            "specifies this task",
+        ] {
+            assert!(
+                refusal.contains(named),
+                "the refusal names both ends of the missing edge; `{named}` is not in:\n{refusal}"
+            );
+        }
+    }
+
+    /// Two specifications of this task's work are a refusal listing both, not a coin toss.
+    #[test]
+    fn two_specifications_of_this_tasks_work_are_refused_and_both_are_named() {
+        let artifacts = [
+            specification(
+                "specification:passkeys",
+                ArtifactStatus::Approved,
+                &["story:AUTH-141"],
+            ),
+            specification(
+                "specification:passkeys-v2",
+                ArtifactStatus::Active,
+                &["task:AUTH-142"],
+            ),
+            // A third, approved, of another story: it is not one of the candidates, so the
+            // ambiguity being reported is an ambiguity inside this task's own work.
+            specification(
+                "specification:sessions",
+                ArtifactStatus::Approved,
+                &["story:AUTH-9"],
+            ),
+        ];
+        let refusal = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(TASK)),
+            None,
+        )
+        .expect_err("a step establishes one thing, and this store offers two")
+        .to_string();
+
+        for named in [
+            "specification:passkeys",
+            "specification:passkeys-v2",
+            "--artifact",
+        ] {
+            assert!(
+                refusal.contains(named),
+                "the refusal names every candidate and the way to say which; `{named}` is not \
+                 in:\n{refusal}"
+            );
+        }
+        assert!(
+            !refusal.contains("specification:sessions"),
+            "another story's approved specification is not a candidate to be ambiguous with:\n\
+             {refusal}"
+        );
+    }
+
+    /// A task that was decomposed from nothing is still matched by a specification of the task
+    /// itself — `Task::declared_work` contributes `task:<id>`, and a rule that refused it would be
+    /// disagreeing with its own name.
+    #[test]
+    fn a_task_that_declares_no_story_is_matched_by_a_specification_of_the_task_itself() {
+        let bare = "id: AUTH-142\n\
+             kind: feature\n\
+             objective: add-passkey-support\n\
+             protocol: adp/1\n\
+             profile: development.fast\n";
+        let artifacts = [
+            // Approved, of another story, and beside it in the store — so a selection that had
+            // stopped consulting the task at all would be ambiguous here rather than right.
+            specification(
+                "specification:sessions",
+                ArtifactStatus::Approved,
+                &["story:AUTH-9"],
+            ),
+            specification(
+                "specification:passkeys",
+                ArtifactStatus::Approved,
+                &["task:AUTH-142"],
+            ),
+        ];
+        let chosen = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(bare)),
+            None,
+        )
+        .expect("`specifies: task:AUTH-142` is exactly the relationship the rule asks about");
+        assert_eq!(artifacts[chosen].id.to_string(), "specification:passkeys");
+    }
+
+    /// `--artifact` names which specification, never whether the binding applies.
+    ///
+    /// The one that matters for the safety envelope: an escape hatch here would be a way to mint
+    /// the record `spec-driven.before_implementation` exists to withhold.
+    #[test]
+    fn an_artifact_named_on_the_command_line_still_has_to_specify_this_task() {
+        let artifacts = [specification(
+            "specification:sessions",
+            ArtifactStatus::Approved,
+            &["story:AUTH-9"],
+        )];
+        let refusal = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(TASK)),
+            Some("specification:sessions"),
+        )
+        .expect_err("naming a document does not make it this task's")
+        .to_string();
+        assert!(
+            refusal.contains("is not a specification which specifies this task")
+                && refusal.contains("does not lift the binding"),
+            "{refusal}"
+        );
+    }
+
+    /// The status half is what `--artifact` does lift: asking whether a `draft` specification
+    /// states anything decidable is a legitimate question, and its edge still has to land here.
+    #[test]
+    fn an_artifact_named_on_the_command_line_may_be_a_draft_of_this_tasks_work() {
+        let artifacts = [specification(
+            "specification:passkeys",
+            ArtifactStatus::Draft,
+            &["story:AUTH-141"],
+        )];
+        let chosen = choose(
+            store(),
+            &artifacts,
+            &graph_of(&artifacts),
+            Some(&binding(TASK)),
+            Some("specification:passkeys"),
+        )
+        .expect("a draft of this task's work may be asked whether it states anything decidable");
+        assert_eq!(artifacts[chosen].id.to_string(), "specification:passkeys");
+    }
+
     /// Which statuses count as a specification a task may be implemented against — the same four
-    /// `spec-driven` accepts, and no more.
+    /// `spec-driven` accepts, and no more. Asked of the rule this verb selects by, so a change to
+    /// the rule is a change to this answer.
     #[test]
     fn only_a_specification_in_force_is_one_a_task_may_be_implemented_against() {
+        let rule = unbound(&specification_of_this_task());
         for status in [
             ArtifactStatus::Approved,
             ArtifactStatus::Accepted,
             ArtifactStatus::Active,
             ArtifactStatus::Implemented,
         ] {
-            assert!(is_in_force(&status), "{status:?}");
+            let artifact = specification("specification:passkeys", status.clone(), &[]);
+            assert!(
+                rule.matches(&artifact, &graph_of(std::slice::from_ref(&artifact)), &[]),
+                "{status:?}"
+            );
         }
         for status in [
             ArtifactStatus::Draft,
@@ -832,10 +1262,59 @@ Some prose that states nothing checkable.\n\
             ArtifactStatus::Superseded,
             ArtifactStatus::Archived,
         ] {
+            let artifact = specification("specification:passkeys", status.clone(), &[]);
             assert!(
-                !is_in_force(&status),
+                !rule.matches(&artifact, &graph_of(std::slice::from_ref(&artifact)), &[]),
                 "`{status:?}` is not a specification anything may be built against"
             );
         }
+    }
+
+    /// **The rule this verb selects by is the rule the shipped principles declare** — parsed from
+    /// the documents rather than described here.
+    ///
+    /// The verb is only as tight as the guard it serves while the two agree, and they are two
+    /// files. This is the check that makes the agreement mechanical: an edit to either principle
+    /// that this verb has not followed fails here, rather than turning up as a record about a
+    /// document `before_implementation` refuses.
+    #[test]
+    fn the_rule_this_verb_selects_by_is_the_one_the_shipped_principles_declare() {
+        let rule = specification_of_this_task();
+        for principle in ["spec-driven", "clean-room"] {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../principles/development")
+                .join(format!("{principle}.yaml"));
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
+            let parsed = aep_schema::parse::principle(&text, Some(&path.display().to_string()))
+                .unwrap_or_else(|error| panic!("{} parses: {error}", path.display()));
+            let declared: Vec<&ArtifactRequirement> = parsed
+                .obligations
+                .iter()
+                .flat_map(|obligation| &obligation.requires.artifacts)
+                .filter(|requirement| requirement.kind == ArtifactKind::Specification)
+                .collect();
+            assert_eq!(
+                declared,
+                vec![&rule],
+                "`{principle}` is what asks for a specification of this task, and this verb writes \
+                 the record that guard reads; the two must state one rule: {declared:#?}"
+            );
+        }
+    }
+
+    /// With no task in reach the selection is unbound, and the store's one in-force specification
+    /// is still decided — a person pointing this verb at a store from outside a project is not
+    /// refused by a binding nothing could have answered.
+    #[test]
+    fn with_no_task_in_reach_the_stores_one_in_force_specification_is_still_decided() {
+        let artifacts = [specification(
+            "specification:sessions",
+            ArtifactStatus::Approved,
+            &["story:AUTH-9"],
+        )];
+        let chosen = choose(store(), &artifacts, &graph_of(&artifacts), None, None)
+            .expect("nothing said what this run is about, and one document is in force");
+        assert_eq!(artifacts[chosen].id.to_string(), "specification:sessions");
     }
 }

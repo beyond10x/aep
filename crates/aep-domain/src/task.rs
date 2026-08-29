@@ -29,7 +29,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::artifact::ArtifactRef;
+use crate::artifact::{ArtifactId, ArtifactRef};
 use crate::capability::CapabilityPolicy;
 use crate::error::ParseError;
 use crate::facts::{FactPath, FactStore, FactValue};
@@ -362,6 +362,46 @@ pub struct Task {
 }
 
 impl Task {
+    /// **The artifacts this task declares as its work** — what *this task* means to anything that
+    /// binds to it.
+    ///
+    /// One function, called from both ends, because two readings of *whose specification is this*
+    /// is the defect the binding exists to close, restored one layer up. `aep-engine`'s
+    /// `Execution` answers
+    /// [`RequirementContext::task_artifacts`](crate::requirement::RequirementContext::task_artifacts)
+    /// with it, so a requirement declaring
+    /// [`RelationTarget::Task`](crate::requirement::RelationTarget::Task) counts only artifacts
+    /// whose edge lands here; `protocol specification evidence` selects the document it writes a
+    /// record about with the same set, so the verb cannot decide a specification the guard it
+    /// serves would refuse.
+    ///
+    /// Two sources, and the second is why this is not just a field read:
+    ///
+    /// * **what the task was decomposed from** — [`TaskArtifacts::derived_from`]. This is the
+    ///   route a driven run actually travels: the task declares `story:open-vocabulary-audit` and
+    ///   the specification the `specify` state wrote declares
+    ///   `specifies: story:open-vocabulary-audit`, so the edge lands on the work and a rule can
+    ///   tell it from another story's.
+    /// * **the task's own id as an artifact reference** — `task:AUTH-142` for task `AUTH-142` —
+    ///   because an author whose specification says `specifies: task:AUTH-142` has written down
+    ///   exactly the relationship the rule is asking about, and refusing it would be the rule
+    ///   disagreeing with its own name.
+    ///
+    /// [`TaskArtifacts::context`] is deliberately **not** here. It holds "other artifacts that
+    /// constrain it" — background the task must respect, not the work it is. Counting it would
+    /// let a task admit another story's specification by listing that story as reading material,
+    /// which is the defect this binding closes wearing a different hat.
+    pub fn declared_work(&self) -> Vec<ArtifactRef> {
+        let mut declared = self.artifacts.derived_from.clone();
+        // Fallible because `ArtifactId` and `TaskId` are different charsets. A task id that is not
+        // half of an artifact id simply contributes no reference: the `derived_from` route is
+        // unaffected, and nothing silently widens.
+        if let Ok(id) = ArtifactId::new(format!("task:{}", self.id)) {
+            declared.push(ArtifactRef::unpinned(id));
+        }
+        declared
+    }
+
     /// The facts a task contributes before anything has been observed.
     ///
     /// These are what a principle's applicability condition reads: `task.kind`, `task.id`, plus

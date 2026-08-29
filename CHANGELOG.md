@@ -67,6 +67,20 @@ belongs in the commit message or in `docs/design/`.
   naming the task itself (`specifies: task:<id>`); the refusal says which of the two ends is
   missing rather than leaving you to guess.
 
+* **The record saying your specification is satisfied is now about *your* specification.**
+  `protocol specification evidence` picked any in-force specification in the store, so in a store
+  holding more than one piece of work it wrote the `specification` record — the one `spec-driven`
+  reads as `specification.satisfied` before completion — about another story's document, and about
+  one the guard before `implement` would itself have refused. It now selects by that guard's own
+  rule: an approved specification whose `specifies` edge lands on the work the task declares. The
+  task comes from `--task <file>` or from the project you are standing in; with neither in reach
+  the selection is unbound and behaves exactly as it did. `--artifact` still says *which*
+  specification to decide and no longer lets you name one that is not this task's — that is
+  refused, naming what is declared and what your task said it was about — but it does still lift
+  the status, so a `draft` can be asked whether it states anything a fact could decide. **What to
+  do if it now refuses you:** the specification needs `specifies:` the story your task names under
+  `derived_from:`, which is the edge a driven run's `specify` state already writes.
+
 * **A run that walked past an `operator` step with nothing recorded now says so.** Until now the
   pause advanced the cursor and the resume carried on, and a run nobody approved was
   indistinguishable in its own record from one somebody did — `NATIVE-1/1` moved

@@ -24,7 +24,7 @@
 //! `evidence.first_seq.*` is the interesting one: it is what lets a document say "a test must have
 //! failed before any code changed" as a checkable fact rather than as a comment.
 
-use aep_domain::artifact::{ArtifactGraph, ArtifactId, ArtifactRef};
+use aep_domain::artifact::{ArtifactGraph, ArtifactRef};
 use aep_domain::entity::{ActorRef, EntityRef};
 use aep_domain::event::{EventEnvelope, ProtocolEvent};
 use aep_domain::evidence::{ApprovalDecision, Evidence, EvidenceKind, EvidenceRecord};
@@ -637,33 +637,16 @@ impl RequirementContext for Execution {
         self.evaluated_at
     }
 
-    /// What *this task* means to a requirement bound to it.
+    /// What *this task* means to a requirement bound to it:
+    /// [`Task::declared_work`](aep_domain::task::Task::declared_work), and nothing added here.
     ///
-    /// Two sources, and the second is why this is not just a field read:
-    ///
-    /// * **what the task was decomposed from** — `derived_from` on the task document. This is the
-    ///   route a driven run actually travels: the task declares `story:open-vocabulary-audit` and
-    ///   the specification the `specify` state wrote declares `specifies: story:open-vocabulary-audit`,
-    ///   so the edge lands on the work and the guard can tell it from another story's.
-    /// * **the task's own id as an artifact reference** — `task:AUTH-142` for task `AUTH-142` —
-    ///   because an author whose specification says `specifies: task:AUTH-142` has written down
-    ///   exactly the relationship the rule is asking about, and refusing it would be the rule
-    ///   disagreeing with its own name.
-    ///
-    /// `context` is deliberately **not** here. It holds "other artifacts that constrain it" —
-    /// background the task must respect, not the work it is. Counting it would let a task admit
-    /// another story's specification by listing that story as reading material, which is the
-    /// defect this binding closes wearing a different hat.
+    /// The rule — `derived_from` plus the task's own id as `task:<id>`, and deliberately not
+    /// `context` — lives on the task itself because the engine is not its only reader:
+    /// `protocol specification evidence` selects the specification it writes a record about with
+    /// the same call, so the verb and this guard cannot come to disagree about whose specification
+    /// a document is.
     fn task_artifacts(&self) -> Vec<ArtifactRef> {
-        let task = &self.plan.task;
-        let mut declared = task.artifacts.derived_from.clone();
-        // Fallible because `ArtifactId` and `TaskId` are different charsets. A task id that is not
-        // half of an artifact id simply contributes no reference: the `derived_from` route is
-        // unaffected, and nothing silently widens.
-        if let Ok(id) = ArtifactId::new(format!("task:{}", task.id)) {
-            declared.push(ArtifactRef::unpinned(id));
-        }
-        declared
+        self.plan.task.declared_work()
     }
 }
 

@@ -223,31 +223,53 @@ fn protocol_property_evidence_writes_a_property_record_with_the_case_count_it_me
     assert!(payload.status.is_pass(), "{payload:?}");
 }
 
-/// The store a specification producer is run against: one specification, in force, with
-/// requirements that reach each of the three verdicts.
+/// The store a specification producer is run against: one specification, in force, **of this
+/// task's work**, with requirements that reach each of the three verdicts.
+///
+/// The `specifies` edge and the task document beside it are not decoration. Since
+/// `story:task-scoped-artifact-requirements`' follow-up the verb selects by
+/// `spec-driven.before_implementation`'s own rule — an approved specification whose edge lands on
+/// the work the task declares — so a fixture without them is a store the verb correctly refuses,
+/// and the record these tests are about is never written.
 fn specification_store(directory: &Path) {
     write(
         &directory.join("specification/passkeys.md"),
         "---\nformat: aep.planning-md/1\nid: specification:passkeys\nkind: specification\n\
          status: approved\ntitle: Passkey sign-in\nsummary: What signing in with a passkey must \
-         do.\n---\n# Specification\n\n## Acceptance\n\n\
+         do.\nrelations:\n- specifies: story:passkeys\n---\n# Specification\n\n\
+         ## Acceptance\n\n\
          - The unit suite is green: `tests.unit.failed == 0`\n\
          - Static analysis is clean: `static_analysis.errors == 0`\n\
          - The change reads well to a person\n",
     );
+    write(&directory.join("task.yaml"), TASK);
 }
+
+/// The task the store's specification is about, named with `--task` on every invocation below.
+///
+/// Named rather than discovered: these tests run from the repository root, so discovery would find
+/// *this* repository's task and bind the selection to work that has nothing to do with the fixture.
+const TASK: &str = "id: PASSKEYS-1\n\
+     kind: feature\n\
+     objective: passkey-sign-in\n\
+     protocol: adp/1\n\
+     profile: development.fast\n\
+     derived_from:\n  - story:passkeys\n";
 
 #[test]
 fn protocol_specification_evidence_writes_the_requirement_by_requirement_verdict() {
     let directory = scratch("specification");
     specification_store(&directory);
     let out = directory.join("specification.yaml");
+    let task = directory.join("task.yaml");
 
     let output = protocol(&[
         "specification",
         "evidence",
         "--store",
         printable(&directory),
+        "--task",
+        printable(&task),
         "--out",
         printable(&out),
     ]);
@@ -287,25 +309,34 @@ fn protocol_specification_evidence_writes_the_requirement_by_requirement_verdict
 }
 
 #[test]
-fn a_store_holding_two_specifications_in_force_is_refused_rather_than_guessed_at() {
+fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_guessed_at() {
     // D5's `Unknown` at the layer above the driver: the verb writes nothing, the step submits
     // nothing, and the run stops at the guard rather than moving on a record about the wrong
     // document.
+    //
+    // Both specifications carry the edge, so the ambiguity is a real one *inside* this task's
+    // work — which is the only ambiguity left since the selection was bound. Another story's
+    // approved specification is not a candidate at all any more, and
+    // `specification_task_binding.rs` is where that is held.
     let directory = scratch("specification-ambiguous");
     specification_store(&directory);
     write(
         &directory.join("specification/sessions.md"),
         "---\nformat: aep.planning-md/1\nid: specification:sessions\nkind: specification\n\
-         status: approved\ntitle: Sessions\nsummary: What a session must do.\n---\n\
+         status: approved\ntitle: Sessions\nsummary: What a session must do.\n\
+         relations:\n- specifies: story:passkeys\n---\n\
          # Specification\n\n## Acceptance\n\n- Sessions expire: `tests.unit.failed == 0`\n",
     );
     let out = directory.join("specification.yaml");
+    let task = directory.join("task.yaml");
 
     let output = protocol(&[
         "specification",
         "evidence",
         "--store",
         printable(&directory),
+        "--task",
+        printable(&task),
         "--out",
         printable(&out),
     ]);
@@ -329,12 +360,16 @@ fn a_store_holding_two_specifications_in_force_is_refused_rather_than_guessed_at
          a document nobody said the run was about"
     );
 
-    // And the way through, which is what makes this a refusal rather than a wall.
+    // And the way through, which is what makes this a refusal rather than a wall. It is a way
+    // through the ambiguity and not through the binding: `--artifact` names one of the two
+    // documents that already specify this task's work.
     let named = protocol(&[
         "specification",
         "evidence",
         "--store",
         printable(&directory),
+        "--task",
+        printable(&task),
         "--artifact",
         "specification:sessions",
         "--out",
@@ -363,6 +398,7 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
     specification_store(&directory);
 
     let tree = root();
+    let task = directory.join("task.yaml");
     let documents = [
         (
             "verification.yaml",
@@ -376,6 +412,8 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
                 "evidence",
                 "--store",
                 printable(&directory),
+                "--task",
+                printable(&task),
             ],
         ),
     ];

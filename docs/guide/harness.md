@@ -74,6 +74,18 @@ predicate it names in backticks is observed `True`.** A requirement that names n
 reported unmet rather than assumed met, and a ticked checkbox is deliberately not the rule — the
 party that writes the specification is the party being checked.
 
+**Which specification it decides is the guard's own question, answered by the guard's own rule.**
+`protocol specification evidence` selects an approved `specification` whose `specifies` edge lands
+on the work the task declares — `spec-driven.before_implementation`'s
+`{kind: specification, status: approved, relation: {kind: specifies, target: task}}`, evaluated by
+`ArtifactRequirement::matches` over `Task::declared_work`, which is the same function and the same
+set the engine answers `RequirementContext::task_artifacts` with. The task is `--task <file>` or the
+one `project.yaml` names; with neither in reach the selection is unbound and takes the store's one
+in-force specification. It writes nothing and says why when the store holds none of this task's or
+more than one, which the driver reads as D5's `Unknown`. `--artifact` names *which* specification,
+never *whether* the binding applies: an id that does not specify this task's work is refused, because
+a flag that produced the record would be the way around the guard rather than the way through it.
+
 ### The launch check, and the flag that waives it
 
 Before the first step runs, the driver compares every evidence kind the **plan** will demand against

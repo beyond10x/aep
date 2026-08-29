@@ -11,7 +11,7 @@ tags:
 - protocol
 relations:
 - decomposes: epic:reference-driver
-revision: 2
+revision: 3
 ---
 # Story: A rule about this task's specification stops accepting somebody else's
 
@@ -74,10 +74,9 @@ the artifact graph, the evidence log and the clock; nothing on it answered *what
   all, so a binding would refuse every task rather than the wrong ones. `preserve-evidence`'s own
   comment names this gap — *"cannot say which artifact"* — and it stays named rather than closed on a
   relation nobody writes.
-- **`protocol specification evidence` choosing which specification a run is held to.** It still picks
-  *the* approved `specification` artifact in the store and refuses when there is more than one
-  (`crates/protocol-cli/src/specification.rs`). That refusal is now stricter than the guard it serves
-  and could read the same binding; it is a separate change with its own refusals to get right.
+- **`protocol specification evidence` choosing which specification a run is held to.** Carried as a
+  follow-up rather than done in the same change, because it has its own refusals to get right — and
+  **now done**: see *The follow-up, done 2026-08-29* below.
 - **A `ValidationCode`.** The malformed form is refused at the parse stage, which is where invariant
   2 puts it, and there is no `ParseError` → `ValidationError` bridge in the workspace. The stable
   identity is the variant plus its `kind`, matched as such and never by message text.
@@ -112,3 +111,41 @@ rule is still unmet* reads as an engine defect until the row says whose they are
 `design-by-contract`, `invariant-checking`, `incremental-decomposition`, `preserve-evidence` and
 `ess-conformance` are argued in *Out of Scope* above rather than left silent, because the next author
 will otherwise close them the same way and refuse the worked example.
+
+## The follow-up, done 2026-08-29
+
+**What was wrong.** Binding the guard left `protocol specification evidence` **looser than the guard
+it serves**: it selected any in-force specification in the store, so a run could write a
+`specification` record about a document `before_implementation` would refuse — and
+`specification.satisfied`, the fact `spec-driven` reads before completion, would be a verdict about
+somebody else's story. A tool that is looser than its own gate is worse than one that is stricter:
+the record looks like evidence and is about the wrong work.
+
+**One rule, shared by construction.** The set is `Task::declared_work`
+(`crates/aep-domain/src/task.rs`) — `derived_from` plus the task's own id as `task:<id>`, `context:`
+still excluded. It was the body of `Execution::task_artifacts`; the engine now calls it and so does
+the verb, so *whose specification is this* has one answer and one place to change. The match is
+`ArtifactRequirement::matches`, the engine's own function, over the requirement
+`{kind: specification, status: approved, relation: {kind: specifies, target: task}}` — the same
+value `spec-driven.before_implementation` and `clean-room` state, held to those two files by a test
+that parses them and compares (`the_rule_this_verb_selects_by_is_the_one_the_shipped_principles_declare`).
+
+**How the verb knows the task.** `--task <file>`, which already existed, or the task `project.yaml`
+names. With neither — a store handed to the verb from outside a project — the selection is unbound
+and behaves as it always did, because refusing there would refuse a person asking a legitimate
+question about a store they are standing outside of.
+
+**`--artifact` was not made an escape hatch.** It names *which* specification, never *whether* the
+binding applies: an id that does not specify this task's work is refused, saying so. What it does
+lift is the status half, so a `draft` can still be asked whether it states anything decidable.
+
+**What a refusal now says.** Both ends, the way the engine's own unmet row says them: what is
+declared (`specification:passkeys (approved), specification:sessions (approved)`) and what the task
+said it was about (`this task's work is story:billing, task:BILLING-1`), plus which task document
+that came from — because the wrong task document is the failure a reader cannot otherwise see.
+
+**Not done, and named rather than left silent.** A `command` step's map cannot say `{task}`
+(`CommandStep::PLACEHOLDERS` is `run_directory` and `transcript`), so a run driven with
+`protocol drive run --task <a path that is not the project's>` reaches this verb through discovery
+and binds to the project's task instead. It fails closed and says which document it read, which is
+visible rather than silent; a `{task}` placeholder is the fix and is a step-map vocabulary change.

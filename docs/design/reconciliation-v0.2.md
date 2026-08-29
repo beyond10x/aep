@@ -196,6 +196,11 @@ Recorded here so they are decisions rather than drift:
     `RequirementContext::task_artifacts`. Every declaration §28 shows still parses and still means
     what it meant; the binding is opt-in per requirement, `spec-driven` and `clean-room` take it,
     and a requirement that does not declare it never consults the task at all. A requirement that
-    does and cannot be answered reads `Unknown`, which permits nothing.
+    does and cannot be answered reads `Unknown`, which permits nothing. The same binding decides
+    **which specification a `specification` record is written about**: `protocol specification
+    evidence` selects by this requirement, through `ArtifactRequirement::matches` over
+    `Task::declared_work`, rather than by a reading of its own — a verb looser than the guard it
+    serves would write a record `before_implementation` refuses, which is the deviation restored one
+    layer up.
     Recorded here rather than left as drift because the document's shape is the narrower one.
     (`story:task-scoped-artifact-requirements`.)
