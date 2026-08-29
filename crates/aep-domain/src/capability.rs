@@ -905,6 +905,45 @@ mod tests {
     }
 
     #[test]
+    fn a_denied_private_read_is_not_downgraded_to_requiring_an_approval() {
+        // `a_denied_capability_is_not_downgraded_to_requiring_an_approval`'s shape, for the new
+        // name: the middle link of `deny > require_approval > allow` is only observable when one
+        // capability sits in both `deny` and `approval_required`, so the state is composed here the
+        // way the documents compose it — a profile grants the broad read, one principle puts the
+        // private half behind approval, a second denies it outright.
+        let private = capability("network.read:private");
+        let mut policy = CapabilityPolicy::allowing([capability("network.read")]);
+        policy.restrict(&CapabilityPolicy {
+            approval_required: [private.clone()].into_iter().collect(),
+            ..CapabilityPolicy::empty()
+        });
+        policy.restrict(&CapabilityPolicy::denying([private.clone()]));
+
+        assert!(
+            policy
+                .allow
+                .contains(&Capability::NetworkRead(Audience::Any))
+                && policy.approval_required.contains(&private)
+                && policy.deny.contains(&private),
+            "the fixture must hold the broad grant plus the private read in `approval_required` \
+             and `deny` at once, or the precedence between deny and require_approval is not what \
+             is being tested: {policy:?}"
+        );
+        assert_eq!(
+            policy.decide(&private),
+            CapabilityDecision::Denied,
+            "a denial of the private read must stay a denial: `ask someone` is not a safety \
+             envelope, because someone can always be asked — and the thing being asked about is a \
+             conversation the asker is not party to"
+        );
+        assert_eq!(
+            policy.matching_entry(&private),
+            Some(&private),
+            "the entry reported as the reason is the deny that decided, not the approval it beat"
+        );
+    }
+
+    #[test]
     fn a_read_that_will_not_say_its_audience_is_not_covered_by_a_public_grant() {
         let policy = CapabilityPolicy::allowing([capability("network.read:public")]);
         assert_eq!(
