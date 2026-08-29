@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:a-date-is-a-day-not-an-instant
 kind: story
-status: active
+status: implemented
 title: A date written at UTC+2 is not a claim about the future
 summary: A bare observation date means midnight UTC, so 20 of an adopter's 215 records read as future-dated for the last two hours of every UTC day — and one future record refuses the whole evidence document.
 owner: protocol
@@ -15,7 +15,7 @@ relations:
 - informed_by: story:evidence-horizons
 - informed_by: story:per-record-horizons
 - serves: vision:O2
-revision: 4
+revision: 6
 ---
 # Story: A date written at UTC+2 is not a claim about the future
 
@@ -26,6 +26,8 @@ Today, for the last two hours of every UTC day, an adopter east of Greenwich wri
 date, and the engine refuses **the whole document** — every other record in it included.
 
 ## Context
+
+*The `file:line` citations in this section are against `9a5b634`, the tree this story was written against. The fix is `4e61665` (merged as `f567b77`), and it moved every line cited here; read them with `git show 9a5b634:<path>`.*
 
 Same adopter as `story:evidence-horizons`, third round, **2026-08-29**, and this is the smaller of
 the two findings that round produced. It is not an argument against the future-date refusal — that

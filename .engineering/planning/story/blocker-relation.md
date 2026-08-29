@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:blocker-relation
 kind: story
-status: active
+status: implemented
 title: Parked on a credential does not look like actively worked
 summary: A blocker typed by what clears it — decision, review, credential, third party, capacity, deploy — so five items on one decision is one conversation.
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 # Story: Parked on a credential does not look like actively worked
 

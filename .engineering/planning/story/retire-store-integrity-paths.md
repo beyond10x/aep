@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:retire-store-integrity-paths
 kind: story
-status: active
+status: implemented
 title: store_integrity keeps its fence and loses its paths
 summary: Delete the path half of drive.rs's store_integrity now the step map declares it; the frontmatter-fence half stays, because content is not a scope.
 owner: protocol
@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - serves: vision:O3
-revision: 3
+revision: 4
 ---
 # Story: one rule, one place
 

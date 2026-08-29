@@ -13,7 +13,7 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
-revision: 2
+revision: 3
 ---
 # Story: Twelve horizons in one corpus, and one number the engine will hold
 
@@ -81,14 +81,14 @@ write-up records two blocking rows, and this is the first: *"the engine holds on
 per plan. The store holds twelve. A wrapper would have to declare twelve evidence kinds, or twelve
 plans, to say what one file says today."* They also note, correctly, that this is **a disagreement
 about where the number belongs, not an oversight**, and cite this repository's own corpus README
-(`examples/evidence-horizons-corpus/README.md:107`) saying so.
+(`examples/evidence-horizons-corpus/README.md:108`) saying so.
 
 ### Why invariant 17's hazard is not what this proposes
 
 Invariant 17 defends against one move: **extension**. *"If `extend` is as easy to call as
 `re-check`, it is the one that gets called — every time, under pressure, by whoever is trying to get
 a gate green"* (`crates/aep-domain/src/requirement.rs:268`,
-`examples/evidence-horizons-corpus/README.md:107`). A record that sets its own expiry can set it
+`examples/evidence-horizons-corpus/README.md:108`). A record that sets its own expiry can set it
 later. That is right, and it is why *shipping a `horizon` field on a record* is not what is asked
 for here.
 
