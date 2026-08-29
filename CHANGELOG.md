@@ -299,8 +299,8 @@ Nothing yet.
 ### Fixed
 
 * **A date written east of Greenwich is no longer a claim about the future, and one bad record no
-  longer discards the whole evidence file.** `observed_at: 2026-08-30` is a *day*, and it meant
-  midnight UTC — so a store at UTC+2 writing local calendar dates wrote a future instant for the
+  longer discards the whole evidence file.** A bare calendar date in `observed_at` —
+  `observed_at: 2026-08-30` — is a *day*, and it meant midnight UTC — so a store at UTC+2 writing local calendar dates wrote a future instant for the
   last two hours of every UTC day: 20 of one adopter's 215 records, refused, and one refused record
   refused the entire document. A bare calendar date is now compared against the moment that day
   begins in the most-ahead timezone in use, UTC+14, so it is refused only once it is in the future
@@ -397,8 +397,9 @@ Nothing yet.
   decides); the report now carries one line saying the record holds nobody's answer.
 
 * **A `command` step of a step map that says `protocol` now runs the build that is driving the
-  run.** A `command` step is spawned by the driver with the driver's own environment, so the name
-  resolved against whatever `protocol` came first on the operator's shell `PATH`. Run `W4-3/1` hit
+  run.** A `command` step is spawned by the driver (`crates/protocol-cli/src/drive.rs`) with the
+  driver's own environment, so the name resolved against whatever `protocol` came first on the
+  operator's shell `PATH`. Run `W4-3/1` hit
   a 0.28.0 install predating the `property` verb: `protocol property evidence` wrote nothing,
   the driver correctly reported *nothing was observed*, and the step spent its whole retry budget
   three times with the cause invisible in the message. The driver now spawns its own
@@ -438,7 +439,8 @@ Nothing yet.
   transcripts (0 of 2 calls failed) and `ok` on the driven honest step (1 of 2, rate 0.500).
 
 * **The resume line the driver prints is a line that works.** A stopped run printed `resume with:
-  protocol drive resume <run>`, and that command re-read none of `--map`, `--task`,
+  protocol drive resume <run>` (`crates/protocol-cli/src/drive.rs`), and that command re-read none
+  of `--map`, `--task`,
   `--pause-on-approval` or `--plugin-dir` — so an operator who typed exactly what they were told got
   a different run, or an error. The run directory now holds a `launch.json` recording how the run
   was started, and `resume` fills in anything the caller left out; a flag still wins over it. A run
