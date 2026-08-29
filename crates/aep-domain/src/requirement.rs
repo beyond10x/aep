@@ -84,6 +84,25 @@ pub trait RequirementContext {
     fn now(&self) -> Option<Timestamp> {
         None
     }
+
+    /// The artifacts the execution's own task declares it is about.
+    ///
+    /// This is what *this task* means to a requirement bound to it with
+    /// [`RelationTarget::Task`]: the task document names the work — the story it was decomposed
+    /// from, the task it implements — and an artifact counts as this task's only when one of its
+    /// edges lands on one of those.
+    ///
+    /// Empty **fails closed**, the same polarity as [`Self::now`]: a context that cannot say what
+    /// its task is about satisfies no task-bound requirement, and the requirement reads
+    /// [`Truth::Unknown`] — which permits nothing. The opposite would mean a caller who never
+    /// wired a task got every approved artifact in the store counted as this task's, which is the
+    /// defect the binding exists to close.
+    ///
+    /// Defaulted, because a requirement that declares no binding never consults it and every
+    /// context that existed before the binding did evaluates exactly as it did.
+    fn task_artifacts(&self) -> Vec<ArtifactRef> {
+        Vec::new()
+    }
 }
 
 /// Which flavour of requirement an outcome came from.
@@ -560,6 +579,73 @@ impl fmt::Display for EvidenceRequirement {
     }
 }
 
+/// *Which* thing a relation must land on, as opposed to what kind of thing.
+///
+/// `target_kind` answers "a design"; this answers "**this** work". Without it an artifact
+/// requirement is a query over the whole store — `kind: specification, status: approved` counts
+/// any approved specification anybody ever wrote, so a rule meant to say *a specification of this
+/// task exists* is satisfied by somebody else's. Run `NATIVE-1/1` left `establish_verifiers`
+/// holding zero approvals of its own on exactly that reading.
+///
+/// A closed vocabulary with one member rather than a `for_task: true` flag, because the question
+/// is the one `target_kind` already asks and two ways to constrain one edge is how the two come to
+/// disagree. `target: task` and `target_kind: story` compose: *specifies a story of this task*.
+///
+/// Deliberately **not** spelled `target_kind: task`, which is a different question — any artifact
+/// of kind `task`, whosever it is.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationTarget {
+    /// The work the execution's own task declares it is about.
+    ///
+    /// Resolved through [`RequirementContext::task_artifacts`], which is the task's declared
+    /// artifacts — not the store, and not the artifact graph at large.
+    Task,
+}
+
+impl RelationTarget {
+    /// Every binding.
+    pub const ALL: &'static [Self] = &[Self::Task];
+
+    /// The binding as written in documents.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Task => "task",
+        }
+    }
+
+    /// Parses a binding name.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|target| target.as_str() == value)
+            .ok_or_else(|| {
+                ParseError::identifier(
+                    "artifact relation target",
+                    value,
+                    format!(
+                        "expected one of {}; `target` binds the edge to the execution's own work, \
+                         and `target_kind` is what names a kind",
+                        Self::ALL
+                            .iter()
+                            .map(|target| target.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                )
+            })
+    }
+}
+
+impl fmt::Display for RelationTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// A relationship an artifact must have.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct RelationRequirement {
@@ -568,13 +654,22 @@ pub struct RelationRequirement {
     /// What kind of thing it must point at.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_kind: Option<ArtifactKind>,
+    /// Which particular thing it must point at.
+    ///
+    /// `None` is the behaviour that shipped: any target counts. Declaring it binds the edge, and
+    /// both constraints then have to be met by **one** edge — "specifies a story of this task" is
+    /// one relationship, not two.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<RelationTarget>,
 }
 
 impl fmt::Display for RelationRequirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.target_kind {
-            Some(kind) => write!(f, "{} a {kind}", self.kind),
-            None => write!(f, "{}", self.kind),
+        match (&self.target_kind, self.target) {
+            (Some(kind), Some(target)) => write!(f, "{} a {kind} of this {target}", self.kind),
+            (Some(kind), None) => write!(f, "{} a {kind}", self.kind),
+            (None, Some(target)) => write!(f, "{} this {target}", self.kind),
+            (None, None) => write!(f, "{}", self.kind),
         }
     }
 }
@@ -628,6 +723,7 @@ impl ArtifactRequirement {
                     Some(Node::Text(relation)) => Some(RelationRequirement {
                         kind: RelationKind::parse(relation)?,
                         target_kind: None,
+                        target: None,
                     }),
                     Some(Node::Map(relation)) => {
                         let kind = relation
@@ -646,7 +742,25 @@ impl ArtifactRequirement {
                             Some(target) => Some(ArtifactKind::parse(target)?),
                             None => None,
                         };
-                        Some(RelationRequirement { kind, target_kind })
+                        // Refused rather than ignored: a binding nobody applies is a guard the
+                        // author believes is on, which is the failure mode this whole field
+                        // exists to end.
+                        let target = match relation.get("target") {
+                            Some(Node::Text(target)) => Some(RelationTarget::parse(target)?),
+                            Some(other) => {
+                                return Err(ParseError::shape(
+                                    "requires.artifacts[].relation.target",
+                                    "a binding name",
+                                    other.type_name(),
+                                ))
+                            }
+                            None => None,
+                        };
+                        Some(RelationRequirement {
+                            kind,
+                            target_kind,
+                            target,
+                        })
                     }
                     Some(other) => {
                         return Err(ParseError::shape(
@@ -674,7 +788,18 @@ impl ArtifactRequirement {
     }
 
     /// `true` when `artifact` counts towards this requirement.
-    pub fn matches(&self, artifact: &Artifact, graph: &ArtifactGraph) -> bool {
+    ///
+    /// `task` is the work the execution's own task declares — [`RequirementContext::task_artifacts`]
+    /// — and is consulted only by a requirement whose relation declares
+    /// [`RelationTarget::Task`]. Passing an empty slice to one that does refuses every artifact,
+    /// which is the fail-closed direction: a caller who cannot say what the task is about must not
+    /// get "any approved specification in the store" by omission.
+    pub fn matches(
+        &self,
+        artifact: &Artifact,
+        graph: &ArtifactGraph,
+        task: &[ArtifactRef],
+    ) -> bool {
         if !artifact.is_kind(&self.kind) {
             return false;
         }
@@ -687,19 +812,28 @@ impl ArtifactRequirement {
             }
         }
         if let Some(relation) = &self.relation {
-            let mut targets = artifact.targets(relation.kind).peekable();
-            if targets.peek().is_none() {
-                return false;
-            }
-            if let Some(target_kind) = &relation.target_kind {
-                let has_target = artifact.targets(relation.kind).any(|reference| {
-                    graph
+            // One edge has to satisfy every constraint the relation states. Checking them
+            // separately would let "specifies a story of this task" be met by an edge to somebody
+            // else's story plus an edge to this task's design.
+            let satisfied = artifact.targets(relation.kind).any(|reference| {
+                if let Some(target_kind) = &relation.target_kind {
+                    if !graph
                         .resolve(reference)
                         .is_some_and(|target| target.is_kind(target_kind))
-                });
-                if !has_target {
-                    return false;
+                    {
+                        return false;
+                    }
                 }
+                if relation.target == Some(RelationTarget::Task) {
+                    // By id, not by reference: a task declaring `story:AUTH-141` and an artifact
+                    // pinning `story:AUTH-141@3` are about the same work. Which revision an
+                    // approval covers is `fresh`'s question, asked on the artifact itself.
+                    return task.iter().any(|declared| declared.id() == reference.id());
+                }
+                true
+            });
+            if !satisfied {
+                return false;
             }
         }
         true
@@ -708,9 +842,10 @@ impl ArtifactRequirement {
     /// Checks this requirement.
     fn evaluate(&self, context: &dyn RequirementContext) -> RequirementOutcome {
         let graph = context.artifacts();
+        let task = context.task_artifacts();
         let matching = graph
             .artifacts()
-            .filter(|artifact| self.matches(artifact, graph))
+            .filter(|artifact| self.matches(artifact, graph, &task))
             .count();
         if matching >= self.at_least {
             return RequirementOutcome::new(
@@ -739,11 +874,35 @@ impl ArtifactRequirement {
 
         let detail = if present.is_empty() {
             format!("no {} artifact is declared", self.kind)
+        } else if self.binds_to_task() {
+            // Still one line, and it answers the question a reader of the bound form actually has:
+            // there are approved artifacts of the right kind here and the rule is still unmet, so
+            // say what the task said it was about — including that it said nothing, which is the
+            // fail-closed case and reads as an engine defect if it is not named.
+            let work = if task.is_empty() {
+                "the task declares no work".to_owned()
+            } else {
+                format!(
+                    "this task's work is {}",
+                    task.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            format!("declared: {}; {work}", present.join(", "))
         } else {
             format!("declared: {}", present.join(", "))
         };
         RequirementOutcome::new(RequirementFlavour::Artifact, self.to_string(), truth)
             .with_detail(detail)
+    }
+
+    /// `true` when this requirement only counts artifacts related to the execution's own task.
+    fn binds_to_task(&self) -> bool {
+        self.relation
+            .as_ref()
+            .is_some_and(|relation| relation.target == Some(RelationTarget::Task))
     }
 }
 
@@ -1692,13 +1851,16 @@ impl schemars::JsonSchema for RelationRequirement {
         let mut form = mapping(vec![
             ("kind", generator.subschema_for::<RelationKind>()),
             ("target_kind", generator.subschema_for::<ArtifactKind>()),
+            ("target", generator.subschema_for::<RelationTarget>()),
         ]);
         form.object().required.insert("kind".to_owned());
         either(
             generator.subschema_for::<RelationKind>(),
             form,
             "A relationship the artifact must have: a relation name on its own, or a mapping \
-             naming the `kind` and the `target_kind` it must point at.",
+             naming the `kind`, the `target_kind` it must point at, and `target` — `task` binds \
+             the edge to the work the execution's own task declares, so the rule counts this \
+             task's artifacts rather than every one in the store.",
         )
     }
 }
@@ -1989,6 +2151,7 @@ advisory:
         artifacts: ArtifactGraph,
         evidence: Vec<EvidenceRecord>,
         now: Option<Timestamp>,
+        task_work: Vec<ArtifactRef>,
     }
 
     impl Context {
@@ -1998,7 +2161,15 @@ advisory:
                 artifacts: ArtifactGraph::new(),
                 evidence: Vec::new(),
                 now: None,
+                task_work: Vec::new(),
             }
+        }
+
+        /// Declares what the execution's own task is about.
+        fn about(mut self, work: &str) -> Self {
+            self.task_work
+                .push(ArtifactRef::parse(work).expect("an artifact reference"));
+            self
         }
 
         fn with_evidence(mut self, producer: Producer, evidence: Evidence) -> Self {
@@ -2069,6 +2240,10 @@ advisory:
 
         fn now(&self) -> Option<Timestamp> {
             self.now
+        }
+
+        fn task_artifacts(&self) -> Vec<ArtifactRef> {
+            self.task_work.clone()
         }
     }
 
@@ -2547,5 +2722,223 @@ advisory:
             .collect::<Vec<_>>()
             .join("\n");
         assert!(rendered.contains("approval security-review"), "{rendered}");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Binding an artifact requirement to the execution's own task
+    // ---------------------------------------------------------------------------------------
+
+    /// An approved specification of `story`, related to it the way a driven run writes it.
+    fn approved_specification(id: &str, story: &str) -> Artifact {
+        Artifact::new(
+            ArtifactId::new(id).expect("id"),
+            ArtifactKind::Specification,
+            ArtifactStatus::Approved,
+            ArtifactLocation::Inline,
+        )
+        .with_relation(
+            RelationKind::Specifies,
+            ArtifactRef::parse(story).expect("a story reference"),
+        )
+    }
+
+    /// The rule as `principles/development/spec-driven.yaml` now states it.
+    fn bound_to_this_task() -> ArtifactRequirement {
+        let node: Node = serde_yaml::from_str(
+            "kind: specification\nstatus: approved\nrelation:\n  kind: specifies\n  target: task\n",
+        )
+        .expect("yaml parses");
+        ArtifactRequirement::from_node(&node).expect("the bound form parses")
+    }
+
+    #[test]
+    fn a_specification_bound_to_the_task_refuses_another_storys_approved_one() {
+        // The defect this exists for, in one graph: run `NATIVE-1/1` moved
+        // `establish_verifiers -> implement` holding zero approvals of its own, because the store
+        // it ran against held two approved specifications belonging to other stories.
+        let ours = approved_specification("specification:ours", "story:ours");
+        let theirs = approved_specification("specification:theirs", "story:theirs");
+        let mut graph = ArtifactGraph::new();
+        graph.insert(ours.clone());
+        graph.insert(theirs.clone());
+
+        // The fixture has to reach the state where the binding is the only thing deciding: both
+        // specifications are approved, both carry the edge, and the unbound rule takes either.
+        let unbound = ArtifactRequirement {
+            relation: None,
+            ..bound_to_this_task()
+        };
+        for specification in [&ours, &theirs] {
+            assert!(
+                unbound.matches(specification, &graph, &[]),
+                "{} must be an approved specification, or the refusal below proves nothing",
+                specification.id
+            );
+        }
+
+        let work = [ArtifactRef::parse("story:ours").expect("a story reference")];
+        let requirement = bound_to_this_task();
+        assert!(
+            requirement.matches(&ours, &graph, &work),
+            "the specification of the story this task declares is this task's"
+        );
+        assert!(
+            !requirement.matches(&theirs, &graph, &work),
+            "another story's approved specification is not this task's, however approved it is"
+        );
+    }
+
+    #[test]
+    fn a_task_that_declares_no_work_satisfies_no_bound_requirement() {
+        // Fail closed, the same polarity as a missing clock: the alternative — an empty binding
+        // matching everything — is the defect wearing a default.
+        let ours = approved_specification("specification:ours", "story:ours");
+        let mut graph = ArtifactGraph::new();
+        graph.insert(ours.clone());
+
+        assert!(
+            !bound_to_this_task().matches(&ours, &graph, &[]),
+            "a caller that cannot say what the task is about must not be handed the whole store"
+        );
+    }
+
+    #[test]
+    fn a_bound_requirement_reads_unknown_and_names_what_the_task_is_about() {
+        // `Unknown`, never `False` (invariant 5): the specification of this task has not been
+        // written yet, and waiting is what produces one.
+        let context = Context::new()
+            .with_artifact(approved_specification(
+                "specification:theirs",
+                "story:theirs",
+            ))
+            .about("story:ours");
+        let report = bound_to_this_task().evaluate(&context);
+
+        assert_eq!(report.truth, Truth::Unknown, "{report:?}");
+        assert_eq!(
+            report.requirement, "artifact specification (approved) which specifies this task",
+            "one line, and it says which task"
+        );
+        let detail = report.detail.as_deref().expect("a reason");
+        assert!(
+            detail.contains("specification:theirs") && detail.contains("story:ours"),
+            "the row names what is declared and what this task is about: {detail}"
+        );
+
+        let satisfied = Context::new()
+            .with_artifact(approved_specification("specification:ours", "story:ours"))
+            .about("story:ours");
+        assert_eq!(
+            bound_to_this_task().evaluate(&satisfied).truth,
+            Truth::True,
+            "this task's own approved specification satisfies it"
+        );
+    }
+
+    #[test]
+    fn a_pinned_edge_and_an_unpinned_declaration_are_the_same_work() {
+        // Which revision an approval covers is `fresh`'s question, asked on the artifact. Reading
+        // `story:ours@3` as a different story would refuse every task that pins one.
+        let ours = approved_specification("specification:ours", "story:ours@3");
+        let mut graph = ArtifactGraph::new();
+        graph.insert(ours.clone());
+
+        let work = [ArtifactRef::parse("story:ours").expect("a story reference")];
+        assert!(bound_to_this_task().matches(&ours, &graph, &work));
+    }
+
+    #[test]
+    fn one_edge_has_to_satisfy_both_halves_of_a_bound_relation() {
+        // The rule is load-bearing only where the two halves are separable: this specification
+        // reaches a story that is not this task's, and this task's work through something that is
+        // not a story. Checking the halves apart would call that a match.
+        let mut mixed = approved_specification("specification:mixed", "story:theirs");
+        mixed = mixed.with_relation(
+            RelationKind::Specifies,
+            ArtifactRef::parse("epic:ours").expect("an epic reference"),
+        );
+        let mut graph = ArtifactGraph::new();
+        graph.insert(mixed.clone());
+        graph.insert(Artifact::new(
+            ArtifactId::new("story:theirs").expect("id"),
+            ArtifactKind::Story,
+            ArtifactStatus::Active,
+            ArtifactLocation::Inline,
+        ));
+        graph.insert(Artifact::new(
+            ArtifactId::new("epic:ours").expect("id"),
+            ArtifactKind::Epic,
+            ArtifactStatus::Active,
+            ArtifactLocation::Inline,
+        ));
+
+        let node: Node = serde_yaml::from_str(
+            "kind: specification\nstatus: approved\nrelation:\n  kind: specifies\n  target_kind: story\n  target: task\n",
+        )
+        .expect("yaml parses");
+        let requirement = ArtifactRequirement::from_node(&node).expect("parses");
+        let work = [ArtifactRef::parse("epic:ours").expect("an epic reference")];
+
+        assert!(
+            requirement.matches(
+                &mixed,
+                &graph,
+                &[ArtifactRef::parse("story:theirs").expect("a story reference")]
+            ),
+            "the story half alone must be reachable, or the refusal below proves nothing"
+        );
+        assert!(
+            !requirement.matches(&mixed, &graph, &work),
+            "a story that is not this task's plus this task's epic is not `a story of this task`"
+        );
+    }
+
+    #[test]
+    fn a_relation_target_nothing_binds_to_is_refused_by_name() {
+        // Refused at the parse stage (invariant 2), and recognisable by the variant and its
+        // `kind` rather than by the sentence (invariant 4's rule: match on the code, never on
+        // message text). A binding silently ignored is a guard its author believes is on.
+        let node: Node = serde_yaml::from_str(
+            "kind: specification\nrelation:\n  kind: specifies\n  target: whatever\n",
+        )
+        .expect("yaml parses");
+        let refusal = ArtifactRequirement::from_node(&node).expect_err("an unknown binding");
+        assert!(
+            matches!(
+                &refusal,
+                ParseError::Identifier { kind, value, .. }
+                    if *kind == "artifact relation target" && value == "whatever"
+            ),
+            "{refusal:?}"
+        );
+        assert!(
+            refusal.to_string().contains("target_kind"),
+            "the message points at the field that does name a kind: {refusal}"
+        );
+    }
+
+    #[test]
+    fn the_bound_declaration_survives_a_round_trip() {
+        let requirement = bound_to_this_task();
+        let json = serde_json::to_value(&requirement).expect("serialises");
+        assert_eq!(json["relation"]["target"], serde_json::json!("task"));
+
+        let node: Node = serde_json::from_value(json).expect("is a document node");
+        assert_eq!(
+            ArtifactRequirement::from_node(&node).expect("parses back"),
+            requirement,
+            "what the engine writes is what the parser reads"
+        );
+    }
+
+    #[test]
+    fn an_unbound_relation_serialises_exactly_as_it_did() {
+        // The field is absent, not `null`: every principle written before the binding existed
+        // produces the same bytes.
+        let node: Node =
+            serde_yaml::from_str("kind: design\nrelation:\n  kind: designs\n").expect("parses");
+        let requirement = ArtifactRequirement::from_node(&node).expect("parses");
+        let json = serde_json::to_value(&requirement).expect("serialises");
+        assert!(json["relation"].get("target").is_none(), "{json}");
     }
 }

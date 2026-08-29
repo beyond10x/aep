@@ -385,6 +385,30 @@ mod tests {
     }
 
     #[test]
+    fn the_relation_requirement_schema_carries_the_task_binding_and_refuses_an_invented_one() {
+        // The binding is what makes `spec-driven` mean *this* work rather than any approved
+        // specification in the store, so it has to reach the schema an editor loads: a `target`
+        // the published schema does not know about is a rule an author writes, sees no squiggle
+        // on, and finds out about from a run.
+        let validator = definition("principle.schema.json", "RelationRequirement");
+        accepts(
+            &validator,
+            &serde_json::json!({ "kind": "specifies", "target": "task" }),
+            "`target: task` binds the edge to the execution's own work",
+        );
+        accepts(
+            &validator,
+            &serde_json::json!({ "kind": "specifies", "target_kind": "story", "target": "task" }),
+            "the two compose: `specifies a story of this task`",
+        );
+        refuses(
+            &validator,
+            &serde_json::json!({ "kind": "specifies", "target": "story" }),
+            "`target` is a binding, not a kind — `target_kind` is the field that names one",
+        );
+    }
+
+    #[test]
     fn the_review_requirement_schema_accepts_a_bare_kind_and_refuses_a_mapping_naming_no_subject() {
         let validator = definition("principle.schema.json", "ReviewRequirement");
         accepts(

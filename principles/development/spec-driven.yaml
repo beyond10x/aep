@@ -21,8 +21,23 @@ requires:
     artifacts:
       # `approved` is also satisfied by `accepted`, `active` and `implemented`, so a specification
       # already in force does not have to be re-approved for each task that implements it.
+      #
+      # `target: task` is the half that makes the rule mean what its summary says. Without it this
+      # is a query over the whole store, and any approved specification anybody ever wrote
+      # satisfies it: run `NATIVE-1/1` left `establish_verifiers` for `implement` holding zero
+      # approvals of its own, because two other stories' specifications were approved in the same
+      # store. The edge has to land on the work this task declares.
+      #
+      # `specifies` rather than `derived_from`, because that is the edge a run actually writes: the
+      # `specify` state's artifact carries `specifies: story:<the task's story>`, and every
+      # specification in this repository's own store and in `examples/development-passkeys/` does
+      # the same. `derived_from` on those artifacts points at the run's intake record, which is a
+      # second hop and not what the task named.
       - kind: specification
         status: approved
+        relation:
+          kind: specifies
+          target: task
 
   before_completion:
     predicates:

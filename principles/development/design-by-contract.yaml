@@ -20,6 +20,12 @@ requires:
     artifacts:
       # Any design subkind satisfies this: a feature, component, api, data or architecture design
       # all count as a design.
+      #
+      # NOT bound to the task with `relation: {kind: designs, target: task}`, the way `spec-driven`
+      # is. A design's edge lands on the *specification* (`designs: spec:…`), which is two hops from
+      # the work a task declares, and a one-hop binding would refuse this repository's own worked
+      # example. Binding this needs a transitive reach, which is a different rule
+      # (`story:task-scoped-artifact-requirements`, Out of Scope).
       - kind: design
         status: approved
     predicates:

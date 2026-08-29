@@ -101,6 +101,9 @@ requires:
       status: approved
       fresh: true                    # default; excludes superseded/rejected
       relation: {kind: designs, target_kind: specification}
+    - kind: specification
+      status: approved
+      relation: {kind: specifies, target: task}   # of *this* task, not any in the store
   reviews:
     - subject_kind: design
       result: approved               # approved | changes_requested | rejected
@@ -119,6 +122,23 @@ requires:
 A bare list under `requires:` is read as predicates. An unrecognised mapping key is read as a fact
 predicate — so `requires: {change.architectural: true}` works, and a misspelt key becomes an
 `unobservable_fact` error instead of being ignored.
+
+`relation.target` is the field that decides *whose* artifact counts. Without it an artifact
+requirement is a query over the whole store: `kind: specification, status: approved` is satisfied by
+any approved specification anybody has ever written, including one belonging to a different piece of
+work. `target: task` binds the edge to the work **this** task declares — its `derived_from`
+references, and the task's own id as `task:<id>` — so the rule reads *a specification of this task*.
+It composes with `target_kind`, and one edge has to satisfy both: `{kind: specifies, target_kind:
+story, target: task}` means *specifies a story of this task*.
+
+`target` is a binding, not a kind. `target_kind: task` is the different question *any artifact of
+kind `task`, whosever it is*, and a `target` naming anything but `task` is refused when the document
+is parsed rather than ignored.
+
+A task that declares no `derived_from` is matched only by an artifact whose edge lands on the task
+itself, `task:<id>`. An unmet bound requirement reads **Unknown**, never False — the specification of
+this work has not been written yet — and the row names both the artifacts that are declared and what
+the task said it was about, so the repair is not a guess.
 
 `horizon:` is the one field that makes a satisfied requirement stop being satisfied. It is written
 as a number of days — `7d`, `7D`, or a bare `7` — and it says how long an observation counts for.

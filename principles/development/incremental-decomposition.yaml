@@ -26,6 +26,11 @@ requires:
     artifacts:
       # The output of decomposition that later obligations can be checked against: criteria written
       # before the code, not fitted to it afterwards.
+      #
+      # NOT bound to the task. `relation: {target: task}` reads an edge, and no run and no example
+      # writes one from `acceptance-criteria` to the work a task declares — so a binding here would
+      # refuse every task rather than the wrong ones, which is a guard nobody can satisfy rather
+      # than a stricter one.
       - kind: acceptance-criteria
 
 # NOT checked, and deliberately not faked:

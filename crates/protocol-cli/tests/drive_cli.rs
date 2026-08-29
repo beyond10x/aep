@@ -97,17 +97,28 @@ impl Fixture {
         std::fs::remove_dir_all(&directory).ok();
         std::fs::create_dir_all(&directory).expect("the temporary tree is writable");
 
+        // The story, the specification of it, and a task that says which story it is: the shape a
+        // driven run leaves behind, and the shape `spec-driven` now reads. Without the `specifies`
+        // edge and the task's `derived_from` this store is the one run `NATIVE-1/1` walked — an
+        // approved specification of nobody's work in particular — and the run stops at
+        // `establish_verifiers -> implement`, which is the guard working rather than a defect here.
+        write(
+            &directory.join(".engineering/planning/story/passkeys.md"),
+            "---\nformat: aep.planning-md/1\nid: story:passkeys\nkind: story\nstatus: active\n\
+             title: Sign in with a passkey\nsummary: What the work is.\n---\n# Story\n\n\
+             Signing in with a passkey replaces the password prompt.\n",
+        );
         write(
             &directory.join(".engineering/planning/specification/passkeys.md"),
             "---\nformat: aep.planning-md/1\nid: specification:passkeys\nkind: specification\n\
              status: approved\ntitle: Passkey sign-in\nsummary: What signing in with a passkey \
-             must do.\n---\n# Specification\n\nThe assertion is verified against the stored \
-             public key.\n",
+             must do.\nrelations:\n- specifies: story:passkeys\n---\n# Specification\n\nThe \
+             assertion is verified against the stored public key.\n",
         );
         write(
             &directory.join("task.yaml"),
             "id: DRIVE-1\nkind: feature\nobjective: drive-a-workflow\nprotocol: adp/1\n\
-             profile: development.standard\n",
+             profile: development.standard\nderived_from:\n  - story:passkeys\n",
         );
         write(&directory.join("steps.yaml"), &step_map(operator));
 

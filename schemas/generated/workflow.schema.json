@@ -830,7 +830,7 @@
       ]
     },
     "RelationRequirement": {
-      "description": "A relationship the artifact must have: a relation name on its own, or a mapping naming the `kind` and the `target_kind` it must point at.",
+      "description": "A relationship the artifact must have: a relation name on its own, or a mapping naming the `kind`, the `target_kind` it must point at, and `target` — `task` binds the edge to the work the execution's own task declares, so the rule counts this task's artifacts rather than every one in the store.",
       "oneOf": [
         {
           "$ref": "#/definitions/RelationKind"
@@ -844,10 +844,25 @@
             "kind": {
               "$ref": "#/definitions/RelationKind"
             },
+            "target": {
+              "$ref": "#/definitions/RelationTarget"
+            },
             "target_kind": {
               "$ref": "#/definitions/ArtifactKind"
             }
           }
+        }
+      ]
+    },
+    "RelationTarget": {
+      "description": "*Which* thing a relation must land on, as opposed to what kind of thing.\n\n`target_kind` answers \"a design\"; this answers \"**this** work\". Without it an artifact requirement is a query over the whole store — `kind: specification, status: approved` counts any approved specification anybody ever wrote, so a rule meant to say *a specification of this task exists* is satisfied by somebody else's. Run `NATIVE-1/1` left `establish_verifiers` holding zero approvals of its own on exactly that reading.\n\nA closed vocabulary with one member rather than a `for_task: true` flag, because the question is the one `target_kind` already asks and two ways to constrain one edge is how the two come to disagree. `target: task` and `target_kind: story` compose: *specifies a story of this task*.\n\nDeliberately **not** spelled `target_kind: task`, which is a different question — any artifact of kind `task`, whosever it is.",
+      "oneOf": [
+        {
+          "description": "The work the execution's own task declares it is about.\n\nResolved through [`RequirementContext::task_artifacts`], which is the task's declared artifacts — not the store, and not the artifact graph at large.",
+          "type": "string",
+          "enum": [
+            "task"
+          ]
         }
       ]
     },

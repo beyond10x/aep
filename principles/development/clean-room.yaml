@@ -26,8 +26,16 @@ requires:
     artifacts:
       # The specification is the only permitted source, so it has to exist before implementation.
       # Clean-room without one means building from nothing.
+      #
+      # Bound to this task for the same reason as `spec-driven`, and it matters more here: the
+      # capability layer has taken `network.read` away because the original may not be fetched, so
+      # the specification is the only thing left to build from. Somebody else's approved
+      # specification is not a source for this work, and an unbound rule would have accepted one.
       - kind: specification
         status: approved
+        relation:
+          kind: specifies
+          target: task
 
   before_completion:
     predicates:

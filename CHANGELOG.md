@@ -54,6 +54,19 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **An approved specification of somebody else's story no longer lets your task start
+  implementing.** `spec-driven` and `clean-room` asked for `kind: specification, status: approved`
+  and nothing more, which is a query over the whole artifact store — so in any store holding more
+  than one piece of work, the guard before `implement` was satisfied by a specification of a
+  different story. Run `NATIVE-1/1` passed it holding zero approvals of its own. Both rules now
+  bind to the work the task declares (`relation: {kind: specifies, target: task}`), and the row
+  reads `artifact specification (approved) which specifies this task`. **What to do if it now
+  refuses you:** your task document names the story or task it is for, under `derived_from:`, and
+  the specification carries `specifies: <that story>` — that is the edge a driven run's `specify`
+  state already writes. A task that declares no `derived_from` is matched only by a specification
+  naming the task itself (`specifies: task:<id>`); the refusal says which of the two ends is
+  missing rather than leaving you to guess.
+
 * **A run that walked past an `operator` step with nothing recorded now says so.** Until now the
   pause advanced the cursor and the resume carried on, and a run nobody approved was
   indistinguishable in its own record from one somebody did — `NATIVE-1/1` moved

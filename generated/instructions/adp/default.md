@@ -275,7 +275,7 @@ Applies when `change.clean_room == true`.
 
 **Before entering `implement`, the implementation phase:**
 
-* artifact specification (approved)
+* artifact specification (approved) which specifies this task
 
 Evidence it requires, which must exist before the work is finished:
 
@@ -504,7 +504,7 @@ Applies when `task.kind in [feature, bugfix, refactor, migration]`.
 
 **Before entering `implement`, the implementation phase:**
 
-* artifact specification (approved)
+* artifact specification (approved) which specifies this task
 
 Evidence it requires, which must exist before the work is finished:
 

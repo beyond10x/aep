@@ -22,6 +22,10 @@ requires:
     # The evidence requirement above cannot say *which* artifact — pinning an evidence subject needs
     # a concrete artifact id, which nobody knows when the rule is written — so the kind is pinned
     # here, against the artifact graph.
+    # NOT closed by `relation: {target: task}` either, for the reason above's sibling: nothing
+    # writes an edge from an `incident-report` to what a task declares, so a binding would refuse
+    # every incident rather than the wrong report. The gap stays named
+    # (`story:task-scoped-artifact-requirements`, Out of Scope).
     artifacts:
       - kind: incident-report
 # No capability policy. Restarting the service is not the wrong action; doing it before the capture is.

@@ -182,3 +182,20 @@ Recorded here so they are decisions rather than drift:
     release, which is the same defect with a shorter period. `EssConformanceResult` keeps its two
     fields declared and accepts them on read — it refuses unknown fields, so a reader without them
     would refuse every conformance record written before the change — and writes neither.
+
+14. **An artifact requirement can bind to the execution's own task.** §28 spells an artifact
+    requirement as `kind` plus `status` and nothing else, and §23 gives `Principle` a
+    `required_artifacts: Vec<ArtifactRequirement>` with no notion of *whose* artifact. Read
+    literally, `kind: specification, status: approved` is a query over the whole artifact graph, and
+    that is how it was implemented: run `NATIVE-1/1` (2026-08-29) satisfied
+    `spec-driven.before_implementation` on two approved specifications belonging to two other
+    stories. The principle's own header — *an approved specification must exist before implementation
+    of this work* — was unenforceable as written. `RelationRequirement` therefore carries a `target`
+    beside its `target_kind`, whose one member `task` binds the edge to the artifacts the task
+    declares (`derived_from`, plus the task's own id as `task:<id>`), resolved through
+    `RequirementContext::task_artifacts`. Every declaration §28 shows still parses and still means
+    what it meant; the binding is opt-in per requirement, `spec-driven` and `clean-room` take it,
+    and a requirement that does not declare it never consults the task at all. A requirement that
+    does and cannot be answered reads `Unknown`, which permits nothing.
+    Recorded here rather than left as drift because the document's shape is the narrower one.
+    (`story:task-scoped-artifact-requirements`.)

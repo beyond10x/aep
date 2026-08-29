@@ -16,6 +16,9 @@ requires:
       # This is the half of the rule that fails loudly when a team checks whatever the code happens to
       # do instead of what it was supposed to guarantee.
       # `approved` is satisfied by accepted, active or implemented; any design subkind counts.
+      # NOT bound to the task: same two-hop reason as `design-by-contract`, and this one is timed
+      # before completion, where the design that states the invariants may legitimately be an older
+      # one this work did not produce.
       - kind: design
         status: approved
 
