@@ -2102,3 +2102,141 @@ fn transition_with_an_unknown_run_cannot_answer() {
         stderr(&output)
     );
 }
+
+// --------------------------------------------------------------- `protocol drive hook`
+
+/// One `before-call` consultation, run through the shipped binary.
+///
+/// Spawned rather than called, because *the rule is runnable as a program* is the whole claim the
+/// native arm rests on: a unit test of the function would hold whether or not the verb existed.
+fn hook(document: &str) -> Output {
+    use std::io::Write as _;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["drive", "hook"])
+        .current_dir(root())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the protocol binary runs");
+    child
+        .stdin
+        .take()
+        .expect("stdin is piped")
+        .write_all(document.as_bytes())
+        .expect("the document is written");
+    child.wait_with_output().expect("the process exits")
+}
+
+/// One `file_edit` call in the loop's own spelling: `path`, `old`, `new`.
+fn before_edit(path: &str, old: &str, new: &str) -> String {
+    serde_json::json!({
+        "hook": "before-call",
+        "entry": "file_edit",
+        "call": {"arguments": {"path": path, "old": old, "new": new}},
+    })
+    .to_string()
+}
+
+/// The fence rule, spawnable: an edit that crosses a planning document's closing `---` is refused.
+///
+/// **The fixture reaches the state where the rule decides.** A body edit under the same path is
+/// asserted to proceed first, so the refusal below is the fence answering and not the path — the
+/// path half of this rule left for the step map's `scope:`, and a test that only checked the
+/// refusal would keep passing if this verb went back to refusing everything under the store.
+#[test]
+fn the_hook_refuses_an_edit_that_crosses_a_planning_documents_fence() {
+    let store_file = ".engineering/planning/story/one.md";
+
+    let body = hook(&before_edit(store_file, "a body sentence", "a better one"));
+    assert_eq!(
+        code(&body),
+        0,
+        "a targeted body edit is not this rule's business:\n{}{}",
+        stdout(&body),
+        stderr(&body)
+    );
+
+    let crossing = hook(&before_edit(store_file, "---", "-- -"));
+    assert_eq!(
+        code(&crossing),
+        2,
+        "exit 2 is how the loop's port reads a refusal:\n{}{}",
+        stdout(&crossing),
+        stderr(&crossing)
+    );
+    let reason: serde_json::Value =
+        serde_json::from_str(stdout(&crossing).trim()).expect("the refusal is the port's JSON");
+    let text = reason["reason"].as_str().expect("a reason for the model");
+    assert!(text.contains("frontmatter fence"), "{text}");
+    assert!(text.contains(store_file), "and names the document: {text}");
+
+    let written = hook(&before_edit(store_file, "prose", "---\nstatus: done"));
+    assert_eq!(
+        code(&written),
+        2,
+        "the replacement text is read as well as the quoted one"
+    );
+
+    let elsewhere = hook(&before_edit("docs/design/a.md", "---", "***"));
+    assert_eq!(
+        code(&elsewhere),
+        0,
+        "a horizontal rule in a design document is not a store fence"
+    );
+}
+
+/// The vendor's argument names arrive at this verb too, and mean the same thing.
+///
+/// The loop sends `path`/`old`/`new`; Claude Code's `Edit` sends `file_path`/`old_string`/
+/// `new_string`. A rule that read one spelling silently allowed everything on the other arm once,
+/// and the store took a forged `revision: 99` for it.
+#[test]
+fn the_hook_reads_both_arms_spellings_of_the_same_edit() {
+    let document = serde_json::json!({
+        "hook": "before-call",
+        "entry": "file_edit",
+        "call": {"arguments": {
+            "file_path": ".engineering/planning/story/one.md",
+            "old_string": "---",
+            "new_string": "x",
+        }},
+    })
+    .to_string();
+    let output = hook(&document);
+    assert_eq!(code(&output), 2, "{}{}", stdout(&output), stderr(&output));
+}
+
+/// `file_write` is not this verb's question: a whole file is the step map's `scope:`.
+///
+/// The path-and-granularity half of the old `store_integrity` is declared in the map and travels
+/// to this arm as `--write-scope`, which the loop's own tools enforce before a hook is spawned.
+/// Answering it here as well would be a second copy of one rule.
+#[test]
+fn the_hook_leaves_a_whole_file_write_to_the_declared_scope() {
+    let document = serde_json::json!({
+        "hook": "before-call",
+        "entry": "file_write",
+        "call": {"arguments": {
+            "path": ".engineering/planning/story/one.md",
+            "text": "---\nid: story:forged\n---\n",
+        }},
+    })
+    .to_string();
+    let output = hook(&document);
+    assert_eq!(
+        code(&output),
+        0,
+        "the hook proceeds; the scope is what refuses this:\n{}{}",
+        stdout(&output),
+        stderr(&output)
+    );
+}
+
+/// A document this program cannot read is neither yes nor no: the loop's port reads it fail closed.
+#[test]
+fn the_hook_cannot_answer_an_unreadable_document() {
+    let output = hook("this is not JSON");
+    assert_eq!(code(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert!(stderr(&output).contains("not JSON"), "{}", stderr(&output));
+}

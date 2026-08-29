@@ -354,6 +354,50 @@ be told which document that was, and fell back to the task `project.yaml` names.
 because a `command` step is spawned with the project directory as its working directory, and a
 relative `--task` is relative to wherever the operator typed it.
 
+### Where an `llm` step may write
+
+An `llm` step may declare a `scope:` — the rule that decides its file writes, in the document rather
+than in the driver:
+
+```yaml
+      - kind: llm
+        description: Make the smallest change that satisfies the unit.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied         # the CLI owns every mutation of the store, bodies included
+          - paths: ["crates/**", "docs/**"]
+            write: allowed
+          - paths: ["**"]         # the last rule must be a catch-all
+            write: denied
+        prompt: …
+```
+
+Globs are relative to the working tree, **first matching rule wins**, and the rules are never
+sorted — which is why the last one has to name `**`: a path nobody mentioned must have an answer,
+and leaving it to a default is how a scope stops covering the tree it was written for. A scope whose
+tail is silent is refused at load.
+
+The three words are about **granularity**, not about a harness's operation names — which of a
+harness's tools replace a whole file is that harness's fact, and naming `file.write` here would
+couple a map to another protocol's vocabulary at its most volatile point:
+
+| word | what it permits |
+|---|---|
+| `allowed` | anything that writes may write here |
+| `partial-only` | part of a file may be changed; a whole file may never be replaced |
+| `denied` | nothing that writes may act here |
+
+Both arms are held to the same declaration. On the vendor arm the driver answers each call at the
+metaharness seam — `Write` and `NotebookEdit` replace a whole file, `Edit` changes part of one — and
+the refusal names the rule that matched and the globs the step *may* write. On the native arm the
+rules travel to the loop's own tools as `--write-scope`.
+
+**A step with no `scope:` is restricted by nothing.** An undeclared scope is a map that said
+nothing, not a map that said *everything*, so a map driving work that must not touch some part of
+the tree has to say so. One rule is deliberately not expressible here and stays in the driver: an
+edit whose text crosses a planning document's closing `---` is refused whatever the scope allows,
+because that is a judgement about the edit's text and no path can decide it.
+
 ## Task and artifact manifest
 
 See [Govern a task](../guides/govern-a-task.md) for complete examples. A task requires `id`,

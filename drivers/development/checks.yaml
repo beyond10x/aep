@@ -83,6 +83,18 @@ states:
       - kind: llm
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
+        # Where this step may write. First match wins and the last rule is a catch-all, so a path
+        # nobody thought of has an answer rather than a default. Two rules and not this map's
+        # sibling's four: the work driven under `default.yaml` is Rust in known directories, and the
+        # work driven under this one is documents, prompts and plugin shell, which live everywhere
+        # in the tree. What is *not* everywhere is the planning store — `protocol artifact` owns
+        # every mutation of it, including bodies — and that is the rule this declaration exists to
+        # state, in the document a person reads rather than in the driver.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Read the task under `.engineering/` and the artifacts it references. Record what is being
           asked for in the planning store, in the requester's own terms. Do not design, do not
@@ -93,6 +105,13 @@ states:
       - kind: llm
         description: State the required behaviour as a specification artifact.
         skills: [planning]
+        # Where this step may write; the same two rules every `llm` step here carries, and the
+        # first one is why: the planning store has one writer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Write the specification for this task as a planning artifact of kind `specification`,
           through `protocol artifact new`. State the required behaviour so that a verifier could
@@ -107,6 +126,13 @@ states:
       - kind: llm
         description: Break the specification into units that can each be verified alone.
         skills: [planning]
+        # Where this step may write; the same two rules every `llm` step here carries, and the
+        # first one is why: the planning store has one writer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Break the specification into tasks that can each be implemented and verified on their own,
           through `protocol artifact new` and `protocol artifact relate`. Every task states its own
@@ -118,6 +144,13 @@ states:
       - kind: llm
         description: Write the checks before there is an implementation to shape them around.
         skills: [planning]
+        # Where this step may write; the same two rules every `llm` step here carries, and the
+        # first one is why: the planning store has one writer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Write the checks that will decide whether each decomposed unit is done — one check per
           unit, each naming the unit it decides — and make `bash .engineering/checks/run.sh` run all
@@ -157,6 +190,13 @@ states:
       - kind: llm
         description: Make the smallest change that satisfies the unit and its checks.
         skills: [planning]
+        # Where this step may write; the same two rules every `llm` step here carries, and the
+        # first one is why: the planning store has one writer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Make the smallest change that satisfies the decomposed unit and the checks written for it.
           Do not weaken a check to make it pass; the workflow has an explicit route back here from
@@ -229,6 +269,13 @@ states:
       - kind: llm
         description: Try to break what the previous state just declared working.
         skills: [planning]
+        # Where this step may write; the same two rules every `llm` step here carries, and the
+        # first one is why: the planning store has one writer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
         prompt: >-
           Try to break what `verify` just declared working: an input the checks do not cover, a
           claim in the specification no check decides, a check that would pass with the

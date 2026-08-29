@@ -124,6 +124,13 @@ events in the run's own event stream rather than a side-channel log. Afterwards 
 whether it held — a verdict a program reads from the stream, not one the agent reported about
 itself.
 
+What that policy decides about a **write** it reads out of the step map rather than out of itself:
+the step's `scope:` says which paths this step may write and how much of a file it may replace, the
+same declaration the native arm receives as `--write-scope`. A rule a run is held to belongs in the
+document a person reads. One rule stays in the driver because no scope grammar can carry it — an
+edit whose text crosses a planning document's closing `---` is refused whatever the scope allows,
+which is a judgement about the edit's text and not about its path.
+
 `protocol workflow render --run <id>` draws where a run got to, what it produced and why it
 stopped, with the engine's own sentences on the arrows.
 

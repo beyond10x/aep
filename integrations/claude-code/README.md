@@ -76,7 +76,8 @@ The same rules hold today, one level down and in one place:
 
 | rule | where it lives now | active when |
 |---|---|---|
-| the planning store has one writer: `Edit`, `Write`, and `NotebookEdit` are denied under `.engineering/planning/**`; prose goes through `protocol artifact body` | `store_integrity` in `crates/protocol-cli/src/drive.rs`, answering the metaharness seam at decision time | every driven `llm` step |
+| the planning store has one writer: `Edit`, `Write`, and `NotebookEdit` are denied under `.engineering/planning/**`; prose goes through `protocol artifact body` | the step's own `scope:` in the step map (`drivers/development/default.yaml`), enforced by `declared_write` in `crates/protocol-cli/src/drive.rs` at decision time — and handed to the native arm as `--write-scope`, so both arms read one declaration | every driven `llm` step whose map declares a scope |
+| an edit whose text crosses a planning document's closing `---` is refused, whatever the scope allows | `store_integrity` in `crates/protocol-cli/src/drive.rs`, and `protocol drive hook` for the native loop. It stayed in code because it is a judgement about an edit's *text*: no path can decide it | every driven `llm` step |
 | a driven shell is one simple invocation of `protocol artifact …` or `protocol trace …` — no pipes, no redirection, no substitution | `driven_surface`, same place | every driven `llm` step |
 | a tool no admitted capability renders to is refused naming the state's surface | `decide_tool`, same place — the allowlist that used to ride on `--allowedTools` | every driven `llm` step |
 

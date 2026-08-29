@@ -84,11 +84,13 @@ have been a real weakening, because `Read` carries a `file_path` too and *read t
 `crates/trace-spec/tests/write_selectors.rs`.
 
 **A forbidding row is not the same set as a witnessing row.** `no-artifact-file-was-rewritten-whole`
-names `[NotebookEdit, Write]` and deliberately leaves `Edit` out, because the store's rule
-(`store_integrity`) denies a whole-file replacement outright and permits a targeted body edit — the
-skill's second guardrail asks for exactly that. Whether a given `Edit` crossed the `---` fence is a
-judgement about `old_string`, not about a path, and no matcher here expresses it; that half stays
-with `protocol artifact validate`. Copy the *reasoning*, not the list, when you write a new row.
+names `[NotebookEdit, Write]` and deliberately leaves `Edit` out, because the store's rule denies a
+whole-file replacement outright and permits a targeted body edit — the skill's second guardrail asks
+for exactly that. That half is the step map's `scope:` (`write: denied` or `partial-only` over
+`.engineering/planning/**`), which both arms are held to. Whether a given `Edit` crossed the `---`
+fence is a judgement about `old_string`, not about a path, and no matcher here expresses it; that
+half is `store_integrity` in the driver, and `protocol artifact validate` afterwards. Copy the
+*reasoning*, not the list, when you write a new row.
 
 **Codex observability, stated rather than discovered.** On the seam a Codex write travels as
 `apply_patch`, whose input is a patch envelope under `command` — the path lives inside the patch text
