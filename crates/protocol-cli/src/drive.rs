@@ -1256,6 +1256,7 @@ impl CliExecutors {
         step: &LlmStep,
         frame_file: &Path,
         prompt: &str,
+        tools: &ToolConfig,
     ) -> Vec<String> {
         match harness {
             Harness::ClaudeCode => metaharness_argv(
@@ -1271,6 +1272,7 @@ impl CliExecutors {
                 &step.scope,
                 &step.context,
                 prompt,
+                tools,
             ),
         }
     }
@@ -1314,7 +1316,13 @@ impl CliExecutors {
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
 
-        let argv = self.argv_for(harness, step, &frame_file, &prompt_for(step, context));
+        let argv = self.argv_for(
+            harness,
+            step,
+            &frame_file,
+            &prompt_for(step, context),
+            context.tools,
+        );
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
         let spawned = Process::new(&argv[0])
@@ -2317,6 +2325,20 @@ impl Harness {
     }
 }
 
+/// The programs a driven step may start, shared by both arms.
+///
+/// One decision, two enforcements: the vendor arm refuses anything outside this set at the call
+/// (`driven_surface`), and the native arm is handed it as `--allow-program` so the loop never
+/// publishes a `run` that could start anything else. The second is the stronger of the two — a
+/// program not on the list has no tool to reach it — which is the whole argument for that loop.
+fn driven_programs(config: &ToolConfig) -> Vec<String> {
+    let mut programs = vec!["protocol".to_owned()];
+    if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
+        programs.extend(READ_ONLY_PROGRAMS.iter().map(|name| (*name).to_owned()));
+    }
+    programs
+}
+
 /// The neutral operations an admitted capability set reaches, as `available_operations` spells them.
 ///
 /// The same shared decision as every other rendering, in the vocabulary the b10x adapter answers
@@ -3033,6 +3055,7 @@ fn b10x_argv(
     scope: &[ScopeRule],
     context_files: &[String],
     prompt: &str,
+    config: &ToolConfig,
 ) -> Vec<String> {
     let mut argv = vec![
         METAHARNESS_BINARY.to_owned(),
@@ -3064,6 +3087,21 @@ fn b10x_argv(
         argv.push("--substrate-embedded".to_owned());
         argv.push("--cgroup-root".to_owned());
         argv.push(root.display().to_string());
+    }
+    // **`run` is published only to a session that was told which programs it may start.** The loop
+    // withholds it outright when no allowlist was given — `programs.is_none()` in
+    // `harness-tools`' local operations — which is the same rule as everywhere else on that arm: a
+    // tool outside the surface does not exist rather than being refused. Run `b10x-2991520` spent
+    // 30 `tool_search` calls, 28 of them distinct, hunting for `run`, `exec`, `shell`, `spawn` and
+    // `execute` because the step it was given needs the `protocol` CLI and nothing could start one.
+    //
+    // The list is the same decision `driven_surface` enforces on the vendor arm, rendered rather
+    // than re-decided: the CLI, and the readers a state that admits `repository.read` may use.
+    if config.admits(&Capability::CommandExecution) {
+        for program in driven_programs(config) {
+            argv.push("--allow-program".to_owned());
+            argv.push(program);
+        }
     }
     for rule in scope {
         for path in &rule.paths {
@@ -4417,6 +4455,62 @@ mod tests {
         );
     }
 
+    /// A native step is told which programs it may start, or its loop publishes no `run` at all.
+    ///
+    /// **Run `b10x-2991520`, 2026-08-29: 30 `tool_search` calls, 28 of them distinct**, hunting for
+    /// `run`, `exec`, `shell`, `spawn`, `execute`, `argv` and `program`. The step it was given
+    /// records something in the planning store, whose only route is the `protocol` CLI, and nothing
+    /// in its catalogue could start a process — `harness-tools` withholds `run` outright when no
+    /// allowlist was supplied (`programs.is_none()`). The loop was right and the driver had not
+    /// told it anything.
+    ///
+    /// The list is the same decision `driven_surface` enforces on the vendor arm, rendered rather
+    /// than re-decided. The native rendering is the stronger of the two: a program not on it has no
+    /// tool to reach it, where the vendor arm refuses the call after the model has spent the turn.
+    #[test]
+    fn a_native_step_is_told_which_programs_it_may_start() {
+        let executing = config(&[Capability::RepositoryRead, Capability::CommandExecution]);
+        let argv = b10x_argv(
+            &B10xOptions::default(),
+            Path::new("/home/op/.cache/ws_run"),
+            &[],
+            &[],
+            "do the thing",
+            &executing,
+        );
+        let allowed: Vec<&String> = argv
+            .windows(2)
+            .filter(|pair| pair[0] == "--allow-program")
+            .map(|pair| &pair[1])
+            .collect();
+        assert!(
+            allowed.iter().any(|name| *name == "protocol"),
+            "the CLI a driven step reaches the store through: {argv:?}"
+        );
+        for reader in READ_ONLY_PROGRAMS {
+            assert!(
+                allowed.iter().any(|name| name.as_str() == *reader),
+                "`{reader}` is admitted on the vendor arm and must be admitted here: {allowed:?}"
+            );
+        }
+
+        // A state with no `command.execute` is told nothing, so the loop publishes no `run` — the
+        // absence is the enforcement rather than a refusal after the fact.
+        let reading_only = config(&[Capability::RepositoryRead]);
+        let quiet = b10x_argv(
+            &B10xOptions::default(),
+            Path::new("/home/op/.cache/ws_run"),
+            &[],
+            &[],
+            "do the thing",
+            &reading_only,
+        );
+        assert!(
+            !quiet.iter().any(|word| word == "--allow-program"),
+            "a state that admits no execution names no program: {quiet:?}"
+        );
+    }
+
     /// The audit asks each harness in the vocabulary that harness answers in.
     ///
     /// **Run `b10x-2623331`, 2026-08-29.** Its `session.started` published
@@ -4484,6 +4578,7 @@ mod tests {
             &[],
             &[],
             "do the thing",
+            &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
         );
         let joined = confined.join(" ");
         assert!(
@@ -4502,6 +4597,7 @@ mod tests {
             &[],
             &[],
             "do the thing",
+            &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
         );
         assert!(
             !ordinary.join(" ").contains("--substrate"),
@@ -4680,6 +4776,7 @@ mod tests {
             &step.scope,
             &step.context,
             "do the thing",
+            &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
         );
         assert_eq!(argv[0], "metaharness");
         assert_eq!(argv[1], "run");
@@ -4730,6 +4827,7 @@ mod tests {
             &[],
             &[],
             "do the thing",
+            &config(&[Capability::RepositoryRead]),
         );
         assert!(authenticated
             .windows(2)

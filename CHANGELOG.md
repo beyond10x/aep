@@ -11,6 +11,16 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **A driven step on the native loop is told which programs it may start.** `harness-tools`
+  withholds `run` outright when no allowlist was supplied, which is that loop's rule everywhere — a
+  tool outside the surface does not exist rather than being refused. The driver never passed one, so
+  a session asked to record something in the planning store, whose only route is the `protocol` CLI,
+  had no way to start a process: it spent 30 `tool_search` calls, 28 of them distinct, hunting for
+  `run`, `exec`, `shell`, `spawn` and `execute`. The list is the same decision `driven_surface`
+  enforces on the vendor arm — the CLI, plus the readers a reading state may use — rendered rather
+  than re-decided, and the native rendering is the stronger of the two: a program not on it has no
+  tool to reach it, where the vendor arm refuses the call after the model has spent the turn.
+
 * **The tool audit asks each harness in the vocabulary that harness answers in.** A vendor harness
   publishes one tool per act, so `offered_tools` is its answer; the b10x loop publishes three verbs
   over a catalogue — `tool_search`, `tool_describe`, `tool_invoke` — and states its reach as

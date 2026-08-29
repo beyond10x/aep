@@ -702,3 +702,36 @@ answer *what had shipped as of this commit*; batching tags in one push is safe a
 * Ticket references go in a `Refs:` tagline at the end of the body, never in the title.
 * Write messages through a file or a quoted heredoc (`git commit -F -` with `<<'MSG'`), never
   `-m "…"` with backticks in the text.
+
+## Driving a run: standing rules for whoever is at the wheel
+
+Written 2026-08-29, after a night of driving this repository with itself. Each line is a mistake
+that was made, not a principle that sounded good.
+
+**Kill a run the moment you know it cannot succeed.** Not after the next state, not after the report
+— the moment. A run whose session is hunting for a tool that will never be published, or whose task
+document is the wrong one, is spending real money to produce a record nobody wants. Diagnosing it
+and letting it continue is the worst of both.
+
+**Prove the environment before the model.** Every launch-time fact is decidable for free: the
+binaries on the constructed `PATH`, the endpoint, the workspace, the allowlist. Run the pre-flight
+with `--max-iterations 0` first, every time. Four of the eight defects found tonight were launch
+environment, and each was found *after* a paid session rather than before a free one.
+
+**There are always two `PATH`s.** The driver's own, and the constructed one metaharness gives the
+child (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`). A binary on one is not on the other, and
+`cargo install` defaults to `$CARGO_HOME/bin`, which is on neither. Say which one a refusal means.
+
+**A refusal that names an install command must name one that works.** Twice tonight a message told
+an operator to install where the thing doing the resolving would not look.
+
+**Measure what you set out to move, and the thing that pays for it.** Waste fell from 17.2% to 2.7%
+and one state's cost tripled; a scorer that reported only the first would have called that a win.
+And a metric that counts refusals cannot see 30 successful calls that achieved nothing.
+
+**Write the finding into the store, not into the chat.** A defect explained in a message is gone
+when the session ends. `protocol artifact new story …` costs a minute.
+
+**When an instrument disagrees with a run, suspect the instrument.** The tool audit was wrong about
+a harness twice before it was right about one, and both times it was loud. An audit that fires on a
+session holding exactly what it needs teaches the reader to skip the next true one.

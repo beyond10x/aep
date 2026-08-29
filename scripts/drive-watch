@@ -134,6 +134,10 @@ def brief(value, limit=150):
 
 UNKNOWN_WARNED = set()
 
+# Whether a streamed assistant turn is mid-flight, so the next event of another kind
+# can close it.
+STREAM = {"open": False, "column": 0}
+
 
 def show(e, state):
     k = e.get("event")
@@ -156,6 +160,9 @@ def show(e, state):
         return
     if TTY:
         sys.stdout.write("\r\033[2K")
+    if STREAM["open"] and k != "text":
+        sys.stdout.write("\n")
+        STREAM["open"] = False
     if k == "session.started":
         print(f"\n{C['bld']}{C['cya']}=== {state}{C['off']}  {e.get('model')}  "
               f"{C['dim']}tools {len(e.get('offered_tools') or [])} · "
@@ -182,12 +189,26 @@ def show(e, state):
             for l in head:
                 print(f"   {C['dim']}| {l[:W - 5]}{C['off']}")
     elif k == "text":
-        t = (e.get("text") or "").strip()
-        if t:
-            print()
-            for para in t.split("\n"):
-                print(textwrap.fill(para, W, initial_indent="  ", subsequent_indent="  ") or "")
-            print()
+        # **One `text` event is not one message.** A vendor harness emits a finished assistant turn;
+        # the b10x loop streams deltas — ` from`, ` the`, ` native`, ` loop` — and printing each as
+        # its own wrapped paragraph turns a sentence into a column of fragments. They are written as
+        # they arrive and closed by the next event of any other kind, which is where the turn ends.
+        chunk = e.get("text") or ""
+        if chunk:
+            if not STREAM["open"]:
+                sys.stdout.write("\n  ")
+                STREAM["open"], STREAM["column"] = True, 2
+            for piece in chunk.splitlines(keepends=True):
+                if piece.endswith("\n"):
+                    sys.stdout.write(piece.rstrip("\n") + "\n  ")
+                    STREAM["column"] = 2
+                    continue
+                if STREAM["column"] + len(piece) > W:
+                    sys.stdout.write("\n  ")
+                    STREAM["column"] = 2
+                sys.stdout.write(piece)
+                STREAM["column"] += len(piece)
+            sys.stdout.flush()
     elif k == "session.ended":
         cost = e.get("total_cost_usd")
         money = f" cost ${cost:.2f}" if isinstance(cost, (int, float)) else ""
