@@ -9,19 +9,9 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-### Changed
+Nothing yet.
 
-* **`protocol workflow flow` emits every state as a section.** Each non-terminal state is a group
-  named for the state, holding its steps as `<state>-1`, `<state>-2`, … in the map's order — one
-  node when the map gave it one step or none — and a retreat is a group of those groups. It was a
-  bare node for a state with one step or none, and `b10x-harness workflow run` asks its
-  `transition` hook at a group boundary and nowhere else (harness design 0003 § 3): the fifth paid
-  native walk of 2026-08-29 was consulted four times, all at `root`, and never about `receive`,
-  `specify` or `decompose`. Now `protocol drive transition` is asked on both sides of every state.
-  The document's header says so; `b10x-harness workflow plan` shows every state as a section, and
-  the harness's committed fixture `adp-default.projected.yaml` is refreshed from this verb. A
-  reader keyed on node ids sees `receive-1` where it saw `receive`; the state a node is in has
-  always been `run.state`, and still is.
+## [0.33.0] — 2026-08-30
 
 ### Added
 
@@ -201,7 +191,44 @@ belongs in the commit message or in `docs/design/`.
   the rule is now a validation error rather than a paragraph somebody was asked to follow
   (`story:private-message-denial`, adopter register row `D-I2`).
 
+* **Both harnesses can be pointed at one gateway, which is what makes a harness comparison one.**
+  `--claude-endpoint` and `--claude-model` join the existing `--b10x-endpoint`/`--b10x-model`, so a
+  `harness: claude-code` step and a `harness: b10x` step can run against the same model. Without
+  this a comparison of the two arms measured the two *models* at least as much as the two harnesses,
+  and no scorer could separate them afterwards. metaharness requires `--credentials none` alongside
+  an endpoint — a child pointed at a foreign endpoint must hold no operator credential — so the
+  driver passes it rather than making the caller remember. An endpoint with no model, or a model
+  with nowhere to go, is not a gateway and is ignored: metaharness refuses each alone, and passing
+  half of one would turn a flag mistake into a launch refusal several states into a paid run.
+
+* **`protocol artifact show <id>` prints one artifact.** Its frontmatter fields — id, kind, status,
+  title, summary, owner, tags, relations, revision — and then its markdown body, verbatim. There was
+  no verb for an id in hand: `list` prints the whole plan, `board` arranges it, `history` prints the
+  event log, `explain` answers what made a status happen, and `body` writes. A driven session in run
+  `W4-3/1` typed `show` five times and was answered `unrecognized subcommand` every time, which is
+  why the verb is called `show`. An id the plan does not hold is refused naming it. Read through the
+  contract, so a markdown, SQLite, Postgres or hybrid plan gives one answer.
+
+* **`task audit-check` is a step of the gate**, fourth of twenty: seven units of
+  `.engineering/checks/`, four seconds, re-resolving every `file:line`
+  `docs/guide/open-vocabulary.md` cites. A commit that shifts a cited declaration now fails the gate
+  instead of leaving a *closed* verdict pointing at a serde attribute — which is what had happened:
+  eight doc-comment lines landed above `pub enum EvidenceKind` and the audit's citation rotted
+  silently, because the suite that catches exactly this was not in the gate.
+
 ### Changed
+
+* **`protocol workflow flow` emits every state as a section.** Each non-terminal state is a group
+  named for the state, holding its steps as `<state>-1`, `<state>-2`, … in the map's order — one
+  node when the map gave it one step or none — and a retreat is a group of those groups. It was a
+  bare node for a state with one step or none, and `b10x-harness workflow run` asks its
+  `transition` hook at a group boundary and nowhere else (harness design 0003 § 3): the fifth paid
+  native walk of 2026-08-29 was consulted four times, all at `root`, and never about `receive`,
+  `specify` or `decompose`. Now `protocol drive transition` is asked on both sides of every state.
+  The document's header says so; `b10x-harness workflow plan` shows every state as a section, and
+  the harness's committed fixture `adp-default.projected.yaml` is refreshed from this verb. A
+  reader keyed on node ids sees `receive-1` where it saw `receive`; the state a node is in has
+  always been `run.state`, and still is.
 
 * **Where a driven step may write is decided by the step map, not by the driver.** A driven `llm`
   step's writes — `Write`, `Edit`, `NotebookEdit` on the vendor arm — are now answered from that
@@ -250,6 +277,24 @@ belongs in the commit message or in `docs/design/`.
   (`docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1 and § 8 OQ4). The same note
   states the other half: `denied: 0` is *nobody asked me*, not *nothing was refused*, and only one
   of those is a fact about the run.
+
+* **A quoted metacharacter is an argument, not a composition.** The rule refusing `&&`, `|`, `;`,
+  `>` and `$(…)` scanned the bare characters, so `grep -n "StolenLock\|took_lock_from" crates/` —
+  one invocation whose `|` belongs to grep — was refused. It surfaced within minutes of the readers
+  being admitted, three times in one state of a live run: a tool admitted and then refused the
+  natural way to use it, which tells a session two things and lets it believe neither. The check now
+  tracks single quotes, double quotes and a backslash escape, and asks whether the metacharacter is
+  outside both. `$(` and a backtick still compose inside **double** quotes, because there they still
+  substitute; inside single quotes they are literal. It is not a shell parser and does not try to be.
+
+* **A driven state that admits reading can now read at scale.** `repository.read` renders `Glob` and
+  `Grep`; Claude Code 2.1.247 offers neither, and its own error tells the model to *search file
+  contents with `grep` via the Bash tool instead* — which the driver refused. So a session was told
+  to do the one thing the driver denied, and run `W4-3/1` spent 19 of its 215 calls discovering that
+  and never searched anything. The shell now also admits `grep`, `rg`, `ls`, `cat`, `head`, `tail`
+  and `wc`, and only when the state admits reading. It is not a general shell: `sed` and `awk` write,
+  `find` has `-delete` and `-exec`, `xargs` and `env` run something else, and composition and
+  redirection were already refused — which is the only reason a reader cannot become a writer here.
 
 ### Fixed
 
@@ -392,73 +437,6 @@ belongs in the commit message or in `docs/design/`.
   instead of going `unk` there. Against the committed fixtures it reads `ok` on both plugin-eval
   transcripts (0 of 2 calls failed) and `ok` on the driven honest step (1 of 2, rate 0.500).
 
-### Added
-
-* **Both harnesses can be pointed at one gateway, which is what makes a harness comparison one.**
-  `--claude-endpoint` and `--claude-model` join the existing `--b10x-endpoint`/`--b10x-model`, so a
-  `harness: claude-code` step and a `harness: b10x` step can run against the same model. Without
-  this a comparison of the two arms measured the two *models* at least as much as the two harnesses,
-  and no scorer could separate them afterwards. metaharness requires `--credentials none` alongside
-  an endpoint — a child pointed at a foreign endpoint must hold no operator credential — so the
-  driver passes it rather than making the caller remember. An endpoint with no model, or a model
-  with nowhere to go, is not a gateway and is ignored: metaharness refuses each alone, and passing
-  half of one would turn a flag mistake into a launch refusal several states into a paid run.
-
-### Changed
-
-* **A quoted metacharacter is an argument, not a composition.** The rule refusing `&&`, `|`, `;`,
-  `>` and `$(…)` scanned the bare characters, so `grep -n "StolenLock\|took_lock_from" crates/` —
-  one invocation whose `|` belongs to grep — was refused. It surfaced within minutes of the readers
-  being admitted, three times in one state of a live run: a tool admitted and then refused the
-  natural way to use it, which tells a session two things and lets it believe neither. The check now
-  tracks single quotes, double quotes and a backslash escape, and asks whether the metacharacter is
-  outside both. `$(` and a backtick still compose inside **double** quotes, because there they still
-  substitute; inside single quotes they are literal. It is not a shell parser and does not try to be.
-
-* **A driven state that admits reading can now read at scale.** `repository.read` renders `Glob` and
-  `Grep`; Claude Code 2.1.247 offers neither, and its own error tells the model to *search file
-  contents with `grep` via the Bash tool instead* — which the driver refused. So a session was told
-  to do the one thing the driver denied, and run `W4-3/1` spent 19 of its 215 calls discovering that
-  and never searched anything. The shell now also admits `grep`, `rg`, `ls`, `cat`, `head`, `tail`
-  and `wc`, and only when the state admits reading. It is not a general shell: `sed` and `awk` write,
-  `find` has `-delete` and `-exec`, `xargs` and `env` run something else, and composition and
-  redirection were already refused — which is the only reason a reader cannot become a writer here.
-
-### Added
-
-* **A run directory records which binary each `command` step actually ran.** `commands.jsonl` holds
-  one line per step attempt with the program the map wrote, the program that was spawned and which
-  of the two it was; each step's `.log` now opens with the same fact. Substituting a binary
-  silently is its own kind of lie, and a reader can now tell a step that used the driver's build
-  from one that used something it found.
-
-* **`protocol drive run` and `protocol drive resume` refuse before allocating a run id when a map's
-  `command` steps say `protocol` and the driver cannot guarantee they get this build.** It fires
-  only where the driver cannot name its own binary and the `protocol` on its `PATH` is a different
-  version; the refusal names both versions, and it names the fix correctly —
-  `cargo install --root ~/.local` puts the binary where a *session* looks, while a driver-side
-  `PATH` is the operator's own shell, so putting `~/.local/bin` first in it is part of the answer.
-
-* **`protocol artifact show <id>` prints one artifact.** Its frontmatter fields — id, kind, status,
-  title, summary, owner, tags, relations, revision — and then its markdown body, verbatim. There was
-  no verb for an id in hand: `list` prints the whole plan, `board` arranges it, `history` prints the
-  event log, `explain` answers what made a status happen, and `body` writes. A driven session in run
-  `W4-3/1` typed `show` five times and was answered `unrecognized subcommand` every time, which is
-  why the verb is called `show`. An id the plan does not hold is refused naming it. Read through the
-  contract, so a markdown, SQLite, Postgres or hybrid plan gives one answer.
-
-### Fixed
-
-* **A `command` step of a step map that says `protocol` now runs the build that is driving the
-  run.** A `command` step is spawned by the driver with the driver's own environment, so the name
-  resolved against whatever `protocol` came first on the operator's shell `PATH`. Run `W4-3/1` hit
-  a 0.28.0 install predating the `property` verb: `protocol property evidence` wrote nothing,
-  the driver correctly reported *nothing was observed*, and the step spent its whole retry budget
-  three times with the cause invisible in the message. The driver now spawns its own
-  `current_exe()` for any step whose program's file name is `protocol`, which also guarantees the
-  version agreement the run's evidence is recorded against. Every other program a step names —
-  `cargo`, `bash`, `git` — resolves exactly as before.
-
 * **The resume line the driver prints is a line that works.** A stopped run printed `resume with:
   protocol drive resume <run>`, and that command re-read none of `--map`, `--task`,
   `--pause-on-approval` or `--plugin-dir` — so an operator who typed exactly what they were told got
@@ -500,23 +478,11 @@ belongs in the commit message or in `docs/design/`.
   prompt names it, with what it is derived from, before the map's own words
   (`story:governed-dogfood-run`).
 
-### Added
-
-* **`task audit-check` is a step of the gate**, fourth of twenty: seven units of
-  `.engineering/checks/`, four seconds, re-resolving every `file:line`
-  `docs/guide/open-vocabulary.md` cites. A commit that shifts a cited declaration now fails the gate
-  instead of leaving a *closed* verdict pointing at a serde attribute — which is what had happened:
-  eight doc-comment lines landed above `pub enum EvidenceKind` and the audit's citation rotted
-  silently, because the suite that catches exactly this was not in the gate.
-
-### Fixed
-
 * **The audit's own checks read the store with this tree's build, not the ambient `protocol`.**
   Four store helpers, `H1` and `F2` still resolved whatever was on `PATH` — here a **0.28.0** binary
   against a 0.32.x store, which is how five stories were reported as drifted that had not drifted.
   One resolved binary now, version-checked against the workspace, and exported so an inner run on a
   copy with no `target/` reads with the same build rather than falling back to the stale one.
-
 
 ## [0.32.1] — 2026-08-28
 
@@ -4131,7 +4097,8 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.32.1...HEAD
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.33.0...HEAD
+[0.33.0]: https://github.com/beyond10x/engineering-protocols/compare/0.32.1...0.33.0
 [0.32.1]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...0.32.1
 [0.32.0]: https://github.com/beyond10x/engineering-protocols/compare/0.31.0...0.32.0
 [0.31.0]: https://github.com/beyond10x/engineering-protocols/compare/0.30.0...0.31.0
