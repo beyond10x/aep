@@ -159,7 +159,7 @@ with none of the conformance suites behind it.
 
 | Command | Does |
 |---|---|
-| `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
+| `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
 | `protocol drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
 | `protocol drive resume <run> [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock |
 
@@ -176,6 +176,39 @@ named, a resume that finds nothing walks on as it always did and the report says
 nobody's answer. `run` and `resume` exit `0` when the run completes or stops awaiting an operator,
 and `1` otherwise.
 
+What a run writes beside its cursor, in `.engineering/runs/<run>/`: `launch.json`, how the run was
+started — which is what makes the printed `resume with: protocol drive resume <run>` line a line
+that works, since `resume` fills in `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` from
+it and a flag typed on the resume still wins; `commands.jsonl`, one line per `command` step attempt
+naming the program the map wrote, the program that was spawned and which of the two it was; and a
+`step-context.json` per `llm` step. `--max-iterations` bounds the call, not the run's lifetime, so a
+resume gets the budget the operator typed.
+
+Four refusals and fallbacks to know before the first paid run. A `command` step whose program is
+`protocol` runs the driver's own binary, whatever is first on `PATH`; where the driver cannot name
+its own binary and the `protocol` on `PATH` is another version, `run` and `resume` refuse before
+allocating a run id, naming both versions. A run whose `llm` sessions could not reach the `protocol`
+CLI is refused before anything is spent — the child environment is constructed, and its `PATH` is
+`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`. With no `--plugin-dir` and no
+`AEP_DRIVE_PLUGIN_DIR`, `<project>/integrations/claude-code` is loaded when it exists. And every
+`llm` step is told which task the run drives, before the map's own words.
+
+An `llm` step names its harness. `harness: claude-code` — the default when a step is silent — is
+launched through `metaharness run claude`; `harness: b10x` is launched through `metaharness run
+b10x`, the beyond10x loop, given the state's program allow-list, the driver's own policy as the
+loop's `--hooks`, the `protocol` binary as its `--driver`, and the same `--plugin-dir` the vendor
+arm is given. The shipped `development/default` map drives all six of its `llm` steps on `b10x`;
+`development/checks` says nothing and so drives Claude Code.
+
+| Option | Does |
+|---|---|
+| `--b10x-endpoint <url>`, `--b10x-model <model>`, `--b10x-wire openai-responses\|anthropic-messages` | where a `harness: b10x` step's loop is pointed and which model API it speaks there; the loop picks no model of its own |
+| `--b10x-api-key` | send `OPENAI_API_KEY` to that endpoint; off by default, because a gateway that authenticates nobody is the case a driven run starts in |
+| `--b10x-oauth-token-file <file> [--b10x-oauth-token-pointer <ptr>]` | a subscription token for the b10x arm instead of an API key; the path travels into an argv, and the token enters neither this process nor metaharness |
+| `--b10x-cgroup-root <dir>` | a delegated cgroup subtree, so a confined `b10x` step may execute its suite; turns on `--substrate-embedded` with it |
+| `--claude-endpoint <url>`, `--claude-model <model>` | point a `harness: claude-code` step at the same gateway, so a comparison of the two arms differs by harness and not by model; metaharness is passed `--credentials none` with it |
+| `--allow-evidence-gap` | start even though the map cannot produce an evidence kind the plan will demand — an economic pre-flight, not a protocol rule |
+
 `protocol workflow render` draws the same thing for a reader: the states down the page, the guards
 beside the arrows, and — with `--run` or `--state` — where a run is, where it has been, what it
 produced and why it stopped. It evaluates nothing; every overlay was decided by the engine and read
@@ -188,6 +221,29 @@ out of a run directory.
 | `protocol workflow render --id … --state snapshot.yaml` | an engine snapshot drawn over it instead |
 
 Without `--out`, everything but `png` goes to standard output.
+
+Two more verbs read the same documents. `protocol workflow instruct` writes a workflow out as
+instructions in words, for a reader with no canvas: the states as things you may not enter yet, the
+guards as what opens each move, and the principles that time obligations against the phases those
+states declare, joined to the states each lands on. `protocol workflow flow` projects a workflow into
+the document the b10x harness walks natively (`b10x-harness workflow run --flow`). It is an honest
+projection and not an equivalence: that notation is a DAG of sub-trees and this graph goes backwards,
+so a retreat becomes a group that repeats, terminal states are dropped because nothing runs in them,
+and **no guard travels at all** — the governor stays a program the loop asks at every section
+boundary, not a field in the document. What it answers for free, before anything is paid to run, is
+whether the shape fits.
+
+| Command | Does |
+|---|---|
+| `protocol workflow instruct [--id adp/default] [--root .] [--out f]` | the workflow as instructions; without `--id`, every workflow the tree declares, into a directory |
+| `protocol workflow flow --id adp/default [--root .] [--map <file-or-id>] [--max-attempts 3] [--out f]` | the projection; with `--map`, each node carries what a harness does in that state — an `llm` step as its prompt, context, write scope and harness, a `command` step as its argv and the evidence it establishes, an `operator` step as what it asks for — and a state with several steps becomes a group chained in the map's order |
+
+Without `--map` the nodes carry the state's summary and nothing a harness could run, which is enough
+to answer whether the shape fits and not enough to run. The header names the map and the pin it was
+written against; a map pinned to another version of the workflow is refused before anything is
+written, in the words `drive run` refuses it in. `--max-attempts` is a number because the notation
+wants one: the workflow bounds a retreat with the engine's iteration budget, which is not in the
+document.
 
 ## Evidence surface
 

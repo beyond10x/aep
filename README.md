@@ -68,6 +68,11 @@ and nine principles, a workflow and twelve capability decisions are derived from
 * **`protocol workflow render` draws the run.** A workflow, and where a run has been, what it
   produced and why it stopped, as SVG, HTML, PNG or a live terminal frame. The reasons are the
   engine's own sentences, verbatim.
+* **`protocol workflow flow` projects the workflow into the document the b10x loop walks natively**,
+  with `--map` carrying each state's step into its node. An honest projection and not an
+  equivalence: retreats become repeating groups, terminal states are dropped, and no guard travels,
+  so the governor stays a program the loop asks at every section boundary. `protocol workflow
+  instruct` writes the same workflow out in words.
 * **`protocol trace check` reads the run back.** An agent's transcript is judged against a typed
   specification — fifty-one expectation kinds — so *the agent followed the rules* is a verdict a program
   reached from the record, not a claim the agent made about itself. Its exit codes distinguish

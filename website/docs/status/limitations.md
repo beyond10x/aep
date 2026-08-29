@@ -107,11 +107,13 @@ The reference driver exists and has walked a real story. What it has not yet don
 * **A driven session is not hermetic.** A scratch config directory does not exclude account-level
   MCP servers: two of the four sessions in the first run listed three of them, all unauthenticated,
   and nothing asserts their absence.
-* **Harness neutrality has been answered for the vocabulary, not for the driving path.** `0.22.0`
-  added a second transcript adapter, so one `trace-spec/1` specification now decides two shapes —
-  but it is checked against committed **synthetic** fixtures, and the verified reader for that
-  harness lives in [metaharness](https://github.com/beyond10x/metaharness), not here. No second
-  harness has been **driven**.
+* **Harness neutrality has been answered for the vocabulary and for one second harness — this
+  family's own.** `0.22.0` added a second transcript adapter, so one `trace-spec/1` specification
+  decides two shapes — checked against committed **synthetic** fixtures, with the verified reader for
+  that harness in [metaharness](https://github.com/beyond10x/metaharness), not here. The driving
+  path now has two harnesses under one step map, Claude Code and the b10x loop (`harness: b10x`),
+  which answers *can the driver drive something else* and not *can a stranger's harness read these
+  documents*: no second **vendor** harness has been driven.
 * **A story's `implemented` is a claim nothing checks *by default*.** Since `0.15.0` a ladder rung
   *may* declare what it costs — `requires: [{ evidence: test_result, at_least: 1 }]` — and the move
   is then refused until the observation is recorded. The shipped `story` ladder does not declare one,

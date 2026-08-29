@@ -6,20 +6,25 @@ description: What is implemented, per component, with the numbers the repository
 
 # Where this stands
 
-Current as of the tag `0.23.2` (2026-08-26). The repository's gate, `task check`, runs **twelve
-steps** — formatting, clippy with warnings as errors, the test suite, rustdoc with warnings as
-errors, six drift checks that regenerate every schema, projection, suite, synthesized tree,
-infrastructure IR and the delivered-waves record and compare bytes, a build on the declared MSRV,
-and this documentation site's own build. This page states no suite or test counts: four
+Current as of the tag `0.32.1` (2026-08-28), plus what `main` carried on 2026-08-29 where a row
+says so. The repository's gate, `task check`, runs **twenty steps** — `fmt-check`, `status-check`,
+`plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`,
+`test`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`,
+`infra-check`, `synth-check`, `lab-check`, `msrv` and `website`: formatting, clippy with warnings as
+errors, the test suite, rustdoc with warnings as errors, the drift checks that regenerate every
+schema, projection, suite, synthesized tree, infrastructure IR and the delivered-waves record and
+compare bytes, the plan's own store validated and its audit's `file:line` citations re-resolved, a
+build on the declared MSRV, and this documentation site's own build. This page states no suite or test counts: four
 hand-written counts drifted apart within the repository's first 48 hours, so the count now lives in
 exactly one place — the gate's own output. Run `task check` for the measurement.
 
-CI runs the same twelve steps; nothing lands that does not pass all of them. The gate needs the Go
+CI runs the same twenty steps; nothing lands that does not pass all of them. The gate needs the Go
 toolchain, the `wasm32-unknown-unknown` Rust target and Node beside Rust's own, and a step whose
 toolchain is missing fails and names it rather than skipping — a skipped check reads exactly like a
 passing one.
 
-Two of those twelve were added on 2026-08-26, and the reason is the most useful thing on this page:
+Two of those — the MSRV build and the website build — were added on 2026-08-26, and the reason is
+the most useful thing on this page:
 **CI had been red for eleven consecutive releases behind a green local gate**, because `task check`
 was missing exactly the two jobs CI also ran. One failure arrived through the lockfile — a
 transitive dependency raised *its own* `rust-version` and the declared MSRV stopped holding, with no
@@ -77,8 +82,8 @@ The v0.2 scope is complete.
 | interaction contract, identity, audit | implemented, with an in-memory reference backend |
 | conformance suites for backends | implemented — 16 suites, 3 levels, 89 properties at `full`, checked against a deliberately broken backend |
 | a durable planning store | implemented as markdown (`aep-backend-markdown`) — **not** an implementation of the storage contract; see [Limitations](./limitations.md) |
-| a reference driver | implemented — `protocol drive run\|status\|resume`, with `command`, `llm` and `operator` steps |
-| running on a real project | **once**, and it blocked; see above |
+| a reference driver | implemented — `protocol drive run\|status\|resume`, with `command`, `llm` and `operator` steps, driving two harnesses: Claude Code through `metaharness run claude`, and the b10x loop through `metaharness run b10x` — the shipped `development/default` map says `harness: b10x` on all six of its `llm` steps |
+| running on a real project | twice, from this repository's own backlog — `W4-1/1` (2026-08-21) blocked in `establish_verifiers` for two correct reasons, see above; `W4-3/1` (2026-08-29) walked two states with sessions that could not reach the `protocol` CLI and submitted nothing, and six driver defects fixed under `[Unreleased]` in the changelog carry its run id as their evidence |
 
 The document tree is 49 files — 3 protocols, 22 principles, 4 workflows, 6 profiles, **12 artifact
 lifecycles** and 2 step maps — validated against the protocol vocabulary in CI, plus 15 generated
@@ -157,6 +162,9 @@ contributed by an outside adopter: **43 occurrences, 43 records, 0 unparsed**.
 | `protocol artifact new\|move\|relate\|body\|list\|board\|graph\|history\|evidence\|validate\|kinds\|relations\|lifecycle` | implemented — a status move is decided against the kind's lifecycle by [`entity-core`](../concepts/lifecycles.md), and may be refused for want of recorded evidence |
 | the Claude Code plugin | implemented — one `planning` skill, two agents (`decomposer` writes, `plan-reviewer` only reads), two `PreToolUse` hooks (`store-integrity` over edits, `driven-surface` over the shell) and an eval that spends real money on a real headless session and judges it two ways |
 | `protocol workflow render` | implemented — `svg`, `html`, `png`, `tui`, and `--watch` to redraw a live run |
+| `protocol workflow instruct` | implemented — the same documents as words, for a reader with no canvas |
+| `protocol workflow flow` | implemented — a workflow projected into the document `b10x-harness workflow run` walks; with `--map`, each node carries its state's step; no guard travels, by design |
+| the evaluation, four arms | `protocol eval run --arm raw\|plugin\|driven\|native` and `eval matrix`; a `native` cell has a reading rule rather than a column |
 
 ### Transcript conformance
 
@@ -222,18 +230,19 @@ The compact list; [Limitations](./limitations.md) carries the consequences of ea
 * Obligations are plan entries, not yet artifacts a task can own (deferred by decision).
 * Nothing gates on `trace_conformance`, so a driven run's own transcript check is provenance in the
   audit trail rather than a gate that can stop it.
-* A second harness has never been **driven**. `0.22.0` added a Codex rollout adapter so one
-  `trace-spec/1` specification now decides two transcript shapes — which is the neutrality claim
-  answered for the *vocabulary* — but it is checked against committed **synthetic** fixtures, and
-  the verified reader for Codex rollouts lives in `metaharness`, not here. Neutrality of the
-  driving path remains untested.
+* A second **vendor** harness has never been driven. The driving path now has two harnesses under
+  one step map — Claude Code and the b10x loop — so neutrality is answered for a loop this family
+  owns, and not yet for a stranger's. `0.22.0`'s Codex rollout adapter is checked against committed
+  **synthetic** fixtures, and the verified reader for Codex rollouts lives in `metaharness`, not
+  here.
 
 ---
 
 **Sources.** `git tag -l`; `target/debug/protocol validate`, `conformance --level full --format
-json`, `evidence scan`, `--help` (verb counts), `artifact lifecycle`, `artifact history` at `0.23.2`;
+json`, `evidence scan`, `--help` (verb counts), `artifact lifecycle`, `artifact history` at `0.32.1`;
 `ls artifacts/lifecycles/` and `find .engineering/planning -name '*.md' | wc -l` (the ladder and
-artifact counts); `Taskfile.yml` (the twelve gate steps);
+artifact counts); `Taskfile.yml` (the twenty gate steps); `drivers/development/default.yaml`
+(`harness: b10x`, six steps); `CHANGELOG.md` § *Unreleased* (`W4-3/1`);
 `crates/aep-backend-markdown/Cargo.toml` and `src/kernel.rs` (the `entity-core` pin and the seam);
 `docs/plan/harness-wave-4-governed-dogfood.md` § *W4.1*;
 `docs/plan/gap-register.md`; `examples/evidence-horizons-corpus/expected.json`;

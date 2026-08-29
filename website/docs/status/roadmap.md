@@ -45,6 +45,16 @@ before code generation was allowed to be judged by it.)
 | W7 — **a claim that left the boundary** | `outbound-claim`, where sending is not undoable — added as a YAML file with no Rust change at all, which is the proof the whole `entity-core` programme was for | `0.23.0` |
 | The pin says what it links | the `entity-core` pin moved to the tag that exists, and `outbound-claim` starts at the built-in `draft` rather than an invented near-miss | `0.23.1` |
 | **The first tag this repository has verified** | `task check` gained the MSRV build and the website build — the two jobs CI ran and the local gate did not, which is how CI stayed red behind a green gate for eleven consecutive releases | `0.23.2` |
+| A tag cuts its own release | a release workflow that runs CI itself, called rather than copied, and `cargo xtask notes` | `0.24.0` |
+| Workspaces | `.engineering/workspace.yaml` names and pins member repositories; `protocol workspace list\|crossings\|show\|members`; a member nobody has checked out is a normal condition, and cycle detection holds over the combined graph | `0.25.0`, `0.26.0` |
+| The planning store is a contract implementation | `aep-backend-markdown` implements the storage contract; `aep-backend-sqlite`, the first database backend; the two commands D-P1 waited on | `0.27.0` – `0.27.3` |
+| The store over `entity-store` | `aep-backend-entity`, the contract over any `entity_store::Store`; a SQLite plan holds its own history; the pin moves to `entity-runtime` 0.10.0 | `0.28.0` |
+| The plan's documents are a provider | `MarkdownProvider`; history and audit answered from the event log (D-P3); `artifact validate` reports drift and deletion (D-P2, D-P4) | `0.29.0` |
+| `project.yaml` names the store | every verb opens the store the project names — markdown, SQLite or `hybrid`; an observation is an event on the entity it is about | `0.30.0` |
+| The epic closes | an edge no longer moves its source's revision; `epic:planning-store-as-backend` is `implemented`, fifteen stories | `0.31.0` |
+| A driven run produces every kind its plan demands | the cargo map produces each evidence kind the plan asks for; the eleven ladders `entity-runtime` re-expresses are held equal to ours by a test; `task plan-check` joins the gate | `0.32.0` |
+| The pre-flight runs first | the evidence-coverage pre-flight runs before the machine check, so a machine without `metaharness` still hears about a real coverage gap | `0.32.1` |
+| **W4.4 — a second harness on the same step map** | the b10x loop is driven as `harness: b10x` steps of `development/default`, both arms can be pointed at one gateway (`--claude-endpoint`, `--b10x-endpoint`), the planning skill reaches both as a skill rather than as a file on every turn, and the four-arm evaluation's `native` arm reads the result | on `main`, 2026-08-29, unreleased |
 
 ## Deferred by decision
 
@@ -59,8 +69,6 @@ before code generation was allowed to be judged by it.)
 * **W4.3 — a story's completion gated on evidence.** Its acceptance criterion is a *verdict* on the
   design — accepted, accepted in part, or refused — and not a build. Until then, a story's
   `implemented` is a claim nothing checks.
-* **W4.4 — a second harness on the same step map.** Unscheduled, which is why harness neutrality is
-  listed as an untested claim rather than a delivered property.
 
 The full register of open gaps, each with what closes it, is `docs/plan/gap-register.md` in the
 repository. Twenty rows are open there today — ten from building the harness, ten from the first
@@ -91,13 +99,15 @@ blunt.
 ## The next honest milestones
 
 * **AEP:** a driven run that reaches the operator. The first one blocked four states short, for two
-  correct reasons about the step map — so the milestone is no longer *has it ever governed anything*
-  but *can it carry one story all the way through*.
+  correct reasons about the step map; the second, `W4-3/1`, could not reach the CLI from its sessions
+  and submitted nothing, and every cause is fixed in code under `[Unreleased]` — so the milestone
+  is no longer *has it ever governed anything* but *can it carry one story all the way through*.
 * **ESS:** wave 7 closed the loop it named; what remains (W7.4) is deferred rather than scheduled.
 * **Infrastructure:** waves 1–4 delivered the observe → desire → project loop; no further wave is
   currently sequenced on a plan page.
-* **The harness:** a second one. Every behavioural document is published as harness-neutral and
-  exactly one adapter has ever read them, so the claim is untested rather than proven.
+* **The harness:** a second *vendor's*. Two harnesses now read the documents under one step map —
+  Claude Code and the b10x loop — and the loop is this family's own, so the neutrality a stranger's
+  harness would prove is still unproven.
 * **Adoption:** the first outside adopter's review is triaged into thirteen stories, twelve of them
   still drafts and none sequenced. Sequencing them is what turns *somebody could write a tree
   against this* into *somebody keeps one*.

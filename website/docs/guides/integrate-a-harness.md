@@ -36,9 +36,10 @@ also the argument for reading the rest of this page before writing your own.
 
 Two things the driver does not do, both of which land on you if you build one:
 
-* **It only knows the harness it was written against.** The `llm` step launches Claude Code. A
-  second harness needs an adapter, and the harness-neutrality claim has never met one — see
-  [Limitations](../status/limitations.md).
+* **It knows two harnesses, both through metaharness.** An `llm` step says `harness: claude-code`
+  (the default) or `harness: b10x`, and the driver launches `metaharness run claude` or
+  `metaharness run b10x`; a third needs an adapter there, not here. Neither is a stranger's harness —
+  see [Limitations](../status/limitations.md).
 * **It reads a step map, and the two shipped maps verify the two shapes of work this repository
   has.** `drivers/development/default.yaml` (`development/default`) names `cargo` in every state
   that names a verifier, so a repository whose tests are not Rust tests cannot satisfy `test-driven`
@@ -343,6 +344,28 @@ this is a first attempt or a retry.
 document that asked for it, already written for a person. Summarising it into "some checks failed"
 throws away the only part that tells anyone what to do. For machine consumers, every explanation
 serialises; show text to people and JSON to programs, and do not invent a third rendering.
+
+## The native route: a projected workflow, walked by the loop
+
+`protocol drive` asks the engine before every step. The b10x harness can also walk a workflow by
+itself — `b10x-harness workflow run` takes a flow document and runs one model turn per step, one
+session per section — and `protocol workflow flow` writes that document from a workflow here:
+
+```console
+$ protocol workflow flow --id adp/default --map development/default --out adp.flow.yaml
+$ b10x-harness workflow plan --flow adp.flow.yaml          # no endpoint: is the shape sound?
+$ b10x-harness workflow run  --flow adp.flow.yaml --input "AUTH-142" --hooks hooks.json …
+```
+
+Read the projection for what it is. A retreat becomes a group that repeats, terminal states are
+dropped, and **no guard travels**: the flow says what runs in what order, and nothing in it can
+refuse a move. The refusing is done by a `transition` hook the loop asks before a section is entered
+and after it leaves — exit `2` at the entry skips the section as failed, exit `2` on a clean exit
+sends the section back for another attempt, and a hook that cannot answer is read as a refusal. That
+hook is where the engine belongs, and the verb that would answer it from a run cursor — a
+`protocol drive transition` reading the loop's JSON on stdin and answering from `evaluate` and
+`transition` — is designed and **not yet shipped**. Until it is, a native walk is an ordering and
+not a government, and a run that needs the guards enforced is a `protocol drive run`.
 
 ## Checking the run afterwards
 
