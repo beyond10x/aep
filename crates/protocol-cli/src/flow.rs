@@ -853,7 +853,7 @@ root:
 
     /// What `--map` is for: a node a harness can act on rather than a name it can print.
     #[test]
-    fn a_state_with_one_llm_step_carries_the_prompt_the_context_the_scope_and_the_harness() {
+    fn a_state_with_one_llm_step_carries_the_prompt_the_scope_and_the_harness() {
         let map = shipped("default.yaml");
         let document = project(&workflow(), 3, Some(&map)).expect("projects");
         let runs = runs(&document);
@@ -867,7 +867,6 @@ root:
                     "summary",
                     "kind",
                     "prompt",
-                    "context",
                     "scope",
                     "harness",
                     "description"
@@ -880,10 +879,14 @@ root:
                 run["prompt"].as_str().is_some_and(|text| !text.is_empty()),
                 "{state} has nothing to send"
             );
-            assert_eq!(
-                strings(run, "context"),
-                ["integrations/claude-code/skills/planning/SKILL.md"],
-                "{state}"
+            // **No `context:` any more, and its absence is the assertion.** The map handed every
+            // `llm` step the planning skill eagerly while neither harness could read a plugin's
+            // skills; both read it now, so the document is one `skill` call away instead of being
+            // billed on every turn of a stateless loop. A `context` key reappearing here is the
+            // map regressing to eager delivery, not a test that needs relaxing.
+            assert!(
+                run.get("context").is_none(),
+                "{state} carries a context file the map no longer declares"
             );
             assert!(!strings(run, "scope").is_empty(), "{state} is unscoped");
         }

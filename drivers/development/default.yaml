@@ -56,12 +56,18 @@ states:
         harness: b10x
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
-        # What this step is given rather than has to find. Paid on every turn of a stateless loop,
-        # and still cheaper than the reads it replaces: a discovery read is a call, a turn *and* a
-        # result that then joins the same replay. Named files only — a glob is a promise about a
-        # directory's future size, and a step map is pinned.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
+        # **No `context:` any more, because the planning skill arrives as a skill.** Every `llm`
+        # step here used to be handed `integrations/claude-code/skills/planning/SKILL.md` eagerly,
+        # which was the only route there was: neither harness could read a plugin's skills, so a
+        # step told to work through the planning store was given the instructions or went without.
+        # Both read it now — `plugin_dirs` finds `integrations/claude-code` with no flag at all —
+        # so the description is in the standing instruction and the body is one `skill` call away.
+        #
+        # Eager delivery is not free, and a stateless loop makes that plain: the conversation is
+        # replayed whole every turn, so this document was billed on turn one and on turn forty of
+        # every run, six steps over, including the runs that never opened it. `context:` is still
+        # right for a file a step genuinely reads throughout — that is what its own help says — and
+        # a library the model chooses from is the other case.
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
@@ -86,8 +92,6 @@ states:
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -111,8 +115,6 @@ states:
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -135,8 +137,6 @@ states:
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -189,8 +189,6 @@ states:
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -319,8 +317,6 @@ states:
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
         # native file writers because `protocol artifact` owns every mutation, including bodies.
-        context:
-          - integrations/claude-code/skills/planning/SKILL.md
         scope:
           - paths: [".engineering/planning/**"]
             write: denied

@@ -6964,14 +6964,20 @@ profile: test.reading
 
         // The argv is built from the committed declaration, so assert the declaration is still the
         // one this test was written against before asserting what it renders as.
-        assert_eq!(
-            step.context,
-            vec!["integrations/claude-code/skills/planning/SKILL.md".to_owned()],
-            "the committed map gives `receive` exactly one context file"
-        );
         assert!(
-            repository.join(&step.context[0]).is_file(),
-            "and it is a file in this checkout"
+            step.context.is_empty(),
+            "the committed map gives `receive` no context file: the planning skill it used to hand \
+             over eagerly now arrives through the plugin, one `skill` call away instead of billed \
+             on every turn of a stateless loop"
+        );
+        // The document itself still has to be there — the dependency moved, it did not go away.
+        // A run reaches it through the plugin now, so this is what would silently stop offering
+        // the planning skill if the file were renamed.
+        assert!(
+            repository
+                .join("integrations/claude-code/skills/planning/SKILL.md")
+                .is_file(),
+            "the plugin still ships the planning skill this map's steps are written around"
         );
         assert_eq!(
             step.scope.len(),
@@ -7035,16 +7041,11 @@ profile: test.reading
                 "drivers/**=allowed",
                 "--write-scope",
                 "**=denied",
-                "--context",
-                "integrations/claude-code/skills/planning/SKILL.md",
-                // **The plugin, on this arm too.** The loop reads the skills half of the vendor's
-                // on-disk format, so the step is offered the same library the vendor arm is
-                // rather than having to find the CLI's own `skill load` verb by itself.
-                //
-                // Note what this leaves standing: the `--context` above hands the same document
-                // eagerly, on every turn, which is what the map did while there was no other way
-                // to get it there. Now that there is, that line is a per-turn cost for a document
-                // the model can ask for — worth dropping from the map, and its own change.
+                // **The plugin, and no `--context` beside it.** The loop reads the skills half
+                // of the vendor's on-disk format, so the step is offered the same library the
+                // vendor arm is rather than having to find the CLI's own `skill load` verb for
+                // itself — and the map no longer hands it the same document eagerly on every turn
+                // as well, which is what it did while there was no other route.
                 "--plugin-dir",
                 "/plugins/claude-code",
                 "-p",
