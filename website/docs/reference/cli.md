@@ -74,6 +74,14 @@ from, default `.`).
 The difference is that they write exactly one file, at a path the id determines, inside a directory
 somebody opted into — and an item you did not want is removed with `rm`.
 
+**Every write is journalled with an actor, and the caller says who.** `AEP_ACTOR` declares it —
+`human:<name>`, `agent:<name>`, `service:<name>` or `system` — and a value that does not parse is
+refused, naming the variable, rather than quietly replaced by yours; unset, the write is
+`human:$USER` as before. `protocol drive` sets it to `agent:<execution id>` on every process it
+starts for a step, so a `command` step's `protocol artifact move` reads back as the run's own act
+in `protocol artifact history` rather than as the operator's. Nothing here *verifies* an
+identity — it is a declaration, exactly as strong as the rest of the provenance model.
+
 ## Adoption surface
 
 `protocol reverse` points the tooling at a repository that already exists and was not written with

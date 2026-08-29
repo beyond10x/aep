@@ -323,3 +323,89 @@ fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
     assert!(drift[0].to_string().contains("implemented"), "{}", drift[0]);
     assert!(drift[0].to_string().contains("draft"), "{}", drift[0]);
 }
+
+/// A move made by a driven session reads as the agent's, not as the operator's.
+///
+/// **This is the end of the chain, and the only place a reader ever sees it.** `protocol drive`
+/// declares `AEP_ACTOR=agent:<execution id>` on the session it launches, `command_actor()` parses
+/// that into the actor the store is opened with, and the journal is where the answer lands —
+/// `protocol artifact history` and `protocol artifact explain` print this field. Before it, every
+/// entry in this store said `human:<$USER>` whoever made the move, so an agent's
+/// `protocol artifact move <spec> approved` was indistinguishable from the operator's own: the
+/// *accepts any caller* gap `story:attested-approver` names from the store's side.
+///
+/// It goes through `MarkdownBackend` rather than appending an entry directly, because appending
+/// one would assert only that a struct round-trips. What has to hold is that the actor the store
+/// was **opened with** is the actor the record carries.
+#[test]
+fn a_move_made_by_a_driven_session_is_journalled_as_the_agents_and_not_the_operators() {
+    use aep_backend_markdown::backend::MarkdownBackend;
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, UpdateEntity};
+    use aep_domain::entity::{ActorRef, EntityLocator, EntityRef};
+    use aep_domain::time::Timestamp;
+
+    let root = scratch("driven-actor");
+    std::fs::create_dir_all(root.join("story")).expect("a scratch store");
+    std::fs::write(
+        root.join("story/one.md"),
+        "---\nformat: aep.planning-md/1\nid: story:one\nkind: story\nstatus: draft\ntitle: One\nrevision: 1\n---\n\n# One\n",
+    )
+    .expect("a document");
+
+    let session = ActorRef::parse("agent:W4-3.1").expect("an actor");
+    let store = MarkdownBackend::open(
+        &root,
+        std::iter::empty(),
+        Timestamp::from_epoch_millis(1_700_000_000_000),
+        session.clone(),
+        aep_domain::artifact::LifecycleRegistry::default(),
+    )
+    .expect("the store opens");
+    let target = block_on(
+        store.resolve(&EntityLocator::parse("ep://planning/store/story/one").expect("a locator")),
+    )
+    .expect("story:one is seeded");
+    block_on(
+        store.execute(CommandEnvelope::new(
+            "cmd-move".parse().expect("a command id"),
+            "aep.entity.update/v1",
+            Command::UpdateEntity(UpdateEntity {
+                target: EntityRef::new(target),
+                changes: [("status".to_owned(), aep_domain::node::Node::from("active"))]
+                    .into_iter()
+                    .collect(),
+            }),
+            CommandContext::new(
+                "req-move".parse().expect("a request id"),
+                "key-move".parse().expect("an idempotency key"),
+                session.clone(),
+                "corr-driven".parse().expect("a correlation id"),
+                Timestamp::from_epoch_millis(1_700_000_001_000),
+            ),
+        )),
+    )
+    .expect("the move is accepted");
+
+    let (entries, unreadable) = journal::history(&root, &id("one"));
+    assert_eq!(unreadable, 0, "every line the move wrote is readable");
+    let moved = entries
+        .iter()
+        .find(|entry| matches!(entry.change, Change::Moved { .. }))
+        .expect("the move is in the journal, or there is nothing to be attributed");
+    assert_eq!(
+        moved.actor, "agent:W4-3.1",
+        "the journal says who moved it, and a driven move is the run's"
+    );
+    assert_eq!(
+        ActorRef::parse(&moved.actor).expect("what the journal holds is an actor"),
+        session,
+        "and it reads back as the same actor the store was opened with"
+    );
+    assert!(
+        !moved.actor.starts_with("human:"),
+        "the defect this closes: every write said `human:<$USER>` whoever made it"
+    );
+}

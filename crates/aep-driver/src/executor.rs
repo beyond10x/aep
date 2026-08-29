@@ -35,7 +35,7 @@
 use std::path::Path;
 
 use aep_domain::action::ActionRequest;
-use aep_domain::ids::StateId;
+use aep_domain::ids::{ExecutionId, StateId};
 use aep_domain::task::Task;
 use aep_driver_spec::map::{CommandStep, LlmStep, OperatorStep};
 use aep_driver_spec::tool::ToolConfig;
@@ -74,6 +74,15 @@ pub struct StepContext<'a> {
     /// So the driver states it, and the step map no longer has to. Sequencing is the driver's
     /// business and the identity of the work is the run's.
     pub task: &'a Task,
+    /// **The execution this step belongs to**, which is also the identity a session acts under.
+    ///
+    /// The task says *what* is being worked on and this says *which attempt at it is working*, so
+    /// two runs of one task are two actors rather than one. An executor that starts a session
+    /// declares it to that session — `protocol-cli` sets `AEP_ACTOR` from
+    /// [`crate::attest::session_actor`] — so a store write made from inside the run is attributed
+    /// to the run rather than to whoever launched it, and the same actor is the one
+    /// [`crate::attest::admit`] refuses an approval from.
+    pub execution: &'a ExecutionId,
     /// The workflow state the run is in.
     pub state: &'a StateId,
     /// Which step of that state's list this is.

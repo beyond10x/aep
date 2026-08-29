@@ -11,6 +11,21 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A store write can say who made it, and a driven step says so by itself.** `AEP_ACTOR` declares
+  the actor every `protocol artifact new`, `move`, `body`, `relate` and `evidence` is journalled
+  with — `human:<name>`, `agent:<name>`, `service:<name>` or `system` — so
+  `protocol artifact history` and `protocol artifact explain` can tell an agent's move from a
+  person's. Until now every write in a store said `human:$USER` whoever made it, which is why an
+  approval recorded by a driven run was indistinguishable in the record from the operator's own. A
+  value that does not parse is **refused, naming the variable**, never quietly replaced by
+  `$USER`; unset, nothing changes. `protocol drive` sets it to `agent:<execution id>` on every
+  process it starts for a step, and that is the same actor an approval is refused from as
+  self-approval, so a run cannot approve its own work under the name it writes under. **What it
+  does not yet reach:** an `llm` step's model session, whose environment metaharness constructs
+  from a fixed allowlist rather than inheriting — that session's own `protocol artifact move` is
+  still journalled as `human:$USER`, and closing it needs a flag on the metaharness side
+  (`story:the-store-knows-who-wrote-it`).
+
 * **An `operator` step can be answered by a named agent, and the run says who answered.**
   `protocol drive run --pause-on-approval --approver agent:<name>` admits one named non-human
   actor's recorded approval at an `operator` step; a person's approval is admissible without being

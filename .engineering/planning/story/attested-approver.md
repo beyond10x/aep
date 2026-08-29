@@ -6,7 +6,7 @@ status: draft
 title: An operator step can be answered by an independent agent, not only by a person
 relations:
 - decomposes: epic:reference-driver
-revision: 3
+revision: 4
 ---
 # Story: An operator step can be answered by an independent agent, not only by a person
 
@@ -117,7 +117,12 @@ routes, because walking past a self-approval is the case the step exists to prev
 
 **What this does not do, named.** The approver is whatever `producer` the record carries: a
 declared identity, as strong as the rest of the evidence model (D-3 stays proposed). And the
-store's own provenance cannot yet tell an agent's `protocol artifact move` from a person's:
-`command_actor()` (`crates/protocol-cli/src/planning.rs`) stamps `human:<USER>` on every move,
-which is the *accepts any caller* gap this story's Context names from the other side. Closing it —
-an actor the driver hands each session, read by the CLI over `USER` — is a story of its own.
+store's own provenance could not tell an agent's `protocol artifact move` from a person's:
+`command_actor()` (`crates/protocol-cli/src/planning.rs`) stamped `human:<USER>` on every move,
+which is the *accepts any caller* gap this story's Context names from the other side. That is
+`story:the-store-knows-who-wrote-it`, taken up the same day: `AEP_ACTOR` declares the actor and the
+driver sets it to `agent:<execution id>` — the same string `attest` refuses an approval from — on
+every process it starts for a step. Half of it lands. An `llm` step's model session does not
+inherit it, because metaharness constructs its child's environment from a fixed allowlist and
+publishes no flag admitting another variable, so a move the model itself makes is still the
+operator's in the journal.

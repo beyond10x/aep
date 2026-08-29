@@ -351,6 +351,13 @@ nothing changed, and a trail padded with them is a trail nobody reads.
 `command_context` takes the request id and idempotency key from you, because only you know whether
 this is a first attempt or a retry. Guessing would defeat the point of both.
 
+**A driver says who its steps are.** `StepContext::execution` is the run's identity, and
+`aep_driver::attest::session_actor` spells it as the `agent:<execution id>` a step declares in
+`AEP_ACTOR` — the same value `attest::admit` refuses an approval from, so a run cannot approve its
+own work under the name it writes to the planning store under. `protocol drive` sets it on every
+process it starts; a session your harness starts through a launcher that constructs its child's
+environment will not inherit it, and the store then records the write as whoever launched the run.
+
 ## What you owe the user when a transition is blocked
 
 Show `CompletionExplanation` verbatim. It is the protocol's own account of the situation, one line

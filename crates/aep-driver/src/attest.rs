@@ -40,6 +40,24 @@
 
 use aep_domain::entity::ActorRef;
 use aep_domain::evidence::Producer;
+use aep_domain::ids::ExecutionId;
+
+/// The actor a driven session acts as, and writes to the planning store as.
+///
+/// **One spelling, in one place, because two readers need the same answer.** [`crate::run`] puts
+/// it in the set of actors an approval may not come from — a run cannot approve what it produced —
+/// and `protocol-cli` hands the same string to every `llm` step's session in `AEP_ACTOR`, so a
+/// `protocol artifact move` made from inside the run is journalled as the run's own act rather
+/// than as the operator's. If the two spellings could drift, a run would be able to approve its
+/// own work under a name its own refusal did not recognise, which is the one failure this module
+/// exists to prevent.
+///
+/// `None` when the execution id cannot be spelled as an actor name: [`ExecutionId`] admits `/` and
+/// [`ActorRef`] does not. A run with no actor to declare declares none, and the caller falls back
+/// to whatever it did before — never to a name that is somebody else's.
+pub fn session_actor(execution: &ExecutionId) -> Option<ActorRef> {
+    ActorRef::parse(&format!("agent:{execution}")).ok()
+}
 
 /// Whether one approval's producer may answer an `operator` step of this run.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +257,36 @@ mod tests {
             assert!(refusal.contains(text) || text == "system", "{refusal}");
         }
         assert_eq!(naming_refusal(&actor("agent:orchestrator"), &own), None);
+    }
+
+    #[test]
+    fn the_actor_a_session_writes_under_is_the_actor_its_own_approval_is_refused_under() {
+        // The agreement the two readers of `session_actor` depend on, asserted on one value: the
+        // string handed to a session in `AEP_ACTOR` and the string `admit` refuses as this run's
+        // own must be the same, or a run could approve its own work under the name it writes
+        // under. The fixture reaches that state — the producer *is* the session's own actor, and
+        // it is named as the approver besides — before asserting the refusal.
+        let execution = ExecutionId::new("T-1.1").expect("an execution id");
+        let session = session_actor(&execution).expect("`T-1.1` spells an actor name");
+        assert_eq!(session.to_string(), "agent:T-1.1");
+
+        let own = [session.clone()];
+        let Admission::Refused { reason } = admit(&agent(session.name()), Some(&session), &own)
+        else {
+            panic!("the actor a session writes under cannot approve that session's work");
+        };
+        assert!(
+            reason.contains("agent:T-1.1") && reason.contains("own actor"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn an_execution_id_that_cannot_be_spelled_as_an_actor_declares_none() {
+        // `ExecutionId` admits `/` and an actor name does not, so the answer is *no actor* rather
+        // than a mangled one: a run that cannot say who it is must not say it is somebody else.
+        let slashed = ExecutionId::new("T-1/1").expect("an execution id may carry a slash");
+        assert_eq!(session_actor(&slashed), None);
     }
 
     #[test]

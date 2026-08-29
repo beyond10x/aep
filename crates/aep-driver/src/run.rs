@@ -901,8 +901,12 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             // Zero attempts means the step was never run in this run or any it resumed from, so
             // there is nothing it wrote to be about.
             .filter(|preceding| preceding.attempt > 0);
+        // Cloned rather than borrowed off the execution: an `llm` step's authorizer takes the
+        // execution mutably for the length of the step, and the context is alive across it.
+        let execution_id = execution.id().clone();
         let context = StepContext {
             task: self.task,
+            execution: &execution_id,
             state,
             index,
             attempt,
@@ -1050,8 +1054,14 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     /// The execution, the task, and the harness each `llm` step runs under: an approval carrying
     /// any of these as its producer is the run approving its own work. Declared identities, as
     /// strong as the record and no stronger — see [`crate::attest`].
+    ///
+    /// The execution's actor comes from [`attest::session_actor`] rather than being spelled again
+    /// here, because that is the same function `protocol-cli` hands to each `llm` step's session
+    /// in `AEP_ACTOR`. The two have to agree or a run could approve its own work under the very
+    /// name it writes to the store under.
     fn own_actors(&self, execution: &Execution) -> Vec<ActorRef> {
-        let mut names: Vec<String> = vec![execution.id().to_string(), self.task.id.to_string()];
+        let mut actors: Vec<ActorRef> = attest::session_actor(execution.id()).into_iter().collect();
+        let mut names: Vec<String> = vec![self.task.id.to_string()];
         for entry in self.map.states.values() {
             for step in &entry.steps {
                 if let Step::Llm(llm) = step {
@@ -1059,12 +1069,14 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 }
             }
         }
-        names.sort();
-        names.dedup();
-        names
-            .into_iter()
-            .filter_map(|name| ActorRef::parse(&format!("agent:{name}")).ok())
-            .collect()
+        actors.extend(
+            names
+                .into_iter()
+                .filter_map(|name| ActorRef::parse(&format!("agent:{name}")).ok()),
+        );
+        actors.sort();
+        actors.dedup();
+        actors
     }
 
     fn check_agreement(

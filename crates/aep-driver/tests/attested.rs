@@ -22,7 +22,7 @@ use aep_domain::ids::ApprovalId;
 use aep_domain::task::Task;
 use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::Verifier;
-use aep_driver::attest::{admit, Admission};
+use aep_driver::attest::{admit, session_actor, Admission};
 use aep_driver::executor::{
     CommandStepExecutor, LlmStepExecutor, OperatorStepExecutor, StepAuthorizer, StepContext,
     StepOutcome,
@@ -158,6 +158,9 @@ enum Act {
 struct Fake {
     script: VecDeque<Act>,
     asked: Vec<usize>,
+    /// The execution each step was told it belongs to, so a test can compare what a step is
+    /// handed against what the cursor records.
+    executions: Vec<String>,
 }
 
 impl Fake {
@@ -165,11 +168,13 @@ impl Fake {
         Self {
             script: script.iter().copied().collect(),
             asked: Vec::new(),
+            executions: Vec::new(),
         }
     }
 
     fn act(&mut self, context: &StepContext<'_>) -> StepOutcome {
         self.asked.push(context.index);
+        self.executions.push(context.execution.to_string());
         match self.script.pop_front().expect(
             "the script has an act for every step the driver runs; an empty script means the \
              driver ran a step the test did not expect",
@@ -481,6 +486,71 @@ fn with_an_approver_named_a_resume_that_found_nothing_recorded_stops_again() {
         .expect("still owed");
     assert!(note.contains("nothing was recorded"), "{note}");
     assert!(note.contains("agent:orchestrator"), "{note}");
+}
+
+/// The run's two names for itself are one name, end to end.
+///
+/// A step is told which execution it belongs to; `protocol-cli` turns that into the `AEP_ACTOR`
+/// its session writes to the planning store under; and `own_actors` turns the *same* value into
+/// the actor an approval may not come from. If any link spelled it differently, a driven run could
+/// approve its own specification under the very identity it wrote it with — which is the one
+/// outcome the `operator` step exists to prevent, and the reason the chain is asserted here rather
+/// than trusted to three matching `format!` calls.
+#[test]
+fn the_execution_a_step_is_told_it_is_is_the_actor_whose_approval_the_run_refuses() {
+    let root = scratch("attested-agreement");
+    let run = RunDirectory::at(root.join("runs").join("T-1").join("1"));
+    let store = MarkdownStore::open(root.join("planning"));
+    let mut fake = Fake::new(&[Act::Pause]);
+    let report = drive(
+        &engine(),
+        &task(),
+        &store,
+        &map(),
+        &run,
+        &mut fake,
+        &DriverOptions {
+            pause_on_approval: true,
+            ..DriverOptions::default()
+        },
+    )
+    .expect("a pause is a report");
+
+    let told = fake
+        .executions
+        .first()
+        .cloned()
+        .expect("the operator step ran, and was told which execution it belongs to");
+    assert_eq!(
+        told,
+        report.cursor.execution.to_string(),
+        "a step is told the execution the cursor records, or the actor a session declares is not \
+         this run's"
+    );
+    let session = session_actor(&report.cursor.execution).expect("the execution spells an actor");
+    assert_eq!(session.to_string(), format!("agent:{told}"));
+
+    // The state the rule is load-bearing in: the session's own actor granted the approval, and it
+    // is named as the approver besides, so nothing but the self-approval rule can refuse it.
+    approve(&run, agent(session.name()), "specification");
+    let options = DriverOptions {
+        pause_on_approval: true,
+        approver: Some(session.clone()),
+        ..DriverOptions::default()
+    };
+    let (resumed_report, asked) = resumed(&root, &run, &options, &[]);
+
+    assert!(asked.is_empty(), "no step ran on a self-approval");
+    assert_eq!(resumed_report.status(), RunStatus::AwaitingOperator);
+    let note = resumed_report
+        .notes
+        .iter()
+        .find(|note| note.contains("still owed"))
+        .expect("the step is still owed");
+    assert!(
+        note.contains(&session.to_string()) && note.contains("own actor"),
+        "the refusal names the same actor the session writes under: {note}"
+    );
 }
 
 #[test]

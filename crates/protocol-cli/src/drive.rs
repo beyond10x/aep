@@ -54,7 +54,7 @@ use aep_domain::evidence::{
     ChangeSet, ContractResult, Evidence, EvidenceKind, Producer, Provenance, StaticAnalysisResult,
     TestResult, TestSuite,
 };
-use aep_domain::ids::{StateId, TaskId, ToolRef};
+use aep_domain::ids::{ExecutionId, StateId, TaskId, ToolRef};
 use aep_domain::task::Task;
 use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::Verifier;
@@ -1477,8 +1477,15 @@ impl CliExecutors {
         );
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
+        //
+        // `session_env` is set on **this** process all the same, and its own doc says how far it
+        // gets: metaharness `env_clear()`s and rebuilds its child's environment from a fixed
+        // allowlist, so the actor reaches metaharness and not the model's shell. Set here rather
+        // than omitted because this is the launch that declares who the session is, and the day
+        // the other side admits a variable this is the line that already says it.
         let spawned = Process::new(&argv[0])
             .args(&argv[1..])
+            .envs(session_env(context.execution))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -1710,9 +1717,13 @@ impl CommandStepExecutor for CliExecutors {
             .collect::<Vec<_>>()
             .join(" ");
         self.record_command(context, &words[0], &resolved);
+        // A `command` step is this process's own child, so the declared actor genuinely arrives:
+        // a step map whose `run:` is a `protocol artifact …` writes to the store as the run, not
+        // as whoever typed `protocol drive run`.
         let outcome = Process::new(&resolved.program)
             .args(&words[1..])
             .current_dir(&self.working_directory)
+            .envs(session_env(context.execution))
             .stdin(Stdio::null())
             .output();
 
@@ -3049,6 +3060,38 @@ fn session_path() -> String {
     }
 }
 
+/// What the driver adds to the environment of every process it starts for a step.
+///
+/// **One variable: who the step is, when it writes to the planning store.** `command_actor()`
+/// stamped `human:<$USER>` on every `artifact new`, `move`, `body`, `relate` and `evidence`,
+/// whoever made it — so a driven session that ran `protocol artifact move <spec> approved` was
+/// journalled as the operator's own move and the store could not tell an agent's write from a
+/// person's. It is [`aep_driver::attest::session_actor`] and not a second spelling of
+/// `agent:<execution>`, because the same value is what
+/// [`aep_driver::attest::admit`] refuses an approval from: a run that wrote under one name and
+/// was refused under another could approve its own work.
+///
+/// Empty when the execution id cannot be spelled as an actor name, and the session then writes as
+/// the operator did before. Declaring nothing is honest; declaring a mangled name is not.
+///
+/// # What this reaches, and what it does not
+///
+/// A `command` step is spawned by this process, so it inherits the variable and a `protocol`
+/// invocation in a step map is attributed to the run. An **`llm` step's session is not**:
+/// `metaharness run` is spawned here and receives it, but metaharness constructs its child's
+/// environment rather than inheriting one — `env_clear()` and a fixed allowlist (`INHERITED_KEYS`,
+/// seven names, in `metaharness-claude`'s launch; `PATH` plus a credential in the `b10x` adapter's)
+/// — and it publishes no flag that admits another variable. So the model's own
+/// `protocol artifact move` is still journalled as `human:<$USER>`, and closing that is a flag on
+/// that side of the boundary, not an edit on this one (`story:the-store-knows-who-wrote-it`,
+/// § *Out of Scope*).
+fn session_env(execution: &ExecutionId) -> Vec<(String, String)> {
+    aep_driver::attest::session_actor(execution)
+        .map(|actor| (crate::planning::ACTOR_ENV.to_owned(), actor.to_string()))
+        .into_iter()
+        .collect()
+}
+
 /// Refuses a run whose `llm` steps are told to use `protocol` when the session will not have it.
 ///
 /// **Run `W4-3/1`, 2026-08-28, is why, and it cost $1.03 to find out.** The map's steps say *record
@@ -3758,6 +3801,15 @@ mod tests {
         ToolConfig::new(capabilities.iter().cloned().collect())
     }
 
+    /// The execution every fixture below belongs to: the first run of task `T-1`.
+    ///
+    /// `'static` because two of the helpers here *return* a [`StepContext`], and a context borrows
+    /// its execution for as long as it lives.
+    fn driven_execution() -> &'static ExecutionId {
+        static EXECUTION: std::sync::OnceLock<ExecutionId> = std::sync::OnceLock::new();
+        EXECUTION.get_or_init(|| ExecutionId::new("T-1.1").expect("an execution id"))
+    }
+
     /// One `llm` step, as a step map that names the second harness would produce it.
     ///
     /// The harness is spelled as a literal rather than through a constant, deliberately: this is
@@ -3792,6 +3844,7 @@ mod tests {
         task: &'a aep_domain::task::Task,
     ) -> StepContext<'a> {
         StepContext {
+            execution: driven_execution(),
             task,
             state,
             index: 0,
@@ -3833,6 +3886,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -3905,6 +3959,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4056,6 +4111,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4107,6 +4163,7 @@ mod tests {
         // And a state with no read capability gets none of them.
         let blind = config(&[Capability::CommandExecution]);
         let deaf = StepContext {
+            execution: driven_execution(),
             tools: &blind,
             ..context
         };
@@ -4148,6 +4205,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4236,6 +4294,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4297,6 +4356,7 @@ mod tests {
         ];
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4380,6 +4440,7 @@ mod tests {
         let reaching: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 1,
@@ -4423,6 +4484,7 @@ mod tests {
         // has run is D5's `Unknown` rather than a verdict about a file that is not there.
         let empty: Vec<String> = Vec::new();
         let unrun = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 1,
@@ -4466,6 +4528,7 @@ mod tests {
         let empty: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 0,
@@ -4520,6 +4583,7 @@ mod tests {
         let empty: Vec<String> = Vec::new();
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 3,
@@ -4593,6 +4657,7 @@ mod tests {
     /// One context for the policy tests.
     fn policy_context<'a>(state: &'a StateId, tools: &'a ToolConfig) -> StepContext<'a> {
         StepContext {
+            execution: driven_execution(),
             task: task_ref(),
             state,
             index: 0,
@@ -4710,6 +4775,7 @@ mod tests {
         reaching: &'a [String],
     ) -> StepContext<'a> {
         StepContext {
+            execution: driven_execution(),
             task: task_ref(),
             state,
             index: 2,
@@ -5278,6 +5344,52 @@ mod tests {
             .any(|pair| pair[0] == "--credentials" && pair[1] == "api-key"));
     }
 
+    /// Both arms' sessions are launched as the run, so a store write from inside one says so.
+    ///
+    /// **The defect this is about is one variable wide.** `command_actor()` stamped
+    /// `human:<$USER>` on every store write, so a driven session running
+    /// `protocol artifact move <spec> approved` was journalled as the operator's own move and
+    /// nothing in the record could tell an agent's write from a person's. The launch declares who
+    /// the session is instead.
+    ///
+    /// The second assertion is the one that has to hold for the first to be worth anything: the
+    /// actor a session *writes* under is the same actor `admit` refuses an approval *from*. Two
+    /// spellings of `agent:<execution>` would let a run approve its own specification under the
+    /// name it wrote it with, which is the case the `operator` step exists to prevent — so the
+    /// fixture reaches that state, naming the session itself as the approver, before asserting the
+    /// refusal.
+    #[test]
+    fn an_llm_sessions_launch_declares_the_run_as_its_actor_and_that_actor_cannot_approve_the_run()
+    {
+        let execution = ExecutionId::new("W4-3.1").expect("an execution id");
+        assert_eq!(
+            session_env(&execution),
+            vec![("AEP_ACTOR".to_owned(), "agent:W4-3.1".to_owned())],
+            "the variable and its value are what `command_actor()` reads on the other side"
+        );
+
+        let declared = ActorRef::parse(&session_env(&execution)[0].1).expect("a parseable actor");
+        let own = [aep_driver::attest::session_actor(&execution).expect("the run's own actor")];
+        assert_eq!(declared, own[0], "one spelling, not two");
+        let refusal = aep_driver::attest::admit(
+            &Producer::Agent {
+                id: declared.name().to_owned(),
+            },
+            Some(&declared),
+            &own,
+        );
+        assert!(
+            !refusal.is_admitted(),
+            "the actor a session writes under may not approve that session's work: {refusal:?}"
+        );
+
+        // An execution id an actor name cannot hold declares nothing rather than a mangled name:
+        // the session then writes as the operator did before, which is honest, and never as
+        // somebody else.
+        let slashed = ExecutionId::new("W4-3/1").expect("an execution id may carry a slash");
+        assert!(session_env(&slashed).is_empty());
+    }
+
     /// The native arm reaches a subscription model, and the token stays out of both processes.
     ///
     /// Without this the arm could only be pointed at a gateway, and the gateway on hand served a
@@ -5625,6 +5737,7 @@ mod tests {
         let reaching = vec!["to verify: the suite is green".to_owned()];
         let task = driven_task();
         let context = StepContext {
+            execution: driven_execution(),
             task: &task,
             state: &state,
             index: 2,

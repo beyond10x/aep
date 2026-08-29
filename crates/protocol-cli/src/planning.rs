@@ -1221,12 +1221,55 @@ pub(crate) fn clock_at_the_edge() -> aep_domain::time::Timestamp {
     aep_domain::time::Timestamp::from_epoch_millis(millis)
 }
 
+/// The environment variable a caller declares its actor in.
+///
+/// Named the way `AEP_DRIVE_PLUGIN_DIR` is: the `AEP_` prefix is this CLI's, and the rest says
+/// what the value is. Written by `protocol drive` onto every session it launches
+/// (`crate::drive::session_env`) and read here on every store write, so the two ends of the
+/// declaration are one constant rather than two string literals.
+pub(crate) const ACTOR_ENV: &str = "AEP_ACTOR";
+
 /// Who the command is from.
 ///
-/// `human:` because a person typed it. The store cannot verify an identity, and a field that looks
-/// verified and is not is worse than one that plainly is not.
+/// Reads [`ACTOR_ENV`] and falls back to `human:<$USER>`. See [`actor_from`] for what each answer
+/// means; this half exists only to fetch the two variables, so the deciding half is a function of
+/// its arguments and can be tested without writing to an environment every other test shares.
 pub(crate) fn command_actor() -> Result<aep_domain::entity::ActorRef> {
-    let name = actor_of(None);
+    actor_from(
+        std::env::var(ACTOR_ENV).ok().as_deref(),
+        std::env::var("USER").ok().as_deref(),
+    )
+}
+
+/// Who a store write is attributed to, given what the caller declared and who is logged in.
+///
+/// **Three answers, and the middle one is the point.**
+///
+/// * `declared` is `Some` and parses — that is the actor, whatever it says. A driven session is
+///   handed `agent:<execution id>`, so `protocol artifact move` run from inside a run is
+///   journalled as the run's act; before this, every write in the store said `human:<$USER>` and
+///   the journal could not tell an agent's move from the operator's own.
+/// * `declared` is `Some` and does **not** parse — including the empty string, which is what a
+///   harness that forgot to fill the variable in leaves behind — and the command is **refused,
+///   naming the variable and the value**. Falling back here is the one thing this must not do: it
+///   would attribute an agent's write to whoever was logged in, which is exactly the defect.
+/// * `declared` is `None` — nothing changes. `human:<$USER>`, sanitised, as it has always been.
+///
+/// The store still cannot *verify* an identity, and this does not pretend otherwise: it is a
+/// declaration, as strong as the rest of the provenance model and no stronger (gap register
+/// **D-3**, attestation by signature, stays proposed). What it buys is that an agent can declare
+/// something other than a person's name.
+fn actor_from(declared: Option<&str>, user: Option<&str>) -> Result<aep_domain::entity::ActorRef> {
+    if let Some(declared) = declared {
+        return aep_domain::entity::ActorRef::parse(declared).map_err(|error| {
+            anyhow::anyhow!(
+                "{ACTOR_ENV} is set to `{declared}`, which is not a usable actor: {error}. Unset \
+                 it to write as `human:$USER`"
+            )
+        });
+    }
+    // An empty `USER` reads the same as no `USER`: an actor named after nobody is not a name.
+    let name = user.filter(|name| !name.is_empty()).unwrap_or("unknown");
     let sanitised: String = name
         .chars()
         .map(|c| {
@@ -3082,16 +3125,12 @@ fn print_history(
 /// covers the journal as well as the store, with a guard that calls that same predicate.
 const _SUPERSEDED_JOURNAL_HELPER: () = ();
 
-/// Who is doing this, as they are willing to say.
+/// Who is doing this, as they are willing to say — superseded by [`actor_from`].
 ///
-/// The store cannot verify an identity, so this is free text and the journal's own documentation
-/// says as much. A field that looks verified and is not is worse than one that plainly is not.
-fn actor_of(given: Option<&str>) -> String {
-    given.map_or_else(
-        || std::env::var("USER").unwrap_or_else(|_| "unknown".to_owned()),
-        str::to_owned,
-    )
-}
+/// It read `$USER` and nothing else, which is why every write in this store said `human:<$USER>`
+/// however it was made. The store still cannot verify an identity; what changed is that a caller
+/// can now declare one, and the declaration is parsed rather than interpolated.
+const _SUPERSEDED_ACTOR_HELPER: () = ();
 
 /// The instant this invocation ran, ISO-8601, read from the system clock.
 ///
@@ -3492,6 +3531,66 @@ struct Lifecycle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The declared actor is taken as declared, so a driven write is the run's and not a person's.
+    ///
+    /// Arguments rather than `std::env::set_var`: the process environment is shared by every test
+    /// in this binary and they run in parallel, so a test that set `AEP_ACTOR` would decide what a
+    /// concurrent test read.
+    #[test]
+    fn a_declared_actor_is_who_the_write_is_from_and_an_undeclared_one_is_the_logged_in_person() {
+        assert_eq!(
+            actor_from(Some("agent:W4-3.1"), Some("timo"))
+                .expect("a well-formed actor")
+                .to_string(),
+            "agent:W4-3.1",
+            "the declaration wins over `$USER`, or a driven move is journalled as the operator's"
+        );
+        assert_eq!(
+            actor_from(Some("system"), Some("timo"))
+                .expect("a well-formed actor")
+                .to_string(),
+            "system"
+        );
+        assert_eq!(
+            actor_from(None, Some("timo"))
+                .expect("a well-formed actor")
+                .to_string(),
+            "human:operator",
+            "nothing declared is the behaviour that was there before, unchanged"
+        );
+        assert_eq!(
+            actor_from(None, Some("Ada Lovelace"))
+                .expect("a well-formed actor")
+                .to_string(),
+            "human:Ada-Lovelace",
+            "and a login name that is not an actor name is still sanitised into one"
+        );
+        assert_eq!(
+            actor_from(None, None)
+                .expect("a well-formed actor")
+                .to_string(),
+            "human:unknown"
+        );
+    }
+
+    /// A declaration nobody can read is refused, never quietly replaced by a person's name.
+    #[test]
+    fn a_malformed_declared_actor_is_refused_naming_the_variable_and_never_defaulted() {
+        for value in ["robot:hal", "alice", "", "agent:"] {
+            let error = actor_from(Some(value), Some("timo"))
+                .expect_err("a declaration that does not parse is a refusal")
+                .to_string();
+            assert!(
+                error.contains(ACTOR_ENV),
+                "the refusal names the variable so the caller knows what to fix: {error}"
+            );
+            assert!(
+                !error.contains("human:operator"),
+                "and never falls back to whoever is logged in: {error}"
+            );
+        }
+    }
 
     #[test]
     fn an_edge_argument_splits_at_the_first_colon_only() {
