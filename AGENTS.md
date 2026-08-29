@@ -587,7 +587,7 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 Written down because it is already practised, and an unwritten standard is one the next agent meets
 only by violating it.
 
-* **The workspace has fifteen direct third-party crates.** Twelve are declared once in
+* **The workspace has sixteen direct third-party crates.** Twelve are declared once in
   `[workspace.dependencies]`: seven from crates.io — `serde`, `serde_json`, `serde_yaml`,
   `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s **five** by **git tag** —
   `entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote`
@@ -598,12 +598,13 @@ only by violating it.
   `aep-backend-entity` takes `entity-core` and `entity-store`; `aep-backend-sqlite` takes
   `entity-sqlite`; `aep-backend-postgres` takes `entity-postgres`, which brings `postgres` 0.19
   without default features and no TLS backend — the connection is the caller's, by URL;
-  `aep-backend-hybrid` takes `entity-remote` for `Hybrid`, which brings nothing further). Three are
+  `aep-backend-hybrid` takes `entity-remote` for `Hybrid`, which brings nothing further). Four are
   crate-local: `sha2` wherever a document is content-addressed (`aep-engine`, `aep-driver-spec`,
   `ess-gen`, `infra-compiler`, `infra-domain`, `protocol-cli`, `trace-domain`, and as a
   dev-dependency of `aep-backend-markdown`, which hashes no shipped document and holds a pinned copy
-  of `entity-runtime`'s), `jsonschema` as a dev-dependency of
-  `ess-gen` and `aep-schema`, and `proptest` in `aep-domain` and as a dev-dependency of
+  of `entity-runtime`'s), `jsonschema` in `schema-contract` and as a dev-dependency of
+  `ess-gen` and `aep-schema`, `regex` in `trace-domain` (below), and `proptest` in `aep-domain` and
+  as a dev-dependency of
   `ess-compiler` (`default-features = false`, and every property runs under a fixed seed so the gate
   cannot be flaky — the seed and the way to widen locally are documented where each is used).
   `entity-sqlite` brings **`rusqlite` with the `bundled` feature — SQLite compiled from
@@ -615,6 +616,24 @@ only by violating it.
 * **A non-workspace dependency carries its justification in the manifest**, beside the line that adds
   it: what it buys, which features are dropped and why that is safe here, and why the version matches
   the other crate that uses it. `crates/ess-gen/Cargo.toml` is the model.
+* **`regex`, in `trace-domain`, is what makes `regex:` matchers work** — the sixteenth crate, taken
+  on 2026-08-29 by `story:regex-matchers` after `TRACE-SPEC-008` had refused the matcher by name
+  since the checker shipped. Two facts decided it and both are measurable:
+  * **It was already here.** `cargo tree -i regex` reaches `protocol-cli` through `jsonschema`,
+    which `schema-contract` takes at **run time** (`crates/schema-contract/Cargo.toml:18`), so the
+    shipped binary has linked `regex` all along. Adopting it added **one line to `Cargo.lock`** —
+    an edge, not a package — and no compile unit, no version and no audit surface.
+  * **The refusal had stopped being free.** Its price was alternation, and a committed
+    specification wants it: `conformance/trace/expectations.denial-step.trace.yaml:135` gates on
+    *no shell call chained a second command onto a permitted one* and can only spell that
+    `contains: "&& sed"`, which `; sed` and `&& rm` walk straight past.
+  Considered and refused: **`fancy-regex`**, which backtracks — `glob_matches` was hand-written to
+  be linear precisely because a checker reads whatever a transcript happens to contain, and an
+  engine that can blow up on its input gives that away; a **hand-rolled engine**, which is a
+  dependency written by us with none of the auditing and all of the surface; and **keeping the
+  refusal**, which the row above prices. Default features stay on, and cutting them would be a
+  claim the build does not honour: cargo unions features across a graph and `jsonschema` already
+  builds this `regex` with its defaults. The decision is in the gap register as **D-8**.
 * **Prefer no dependency, and record the refusal.** `crates/aep-domain/tests/invariants.rs` opens by
   weighing three mechanisms and taking the one that needs no new crate, saying what `trybuild` would
   have cost; `crates/ess-compiler/tests/billing.rs` scans its own sources on the same reasoning. Where
