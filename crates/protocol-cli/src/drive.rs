@@ -2655,9 +2655,26 @@ fn driven_programs(config: &ToolConfig) -> Vec<String> {
     // such file or directory`, and reasoned its way to writing the store's files directly — which
     // the write scope then refused, so the step achieved nothing twice over. The driver *is*
     // `protocol`, so it names itself, which also pins the build the run's evidence is recorded
-    // against. The bare name stays beside it for a sandbox whose `PATH` does carry one.
+    // against.
+    //
+    // **The bare name is not kept beside it, and that is the correction.** It was, "for a sandbox
+    // whose `PATH` does carry one" — but this one does not, and allow-listing a program that
+    // cannot be found is worse than not allow-listing it. A declared program passes admission and
+    // then dies at exec with `127`, which a model reads as *the command is wrong* rather than *the
+    // spelling is wrong*; a program outside the set is refused **here**, by name, listing the set,
+    // with nothing sent to the daemon (`harness_substrate::tools`), so the refusal itself shows the
+    // spelling that works.
+    //
+    // Measured on run EVAL-1/1 at 8783e3c. The session proved the absolute path worked on its
+    // second call — `<path>/protocol skill load planning` — then used the bare name on its third,
+    // fourth and sixth, took `127` each time, gave up on the CLI and hand-wrote the store's
+    // frontmatter with `file_write`, omitting `id`. The store ended unparseable. Every one of those
+    // turns was bought by a list that said yes to a word the machine could not resolve.
     let mut programs = match std::env::current_exe() {
-        Ok(binary) => vec![binary.display().to_string(), "protocol".to_owned()],
+        Ok(binary) => vec![binary.display().to_string()],
+        // No absolute path to offer, so the bare name is the only spelling there is. A sandbox
+        // whose `PATH` carries one is the case this branch is for; one that does not will refuse
+        // at exec, and there is nothing better to declare.
         Err(_) => vec!["protocol".to_owned()],
     };
     if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
@@ -4993,9 +5010,30 @@ mod tests {
             .filter(|pair| pair[0] == "--allow-program")
             .map(|pair| &pair[1])
             .collect();
+        // **The CLI by a path, and never by a bare name the confined `PATH` cannot resolve.**
+        // Asserting `== "protocol"` is what this said before, and it passed while run EVAL-1/1
+        // spent four turns taking `127` from a word this list had said yes to. A declared program
+        // that cannot be found is admitted and then fails at exec; one that is not declared is
+        // refused here, by name, listing the set — which is the only form of this answer that tells
+        // the model the spelling that works.
+        // The CLI is declared as the running binary's own path. Under `cargo test` that path is
+        // the test executable rather than `protocol`, which is why this asserts the *shape* — one
+        // declared program that is not a reader, and it resolves without a `PATH` — instead of the
+        // name. `driven_programs` names `current_exe()` either way.
+        let cli: Vec<&&String> = allowed
+            .iter()
+            .filter(|name| !READ_ONLY_PROGRAMS.contains(&name.as_str()))
+            .collect();
+        assert_eq!(
+            cli.len(),
+            1,
+            "exactly one CLI is declared, and it is the driver itself: {argv:?}"
+        );
         assert!(
-            allowed.iter().any(|name| *name == "protocol"),
-            "the CLI a driven step reaches the store through: {argv:?}"
+            cli[0].starts_with('/'),
+            "the CLI is declared by path: a bare name passes admission and then dies at exec with \
+             `127`, which reads as a wrong command rather than a wrong spelling — run EVAL-1/1 \
+             spent four turns on that and then hand-wrote the store: {allowed:?}"
         );
         for reader in READ_ONLY_PROGRAMS {
             assert!(
