@@ -1946,16 +1946,36 @@ fn answer_events(
         // is what `decide_tool` is for; a harness offering *less* is a rendering this repository
         // owns and should fix. Only the second is printed.
         if event["event"] == "session.started" {
-            if let Some(offered) = event["offered_tools"].as_array() {
-                let present: Vec<&str> = offered.iter().filter_map(|v| v.as_str()).collect();
+            // **Which list answers *can this session do it* depends on the harness, and reading the
+            // wrong one is how an audit cries wolf.** A vendor harness publishes one tool per act,
+            // so `offered_tools` is the answer. A loop that publishes three verbs over a catalogue
+            // — `tool_search`, `tool_describe`, `tool_invoke` — answers in `available_operations`
+            // instead, and comparing a rendered catalogue against those three verbs reported every
+            // single entry as missing: run `b10x-2623331` was told it lacked `file_read`,
+            // `file_write`, `file_edit`, `dir_list` and `search` while its own record published all
+            // five. An audit that fires on a session that has everything it needs is worse than no
+            // audit, because the next true one is read as noise.
+            //
+            // Operations first, tools second, union never: the two are different vocabularies, and
+            // a name present in one is not absent from the other.
+            let published: Vec<&str> = event["available_operations"]
+                .as_array()
+                .or_else(|| event["offered_tools"].as_array())
+                .map(|listed| listed.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            if !published.is_empty() {
+                let present = published;
                 let missing: Vec<String> = harness
-                    .tools(context.tools)
+                    .operations_or_tools(context.tools)
                     .into_iter()
                     // The shell is the one entry a harness may legitimately hold back: Claude Code
                     // does not list `Bash` among its offered tools, and the b10x loop publishes
                     // `run` only where the machine can confine an exec.
                     .filter(|named| {
-                        named != "Bash" && named != "run" && !present.contains(&named.as_str())
+                        named != "Bash"
+                            && named != "run"
+                            && named != "command.execute"
+                            && !present.contains(&named.as_str())
                     })
                     .collect();
                 if !missing.is_empty() {
@@ -2272,6 +2292,21 @@ impl Harness {
         }
     }
 
+    /// The names to audit a session's own published list against.
+    ///
+    /// **Two harnesses answer *what can this session do* in two vocabularies, and the audit has to
+    /// ask in the one the answer is written in.** Claude Code publishes one tool per act, so its
+    /// tool names are the question. The b10x loop publishes three verbs over a catalogue and states
+    /// its reach as `available_operations` in the neutral scheme — so the tool names would compare
+    /// a catalogue against `tool_search`, `tool_describe`, `tool_invoke` and report every entry
+    /// missing, which is what run `b10x-2623331` was told while its record published all five.
+    fn operations_or_tools(self, config: &ToolConfig) -> Vec<String> {
+        match self {
+            Self::ClaudeCode => allowed_tools(config),
+            Self::B10x => b10x_operations(config),
+        }
+    }
+
     /// Whether this harness's seam puts a decision to the driver before a call runs.
     ///
     /// `false` for b10x, and the run report has to say so in those words rather than reporting a
@@ -2280,6 +2315,23 @@ impl Harness {
     fn adjudicates(self) -> bool {
         matches!(self, Self::ClaudeCode)
     }
+}
+
+/// The neutral operations an admitted capability set reaches, as `available_operations` spells them.
+///
+/// The same shared decision as every other rendering, in the vocabulary the b10x adapter answers
+/// in. `command.execute` is deliberately absent from the audit's view of it: the loop publishes
+/// `run` only where the machine can confine an exec, which is a fact about the machine and not a
+/// disagreement about the map.
+fn b10x_operations(config: &ToolConfig) -> Vec<String> {
+    let mut operations: Vec<String> = Vec::new();
+    if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
+        operations.extend(["file.read", "dir.list", "search"].map(ToOwned::to_owned));
+    }
+    if config.admits(&Capability::RepositoryWrite) {
+        operations.extend(["file.write", "file.edit"].map(ToOwned::to_owned));
+    }
+    operations
 }
 
 /// The b10x loop's tool names for an admitted capability set.
@@ -4362,6 +4414,49 @@ mod tests {
         assert_eq!(
             operations,
             ["dir.list", "file.read", "search", "skill.load"]
+        );
+    }
+
+    /// The audit asks each harness in the vocabulary that harness answers in.
+    ///
+    /// **Run `b10x-2623331`, 2026-08-29.** Its `session.started` published
+    /// `available_operations: [file.read, dir.list, search, file.write, file.edit]` — everything the
+    /// state admitted — and the audit told it, per state, that it was missing every one of them. It
+    /// had compared a rendered catalogue against `offered_tools`, which on that loop is only
+    /// `tool_search`, `tool_describe` and `tool_invoke`. An audit that fires on a session holding
+    /// exactly what it needs is worse than none: the next true one is read as noise.
+    #[test]
+    fn the_tool_audit_reads_the_list_each_harness_answers_in() {
+        let reading_and_writing =
+            config(&[Capability::RepositoryRead, Capability::RepositoryWrite]);
+
+        // What the b10x loop actually published in that run, and what the audit must compare to.
+        let published = ["file.read", "dir.list", "search", "file.write", "file.edit"];
+        let asked = Harness::B10x.operations_or_tools(&reading_and_writing);
+        for operation in &published {
+            assert!(
+                asked.iter().any(|name| name == operation),
+                "`{operation}` was published and the audit does not ask about it: {asked:?}"
+            );
+        }
+        for name in &asked {
+            assert!(
+                published.contains(&name.as_str()),
+                "the audit asks about `{name}`, which that loop never publishes — this is the false \
+                 alarm the run was given"
+            );
+        }
+
+        // The vendor arm is unchanged: one tool per act, so its tool names are the question.
+        let claude = Harness::ClaudeCode.operations_or_tools(&reading_and_writing);
+        assert!(
+            claude.iter().any(|name| name == "Read"),
+            "Claude Code answers in tool names: {claude:?}"
+        );
+        assert!(
+            !claude.iter().any(|name| name.contains('.')),
+            "and never in the neutral operation scheme, which would compare two vocabularies: \
+             {claude:?}"
         );
     }
 

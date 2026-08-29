@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+* **The tool audit asks each harness in the vocabulary that harness answers in.** A vendor harness
+  publishes one tool per act, so `offered_tools` is its answer; the b10x loop publishes three verbs
+  over a catalogue — `tool_search`, `tool_describe`, `tool_invoke` — and states its reach as
+  `available_operations`. Comparing a rendered catalogue against those three verbs reported every
+  entry as missing: a run whose record published `file.read`, `dir.list`, `search`, `file.write` and
+  `file.edit` was told, once per state, that it lacked all five. An audit that fires on a session
+  holding exactly what it needs is worse than no audit, because the next true one is read as noise.
+
 ### Added
 
 * **Both harnesses can be pointed at one gateway, which is what makes a harness comparison one.**
