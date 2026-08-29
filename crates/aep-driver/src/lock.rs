@@ -72,6 +72,15 @@ pub struct LockState {
     pub host: String,
     /// What the caller found out about that process.
     pub liveness: Liveness,
+    /// What the holding run is doing, as the **caller** read it.
+    ///
+    /// Supplied, never discovered: this crate is handed a `LockState` and probes nothing, so the
+    /// state arrives from whoever read the holder's cursor. Absent means *this machine could not
+    /// determine one* — which [`LockState::refusal`] words as `state unknown` rather than dropping
+    /// the clause, because a missing clause reads as *there is no state* and only one of those two
+    /// is a reason to go and look.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
 }
 
 impl LockState {
@@ -94,9 +103,16 @@ impl LockState {
     /// unconditionally still prints something true. The record of the theft itself belongs in the
     /// new run's cursor (`StolenLock`), because `--take-lock` supersedes rather than erases.
     pub fn refusal(&self, taking: bool) -> String {
+        // One shared fragment, interpolated by every branch below, so the five facts an operator
+        // decides on — run, pid, host, liveness and state — cannot be lost by a sixth arm that
+        // forgets to repeat them.
         let holder = format!(
-            "run `{}` holds the store lock (pid {} on {}, {})",
-            self.run, self.pid, self.host, self.liveness
+            "run `{}` holds the store lock (pid {} on {}, {}, state {})",
+            self.run,
+            self.pid,
+            self.host,
+            self.liveness,
+            self.state.as_deref().unwrap_or("unknown")
         );
         match (self.liveness, taking) {
             (Liveness::Alive, true) => format!(

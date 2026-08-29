@@ -63,7 +63,9 @@ use aep_domain::error::ValidationErrors;
 use aep_domain::evidence::{ApprovalDecision, Evidence};
 use aep_domain::ids::{StateId, TaskId};
 use aep_domain::task::Task;
-use aep_driver_spec::cursor::{DriverCursor, OperatorAnswer, OwedAnswer, RunId, RunStatus};
+use aep_driver_spec::cursor::{
+    DriverCursor, OperatorAnswer, OwedAnswer, RunId, RunStatus, StolenLock,
+};
 use aep_driver_spec::map::{Step, StepMap};
 use aep_engine::evaluate::{Evaluation, Requirement};
 use aep_engine::execution::Execution;
@@ -139,6 +141,18 @@ pub struct DriverOptions {
     /// approval while the run is stopped — it says whose answer the resume may count
     /// ([`crate::attest`]). Never this run's own actor, and the launch refuses the attempt.
     pub approver: Option<ActorRef>,
+    /// The lock this call superseded on its way in, when it superseded one.
+    ///
+    /// An **input**, for the same reason this crate is handed a [`crate::lock::LockState`] rather
+    /// than probing for one: `lock.json` belongs to `protocol-cli`, along with the run directory it
+    /// grants, and a driver that opened the lock file would be a driver reading ambient OS state
+    /// (review finding **F19**). What arrives here is the three values the caller already read out
+    /// of the lock it took.
+    ///
+    /// `None` means *this call took nothing from anybody*, which says nothing about what the run did
+    /// on an earlier call: a theft already in the cursor is never cleared by a later clean
+    /// acquisition, or the record would be erasable by resuming the run once more on a free lock.
+    pub stolen_lock: Option<StolenLock>,
 }
 
 impl Default for DriverOptions {
@@ -149,6 +163,7 @@ impl Default for DriverOptions {
             headless: true,
             approver: None,
             task_document: None,
+            stolen_lock: None,
         }
     }
 }
@@ -526,6 +541,34 @@ impl Streak {
 
 impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     /// The loop.
+    /// The cursor this call walks with: the one carried in, or a fresh one.
+    ///
+    /// A resume reads its cursor off disk rather than building one, so the theft this call made
+    /// on its way in is folded into it here — and only when there *was* one. An unconditional
+    /// assignment would clear a recorded theft on the next resume over a free lock, which is the
+    /// one direction `took_lock_from` never moves in.
+    fn cursor_for(
+        &self,
+        carried: Option<DriverCursor>,
+        run_id: &RunId,
+        execution: &Execution,
+    ) -> DriverCursor {
+        match carried {
+            Some(mut existing) => {
+                if let Some(stolen) = &self.options.stolen_lock {
+                    existing.took_lock_from = Some(stolen.clone());
+                }
+                existing
+            }
+            None => fresh_cursor(
+                run_id,
+                execution,
+                self.map,
+                self.options.stolen_lock.clone(),
+            ),
+        }
+    }
+
     fn run<X: StepExecutors>(
         &self,
         executors: &mut X,
@@ -559,10 +602,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                     .engine
                     .initialize_with_artifacts(self.task.clone(), graph)?,
             };
-            let mut cursor = match carried.take() {
-                Some(existing) => existing,
-                None => fresh_cursor(&run_id, &execution, self.map),
-            };
+            let mut cursor = self.cursor_for(carried.take(), &run_id, &execution);
             self.check_agreement(&cursor, &execution)?;
             if !checked {
                 self.check_map(&execution)?;
@@ -1176,7 +1216,17 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
 }
 
 /// The cursor a run starts with, pinned to the three things a resume checks.
-fn fresh_cursor(run: &RunId, execution: &Execution, map: &StepMap) -> DriverCursor {
+///
+/// `stolen` is the lock this run superseded on its way in, as its caller read it. It is written
+/// here rather than after the run, so a run that supersedes a lock and then blocks, breaks its store
+/// or spends its budget without executing a step still leaves the theft in the record — which is
+/// precisely the case somebody goes looking for.
+fn fresh_cursor(
+    run: &RunId,
+    execution: &Execution,
+    map: &StepMap,
+    stolen: Option<StolenLock>,
+) -> DriverCursor {
     let plan = execution.plan();
     let initial = execution.state_id().clone();
     let mut cursor = DriverCursor {
@@ -1194,7 +1244,7 @@ fn fresh_cursor(run: &RunId, execution: &Execution, map: &StepMap) -> DriverCurs
         iterations: 0,
         status: RunStatus::Running,
         reasons: Vec::new(),
-        took_lock_from: None,
+        took_lock_from: stolen,
         owed: None,
         answers: Vec::new(),
     };

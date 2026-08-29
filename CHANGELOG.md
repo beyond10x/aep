@@ -11,6 +11,26 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A stolen lock is in the taking run's record, and a lock refusal says what the holder is
+  doing.** `protocol drive run --take-lock` and `protocol drive resume --take-lock` now write the
+  lock they superseded — the holder's run id, pid and host — into the taking run's own cursor as
+  `took_lock_from`, so `protocol drive status` prints *this run took the lock from pid 4711 of run
+  `AUTH-142/2`* out of the record rather than out of a terminal's scrollback. It was built and
+  printed before, and never persisted: the cursor had a printer for a field that was always empty.
+  The theft is written on the way **in**, so a run that supersedes a lock and then blocks, breaks
+  its store or spends its budget without executing a step still leaves it in the record; a later
+  resume over a free lock never clears it, and a resume that supersedes again records the newer
+  theft over the older. The refusal a live lock answers with now names the holder's **state**,
+  read from the holder's own `cursor.json` and never from `lock.json` — a lock file is written once
+  and the state moves after every step — and says `state unknown` when that cursor is missing or
+  will not parse, rather than dropping the clause or crashing on somebody else's file. Beside it,
+  tested rather than asserted: a resume against a lock another live run holds is refused and
+  writes nothing; a lock naming another host is refused at the binary and `--take-lock` does not
+  pass it; an approval pause is the lock released with the `current` pointer kept. The story is
+  `story:operator-resume-ux`, and the change is the product of this repository's own governed run
+  `W4-3` on 2026-08-29, integrated from the run's workspace after the driver defects that run
+  surfaced were fixed under this heading.
+
 * **`protocol artifact validate` now says when a document claims a revision no write produced.**
   A `revision:` higher than anything the event log records for that document is reported as its own
   finding — `story:x claims revision 99, and no write produced it: 3 event(s) logged, the highest at

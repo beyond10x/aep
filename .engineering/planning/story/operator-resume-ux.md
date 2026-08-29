@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:operator-resume-ux
 kind: story
-status: draft
+status: implemented
 title: A refused run tells the operator which of two things to type
 summary: The lock refusal names the holder and the two routes out of it; --take-lock supersedes rather than erases; --resume re-acquires before it writes.
 owner: driver
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - depends_on: story:protocol-drive-verb
-revision: 2
+revision: 5
 ---
 # Story: A refused run tells the operator which of two things to type
 
