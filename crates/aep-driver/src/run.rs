@@ -58,10 +58,12 @@ use aep_backend_markdown::store::StoreReport;
 use aep_backend_markdown::MarkdownStore;
 use aep_domain::action::ActionRequest;
 use aep_domain::artifact::ArtifactGraph;
+use aep_domain::entity::ActorRef;
 use aep_domain::error::ValidationErrors;
+use aep_domain::evidence::{ApprovalDecision, Evidence};
 use aep_domain::ids::{StateId, TaskId};
 use aep_domain::task::Task;
-use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus};
+use aep_driver_spec::cursor::{DriverCursor, OperatorAnswer, OwedAnswer, RunId, RunStatus};
 use aep_driver_spec::map::{Step, StepMap};
 use aep_engine::evaluate::{Evaluation, Requirement};
 use aep_engine::execution::Execution;
@@ -71,6 +73,7 @@ use aep_engine::{
     Clock, CompletionExplanation, Engine, ProtocolEngine, ProtocolError, Snapshot, TransitionResult,
 };
 
+use crate::attest::{self, Admission};
 use crate::executor::{StepAttempt, StepContext, StepExecutors, StepOutcome};
 use crate::route::{next_step, NextStep};
 use crate::tool::tool_config;
@@ -112,6 +115,14 @@ pub struct DriverOptions {
     pub pause_on_approval: bool,
     /// Whether there is nobody at the keyboard.
     pub headless: bool,
+    /// The one non-human actor whose approval may answer an `operator` step of this run.
+    ///
+    /// Opt-in and named, exactly as `--pause-on-approval` is opt-in: without it only a person's
+    /// approval counts, which is what every run did before the flag existed. It does not answer
+    /// anything itself — the run still stops at the step, and the named actor records its
+    /// approval while the run is stopped — it says whose answer the resume may count
+    /// ([`crate::attest`]). Never this run's own actor, and the launch refuses the attempt.
+    pub approver: Option<ActorRef>,
 }
 
 impl Default for DriverOptions {
@@ -120,6 +131,7 @@ impl Default for DriverOptions {
             max_iterations: 25,
             pause_on_approval: false,
             headless: true,
+            approver: None,
         }
     }
 }
@@ -539,6 +551,14 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 self.check_map(&execution)?;
                 checked = true;
             }
+            // A run stopped at an `operator` step reads what arrived while it was stopped before
+            // it does anything else, so that whoever answered is in the record before the run
+            // walks on — or the run stops again, saying who would be admissible.
+            if let Some(owed) = cursor.owed.take() {
+                if let Some(report) = self.settle(owed, &execution, &mut cursor, &mut tally)? {
+                    return Ok(report);
+                }
+            }
 
             let evaluation = self.engine.evaluate(&execution);
             cursor.iterations += 1;
@@ -682,8 +702,10 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             return Err(DriveError::Refused(format!(
                 "step {index} of `{state}` is an `operator` step and nobody is at the keyboard: \
                  {label}. Pass `--pause-on-approval` to run until the first approval and stop \
-                 there, or run interactively. Reaching this at all means the plan owes an approval \
-                 that the pre-flight scan did not see"
+                 there — a person answers by recording an approval and resuming, and \
+                 `--approver agent:<name>` admits one named agent's recorded approval as well — \
+                 or run interactively. Reaching this at all means the plan owes an approval that \
+                 the pre-flight scan did not see"
             )));
         }
 
@@ -765,30 +787,57 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 }
             }
             StepOutcome::Paused { reason } => {
-                tally.progress.notes.push(format!(
-                    "step {index} of `{state}` ({label}) is waiting for a person: {reason}"
-                ));
-                // The pause **is** this step's completion, so the cursor moves past it. The design
-                // says a paused run "resumes" (§ 4.6), and a cursor left pointing at the step that
-                // paused does not resume: it re-presents the same question to the same person on
-                // every resume, and no map with an `operator` step before its last state could ever
-                // move past one. What the person was asked for is decided by the guard on the way
-                // out, not by asking again — a person who did nothing meets a `TransitionBlocked`
-                // naming exactly what is still owed. A back-edge re-entry sets `step` to 0, so
-                // re-entering the state asks again, which is the case where asking twice is right.
-                cursor.step += 1;
-                let progress = std::mem::take(&mut tally.progress);
                 return self
-                    .finish(
-                        cursor.clone(),
-                        execution,
-                        RunStatus::AwaitingOperator,
-                        progress,
-                    )
+                    .pause(&reason, index, step, execution, cursor, tally)
                     .map(Some);
             }
         }
         Ok(None)
+    }
+
+    /// Stops the run at an `operator` step, remembering what is owed.
+    fn pause(
+        &self,
+        reason: &str,
+        index: usize,
+        step: &Step,
+        execution: &Execution,
+        cursor: &mut DriverCursor,
+        tally: &mut Tally,
+    ) -> Result<RunReport, DriveError> {
+        let state = cursor.state.clone();
+        let label = step.label();
+        tally.progress.notes.push(format!(
+            "step {index} of `{state}` ({label}) is waiting for an answer: {reason}"
+        ));
+        // What is owed, remembered so the resume can say who answered it — or that
+        // nobody did. `evidence_before` is the record's length now: everything after it
+        // arrives while nothing of this run is executing.
+        cursor.owed = Some(OwedAnswer {
+            state: state.clone(),
+            step: index,
+            prompt: match step {
+                Step::Operator(operator) => operator.prompt.clone(),
+                _ => label,
+            },
+            evidence_before: execution.recorded_evidence().len(),
+        });
+        // The pause **is** this step's completion, so the cursor moves past it. The design
+        // says a paused run "resumes" (§ 4.6), and a cursor left pointing at the step that
+        // paused does not resume: it re-presents the same question to the same person on
+        // every resume, and no map with an `operator` step before its last state could ever
+        // move past one. What the person was asked for is decided by the guard on the way
+        // out, not by asking again — a person who did nothing meets a `TransitionBlocked`
+        // naming exactly what is still owed. A back-edge re-entry sets `step` to 0, so
+        // re-entering the state asks again, which is the case where asking twice is right.
+        cursor.step += 1;
+        let progress = std::mem::take(&mut tally.progress);
+        self.finish(
+            cursor.clone(),
+            execution,
+            RunStatus::AwaitingOperator,
+            progress,
+        )
     }
 
     /// Builds the step's context and hands it to the executor for its kind.
@@ -901,6 +950,123 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     ///
     /// Two documents with two owners, so they can be edited apart. Which one is right is not
     /// guessable, and carrying on would run one state's steps against another state's evidence.
+    /// Reads what arrived while the run was stopped at an `operator` step, and settles it.
+    ///
+    /// Three outcomes, and the asymmetry between the last two is the point:
+    ///
+    /// * an **admissible** approval arrived — a person's, or the named agent's — and the cursor
+    ///   records who answered ([`DriverCursor::answers`]); the run carries on;
+    /// * an approval arrived and **none is admissible** — an agent nobody named, the run's own
+    ///   actor, a denial — and the run stops again, saying what was found and who would count.
+    ///   Walking on here is what the step exists to prevent: a run that approved its own
+    ///   specification would satisfy a principle by writing to the document the principle is
+    ///   about;
+    /// * **nothing** arrived. With an approver named, the operator asked for a recorded answer and
+    ///   there is none, so the run stops again. With none named, the run carries on exactly as it
+    ///   did before this existed — a person who moved the artifact the prompt named and resumed
+    ///   is that route, and the guard on the way out is what decides whether they did — and the
+    ///   report says, in one line, that the record holds nobody's answer. Before this line a run
+    ///   that walked past an approval with nothing recorded was indistinguishable from one that
+    ///   was approved.
+    fn settle(
+        &self,
+        owed: OwedAnswer,
+        execution: &Execution,
+        cursor: &mut DriverCursor,
+        tally: &mut Tally,
+    ) -> Result<Option<RunReport>, DriveError> {
+        let own = self.own_actors(execution);
+        let named = self.options.approver.as_ref();
+        let records = execution.recorded_evidence();
+        let arrived = &records[owed.evidence_before.min(records.len())..];
+        let mut refused: Vec<String> = Vec::new();
+        for recorded in arrived {
+            let Evidence::Approval(approval) = &recorded.record.value else {
+                continue;
+            };
+            if approval.decision != ApprovalDecision::Granted {
+                refused.push(format!(
+                    "approval `{}` by {} was denied, not granted",
+                    approval.approval, approval.approver
+                ));
+                continue;
+            }
+            match attest::admit(&approval.approver, named, &own) {
+                Admission::Admitted => {
+                    let by = approval.approver.to_string();
+                    tally.progress.notes.push(format!(
+                        "step {} of `{}` was answered by {by}: approval `{}` granted",
+                        owed.step, owed.state, approval.approval
+                    ));
+                    cursor.answers.push(OperatorAnswer {
+                        state: owed.state,
+                        step: owed.step,
+                        by,
+                        approval: approval.approval.to_string(),
+                        evidence: recorded.record.id.to_string(),
+                    });
+                    return Ok(None);
+                }
+                Admission::Refused { reason } => {
+                    refused.push(format!("approval `{}` — {reason}", approval.approval));
+                }
+            }
+        }
+
+        if refused.is_empty() && named.is_none() {
+            tally.progress.notes.push(format!(
+                "step {} of `{}` was owed an answer and this run's record holds nobody's: nothing \
+                 was recorded while the run was stopped. The run carries on and the guard on the \
+                 way out decides, as it did before; whoever answered is not in this record",
+                owed.step, owed.state
+            ));
+            return Ok(None);
+        }
+        let found = if refused.is_empty() {
+            "nothing was recorded while the run was stopped".to_owned()
+        } else {
+            refused.join("; ")
+        };
+        tally.progress.notes.push(format!(
+            "step {} of `{}` is still owed an answer ({}): {found}. Admissible: {}",
+            owed.step,
+            owed.state,
+            owed.prompt,
+            attest::admissible(named)
+        ));
+        cursor.owed = Some(owed);
+        let progress = std::mem::take(&mut tally.progress);
+        self.finish(
+            cursor.clone(),
+            execution,
+            RunStatus::AwaitingOperator,
+            progress,
+        )
+        .map(Some)
+    }
+
+    /// Every actor this run itself is, in the vocabulary an approval's producer is read in.
+    ///
+    /// The execution, the task, and the harness each `llm` step runs under: an approval carrying
+    /// any of these as its producer is the run approving its own work. Declared identities, as
+    /// strong as the record and no stronger — see [`crate::attest`].
+    fn own_actors(&self, execution: &Execution) -> Vec<ActorRef> {
+        let mut names: Vec<String> = vec![execution.id().to_string(), self.task.id.to_string()];
+        for entry in self.map.states.values() {
+            for step in &entry.steps {
+                if let Step::Llm(llm) = step {
+                    names.push(llm.harness.clone());
+                }
+            }
+        }
+        names.sort();
+        names.dedup();
+        names
+            .into_iter()
+            .filter_map(|name| ActorRef::parse(&format!("agent:{name}")).ok())
+            .collect()
+    }
+
     fn check_agreement(
         &self,
         cursor: &DriverCursor,
@@ -997,6 +1163,8 @@ fn fresh_cursor(run: &RunId, execution: &Execution, map: &StepMap) -> DriverCurs
         status: RunStatus::Running,
         reasons: Vec::new(),
         took_lock_from: None,
+        owed: None,
+        answers: Vec::new(),
     };
     // Counted on entry, and the initial state is an entry. A budget that only counted re-entries
     // would let a one-state workflow run forever.

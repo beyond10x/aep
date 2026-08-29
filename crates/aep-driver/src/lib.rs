@@ -30,6 +30,7 @@
 //! | [`executor`] | adapter point 1 — the three step-executor traits, and what a step can return |
 //! | [`route`] | the deterministic router: run the next step, transition, or stop on a budget |
 //! | [`approval`] | D3(c)'s static pre-flight scan for approvals a run can reach |
+//! | [`attest`] | who may answer an `operator` step: a person, or the one agent the operator named — never the run itself |
 //! | [`coverage`] | F-W4.2-4's static pre-flight scan: what the plan demands, against what the map can produce |
 //! | [`lock`] | D6's refusal, rendered from a lock state somebody else observed |
 //! | [`run`] | the loop, the run directory, and what a run reports when it stops |
@@ -52,6 +53,7 @@
 //! each retry of a crashing step would bury the run's real history under its own polling.
 
 pub mod approval;
+pub mod attest;
 pub mod coverage;
 pub mod executor;
 pub mod lock;

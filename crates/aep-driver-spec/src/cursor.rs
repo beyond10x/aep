@@ -198,6 +198,47 @@ pub struct StolenLock {
     pub host: String,
 }
 
+/// An `operator` step a run stopped at, whose answer the driver has not yet seen.
+///
+/// Written when the step pauses and read on the resume: the question is *what arrived while the
+/// run was stopped*, and the only honest way to ask it is to remember how much of the record
+/// existed when the run stopped. Anything after `evidence_before` in the execution's evidence
+/// arrived while nothing of this run was executing — which is the one property that separates an
+/// approval somebody gave from one the run could have written for itself.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OwedAnswer {
+    /// The state whose step asked.
+    pub state: StateId,
+    /// Which step of that state's list.
+    pub step: usize,
+    /// What was asked for, verbatim from the map.
+    pub prompt: String,
+    /// How many evidence records the execution held when the run stopped.
+    pub evidence_before: usize,
+}
+
+/// Who answered an `operator` step, and with which record.
+///
+/// The run's own statement of who granted the approval it continued past — the acceptance the
+/// story `attested-approver` puts first. It is exactly as strong as the record it points at: the
+/// approver is whatever `producer` the approval carried, and nothing here verifies an identity
+/// (gap register D-3 stays proposed).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperatorAnswer {
+    /// The state whose step was answered.
+    pub state: StateId,
+    /// Which step of that state's list.
+    pub step: usize,
+    /// The approver, as the record states it — `human alice`, `agent orchestrator`.
+    pub by: String,
+    /// Which approval was granted.
+    pub approval: String,
+    /// The evidence id of the record that answered.
+    pub evidence: String,
+}
+
 /// What the driver knows about a run that the engine's snapshot does not hold.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -238,6 +279,16 @@ pub struct DriverCursor {
     /// The lock this run took from somebody else, if it took one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub took_lock_from: Option<StolenLock>,
+    /// The `operator` step this run stopped at and has not yet seen answered.
+    ///
+    /// Set when the step pauses, cleared by the resume that settles it. `default` so a cursor
+    /// written before this field existed still reads: such a run paused, was resumed, and walked
+    /// on — which is what it did, and the record is not rewritten to say otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owed: Option<OwedAnswer>,
+    /// Every `operator` step of this run that was answered, and by whom.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub answers: Vec<OperatorAnswer>,
 }
 
 impl DriverCursor {
@@ -336,6 +387,8 @@ mod tests {
             status: RunStatus::Running,
             reasons: Vec::new(),
             took_lock_from: None,
+            owed: None,
+            answers: Vec::new(),
         }
     }
 
@@ -359,6 +412,47 @@ mod tests {
         assert_eq!(read, cursor);
         assert_eq!(read.visits_of(&StateId::new("implement").unwrap()), 1);
         assert_eq!(read.attempts_at(&StateId::new("implement").unwrap(), 0), 1);
+    }
+
+    #[test]
+    fn a_cursor_written_before_operator_answers_were_recorded_still_reads_and_owes_nothing() {
+        // A run that paused, resumed and walked on under an older driver did exactly that. Its
+        // cursor has neither field, and reading it must not invent an owed step for a resume to
+        // settle, nor refuse the file.
+        let mut without = serde_json::to_value(cursor()).expect("serialises");
+        let object = without.as_object_mut().expect("an object");
+        assert!(
+            object.remove("owed").is_none(),
+            "an empty field is not written"
+        );
+        assert!(
+            object.remove("answers").is_none(),
+            "an empty field is not written"
+        );
+        let read: DriverCursor = serde_json::from_value(without).expect("an older cursor reads");
+        assert_eq!(read.owed, None);
+        assert!(read.answers.is_empty());
+
+        let mut owing = cursor();
+        owing.owed = Some(OwedAnswer {
+            state: StateId::new("establish_verifiers").unwrap(),
+            step: 2,
+            prompt: "approve the specification".to_owned(),
+            evidence_before: 4,
+        });
+        owing.answers.push(OperatorAnswer {
+            state: StateId::new("specify").unwrap(),
+            step: 0,
+            by: "agent orchestrator".to_owned(),
+            approval: "specification".to_owned(),
+            evidence: "ev-7".to_owned(),
+        });
+        let text = serde_json::to_string(&owing).expect("serialises");
+        let read: DriverCursor = serde_json::from_str(&text).expect("deserialises");
+        assert_eq!(
+            read, owing,
+            "what was owed and who answered survive the round trip"
+        );
     }
 
     #[test]

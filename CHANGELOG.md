@@ -9,7 +9,29 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+* **An `operator` step can be answered by a named agent, and the run says who answered.**
+  `protocol drive run --pause-on-approval --approver agent:<name>` admits one named non-human
+  actor's recorded approval at an `operator` step; a person's approval is admissible without being
+  named, on every run, as before. The run still stops at the step — the approver records a granted
+  `approval` against the run's snapshot while it is stopped — and the resume reads what arrived:
+  the cursor records who answered (`answered …` in `protocol drive status`), an approval by the
+  run's own actor (its task, its execution, the harness its `llm` steps run under) is refused as
+  self-approval whoever named it, and an approval by an agent nobody named is refused naming the
+  flag. With an approver named, a resume that finds no admissible approval stops again and says who
+  would be admissible. Naming a person, `system`, a service or the run itself is refused before the
+  run starts. Attestation is exactly as strong as the record: the approver is whatever `producer`
+  the approval carries, and gap register D-3 (attestation by signature) stays proposed.
+
 ### Fixed
+
+* **A run that walked past an `operator` step with nothing recorded now says so.** Until now the
+  pause advanced the cursor and the resume carried on, and a run nobody approved was
+  indistinguishable in its own record from one somebody did — `NATIVE-1/1` moved
+  `establish_verifiers -> implement` holding zero approvals. The behaviour is unchanged for a
+  person who moved the artifact the prompt named and resumed (the guard on the way out still
+  decides); the report now carries one line saying the record holds nobody's answer.
 
 * **A driven step on the native loop is told which programs it may start.** `harness-tools`
   withholds `run` outright when no allowlist was supplied, which is that loop's rule everywhere — a

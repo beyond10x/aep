@@ -103,15 +103,22 @@ with none of the conformance suites behind it.
 
 | Command | Does |
 |---|---|
-| `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--max-iterations 25] [--take-lock]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
+| `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
 | `protocol drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
-| `protocol drive resume <run> [--pause-on-approval] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock |
+| `protocol drive resume <run> [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock |
 
 All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and
 take `--plugin-dir` (repeatable; `AEP_DRIVE_PLUGIN_DIR` supplies it when the flag is absent) to load
 a harness plugin into every `llm` step's session. `--pause-on-approval` runs until the first thing a
-person owes, then persists and exits `0`. `run` and `resume` exit `0` when the run completes or
-stops awaiting an operator, and `1` otherwise.
+person owes, then persists and exits `0`; the resume walks on from the step after it. What answered
+the `operator` step is read on that resume from the run's own record: a granted `approval` a
+person recorded while the run was stopped always counts, and `--approver agent:<name>` admits one
+named agent's recorded approval as well — never the run's own actor, which is refused by name. The
+cursor then says who answered (`protocol drive status`: `answered …`). With an approver named, a
+resume that finds no admissible approval stops again and says who would be admissible; with none
+named, a resume that finds nothing walks on as it always did and the report says the record holds
+nobody's answer. `run` and `resume` exit `0` when the run completes or stops awaiting an operator,
+and `1` otherwise.
 
 `protocol workflow render` draws the same thing for a reader: the states down the page, the guards
 beside the arrows, and — with `--run` or `--state` — where a run is, where it has been, what it

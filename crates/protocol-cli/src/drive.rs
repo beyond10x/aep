@@ -49,6 +49,7 @@ use aep_domain::action::{
     RepositoryWrite,
 };
 use aep_domain::capability::Capability;
+use aep_domain::entity::ActorRef;
 use aep_domain::evidence::{
     ChangeSet, ContractResult, Evidence, EvidenceKind, Producer, Provenance, StaticAnalysisResult,
     TestResult, TestSuite,
@@ -316,6 +317,15 @@ pub(crate) struct RunArgs {
     /// Run until the first thing a person owes, then persist and exit 0.
     #[arg(long)]
     pause_on_approval: bool,
+    /// The one non-human actor whose recorded approval may answer an `operator` step.
+    ///
+    /// `agent:<name>`. It answers nothing itself: the run still stops at the step, the named
+    /// actor records its approval against the run's snapshot while the run is stopped, and the
+    /// resume counts it — and refuses it by name when it is this run's own actor. A person's
+    /// approval is admissible without being named, on every run. Needs `--pause-on-approval`,
+    /// because an answer that arrives while the run is stopped needs a run that can stop.
+    #[arg(long, value_name = "ACTOR", requires = "pause_on_approval")]
+    approver: Option<ActorRef>,
     /// Stop after this many loop iterations, whatever the state of the run.
     #[arg(long, default_value_t = 25)]
     max_iterations: u32,
@@ -356,6 +366,12 @@ pub(crate) struct ResumeArgs {
     /// Run until the first thing a person owes, then persist and exit 0.
     #[arg(long)]
     pause_on_approval: bool,
+    /// The one non-human actor whose recorded approval may answer an `operator` step.
+    ///
+    /// As on `run`. Remembered from the launch when omitted, so a resume admits whoever the run
+    /// was started admitting; given here, it replaces that for this resume and the ones after.
+    #[arg(long, value_name = "ACTOR")]
+    approver: Option<ActorRef>,
     /// Stop after this many loop iterations, whatever the state of the run.
     #[arg(long, default_value_t = 25)]
     max_iterations: u32,
@@ -627,23 +643,11 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     }
 
     // D3(c): the headless pre-flight, static and decidable and run before anything executes.
-    let owed = owed_to_a_person(&plan, &inputs.map);
-    if !owed.is_empty() && !args.pause_on_approval {
-        outln!(
-            "this run would reach {} thing(s) only a person can answer, and `--pause-on-approval` \
-             was not given:",
-            owed.len()
-        );
-        for line in &owed {
-            outln!("  - {line}");
-        }
-        outln!();
-        outln!(
-            "`--pause-on-approval` runs until the first of them, persists and exits 0. There is no \
-             flag that answers one: nothing below the driver checks who granted an approval, so \
-             the refusal has to be the driver's."
-        );
-        return Ok(ExitCode::from(1));
+    if let Some(code) = refuse_owed(&plan, &inputs.map, args.pause_on_approval) {
+        return Ok(code);
+    }
+    if let Some(code) = refuse_approver(args.approver.as_ref(), &inputs.task.id, &inputs.map) {
+        return Ok(code);
     }
 
     let lock = take_lock(&runs, args.take_lock)?;
@@ -660,6 +664,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         project: Some(inputs.project.clone()),
         root: args.location.root.clone(),
         pause_on_approval: args.pause_on_approval,
+        approver: args.approver.clone(),
         plugin_dirs: inputs.plugin_dirs.clone(),
         b10x: args.b10x.clone(),
     }
@@ -671,6 +676,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         max_iterations: args.max_iterations,
         pause_on_approval: args.pause_on_approval,
         headless: true,
+        approver: args.approver.clone(),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -679,6 +685,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         inputs.map.workflow.id().to_string(),
         inputs.map.workflow.major().to_string(),
         args.b10x.clone(),
+        args.approver.clone(),
     );
     let report = aep_driver::run::drive(
         &engine,
@@ -725,6 +732,13 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     let inputs = location.inputs()?;
     let pause_on_approval =
         args.pause_on_approval || launch.as_ref().is_some_and(|l| l.pause_on_approval);
+    // Whose answer counts, remembered from the launch for the same reason the map is: a resume
+    // that admitted a different approver would be a run whose second half was governed by a
+    // policy its own record does not name. Given here, it replaces the remembered one.
+    let approver = args
+        .approver
+        .clone()
+        .or_else(|| launch.as_ref().and_then(|l| l.approver.clone()));
 
     // What the run was pointed at, remembered rather than retyped — the same argument as `--map`
     // and `--task`, and stronger: a `resume` given a different endpoint or a different model would
@@ -749,11 +763,23 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     let lock = take_lock(&runs, args.take_lock)?;
     lock.record_run(&run_id)?;
 
+    if let Some(code) = refuse_approver(approver.as_ref(), &inputs.task.id, &inputs.map) {
+        return Ok(code);
+    }
+    if approver.is_some() && !pause_on_approval {
+        outln!(
+            "`--approver` names whose recorded approval may answer an `operator` step while the \
+             run is stopped, and this run cannot stop: pass `--pause-on-approval` as well"
+        );
+        return Ok(ExitCode::from(1));
+    }
+
     let engine = Engine::new(inputs.registry.clone());
     let options = DriverOptions {
         max_iterations: args.max_iterations,
         pause_on_approval,
         headless: true,
+        approver: approver.clone(),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -762,6 +788,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         inputs.map.workflow.id().to_string(),
         inputs.map.workflow.major().to_string(),
         b10x,
+        approver,
     );
     let report = aep_driver::run::resume(
         &engine,
@@ -851,9 +878,61 @@ fn print_cursor(cursor: &DriverCursor) {
             stolen.host
         );
     }
+    if let Some(owed) = &cursor.owed {
+        outln!(
+            "owed       step {} of {}: {}",
+            owed.step,
+            owed.state,
+            owed.prompt
+        );
+    }
+    for answer in &cursor.answers {
+        outln!(
+            "answered   step {} of {} by {} (approval `{}`, evidence {})",
+            answer.step,
+            answer.state,
+            answer.by,
+            answer.approval,
+            answer.evidence
+        );
+    }
     for reason in &cursor.reasons {
         outln!("           {reason}");
     }
+}
+
+/// Why `--approver` may not name this actor for this run, or `None` when it may.
+///
+/// Checked before a run id, a lock and a model bill exist, for the same reason every other
+/// pre-flight is: a person, `system`, a service, and the run's own actors — the task, the
+/// execution it will be given, and the harness each `llm` step runs under — can never answer.
+fn approver_refusal(named: &ActorRef, task: &TaskId, map: &StepMap) -> Option<String> {
+    let mut own_names: Vec<String> = vec![task.to_string()];
+    for entry in map.states.values() {
+        for step in &entry.steps {
+            if let Step::Llm(llm) = step {
+                own_names.push(llm.harness.clone());
+            }
+        }
+    }
+    let mut own: Vec<ActorRef> = own_names
+        .iter()
+        .filter_map(|name| ActorRef::parse(&format!("agent:{name}")).ok())
+        .collect();
+    // The execution id is `<task>.<ordinal>`, and the ordinal is not known until the engine
+    // mints it: refuse the whole family by prefix rather than let `agent:T-1.2` through.
+    if let ActorRef::Agent(name) = named {
+        if name
+            .strip_prefix(&format!("{task}."))
+            .is_some_and(|ordinal| {
+                !ordinal.is_empty() && ordinal.chars().all(|c| c.is_ascii_digit())
+            })
+        {
+            own.push(named.clone());
+        }
+    }
+    aep_driver::attest::naming_refusal(named, &own)
+        .map(|reason| format!("`--approver {named}` is refused: {reason}"))
 }
 
 /// Renders a finished run and chooses the exit code.
@@ -946,6 +1025,45 @@ fn report_evidence_gap(report: &CoverageReport, origin: &str, allowed: bool) {
          will arrive from outside the run, pass `--allow-evidence-gap` and accept that the run \
          stops at the guard."
     );
+}
+
+/// Refuses a headless start that would reach something only a person can answer.
+///
+/// D3(c): static, decidable, and before anything executes. Prints every entry with the document
+/// that asked for it, and the two flags that change the answer.
+fn refuse_owed(
+    plan: &aep_domain::plan::ExecutionPlan,
+    map: &StepMap,
+    pause_on_approval: bool,
+) -> Option<ExitCode> {
+    let owed = owed_to_a_person(plan, map);
+    if owed.is_empty() || pause_on_approval {
+        return None;
+    }
+    outln!(
+        "this run would reach {} thing(s) only a person can answer, and `--pause-on-approval` \
+         was not given:",
+        owed.len()
+    );
+    for line in &owed {
+        outln!("  - {line}");
+    }
+    outln!();
+    outln!(
+        "`--pause-on-approval` runs until the first of them, persists and exits 0. There is no \
+         flag that answers one — nothing below the driver checks who granted an approval, so the \
+         refusal has to be the driver's — but there is one that says whose answer counts: a \
+         person's always does, and `--approver agent:<name>` admits one named agent's recorded \
+         approval as well, never this run's own."
+    );
+    Some(ExitCode::from(1))
+}
+
+/// Refuses an `--approver` this run may not admit, printing why.
+fn refuse_approver(named: Option<&ActorRef>, task: &TaskId, map: &StepMap) -> Option<ExitCode> {
+    let refusal = approver_refusal(named?, task, map)?;
+    outln!("{refusal}");
+    Some(ExitCode::from(1))
 }
 
 /// Everything only a person can answer that this run would reach.
@@ -1215,6 +1333,9 @@ struct CliExecutors {
     workflow_version: String,
     /// What a `harness: b10x` step needs from this machine, and nothing else reads.
     b10x: B10xOptions,
+    /// The one non-human actor whose recorded approval may answer an `operator` step, so the
+    /// pause can say who may answer it.
+    approver: Option<ActorRef>,
 }
 
 impl CliExecutors {
@@ -1226,6 +1347,7 @@ impl CliExecutors {
         workflow_id: String,
         workflow_version: String,
         b10x: B10xOptions,
+        approver: Option<ActorRef>,
     ) -> Self {
         Self {
             working_directory,
@@ -1234,6 +1356,7 @@ impl CliExecutors {
             workflow_id,
             workflow_version,
             b10x,
+            approver,
         }
     }
 
@@ -1525,6 +1648,13 @@ impl OperatorStepExecutor for CliExecutors {
                 outln!("  {line}");
             }
         }
+        outln!();
+        outln!(
+            "who may answer: {}. Record the approval against this run's snapshot with `protocol \
+             evaluate --evidence <file> --state <run>/snapshot.json`, or do what the prompt says, \
+             then resume.",
+            aep_driver::attest::admissible(self.approver.as_ref())
+        );
         StepOutcome::Paused {
             reason: format!("an operator step in {} is owed an answer", context.state),
         }
@@ -2698,6 +2828,12 @@ struct Launch {
     root: Option<PathBuf>,
     /// Whether the run may stop at an approval.
     pause_on_approval: bool,
+    /// The one non-human actor whose recorded approval the run admits at an `operator` step.
+    ///
+    /// `#[serde(default)]`, so a run started before this existed resumes admitting a person only,
+    /// which is what it admitted when it started.
+    #[serde(default)]
+    approver: Option<ActorRef>,
     /// The plugin directories the sessions loaded.
     plugin_dirs: Vec<PathBuf>,
     /// What a `harness: b10x` step was pointed at.
@@ -5730,6 +5866,81 @@ profile: test.reading
             mint(&diff, false, "git diff", observed_now()).is_none(),
             "a ChangeSet has no form that says no change happened, so the honest answer is to \
              submit nothing"
+        );
+    }
+    /// `RunArgs` as `protocol drive run` parses them, so a refusal here is clap's and not ours.
+    #[derive(Debug, clap::Parser)]
+    struct RunProbe {
+        #[command(flatten)]
+        run: RunArgs,
+    }
+
+    #[test]
+    fn an_approver_is_parsed_as_an_actor_and_needs_a_run_that_can_stop() {
+        use clap::Parser as _;
+        let parsed = RunProbe::try_parse_from([
+            "probe",
+            "--pause-on-approval",
+            "--approver",
+            "agent:orchestrator",
+        ])
+        .expect("a named agent beside the pause flag parses");
+        assert_eq!(
+            parsed.run.approver,
+            Some(ActorRef::parse("agent:orchestrator").expect("an actor"))
+        );
+
+        let error = RunProbe::try_parse_from(["probe", "--approver", "agent:orchestrator"])
+            .expect_err(
+                "an approver answers while the run is stopped, so the run must be able to stop",
+            );
+        assert!(
+            error.to_string().contains("--pause-on-approval"),
+            "the refusal names the flag it needs: {error}"
+        );
+
+        let error = RunProbe::try_parse_from(["probe", "--pause-on-approval", "--approver", "bob"])
+            .expect_err("an actor is `<kind>:<name>`");
+        assert!(
+            error.to_string().contains("human:alice"),
+            "the refusal shows the shape: {error}"
+        );
+    }
+
+    #[test]
+    fn a_person_the_system_a_service_and_the_run_itself_are_refused_as_approvers_before_the_run() {
+        let task = TaskId::new("T-1").expect("a task id");
+        let map = b10x_map();
+        for (named, why) in [
+            ("human:alice", "needs no naming"),
+            ("system", "nobody"),
+            ("service:release-controller", "never answer"),
+            ("agent:T-1", "own actor"),
+            ("agent:T-1.2", "own actor"),
+            ("agent:b10x", "own actor"),
+        ] {
+            let refusal = approver_refusal(&ActorRef::parse(named).expect("an actor"), &task, &map)
+                .unwrap_or_else(|| panic!("`{named}` is refused"));
+            assert!(refusal.contains(why), "`{named}`: {refusal}");
+            assert!(refusal.contains("--approver"), "names the flag: {refusal}");
+        }
+        assert_eq!(
+            approver_refusal(
+                &ActorRef::parse("agent:orchestrator").expect("an actor"),
+                &task,
+                &map
+            ),
+            None,
+            "an agent that is not this run may be named"
+        );
+        assert_eq!(
+            approver_refusal(
+                &ActorRef::parse("agent:T-1.x").expect("an actor"),
+                &task,
+                &map
+            ),
+            None,
+            "only the execution family `<task>.<ordinal>` is the run's own"
         );
     }
 }

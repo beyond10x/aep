@@ -54,6 +54,8 @@ fn cursor(state: &str) -> DriverCursor {
         status: RunStatus::Running,
         reasons: Vec::new(),
         took_lock_from: None,
+        owed: None,
+        answers: Vec::new(),
     }
 }
 

@@ -85,7 +85,8 @@ somebody driving to a `--pause-on-approval` stop and supplying the record by han
 
 Two demands the check deliberately does **not** refuse over, because no map could satisfy them: an
 `approval` or a `review`, and anything pinned to a human verifier. Those arrive from a person, at an
-`operator` step or between runs. One it cannot see at all: a **predicate** obligation such as
+`operator` step or between runs — or, at an `operator` step, from the one agent the operator named
+with `--approver`, whose recorded approval the resume counts unless it is the run's own actor. One it cannot see at all: a **predicate** obligation such as
 `regression_suite.result == passed`, which is not written as an evidence requirement — so a map can
 pass this check and still block at completion, and the shipped cargo map carries a
 `suite: regression` step for exactly that reason.
