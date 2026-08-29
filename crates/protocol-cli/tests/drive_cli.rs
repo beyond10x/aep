@@ -693,7 +693,14 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
     // the other way round this test passed vacuously in CI, where `metaharness` is not installed:
     // the run stopped at the machine check and the gap was never looked for.
     let allocated = said.contains("run        PRE-1/1");
-    let stopped_for_the_machine = said.contains("is not on PATH");
+    // Two machine facts, not one, since this map's `llm` steps name the native harness: the seam
+    // binary has to be on `PATH`, and the loop has to be pointed at an endpoint because it has no
+    // service of its own and metaharness refuses to default one. Both are properties of the
+    // machine rather than of the work — which is the same reason `is not on PATH` is accepted
+    // here — and both sit *after* the coverage pre-flight, so reaching either proves the thing
+    // this test is about.
+    let stopped_for_the_machine =
+        said.contains("is not on PATH") || said.contains("no `--b10x-endpoint` was given");
     assert!(
         allocated || stopped_for_the_machine,
         "the run got past coverage — either to a run id, or to the machine check that follows \
