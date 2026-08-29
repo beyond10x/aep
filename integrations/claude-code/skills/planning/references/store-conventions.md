@@ -42,7 +42,7 @@ No planning-store file is edited directly. One command surface owns every change
 
 | Change | Command |
 |---|---|
-| create an artifact | `protocol artifact new` |
+| create an artifact, with its body when you have it | `protocol artifact new … [--from <path|->]` |
 | replace its complete markdown body | `protocol artifact body <id> --from <path|->` |
 | add a relation | `protocol artifact relate` |
 | move lifecycle status | `protocol artifact move` |

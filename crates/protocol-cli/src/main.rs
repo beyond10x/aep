@@ -334,7 +334,9 @@ enum Command {
     /// * they write into whatever directory is passed; these write inside a directory that was
     ///   **opted into**, either by `--store` or by the project's own `.engineering/planning/`;
     /// * and `protocol artifact new` is not a preview of anything. A plan item you did not want is
-    ///   deleted with `rm`, which is not true of a synthesised workspace.
+    ///   retired with `protocol artifact move <id> --to archived`, which keeps its record — never
+    ///   with `rm`, which `validate` reports as a deletion no command made. Neither is true of a
+    ///   synthesised workspace.
     ///
     /// `new` still refuses to overwrite an existing document, which is the part of the `--out`
     /// argument that does apply.

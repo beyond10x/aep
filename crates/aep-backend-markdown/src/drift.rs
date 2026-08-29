@@ -12,7 +12,7 @@
 //! |---|---|---|
 //! | **drift** | the document's frontmatter disagrees with its last event — somebody edited `status:`, `title:`, an edge, in an editor | 1 |
 //! | **forged revision** | the document claims a revision no logged write produced — higher than any event for it records | 1 |
-//! | **deleted** | the log holds events for a document that is not there — somebody `rm`ed it | 1 |
+//! | **deleted** | the log holds events for a document that is not there — somebody `rm`ed it instead of moving it to `archived` | 1 |
 //! | **pre-provider** | the document has no events at all — it predates the provider, a normal condition and not a defect | 0 |
 //!
 //! # A revision nothing wrote
@@ -131,8 +131,10 @@ impl fmt::Display for Deleted {
         write!(
             f,
             "{} was deleted: its log ends at event {} and the store holds no document — nothing is \
-             physically deleted through a command, so this was `rm`",
-            self.artifact, self.event
+             physically deleted through a command, so this was `rm`. Restore the document from \
+             version control, then retire it with `protocol artifact move {} --to archived`, which \
+             keeps its record",
+            self.artifact, self.event, self.artifact
         )
     }
 }

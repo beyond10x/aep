@@ -17,7 +17,9 @@ use aep_contract::query::{AuditQuery, EntityQuery, QueryService, RelationQuery};
 use aep_contract::testing::block_on;
 use aep_domain::artifact::RelationKind;
 use aep_domain::audit::AuditKind;
-use aep_domain::command::{ApproveDesign, Command, CreateEntity, CreateRelation, UpdateEntity};
+use aep_domain::command::{
+    ApproveDesign, Command, CreateEntity, CreateRelation, MoveStatus, UpdateEntity,
+};
 use aep_domain::entity::{EntityRef, EntityRevision, EntityType, VersionedEntityRef};
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
@@ -502,4 +504,69 @@ fn a_type_can_be_described_without_hard_coding_it() {
     let unknown = block_on(backend.describe_type(&"acme.widget/v1".parse().expect("type")))
         .expect_err("nothing declares that type");
     assert_eq!(unknown.code(), "not_found");
+}
+
+#[test]
+fn retiring_a_review_result_is_a_transition_and_not_the_edit_its_immutability_forbids() {
+    // `review-result.yaml` declares one transition, `active -> archived`, and the kernel refused it
+    // with the guard meant for edits — so a review recorded through the CLI could be neither
+    // completed nor retired (`story:review-result-cannot-be-authored`). Immutability is about what
+    // the record *says*; retiring it says nothing new, and `ArchiveEntity` already allowed it.
+    let backend = MemoryBackend::new();
+    let review = create(
+        &backend,
+        "cmd-1",
+        1_000,
+        "aep.review-result/v1",
+        "ep://acme/payments/review-result/design-passkeys",
+        "Design review",
+        "active",
+    );
+
+    let edit = || {
+        Command::UpdateEntity(UpdateEntity {
+            target: review.unversioned(),
+            changes: [("title".to_owned(), Node::from("Improved after the fact"))].into(),
+        })
+    };
+    let refused =
+        block_on(backend.execute(envelope("cmd-2", edit(), context("req-2", "key-2", 2_000))))
+            .expect_err("a review that can be edited after the fact is not evidence");
+    assert!(
+        matches!(refused, CommandError::Conflict { .. }),
+        "the refusal names the kind's immutability: {refused}"
+    );
+
+    let retire = Command::MoveStatus(MoveStatus {
+        target: review.unversioned(),
+        to: "archived".to_owned(),
+        expected_revision: None,
+        decided_on: None,
+    });
+    let result =
+        block_on(backend.execute(envelope("cmd-3", retire, context("req-3", "key-3", 3_000))))
+            .expect("retiring a review is a transition its lifecycle declares, not an edit");
+    assert_eq!(result.outcome, CommandOutcome::Accepted);
+
+    let after = block_on(backend.get(&review.unversioned(), QueryConsistency::Current))
+        .expect("a retired review is still readable");
+    assert_eq!(after.metadata.revision.get(), 2, "one write, one revision");
+    let Node::Map(fields) = &after.data else {
+        panic!("the body is a mapping");
+    };
+    assert_eq!(fields.get("status"), Some(&Node::from("archived")));
+    assert_eq!(
+        fields.get("title"),
+        Some(&Node::from("Design review")),
+        "retiring changed nothing the record says"
+    );
+
+    // The guard moved nowhere: it stopped covering a move, and still covers every edit.
+    let refused_again =
+        block_on(backend.execute(envelope("cmd-4", edit(), context("req-4", "key-4", 4_000))))
+            .expect_err("retired, and still not editable");
+    assert!(
+        matches!(refused_again, CommandError::Conflict { .. }),
+        "{refused_again}"
+    );
 }

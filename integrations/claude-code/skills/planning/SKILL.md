@@ -52,8 +52,10 @@ story:credential-store moved draft -> proposed (revision 2)
 
 **2. Every store mutation uses `protocol artifact`; never edit a store file directly.** Creation,
 relations, status, and prose use `new`, `relate`, `move`, and `body` respectively. Supply the complete
-body from a file or standard input; the CLI preserves frontmatter, validates the store, and bumps the
-revision once when bytes change.
+body from a file or standard input — `body --from` after creation, or `new … --from` at creation; the
+CLI preserves frontmatter, validates the store, and bumps the revision once when bytes change. For a
+kind whose records are immutable (`review-result` refuses `body`), `new --from` is the only way a
+body arrives, and `move --to archived` is the only way one is retired.
 
 ```console
 $ protocol artifact body story:credential-store --from story-body.md
@@ -179,8 +181,9 @@ $ protocol artifact new story registration-ceremony \
 created story:registration-ceremony (draft) at .engineering/planning/story/registration-ceremony.md
 ```
 
-Then write each story's complete body through `protocol artifact body <id> --from <path|->` — one
-acceptance statement per story, because guardrail 2 makes the CLI the store's sole writer.
+Then write each story's complete body through `protocol artifact body <id> --from <path|->` — or
+hand it to `new … --from <path|->` in the first place — one acceptance statement per story, because
+guardrail 2 makes the CLI the store's sole writer.
 
 Then the one move the operator asked for, and the check:
 

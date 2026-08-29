@@ -54,7 +54,7 @@ from, default `.`).
 
 | Command | Does |
 |---|---|
-| `protocol artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--relate rel:id]` | writes one file, at the path the id determines; refuses to overwrite an existing one |
+| `protocol artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--relate rel:id] [--from <path\|->]` | writes one file, at the path the id determines, with the body from `--from` or else the kind's template; refuses to overwrite an existing one. `--from` is the only way a body reaches an immutable kind such as `review-result`, which refuses `body` |
 | `protocol artifact move <id> --to <status>` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead — or, when the rung is on the ladder but its evidence has not been recorded, says **which kind** is missing and how many. See [Lifecycles, decided as data](../concepts/lifecycles.md) |
 | `protocol artifact relate <id> <relation> <target>` | adds one edge |
 | `protocol artifact body <id> --from <path\|->` | replaces the complete markdown body while preserving CLI-owned frontmatter; changed bytes bump one revision, identical bytes do nothing |

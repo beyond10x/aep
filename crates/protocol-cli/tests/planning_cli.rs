@@ -29,6 +29,28 @@ fn protocol_in(directory: &Path, args: &[&str]) -> Output {
         .expect("the protocol binary runs")
 }
 
+/// Runs `protocol` with `args` against the repository's own tree, with `input` on standard input.
+fn protocol_with_stdin(args: &[&str], input: &str) -> Output {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(args)
+        .current_dir(root())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the protocol binary runs");
+    child
+        .stdin
+        .take()
+        .expect("a piped standard input")
+        .write_all(input.as_bytes())
+        .expect("the body is written");
+    child.wait_with_output().expect("the protocol binary exits")
+}
+
 /// Runs `protocol` with an isolated source cache.
 fn protocol_in_with_cache(directory: &Path, cache: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_protocol"))
@@ -1058,4 +1080,170 @@ fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
         ),
         "{text}"
     );
+}
+
+// One record through its whole life: created with a body, refused an edit, retired, refused the way
+// back. Splitting it would lose that each refusal is about the state the previous step left.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
+    // The second adopter's finding (`story:review-result-cannot-be-authored`): `new` took no body,
+    // `body` was refused as immutable, and `move --to archived` — the one transition the kind's
+    // lifecycle declares — was refused by the same guard. Three refusals, no legal path, and the
+    // review ended up in a `docs/reviews/` directory the kind exists to replace.
+    let store = scratch("aep-planning-review-result");
+    // Beside the store, not in it: a loose markdown file inside the tree is a document that cannot
+    // be read, and `new` refuses to write into a store it cannot read whole.
+    let drafts = scratch("aep-planning-review-result-drafts");
+    let review = drafts.join("review.md");
+    write(
+        &review,
+        "# Backlog against the objectives\n\nEvery epic names an objective; two objectives have no \
+         epic.\n",
+    );
+    let revised = drafts.join("revised.md");
+    write(
+        &revised,
+        "# Backlog against the objectives\n\nOn reflection, all fine.\n",
+    );
+
+    // A review says what it reviews, or `validate` refuses it as an empty declaration.
+    let subject = protocol(&[
+        "artifact",
+        "new",
+        "epic",
+        "objectives",
+        "--title",
+        "Objectives",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&subject), 0, "{}", stderr(&subject));
+
+    let created = protocol(&[
+        "artifact",
+        "new",
+        "review-result",
+        "backlog-vs-objectives",
+        "--title",
+        "Backlog against the objectives",
+        "--relate",
+        "reviews:epic:objectives",
+        "--from",
+        printable(&review),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert!(
+        stdout(&created).contains("(active)"),
+        "a review is recorded, never drafted: {}",
+        stdout(&created)
+    );
+    let written = store.join("review-result/backlog-vs-objectives.md");
+    let text = std::fs::read_to_string(&written).expect("readable");
+    assert!(
+        text.contains("two objectives have no epic"),
+        "the body did not arrive with the record: {text}"
+    );
+
+    // Immutable, still: the body that arrived is the body it keeps.
+    let edited = protocol(&[
+        "artifact",
+        "body",
+        "review-result:backlog-vs-objectives",
+        "--from",
+        printable(&revised),
+        "--store",
+        printable(&store),
+    ]);
+    assert_ne!(code(&edited), 0, "a review was edited after the fact");
+    let said = format!("{}{}", stdout(&edited), stderr(&edited));
+    assert!(said.contains("immutable"), "the refusal says why: {said}");
+    let text = std::fs::read_to_string(&written).expect("readable");
+    assert!(
+        text.contains("two objectives have no epic") && !text.contains("all fine"),
+        "a refused edit changed the file: {text}"
+    );
+
+    // The one transition its lifecycle declares, and the move the old guard closed.
+    let retired = protocol(&[
+        "artifact",
+        "move",
+        "review-result:backlog-vs-objectives",
+        "--to",
+        "archived",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(
+        code(&retired),
+        0,
+        "{}{}",
+        stdout(&retired),
+        stderr(&retired)
+    );
+    assert!(
+        stdout(&retired).contains("moved active -> archived"),
+        "{}",
+        stdout(&retired)
+    );
+
+    // And the ladder, not the guard, is what refuses the way back.
+    let way_back = protocol(&[
+        "artifact",
+        "move",
+        "review-result:backlog-vs-objectives",
+        "--to",
+        "active",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&way_back), 1, "archived is terminal");
+    let said = format!("{}{}", stdout(&way_back), stderr(&way_back));
+    assert!(
+        said.contains("review-result:backlog-vs-objectives is archived"),
+        "{said}"
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+}
+
+#[test]
+fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
+    let store = scratch("aep-planning-new-stdin");
+    let created = protocol_with_stdin(
+        &[
+            "artifact",
+            "new",
+            "story",
+            "demo",
+            "--title",
+            "Demo",
+            "--from",
+            "-",
+            "--store",
+            printable(&store),
+        ],
+        "# Story: Demo\n\n## Outcome\n\nOne sentence, and it arrived with the record.\n",
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+
+    let text = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
+    assert!(
+        text.contains("it arrived with the record"),
+        "the body on standard input was not written: {text}"
+    );
+    assert!(
+        !text.contains("Starting point for a `story` artifact"),
+        "the template was written over the body that was handed in: {text}"
+    );
+    assert!(
+        text.contains("revision: 1"),
+        "one write, one revision: {text}"
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 }

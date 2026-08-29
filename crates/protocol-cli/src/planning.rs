@@ -1104,6 +1104,14 @@ pub(crate) struct NewArgs {
     /// and every artifact id does.
     #[arg(long = "relate")]
     relate: Vec<String>,
+    /// Read the complete body from this UTF-8 file; `-` reads standard input.
+    ///
+    /// Without it the kind's template is the body, to be replaced later with `body`. That later
+    /// step does not exist for an immutable kind — a `review-result` refuses every edit after the
+    /// fact, which is what makes it evidence — so for one of those the body has to arrive with the
+    /// record or never arrive at all, and this is how it arrives.
+    #[arg(long, value_name = "PATH")]
+    from: Option<PathBuf>,
 }
 
 /// How to render the plan's graph.
@@ -1502,7 +1510,13 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
             ));
     }
 
-    let body = template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title));
+    // The body arrives with the record when the caller has one. It matters most for the kind that
+    // cannot take one later: `body` is refused on a `review-result` by design, so without this the
+    // only review `new` could record was the template.
+    let body = match &args.from {
+        Some(from) => read_body(from)?,
+        None => template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title)),
+    };
     let document = PlanningDocument::new(frontmatter, body);
 
     // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
@@ -1878,19 +1892,27 @@ fn update_through_a_command(
     Ok(())
 }
 
-/// `protocol artifact body`
-fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
-    let id = artifact_id(id)?;
-    let body = if from == Path::new("-") {
+/// The complete body a verb was handed: a file, or standard input when `from` is `-`.
+///
+/// Shared by `new --from` and `body --from`, so the two moments a body can reach the store read it
+/// the same way, and a body that arrives at birth is the bytes it would have been a revision later.
+fn read_body(from: &Path) -> Result<String> {
+    if from == Path::new("-") {
         let mut body = String::new();
         std::io::stdin()
             .read_to_string(&mut body)
-            .context("reading the replacement body from standard input")?;
-        body
+            .context("reading the body from standard input")?;
+        Ok(body)
     } else {
         std::fs::read_to_string(from)
-            .with_context(|| format!("reading the replacement body from {}", from.display()))?
-    };
+            .with_context(|| format!("reading the body from {}", from.display()))
+    }
+}
+
+/// `protocol artifact body`
+fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let body = read_body(from)?;
 
     let mut opened = open(&args.location, true)?;
     let not_here = opened.missing(&id);

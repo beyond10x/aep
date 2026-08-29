@@ -315,11 +315,13 @@ fn apply_valid(
         }
 
         Command::MoveStatus(move_status) => {
-            // The same guard `UpdateEntity` carries, and it was missed: both write the same
-            // `status` key, so without it a **review result** — the one kind `is_mutable` refuses —
-            // became editable after the fact through the new command, which is the whole reason
-            // that kind is immutable.
-            require_mutable(store, &move_status.target)?;
+            // **Not** the guard `UpdateEntity` carries. It was here once, on the argument that both
+            // commands write the `status` key — and it closed the one transition an immutable
+            // kind's lifecycle declares: `review-result.yaml` says `active -> archived`, this
+            // refused it, and `ArchiveEntity` above retired the same record without a word. A move
+            // is a transition the engine already decided against the kind's ladder; an edit is a
+            // change to what the record *says*, and only the second is what immutability forbids.
+            // A review-result is retired here and edited nowhere.
             // The caller's assertion about what it read. Every other revision-guarded command
             // carries a `VersionedEntityRef` and reaches `require_revision` through it; this one
             // states the revision on the payload, and `CommandEnvelope::new` does not copy it — so

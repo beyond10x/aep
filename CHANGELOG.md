@@ -141,6 +141,17 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **A `review-result` can be recorded with its body, and retired.** Found by the second adopter
+  (`story:review-result-cannot-be-authored`): `protocol artifact new` took no body, `body` refused
+  the kind as immutable, and `move --to archived` — the one transition
+  `artifacts/lifecycles/review-result.yaml` declares — was refused by the same guard, so a review
+  recorded through the CLI was an empty record nobody could complete or retire. Now
+  `protocol artifact new … --from <path|->` writes the body with the record, for every kind; a move
+  on an immutable kind is decided by its lifecycle alone, so `active -> archived` succeeds and the
+  way back is refused by the ladder; `body` on one stays refused. `protocol artifact --help` no
+  longer says an unwanted item is deleted with `rm` — it is retired with `move --to archived` — and
+  `validate`'s deletion finding names that command and the recovery.
+
 * **`protocol workflow flow --map` no longer takes a step map and throws it away.** The flag was
   accepted, its own help promised that each node would carry *what a harness actually does in that
   state*, and the projected document came out identical with it and without it — every node holding
