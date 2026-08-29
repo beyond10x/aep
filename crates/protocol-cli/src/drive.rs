@@ -1540,7 +1540,10 @@ impl CliExecutors {
                 &step.context,
                 prompt,
                 context.tools,
-                hooks,
+                OperatorFiles {
+                    hooks,
+                    plugin_dirs: &self.plugin_dirs,
+                },
             ),
         }
     }
@@ -3793,6 +3796,19 @@ pub(crate) fn write_scope_word(scope: WriteScope) -> &'static str {
 /// entries. Asking for confinement here would turn every driven b10x step into a launch refusal;
 /// not asking for it makes the limitation visible where it can be acted on, in [`b10x_preflight`]
 /// before the run and in the session-start audit during it.
+/// The files the operator handed this run, as one value.
+///
+/// Grouped for the reason `Confinement` groups its own: two more positional paths on a function
+/// that already takes six is a call site nobody can read, and these two are one decision — what
+/// the operator gave this step that the step did not go and find.
+#[derive(Debug, Clone, Copy)]
+struct OperatorFiles<'a> {
+    /// The content rule consulted before every call, or none.
+    hooks: Option<&'a Path>,
+    /// Plugin directories whose skills the run may load by name.
+    plugin_dirs: &'a [PathBuf],
+}
+
 fn b10x_argv(
     options: &B10xOptions,
     working_directory: &Path,
@@ -3800,7 +3816,7 @@ fn b10x_argv(
     context_files: &[String],
     prompt: &str,
     config: &ToolConfig,
-    hooks: Option<&Path>,
+    operator: OperatorFiles<'_>,
 ) -> Vec<String> {
     let mut argv = vec![
         METAHARNESS_BINARY.to_owned(),
@@ -3880,7 +3896,7 @@ fn b10x_argv(
     // paths*; the store's rule is about *which fields* — a step legitimately writes under
     // `.engineering/planning`, and must not hand-edit the frontmatter the CLI owns. Without this the
     // native arm's whole enforcement is which tools exist, and `file_write` has to exist.
-    if let Some(hooks) = hooks {
+    if let Some(hooks) = operator.hooks {
         argv.push("--hooks".to_owned());
         argv.push(hooks.display().to_string());
     }
@@ -3895,6 +3911,15 @@ fn b10x_argv(
     for file in context_files {
         argv.push("--context".to_owned());
         argv.push(file.clone());
+    }
+    // **The same directories the vendor arm is given.** The loop reads the skills half of the
+    // vendor's on-disk plugin format, so a step here is offered the same library rather than
+    // having to discover the CLI's own `skill load` verb for itself. What a dropped `--plugin-dir`
+    // costs is on the record: run W4-2 lost all eight of its post-fix sessions to one, running
+    // unenforced while looking clean.
+    for directory in operator.plugin_dirs {
+        argv.push("--plugin-dir".to_owned());
+        argv.push(directory.display().to_string());
     }
     argv.push("-p".to_owned());
     argv.push(prompt.to_owned());
@@ -5360,7 +5385,10 @@ mod tests {
             &[],
             "do the thing",
             &executing,
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         let allowed: Vec<&String> = argv
             .windows(2)
@@ -5422,7 +5450,10 @@ mod tests {
             &[],
             "do the thing",
             &reading_only,
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         assert!(
             !quiet.iter().any(|word| word == "--allow-program"),
@@ -5498,7 +5529,10 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         let joined = confined.join(" ");
         assert!(
@@ -5518,7 +5552,10 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         assert!(
             !ordinary.join(" ").contains("--substrate"),
@@ -5713,7 +5750,10 @@ mod tests {
             &step.context,
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         assert_eq!(argv[0], "metaharness");
         assert_eq!(argv[1], "run");
@@ -5765,7 +5805,10 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         assert!(authenticated
             .windows(2)
@@ -5840,7 +5883,10 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         let after = |flag: &str| {
             argv.windows(2)
@@ -5870,7 +5916,10 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
-            None,
+            OperatorFiles {
+                hooks: None,
+                plugin_dirs: &[],
+            },
         );
         assert!(
             !sourceless
@@ -6988,6 +7037,16 @@ profile: test.reading
                 "**=denied",
                 "--context",
                 "integrations/claude-code/skills/planning/SKILL.md",
+                // **The plugin, on this arm too.** The loop reads the skills half of the vendor's
+                // on-disk format, so the step is offered the same library the vendor arm is
+                // rather than having to find the CLI's own `skill load` verb by itself.
+                //
+                // Note what this leaves standing: the `--context` above hands the same document
+                // eagerly, on every turn, which is what the map did while there was no other way
+                // to get it there. Now that there is, that line is a per-turn cost for a document
+                // the model can ask for — worth dropping from the map, and its own change.
+                "--plugin-dir",
+                "/plugins/claude-code",
                 "-p",
                 "do the thing",
             ],
