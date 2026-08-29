@@ -3747,7 +3747,11 @@ fn metaharness_argv(
 /// later fails to compile here instead of reaching an argv as an empty word. It coincides with the
 /// map's own kebab-case wire form and that is not an accident worth relying on silently —
 /// `the_write_scope_words_are_the_ones_the_step_map_is_written_in` asserts the two agree.
-fn write_scope_word(scope: WriteScope) -> &'static str {
+///
+/// `pub(crate)` because [`crate::flow`] renders the same scope into a projected flow node, and a
+/// projection that spelled a scope differently from the run it describes would be a document that
+/// looks like the thing it is not.
+pub(crate) fn write_scope_word(scope: WriteScope) -> &'static str {
     match scope {
         WriteScope::Allowed => "allowed",
         WriteScope::PartialOnly => "partial-only",
