@@ -56,6 +56,7 @@ def score(path):
     wasted = collections.Counter()
     causes = collections.Counter()
     turns, cost, errors = {}, {}, 0
+    tokens_in, tokens_cached, tokens_out = {}, {}, {}
     for name in sorted(os.listdir(where)):
         if not name.endswith(".jsonl"):
             continue
@@ -79,6 +80,16 @@ def score(path):
                             break
                     else:
                         causes["other refusal"] += 1
+            elif k == "warning" and e.get("code") == "unpublished-tool":
+                # **The native loop refuses inside itself, and this scorer could not see it.** A
+                # `b10x` run publishes three verbs and routes everything through `tool_invoke`; a
+                # model that calls a catalogue entry by its own name gets a warning here and an
+                # errored `tool.result` whose content is null, so neither the `tool.decided` branch
+                # (there is no decision — nobody asked the driver) nor the marker match below
+                # counted it. Run NATIVE-1/1 scored 0.0% waste with 10 of its 82 calls thrown away
+                # exactly this way, which is an instrument agreeing with the arm it measures.
+                wasted[state] += 1
+                causes["the loop published no such tool"] += 1
             elif k == "tool.result" and e.get("is_error"):
                 content = str(e.get("content") or "")
                 if "No such tool available" in content:
@@ -87,6 +98,16 @@ def score(path):
                 elif any(marker in content for marker in CLI_REFUSALS):
                     wasted[state] += 1
                     causes["the CLI refused the invocation"] += 1
+            elif k == "usage":
+                # Input and cached-input, because the cost of a stateless loop is the history it
+                # re-sends: a run whose cache hit rate decays with conversation length pays
+                # quadratically, and waste alone will not show it moving.
+                u = e.get("usage") or {}
+                tokens_in[state] = tokens_in.get(state, 0) + (u.get("input_tokens") or 0)
+                tokens_cached[state] = tokens_cached.get(state, 0) + (
+                    u.get("cache_read_input_tokens") or 0
+                )
+                tokens_out[state] = tokens_out.get(state, 0) + (u.get("output_tokens") or 0)
             elif k == "session.ended":
                 # **Accumulated, never assigned.** A state can be entered more than once — a retry,
                 # a resume, a `verify -> implement` cycle — and every attempt writes its own
@@ -98,7 +119,8 @@ def score(path):
                 if e.get("is_error"):
                     errors += 1
     return {"where": where, "calls": calls, "wasted": wasted, "causes": causes,
-            "turns": turns, "cost": cost, "errors": errors}
+            "turns": turns, "cost": cost, "errors": errors,
+            "in": tokens_in, "cached": tokens_cached, "out": tokens_out}
 
 
 def report(name, s):
@@ -116,14 +138,35 @@ def report(name, s):
     turns = sum(s["turns"].values())
     spend = sum(s["cost"].values())
     print(f"  waste {rate:.1f}%   sessions errored {s['errors']}")
+    # **What the history costs.** Reported beside waste for the reason the cost line below is: the
+    # dominant spend of a stateless loop is the conversation it re-sends every turn, and a cache
+    # that stops covering the tail shows up here and nowhere else. Run NATIVE-1/1's cache hit rate
+    # fell 66.2% -> 12.5% as the conversation grew, and its longest state sent 1.33M input tokens to
+    # produce 10.5k output.
+    total_in = sum(s["in"].values())
+    if total_in:
+        cached = sum(s["cached"].values())
+        print(f"  {total_in:,} input token(s), {100.0 * cached / total_in:.1f}% cached, "
+              f"{sum(s['out'].values()):,} output")
+        for state in sorted(s["in"]):
+            got = s["in"][state]
+            if got:
+                print(f"     {state:22} {got:9,} in  {100.0 * s['cached'][state] / got:5.1f}% cached"
+                      f"  {s['out'].get(state, 0):7,} out")
     # **Cost and turns are printed beside waste, always, and the reason is on this line.** The first
     # version of this scorer reported waste alone. Admitting `grep` to a reading state cut waste from
     # 17.2% to 3.0% and multiplied the cost of one state by 3.6, and the instrument showed only the
     # half that flattered the change. A score that reports the number its author set out to move,
     # and not the one that pays the bill, is an instrument that agrees with whoever built it.
-    if turns:
+    if turns and spend:
         print(f"  ${spend:.2f} over {turns} turns — ${spend / turns:.3f}/turn, "
               f"${spend / max(total, 1):.3f}/call")
+    elif turns:
+        # **Unpriced is not free, and printing $0.000/turn said it was.** A `b10x` run launched
+        # without `--prices` reports no cost at all, and the previous line rendered that as three
+        # zeroes beside a real turn count — the one shape a reader skims as "this arm is cheap".
+        print(f"  cost unpriced over {turns} turns — no rate card reached this run, "
+              f"so nothing here says what it spent")
     if s["causes"]:
         for cause, n in s["causes"].most_common():
             print(f"     {n:4}  {cause}")

@@ -708,6 +708,31 @@ answer *what had shipped as of this commit*; batching tags in one push is safe a
 Written 2026-08-29, after a night of driving this repository with itself. Each line is a mistake
 that was made, not a principle that sounded good.
 
+**Every process you start is yours until you have watched it die.** `kill $VAR` where `VAR` came
+from `jobs -p` in a non-interactive shell kills nothing: there are no jobs, `kill` gets no argument,
+and when that shell exits its children are reparented to init and run forever. Twelve busy-loop
+spinners started that way held four cores at 99% for thirty-four minutes on 2026-08-29 and were
+found by the operator, not by the agent that started them — which had already printed "hogs killed"
+on the strength of an `echo`. Start long-lived things under `systemd-run --user --scope --slice=…`
+so `systemctl --user stop` takes the whole tree, or wrap them in `timeout`; then **verify with
+`kill -0` or `ps` that they are gone** and report the check, not the intent.
+
+**A wait condition must not match the waiter.** `until ! pgrep -f "protocol drive run"; do sleep
+20; done` never exits: the waiting shell's own command line contains that string, so `pgrep` finds
+itself and the loop spins until something kills it. Four such monitors were left running on
+2026-08-29, in a session that had already written the rule above, and the work each was waiting for
+had finished before the first one was started. Match on something the waiter cannot contain — a pid
+from `$!`, a marker file the job touches on exit — or use the harness's own completion notification
+and do not poll at all. Then check the exit is real: `ps` for the job, not `echo` for yourself.
+
+**Load is not a proof, and it is the expensive way to be wrong.** The failing-under-load hypothesis
+about a flaky test was "attacked" by spawning CPU hogs and re-running twenty times, which
+demonstrated nothing either way and cost half an hour of the machine. The property was
+timing-dependent, so the proof was to *change the timing*: slow the fixture's writer 25x and the
+same failure becomes deterministic in 50 ms on an idle machine, with a mutation that turns it red
+every run. When something is intermittent, find the parameter it depends on and move it. Reach for
+brute force only when there is no such parameter, and say so.
+
 **Kill a run the moment you know it cannot succeed.** Not after the next state, not after the report
 — the moment. A run whose session is hunting for a tool that will never be published, or whose task
 document is the wrong one, is spending real money to produce a record nobody wants. Diagnosing it
