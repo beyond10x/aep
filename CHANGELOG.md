@@ -11,6 +11,20 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **`regex:` matchers work in a `trace-spec/1` document; they used to be refused by name.** Write
+  `args: {command: {regex: "(&&|\\|\\||;)\\s*\\w"}}` and the checker runs it, with the same
+  three-valued reading as every other matcher — an argument the call does not carry is still not a
+  match, and a field a transcript does not record is still `unk` rather than a failure. **A `regex:`
+  searches the field, where a `glob:` has to be the whole of it**, so anchoring is `^` and `$` and
+  yours to write; and `.`, `+`, `|` and `(` are metacharacters in a pattern and literals in a glob.
+  Nothing you have already written changed meaning: a `glob:` is still anchored, still literal, and
+  still digests to the same value, so no specification was renamed by this. `TRACE-SPEC-008` has
+  not gone away — it still means *this matcher cannot be run* and now fires on a pattern the engine
+  will not compile, at validation, quoting the engine's complaint, before a transcript is opened.
+  A pattern that matches every text there is (`{regex: ".*"}`) is refused under `text.matches` for
+  the same reason `{glob: "*"}` always was; `{regex: "^$"}` — *the final message is empty* — is
+  not, because a run can fail it.
+
 * **A story says which objective it serves, and `validate` holds it to that.** A fourteenth
   relation, `serves`, points at an objective — a `vision` artifact — and nothing else (`validate`
   refuses a `serves` into any other kind). Where a store declares at least one `vision`, every

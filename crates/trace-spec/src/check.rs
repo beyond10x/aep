@@ -1589,7 +1589,7 @@ mod tests {
         AdapterRef, EventKind, McpServer, OpaqueEvent, RateLimitState, RunOutcome, RunUsage,
         ToolResult, TraceEvent,
     };
-    use trace_domain::matcher::{FieldMatcher, ScalarValue};
+    use trace_domain::matcher::{FieldMatcher, Pattern, ScalarValue};
 
     use super::*;
     use crate::report::Verdict;
@@ -2614,6 +2614,70 @@ mod tests {
             evaluate(&kind, &truncated).verdict(),
             Verdict::Unknown,
             "a truncated transcript is not a bad result"
+        );
+    }
+
+    #[test]
+    fn a_regex_matcher_reads_three_valued_exactly_as_a_glob_does_and_absence_is_never_a_failure() {
+        // The acceptance the `regex` adoption owed: a new matcher must not have bought a new
+        // truth table. `Unknown` is not `False` (invariant 5) — a field the transcript does not
+        // record is a question nobody can answer, and reading it as a failed match would let a
+        // harness that renamed a key look like an agent that misbehaved.
+        let regex_over = |field: &str, pattern: &str| {
+            let mut matcher = ResultMatcher::default();
+            matcher.fields.insert(
+                field.to_owned(),
+                FieldMatcher::Regex(Pattern::new(pattern).expect("a pattern")),
+            );
+            ExpectationKind::ToolResultMatches {
+                selector: CallSelector::tool("Bash"),
+                result: matcher,
+            }
+        };
+
+        let recorded = ir(vec![
+            call_event(1, None, "a", "Bash", r#"{"command":"ls"}"#),
+            result_event(2, None, "a", Some(false), r#"{"stdout":"3 files"}"#),
+        ]);
+        assert_eq!(
+            evaluate(&regex_over("stdout", r"^\d+ files$"), &recorded).verdict(),
+            Verdict::Ok,
+            "the field is there and the pattern holds"
+        );
+        assert_eq!(
+            evaluate(&regex_over("stdout", r"^\d+ dirs$"), &recorded).verdict(),
+            Verdict::Gap,
+            "the field is there and the pattern does not hold, which is an observation"
+        );
+        assert_eq!(
+            evaluate(&regex_over("stderr", r".+"), &recorded).verdict(),
+            Verdict::Unknown,
+            "the field is not there — nobody looked, which is not the same finding as it is broken"
+        );
+
+        // And the same three answers from a glob over the same three questions, because the point
+        // is that they are the same three and not that a regex has any of its own.
+        let glob_over = |field: &str, pattern: &str| {
+            let mut matcher = ResultMatcher::default();
+            matcher
+                .fields
+                .insert(field.to_owned(), FieldMatcher::Glob(pattern.to_owned()));
+            ExpectationKind::ToolResultMatches {
+                selector: CallSelector::tool("Bash"),
+                result: matcher,
+            }
+        };
+        assert_eq!(
+            evaluate(&glob_over("stdout", "* files"), &recorded).verdict(),
+            Verdict::Ok
+        );
+        assert_eq!(
+            evaluate(&glob_over("stdout", "* dirs"), &recorded).verdict(),
+            Verdict::Gap
+        );
+        assert_eq!(
+            evaluate(&glob_over("stderr", "*?"), &recorded).verdict(),
+            Verdict::Unknown
         );
     }
 

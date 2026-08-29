@@ -38,7 +38,7 @@
 //! | every kind's own parameters can decide something | `TRACE-SPEC-005` |
 //! | every id is a stable identifier | `TRACE-SPEC-006` |
 //! | every bound can be satisfied | `TRACE-SPEC-007` |
-//! | no matcher this build does not implement was asked for | `TRACE-SPEC-008` |
+//! | every matcher this build is asked to run can be run | `TRACE-SPEC-008` |
 //!
 //! `TRACE-SPEC-005` is the one worth reading the code for, because "can decide something" is a
 //! judgement and every call of it is written down beside the check that makes it. A `tool.absent`
@@ -62,14 +62,18 @@
 //! describes the canonical spelling alone, because `schemars` reads `rename` and not `alias`;
 //! that is a schema which is stricter than the reader, never looser, which is the safe direction.
 //!
-//! # `regex:` deserializes and is then refused
+//! # `regex:` is compiled here, once, before a transcript is opened
 //!
-//! Design § 3.4 lists a `regex` matcher and this build has no regular-expression engine to run
-//! one with. It is accepted by the *parser* and refused by *validation*
-//! ([`TraceCode::SpecUnsupportedMatcher`]) with a message naming `glob` as what to write instead.
-//! Both alternatives are worse: refusing it as an unknown field would tell the author that
-//! `regex` is a typo, and reading it as `contains` would produce a specification that means
-//! something other than what it says.
+//! Design § 3.4 lists a `regex` matcher and this build runs one. The pattern is compiled during
+//! *validation*, not on first use, so a document with an unclosed group is refused
+//! ([`TraceCode::SpecUnusableMatcher`]) beside every other defect in the same pass — where
+//! compiling lazily would report it once per event, in the middle of a report, after the run
+//! being judged had already been read.
+//!
+//! What that refusal is **not** is the old one. Until `regex` was adopted this parser accepted
+//! `regex:` and validation refused it by name under the same code, naming `glob` as what to write
+//! instead; the code's meaning — *this matcher cannot be run* — is unchanged and its cause is
+//! narrower.
 //!
 //! # Errors accumulate
 //!
@@ -81,7 +85,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::code::{TraceCode, ValidationErrors};
 use crate::matcher::{
-    CallSelector, CountBound, FieldMatcher, RangeBound, ResultMatcher, ScalarValue,
+    CallSelector, CountBound, FieldMatcher, Pattern, RangeBound, ResultMatcher, ScalarValue,
 };
 use crate::spec::{
     Aggregate, ApiErrorStatus, Expectation, ExpectationKind, OnUnknown, Severity, ToolAvailability,
@@ -248,8 +252,8 @@ pub struct RawRangeBound {
 /// A matcher over one named field as written: `{contains: "protocol artifact new"}`.
 ///
 /// Externally tagged, so a matcher name this build does not know is refused by name rather than
-/// defaulted away — and so `regex:` can be *read* and then refused with advice, which an
-/// unknown-field refusal could not do.
+/// defaulted away — and so a `regex:` whose pattern does not compile is refused with the engine's
+/// own complaint, which an unknown-field refusal could not carry.
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RawFieldMatcher {
@@ -257,12 +261,13 @@ pub enum RawFieldMatcher {
     Exact(String),
     /// `{contains: "…"}` — a substring of the field.
     Contains(String),
-    /// `{glob: "…"}` — `*` for any run of characters, `?` for one.
+    /// `{glob: "…"}` — `*` for any run of characters, `?` for one, anchored at both ends.
     Glob(String),
     /// `{equals: <bool|integer|string>}` — a scalar field, compared like with like.
     Equals(RawScalar),
-    /// `{regex: "…"}` — accepted by the parser and refused by validation
-    /// ([`TraceCode::SpecUnsupportedMatcher`]), with `glob` named as what to write instead.
+    /// `{regex: "…"}` — a regular expression searched for **anywhere** in the field, where a glob
+    /// has to match the whole of it. Compiled at validation; a pattern that will not compile is
+    /// refused with [`TraceCode::SpecUnusableMatcher`].
     Regex(String),
 }
 
@@ -1403,6 +1408,10 @@ fn skill_count(
     Some((skill?, count?))
 }
 
+/// A subject [`matches_every_text`] probes a regular expression with, chosen so that no pattern
+/// anybody writes about a transcript is *about* it: one NUL character.
+const VACUITY_PROBE: &str = "\u{0}";
+
 /// `true` when every text there is satisfies the matcher, the empty one included.
 fn matches_every_text(matcher: &FieldMatcher) -> bool {
     match matcher {
@@ -1410,6 +1419,16 @@ fn matches_every_text(matcher: &FieldMatcher) -> bool {
         FieldMatcher::Glob(pattern) => {
             !pattern.is_empty() && pattern.chars().all(|character| character == '*')
         }
+        // Two probes rather than an analysis of the pattern, and the second one is load-bearing.
+        // A *search* that matches the empty subject matches at position 0 of every subject — so
+        // `{regex: ".*"}` is `{glob: "*"}`'s mistake and is caught — **unless** the pattern
+        // carries an anchor, and `{regex: "^$"}` is *the final message is empty*: a real
+        // expectation, which a run can fail, and which the first probe alone would refuse.
+        //
+        // Not a proof, and the gap is named rather than hidden: a pattern vacuous for some third
+        // reason passes here, exactly as `{glob: "*a*"}` does two arms up. What this catches is
+        // the mistake that is easy to make and invisible in a report.
+        FieldMatcher::Regex(pattern) => pattern.is_match("") && pattern.is_match(VACUITY_PROBE),
         _ => false,
     }
 }
@@ -1945,7 +1964,8 @@ fn result_of(
     usable.then_some(ResultMatcher { fields: matchers })
 }
 
-/// Validates one field matcher, and refuses `regex:` by name.
+/// Validates one field matcher, compiling a `regex:` here so a broken pattern is refused with
+/// every other defect in the document rather than per-event during a run.
 fn matcher_of(
     raw: RawFieldMatcher,
     location: &str,
@@ -1958,19 +1978,25 @@ fn matcher_of(
         RawFieldMatcher::Equals(value) => {
             scalar_of(value, location, errors).map(FieldMatcher::Equals)
         }
-        RawFieldMatcher::Regex(pattern) => {
-            errors.refuse(
-                TraceCode::SpecUnsupportedMatcher,
-                location.to_owned(),
-                format!(
-                    "`regex: {pattern:?}` is a matcher this build does not implement, and it is \
-                     refused by name rather than read as `contains:` — which would be a \
-                     specification that means something other than what it says. Write `glob:` \
-                     instead: `*` for any run of characters, `?` for one, anchored at both ends"
-                ),
-            );
-            None
-        }
+        RawFieldMatcher::Regex(pattern) => match Pattern::new(&pattern) {
+            Ok(compiled) => Some(FieldMatcher::Regex(compiled)),
+            Err(complaint) => {
+                errors.refuse(
+                    TraceCode::SpecUnusableMatcher,
+                    location.to_owned(),
+                    // The engine's own complaint, verbatim and last, because it names the
+                    // offending position and nothing this crate could write would locate the
+                    // defect better than the parser that met it.
+                    format!(
+                        "`regex: {pattern:?}` is not a regular expression this build can compile, \
+                         so the expectation could never be evaluated. Note that a regex searches \
+                         anywhere in the field, where `glob:` has to match the whole of it — `*` \
+                         alone is a glob and not a pattern. The engine says: {complaint}"
+                    ),
+                );
+                None
+            }
+        },
     }
 }
 
@@ -2203,6 +2229,17 @@ mod tests {
     fn accepted(text: &str) -> TraceSpec {
         read_spec(text).unwrap_or_else(|errors| panic!("this document must validate: {errors}"))
     }
+
+    /// The digest of the one-expectation glob specification in
+    /// `a_glob_serializes_and_digests_exactly_as_it_did_before_a_second_matcher_existed`.
+    ///
+    /// Recomputable by anyone, without running this code:
+    ///
+    /// ```console
+    /// $ printf %s '{"expectations":[{"id":"only","kind":{"expect":"tool.absent","selector":{"args":{"file_path":{"glob":"*/.engineering/planning/*.md"}},"tools":["Edit"]}},"on_unknown":"unknown","severity":"gate","statement":null}],"format":"trace-spec/1","id":"planning-plugin/eval","title":null}' | sha256sum
+    /// ```
+    const GLOB_SPEC_DIGEST: &str =
+        "935cd04eaca6870e46bef165186a955de51d42971386eaa04bf719d797ed140e";
 
     /// The design's own example, in the wire form this build reads.
     const REALISTIC_YAML: &str = r#"
@@ -2563,7 +2600,7 @@ expectations:
              \x20 - id: same-id\n\
              \x20   expect: {tool.called: {tool: Bash, count: {at_least: 5, at_most: 2}}}\n\
              \x20 - id: same-id\n\
-             \x20   expect: {tool.absent: {tool: Edit, args: {file_path: {regex: \"x\"}}}}\n",
+             \x20   expect: {tool.absent: {tool: Edit, args: {file_path: {regex: \"(\"}}}}\n",
         );
         assert_eq!(refused.len(), 4, "{refused}");
         assert_eq!(
@@ -2582,7 +2619,7 @@ expectations:
             "{refused}"
         );
         assert_eq!(
-            refused.count(TraceCode::SpecUnsupportedMatcher),
+            refused.count(TraceCode::SpecUnusableMatcher),
             1,
             "{refused}"
         );
@@ -2656,21 +2693,123 @@ expectations:
     }
 
     #[test]
-    fn a_regex_matcher_is_refused_by_name_and_the_message_says_to_write_a_glob() {
-        let refused = refusals(&one(
+    fn a_regex_matcher_is_compiled_and_carried_through_as_the_pattern_the_author_wrote() {
+        let spec = accepted(&one(
             "{tool.absent: {tool: Edit, args: {file_path: {regex: \"\\\\.md$\"}}}}",
         ));
+        let ExpectationKind::ToolAbsent { selector } = &spec.expectations[0].kind else {
+            panic!("the document declares a `tool.absent`");
+        };
+        let Some(FieldMatcher::Regex(pattern)) = selector.args.get("file_path") else {
+            panic!(
+                "`regex:` must reach the validated document as a regex matcher, not as \
+                   anything else: {selector}"
+            );
+        };
         assert_eq!(
-            refused.count(TraceCode::SpecUnsupportedMatcher),
+            pattern.as_str(),
+            r"\.md$",
+            "the pattern is carried as written, because the specification digest is taken over it"
+        );
+        assert!(pattern.is_match("a/b/story.md"));
+        assert!(
+            !pattern.is_match("a/b/story.markdown"),
+            "`$` anchors the end, which is the author's to spell and not this build's to assume"
+        );
+    }
+
+    #[test]
+    fn a_regex_that_will_not_compile_is_refused_at_validation_with_the_engines_own_complaint() {
+        // The refusal exists so a document that can never be evaluated is stopped before a
+        // transcript is opened, rather than once per event in the middle of a report.
+        let refused = refusals(&one(
+            "{tool.absent: {tool: Edit, args: {file_path: {regex: \"(unclosed\"}}}}",
+        ));
+        assert_eq!(
+            refused.count(TraceCode::SpecUnusableMatcher),
             1,
             "{refused}"
         );
         assert_eq!(refused.len(), 1, "{refused}");
         assert!(
-            refused.as_slice()[0].message.contains("glob"),
-            "a refusal that does not say what to write instead sends the author to the source: \
-             {refused}"
+            refused.as_slice()[0].message.contains("unclosed group"),
+            "the engine's own complaint locates the defect and must survive into the message; \
+             a refusal that only says `invalid` sends the author to the source: {refused}"
         );
+    }
+
+    #[test]
+    fn a_regex_that_matches_every_text_is_refused_and_an_anchored_one_that_looks_like_it_is_not() {
+        // `{regex: ".*"}` is `{glob: "*"}`'s mistake in the other language: a `text.matches` that
+        // can only ever report `ok`.
+        let vacuous = refusals(&one("{text.matches: {regex: \".*\"}}"));
+        assert_eq!(
+            vacuous.count(TraceCode::SpecInvalidExpectation),
+            1,
+            "{vacuous}"
+        );
+
+        // And the one the empty-subject probe alone would have refused wrongly. *The final message
+        // is empty* is a real expectation and a run can fail it.
+        let anchored = accepted(&one("{text.matches: {regex: \"^$\"}}"));
+        let ExpectationKind::TextMatches { matcher } = &anchored.expectations[0].kind else {
+            panic!("the document declares a `text.matches`");
+        };
+        assert!(matcher.matches_text(""), "it holds for the empty message");
+        assert!(
+            !matcher.matches_text("done"),
+            "and fails for a message with anything in it, which is what makes it an expectation"
+        );
+    }
+
+    #[test]
+    fn a_glob_keeps_its_literal_reading_now_that_a_regex_matcher_exists_beside_it() {
+        // The acceptance the adoption owed: an existing specification means exactly what it did.
+        // Every character below is a regular-expression metacharacter and a glob literal, so a
+        // glob quietly re-read as a pattern would pass the first assertion and fail the second.
+        let spec = accepted(&one(
+            "{tool.absent: {tool: Edit, args: {file_path: {glob: \"a.c+d\"}}}}",
+        ));
+        let ExpectationKind::ToolAbsent { selector } = &spec.expectations[0].kind else {
+            panic!("the document declares a `tool.absent`");
+        };
+        let Some(matcher) = selector.args.get("file_path") else {
+            panic!("the selector carries the argument matcher");
+        };
+        assert!(matches!(matcher, FieldMatcher::Glob(_)), "{matcher}");
+        assert!(matcher.matches_text("a.c+d"));
+        assert!(
+            !matcher.matches_text("abcccd"),
+            "`.` and `+` are literal in a glob; read as a pattern this subject would match"
+        );
+        assert!(
+            !matcher.matches_text("xa.c+dy"),
+            "and a glob is anchored at both ends, where a regex of the same text would search"
+        );
+    }
+
+    #[test]
+    fn a_glob_serializes_and_digests_exactly_as_it_did_before_a_second_matcher_existed() {
+        // A specification's digest is its identity — it is what a committed eval matrix names a
+        // specification by — so a new matcher variant that shifted the serialization of the old
+        // ones would silently rename every specification in the repository.
+        //
+        // The matcher's own bytes are asserted beside the digest, and that is what makes the "as
+        // it did before" checkable rather than asserted: `{"glob": "…"}` is serde's externally
+        // tagged form for this variant and depends on nothing but this variant's name and payload,
+        // neither of which moved. A pinned digest with no readable bytes beside it is a constant
+        // the next reader updates to whatever the build now says.
+        let spec = accepted(&one(
+            "{tool.absent: {tool: Edit, args: {file_path: {glob: \"*/.engineering/planning/*.md\"}}}}",
+        ));
+        let ExpectationKind::ToolAbsent { selector } = &spec.expectations[0].kind else {
+            panic!("the document declares a `tool.absent`");
+        };
+        assert_eq!(
+            serde_json::to_string(&selector.args).expect("the matchers serialize"),
+            r#"{"file_path":{"glob":"*/.engineering/planning/*.md"}}"#
+        );
+        assert_eq!(spec.digest, GLOB_SPEC_DIGEST);
     }
 
     #[test]

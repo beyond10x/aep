@@ -2002,6 +2002,7 @@ dependencies = [
 name = "trace-domain"
 version = "0.32.1"
 dependencies = [
+ "regex",
  "schemars",
  "serde",
  "serde_json",

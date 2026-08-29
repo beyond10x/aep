@@ -32,6 +32,27 @@ schemars.workspace = true
 # JSON is YAML.
 serde_yaml.workspace = true
 
+# The `regex:` matcher. Taken rather than refused because it is **already in this workspace's
+# dependency graph** and in the shipped binary's: `jsonschema` takes it as a runtime dependency
+# (`crates/schema-contract/Cargo.toml`), so `cargo tree -i regex` reaches `protocol-cli` today and
+# adopting it here adds no crate, no compile unit and no audit surface — it changes which crates
+# may call the one that is already linked. Considered and refused: `fancy-regex`, which is a
+# backtracking engine and would give up the property the glob matcher was written to keep (a
+# checker reads whatever a transcript happens to contain, and a pattern that can blow up on its
+# input is a checker that hangs on a hostile one); a hand-rolled engine, which the story rules out
+# by name as a dependency written by us with none of the auditing; and continuing to refuse
+# `regex:`, which stops being free the moment a committed specification wants alternation —
+# `conformance/trace/expectations.denial-step.trace.yaml` states *no shell call chained a second
+# command onto a permitted one* and can only spell it `contains: "&& sed"`.
+#
+# `1` and not a narrower requirement so cargo resolves the one version `jsonschema` already pins.
+# Default features stay on, and cutting them here would be a claim the build does not honour:
+# cargo unions features across a graph, and the same `regex` is built with its defaults for
+# `jsonschema` in every workspace build. What the defaults are is the point — the `perf` and
+# `unicode` tables of a **non-backtracking** engine, linear in the length of the subject, with no
+# I/O and no network.
+regex = "1"
+
 # The transcript digest and the specification digest: SHA-256, 64 hex characters, the same
 # construction and the same full width as `ess-gen`'s specification digest and `infra-compiler`'s
 # IR digest (gap register D-4 settled the width). Same version and same spelling as those two,

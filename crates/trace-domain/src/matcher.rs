@@ -10,19 +10,32 @@
 //! does. This repository has met that fork once and chose projection; inventing an expression
 //! language here would take the other branch by accident.
 //!
-//! # `regex` is refused by name, and `glob` is what to write instead
+//! # `glob` is anchored, `regex` searches, and the difference is the thing to know
 //!
-//! Design § 3.4 lists a `regex` matcher. This build does not implement one and does not silently
-//! reinterpret one: the workspace carries no regular-expression engine, `AGENTS.md`
-//! § *Dependencies* says to prefer no dependency and record the refusal, and a `regex:` key
-//! quietly read as `contains:` would be a specification that means something other than what it
-//! says. [`crate::code::TraceCode::SpecUnsupportedMatcher`] refuses it and the message names
-//! [`FieldMatcher::Glob`].
+//! Design § 3.4 lists both, and both ship. They are **not** two spellings of one matcher, and the
+//! two ways to get this wrong are opposite:
 //!
-//! What `glob` buys is what the design's own examples needed: `*.engineering/planning/*.md` is
-//! the file-path assertion in § 3, and it is a glob wearing a regular expression's syntax. What it
-//! does not buy is alternation, capture and quantifiers — which is a real loss, named here rather
-//! than discovered later.
+//! | | [`FieldMatcher::Glob`] | [`FieldMatcher::Regex`] |
+//! |---|---|---|
+//! | where it must hold | the **whole** field, anchored at both ends | **anywhere** in the field, like `contains:` |
+//! | `*` | any run of characters | *repeat the previous item* — a bare `*` does not compile |
+//! | `.` | a literal dot | any character |
+//! | alternation, groups, classes, quantifiers | none | all of them |
+//!
+//! So `{glob: "a.c"}` matches the three characters `a.c` and nothing else, and `{regex: "a.c"}`
+//! also matches `abc`. Neither meaning moved when the second one arrived: a specification written
+//! against `glob` reads exactly as it always did, which
+//! `a_glob_keeps_its_literal_reading_now_that_a_regex_matcher_exists_beside_it` pins.
+//!
+//! **The engine is `regex`, and the choice of engine is a guarantee rather than a convenience.**
+//! It compiles to an automaton and never backtracks, so a match is linear in the length of the
+//! subject — which is what [`glob_matches`] was hand-written to preserve, and what a checker
+//! reading whatever a transcript happens to contain cannot do without. `AGENTS.md`
+//! § *Dependencies* carries the rest of the decision, including why the alternatives were refused.
+//!
+//! A pattern is compiled **once, at validation**, so a specification that will not compile is
+//! refused before a transcript is opened ([`crate::code::TraceCode::SpecUnusableMatcher`]) rather
+//! than failing per-event in the middle of a report.
 //!
 //! # A bare number is not a bound
 //!
@@ -218,6 +231,79 @@ impl fmt::Display for ScalarValue {
     }
 }
 
+/// A regular expression, compiled once and carried beside the text it was written as.
+///
+/// The wrapper exists because [`FieldMatcher`] is `PartialEq` and `Serialize` and `regex::Regex`
+/// is neither, and both answers matter:
+///
+/// * **Equality is over the pattern as written.** Two matchers are the same matcher when an author
+///   typed the same thing, not when this build's automata happen to agree — nothing can decide the
+///   latter, and a matcher that compared as equal for a reason no reader could see would make a
+///   `PartialEq` on an expectation useless for saying *these two rows are the same row*.
+/// * **It serializes as the pattern, never as the automaton.** The specification digest is taken
+///   over the canonical JSON of the validated document
+///   ([`digest_of_canonical`](crate::digest::digest_of_canonical)), so a specification's identity
+///   stays its text: a `regex` release that compiles the same pattern differently must not rename
+///   every run judged against it.
+///
+/// The compiled form is never exposed. `regex` stays out of this crate's public signatures —
+/// [`Pattern::new`] returns the engine's complaint as a `String` — so a caller cannot come to
+/// depend on the engine through a type this crate hands them.
+#[derive(Debug, Clone)]
+pub struct Pattern(regex::Regex);
+
+impl Pattern {
+    /// Compiles a pattern, or returns what the engine said was wrong with it.
+    ///
+    /// # Errors
+    ///
+    /// When the text is not a regular expression this engine can compile — an unclosed group, an
+    /// unknown escape, or a pattern whose compiled form would exceed the engine's size limit. The
+    /// message is the engine's own, which names the offending position.
+    pub fn new(pattern: &str) -> Result<Self, String> {
+        regex::Regex::new(pattern)
+            .map(Self)
+            .map_err(|error| error.to_string())
+    }
+
+    /// The pattern as the author wrote it.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// `true` when the pattern is found **anywhere** in the subject.
+    ///
+    /// A search and not a whole-field test, which is the one thing to know about this matcher
+    /// beside [`FieldMatcher::Glob`]: anchoring is `^` and `$`, spelled by the author, because a
+    /// silently anchored regular expression would refuse `{regex: "rm\\s+-[rf]+"}` — a row about
+    /// a command *somewhere* in a shell line, which is the shape almost every one of these is.
+    #[must_use]
+    pub fn is_match(&self, subject: &str) -> bool {
+        self.0.is_match(subject)
+    }
+}
+
+impl PartialEq for Pattern {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for Pattern {}
+
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for Pattern {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// How one named field is compared.
 ///
 /// Externally tagged — `{"contains": "protocol artifact new"}` — which is both the shape a
@@ -232,8 +318,11 @@ pub enum FieldMatcher {
     /// A substring of the field.
     Contains(String),
     /// A glob over the field: `*` for any run of characters, `?` for one, everything else
-    /// literal.
+    /// literal, and anchored at both ends.
     Glob(String),
+    /// A regular expression searched for anywhere in the field. See [`Pattern`], and the table at
+    /// the top of this module for how it differs from [`FieldMatcher::Glob`].
+    Regex(Pattern),
     /// A scalar field, compared like with like.
     Equals(ScalarValue),
 }
@@ -249,6 +338,7 @@ impl FieldMatcher {
             Self::Exact(expected) => text_of(recorded) == *expected,
             Self::Contains(expected) => text_of(recorded).contains(expected.as_str()),
             Self::Glob(pattern) => glob_matches(pattern, &text_of(recorded)),
+            Self::Regex(pattern) => pattern.is_match(&text_of(recorded)),
             Self::Equals(expected) => expected.matches(recorded),
         }
     }
@@ -265,6 +355,7 @@ impl FieldMatcher {
             Self::Exact(expected) | Self::Equals(ScalarValue::Text(expected)) => text == expected,
             Self::Contains(expected) => text.contains(expected.as_str()),
             Self::Glob(pattern) => glob_matches(pattern, text),
+            Self::Regex(pattern) => pattern.is_match(text),
             Self::Equals(_) => false,
         }
     }
@@ -276,6 +367,9 @@ impl fmt::Display for FieldMatcher {
             Self::Exact(value) => write!(f, "= {value:?}"),
             Self::Contains(value) => write!(f, "~ {value:?}"),
             Self::Glob(value) => write!(f, "glob {value:?}"),
+            // A different word from `glob`, because a report a person reads to decide whether a
+            // row is wrong has to say which of the two languages the pattern was written in.
+            Self::Regex(value) => write!(f, "regex {:?}", value.as_str()),
             Self::Equals(value) => write!(f, "== {value}"),
         }
     }
@@ -296,9 +390,14 @@ pub fn text_of(recorded: &Recorded) -> String {
 
 /// Matches a glob against a subject: `*` any run of characters, `?` exactly one.
 ///
+/// **Anchored at both ends**, which is the difference from [`FieldMatcher::Regex`] an author has
+/// to know: `abc` does not match `abcd`, where the regular expression `abc` would.
+///
 /// Iterative with one backtrack point, so it is linear in practice and cannot blow up the way a
-/// backtracking regular expression can — which matters for a checker that reads whatever a
-/// transcript happens to contain.
+/// *backtracking* regular expression can — which matters for a checker that reads whatever a
+/// transcript happens to contain. The engine beside it holds the same property by construction and
+/// not by hand: `regex` compiles to an automaton and never backtracks, which is why it and not a
+/// backtracking one is the crate this workspace took (`AGENTS.md` § *Dependencies*).
 #[must_use]
 pub fn glob_matches(pattern: &str, subject: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
@@ -661,6 +760,40 @@ mod tests {
         assert!(
             !glob_matches("abc", "abcd"),
             "a glob is anchored at both ends"
+        );
+    }
+
+    #[test]
+    fn a_regex_searches_the_field_where_a_glob_of_the_same_text_has_to_be_the_whole_of_it() {
+        // The one difference between the two matchers an author has to hold in their head, and
+        // the reason `regex` is not just "glob with more syntax". One subject, one spelling, two
+        // answers — and the answers are what the table at the top of the module promises.
+        let subject = Recorded::String("cargo test --workspace".to_owned());
+        let searched = FieldMatcher::Regex(Pattern::new("test").expect("a pattern"));
+        let anchored = FieldMatcher::Glob("test".to_owned());
+        assert!(searched.matches(&subject));
+        assert!(!anchored.matches(&subject));
+
+        // And the metacharacter half: `.` is a literal in one language and any character in the
+        // other, which is what a specification silently re-read from one to the other would lose.
+        let dotted = Recorded::String("axc".to_owned());
+        assert!(FieldMatcher::Regex(Pattern::new("^a.c$").expect("a pattern")).matches(&dotted));
+        assert!(!FieldMatcher::Glob("a.c".to_owned()).matches(&dotted));
+    }
+
+    #[test]
+    fn a_pattern_compares_and_serializes_by_the_text_it_was_written_as_and_not_by_its_automaton() {
+        // Two patterns that accept exactly the same language and were not written the same way.
+        // If either answer came off the compiled form, a specification's identity would be this
+        // build's opinion about regular expressions rather than the document the author wrote.
+        let written = Pattern::new("ab|ac").expect("a pattern");
+        let equivalent = Pattern::new("a(b|c)").expect("a pattern");
+        assert!(written.is_match("ab") && equivalent.is_match("ab"));
+        assert_ne!(written, equivalent);
+        assert_eq!(written, Pattern::new("ab|ac").expect("a pattern"));
+        assert_eq!(
+            serde_json::to_string(&FieldMatcher::Regex(written)).expect("a matcher serializes"),
+            r#"{"regex":"ab|ac"}"#
         );
     }
 

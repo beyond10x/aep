@@ -954,7 +954,7 @@
       ]
     },
     "RawFieldMatcher": {
-      "description": "A matcher over one named field as written: `{contains: \"protocol artifact new\"}`.\n\nExternally tagged, so a matcher name this build does not know is refused by name rather than defaulted away — and so `regex:` can be *read* and then refused with advice, which an unknown-field refusal could not do.",
+      "description": "A matcher over one named field as written: `{contains: \"protocol artifact new\"}`.\n\nExternally tagged, so a matcher name this build does not know is refused by name rather than defaulted away — and so a `regex:` whose pattern does not compile is refused with the engine's own complaint, which an unknown-field refusal could not carry.",
       "oneOf": [
         {
           "description": "`{exact: \"…\"}` — the whole field, character for character.",
@@ -983,7 +983,7 @@
           "additionalProperties": false
         },
         {
-          "description": "`{glob: \"…\"}` — `*` for any run of characters, `?` for one.",
+          "description": "`{glob: \"…\"}` — `*` for any run of characters, `?` for one, anchored at both ends.",
           "type": "object",
           "required": [
             "glob"
@@ -1009,7 +1009,7 @@
           "additionalProperties": false
         },
         {
-          "description": "`{regex: \"…\"}` — accepted by the parser and refused by validation ([`TraceCode::SpecUnsupportedMatcher`]), with `glob` named as what to write instead.",
+          "description": "`{regex: \"…\"}` — a regular expression searched for **anywhere** in the field, where a glob has to match the whole of it. Compiled at validation; a pattern that will not compile is refused with [`TraceCode::SpecUnusableMatcher`].",
           "type": "object",
           "required": [
             "regex"

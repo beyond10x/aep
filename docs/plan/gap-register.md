@@ -207,6 +207,51 @@ a diff:
   would make every trace record fail the revision comparison for a reason unrelated to the
   revision. The match arm says so where a reader will look for it.
 
+## Closed by decision, 2026-08-29
+
+### D-8 — `regex:` matchers: the engine is adopted, and `TRACE-SPEC-008` keeps its meaning with a narrower cause
+
+`story:regex-matchers`. The trace wave shipped `glob` and refused `regex:` **by name** under
+`TRACE-SPEC-008`, on the standing rule to prefer no dependency and record the refusal
+(`trace-wave-1-transcript-checker.md`, decisions table and *deferred* table). That refusal is
+withdrawn. Both halves of the trade turned out to be measured wrong, and both are measurable:
+
+- **The dependency was never new.** `cargo tree -i regex` reaches `protocol-cli` through
+  `jsonschema`, which `schema-contract` takes as a **runtime** dependency
+  (`crates/schema-contract/Cargo.toml:18`). The shipped binary has linked `regex` for as long as
+  `protocol schema validate` has existed. Adopting it in `trace-domain` changed **one line of
+  `Cargo.lock`** — an edge on an existing package — and added no version, no compile unit and no
+  audit surface. "Prefer no dependency" was being applied to a crate the workspace already had.
+- **The refusal had stopped being free**, which is exactly the condition the story's own open
+  question set for it. Its price is alternation, and a committed specification wants it:
+  `conformance/trace/expectations.denial-step.trace.yaml:130-135` states *no shell call chained a
+  second command onto a permitted one* and gates on `contains: "&& sed"` — one literal, which
+  `; sed`, `&& rm` and `&&sed` all walk past. The row's `statement:` and the row's matcher had
+  come apart, and no glob closes that gap.
+
+What it is **not** is a general licence: `regex` was taken and a backtracking engine was refused.
+`glob_matches` was hand-written to be linear because a checker reads whatever a transcript happens
+to contain; `regex` compiles to an automaton and never backtracks, so the property survives by
+construction rather than by hand. `fancy-regex` would have given it away. The alternatives are in
+`AGENTS.md` § *Dependencies*.
+
+- **`glob` did not move.** It is still anchored at both ends and its metacharacters are still
+  literal; `regex:` searches, and anchoring is `^`/`$` for the author to write. A specification
+  written against `glob` serializes to the same bytes and digests to the same value, asserted by
+  `a_glob_serializes_and_digests_exactly_as_it_did_before_a_second_matcher_existed` with the digest
+  recomputable from bytes printed in the test.
+- **`TRACE-SPEC-008` keeps its wire string and its meaning** — *this matcher cannot be run* — and
+  loses breadth: it now refuses only a `regex:` the engine will not compile, carrying the engine's
+  own complaint, at validation rather than per event. The Rust variant is renamed
+  `SpecUnusableMatcher`, because *unsupported* would have been a lie about an unclosed bracket.
+- **A vacuous pattern is refused where a vacuous glob already was.** `text.matches: {regex: ".*"}`
+  is `{glob: "*"}`'s mistake and earns `TRACE-SPEC-005`; `{regex: "^$"}` — *the final message is
+  empty* — does not, which is why the check is two probes rather than one.
+
+Left owed, deliberately and not silently: **no committed specification was rewritten.** The
+`&& sed` row above is the first candidate and changing it moves that specification's digest, which
+is an eval-matrix decision rather than a matcher one.
+
 ## Closed by decision, 2026-08-21
 
 ### D-5 — transcript conformance is its own evidence kind, not a `Verification`

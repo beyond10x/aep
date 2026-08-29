@@ -97,15 +97,21 @@ trace_codes! {
     /// to be told that it is the bound, not the kind.
     SpecUnsatisfiableBound => "TRACE-SPEC-007",
 
-    /// A matcher this build does not implement was asked for by name.
+    /// A matcher this build cannot run was written.
     ///
-    /// Reserved for `regex`, which the design's § 3.4 lists and this build refuses rather than
-    /// silently reinterprets: the workspace carries no regular-expression engine and
-    /// `AGENTS.md` § *Dependencies* says to record the refusal instead of adding one. The message
-    /// names `glob` as what to write instead. Refusing by name is the point — a `regex:` key
-    /// quietly read as `contains:` would be a specification that means something other than what
-    /// it says.
-    SpecUnsupportedMatcher => "TRACE-SPEC-008",
+    /// Today that is one thing: a `regex:` whose pattern the engine will not compile. The message
+    /// is the engine's own complaint, which names the offending position, and the refusal happens
+    /// at **validation** — a specification that cannot be run is refused before a transcript is
+    /// opened rather than in the middle of a report.
+    ///
+    /// The wire string is unchanged and the meaning is the one it always had — *this matcher
+    /// cannot be run* — but the cause moved. Until `regex` was adopted (`AGENTS.md`
+    /// § *Dependencies*) this code refused `regex:` **outright**, because the workspace carried no
+    /// engine; a `regex:` key quietly read as `contains:` would have been a specification that
+    /// meant something other than what it said, and refusing an unknown *field* would have told
+    /// the author that `regex` was a typo. Neither is true now: a well-formed pattern is compiled
+    /// and run, and only a broken one earns this.
+    SpecUnusableMatcher => "TRACE-SPEC-008",
 
     /// A transcript's bytes are not UTF-8, or one of its lines is not JSON.
     ///

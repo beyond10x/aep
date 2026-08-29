@@ -97,6 +97,35 @@ cache use, per-step timing), each `gate` or `advisory`:
       args: {command: {contains: "protocol artifact new"}}
 ```
 
+### The five matchers, and the one difference that catches people
+
+A matcher applies to one named field. There are five, and no boolean combinators between them —
+when one row cannot say it, the answer is a second row, not an expression language.
+
+| written | holds when |
+|---|---|
+| `{exact: "…"}` | the field is that text, character for character |
+| `{contains: "…"}` | the text appears anywhere in the field |
+| `{glob: "…"}` | the **whole** field matches, with `*` for any run of characters and `?` for one |
+| `{regex: "…"}` | the pattern is found **anywhere** in the field |
+| `{equals: <bool\|integer\|string>}` | a scalar field is that value, compared type for type — `false` never matches the string `"false"` |
+
+`glob` and `regex` are not two spellings of one thing, and mistaking one for the other is the way
+to write a row that quietly stops checking:
+
+* **A glob is anchored at both ends; a regex searches.** `{glob: "cargo test"}` holds only for a
+  command that is exactly `cargo test`. `{regex: "cargo test"}` holds for
+  `cargo test --workspace` too. Anchor a pattern yourself with `^` and `$`.
+* **`*`, `.`, `+`, `|` and `(` swap sides.** In a glob `*` means *anything* and the rest are
+  literal characters; in a pattern `.` is any character, `|` is alternation, and a bare `*` is not
+  a pattern at all — it is refused with `TRACE-SPEC-008` before any transcript is read.
+
+Reach for `regex` when a claim needs alternation or a quantifier — *no shell call chained a second
+command onto a permitted one* is `{regex: "(&&|\\|\\||;)\\s*\\w"}` and is not expressible as a
+glob. Reach for `glob` for paths, which is what it is good at. A matcher that holds for every text
+there is — `{contains: ""}`, `{glob: "*"}`, `{regex: ".*"}` — is refused under `text.matches`: an
+expectation that can only report `ok` is a check that stopped checking.
+
 The report is one row per expectation and this specification declares forty-two, so the command
 below takes the first twelve lines rather than abridging by hand:
 
