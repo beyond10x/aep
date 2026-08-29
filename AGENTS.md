@@ -656,6 +656,45 @@ a scorer that showed only the first half would have called that an unqualified w
 ran and reported a failure is **not** waste — a red suite is the point of running it. The line is
 whether the program refused the invocation or answered it.
 
+## Being the subject of a live harness evaluation
+
+metaharness' `evals/engineering-protocols/run-driven.sh` drives this repository under either
+harness and scores the transcripts; **that script is where the procedure and its traps are written
+down**, and it is the file to read first. What follows is only what this repository has to get
+right to be a fair subject.
+
+**A confined run cannot see this filesystem.** The sandbox binds `/usr`, `/bin`, `/lib`, `/lib64`
+and the workspace, and nothing else. Two consequences that each cost a paid run:
+
+- `driven_programs` must **not** declare the CLI. An allow-list decides what a `run` may *name*;
+  only a mount decides what the sandbox *contains*. The bare name failed on `PATH`, the absolute
+  host path was then admitted and still found nothing, and both times the session gave up on the
+  CLI and hand-wrote the planning store. The driver travels as `--driver` instead, which stages the
+  binary read-only and allow-lists its mounted path; steps quote `DRIVEN_DRIVER`
+  (`/toolchain/driver/protocol`) and are told the bare name does not resolve.
+- Read-only is not incidental: this is the binary that records the run's evidence, and a run able
+  to rewrite it has no evidence.
+
+**The store rule reaches the native arm as a program, not as a seam.** `protocol drive` adjudicates
+every call itself for a vendor harness; the native loop has no such seam and consults hook programs
+instead, so the driver writes a `hooks.json` per step pointing at `protocol drive hook`. Without it
+that arm runs with the content tier off while its column reads as though it were on.
+
+**The planning skill is not handed over as `context:` any more.** Both harnesses read the plugin at
+`integrations/claude-code`, so a description is in the standing instruction and the body is one
+`skill` call away. A `context:` key reappearing under an `llm` step is the map regressing to eager
+delivery — billed on every turn of a stateless loop — and `flow.rs` asserts its absence.
+
+**Do not run `cargo fmt --all` in this repository.** It reformats `generated/` and `synth-check`
+then fails the gate on fourteen workspaces. Use `cargo fmt -p <crate>`. If it has already happened,
+`cargo xtask synth` regenerates from the specifications and restores them — do not `git checkout`
+them, and do not hand-edit.
+
+**Read the gate's own count, and distrust a remembered one.** `task check` at `2b5be62` gives
+`191 suites, 2830 passed, exit 0`. A figure quoted from memory was wrong twice in one day; if a
+number matters, measure the tree with and without the change rather than comparing against
+something recalled.
+
 ## Releases
 
 The bare-version tag is an org-wide convention (atlas § *Naming*); what follows is this
