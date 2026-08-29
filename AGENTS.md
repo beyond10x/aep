@@ -467,6 +467,17 @@ knowing: `task check 2>&1 | tail` reports **`tail`'s** exit status, not the gate
 aborted at the first step read as green and two commits were pushed claiming a gate that had never
 run past `fmt-check`. Read the gate's own status, not a pipeline's.
 
+**Two worktrees must not share a `CARGO_TARGET_DIR`.** Learned 2026-08-29, at the cost of about
+three gate runs per agent in a four-agent wave. `cargo xtask` resolves the repository root from
+`env!("CARGO_MANIFEST_DIR")`, baked in at build time — so a shared target handed one worktree the
+other's `xtask`, and `cargo xtask schema` run in tree A rewrote `schemas/generated/` in tree B.
+Test binaries were served across trees the same way: a `task check` in one tree ran a test that
+did not exist in it, and an `aep-engine` without a new method linked against an `aep-domain` that
+had it. `crates/protocol-cli/tests/store_selection.rs` asserts `CARGO_TARGET_TMPDIR` lies under
+the repository root and fails eleven tests whenever the target is elsewhere. Each worktree builds
+into its own `target/`; when disk is short, remove a finished worktree's target rather than
+sharing a live one, and treat `touch`ing sources as a symptom, not a fix.
+
 ## Safety envelope
 
 This repository publishes a **public** specification and drives real agent runs. Both are exposed

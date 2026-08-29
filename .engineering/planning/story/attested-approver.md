@@ -6,7 +6,7 @@ status: draft
 title: An operator step can be answered by an independent agent, not only by a person
 relations:
 - decomposes: epic:reference-driver
-revision: 4
+revision: 6
 ---
 # Story: An operator step can be answered by an independent agent, not only by a person
 
@@ -72,6 +72,14 @@ owner. Default if nobody answers: **a class of its own** — `Producer::Agent` i
 agent, and the whole claim here is that the approver is not that. Reusing it would make the
 independence check unable to see the difference it exists to see.
 
+*Decided 2026-08-29, when the operator asked for every open item of the day to be closed:*
+**`Producer::Agent`, closed.** The reasoning above assumed the check would read the class; it reads
+the identity (`attest::admit` compares `ActorRef`s, and the run's own actors are named, not
+classed), so the class carries nothing the check uses. A variant of its own is a published-schema
+change every adopter sees, bought for a distinction nothing consumes today. If attestation by
+signature (gap register D-3) ever needs to tell an approving agent from a producing one, that is
+the milestone at which the variant earns its place — a labelled later step, not a default.
+
 **Does the independence check compare identities, or roles?** Decides: protocol owner. Default:
 **identities** — two sessions of the same model are two actors, and a rule that said otherwise would
 refuse the one arrangement that makes this useful.
@@ -112,11 +120,11 @@ routes, because walking past a self-approval is the case the step exists to prev
 | question | taken | default in the story |
 |---|---|---|
 | identities or roles | **identities**: `agent:orchestrator` and `agent:T-1.1` are two actors | identities — taken |
-| is an agent's approval `Producer::Agent`, or a class of its own | **left open — `Producer::Agent` reused for now.** The check compares identities, the driver stamps no `Producer::Agent` of its own today, so reuse loses nothing the check can see. A class of its own is a `Producer` variant: a published-schema change (`cargo xtask schema`), a `CHANGELOG` line, adopter-visible. Decides: protocol owner | a class of its own — **not** taken, named here instead |
+| is an agent's approval `Producer::Agent`, or a class of its own | **closed 2026-08-29 — `Producer::Agent`** (see Open Questions). Reasoning at the time, kept: `Producer::Agent` reused for now. The check compares identities, the driver stamps no `Producer::Agent` of its own today, so reuse loses nothing the check can see. A class of its own is a `Producer` variant: a published-schema change (`cargo xtask schema`), a `CHANGELOG` line, adopter-visible. Decides: protocol owner | a class of its own — **not** taken, named here instead |
 | what is *the run's own actor* | the task id, the execution id (`<task>.<n>`, refused as a family at launch), and each `llm` step's harness name; `Producer::Harness` always | — |
 
 **What this does not do, named.** The approver is whatever `producer` the record carries: a
-declared identity, as strong as the rest of the evidence model (D-3 stays proposed). And the
+declared identity, as strong as the rest of the evidence model. D-3, attestation by signature, stays proposed on purpose: it is a key-management design (who signs, what a verifier holds, how a revoked key reads in an old record), not a fix, and it gets a design document before it gets code. And the
 store's own provenance could not tell an agent's `protocol artifact move` from a person's:
 `command_actor()` (`crates/protocol-cli/src/planning.rs`) stamped `human:<USER>` on every move,
 which is the *accepts any caller* gap this story's Context names from the other side. That is
