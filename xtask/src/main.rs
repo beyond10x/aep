@@ -601,7 +601,13 @@ fn main() -> Result<()> {
         }
         Command::Infra { check } => infra(&workspace_root(), check),
         Command::Fmt { check } => fmt(check),
-        Command::Status { check } => status(&workspace_root(), check),
+        // Both surfaces of one derivation, under one verb. Two verbs is how one of them stops
+        // being run, and the surface nobody re-runs is the one strangers read first.
+        Command::Status { check } => {
+            let root = workspace_root();
+            status(&root, check)?;
+            website_currency_from_tags(&root, check)
+        }
         Command::Version => version_check(&workspace_root()),
         Command::Deps => deps(&workspace_root()),
         Command::Guards => guards(&workspace_root()),
@@ -1321,6 +1327,226 @@ const STATUS_BEGIN: &str =
 /// The last line of that region.
 const STATUS_END: &str = "<!-- generated:delivered-waves:end -->";
 
+/// The website page carrying the same claim for a reader who is not in the repository.
+const SITE_STATUS_PAGE: &str = "website/docs/status/where-this-stands.md";
+
+/// The landing page, whose status panel names the release in a chip.
+const SITE_LANDING_PAGE: &str = "website/src/pages/index.tsx";
+
+/// The generated region on the website's status page.
+///
+/// An MDX comment, not the HTML one `docs/status.md` uses: Docusaurus compiles a page under
+/// `website/docs/` as MDX 3, which refuses `<!--` outright — *to create a comment in MDX, use
+/// `{/* text */}`*. The two pages therefore carry the same region under two spellings, and the
+/// spelling is the renderer's to dictate.
+const SITE_STATUS_BEGIN: &str =
+    "{/* generated:currency:begin — do not edit; run `cargo xtask status` */}";
+
+/// The end of that region.
+const SITE_STATUS_END: &str = "{/* generated:currency:end */}";
+
+/// The generated region around the landing page's release chip.
+///
+/// A JSX block comment rather than an HTML one: this is a `.tsx` file, and an HTML comment inside a
+/// JSX expression is text on the page.
+const SITE_CHIP_BEGIN: &str =
+    "/* generated:release-chip:begin — do not edit; run `cargo xtask status` */";
+
+/// The end of that region.
+const SITE_CHIP_END: &str = "/* generated:release-chip:end */";
+
+/// The gate's own definition, which is where its step list is derived from.
+const GATE_DEFINITION: &str = "Taskfile.yml";
+
+/// The steps `task check` runs, in order, read from the Taskfile.
+///
+/// Derived rather than transcribed for the reason the delivered-waves table is: the website told
+/// readers the gate had **twenty** steps for as long as it had twenty, and would have gone on
+/// saying so. A step list is a claim about this repository that this repository can answer.
+fn gate_steps(root: &Path) -> Result<Vec<String>> {
+    let path = root.join(GATE_DEFINITION);
+    let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let mut steps = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        if line == "  check:" {
+            inside = true;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        if let Some(name) = line.strip_prefix("      - task: ") {
+            steps.push(name.trim().to_owned());
+        } else if line.starts_with("  ")
+            && line.trim_end().ends_with(':')
+            && !line.starts_with("   ")
+        {
+            // The next task's definition: the `check:` block has ended.
+            break;
+        }
+    }
+    if steps.is_empty() {
+        bail!(
+            "{GATE_DEFINITION} has no `check:` block with `- task:` steps in it, so the gate's own \
+             step list cannot be derived — failing rather than publishing an empty gate"
+        );
+    }
+    Ok(steps)
+}
+
+/// The website's currency claim: which tag this is, and what the gate runs at it.
+fn currency(tag: &str, dated: &str, steps: &[String]) -> String {
+    let listed = match steps.split_last() {
+        Some((last, rest)) => format!(
+            "{} and `{last}`",
+            rest.iter()
+                .map(|step| format!("`{step}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        None => String::new(),
+    };
+    format!(
+        "Current as of the tag `{tag}` ({dated}).\n\nThe repository's gate, `task check`, runs \
+         **{} steps** — {listed}.\n",
+        steps.len()
+    )
+}
+
+/// The day the newest reachable tag was created, as the tag itself records it.
+fn tag_date(root: &Path, tag: &str) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args([
+            "for-each-ref",
+            "--format=%(creatordate:short)",
+            &format!("refs/tags/{tag}"),
+        ])
+        .current_dir(root)
+        .output()
+        .context("running git — the currency stamp is dated from the tag")?;
+    if !output.status.success() {
+        bail!(
+            "git for-each-ref failed for {tag}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let dated = String::from_utf8(output.stdout)
+        .context("reading the tag date as UTF-8")?
+        .trim()
+        .to_owned();
+    if dated.is_empty() {
+        bail!("{tag} has no creation date, so the currency stamp cannot be dated from it");
+    }
+    Ok(dated)
+}
+
+/// Splices one generated region, and says whether the file changed.
+///
+/// Shared by the three regions so that a page added later cannot get a subtly different rule about
+/// what `--check` means.
+fn hold_region(
+    root: &Path,
+    relative: &str,
+    begin: &str,
+    end: &str,
+    replacement: &str,
+    check: bool,
+) -> Result<bool> {
+    let path = root.join(relative);
+    let current =
+        fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let updated = splice_generated(&current, begin, end, replacement)?;
+    if updated == current {
+        return Ok(false);
+    }
+    if check {
+        bail!(
+            "{relative}'s generated region no longer matches the tags; run `cargo xtask status` \
+             and commit the result"
+        );
+    }
+    fs::write(&path, updated).with_context(|| format!("writing {}", path.display()))?;
+    Ok(true)
+}
+
+/// The newest tag reachable from `HEAD`, which is the release this checkout *is*.
+fn newest_reachable_tag(root: &Path) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args([
+            "for-each-ref",
+            "refs/tags",
+            // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
+            "--merged",
+            "HEAD",
+            "--sort=creatordate",
+            "--format=%(refname:short)",
+        ])
+        .current_dir(root)
+        .output()
+        .context("running git — the currency stamp is derived from the tags")?;
+    if !output.status.success() {
+        bail!(
+            "git for-each-ref failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    String::from_utf8(output.stdout)
+        .context("reading the tag list as UTF-8")?
+        .lines()
+        .next_back()
+        .map(str::to_owned)
+        .context(
+            "no tags are reachable from HEAD, so there is no release for the website to be current \
+             as of — fetch them first (`git fetch --tags`)",
+        )
+}
+
+/// Writes or checks the website's currency stamps against the newest reachable tag, and reports.
+fn website_currency_from_tags(root: &Path, check: bool) -> Result<()> {
+    let newest = newest_reachable_tag(root)?;
+    let written = website_currency(root, &newest, check)?;
+    if check {
+        println!("the website's currency stamps are up to date ({newest})");
+    } else {
+        println!("{written} website currency stamp(s) rewritten to {newest}");
+    }
+    Ok(())
+}
+
+/// Writes or checks the three derived claims the website makes about this repository.
+///
+/// The website is not a component gate of its own: `npm run build` resolves links and reads no
+/// claim, so a page describing a repository that moved underneath it builds green for ever. The
+/// landing page's chip said `0.7.1-infra-waves-1-4` on 2026-08-30, twenty-six tags after that was
+/// true, and it was the first version number any visitor saw.
+fn website_currency(root: &Path, tag: &str, check: bool) -> Result<usize> {
+    let dated = tag_date(root, tag)?;
+    let steps = gate_steps(root)?;
+    let mut written = 0;
+    if hold_region(
+        root,
+        SITE_STATUS_PAGE,
+        SITE_STATUS_BEGIN,
+        SITE_STATUS_END,
+        &currency(tag, &dated, &steps),
+        check,
+    )? {
+        written += 1;
+    }
+    if hold_region(
+        root,
+        SITE_LANDING_PAGE,
+        SITE_CHIP_BEGIN,
+        SITE_CHIP_END,
+        &format!("        <code>{tag}</code>\n        "),
+        check,
+    )? {
+        written += 1;
+    }
+    Ok(written)
+}
+
 /// Writes or checks the delivered-waves record in `docs/status.md`.
 ///
 /// The table is derived from the repository's annotated tags, oldest first, because `git tag -n99`
@@ -1384,6 +1610,7 @@ fn status(root: &Path, check: bool) -> Result<()> {
         fs::write(&path, updated).with_context(|| format!("writing {}", path.display()))?;
         println!("wrote the delivered-waves record ({} tags)", tags.len());
     }
+
     Ok(())
 }
 
@@ -4586,6 +4813,93 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&root).ok();
+    }
+}
+
+#[cfg(test)]
+mod currency_tests {
+    use super::{
+        currency, gate_steps, splice_generated, workspace_root, SITE_STATUS_BEGIN, SITE_STATUS_END,
+    };
+
+    /// The gate's step list is read from the Taskfile, so a step added there reaches the website
+    /// without anybody remembering the website exists.
+    ///
+    /// Asserted against the real `Taskfile.yml` rather than a fixture: a parser that agrees with a
+    /// fixture it was written beside proves nothing about the file it actually reads.
+    #[test]
+    fn the_gate_step_list_is_read_from_the_taskfile() {
+        let steps = gate_steps(&workspace_root()).expect("reading the gate's steps");
+        assert!(
+            steps.len() > 10,
+            "the Taskfile parse found only {steps:?}, so it is reading the wrong block"
+        );
+        assert_eq!(
+            steps.first().map(String::as_str),
+            Some("fmt-check"),
+            "the first step of `task check` is `fmt-check`; got {steps:?}"
+        );
+        assert!(
+            steps.contains(&"docs-check".to_owned()),
+            "`docs-check` is a step of the gate and the list has to carry it: {steps:?}"
+        );
+        assert!(
+            steps.iter().all(|step| !step.contains(':')),
+            "a step name carried a colon, so the parse is picking up a YAML key: {steps:?}"
+        );
+    }
+
+    /// A stamp edited by hand is drift, and `--check` has to see it.
+    ///
+    /// The rule is load-bearing only when the region's bytes differ, so the fixture edits them —
+    /// a test that spliced the same text back would pass whether or not the comparison ran.
+    #[test]
+    fn a_hand_edited_currency_stamp_no_longer_matches_what_the_tags_derive() {
+        let steps = vec!["fmt-check".to_owned(), "website".to_owned()];
+        let derived = currency("0.33.0", "2026-08-30", &steps);
+        let page =
+            format!("# Where this stands\n\n{SITE_STATUS_BEGIN}\n{derived}{SITE_STATUS_END}\n");
+
+        let unchanged = splice_generated(&page, SITE_STATUS_BEGIN, SITE_STATUS_END, &derived)
+            .expect("splicing the derived stamp back");
+        assert_eq!(
+            unchanged, page,
+            "re-splicing what is already there must be a no-op"
+        );
+
+        let tampered = page.replace("0.33.0", "0.99.0");
+        assert_ne!(
+            tampered, page,
+            "the fixture did not actually change the stamp"
+        );
+        let repaired = splice_generated(&tampered, SITE_STATUS_BEGIN, SITE_STATUS_END, &derived)
+            .expect("splicing over a hand edit");
+        assert_ne!(
+            repaired, tampered,
+            "a hand-edited stamp must differ from what the tags derive, which is what `--check` \
+             reports"
+        );
+        assert_eq!(
+            repaired, page,
+            "and the repair must land back on the derived text"
+        );
+    }
+
+    /// The rendered stamp says the count and the list, and they agree with each other.
+    #[test]
+    fn the_stamp_states_the_step_count_it_lists() {
+        let steps = vec![
+            "fmt-check".to_owned(),
+            "test".to_owned(),
+            "website".to_owned(),
+        ];
+        let rendered = currency("0.33.0", "2026-08-30", &steps);
+        assert!(rendered.contains("`0.33.0` (2026-08-30)"), "{rendered}");
+        assert!(rendered.contains("**3 steps**"), "{rendered}");
+        assert!(
+            rendered.contains("`fmt-check`, `test` and `website`"),
+            "the list joins with a final `and`: {rendered}"
+        );
     }
 }
 

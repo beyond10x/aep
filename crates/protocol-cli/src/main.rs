@@ -6038,3 +6038,97 @@ fn inspect_ir_document(path: &Path, value: &serde_json::Value) -> Result<InfraIn
             .map_or(0, Vec::len),
     })
 }
+
+/// The website's CLI reference, held against the CLI itself.
+///
+/// The gate's website step is `npm run build`, and Docusaurus resolves links rather than claims: a
+/// page that *describes* a CLI which has moved underneath it builds green for ever. On 2026-08-30,
+/// at 0.33.0, seven of seventy-seven verbs had no entry — the whole `protocol workspace` family
+/// among them, eight releases after `website/docs/status/roadmap.md` told readers it had shipped.
+///
+/// The verb list comes from `clap` rather than from parsing `--help`, so it is the same tree the
+/// binary dispatches on and cannot drift from it by a rendering change.
+#[cfg(test)]
+mod cli_reference {
+    use clap::CommandFactory as _;
+
+    /// The page a reader goes to for the verb list, relative to this crate.
+    const REFERENCE: &str = "../../website/docs/reference/cli.md";
+
+    /// Every leaf verb, spelled as a reader would type it.
+    ///
+    /// A leaf, because a parent that only groups is not something anybody runs: `protocol artifact`
+    /// alone is an error message. `help` is clap's, not ours, and a hidden command is deliberately
+    /// not part of the documented surface.
+    fn leaves(command: &clap::Command, spelled: &str, out: &mut Vec<String>) {
+        let mut branched = false;
+        for sub in command.get_subcommands() {
+            if sub.get_name() == "help" || sub.is_hide_set() {
+                continue;
+            }
+            branched = true;
+            leaves(sub, &format!("{spelled} {}", sub.get_name()), out);
+        }
+        if !branched {
+            out.push(spelled.to_owned());
+        }
+    }
+
+    /// The verbs the page does not spell anywhere.
+    ///
+    /// A substring match, deliberately: the page writes a verb inside a longer synopsis — flags,
+    /// value hints, alternatives — so anything stricter would demand the reference be written in a
+    /// shape nobody wants to read.
+    fn absent_from<'a>(verbs: &'a [String], page: &str) -> Vec<&'a String> {
+        verbs.iter().filter(|verb| !page.contains(*verb)).collect()
+    }
+
+    /// The rule is load-bearing only when a verb is genuinely missing, so the fixture makes one
+    /// missing. Without this, `every_verb_…` would pass identically if `absent_from` returned an
+    /// empty list unconditionally.
+    #[test]
+    fn a_verb_the_reference_does_not_spell_is_reported_by_name() {
+        let verbs = vec![
+            "protocol artifact list".to_owned(),
+            "protocol workspace crossings".to_owned(),
+        ];
+        let page = "| `protocol artifact list [--kind …]` | the plan, one line per artifact |";
+
+        let missing = absent_from(&verbs, page);
+        assert_eq!(
+            missing,
+            vec![&"protocol workspace crossings".to_owned()],
+            "the documented verb must pass and the undocumented one must be named"
+        );
+    }
+
+    #[test]
+    fn every_verb_the_cli_answers_has_an_entry_in_the_reference() {
+        let mut verbs = Vec::new();
+        leaves(&super::Cli::command(), "protocol", &mut verbs);
+        assert!(
+            verbs.len() > 50,
+            "the walk found only {} verbs, so it is walking the wrong tree rather than passing",
+            verbs.len()
+        );
+
+        let page = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(REFERENCE),
+        )
+        .expect("reading the CLI reference page");
+
+        let missing = absent_from(&verbs, &page);
+        assert!(
+            missing.is_empty(),
+            "{} of {} verbs have no entry in {REFERENCE}:\n{}\n\nA verb a reader cannot find is a \
+             verb that did not ship for them. Add a row to the surface it belongs to.",
+            missing.len(),
+            verbs.len(),
+            missing
+                .iter()
+                .map(|verb| format!("  {verb}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+}

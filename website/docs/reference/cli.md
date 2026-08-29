@@ -83,6 +83,38 @@ starts for a step, so a `command` step's `protocol artifact move` reads back as 
 in `protocol artifact history` rather than as the operator's. Nothing here *verifies* an
 identity — it is a declaration, exactly as strong as the rest of the provenance model.
 
+**A hybrid plan has two verbs of its own.** `store: hybrid` in `project.yaml` keeps the plan in
+markdown *and* in a replica under a declared policy. A write one side took and the other did not is
+a **divergence** — recorded, never silently merged, because the two sides disagreeing is a fact
+somebody has to see.
+
+| Command | Does |
+|---|---|
+| `protocol artifact divergences [--store …] [--root .] [--format text\|yaml\|json]` | the divergences a hybrid plan has recorded: writes one side took and the other did not. Only a `store: hybrid` plan has any, and the exit code says whether anything is outstanding |
+| `protocol artifact catch-up [--store …] [--root .] [--format …]` | replays those divergences at the side that has not seen them — the runtime's catch-up (`store-v0.1.md` R-108). What the authority holds **now** is replayed, nothing is merged, and a replica that moved on its own stays outstanding for a person |
+
+## Workspace surface
+
+`protocol workspace` answers across the repositories `.engineering/workspace.yaml` names and pins, so
+a plan spanning four repositories is one question rather than four. The consequence for a person is
+that a member nobody has checked out is a **normal** condition that says so, rather than an error
+that stops the answer.
+
+| Command | Does |
+|---|---|
+| `protocol workspace members [--root .] [--fetch] [--format text\|yaml\|json]` | the members, where each one resolves to, and whether its store is there. `--fetch` materializes a pinned Git member instead of reporting it unresolved, and is **off by default**: it is the one thing here that reaches a network, and a read-only report should not do that because somebody typed `members` |
+| `protocol workspace list [--root .] [--kind …] [--status …] [--member …] [--format …]` | the plan across every member, one line per artifact |
+| `protocol workspace crossings [--root .] [--strict] [--format …]` | every relation that crosses a member boundary, and whether its target is there. `--strict` exits 1 when one does not resolve — a gate for a workspace whose members are all present, and not the default, because an unresolved crossing into a member you have not checked out is not a defect |
+| `protocol workspace show <reference> [--root .] [--format …]` | where one reference points, and what to type when more than one member holds it. `kind:name`, or `member/kind:name` to say which member |
+
+## Property surface
+
+One verb, and it writes rather than decides — the same split as `protocol trace evidence`.
+
+| Command | Does |
+|---|---|
+| `protocol property evidence [--out …] [--format …]` | runs the properties and writes the `property_test_result` document a run reads; standard output when `--out` is absent. Exits `0` whatever the properties said, because the verdict belongs in the record and the engine is what decides on it. A caller who wants the verdict as an exit code is asking for a test runner, and `cargo test` is one |
+
 ## Specification surface
 
 One verb, and it answers one question: **is the specification this task is being held to satisfied

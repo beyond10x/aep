@@ -9,7 +9,45 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+* **`task docs-check` is a step of the gate**, eleventh of twenty-one: every verb the CLI answers
+  must have an entry in `website/docs/reference/cli.md`, and the step fails naming each one that
+  does not. The verb list comes from `clap` rather than from parsing `--help`, so it is the tree the
+  binary dispatches on and a rendering change cannot move it. Seven of seventy-seven verbs had no
+  entry when this landed — `protocol workspace list|crossings|show|members`, `protocol artifact
+  divergences|catch-up` and `protocol property evidence` — and the `workspace` family had been
+  undocumented for **eight releases**, while the site's own roadmap page told readers it had
+  shipped in 0.25.0. All seven now have entries, under three new sections: *Workspace surface*,
+  *Property surface*, and a hybrid-store pair on the planning surface.
+
+### Changed
+
+* **The website's claims about this repository are generated from the tag, not typed.**
+  `cargo xtask status` already owned `docs/status.md`'s delivered-waves table; it now owns three
+  more regions, and `status-check` — the second step of the gate — fails when any of them drifts.
+  The landing page's release chip read `0.7.1-infra-waves-1-4`, **twenty-six tags** after that was
+  true, and it is the first version number a visitor sees; `where-this-stands.md` said *as of the
+  tag `0.32.1`* and named twenty gate steps. All three are now derived — the tag and its date from
+  the newest tag reachable from `HEAD`, the step list from `Taskfile.yml`'s own `check:` block —
+  so a release cut without them fails the gate at the tag, and **no step is added to the release
+  procedure**: `AGENTS.md` § *Releases* already runs `cargo xtask status` after the tag exists.
+  The page under `website/docs/` carries an MDX comment where `docs/status.md` carries an HTML one,
+  because Docusaurus compiles it as MDX 3 and MDX 3 refuses `<!--`.
+  **One candidate was examined and left alone**: `limitations.md`'s *"two durable backends, as of
+  `0.27.0`"* is a claim about **when** something became true, not a currency stamp, and generating
+  over it would have made it false.
+
+### Fixed
+
+* **The landing page's status panel said three things that were not true.** It published
+  *"106 suites and 1811 tests"* — a hand-written count, which this repository forbids on every other
+  surface because four of them drifted apart in its first 48 hours, and which `task check` now
+  measures at 192 suites and 2890 tests. It dated that measurement to a tag twenty-six releases old.
+  And it told a first-time reader *"There is no durable backend"*, which stopped being true at
+  `0.27.0` — `website/docs/status/limitations.md` has said so, two clicks away, ever since. The
+  counts are gone rather than updated, the tag comes from the generated chip, and the backend
+  sentence is replaced by the limit that does still hold. The panel is called `HonestStatus`.
 
 ## [0.33.0] — 2026-08-30
 

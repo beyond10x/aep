@@ -168,12 +168,18 @@ function HonestStatus() {
       ordinal="04"
       label="Status"
       title="What is built, and what is not"
-      chip={<code>0.7.1-infra-waves-1-4</code>}>
+      chip={
+        /* generated:release-chip:begin — do not edit; run `cargo xtask status` */
+        <code>0.33.0</code>
+        /* generated:release-chip:end */
+      }>
       <div className={styles.ledger}>
         <p className={styles.ledgerBuilt}>
-          The protocol is implemented and gated: <strong>106 suites and 1811 tests</strong>, with 0
-          clippy warnings and 0 rustdoc warnings, as of the tag <code>0.7.1-infra-waves-1-4</code>.
-          A specification compiles into documentation, JSON Schema, OpenAPI 3.1 and AsyncAPI 3.0;
+          The protocol is implemented and gated: the whole suite green, 0 clippy warnings and 0
+          rustdoc warnings, at the tag in the chip above. This page publishes no suite or test
+          count — four hand-written counts drifted apart in this repository&apos;s first 48 hours,
+          so the number lives in exactly one place, which is <code>task check</code>&apos;s own
+          output. A specification compiles into documentation, JSON Schema, OpenAPI 3.1 and AsyncAPI 3.0;
           generates its own conformance suite; and synthesises the structural part of its own
           implementation in three targets — the same specification runs as a Rust and a Go
           application, both started and held to one behaviour in every CI run. All of it is
@@ -181,8 +187,8 @@ function HonestStatus() {
         </p>
         <p className={styles.ledgerNot}>
           It does <strong>not</strong> generate behaviour — every algorithm is a typed obligation
-          someone still has to implement. There is no durable backend. No team has been governed by
-          this yet. And one thing you still have to trust: nothing binds a verifier&apos;s identity
+          someone still has to implement. No team outside this repository has been governed by it
+          yet. And one thing you still have to trust: nothing binds a verifier&apos;s identity
           to the evidence it submits.
         </p>
       </div>

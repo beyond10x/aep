@@ -31,6 +31,7 @@ tasks:
       - task: claim-check
       - task: clippy
       - task: test
+      - task: docs-check
       - task: postgres-check
       - task: doc-check
       - task: schema-check
@@ -159,6 +160,19 @@ tasks:
       the SQLite one — and `cargo tree -i entity-core` was the only thing that said so.
     cmds:
       - cargo xtask deps
+
+  docs-check:
+    desc: >-
+      Fail when a verb the CLI answers has no entry in the website's CLI reference. The gate's
+      website step is `npm run build`, and Docusaurus resolves links rather than claims — so a page
+      describing a CLI that moved underneath it builds green for ever. Seven of seventy-seven verbs
+      had no entry on 2026-08-30, the whole `protocol workspace` family among them, eight releases
+      after the site's own roadmap page told readers it had shipped.
+    # A named step as well as a test, for the reason every other drift check is one: `2883 tests, 1
+    # failed` reads as "the gate failed", and `docs-check` reads as "the CLI reference is stale".
+    # The verb list comes from clap, not from parsing `--help`, so a rendering change cannot move it.
+    cmds:
+      - cargo test -q -p protocol-cli --bin protocol cli_reference
 
   clippy:
     desc: Lint every target, warnings are errors.

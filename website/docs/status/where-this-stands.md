@@ -6,17 +6,22 @@ description: What is implemented, per component, with the numbers the repository
 
 # Where this stands
 
-Current as of the tag `0.32.1` (2026-08-28), plus what `main` carried on 2026-08-29 where a row
-says so. The repository's gate, `task check`, runs **twenty steps** — `fmt-check`, `status-check`,
-`plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`,
-`test`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`,
-`infra-check`, `synth-check`, `lab-check`, `msrv` and `website`: formatting, clippy with warnings as
-errors, the test suite, rustdoc with warnings as errors, the drift checks that regenerate every
-schema, projection, suite, synthesized tree, infrastructure IR and the delivered-waves record and
-compare bytes, the plan's own store validated and its audit's `file:line` citations re-resolved, a
-build on the declared MSRV, and this documentation site's own build. This page states no suite or test counts: four
-hand-written counts drifted apart within the repository's first 48 hours, so the count now lives in
-exactly one place — the gate's own output. Run `task check` for the measurement.
+{/* generated:currency:begin — do not edit; run `cargo xtask status` */}
+Current as of the tag `0.33.0` (2026-08-30).
+
+The repository's gate, `task check`, runs **21 steps** — `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`, `lab-check`, `msrv` and `website`.
+{/* generated:currency:end */}
+
+Behind those steps: formatting, clippy with warnings as errors, the test suite, rustdoc with
+warnings as errors, the drift checks that regenerate every schema, projection, suite, synthesized
+tree, infrastructure IR, the delivered-waves record and this page's own stamps, and compare bytes;
+the plan's own store validated and its audit's `file:line` citations re-resolved; the CLI reference
+held against the CLI itself; a build on the declared MSRV; and this documentation site's own build.
+
+This page states no suite or test counts: four hand-written counts drifted apart within the
+repository's first 48 hours, so the count now lives in exactly one place — the gate's own output.
+Run `task check` for the measurement. The stamp above is derived from the repository's tags and its
+Taskfile for the same reason, and `status-check` fails when it drifts.
 
 CI runs the same twenty steps; nothing lands that does not pass all of them. The gate needs the Go
 toolchain, the `wasm32-unknown-unknown` Rust target and Node beside Rust's own, and a step whose
