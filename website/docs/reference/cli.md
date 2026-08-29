@@ -161,6 +161,7 @@ with none of the conformance suites behind it.
 |---|---|
 | `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
 | `protocol drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
+| `protocol drive transition [--run <id>]` | answers a native loop's `transition` hook from the engine: the loop's JSON on stdin; exit `0` proceeds, `2` refuses with `{"reason": …}`; writes nothing |
 | `protocol drive resume <run> [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock |
 
 All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and

@@ -11,6 +11,20 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **`protocol drive transition` — the governor a native flow consults at a section boundary.**
+  `b10x-harness workflow run` walks a flow `protocol workflow flow` projected from a workflow, and
+  that projection is an ordering, not a government: no guard travels. The loop asks a `transition`
+  hook before a section is entered and after it leaves; this verb answers it from the engine —
+  `evaluate` for `enter`, `transition` on a copy of the execution for `leave` — so a native walk is
+  governed by the same documents that govern a driven run, with no crate dependency in either
+  direction (harness design 0003 § 7, E2; atlas ADR 0004). Reads the loop's document on stdin;
+  exit `0` proceeds, `2` refuses with `{"reason": …}` in the engine's words, anything else is a
+  verb that could not answer, which the loop reads fail closed. `--run <id>` positions the engine
+  on that run's snapshot over the store as it is now; without it, on the state the flow path
+  names — a step node after its state, a retreat group `<first>-to-<last>` at its first state on
+  `enter` and its last on `leave`. A section that came out failed is left alone. Decides only:
+  writes nothing, takes no lock, and a consultation leaves a run's cursor byte-identical.
+
 * **A stolen lock is in the taking run's record, and a lock refusal says what the holder is
   doing.** `protocol drive run --take-lock` and `protocol drive resume --take-lock` now write the
   lock they superseded — the holder's run id, pid and host — into the taking run's own cursor as

@@ -288,7 +288,7 @@ fn step_map(operator: bool) -> String {
 
 #[test]
 fn every_verb_can_be_asked_for_help() {
-    for verb in ["run", "status", "resume"] {
+    for verb in ["run", "status", "resume", "transition"] {
         let output = protocol(&["drive", verb, "--help"]);
         assert_eq!(code(&output), 0, "{}", stderr(&output));
         assert!(
@@ -1891,4 +1891,214 @@ fn a_lock_naming_another_host_is_refused_at_the_binary_and_take_lock_does_not_pa
              run directory behind means that order has moved:\n{text}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// `protocol drive transition` — the governor a native flow consults at a section boundary.
+// ---------------------------------------------------------------------------------------------
+
+/// Runs `drive transition` against the fixture with `document` on stdin.
+fn transition(fixture: &Fixture, extra: &[&str], document: &str) -> Output {
+    use std::io::Write as _;
+    let mut args: Vec<String> = vec!["drive".to_owned(), "transition".to_owned()];
+    args.extend(fixture.location());
+    args.extend(extra.iter().map(ToString::to_string));
+    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(&args)
+        .current_dir(root())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the protocol binary runs");
+    child
+        .stdin
+        .take()
+        .expect("stdin is piped")
+        .write_all(document.as_bytes())
+        .expect("the document is written");
+    child.wait_with_output().expect("the process exits")
+}
+
+/// The loop's document, as design 0003 § 3 spells it.
+fn consultation(path: &str, moment: &str, failed: bool) -> String {
+    serde_json::json!({
+        "hook": "transition", "flow": "adp/default", "path": path, "moment": moment,
+        "attempt": 1, "of": 3, "failed": failed, "handoff": {}, "workspace": "/nowhere"
+    })
+    .to_string()
+}
+
+/// Entering a section with no run behind it proceeds: the engine is put on the state the path
+/// names, and that is where it is.
+#[test]
+fn transition_enter_without_a_run_proceeds_on_a_state_the_workflow_declares() {
+    let fixture = Fixture::new("transition-enter", false);
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.implement", "enter", false),
+    );
+    assert_eq!(code(&output), 0, "{}{}", stdout(&output), stderr(&output));
+}
+
+/// Leaving a section whose rung costs evidence the store does not hold is refused, in the
+/// engine's words: the reason names the state and what is missing.
+#[test]
+fn transition_leave_is_refused_by_the_engine_when_the_rung_is_not_earned() {
+    let fixture = Fixture::new("transition-leave", false);
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.establish_verifiers", "leave", false),
+    );
+    let text = stdout(&output);
+    assert_eq!(code(&output), 2, "{text}{}", stderr(&output));
+    let reason: serde_json::Value = serde_json::from_str(text.trim()).expect("a JSON refusal");
+    let reason = reason["reason"].as_str().expect("a reason string");
+    assert!(
+        reason.contains("establish_verifiers"),
+        "the refusal names the state it is about:\n{reason}"
+    );
+}
+
+/// A section that came out failed is left alone: the loop has already recorded the failure and
+/// the engine adds nothing (design 0003 § 3, third row).
+#[test]
+fn transition_leave_of_a_failed_section_proceeds() {
+    let fixture = Fixture::new("transition-failed", false);
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.establish_verifiers", "leave", true),
+    );
+    assert_eq!(code(&output), 0, "{}{}", stdout(&output), stderr(&output));
+}
+
+/// A path naming something the workflow does not declare is a refusal, not a guess.
+#[test]
+fn transition_refuses_a_path_that_names_no_state() {
+    let fixture = Fixture::new("transition-unknown", false);
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.polishing", "enter", false),
+    );
+    let text = stdout(&output);
+    assert_eq!(code(&output), 2, "{text}{}", stderr(&output));
+    assert!(text.contains("polishing"), "{text}");
+    assert!(text.contains("not a state"), "{text}");
+}
+
+/// A retreat group `<first>-to-<last>` is entered at its first state and left at its last.
+#[test]
+fn transition_reads_a_retreat_group_as_its_first_and_last_state() {
+    let fixture = Fixture::new("transition-group", false);
+    // Entering `implement-to-verify` is entering `implement`: no run, so proceed.
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.implement-to-verify", "enter", false),
+    );
+    assert_eq!(code(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    // Leaving it is leaving `verify`, whose rung is not earned in an empty store.
+    let output = transition(
+        &fixture,
+        &[],
+        &consultation("root.implement-to-verify", "leave", false),
+    );
+    let text = stdout(&output);
+    assert_eq!(code(&output), 2, "{text}{}", stderr(&output));
+    assert!(text.contains("verify"), "{text}");
+}
+
+/// A document for another hook point proceeds, said rather than assumed.
+#[test]
+fn transition_answers_only_the_transition_point() {
+    let fixture = Fixture::new("transition-other-point", false);
+    let output = transition(
+        &fixture,
+        &[],
+        r#"{"hook":"before-call","entry":"file_write","call":{"arguments":{"path":"x"}}}"#,
+    );
+    assert_eq!(code(&output), 0, "{}{}", stdout(&output), stderr(&output));
+}
+
+/// A document the verb cannot read is neither yes nor no: exit 1, which the loop reads fail
+/// closed.
+#[test]
+fn transition_cannot_answer_an_unreadable_document() {
+    let fixture = Fixture::new("transition-unreadable", false);
+    let output = transition(&fixture, &[], "this is not JSON");
+    assert_eq!(code(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert!(
+        stderr(&output).contains("not the loop's JSON"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+/// With `--run`, the engine is positioned on the run's own cursor.
+///
+/// Entering the state the run is in proceeds; leaving a state the run is *not* in is refused
+/// rather than answered from a state the flow only claims — the two disagree about where the work
+/// is, and a governor does not guess.
+#[test]
+fn transition_with_a_run_answers_from_the_runs_cursor() {
+    let fixture = Fixture::new("transition-run", false);
+    fixture.drive(&["run"], &[]);
+    let cursor = fixture.cursor("DRIVE-1/1");
+    let state = cursor["state"].as_str().expect("the cursor names a state");
+
+    let output = transition(
+        &fixture,
+        &["--run", "DRIVE-1/1"],
+        &consultation(&format!("root.{state}"), "enter", false),
+    );
+    assert_eq!(
+        code(&output),
+        0,
+        "entering the state the run is in proceeds:\n{}{}",
+        stdout(&output),
+        stderr(&output)
+    );
+
+    let elsewhere = if state == "verify" {
+        "implement"
+    } else {
+        "verify"
+    };
+    let output = transition(
+        &fixture,
+        &["--run", "DRIVE-1/1"],
+        &consultation(&format!("root.{elsewhere}"), "leave", false),
+    );
+    let text = stdout(&output);
+    assert_eq!(code(&output), 2, "{text}{}", stderr(&output));
+    assert!(text.contains("disagree"), "{text}");
+    assert!(
+        text.contains(state),
+        "the refusal names where the run is:\n{text}"
+    );
+
+    // Nothing was written: a governor answers, it does not walk.
+    let after = fixture.cursor("DRIVE-1/1");
+    assert_eq!(after, cursor, "the cursor is untouched by a consultation");
+}
+
+/// A run that does not exist is a verb that cannot answer, not a refusal of the move.
+#[test]
+fn transition_with_an_unknown_run_cannot_answer() {
+    let fixture = Fixture::new("transition-no-run", false);
+    let output = transition(
+        &fixture,
+        &["--run", "DRIVE-9/9"],
+        &consultation("root.implement", "enter", false),
+    );
+    assert_eq!(code(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert!(
+        stderr(&output).contains("no run DRIVE-9/9"),
+        "{}",
+        stderr(&output)
+    );
 }

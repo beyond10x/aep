@@ -362,10 +362,20 @@ dropped, and **no guard travels**: the flow says what runs in what order, and no
 refuse a move. The refusing is done by a `transition` hook the loop asks before a section is entered
 and after it leaves — exit `2` at the entry skips the section as failed, exit `2` on a clean exit
 sends the section back for another attempt, and a hook that cannot answer is read as a refusal. That
-hook is where the engine belongs, and the verb that would answer it from a run cursor — a
-`protocol drive transition` reading the loop's JSON on stdin and answering from `evaluate` and
-`transition` — is designed and **not yet shipped**. Until it is, a native walk is an ordering and
-not a government, and a run that needs the guards enforced is a `protocol drive run`.
+hook is where the engine belongs, and **`protocol drive transition` is the verb that answers it**:
+it reads the loop's JSON on stdin and answers `enter` from `evaluate` and `leave` from `transition`
+on a copy of the execution, in the engine's own words. Declare it in the hooks file:
+
+```json
+{ "hooks": [ { "on": "transition", "run": ["protocol", "drive", "transition", "--run", "AUTH-142/1"] } ] }
+```
+
+`--run` positions the engine on that run's snapshot over the store as it is now; without it the
+engine is put on the state the flow path names — the section's first state on `enter`, its last on
+`leave`. A section that came out failed is left alone. The verb decides only: it writes nothing,
+takes no lock, and a consultation leaves a run's cursor byte-identical. What it does **not** do is
+walk: the loop moves the sequencer, and a run that needs the engine to move it is still a
+`protocol drive run`.
 
 ## Checking the run afterwards
 

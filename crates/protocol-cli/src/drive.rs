@@ -76,7 +76,7 @@ use aep_driver_spec::tool::ToolConfig;
 use aep_engine::engine::EvidenceSubmission;
 use aep_engine::policy::Decision;
 use aep_engine::project::project_directory;
-use aep_engine::{Engine, Registry};
+use aep_engine::{Engine, ProtocolEngine, Registry, TransitionResult};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
 
@@ -188,6 +188,35 @@ pub(crate) enum DriveCommand {
     /// blocks with `{"reason": …}` on stdout. Not for people to run.
     #[command(hide = true)]
     Hook,
+    /// Answer one `transition` hook consultation from the native loop, on stdin — the governor.
+    ///
+    /// **The engine, reachable as a program at a section boundary.** `b10x-harness workflow run`
+    /// walks a flow `protocol workflow flow` projected from a workflow, and that projection is an
+    /// ordering and not a government: no guard travels. The loop asks a `transition` hook before
+    /// a section is entered and after it leaves, and this verb is what answers it from the engine
+    /// — `evaluate` for entering, `transition` for leaving — so a native walk is governed by the
+    /// same documents that govern a driven run, with no crate dependency in either direction.
+    ///
+    /// Reads the loop's `transition` document on stdin and answers with an exit status: `0`
+    /// proceeds, `2` refuses with `{"reason": …}` on stdout, in the engine's own words. Positions
+    /// the engine on a run's cursor when `--run` names one, and on the state the flow path names
+    /// otherwise. Decides only; writes nothing and takes no lock.
+    Transition(TransitionArgs),
+}
+
+/// The arguments of `protocol drive transition`.
+#[derive(Debug, Args)]
+pub(crate) struct TransitionArgs {
+    /// Where the documents, the task and the store are.
+    #[command(flatten)]
+    location: DriveLocation,
+    /// The run whose snapshot positions the engine, such as `AUTH-142/3`.
+    ///
+    /// Without it the engine is positioned on the state the flow path names — the section's first
+    /// state on `enter`, its last on `leave` — over the store as it is now, which is what a native
+    /// walk that has no run of its own gets.
+    #[arg(long)]
+    run: Option<String>,
 }
 
 /// Where the run's inputs are.
@@ -416,6 +445,7 @@ pub(crate) fn run(command: DriveCommand) -> Result<ExitCode> {
         DriveCommand::Status(args) => status(&args),
         DriveCommand::Resume(args) => resume(&args),
         DriveCommand::Hook => Ok(hook()),
+        DriveCommand::Transition(args) => Ok(transition(&args)),
     }
 }
 
@@ -2711,6 +2741,272 @@ fn hook() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// What the loop asks at a section boundary, as this verb reads it.
+///
+/// The document is the harness's (`b10x-harness` design 0003 § 3): `path` is the flow node,
+/// `moment` is `enter` or `leave`, `failed` says whether a left section came out failed. Everything
+/// else the loop sends — `attempt`, `of`, `handoff`, `workspace` — is recorded by the loop and is
+/// not what the engine decides on.
+#[derive(Debug, serde::Deserialize)]
+struct TransitionConsultation {
+    hook: String,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    moment: String,
+    #[serde(default)]
+    failed: bool,
+}
+
+/// `protocol drive transition`
+///
+/// Exit `0` proceeds; exit `2` refuses with `{"reason": …}` on stdout; anything else is a verb that
+/// could not answer, which the loop reads **fail closed** — a governor that could not answer did
+/// not say yes.
+fn transition(args: &TransitionArgs) -> ExitCode {
+    let mut document = String::new();
+    if std::io::Read::read_to_string(&mut std::io::stdin(), &mut document).is_err() {
+        eprintln!("the transition document could not be read from stdin");
+        return ExitCode::from(1);
+    }
+    let consultation: TransitionConsultation = match serde_json::from_str(&document) {
+        Ok(consultation) => consultation,
+        Err(error) => {
+            eprintln!("the transition document is not the loop's JSON: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    // Only `transition` is answered here; a file that declares this program at another point
+    // proceeds, said out loud rather than assumed, so it cannot silently block a call.
+    if consultation.hook != "transition" {
+        return ExitCode::SUCCESS;
+    }
+    let moment = match consultation.moment.as_str() {
+        "enter" => Moment::Enter,
+        "leave" => Moment::Leave,
+        other => {
+            eprintln!("`moment` is `{other}`; this verb answers `enter` and `leave`");
+            return ExitCode::from(1);
+        }
+    };
+    // A section that came out failed is already failed; the refusal is the loop's record and the
+    // engine has nothing to add (design 0003 § 3, third row).
+    if moment == Moment::Leave && consultation.failed {
+        return ExitCode::SUCCESS;
+    }
+
+    match answer(args, &consultation.path, moment) {
+        Ok(Answer::Proceed) => ExitCode::SUCCESS,
+        Ok(Answer::Refuse(reason)) => {
+            outln!("{}", serde_json::json!({ "reason": reason }));
+            ExitCode::from(2)
+        }
+        Err(error) => {
+            eprintln!("the governor could not answer: {error:#}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+/// Which side of a section the loop is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Moment {
+    Enter,
+    Leave,
+}
+
+/// What the engine said.
+#[derive(Debug)]
+enum Answer {
+    Proceed,
+    Refuse(String),
+}
+
+/// Positions the engine and asks it.
+///
+/// **Enter** asks whether the engine may be in the section's first state: it is there already —
+/// the driven run's cursor is on it — or a transition into it is permitted now. Otherwise the
+/// refusal is that transition's unmet requirements, in the engine's words, or the plain fact that
+/// the workflow declares no move from where the engine is to where the flow wants to go.
+///
+/// **Leave** asks whether the engine may leave the section's last state: `transition` on a copy of
+/// the execution moves or completes, and the copy is dropped. `Blocked` is the refusal, reasons and
+/// all. Nothing is persisted: a governor answers a question; the run that walks is the loop's.
+fn answer(args: &TransitionArgs, path: &str, moment: Moment) -> Result<Answer> {
+    let (engine, mut execution, positioned_by_run) = position(args, path, moment)?;
+    let wanted = flow_state(path, moment);
+    let workflow = &execution.plan().workflow;
+    let Some(wanted) = wanted else {
+        return Ok(Answer::Refuse(format!(
+            "the flow path `{path}` names no section this verb can read"
+        )));
+    };
+    if !workflow.states.contains_key(&wanted) {
+        return Ok(Answer::Refuse(format!(
+            "the flow path `{path}` names `{wanted}`, which is not a state of workflow `{}`",
+            workflow.id
+        )));
+    }
+
+    match moment {
+        Moment::Enter => {
+            if execution.state_id() == &wanted {
+                return Ok(Answer::Proceed);
+            }
+            if !positioned_by_run {
+                // Without a run there is no "where the engine is" but the state the path names,
+                // which it is already on.
+                return Ok(Answer::Proceed);
+            }
+            let evaluation = engine.evaluate(&execution);
+            match evaluation
+                .transitions
+                .iter()
+                .find(|transition| transition.to == wanted)
+            {
+                Some(transition) if transition.permitted => Ok(Answer::Proceed),
+                Some(transition) => Ok(Answer::Refuse(format!(
+                    "{} -> {}: {}",
+                    evaluation.state,
+                    wanted,
+                    transition.unmet().join("; ")
+                ))),
+                None => Ok(Answer::Refuse(format!(
+                    "the run is in `{}` and workflow `{}` declares no move from there to `{wanted}`",
+                    evaluation.state, workflow.id
+                ))),
+            }
+        }
+        Moment::Leave => {
+            if execution.state_id() != &wanted {
+                return Ok(Answer::Refuse(format!(
+                    "the flow is leaving `{wanted}` and the run's cursor is in `{}`: the two \
+                     disagree about where the work is, and a governor does not guess",
+                    execution.state_id()
+                )));
+            }
+            match engine.transition(&mut execution) {
+                Ok(TransitionResult::Moved { .. } | TransitionResult::Completed { .. }) => {
+                    Ok(Answer::Proceed)
+                }
+                Ok(TransitionResult::Blocked { state, reasons }) => Ok(Answer::Refuse(format!(
+                    "{state}: {}",
+                    if reasons.is_empty() {
+                        "nothing may move yet".to_owned()
+                    } else {
+                        reasons.join("; ")
+                    }
+                ))),
+                Err(error) => Ok(Answer::Refuse(format!("the engine refused: {error}"))),
+            }
+        }
+    }
+}
+
+/// The state a flow node path stands for at this moment.
+///
+/// `protocol workflow flow` names a step node after its state and a retreat group
+/// `<first>-to-<last>` (or `<state>-again` for a one-state retreat); the root is `root`. Entering
+/// a group is entering its first state, leaving it is leaving its last.
+fn flow_state(path: &str, moment: Moment) -> Option<StateId> {
+    let leaf = path.rsplit('.').next().unwrap_or(path);
+    if leaf.is_empty() || leaf == "root" {
+        return None;
+    }
+    let name = if let Some(state) = leaf.strip_suffix("-again") {
+        state
+    } else if let Some((first, last)) = leaf.split_once("-to-") {
+        match moment {
+            Moment::Enter => first,
+            Moment::Leave => last,
+        }
+    } else {
+        leaf
+    };
+    name.parse().ok()
+}
+
+/// The engine and an execution to ask it about.
+///
+/// With `--run`, the run's snapshot over the store as it is now — the same restore the driver does
+/// at the top of every iteration. Without it, a fresh execution walked to the state the path names,
+/// over the same store. The `bool` says which, because the two answer `enter` differently.
+fn position(
+    args: &TransitionArgs,
+    path: &str,
+    moment: Moment,
+) -> Result<(Engine, aep_engine::Execution, bool)> {
+    let project = match &args.location.project {
+        Some(named) => named.clone(),
+        None => discover_project()?,
+    };
+    let (location, snapshot) = match &args.run {
+        Some(named) => {
+            let runs = runs_directory(&project)?;
+            let run_id: RunId = named.parse().map_err(|error| anyhow::anyhow!("{error}"))?;
+            let directory = RunDirectory::at(run_path(&runs, &run_id));
+            if !directory.path().is_dir() {
+                bail!("no run {run_id} in {}", runs.display());
+            }
+            let launch = Launch::read(directory.path());
+            let snapshot = directory
+                .read_snapshot()
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            (
+                args.location.remembering(launch.as_ref(), &project),
+                Some(snapshot),
+            )
+        }
+        None => (args.location.remembering(None, &project), None),
+    };
+    let inputs = location.inputs()?;
+    let report = aep_driver::run::PlanSource::load(&inputs.store);
+    if !report.is_clean() {
+        bail!(
+            "the store is not readable: {}",
+            report
+                .failures
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+    }
+    let graph = report
+        .graph_in_workspace(aep_driver::run::PlanSource::declared_members(&inputs.store))
+        .map_err(|errors| {
+            anyhow::anyhow!(
+                "{}",
+                errors
+                    .as_slice()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        })?;
+    let engine = Engine::new(inputs.registry.clone());
+    if let Some(snapshot) = snapshot {
+        let execution = engine
+            .restore(inputs.task.clone(), graph, snapshot)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+            .context("restoring the run's execution")?;
+        return Ok((engine, execution, true));
+    }
+    let mut execution = engine
+        .initialize_with_artifacts(inputs.task.clone(), graph)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .context("initialising an execution")?;
+    if let Some(state) = flow_state(path, moment) {
+        if execution.plan().workflow.states.contains_key(&state) && execution.state_id() != &state {
+            execution
+                .enter_state(state)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+        }
+    }
+    Ok((engine, execution, false))
 }
 
 fn store_integrity(tool: &str, input: &serde_json::Value) -> Result<(), String> {

@@ -21,6 +21,7 @@ executes the three kinds of step that touch the world, and records what happened
 | It supplies | You supply |
 |---|---|
 | the loop: initialize, ask, act, submit, transition | the model, the shell and the person |
+| `protocol drive transition` — the engine as a program a *native* flow consults at each section boundary, so a `b10x-harness workflow run` is governed without walking here | the loop that walks, and a hooks file naming the verb |
 | a **step map** — what a harness *does* in each state — as the fifth document kind, under `drivers/` | a step map for your repository, or the shipped `drivers/development/default.yaml` |
 | a run directory under `.engineering/runs/<run-id>/`, and a store lock with a liveness probe | nothing; `resume` re-takes it |
 | three step kinds: `llm` (a model session), `command` (a program) and `operator` (a person) | which of them each state needs |
