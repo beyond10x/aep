@@ -74,6 +74,26 @@ pub struct StepContext<'a> {
     /// So the driver states it, and the step map no longer has to. Sequencing is the driver's
     /// business and the identity of the work is the run's.
     pub task: &'a Task,
+    /// **The document [`Self::task`] was read from**, when the caller read one.
+    ///
+    /// The task is *what* the run is driving; this is where somebody wrote it down, and only the
+    /// second is a thing a spawned program can be handed. `protocol specification evidence --task
+    /// <file>` binds its selection to a task document, and a step map had no way to name one — so
+    /// a run driven with `--task <a path that is not the project's>` reached that verb through
+    /// discovery and bound to the project's task instead. `{task}` in a `command` step's `run`
+    /// words or `record:` path expands to this, and `protocol-cli` resolves it to an absolute path
+    /// because a `command` step runs in the project directory rather than wherever the operator
+    /// typed the flag.
+    ///
+    /// `None` when the caller built its task from bytes it never read out of a file, which is what
+    /// this crate's own tests do. A `{task}` in a run with none is [`StepOutcome::NoVerdict`],
+    /// exactly as a `{transcript}` in a run where no `llm` step has run is: a fact about the run,
+    /// which no document loader could have decided.
+    ///
+    /// **Not a field of [`Task`]**, and invariant 10 is why: document identity comes from document
+    /// content and never from a filename, so a path hung on the validated type would travel
+    /// everywhere the identity does and be available to index by.
+    pub task_document: Option<&'a Path>,
     /// **The execution this step belongs to**, which is also the identity a session acts under.
     ///
     /// The task says *what* is being worked on and this says *which attempt at it is working*, so

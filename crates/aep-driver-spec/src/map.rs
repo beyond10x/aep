@@ -570,16 +570,25 @@ pub struct CommandStep {
 impl CommandStep {
     /// The names a `{placeholder}` in [`Self::run`] or in `evidence.record` may have.
     ///
-    /// Two, and both are things only the run knows: where its directory is, and which transcript
-    /// the `llm` step before this one wrote. A map is a document in the repository and a run
-    /// directory is allocated when the run starts, so a step that has to name one has no way to
-    /// write it down — which is why `protocol trace check` could not be a step of a map before
-    /// these existed.
+    /// Three, and all three are things only the run knows: where its directory is, which task
+    /// document it was started from, and which transcript the `llm` step before this one wrote. A
+    /// map is a document in the repository and a run directory is allocated when the run starts,
+    /// so a step that has to name one has no way to write it down — which is why
+    /// `protocol trace check` could not be a step of a map before these existed.
+    ///
+    /// **`{task}` is the third, and it is here because a verb that binds to *this* run's task had
+    /// no way to be told which one.** `protocol specification evidence` selects the specification
+    /// of the work the task declares; with no way to name the task in a map, a run driven with
+    /// `protocol drive run --task <a path that is not the project's>` reached that verb through
+    /// discovery and bound to the *project's* task instead — writing a record about the wrong
+    /// story, or refusing over the wrong one. The driver expands it to the **absolute** path of
+    /// the task document the run was started from, because a `command` step runs in the project
+    /// directory and a path typed on a command line is relative to wherever it was typed.
     ///
     /// The list is closed and an unknown name is refused at load, because the alternative is a
     /// command line containing the literal characters `{transcirpt}` and a checker reporting that
     /// it cannot read that file, halfway through a run.
-    pub const PLACEHOLDERS: &'static [&'static str] = &["run_directory", "transcript"];
+    pub const PLACEHOLDERS: &'static [&'static str] = &["run_directory", "task", "transcript"];
 
     /// The program, which a validated step always has.
     pub fn program(&self) -> &str {
@@ -1378,6 +1387,52 @@ mod tests {
             {"kind":"command","run":["find",".","-exec","rm","{}",";"]},
             {"kind":"command","run":["jq","{a: .b}"]}]}}"#;
         read(&map_json("adp/default/1", literal)).expect("braces that name nothing are text");
+    }
+
+    /// `{task}` is in the vocabulary, and the hint a misspelling gets names all three.
+    ///
+    /// Both halves in one test on purpose: the hint is what a person acts on, and a vocabulary
+    /// that grew without the hint growing with it is a refusal that tells the reader to write one
+    /// of the two names that were legal last year. It is read out of `PLACEHOLDERS` rather than
+    /// spelled here, so this asserts the three names arrive rather than that a literal matches
+    /// itself.
+    #[test]
+    fn the_task_document_can_be_named_and_a_misspelling_is_offered_all_three_names() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["protocol","specification","evidence","--task","{task}"]}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("`{task}` is expandable");
+        let steps = map.steps_for(&StateId::new("implement").unwrap());
+        let Step::Command(command) = &steps[0] else {
+            panic!("the only step is the command");
+        };
+        assert!(
+            command.expandable().any(|word| word == "{task}"),
+            "the placeholder survives validation as written: {:?}",
+            command.run
+        );
+
+        // And a state with no `llm` step in it is fine, unlike `{transcript}`: which task a run is
+        // driving is known before the first step, so nothing about the order can withhold it.
+        assert_eq!(
+            steps.len(),
+            1,
+            "`{{task}}` needs no step before it, so this map is one step long"
+        );
+
+        let misspelled = r#"{"implement":{"steps":[
+            {"kind":"command","run":["protocol","specification","evidence","--task","{tsak}"]}]}}"#;
+        let errors = read(&map_json("adp/default/1", misspelled)).expect_err("refused");
+        assert!(
+            errors.contains(ValidationCode::UndeclaredReference),
+            "{errors}"
+        );
+        let said = errors.to_string();
+        for name in CommandStep::PLACEHOLDERS {
+            assert!(
+                said.contains(&format!("{{{name}}}")),
+                "the hint offers every name a step may write, and `{{{name}}}` is missing: {said}"
+            );
+        }
     }
 
     /// `{transcript}` in a state with no `llm` step before it names a session that never happened.

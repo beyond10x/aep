@@ -111,14 +111,30 @@ fn transcript_path(run_directory: &Path, state: &StateId, index: usize, attempt:
 /// Expands the placeholders a step map admits, or says which one it could not.
 ///
 /// The vocabulary is `aep_driver_spec::map::CommandStep::PLACEHOLDERS` and an unknown name is
-/// refused at load, so the only failure reachable here is a `{transcript}` in a run where the
-/// `llm` step before it has not run — which is a fact about the run and cannot be decided from the
-/// document.
+/// refused at load, so the only failures reachable here are the two that are facts about the
+/// **run** rather than about the document: a `{transcript}` in a run where the `llm` step before it
+/// has not run, and a `{task}` in a run that was not started from a task document. Neither is
+/// decidable at load, and both are D5's `Unknown` rather than a guess.
+///
+/// `{task}` expands to the task document's path **as the driver resolved it**, which
+/// `DriveLocation::inputs` makes absolute: a `command` step is spawned with the project directory
+/// as its working directory, so a relative `--task` — resolved against whatever directory the
+/// operator typed it in — is a path the child would open somewhere else or not at all.
 fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
     let mut expanded = word.to_owned();
     for name in placeholders_in(word) {
         let value = match name {
             "run_directory" => context.run_directory.display().to_string(),
+            "task" => {
+                let Some(document) = context.task_document else {
+                    return Err(format!(
+                        "`{{task}}` is the task document this run was started from, and task \
+                         `{}` was not read out of one",
+                        context.task.id
+                    ));
+                };
+                document.display().to_string()
+            }
             "transcript" => {
                 let Some(step) = context.preceding_llm else {
                     return Err(format!(
@@ -402,6 +418,17 @@ fn discover_project() -> Result<PathBuf> {
     })
 }
 
+/// A path a child process can open, whatever directory it is started in.
+///
+/// [`std::path::absolute`] and not [`Path::canonicalize`]: this must not touch the filesystem or
+/// resolve a symlink. A task document reached through a symlinked worktree is the document the
+/// operator named, and rewriting it to the link's target would put a path in a run's record that
+/// the operator never typed. A path the platform refuses to absolutize is left as it was — a
+/// working relative path is better than a lost one.
+fn absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Everything a run needs, resolved from flags or from the project it was run in.
 struct Inputs {
     /// The project directory — the one holding `.engineering`.
@@ -410,6 +437,13 @@ struct Inputs {
     registry: Registry,
     /// The task being driven.
     task: Task,
+    /// The document [`Inputs::task`] was read from, absolute.
+    ///
+    /// What `{task}` expands to. Absolute because a `command` step is spawned with the project
+    /// directory as its working directory and `--task` is relative to the operator's own: the two
+    /// are the same directory often enough that a relative path would work in testing and open the
+    /// wrong document — or nothing — in a run started from anywhere else.
+    task_document: PathBuf,
     /// The planning store the artifact graph is rebuilt from every iteration.
     store: crate::planning::DrivenPlan,
     /// The step map driving the run.
@@ -442,12 +476,19 @@ impl DriveLocation {
             }
         };
 
-        let task = match &self.task {
-            Some(path) => crate::read_task(path)?,
-            None => aep_engine::project::load(&project)
-                .map_err(|errors| anyhow::anyhow!("{errors}"))?
+        // Both halves of the answer, together: what is being driven, and which file said so. The
+        // second is what `{task}` expands to, and it is resolved here — beside the read — so there
+        // is no second reading of *which document is this run's task* to drift from the first.
+        let (task, task_document) = if let Some(path) = &self.task {
+            (crate::read_task(path)?, absolute(path))
+        } else {
+            let loaded = aep_engine::project::load(&project)
+                .map_err(|errors| anyhow::anyhow!("{errors}"))?;
+            let document = absolute(&loaded.paths.task);
+            let task = loaded
                 .task
-                .context("the project names no task, and no `--task` was given")?,
+                .context("the project names no task, and no `--task` was given")?;
+            (task, document)
         };
 
         let store = crate::planning::DrivenPlan::for_project(self.store.as_deref(), &project)?;
@@ -460,6 +501,7 @@ impl DriveLocation {
             project,
             registry,
             task,
+            task_document,
             store,
             map,
             map_origin,
@@ -660,6 +702,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     // prints is a line that works.
     Launch {
         task: args.location.task.clone(),
+        task_document: Some(inputs.task_document.clone()),
         map: args.location.map.clone(),
         project: Some(inputs.project.clone()),
         root: args.location.root.clone(),
@@ -677,6 +720,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         pause_on_approval: args.pause_on_approval,
         headless: true,
         approver: args.approver.clone(),
+        task_document: Some(inputs.task_document.clone()),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -745,6 +789,21 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     // be a run whose second half was produced by something its own record does not name.
     let b10x = launch.as_ref().map(|l| l.b10x.clone()).unwrap_or_default();
 
+    // What `{task}` expands to, taken from the launch record whenever the caller did not name a
+    // task on this invocation. Resolving it again here would resolve it against *this* process's
+    // working directory, so a resume typed from somewhere else would hand a `command` step a
+    // different path than the run's own earlier steps got — one run, two documents, and neither
+    // the step nor its record saying which. A flag still wins, exactly as it does in
+    // `remembering`: an operator who names a task on a resume means that task.
+    let task_document = if args.location.task.is_some() {
+        inputs.task_document.clone()
+    } else {
+        launch
+            .as_ref()
+            .and_then(|l| l.task_document.clone())
+            .unwrap_or_else(|| inputs.task_document.clone())
+    };
+
     // The same pre-flights `run` does, and a resume needs them just as much: a resume re-takes the
     // lock, so discovering the missing binary mid-step costs a lock and an attempt in the cursor of
     // a run that was already stopped once.
@@ -784,6 +843,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         pause_on_approval,
         headless: true,
         approver: approver.clone(),
+        task_document: Some(task_document),
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -3018,6 +3078,20 @@ fn b10x_read_only_note(
 struct Launch {
     /// The task document, as given.
     task: Option<PathBuf>,
+    /// The task document, as the run **resolved** it: absolute, and filled in when discovery
+    /// rather than a flag found it.
+    ///
+    /// A second field beside the first rather than a replacement for it, because they answer
+    /// different questions: `task` is what to pass to a resume, and this is what `{task}` expanded
+    /// to. A resume that recomputed the second would expand a different path whenever it ran from
+    /// a different directory than the launch did — a driven step named one document and the resume
+    /// of the same run named another — so it is remembered, exactly as `--map` and the b10x
+    /// options are.
+    ///
+    /// `#[serde(default)]`, so a run started before this existed resumes as it did: `None` here
+    /// means the resume resolves it itself.
+    #[serde(default)]
+    task_document: Option<PathBuf>,
     /// The map, as given — a path or an id, whichever the caller used.
     map: Option<String>,
     /// The project directory the run was started against.
@@ -3885,6 +3959,7 @@ mod tests {
         StepContext {
             execution: driven_execution(),
             task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state,
             index: 0,
             attempt: 1,
@@ -3927,6 +4002,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4000,6 +4076,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4152,6 +4229,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4246,6 +4324,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4335,6 +4414,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4397,6 +4477,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4481,6 +4562,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 1,
             attempt: 1,
@@ -4525,6 +4607,7 @@ mod tests {
         let unrun = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 1,
             attempt: 1,
@@ -4536,6 +4619,72 @@ mod tests {
         };
         let outcome = expand("{transcript}", &unrun).expect_err("there is no transcript to name");
         assert!(outcome.contains("transcript"), "{outcome}");
+    }
+
+    /// `{task}` is the document **this run** was started from, and a run started from none says so.
+    ///
+    /// The two halves are the two things the placeholder has to get right. A driven run reaches
+    /// `protocol specification evidence --task {task}` holding the document the operator named —
+    /// not the one the project names, which is the discovery this closes: run `W4-3/1` bound that
+    /// verb to `task.yaml` while the engine's cursor said something else. And a run whose task was
+    /// never read out of a file produces D5's `Unknown`, rather than a command line carrying the
+    /// literal characters `{task}` into a verb that would then bind by discovery anyway — the
+    /// failure this whole placeholder exists to remove, reintroduced one layer down.
+    #[test]
+    fn the_task_placeholder_is_the_document_this_run_was_started_from() {
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "verify".parse().expect("a state id");
+        let task = driven_task();
+        let empty: Vec<String> = Vec::new();
+        // Not `.engineering/task.yaml`: the whole point is a document the project does not name,
+        // so a test whose fixture used the project's own would pass under discovery too.
+        let named = Path::new("/projects/repo/.engineering/task-native-1.yaml");
+        let context = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: Some(named),
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        assert_eq!(
+            expand("{task}", &context).expect("a run started from a document expands it"),
+            named.display().to_string(),
+            "the document the driver resolved, not the one the project names"
+        );
+        // Inside a word as well as alone, because `--task={task}` is a line a map may write.
+        assert_eq!(
+            expand("--task={task}", &context).expect("a placeholder is expanded where it sits"),
+            format!("--task={}", named.display())
+        );
+
+        let unread = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: None,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: Path::new("/runs/T-1/1"),
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        let refusal = expand("{task}", &unread).expect_err("there is no document to name");
+        assert!(
+            refusal.contains("task document"),
+            "the refusal says what the placeholder is: {refusal}"
+        );
+        assert!(
+            refusal.contains(&task.id.to_string()),
+            "and which task had none: {refusal}"
+        );
     }
 
     /// Invariant 7 at the layer a `record:` path opens: a run cannot submit a person's approval.
@@ -4569,6 +4718,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 0,
             attempt: 1,
@@ -4624,6 +4774,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 3,
             attempt: 1,
@@ -4698,6 +4849,7 @@ mod tests {
         StepContext {
             execution: driven_execution(),
             task: task_ref(),
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state,
             index: 0,
             attempt: 1,
@@ -4816,6 +4968,7 @@ mod tests {
         StepContext {
             execution: driven_execution(),
             task: task_ref(),
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state,
             index: 2,
             attempt: 3,
@@ -5814,6 +5967,7 @@ mod tests {
         let context = StepContext {
             execution: driven_execution(),
             task: &task,
+            task_document: Some(Path::new("/projects/repo/task.yaml")),
             state: &state,
             index: 2,
             attempt: 1,

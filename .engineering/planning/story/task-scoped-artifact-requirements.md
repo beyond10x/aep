@@ -11,7 +11,7 @@ tags:
 - protocol
 relations:
 - decomposes: epic:reference-driver
-revision: 3
+revision: 4
 ---
 # Story: A rule about this task's specification stops accepting somebody else's
 
@@ -144,8 +144,42 @@ declared (`specification:passkeys (approved), specification:sessions (approved)`
 said it was about (`this task's work is story:billing, task:BILLING-1`), plus which task document
 that came from — because the wrong task document is the failure a reader cannot otherwise see.
 
-**Not done, and named rather than left silent.** A `command` step's map cannot say `{task}`
-(`CommandStep::PLACEHOLDERS` is `run_directory` and `transcript`), so a run driven with
-`protocol drive run --task <a path that is not the project's>` reaches this verb through discovery
-and binds to the project's task instead. It fails closed and says which document it read, which is
-visible rather than silent; a `{task}` placeholder is the fix and is a step-map vocabulary change.
+**Done 2026-08-29, and the original finding is kept as the record of why.** It read: *a `command`
+step's map cannot say `{task}` (`CommandStep::PLACEHOLDERS` is `run_directory` and `transcript`), so
+a run driven with `protocol drive run --task <a path that is not the project's>` reaches this verb
+through discovery and binds to the project's task instead. It fails closed and says which document
+it read, which is visible rather than silent; a `{task}` placeholder is the fix and is a step-map
+vocabulary change.* It was, and that is all it was: `--task` already existed on the verb, so the
+consumer was only ever waiting for a way to be told.
+
+**`{task}` is the third and last name in the closed vocabulary**
+(`crates/aep-driver-spec/src/map.rs`, `CommandStep::PLACEHOLDERS`). The driver expands it to the
+**absolute** path of the task document the run was started from — the one `--task` named, or the one
+discovery found when no flag did. Absolute because a `command` step is spawned with the project
+directory as its working directory while `--task` is relative to wherever the operator typed it, and
+a placeholder that expanded to a path the child cannot open would be the same class of defect one
+layer down. Nothing about it is decidable at load, so a `{task}` in a run started from no document
+at all is D5's `Unknown` — the same shape as a `{transcript}` in a run where no `llm` step has run.
+
+**A resume expands what the run was started from, not what it can work out today.** The value is
+written into the run's `launch.json` beside `--map` and the b10x options, for their reason: a resume
+that resolved the document again would resolve it against its own working directory and against
+whatever `project.yaml` says now, so one run's steps could name two documents with nothing in the
+record saying which was meant. A flag still wins, as it does everywhere else in `remembering`.
+
+**`drivers/development/default.yaml` passes `--task {task}`**, so the shipped map binds explicitly
+and discovery is what answers a person running the verb by hand outside a run.
+
+Three tests hold it, each verified by the mutation it exists to catch:
+
+- `the_task_document_can_be_named_and_a_misspelling_is_offered_all_three_names`
+  (`crates/aep-driver-spec/src/map.rs`) — the vocabulary, and the hint that has to grow with it, read
+  out of `PLACEHOLDERS` rather than spelled again.
+- `the_task_placeholder_is_the_document_this_run_was_started_from`
+  (`crates/protocol-cli/src/drive.rs`) — the expansion, alone and inside a word, and the refusal for
+  a run whose task was never read out of a file.
+- `a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from`
+  (`crates/protocol-cli/tests/drive_cli.rs`) — a driven project holding two stories, two approved
+  specifications and two tasks, asserting **both** halves: the map without the placeholder writes a
+  record about the *project's* story, and the map with it writes one about the task the run was
+  started from. Without the first half this would pass in any store with one specification in it.

@@ -11,6 +11,18 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A `command` step can name the task document its run was started from: `{task}`.** It joins
+  `{run_directory}` and `{transcript}` as the third and last placeholder a step map may write, and
+  the driver expands it to the absolute path of the task the run was launched with — the one
+  `protocol drive run --task <file>` named, or the one discovery found when no flag did, and the
+  same path again on a resume. Until now a map could not say *this run's task*, so
+  `protocol specification evidence` reached its own discovery and bound to the task
+  `project.yaml` names: a run driven with `--task <a path that is not the project's>` decided
+  another story's specification, or refused over it, while the run's own cursor said something
+  else. `drivers/development/default.yaml` now passes `--task {task}`, so a driven run binds
+  explicitly rather than by discovery. **If you write step maps:** a misspelled placeholder is
+  still refused at load, and the hint now offers all three names.
+
 * **A store write can say who made it, and a driven step says so by itself.** `AEP_ACTOR` declares
   the actor every `protocol artifact new`, `move`, `body`, `relate` and `evidence` is journalled
   with — `human:<name>`, `agent:<name>`, `service:<name>` or `system` — so

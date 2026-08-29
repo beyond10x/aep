@@ -367,6 +367,13 @@ states:
       # The verb refuses, and submits nothing, when it cannot tell which specification the run is
       # about: more than one in force and none of them the one the task references is D5's
       # `Unknown`, not a guess.
+      #
+      # `--task {task}` is the document *this run* was started from, filled in by the driver. Without
+      # it the verb falls back to its own discovery — the task `project.yaml` names — so a run driven
+      # with `protocol drive run --task <a path that is not the project's>` decided the wrong story's
+      # specification, or refused over it, while the engine's cursor said something else entirely.
+      # A step map is written once and driven many times, so this is the only way it can say
+      # *whichever task this run is about*.
       - kind: command
         description: Decide the specification's requirements against what this run observed.
         run:
@@ -375,6 +382,8 @@ states:
           - evidence
           - --store
           - .engineering/planning
+          - --task
+          - "{task}"
           - --snapshot
           - "{run_directory}/snapshot.json"
           - --out

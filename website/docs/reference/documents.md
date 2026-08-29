@@ -339,12 +339,20 @@ says rather than minting anything. That is what makes `trace_conformance` reacha
 all: its record carries a specification digest, a transcript digest and three counts, and an exit
 status carries none of them.
 
-Two placeholders are expanded in a `command` step's `run` words and in its `record:` path:
-`{run_directory}`, and `{transcript}`, the transcript of the `llm` step this one follows in the
-same state, at the attempt that ran. The list is closed, so a misspelling is refused at load rather
-than handed to a program as literal braces, and so is a `{transcript}` in a state with no `llm` step
-before it. `{}` and `{a: .b}` match nothing and stay ordinary text, because `find -exec` and `jq`
-write them.
+Three placeholders are expanded in a `command` step's `run` words and in its `record:` path:
+`{run_directory}`; `{task}`, the **absolute path of the task document this run was started from** —
+the one `protocol drive run --task <file>` named, or the one it discovered when no flag did, and the
+same path again on a resume, because the run directory remembers it; and `{transcript}`, the
+transcript of the `llm` step this one follows in the same state, at the attempt that ran. The list
+is closed, so a misspelling is refused at load rather than handed to a program as literal braces,
+and so is a `{transcript}` in a state with no `llm` step before it. `{}` and `{a: .b}` match nothing
+and stay ordinary text, because `find -exec` and `jq` write them.
+
+`{task}` exists because a map is written once and driven many times: a verb that binds to *this
+run's* task — `protocol specification evidence --task {task}` is the one that ships — had no way to
+be told which document that was, and fell back to the task `project.yaml` names. It is absolute
+because a `command` step is spawned with the project directory as its working directory, and a
+relative `--task` is relative to wherever the operator typed it.
 
 ## Task and artifact manifest
 

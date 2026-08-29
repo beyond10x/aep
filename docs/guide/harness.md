@@ -81,7 +81,18 @@ on the work the task declares — `spec-driven.before_implementation`'s
 `ArtifactRequirement::matches` over `Task::declared_work`, which is the same function and the same
 set the engine answers `RequirementContext::task_artifacts` with. The task is `--task <file>` or the
 one `project.yaml` names; with neither in reach the selection is unbound and takes the store's one
-in-force specification. It writes nothing and says why when the store holds none of this task's or
+in-force specification.
+
+**A driven step names the task rather than discovering one.** `drivers/development/default.yaml`
+writes `--task {task}`, which the driver expands to the absolute path of the task document *this
+run* was started from. Discovery is the fallback and it answers a different question — *which task
+does this project name?* — so a run driven with `protocol drive run --task <a path that is not the
+project's>` used to decide the project's story's specification while the engine's cursor said
+something else. The three placeholders a map may write — `{run_directory}`, `{task}`, `{transcript}`
+— are `CommandStep::PLACEHOLDERS` (`crates/aep-driver-spec/src/map.rs`), and a misspelling is
+refused at load rather than handed to a program as literal braces.
+
+It writes nothing and says why when the store holds none of this task's or
 more than one, which the driver reads as D5's `Unknown`. `--artifact` names *which* specification,
 never *whether* the binding applies: an id that does not specify this task's work is refused, because
 a flag that produced the record would be the way around the guard rather than the way through it.

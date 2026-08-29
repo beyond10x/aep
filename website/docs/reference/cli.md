@@ -82,6 +82,54 @@ starts for a step, so a `command` step's `protocol artifact move` reads back as 
 in `protocol artifact history` rather than as the operator's. Nothing here *verifies* an
 identity — it is a declaration, exactly as strong as the rest of the provenance model.
 
+## Specification surface
+
+One verb, and it answers one question: **is the specification this task is being held to satisfied
+by what this run observed?** It reads the planning store and a run's snapshot, decides every
+requirement, and writes the `specification` evidence record `protocol evaluate --evidence` accepts —
+the record `spec-driven` reads as `specification.satisfied` before a task may complete.
+
+| Command | Does |
+|---|---|
+| `protocol specification evidence [--store .engineering/planning] [--task <file>] [--snapshot <file>] [--artifact <id>] [--out <file>] [--format text\|yaml\|json]` | decides the specification of this task's work, requirement by requirement, and writes the record naming what is unmet |
+
+**A requirement is a list item under a `Requirements` or `Acceptance` heading, and it is satisfied
+when the predicate it names in backticks is observed `True`.** Nothing in a markdown artifact marks
+a requirement, so the verb defines one, and the definition has to be one you can satisfy on purpose
+and cannot satisfy by accident: a requirement naming no predicate is reported **unmet**, and a
+ticked checkbox is deliberately not the rule — the party that writes the specification is the party
+being checked. `False` and `Unknown` both fail to satisfy and are reported apart, because nobody
+looked is not the same finding as it is broken. Without `--snapshot` every requirement reads
+`Unknown`, which is a legitimate question of its own: *is this written so that anything could ever
+decide it?*
+
+**Which specification is the guard's own question.** Omit `--artifact` and the verb selects an
+approved `specification` whose `specifies` edge lands on the work the task declares — the rule
+`spec-driven.before_implementation` states, evaluated by the engine's own function, so the verb
+cannot decide a document the guard it serves would refuse. The task is `--task <file>`, or the one
+`project.yaml` names when the flag is absent; with neither in reach the selection is unbound and
+falls back to the store's one in-force specification. A driven step writes `--task {task}`, which
+the driver expands to the document *that run* was started from.
+
+`--artifact` names *which* specification, never *whether* the binding applies: an id that does not
+specify this task's work is refused. It does lift the status half, so a `draft` can be asked whether
+it states anything a fact could decide.
+
+**A refusal names both ends and which document it read**, because the wrong task is the failure a
+reader cannot otherwise see:
+
+```text
+2 specifications in .engineering/planning are this task's — specification:billing,
+specification:billing-v2 — so a step here would establish something about one of several
+documents. this task's work is story:billing, task:BILLING-1 (from
+.engineering/task-billing.yaml). `--artifact` names one exactly; it does not lift the binding
+```
+
+It exits `0` whatever the verdict — an unsatisfied specification is exactly what the record is for —
+and writes nothing at all when it cannot tell which specification the run is about. A driver reads
+that as *nothing observed*, and the run stops at the guard rather than moving on a record about
+somebody else's story.
+
 ## Adoption surface
 
 `protocol reverse` points the tooling at a repository that already exists and was not written with

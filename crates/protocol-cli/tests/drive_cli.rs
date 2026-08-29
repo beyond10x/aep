@@ -1079,3 +1079,269 @@ fn a_command_step_naming_another_program_is_resolved_as_written() {
         "that step ran this CLI, which is not what it named:\n{log}"
     );
 }
+
+// ------------------------------------------------------------------------------------------------
+// `{task}`: which task document a step is about
+// ------------------------------------------------------------------------------------------------
+
+/// This repository's tree, written the only way `project.yaml` accepts it: **relative** to the
+/// project's own `.engineering` directory.
+///
+/// An absolute path is refused by name — *an absolute path names a place on one machine* — and this
+/// fixture lives under `TMPDIR`, which shares no useful prefix with the repository. So the relation
+/// is spelled out: one `..` for every component of the fixture's `.engineering`, then the
+/// repository root's own components.
+fn tree_relative_to(engineering: &Path) -> String {
+    use std::path::Component;
+    let climb = engineering
+        .components()
+        .filter(|component| matches!(component, Component::Normal(_)))
+        .count();
+    let descend = root()
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("{}/{descend}", vec![".."; climb].join("/"))
+}
+
+/// A project whose store holds two stories, two approved specifications and two tasks.
+///
+/// The shape the defect needs, and it needs every part of it: a task the **project** names, a
+/// different task the **run** is started from, and a specification bound to each — because a verb
+/// that binds by discovery and a verb that binds to the run's own task give the same answer in any
+/// store where those are the same document.
+struct TwoTasks {
+    directory: PathBuf,
+}
+
+impl TwoTasks {
+    fn new(name: &str) -> Self {
+        // The pid is in the path because `TMPDIR` is one directory for every session and worktree
+        // on this machine, and this fixture begins by deleting its own tree. Canonical, because
+        // `tree_relative_to` walks out of it with `..` and the kernel resolves that physically: one
+        // symlinked component anywhere in `TMPDIR` and the climb lands somewhere else.
+        let directory = std::env::temp_dir()
+            .canonicalize()
+            .expect("the temporary directory exists")
+            .join(format!("protocol-drive-task-{name}-{}", std::process::id()));
+        std::fs::remove_dir_all(&directory).ok();
+        std::fs::create_dir_all(&directory).expect("the temporary tree is writable");
+
+        for (story, title) in [
+            ("passkeys", "Sign in with a passkey"),
+            ("billing", "Bill it"),
+        ] {
+            write(
+                &directory.join(format!(".engineering/planning/story/{story}.md")),
+                &format!(
+                    "---\nformat: aep.planning-md/1\nid: story:{story}\nkind: story\n\
+                     status: active\ntitle: {title}\nsummary: What the work is.\n---\n# Story\n\n\
+                     The body nobody reads.\n"
+                ),
+            );
+            write(
+                &directory.join(format!(".engineering/planning/specification/{story}.md")),
+                &format!(
+                    "---\nformat: aep.planning-md/1\nid: specification:{story}\n\
+                     kind: specification\nstatus: approved\ntitle: {title}, specified\n\
+                     summary: What it must do.\nrelations:\n- specifies: story:{story}\n---\n\
+                     # Specification\n\n## Acceptance\n\n- It works: `tests.unit.failed == 0`\n"
+                ),
+            );
+        }
+
+        // The project, and the task it names. This is the document discovery finds, and it is the
+        // one a run started from another task must **not** be about.
+        write(
+            &directory.join(".engineering/project.yaml"),
+            &format!(
+                "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+                 protocols: {}\n",
+                tree_relative_to(&directory.join(".engineering"))
+            ),
+        );
+        write(
+            &directory.join(".engineering/task.yaml"),
+            "id: DRIVE-P\nkind: feature\nobjective: the-project-s-own-task\nprotocol: adp/1\n\
+             profile: development.standard\nderived_from:\n  - story:passkeys\n",
+        );
+
+        // And the task this run is started from, which the project names nowhere.
+        write(
+            &directory.join("task-billing.yaml"),
+            "id: DRIVE-B\nkind: feature\nobjective: the-task-the-run-was-started-from\n\
+             protocol: adp/1\nprofile: development.standard\nderived_from:\n  - story:billing\n",
+        );
+
+        Self { directory }
+    }
+
+    /// A one-state map whose only step asks which specification this run is being held to.
+    ///
+    /// `--out` and no `evidence:`: what is under test is which document the verb bound to, and a
+    /// step that also submitted a record would additionally be a test of the engine's routing.
+    fn map(&self, name: &str, task_flag: bool, stop: bool) -> PathBuf {
+        let flag = if task_flag {
+            "--task, \"{task}\", "
+        } else {
+            ""
+        };
+        // The pause goes *before* the step under test, so a resume is the only thing that can run
+        // it: a test that let the first invocation write the record would be a test of `run`
+        // wearing a resume's name.
+        let pause = if stop {
+            "      - kind: operator\n        prompt: say whether this is the right task\n"
+        } else {
+            ""
+        };
+        let path = self.directory.join(format!("{name}.yaml"));
+        write(
+            &path,
+            &format!(
+                "format: aep.driver-steps/1\nid: fixture/{name}\nworkflow: adp/default/2\n\
+                 states:\n  establish_verifiers:\n    steps:\n\
+                 {pause}\
+                 \x20     - kind: command\n\
+                 \x20       description: which specification is this run held to\n\
+                 \x20       run: [protocol, specification, evidence, {flag}--out, \
+                 \"{{run_directory}}/specification.yaml\"]\n"
+            ),
+        );
+        path
+    }
+
+    /// Drives one run from `task-billing.yaml` with the map named, and returns its run directory.
+    fn drive(&self, map: &Path, ordinal: &str, extra: &[&str]) -> (Output, PathBuf) {
+        let mut args = vec![
+            "drive".to_owned(),
+            "run".to_owned(),
+            "--project".to_owned(),
+            printable(&self.directory).to_owned(),
+            "--root".to_owned(),
+            printable(&root()).to_owned(),
+            "--task".to_owned(),
+            printable(&self.directory.join("task-billing.yaml")).to_owned(),
+            "--map".to_owned(),
+            printable(map).to_owned(),
+            "--allow-evidence-gap".to_owned(),
+            "--max-iterations".to_owned(),
+            "8".to_owned(),
+        ];
+        args.extend(extra.iter().map(ToString::to_string));
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        (protocol(&borrowed), self.run(ordinal))
+    }
+
+    /// Resumes one run **naming nothing but the run**, which is the line the driver prints.
+    fn resume(&self, run: &str, extra: &[&str]) -> Output {
+        let mut args = vec![
+            "drive".to_owned(),
+            "resume".to_owned(),
+            run.to_owned(),
+            "--project".to_owned(),
+            printable(&self.directory).to_owned(),
+        ];
+        args.extend(extra.iter().map(ToString::to_string));
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        protocol(&borrowed)
+    }
+
+    /// One run's directory.
+    fn run(&self, ordinal: &str) -> PathBuf {
+        self.directory
+            .join(".engineering/runs/DRIVE-B")
+            .join(ordinal)
+    }
+}
+
+/// The record a driven step writes is about the task the run was **started from**.
+///
+/// `story:task-scoped-artifact-requirements` left this open by name: a `command` step's map could
+/// not say `{task}`, so `protocol specification evidence` in a run driven with
+/// `--task <a path that is not the project's>` reached its own discovery and bound to the
+/// project's task instead — writing `specification.satisfied` about somebody else's story, or
+/// refusing over it.
+///
+/// Both halves are driven here, and the discovery half is not decoration: it is what makes this a
+/// test of the placeholder rather than a test of a store with one specification in it. Without it,
+/// a `{task}` that expanded to the project's own document would pass.
+#[test]
+fn a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from() {
+    let fixture = TwoTasks::new("bound");
+
+    // First, the run as it behaved before `{task}` existed: the step names no task, the verb
+    // discovers the project, and the record is about the project's task, not this run's.
+    let discovering = fixture.map("steps-discovering", false, false);
+    let (output, run) = fixture.drive(&discovering, "1", &[]);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+    let record = std::fs::read_to_string(run.join("specification.yaml"))
+        .unwrap_or_else(|error| panic!("the step wrote no record: {error}\n{said}"));
+    assert!(
+        record.contains("specification:passkeys"),
+        "discovery binds to the project's task, which is the defect this closes:\n{record}"
+    );
+
+    // Then the same run with `--task {task}` in the map, which is the only difference.
+    let named = fixture.map("steps-named", true, false);
+    let (output, run) = fixture.drive(&named, "2", &[]);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+    let record = std::fs::read_to_string(run.join("specification.yaml"))
+        .unwrap_or_else(|error| panic!("the step wrote no record: {error}\n{said}"));
+    assert!(
+        record.contains("specification:billing"),
+        "the record is about the task the run was started from:\n{record}"
+    );
+    assert!(
+        !record.contains("specification:passkeys"),
+        "and about nothing else:\n{record}"
+    );
+
+    // The placeholder was expanded to a path, not passed through as four literal characters: a
+    // verb handed `{task}` would refuse to read it and the step would have written nothing at all,
+    // which is the failure this assertion tells apart from a step that never ran.
+    let log = std::fs::read_to_string(run.join("establish_verifiers-0-1.log"))
+        .unwrap_or_else(|error| panic!("that step wrote no log: {error}\n{said}"));
+    assert!(
+        log.contains(printable(&fixture.directory.join("task-billing.yaml"))),
+        "the step's own log names the document it was handed:\n{log}"
+    );
+}
+
+/// A resume expands `{task}` to what the run was started from, and is told nothing to do it.
+///
+/// The run directory is the record of how the run was launched — that is what `launch.json` is for
+/// — and `{task}` joins the list it remembers. A resume that resolved the document again would
+/// resolve it against *its own* working directory and against whatever `project.yaml` says today,
+/// so one run's steps could name two documents with nothing in the record saying which was meant.
+/// The step under test is behind an `operator` step, so only the resume can run it.
+#[test]
+fn a_resume_expands_the_task_document_the_run_was_started_from() {
+    let fixture = TwoTasks::new("resumed");
+    let map = fixture.map("steps-paused", true, true);
+
+    let (output, run) = fixture.drive(&map, "1", &["--pause-on-approval"]);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+    assert_eq!(
+        code(&output),
+        0,
+        "a run that stops at a person exits 0:\n{said}"
+    );
+    assert!(
+        !run.join("specification.yaml").exists(),
+        "the pause is before the step, so nothing has decided a specification yet:\n{said}"
+    );
+
+    // Nothing but the run id and the project: no `--task`, which is the whole point.
+    let output = fixture.resume("DRIVE-B/1", &["--max-iterations", "8"]);
+    let said = format!("{}{}", stdout(&output), stderr(&output));
+    let record = std::fs::read_to_string(run.join("specification.yaml"))
+        .unwrap_or_else(|error| panic!("the resumed step wrote no record: {error}\n{said}"));
+    assert!(
+        record.contains("specification:billing"),
+        "the resumed step is about the task the run was started from, not the project's:\n{record}"
+    );
+}

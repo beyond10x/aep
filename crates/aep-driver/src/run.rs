@@ -98,9 +98,25 @@ const CURSOR_FILE: &str = "cursor.json";
 const ROUTES_OUT: &str = "the routes out are `--restart`, which allocates a new run id and \
                           re-observes the evidence, or reverting the document that moved";
 
-/// How a run is bounded and what it may do without a person.
+/// How a run is bounded, what it may do without a person, and where its task was read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DriverOptions {
+    /// The document the `task` argument of [`drive`] and [`resume`] was read from.
+    ///
+    /// What `{task}` expands to in a `command` step
+    /// ([`StepContext::task_document`](crate::executor::StepContext::task_document)), and the only
+    /// way a step map can name the document *this* run was started from rather than whichever one
+    /// a verb discovers.
+    ///
+    /// Here rather than beside `task:` in the signature because it is not always knowable: a
+    /// caller may parse a task out of bytes that were never a file, and an `Option` says so where
+    /// a seventh parameter would make every such caller invent a path. `None` is *this run was not
+    /// started from a document*, and a `{task}` in the map is then D5's `Unknown` rather than a
+    /// guess.
+    ///
+    /// **Absolute**, by that field's contract: a `command` step runs in the project directory, and
+    /// a relative path given on a command line is relative to wherever it was typed.
+    pub task_document: Option<PathBuf>,
     /// The blunt bound on the whole loop.
     ///
     /// A third bound beside the per-state visit budget and the per-step retry budget, and the least
@@ -132,6 +148,7 @@ impl Default for DriverOptions {
             pause_on_approval: false,
             headless: true,
             approver: None,
+            task_document: None,
         }
     }
 }
@@ -906,6 +923,9 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         let execution_id = execution.id().clone();
         let context = StepContext {
             task: self.task,
+            // Off the options rather than off the task: a validated `Task` carries no path, by
+            // invariant 10, so the document it was read from is the caller's to state.
+            task_document: self.options.task_document.as_deref(),
             execution: &execution_id,
             state,
             index,
