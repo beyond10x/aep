@@ -478,6 +478,14 @@ the repository root and fails eleven tests whenever the target is elsewhere. Eac
 into its own `target/`; when disk is short, remove a finished worktree's target rather than
 sharing a live one, and treat `touch`ing sources as a symptom, not a fix.
 
+**Test fixtures on disk carry the process id in their path.** The same day, the markdown
+backend's `scratch(name)` opened `$TMPDIR/aep-markdown-store/<name>` and began with
+`remove_dir_all`; `TMPDIR` is one directory for every session and worktree on this machine, so two
+gates running at once deleted each other's fixtures mid-test — one read 1 failed, the other 0, both
+true. Proved without load: two concurrent runs, 52 passed against 50 passed / 2 failed; with the
+pid in the path, 52 and 52 (8c57794). A fixture path a second process can compute is a fixture a
+second process will delete.
+
 ## Safety envelope
 
 This repository publishes a **public** specification and drives real agent runs. Both are exposed
