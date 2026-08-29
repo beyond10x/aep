@@ -1408,15 +1408,24 @@ impl CliExecutors {
         step: &LlmStep,
         frame_file: &Path,
         prompt: &str,
-        tools: &ToolConfig,
+        context: &StepContext<'_>,
     ) -> Vec<String> {
         match harness {
+            // **The actor is derived here, beside the argv it belongs to.** `session_env` sets the
+            // same value on every child this process spawns, which reaches a `command` step because
+            // that is our child; an `llm` step's model is behind metaharness, which constructs its
+            // child's environment rather than inheriting ours, so it has to be *said*. `None` when
+            // the execution id has no actor spelling — the same silence `session_env` keeps, and
+            // declaring a mangled name would be worse than declaring nothing.
             Harness::ClaudeCode => metaharness_argv(
                 frame_file,
                 &self.working_directory,
                 &self.plugin_dirs,
                 prompt,
                 self.b10x.claude_gateway(),
+                aep_driver::attest::session_actor(context.execution)
+                    .map(|actor| actor.to_string())
+                    .as_deref(),
             ),
             Harness::B10x => b10x_argv(
                 &self.b10x,
@@ -1424,7 +1433,7 @@ impl CliExecutors {
                 &step.scope,
                 &step.context,
                 prompt,
-                tools,
+                context.tools,
             ),
         }
     }
@@ -1473,7 +1482,7 @@ impl CliExecutors {
             step,
             &frame_file,
             &prompt_for(step, context),
-            context.tools,
+            context,
         );
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
@@ -3454,6 +3463,7 @@ fn metaharness_argv(
     plugin_dirs: &[PathBuf],
     prompt: &str,
     gateway: Option<(&str, &str)>,
+    actor: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         METAHARNESS_BINARY.to_owned(),
@@ -3467,6 +3477,18 @@ fn metaharness_argv(
         "--decisions".to_owned(),
         "ask".to_owned(),
     ];
+    // **Who the session's own store writes are made as.** `session_env` above sets `AEP_ACTOR` on
+    // every child this process spawns, which reaches a `command` step because that is our child —
+    // and does not reach an `llm` step's model, because metaharness constructs its child's
+    // environment rather than inheriting one. That was recorded as out of scope on this side and a
+    // flag on the other; the flag exists now, and it is declared rather than inherited for the
+    // reason metaharness's own allowlist exists: a variable that can be set by the surrounding
+    // shell is not provenance. Absent when the execution id has no actor spelling, which is the
+    // same silence `session_env` keeps.
+    if let Some(actor) = actor {
+        argv.push("--actor".to_owned());
+        argv.push(actor.to_owned());
+    }
     // **The same gateway both arms can be pointed at, which is what makes them comparable.**
     // Without it the harness comparison is confounded: one arm on a vendor's own model and the
     // other on whatever a gateway serves measures the two models at least as much as the two
@@ -5210,6 +5232,7 @@ mod tests {
             &[],
             "do the thing",
             both.claude_gateway(),
+            None,
         );
         let joined = argv.join(" ");
         assert!(
@@ -5250,6 +5273,7 @@ mod tests {
             &[],
             "do the thing",
             None,
+            None,
         );
         assert!(
             !plain.join(" ").contains("--model-endpoint"),
@@ -5265,10 +5289,23 @@ mod tests {
             &[PathBuf::from("/plugins/claude-code")],
             "do the thing",
             None,
+            Some("agent:T-1.1"),
         );
         assert_eq!(argv[0], "metaharness");
         assert_eq!(argv[1], "run");
         assert_eq!(argv[2], "claude");
+        // **Who the session writes as, declared across the boundary.** `session_env` reaches a
+        // `command` step because that is this process's own child; an `llm` step's model is behind
+        // metaharness, which constructs its child's environment rather than inheriting ours. This
+        // is the flag that closes it, and it is passed rather than exported for the same reason
+        // metaharness keeps an allowlist: a variable the surrounding shell can set is not
+        // provenance. Without it a driven session's `artifact move` journals as `human:$USER` and
+        // the store cannot tell an agent's write from a person's.
+        assert!(
+            argv.windows(2)
+                .any(|pair| pair[0] == "--actor" && pair[1] == "agent:T-1.1"),
+            "the session's actor travels to the harness that will not inherit it: {argv:?}"
+        );
         let has = |flag: &str, value: &str| {
             argv.windows(2)
                 .any(|pair| pair[0] == flag && pair[1] == value)
