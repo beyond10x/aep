@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
-revision: 4
+revision: 5
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs
 
@@ -54,6 +54,24 @@ The crate exists and is in invariant 9's list (`AGENTS.md:288`); `cargo test -p 
 
 Three red-path tests, no production code. The story stays `active` until they exist, because a
 refusal nobody has watched fire is the shape this repository refuses to call done.
+
+### Re-verified — 2026-08-30
+
+Unchanged. `cargo test -p aep-driver-spec` → **35 passed**, exit 0 (33 on 2026-08-28); the two extra
+tests are not these. Line numbers have drifted; the state has not.
+
+- Orphan major pin: production code at `crates/aep-engine/src/registry.rs:377-398`. `registry.rs`
+  still has **no `mod tests`** at all, so no test can reach the branch. The nearest assertion,
+  `crates/aep-driver-spec/src/map.rs:1585`, calls `cross_validate` directly and never loads through
+  the registry.
+- `UndeclaredEvidenceKind`: appears once, at `crates/aep-driver-spec/src/map.rs:913`, in production
+  code only. The sole `check_run` test asserts `refusals.is_empty()`
+  (`crates/protocol-cli/tests/drive_cli.rs:921`) — a green path.
+- `[lints] workspace = true` is present at `crates/aep-driver-spec/Cargo.toml:35`, and the
+  invariant-9 row at `AGENTS.md:300`. Both are still unasserted; the clippy gate step catches the
+  first only indirectly, as 2026-08-28 said.
+
+Two red-path tests are what this story now owes.
 
 ## Out of Scope
 

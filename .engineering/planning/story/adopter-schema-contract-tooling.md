@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:adopter-schema-contract-tooling
 kind: story
-status: active
+status: implemented
 title: One schema, validated and projected for adopters
 summary: An adopter authors one local JSON Schema; protocol validates instances and deterministically projects TypeScript without a second handwritten contract.
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 5
+revision: 7
 ---
 # Story: one project schema registry, validated and projected for adopters
 
@@ -78,3 +78,32 @@ invariant is that every mutation crosses one command surface; prose is not an ex
 None. The project selects the registry path, schemas select their own identity, JSON Schema is the
 single authored source, generated TypeScript is a projection, and the CLI is the sole planning-store
 writer.
+
+## Closed on evidence — 2026-08-30
+
+Eight of nine Acceptance lines hold outright. Runs, this session:
+
+| check | result |
+|---|---|
+| `cargo test -p schema-contract` | 9 passed, exit 0 |
+| `cargo test -p protocol-cli --test schema_contract_cli` | 3 passed, exit 0 |
+| adopter: `protocol schema validate docs/principles.json docs/research/evidence` in `agentic-principles` | `6 schema(s), 6 instance(s): valid`, exit 0 |
+
+Named evidence per line: registry path and default at `crates/aep-domain/src/project.rs:252`, `:268`,
+with `an_absolute_schema_registry_is_refused` at `:975` · offline validation by
+`crates/schema-contract/Cargo.toml:18` (`default-features = false`) and
+`an_unprovided_reference_is_refused_offline` · projection drift by
+`typescript_is_generated_by_schema_id_and_can_be_drift_checked`
+(`crates/protocol-cli/tests/schema_contract_cli.rs:169-172`, asserts exit 1 and the file unchanged) ·
+back-compatibility by `crates/protocol-cli/src/main.rs:522-524` · `artifact body --from <path|->` as
+the sole path by `crates/protocol-cli/tests/planning_cli.rs:270`, `:316`, `:972` · both skills
+prohibiting direct edits at `integrations/claude-code/skills/planning/SKILL.md:54` and the codex
+skill's `:53` · the adopter migrated at `agentic-principles/.engineering/project.yaml:8`
+(`schemas: schemas`), six schemas, one generated module, CI at `.github/workflows/pages.yml:51`.
+
+**The one line not whole** is the last, and it is seven of its eight items: *direct store-write
+instruction* has no test. Nothing in this repository reads a `SKILL.md`'s **content** — the only code
+touching one asserts the file exists (`crates/protocol-cli/src/drive.rs:7747`). A skill that
+regressed to instructing a direct body patch would ship green. Carried as
+`story:skill-text-cannot-instruct-a-direct-store-write` rather than held against this story, because
+it guards the skills, not the schema tooling this story built.

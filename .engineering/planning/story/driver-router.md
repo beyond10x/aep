@@ -12,7 +12,7 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-spec-crate
 - serves: vision:O3
-revision: 4
+revision: 6
 ---
 # Story: `aep-driver` — the three-valued router
 
@@ -36,10 +36,11 @@ so it is held by a test rather than by a sentence.
   source and an ambient environment read.
 - An approval-gated capability never appears in a step's tool set, asserted against a fixture whose
   capability is in `allow`, `approval_required` and `deny` at once.
-- No development profile grants `command.execute`, so an `llm` step holds no shell — asserted, not
-  observed once.
-- The router is handed a `LockState` and never probes for one; a source scan finds no process or
-  filesystem access in the crate.
+- A shell is rendered exactly when `command.execute` is admitted, and never otherwise — asserted,
+  not observed once. A profile that grants the capability gets a shell on purpose.
+- The router is handed a `LockState` and never probes for one. The purity claim is *no clock, no
+  randomness, no ambient environment*; the run directory is the crate's one filesystem impurity, and
+  the scan bans process spawning.
 - No `Producer::Human` and no `Evidence::Approval` is constructible anywhere in the crate.
 
 ## Re-scoped on evidence — 2026-08-28
@@ -59,10 +60,29 @@ are narrower than they read.
 The fourth row is the one that matters: it is a claim in a published story contradicted by the
 crate's own source, and it is written down here rather than left for a reader to discover.
 
+### Reworded — 2026-08-30
+
+Rows three and four are closed by rewording, not by building: the shipped code is the intended
+behaviour and the story's Acceptance was wrong about it.
+
+- `profiles/development-driven.yaml:78` grants `command.execute` deliberately; the header at `:30`
+  and `:65` says why. The property the crate actually holds is asserted by
+  `a_shell_is_rendered_exactly_when_command_execute_is_admitted_and_never_otherwise`
+  (`crates/aep-driver/tests/shell_echo.rs:735`).
+- The `LockState` half holds (`crates/aep-driver/src/lock.rs:3`, `:66`, `:77`). The filesystem half
+  does not: `crates/aep-driver/src/run.rs:260`, `:1259`, `:1276`, `:1280` create, read, write and
+  rename the run directory. Acceptance now says so.
+
+Rows one and two remain open and are what keeps this story `active`: no environment token in
+`BANNED` (`crates/aep-driver/tests/determinism.rs:21-29`), and no one-capability-in-all-three
+fixture asserted through `tool_config` (`crates/aep-driver/tests/tool_config.rs:18-32` uses three
+different capabilities).
+
 ## Out of Scope
 
-The lock file, the liveness probe and the run directory, which sit on the impure side of the line in
-`protocol-cli`. Also out: any evidence an `llm` step could carry — a model-calling step has no field
+The lock file and the liveness probe, which sit on the impure side of the line in `protocol-cli`.
+The run directory is **not** out of scope — it lives in this crate (`crates/aep-driver/src/run.rs`),
+and Acceptance names it as the crate's one filesystem impurity. Also out: any evidence an `llm` step could carry — a model-calling step has no field
 to put it in, by type.
 
 ## Open Questions
