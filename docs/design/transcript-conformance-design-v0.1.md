@@ -118,7 +118,7 @@ between a plan and its emitters, for the same reason.
 ### 2.2 The first adapter: Claude Code `stream-json`
 
 Grounded in a real transcript, read and re-read while writing this: 46 events, 86KB, at
-`/home/operator/.cache/claude-tmp/plugin-eval.3Rgmwv/result.jsonl`, produced by the plugin eval on
+`~/.cache/claude-tmp/plugin-eval.3Rgmwv/result.jsonl`, produced by the plugin eval on
 2026-08-21. The full type census of that run:
 
 | count | event | normalizes to |
@@ -247,7 +247,7 @@ matched and whose `interrupted` is `true` satisfies the first and should fail th
 ### 2.5 Tool traffic is measurable, and it is a context-budget fact
 
 A `tool_use` and its correlated `tool_result` are a *pair*, and the pair has a size. Measured on the
-hermetic run (`/home/operator/.cache/claude-tmp/plugin-eval.VYjb60/result.jsonl`, 37 events):
+hermetic run (`~/.cache/claude-tmp/plugin-eval.VYjb60/result.jsonl`, 37 events):
 
 | tool | calls | errors | input bytes | result bytes | ≈ tokens |
 |---|---:|---:|---:|---:|---:|
@@ -334,7 +334,7 @@ set by a different feature.
 Event 7 is a `user` event with `isSynthetic: true` whose text begins:
 
 ```text
-Base directory for this skill: /home/operator/.cache/claude-tmp/plugin-eval.3Rgmwv/plugin/skills/planning
+Base directory for this skill: ~/.cache/claude-tmp/plugin-eval.3Rgmwv/plugin/skills/planning
 
 # Planning in a governed artifact store
 …

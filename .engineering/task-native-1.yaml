@@ -1,6 +1,7 @@
 # The first native-arm run against a model whose window fits the protocol.
 #
-# The arm is `harness: b10x` on every llm step (map `/home/operator/.cache/ep-native-map.yaml`),
+# The arm is `harness: b10x` on every llm step (map `~/.cache/ep-native-map.yaml` — the map is not
+# tracked here and must be supplied by the operator to reproduce this run),
 # reaching Anthropic's messages endpoint on the operator's subscription. The previous native run
 # died at turn 37 on `maximum context length is 32768 tokens`, which measured the gateway and not
 # the harness.

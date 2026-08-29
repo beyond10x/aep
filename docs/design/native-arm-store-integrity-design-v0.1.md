@@ -102,7 +102,7 @@ about a tool **on a path**.
   `crates/harness-substrate/src/withheld.rs:109-114` — never per path.
 * The catalogue publishes seven entries when the machine can confine writes and execution. The run in
   § 4 published exactly that: `file_read,dir_list,search,find,file_write,file_edit,run`
-  (`/home/operator/.cache/b10x-noBare.log:5`).
+  (`~/.cache/b10x-noBare.log:5`).
 
 So the peer's conclusion holds for the *publication* gate. It does **not** hold for the arm as a
 whole, because the arm has a second gate that is about paths, and it is the write scope.
@@ -177,8 +177,8 @@ That last bullet is what happened.
 | driver run | `EVAL-1/1`, engine `0.32.1`, map digest `b0e5f215…` |
 | loop run id | `b10x-2204624` |
 | when | 2026-08-29, ~13:29 local |
-| console record | `/home/operator/.cache/b10x-noBare.log` |
-| run directory | `/home/operator/.cache/claude-tmp/driven-eval.tYkXuE/ws_project/.engineering/runs/EVAL-1/1/` |
+| console record | `~/.cache/b10x-noBare.log` |
+| run directory | `~/.cache/claude-tmp/driven-eval.tYkXuE/ws_project/.engineering/runs/EVAL-1/1/` |
 | cursor | `"status": "store_broken"`, `"state": "specify"` |
 | catalogue | seven entries including `run` (`b10x-noBare.log:5`) — the PATH and catalogue problems named in `run-driven.sh:110-133` were both fixed before it |
 

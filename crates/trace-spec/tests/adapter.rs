@@ -95,9 +95,9 @@ fn the_edit_runs_tool_traffic_is_eleven_calls_and_not_one_failure() {
     assert_eq!(
         traffic(&ir),
         vec![
-            ("Bash".to_owned(), 4, 0, 4, 1_116, 2_739),
-            ("Edit".to_owned(), 3, 0, 3, 6_863, 637),
-            ("Read".to_owned(), 3, 0, 3, 361, 4_656),
+            ("Bash".to_owned(), 4, 0, 4, 1_116, 2_755),
+            ("Edit".to_owned(), 3, 0, 3, 6_875, 649),
+            ("Read".to_owned(), 3, 0, 3, 373, 4_656),
             ("Skill".to_owned(), 1, 0, 1, 423, 47),
         ],
         "calls, errors, results, input bytes, result bytes"
@@ -398,10 +398,10 @@ fn the_write_run_has_the_same_shape_with_a_different_tool_surface() {
     assert_eq!(
         traffic(&ir),
         vec![
-            ("Bash".to_owned(), 4, 0, 4, 1_186, 1_706),
-            ("Read".to_owned(), 3, 0, 3, 375, 4_682),
+            ("Bash".to_owned(), 4, 0, 4, 1_186, 1_726),
+            ("Read".to_owned(), 3, 0, 3, 387, 4_682),
             ("Skill".to_owned(), 1, 0, 1, 300, 47),
-            ("Write".to_owned(), 3, 0, 3, 4_244, 651),
+            ("Write".to_owned(), 3, 0, 3, 4_256, 663),
         ]
     );
     assert!(

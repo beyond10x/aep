@@ -30,7 +30,7 @@ Measured on the live run:
 | after | **2** |
 
 `protocol drive resume W4-2/1 … --max-iterations 60`, exit 1, status `blocked`
-(`/home/operator/.cache/claude-tmp/resume-2.log`; the same two numbers reproduce under
+(`~/.cache/claude-tmp/resume-2.log`; the same two numbers reproduce under
 `protocol evaluate --state`). The two it removes were **impossible** for a documentation change. The
 two it leaves are `specification` and `verification` records, which the `development/checks` step
 map never produces for **any** task. § 8 is the full accounting of the seven separate things that
