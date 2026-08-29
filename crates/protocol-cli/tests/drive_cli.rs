@@ -2102,3 +2102,43 @@ fn transition_with_an_unknown_run_cannot_answer() {
         stderr(&output)
     );
 }
+
+/// The root is asked about first, and it is the flow's own container, not a state: entering it
+/// proceeds, and leaving it without a run proceeds — the sections inside were governed one by one.
+///
+/// The first paid native walk was refused at `enter root` and ran nothing (2026-08-29); this is
+/// the test that would have cost nothing to write first.
+#[test]
+fn transition_proceeds_at_the_root_which_is_a_container_and_not_a_state() {
+    let fixture = Fixture::new("transition-root", false);
+    for moment in ["enter", "leave"] {
+        let output = transition(&fixture, &[], &consultation("root", moment, false));
+        assert_eq!(
+            code(&output),
+            0,
+            "{moment} root proceeds without a run:\n{}{}",
+            stdout(&output),
+            stderr(&output)
+        );
+    }
+}
+
+/// With a run, leaving the root asks the engine whether the task may move on from the cursor —
+/// and on a run that stopped short, it may not, in the engine's words.
+#[test]
+fn transition_leave_root_with_a_run_is_the_engines_answer() {
+    let fixture = Fixture::new("transition-root-run", false);
+    fixture.drive(&["run"], &[]);
+    let output = transition(
+        &fixture,
+        &["--run", "DRIVE-1/1"],
+        &consultation("root", "leave", false),
+    );
+    let text = stdout(&output);
+    assert_eq!(code(&output), 2, "{text}{}", stderr(&output));
+    let reason: serde_json::Value = serde_json::from_str(text.trim()).expect("a JSON refusal");
+    assert!(
+        reason["reason"].as_str().unwrap_or_default().contains(':'),
+        "the reason is the engine's: state, then what is unmet\n{text}"
+    );
+}

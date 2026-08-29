@@ -2839,9 +2839,26 @@ fn answer(args: &TransitionArgs, path: &str, moment: Moment) -> Result<Answer> {
     let wanted = flow_state(path, moment);
     let workflow = &execution.plan().workflow;
     let Some(wanted) = wanted else {
-        return Ok(Answer::Refuse(format!(
-            "the flow path `{path}` names no section this verb can read"
-        )));
+        // The root is the flow's own container, and the loop asks about it first (design 0003
+        // § 3: "the root is a group and is gated like one"). Entering it is entering the
+        // workflow's initial state, which is where a fresh engine already is: proceed. Leaving it
+        // is the whole walk done, and with a run to stand on the engine says whether the task may
+        // move on from where the cursor is; without one there is nothing to position on, and the
+        // answer is that nothing is owed *here* — the sections inside were governed one by one.
+        // The first paid walk (2026-08-29, `native-eval.IudJuv`) was refused at `enter root` and
+        // ran nothing, which is how this branch came to exist.
+        return Ok(match (moment, positioned_by_run) {
+            (Moment::Enter, _) | (Moment::Leave, false) => Answer::Proceed,
+            (Moment::Leave, true) => match engine.transition(&mut execution) {
+                Ok(TransitionResult::Moved { .. } | TransitionResult::Completed { .. }) => {
+                    Answer::Proceed
+                }
+                Ok(TransitionResult::Blocked { state, reasons }) => {
+                    Answer::Refuse(format!("{state}: {}", reasons.join("; ")))
+                }
+                Err(error) => Answer::Refuse(format!("the engine refused: {error}")),
+            },
+        });
     };
     if !workflow.states.contains_key(&wanted) {
         return Ok(Answer::Refuse(format!(

@@ -32,8 +32,11 @@ belongs in the commit message or in `docs/design/`.
   verb that could not answer, which the loop reads fail closed. `--run <id>` positions the engine
   on that run's snapshot over the store as it is now; without it, on the state the flow path
   names — a step node after its state, a retreat group `<first>-to-<last>` at its first state on
-  `enter` and its last on `leave`. A section that came out failed is left alone. Decides only:
-  writes nothing, takes no lock, and a consultation leaves a run's cursor byte-identical.
+  `enter` and its last on `leave`. The root is the flow's own container: entering it proceeds,
+  leaving it is the engine's answer from a run's cursor and proceeds without one (the first paid
+  native walk was refused at `enter root` and ran nothing; fixed the same night). A section that
+  came out failed is left alone. Decides only: writes nothing, takes no lock, and a consultation
+  leaves a run's cursor byte-identical.
 
 * **A stolen lock is in the taking run's record, and a lock refusal says what the holder is
   doing.** `protocol drive run --take-lock` and `protocol drive resume --take-lock` now write the
