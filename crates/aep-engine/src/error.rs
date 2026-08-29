@@ -91,7 +91,13 @@ pub enum ProtocolError {
     /// the *freshest* record in the log — a negative age inflates the remaining horizon, and the
     /// store can no longer answer whether anybody has ever looked. Refusing it is what makes the
     /// conflation unwritable rather than merely discouraged.
-    #[error("the observation time {observed_at} is in the future; it is {now}")]
+    ///
+    /// The message names the observation **the way the caller wrote it** — a date for a date, an
+    /// epoch value for an epoch value — and the clock as a readable instant beside its millisecond
+    /// count. An adopter pasted `the observation time 1787961600000ms is in the future; it is
+    /// 1787956053626ms` and could not tell which of 215 records it was about, nor that the two
+    /// values are ninety minutes apart.
+    #[error("the observation time {observed_at} is in the future; the clock reads {} ({now})", now.iso_8601())]
     ObservationInFuture {
         /// What the submission claimed.
         observed_at: aep_domain::time::ObservedAt,

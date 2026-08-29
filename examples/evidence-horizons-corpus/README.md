@@ -17,6 +17,7 @@ maintained over several months; the content is not. Free to commit anywhere, inc
 | `corpus/04-classification.md` | 8 arithmetic cases at a fixed reference date, including the `age == horizon` boundary |
 | `corpus/05-traps.md` | 4 rows encoding the two limits: false-within-horizon, and re-check-versus-extend |
 | `corpus/06-reference-gaps.md` | 5 annotations in the four positions this corpus discovered, plus one fenced example that must NOT be counted |
+| `writers-day.yaml` | 5 submitted evidence records encoding *the writer's day is not the engine's day*: which of two spellings of one instant is refused as future |
 | `expected.json` | Generated, not hand-written. Records + per-file coverage + known reference gaps |
 | `generate_expected.py` | Regenerates `expected.json` from a reference implementation |
 
@@ -108,6 +109,45 @@ observation date the identity of the fact, and offer no operation that mutates a
 by whoever is trying to get a gate green. A useful diagnostic to build on top: flag any record whose
 horizon grew while its observation date did not. That needs history rather than one reading, which is
 why it belongs in the store rather than the parser.
+
+## The writer's day is not the engine's day (`writers-day.yaml`)
+
+Same class as the seven positions above — an observation that is present, correct and legible to a
+human, and wrong to the parser — except that here the parser reads the date correctly and the
+*comparison* is what disagrees with the document.
+
+A bare calendar date means midnight UTC. A store at UTC+2 writing local dates therefore writes an
+instant in the future for the last two hours of every UTC day. Measured in an adopter's tree at
+**22:27 UTC on 2026-08-28: 20 of 215 records**, refused. Their exporter now clamps exactly those 20
+to the export instant in epoch milliseconds, with the reason in a comment beside each. Their note on
+it: *"a store west of Greenwich would never have found this."*
+
+The rule the five records encode, read at the corpus's reference date **2026-09-01**:
+
+| # | `observed_at` | spelled as | verdict | why |
+|---|---|---|---|---|
+| 1 | `2026-09-01` | day | admitted | the reference day itself |
+| 2 | `2026-09-02` | day | **admitted** | it began at UTC+14 fourteen hours before Greenwich reaches it |
+| 3 | `1788307200000` | instant | **refused** | the *same instant* as record 2's midnight, and a caller who wrote an instant meant one |
+| 4 | `2026-09-03` | day | refused | it has begun in no timezone |
+| 5 | `1788271620000` | instant | admitted | 14:07 on the reference day, inside it |
+
+Records 2 and 3 are the pair that carries the point: they name one instant and get opposite answers,
+because the granularity a document was written in survives to the comparison. A date is refused only
+when it is unambiguously in the future for **every** writer on earth; an instant keeps the exact
+comparison.
+
+Two things this is deliberately *not*. It is not a relaxation of the refusal — record 4 is refused
+exactly as before, and nothing is downgraded to a warning. And it is not clamping: an engine that
+moves a caller's date to its own clock is an engine deciding when the observation happened, which is
+the one thing it must never do. Clamping belongs in the exporter, which is where the adopter put it.
+
+```console
+$ protocol evidence inspect examples/evidence-horizons-corpus/writers-day.yaml --at 2026-09-01
+```
+
+exits 1 and names records 3 and 4, by file position and by the date as written. `protocol evaluate
+--evidence` answers identically about the same file, submits the other three, and exits 1.
 
 ## Horizon distribution
 

@@ -432,6 +432,15 @@ Two things a horizon cannot do, worth knowing before you set one:
   deliberate: if extending were as easy to call as re-checking, it is the one that would get called
   by whoever is trying to get a gate green.
 
+**Write the date your writers write.** `observed_at: 2026-08-30` is a *day*, not an instant, and a
+store east of Greenwich writes tomorrow's UTC date for the last hours of every UTC day. A date is
+refused as future only once it has begun in **no** timezone — its midnight at UTC+14 — so a correct
+local date is accepted wherever it was written. Write epoch milliseconds only when you mean an
+instant: that spelling is compared exactly, and the two spellings of one midnight can get opposite
+answers from the same clock. A record that is genuinely in the future is still refused, and the
+refusal names the file, the record's position in it and the date as written, while the rest of the
+document is submitted.
+
 `protocol evidence inspect <file>` reads the dates back out of a record without submitting anything,
 and `protocol evidence scan <dir>` does the same for claims written into markdown by hand — with a
 coverage line comparing annotation-shaped occurrences against records the parser actually produced,

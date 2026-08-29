@@ -10,7 +10,7 @@
 //! | 2 | the transition it used to permit is refused, **including** when the guard reads a fact rather than the requirement |
 //! | 3 | re-submitting the identical record restores nothing; only a new observation time does |
 //! | 4 | a snapshot re-decays against the clock it is restored under |
-//! | 5 | an observation in the future is refused outright |
+//! | 5 | an observation in the future is refused outright — a **day** once it has begun in no timezone, an **instant** exactly |
 //! | 6 | `evidence.missing` and the requirement outcome agree about a lapsed record |
 //!
 //! Every test drives the engine on a [`FixedClock`], so *"three weeks later"* is a second engine
@@ -132,7 +132,12 @@ fn task() -> aep_domain::task::Task {
 
 /// An engine whose clock is stopped on `day`.
 fn engine_on(day: &str) -> Engine<FixedClock> {
-    Engine::with_clock(registry(), FixedClock::new(millis(day)))
+    engine_at(millis(day))
+}
+
+/// An engine whose clock is stopped at an instant, for the cases midnight cannot reach.
+fn engine_at(at: u64) -> Engine<FixedClock> {
+    Engine::with_clock(registry(), FixedClock::new(at))
 }
 
 /// Midnight UTC on a day, in epoch milliseconds.
@@ -151,6 +156,21 @@ fn green_on(day: &str) -> EvidenceSubmission {
             verifier: Verifier::TestRunner,
         },
         ObservedAt::new(Timestamp::from_epoch_millis(millis(day))),
+    )
+}
+
+/// A green unit suite, dated with the calendar day a document carries.
+///
+/// The difference from [`green_on`] is the whole subject of `story:a-date-is-a-day-not-an-instant`:
+/// this is what a person writes in a document, and it is a day somewhere rather than an instant
+/// everywhere.
+fn green_dated(day: &str) -> EvidenceSubmission {
+    EvidenceSubmission::new(
+        Evidence::TestResult(TestResult::passing(TestSuite::Unit, 12)),
+        Producer::Verifier {
+            verifier: Verifier::TestRunner,
+        },
+        ObservedAt::on_day(CivilDate::parse(day).expect("a valid date")),
     )
 }
 
@@ -374,6 +394,50 @@ fn an_observation_in_the_future_is_refused_and_never_stored() {
         .submit_evidence(&mut execution, green_on("2026-09-01"))
         .expect("`now` is not the future");
     assert_eq!(execution.recorded_evidence().len(), 1);
+}
+
+#[test]
+fn a_day_that_has_begun_somewhere_is_admitted_and_one_that_has_begun_nowhere_is_still_refused() {
+    // Invariant 7 asserted, not relaxed. The engine still manufactures nothing and still does not
+    // decide when the observation happened: it decides only whether what the caller wrote can
+    // already have been true anywhere on earth. Nothing is clamped and nothing is defaulted.
+    //
+    // The clock is 22:27 UTC on 2026-08-28 — the instant an adopter measured 20 of their 215
+    // records refused, because their store sits at UTC+2 and writes local calendar dates.
+    let engine = engine_at(millis("2026-08-28") + 22 * 3_600_000 + 27 * 60_000);
+    let mut execution = engine.initialize(task()).expect("the task resolves");
+
+    // Written an hour after midnight, two hours east of Greenwich. Correct, and not the future.
+    engine
+        .submit_evidence(&mut execution, green_dated("2026-08-29"))
+        .expect("2026-08-29 began at UTC+14 twelve hours ago; somebody is having that day");
+    assert_eq!(
+        execution.recorded_evidence().len(),
+        1,
+        "the fixture reaches the state the rule is about: a date one UTC day ahead is stored"
+    );
+
+    // The same day, spelled as the instant it starts at, is refused — which is what proves the
+    // granularity is what decided the case above, and not a blanket day of slack.
+    let exact = engine
+        .submit_evidence(&mut execution, green_on("2026-08-29"))
+        .expect_err("an epoch value is compared exactly; that midnight has not arrived");
+    assert_eq!(exact.code(), "observation_in_future", "{exact}");
+
+    // And tomorrow in every timezone is still refused.
+    let refusal = engine
+        .submit_evidence(&mut execution, green_dated("2026-08-30"))
+        .expect_err("a day that has begun nowhere is a plan, not an observation");
+    assert_eq!(refusal.code(), "observation_in_future", "{refusal}");
+    assert!(
+        refusal.to_string().contains("2026-08-30"),
+        "the refusal names the date as the caller wrote it: {refusal}"
+    );
+    assert_eq!(
+        execution.recorded_evidence().len(),
+        1,
+        "and both refusals left nothing behind — a refused record changes nothing"
+    );
 }
 
 #[test]

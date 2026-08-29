@@ -320,7 +320,9 @@ pub fn lifecycle(
 /// Inferring it from when the document was read is the single-field convention that classifies a
 /// three-week-old reading as this morning's; a date a person has to write is a date a person has to
 /// know. It accepts either spelling
-/// [`ObservedAt`](aep_domain::time::ObservedAt) accepts — a calendar date, or epoch milliseconds.
+/// [`ObservedAt`](aep_domain::time::ObservedAt) accepts — a calendar date, or epoch milliseconds —
+/// and which one was written survives the parse, because a day and an instant are refused as
+/// future on different boundaries.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct EvidenceInput {
     /// The observation.
@@ -403,12 +405,27 @@ states:
         );
         assert_eq!(
             inputs[0].observed_at,
+            aep_domain::time::ObservedAt::on_day(
+                aep_domain::time::CivilDate::parse("2026-08-30").expect("a date")
+            ),
+            "an observation time written as a date reaches the submission as a day"
+        );
+        assert_eq!(
+            inputs[0].observed_at.timestamp(),
+            aep_domain::time::CivilDate::parse("2026-08-30")
+                .expect("a date")
+                .to_timestamp(),
+            "whose instant is still midnight UTC — the day is carried beside it, not instead of it"
+        );
+        assert_ne!(
+            inputs[0].observed_at,
             aep_domain::time::ObservedAt::new(
                 aep_domain::time::CivilDate::parse("2026-08-30")
                     .expect("a date")
                     .to_timestamp()
             ),
-            "an observation time written as a date reaches the submission as an instant"
+            "and it is not the same value as the epoch spelling of that instant, because the two \
+             are refused as future on different boundaries"
         );
         let aep_domain::evidence::Evidence::Review(review) = &inputs[0].evidence else {
             panic!("expected a review");

@@ -1,0 +1,73 @@
+# The writer's day is not the engine's day.
+#
+# Five submitted records, read at the corpus's reference date **2026-09-01**. Two of them are
+# refused as future observations and three are not, and which is which is decided by *how the
+# observation time was spelled* rather than by the instant behind it. Records 2 and 3 name the
+# same instant — midnight UTC on 2026-09-02 — and only one of them is refused.
+#
+# The case is an adopter's, measured 2026-08-28 at 22:27 UTC: their store sits at UTC+2, their
+# exporter writes local calendar dates, and for the last two hours of every UTC day the correct
+# date parses to an instant in the future. 20 of their 215 records. Their note on it: *"a store
+# west of Greenwich would never have found this."*
+#
+#   protocol evidence inspect examples/evidence-horizons-corpus/writers-day.yaml --at 2026-09-01
+#
+# exits 1 and names records 3 and 4. Nothing here is clamped, defaulted or rewritten: a record
+# genuinely in the future stays refused, which is invariant 7.
+
+# 1 — the reference day itself, written as a day. Admitted, and always was.
+- kind: test_result
+  observed_at: 2026-09-01
+  suite: unit
+  passed: 34
+  failed: 0
+  producer:
+    producer: verifier
+    verifier: test-runner
+
+# 2 — the case. A writer at UTC+2 at 00:30 local writes 2026-09-02 while Greenwich is still on
+# 2026-09-01. The day began at UTC+14 fourteen hours before it begins at Greenwich, so somebody on
+# earth is having it: admitted. This record is the one that used to refuse the whole document.
+- kind: test_result
+  observed_at: 2026-09-02
+  suite: regression
+  passed: 812
+  failed: 0
+  producer:
+    producer: verifier
+    verifier: test-runner
+
+# 3 — the same instant as record 2's midnight, spelled as an instant. Refused. A caller who wrote
+# an epoch value meant one, so it gets the exact comparison and no timezone width. The two records
+# differ in nothing but their spelling, which is why the spelling is carried to the comparison.
+- kind: test_result
+  observed_at: 1788307200000
+  suite: integration
+  passed: 7
+  failed: 0
+  producer:
+    producer: verifier
+    verifier: test-runner
+
+# 4 — tomorrow in every timezone. Refused. The rule was widened by the width of the timezone map
+# and by nothing else; a day that has begun nowhere is a plan, not an observation.
+- kind: test_result
+  observed_at: 2026-09-03
+  suite: unit
+  passed: 1
+  failed: 0
+  producer:
+    producer: verifier
+    verifier: test-runner
+
+# 5 — 2026-09-01T14:07Z, written as an instant, inside the reference day. Admitted: reading a
+# record on the day it was written is the verb's primary use, and `--at` pins the comparison to
+# the end of the named day rather than to its first millisecond.
+- kind: test_result
+  observed_at: 1788271620000
+  suite: acceptance
+  passed: 3
+  failed: 0
+  producer:
+    producer: verifier
+    verifier: test-runner

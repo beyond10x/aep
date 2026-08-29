@@ -624,7 +624,10 @@ fn record(date: CivilDate, span: &Span, line: usize) -> ClaimRecord {
     };
     ClaimRecord {
         claim,
-        observed_at: ObservedAt::new(date.to_timestamp()),
+        // A date written in a document is a day, and the type is told so: nothing here compares it
+        // against a clock, but a value that says `instant` about a date somebody typed is a value
+        // the next reader has to un-learn.
+        observed_at: ObservedAt::on_day(date),
         date,
         horizon,
         malformed,
@@ -1179,11 +1182,7 @@ mod tests {
             vec![HorizonGrowth::Grew {
                 claim: claim.to_string(),
                 date: CivilDate::parse("2026-08-04").expect("a date"),
-                observed_at: ObservedAt::new(
-                    CivilDate::parse("2026-08-04")
-                        .expect("a date")
-                        .to_timestamp()
-                ),
+                observed_at: ObservedAt::on_day(CivilDate::parse("2026-08-04").expect("a date")),
                 before: Horizon::days(7).expect("a horizon"),
                 after: Horizon::days(60).expect("a horizon"),
             }],
