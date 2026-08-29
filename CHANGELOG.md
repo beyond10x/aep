@@ -9,6 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+* **Both harnesses can be pointed at one gateway, which is what makes a harness comparison one.**
+  `--claude-endpoint` and `--claude-model` join the existing `--b10x-endpoint`/`--b10x-model`, so a
+  `harness: claude-code` step and a `harness: b10x` step can run against the same model. Without
+  this a comparison of the two arms measured the two *models* at least as much as the two harnesses,
+  and no scorer could separate them afterwards. metaharness requires `--credentials none` alongside
+  an endpoint — a child pointed at a foreign endpoint must hold no operator credential — so the
+  driver passes it rather than making the caller remember. An endpoint with no model, or a model
+  with nowhere to go, is not a gateway and is ignored: metaharness refuses each alone, and passing
+  half of one would turn a flag mistake into a launch refusal several states into a paid run.
+
 ### Changed
 
 * **A quoted metacharacter is an argument, not a composition.** The rule refusing `&&`, `|`, `;`,

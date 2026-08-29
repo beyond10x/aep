@@ -223,6 +223,40 @@ pub(crate) struct B10xOptions {
     #[arg(long = "b10x-api-key")]
     #[serde(default)]
     api_key: bool,
+    /// Point a `harness: claude-code` step at the same gateway, so the two arms differ by harness.
+    ///
+    /// **This is what makes a harness comparison a comparison.** With one arm on a vendor's own
+    /// model and the other on whatever a gateway serves, a difference in waste is a difference in
+    /// two things at once, and no scorer can separate them afterwards. Pointed here, both arms
+    /// speak to the same endpoint — Claude Code reaches Anthropic messages at `{root}/v1/messages`
+    /// and the b10x loop the Responses wire at `{root}/v1/responses`, which is the generic model
+    /// adapter's whole point.
+    ///
+    /// metaharness requires `--credentials none` alongside an endpoint, because a child pointed at
+    /// a foreign endpoint must hold no operator credential; the driver passes it rather than making
+    /// the caller remember.
+    #[arg(long = "claude-endpoint", value_name = "BASE_URL")]
+    #[serde(default)]
+    claude_endpoint: Option<String>,
+    /// The model that endpoint serves, for the Claude Code arm.
+    #[arg(long = "claude-model", value_name = "MODEL")]
+    #[serde(default)]
+    claude_model: Option<String>,
+}
+
+impl B10xOptions {
+    /// The gateway a Claude Code step is pointed at, when both halves were given.
+    ///
+    /// Both or neither: an endpoint with no model reaches a gateway and asks it for nothing, and a
+    /// model with no endpoint is a word with nowhere to go. metaharness refuses each on its own,
+    /// and a driver that passed one and not the other would turn a flag mistake into a launch
+    /// refusal three states into a paid run.
+    fn claude_gateway(&self) -> Option<(&str, &str)> {
+        match (&self.claude_endpoint, &self.claude_model) {
+            (Some(endpoint), Some(model)) => Some((endpoint.as_str(), model.as_str())),
+            _ => None,
+        }
+    }
 }
 
 /// The arguments of `protocol drive run`.
@@ -1209,6 +1243,7 @@ impl CliExecutors {
                 &self.working_directory,
                 &self.plugin_dirs,
                 prompt,
+                self.b10x.claude_gateway(),
             ),
             Harness::B10x => b10x_argv(
                 &self.b10x,
@@ -2818,6 +2853,7 @@ fn metaharness_argv(
     working_directory: &Path,
     plugin_dirs: &[PathBuf],
     prompt: &str,
+    gateway: Option<(&str, &str)>,
 ) -> Vec<String> {
     let mut argv = vec![
         METAHARNESS_BINARY.to_owned(),
@@ -2830,9 +2866,23 @@ fn metaharness_argv(
         frame.display().to_string(),
         "--decisions".to_owned(),
         "ask".to_owned(),
-        "-p".to_owned(),
-        prompt.to_owned(),
     ];
+    // **The same gateway both arms can be pointed at, which is what makes them comparable.**
+    // Without it the harness comparison is confounded: one arm on a vendor's own model and the
+    // other on whatever a gateway serves measures the two models at least as much as the two
+    // harnesses, and no scorer can separate them afterwards. metaharness requires
+    // `--credentials none` alongside an endpoint — a child pointed at a foreign endpoint must hold
+    // no operator credential — so the two travel together or not at all.
+    if let Some((endpoint, model)) = gateway {
+        argv.push("--model-endpoint".to_owned());
+        argv.push(endpoint.to_owned());
+        argv.push("--model".to_owned());
+        argv.push(model.to_owned());
+        argv.push("--credentials".to_owned());
+        argv.push("none".to_owned());
+    }
+    argv.push("-p".to_owned());
+    argv.push(prompt.to_owned());
     for directory in plugin_dirs {
         argv.push("--plugin-dir".to_owned());
         argv.push(directory.display().to_string());
@@ -4234,6 +4284,74 @@ mod tests {
         );
     }
 
+    /// Both arms can be pointed at one gateway, which is what makes a harness comparison one.
+    ///
+    /// With one arm on a vendor's own model and the other on whatever a gateway serves, a
+    /// difference in waste is a difference in two things at once and no scorer can separate them
+    /// afterwards. The endpoint and the model travel together — an endpoint with no model reaches a
+    /// gateway and asks it for nothing — and `--credentials none` travels with them, because
+    /// metaharness refuses a child that holds an operator credential while pointed somewhere
+    /// foreign.
+    #[test]
+    fn a_claude_step_can_be_pointed_at_the_same_gateway_as_the_native_loop() {
+        let both = B10xOptions {
+            claude_endpoint: Some("http://127.0.0.1:18080".to_owned()),
+            claude_model: Some("qwen3.8-27b".to_owned()),
+            ..B10xOptions::default()
+        };
+        let argv = metaharness_argv(
+            Path::new("/runs/T-1/1/frame.json"),
+            Path::new("/repo"),
+            &[],
+            "do the thing",
+            both.claude_gateway(),
+        );
+        let joined = argv.join(" ");
+        assert!(
+            joined.contains("--model-endpoint http://127.0.0.1:18080"),
+            "the gateway reaches the argv: {joined}"
+        );
+        assert!(
+            joined.contains("--model qwen3.8-27b"),
+            "and so does the model it serves: {joined}"
+        );
+        assert!(
+            joined.contains("--credentials none"),
+            "and the credential rule travels with them rather than being remembered: {joined}"
+        );
+
+        // Half a gateway is no gateway: metaharness refuses each alone, and a driver that passed
+        // one would turn a flag mistake into a launch refusal states into a paid run.
+        for half in [
+            B10xOptions {
+                claude_endpoint: Some("http://127.0.0.1:18080".to_owned()),
+                ..B10xOptions::default()
+            },
+            B10xOptions {
+                claude_model: Some("qwen3.8-27b".to_owned()),
+                ..B10xOptions::default()
+            },
+        ] {
+            assert!(
+                half.claude_gateway().is_none(),
+                "an endpoint with no model, or a model with nowhere to go, is not a gateway"
+            );
+        }
+
+        // And with neither, the argv is what it has always been.
+        let plain = metaharness_argv(
+            Path::new("/runs/T-1/1/frame.json"),
+            Path::new("/repo"),
+            &[],
+            "do the thing",
+            None,
+        );
+        assert!(
+            !plain.join(" ").contains("--model-endpoint"),
+            "a run that named no gateway is pointed at none"
+        );
+    }
+
     #[test]
     fn the_metaharness_argv_drives_the_seam_with_the_declared_directory_and_frame() {
         let argv = metaharness_argv(
@@ -4241,6 +4359,7 @@ mod tests {
             Path::new("/operator/repo"),
             &[PathBuf::from("/plugins/claude-code")],
             "do the thing",
+            None,
         );
         assert_eq!(argv[0], "metaharness");
         assert_eq!(argv[1], "run");
@@ -4291,6 +4410,7 @@ mod tests {
             endpoint: Some("http://127.0.0.1:8080".to_owned()),
             model: Some("a-model".to_owned()),
             api_key: false,
+            ..B10xOptions::default()
         };
 
         let argv = b10x_argv(
@@ -4596,6 +4716,7 @@ mod tests {
             endpoint: Some("http://127.0.0.1:8080".to_owned()),
             model: Some("a-model".to_owned()),
             api_key: false,
+            ..B10xOptions::default()
         };
         let installed = session_path()
             .split(':')
