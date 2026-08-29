@@ -11,6 +11,16 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A story says which objective it serves, and `validate` holds it to that.** A fourteenth
+  relation, `serves`, points at an objective — a `vision` artifact — and nothing else (`validate`
+  refuses a `serves` into any other kind). Where a store declares at least one `vision`, every
+  `proposed`, `approved` or `active` story or task must `serves` one, and `protocol artifact
+  validate` names each that does not; `draft`, `implemented` and `archived` are exempt, so nothing
+  agreed before objectives existed is rewritten and nothing nobody has agreed to is charged. A
+  store with no `vision` artifact has declared nothing to serve and is untouched by the rule. The
+  objectives themselves are atlas `ROADMAP.md`'s `O1`–`O6`, held here as `vision:O1`…`vision:O6`
+  (atlas ADR 0005). `protocol artifact relate <id> serves vision:<objective>` is the line.
+
 * **`protocol drive transition` — the governor a native flow consults at a section boundary.**
   `b10x-harness workflow run` walks a flow `protocol workflow flow` projected from a workflow, and
   that projection is an ordering, not a government: no guard travels. The loop asks a `transition`

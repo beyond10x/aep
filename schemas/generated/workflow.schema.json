@@ -826,6 +826,13 @@
           "enum": [
             "delivers"
           ]
+        },
+        {
+          "description": "Moves an objective the collection has set — a `vision` artifact — and says which.",
+          "type": "string",
+          "enum": [
+            "serves"
+          ]
         }
       ]
     },

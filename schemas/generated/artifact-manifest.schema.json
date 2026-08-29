@@ -293,6 +293,9 @@
         },
         {
           "delivers": "design:passkeys-auth"
+        },
+        {
+          "serves": "design:passkeys-auth"
         }
       ],
       "type": "object",

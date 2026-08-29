@@ -11,6 +11,7 @@ tags:
 - harness
 relations:
 - decomposes: epic:cross-harness-portability
+- serves: vision:O3
 revision: 5
 ---
 # Story: A native flow is governed by the engine at every section boundary

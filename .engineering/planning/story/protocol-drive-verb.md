@@ -13,6 +13,7 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-router
 - depends_on: story:default-step-map
+- serves: vision:O3
 revision: 3
 ---
 # Story: `protocol drive` — the run that touches the world

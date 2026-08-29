@@ -11,6 +11,7 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-spec-crate
+- serves: vision:O3
 revision: 4
 ---
 # Story: `aep-driver` — the three-valued router

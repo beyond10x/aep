@@ -11,6 +11,7 @@ tags:
 - schema
 relations:
 - decomposes: epic:adopter-feedback-round-1
+- serves: vision:O2
 revision: 5
 ---
 # Story: one project schema registry, validated and projected for adopters

@@ -882,7 +882,7 @@ fn the_vocabulary_verbs_answer_without_a_store() {
     assert_eq!(code(&relations), 0, "{}", stderr(&relations));
     assert_eq!(
         stdout(&relations).lines().count(),
-        13,
+        14,
         "{}",
         stdout(&relations)
     );
@@ -990,5 +990,72 @@ fn the_command_only_scan_sees_a_write_it_should_refuse() {
     assert!(
         !writes_behind_the_contract("    /// Calls `store.update(…)` on its behalf."),
         "and must not fire on prose that names it"
+    );
+}
+
+/// **Grounding** (atlas ADR 0005): once a store declares an objective, agreed work says which it
+/// serves — and `serves` points at an objective and nothing else.
+#[test]
+fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
+    let store = scratch("aep-planning-serves");
+    // No objective declared: an active story that serves nothing is not a problem.
+    write(
+        &store.join("story/agreed.md"),
+        &story("story:agreed", "active", ""),
+    );
+    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&output), 0, "{}", stdout(&output));
+
+    // An objective appears. Now the active story must say which it serves; the draft need not.
+    write(
+        &store.join("vision/O1.md"),
+        "---\nid: vision:O1\nkind: vision\nstatus: approved\ntitle: Governed reach\n---\n# O1\n",
+    );
+    write(
+        &store.join("story/thought.md"),
+        &story("story:thought", "draft", ""),
+    );
+    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let text = stdout(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    assert!(text.contains("1 problem(s):"), "{text}");
+    assert!(
+        text.contains("story:agreed is active and serves no objective"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("story:thought"),
+        "a draft is not charged:\n{text}"
+    );
+
+    // Said which: valid again.
+    write(
+        &store.join("story/agreed.md"),
+        &story(
+            "story:agreed",
+            "active",
+            "relations:\n- serves: vision:O1\n",
+        ),
+    );
+    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&output), 0, "{}", stdout(&output));
+
+    // `serves` into anything but a vision is refused by name.
+    write(
+        &store.join("story/thought.md"),
+        &story(
+            "story:thought",
+            "draft",
+            "relations:\n- serves: story:agreed\n",
+        ),
+    );
+    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let text = stdout(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    assert!(
+        text.contains(
+            "story:thought says it serves story:agreed, which is a story and not a vision"
+        ),
+        "{text}"
     );
 }

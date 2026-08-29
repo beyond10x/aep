@@ -1131,6 +1131,8 @@ pub enum RelationKind {
     Supersedes,
     /// Produces the outcome something asked for.
     Delivers,
+    /// Moves an objective the collection has set — a `vision` artifact — and says which.
+    Serves,
 }
 
 impl RelationKind {
@@ -1149,6 +1151,7 @@ impl RelationKind {
         Self::DependsOn,
         Self::Supersedes,
         Self::Delivers,
+        Self::Serves,
     ];
 
     /// The relation as written in documents.
@@ -1167,6 +1170,7 @@ impl RelationKind {
             Self::DependsOn => "depends_on",
             Self::Supersedes => "supersedes",
             Self::Delivers => "delivers",
+            Self::Serves => "serves",
         }
     }
 
@@ -1208,6 +1212,7 @@ impl RelationKind {
             Self::DependsOn => "depended on by",
             Self::Supersedes => "superseded by",
             Self::Delivers => "delivered by",
+            Self::Serves => "served by",
         }
     }
 }
@@ -2193,9 +2198,73 @@ impl ArtifactGraph {
                     .with_hint("add a `reviews` relation naming the subject"),
                 );
             }
+
+            // `serves` points at an objective and nothing else. An edge that reads "serves" into
+            // a story would be a story claiming to be somebody's purpose.
+            for relation in artifact.targets(RelationKind::Serves) {
+                let target_kind = self.artifacts.get(&relation.id).map(|target| &target.kind);
+                if target_kind.is_some_and(|kind| *kind != ArtifactKind::Vision) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("artifacts.{}.relations", artifact.id),
+                            format!(
+                                "{} says it serves {}, which is a {} and not a vision",
+                                artifact.id,
+                                relation.id,
+                                target_kind.map_or("?", ArtifactKind::as_str)
+                            ),
+                        )
+                        .with_hint("`serves` names an objective: a `vision` artifact"),
+                    );
+                }
+            }
         }
 
+        self.validate_grounding(&mut errors);
+
         errors
+    }
+
+    /// **Grounding.** Where a store declares objectives, the work that is agreed and not yet done
+    /// says which of them it moves (atlas ADR 0005).
+    ///
+    /// A story or task that is `proposed`, `approved` or `active` and serves nothing is a question
+    /// for the operator, not a task. History is not rewritten: `implemented` and `archived` are
+    /// exempt, and so is a `draft`, which nobody has agreed to yet. A store with no `vision`
+    /// artifact has declared nothing to serve, and the rule waits for the first one rather than
+    /// refusing every store that has not adopted objectives.
+    fn validate_grounding(&self, errors: &mut ValidationErrors) {
+        let declares_objectives = self
+            .artifacts
+            .values()
+            .any(|artifact| artifact.kind == ArtifactKind::Vision);
+        if declares_objectives {
+            for artifact in self.artifacts.values() {
+                let live = matches!(
+                    artifact.status,
+                    ArtifactStatus::Proposed | ArtifactStatus::Approved | ArtifactStatus::Active
+                );
+                let work = matches!(artifact.kind, ArtifactKind::Story | ArtifactKind::Task);
+                if work && live && artifact.targets(RelationKind::Serves).next().is_none() {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::EmptyDeclaration,
+                            format!("artifacts.{}.relations", artifact.id),
+                            format!(
+                                "{} is {} and serves no objective: this store declares objectives \
+                                 (`vision` artifacts), and agreed work says which it moves",
+                                artifact.id, artifact.status
+                            ),
+                        )
+                        .with_hint(
+                            "`protocol artifact relate <id> serves vision:<objective>` — or ask \
+                             the operator which objective this work is for",
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     /// Projects the graph into facts, so predicates can be written against it.

@@ -518,16 +518,18 @@ a design review, so the reason is worth having before you write the document.
 ### Relation names
 
 An `artifacts/relations/` document declares which pairings your tree means — that part is yours. The
-names an edge may carry are the engine's, and there are thirteen:
+names an edge may carry are the engine's, and there are fourteen:
 
 ```text
 informed_by  derived_from  decomposes  specifies  designs  implements  decides
-reviews  verifies  blocks  depends_on  supersedes  delivers
+reviews  verifies  blocks  depends_on  supersedes  delivers  serves
 ```
 
 A relation name is something the engine *acts on*, not only something it records. `supersedes` gates
 a status: an artifact that reads `superseded` must have a successor declaring it. `reviews` is
-mandatory on a `review-result`. `decomposes` is the edge the artifact tree is built from, and
+mandatory on a `review-result`. `serves` names an objective — a `vision` artifact — and once a store
+declares one, every `proposed`, `approved` or `active` story or task must serve one (`validate`
+says which do not). `decomposes` is the edge the artifact tree is built from, and
 `depends_on` is the one coverage and validation walk. Cycles are checked once per kind. None of that
 can move into a document, because a document can say what an edge *means* and not what the engine
 *does* about it — so an adopter-declared name would be an edge that looks like it should mean

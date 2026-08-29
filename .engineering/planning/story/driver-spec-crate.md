@@ -10,6 +10,7 @@ tags:
 - driver
 relations:
 - decomposes: epic:reference-driver
+- serves: vision:O3
 revision: 4
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs

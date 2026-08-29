@@ -3346,6 +3346,9 @@ fn meaning(relation: RelationKind) -> &'static str {
         RelationKind::DependsOn => "Needs something else first.",
         RelationKind::Supersedes => "Replaces something, which becomes superseded.",
         RelationKind::Delivers => "Produces the outcome something asked for.",
+        RelationKind::Serves => {
+            "Moves an objective the collection has set — a `vision` artifact — and says which."
+        }
     }
 }
 
