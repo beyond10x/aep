@@ -123,7 +123,43 @@ belongs in the commit message or in `docs/design/`.
   `cargo install --root ~/.local` puts the binary where a *session* looks, while a driver-side
   `PATH` is the operator's own shell, so putting `~/.local/bin` first in it is part of the answer.
 
+* **A profile can say *read the public channels, never a direct message*, and one that forgets is
+  refused instead of validating clean.** `network.read` is now scoped by **audience**, the way
+  `deployment.create` is scoped by environment. `network.read:private` covers a read of
+  correspondence addressed to a bounded audience — a direct message, a group DM, a private channel,
+  a mailbox, a ticket's internal comment; `network.read:public` covers material published to an
+  unbounded one; unscoped `network.read` is still both, and every profile, principle and task that
+  writes it means exactly what it meant before. `aep/1` puts `network.read:private` in its approval
+  floor, so `allow: [network.read]` on its own no longer resolves: the refusal names the entry that
+  was forgotten and the hint says to put it in `deny` or `require_approval`. The line that fixes it
+  is `deny: [network.read:private]` beside the grant. **Membership is not the control** — a token
+  that *can* read a direct message is exactly the case a denial is for — and a harness that cannot
+  tell which audience a read will reach refuses rather than guesses, without having to remember to:
+  a request that does not say its audience asks for the wildcard, and `network.read:public` does
+  not cover the wildcard. The driver's tool table asks the private question for the same reason, so
+  a profile that may not read privately is offered no `WebFetch`/`WebSearch`, which no table can
+  promise is public. Nothing here *enforces* the rule at a Slack API — a capability is a declared
+  authorisation decision and the actor that honours it is the harness — but a profile that forgot
+  the rule is now a validation error rather than a paragraph somebody was asked to follow
+  (`story:private-message-denial`, adopter register row `D-I2`).
+
 ### Changed
+
+* **The approval floor accepts a broad grant that explicitly denies the floored entry.** Until now
+  any outright grant overlapping a floor entry was refused, whatever else the profile said, so
+  `allow: [network.read]` with `deny: [network.read:private]` beside it was refused for granting
+  something it had just forbidden. The floor now asks its own question — *what does this policy
+  decide about the floored capability?* — and a `deny` of it is an answer, because a denial cannot
+  be granted back by any later document. An **approval gate on the narrow slice is still not**
+  accepted as that answer: the broad grant would keep deciding `Allowed` for every scope the gate
+  does not name, and refusing that shape is what the floor is for. A denial of something *else* the
+  floor also covers changes nothing — a floor on `deployment.create` for every environment is not
+  discharged by denying production.
+
+* **The `unknown capability` refusal now lists the scoped spellings too.** It read
+  `… approval.request, deployment.create[:env] and deployment.rollback[:env]`; it now names
+  `network.read[:public|private]` in the same list, so every capability a document may write appears
+  in the one vocabulary listing most adopters ever meet.
 
 * **A green cell in `protocol eval`'s table does not mean the same thing on every arm, and the arm
   word now says which.** A clean store-integrity row — no `store_broken`, `census.denied = 0` —

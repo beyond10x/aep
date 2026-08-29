@@ -19,7 +19,7 @@ description: The project's terms, defined once.
 | **Task** | The unit of governed work: objective, kind, profile, declared context facts, artifact manifest. |
 | **Artifact** | A referenced engineering document — a spec, design, ADR, review — with a kind, a status from its kind's lifecycle, and relations to other artifacts. The manifest holds references, not copies. |
 | **Capability** | A named permission (`repository.write`, `production.write`, …) every governable action maps onto. Default deny; `deny` beats `require_approval` beats `allow`. |
-| **Approval floor** | Capabilities the protocol refuses to let any profile grant outright — `production.write` and `deployment.create:production` under `aep/1`. |
+| **Approval floor** | Capabilities the protocol refuses to let any profile grant outright — `production.write`, `deployment.create:production` and `network.read:private` under `aep/1`. A grant broad enough to cover one counts, and only an explicit `deny` of the floored entry lets it stand. |
 | **Evidence** | A typed record of an observation — test result, approval, diff, conformance run — with a kind, a producer and provenance. Facts are projected from evidence; predicates read facts. |
 | **`observed_at`** | When somebody looked, on an evidence record. Required, with no default, and distinct from the submission time: a suite run three weeks ago and submitted this morning is three weeks old. A value in the future is refused rather than stored. |
 | **Horizon** | The age past which an observation stops counting — `horizon: 7d`, declared on a requirement and never on the record, because a record carrying its own expiry lets whoever wrote it choose how long it counted for. |

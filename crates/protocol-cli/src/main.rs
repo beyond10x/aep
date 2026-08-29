@@ -4493,7 +4493,7 @@ fn action_request(capability: &str) -> Result<ActionRequest> {
                 args: Vec::new(),
             })
         }
-        Capability::NetworkRead | Capability::NetworkWrite => {
+        Capability::NetworkRead(_) | Capability::NetworkWrite => {
             Action::NetworkRequest(aep_domain::action::NetworkRequest {
                 url: "https://example.test/".to_owned(),
                 intent: if capability == Capability::NetworkWrite {

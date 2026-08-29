@@ -10,6 +10,14 @@
 //! A capability that appears in no list is **not granted**. Least privilege is the default
 //! state of the system rather than a principle that has to remember to say so.
 //!
+//! # Scopes
+//!
+//! Three capabilities are scoped by resource class rather than named flat: `deployment.create` and
+//! `deployment.rollback` take an [`Environment`], and `network.read` takes an [`Audience`]. An
+//! unscoped spelling is the wildcard and covers every member of its class. Coverage widens from
+//! the wildcard outwards and never inwards, which is what lets a narrow entry mean something a
+//! broad one cannot reach past.
+//!
 //! # Precedence
 //!
 //! ```text
@@ -138,6 +146,70 @@ impl schemars::JsonSchema for Environment {
     }
 }
 
+/// Who a read is addressed to.
+///
+/// [`Audience::Any`] is a wildcard, exactly as [`Environment::Any`] is: `network.read` with no
+/// audience is the capability for every audience, and a deny of `network.read` denies all of them.
+///
+/// The set is **closed** — there is no variant carrying a name of the adopter's own — because the
+/// only thing this distinction buys is that `private` means the same thing to the harness whose
+/// profile grants it and the harness that enforces it. A third audience minted in a document would
+/// be a word one side reads and the other has never heard of.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Audience {
+    /// Every audience, public and private alike.
+    Any,
+    /// Material published to an unbounded audience: a public channel, a public repository, a page
+    /// on the open web.
+    Public,
+    /// Correspondence addressed to a bounded audience: a direct message, a group direct message, a
+    /// private channel, a mailbox, a ticket's internal comment.
+    Private,
+}
+
+impl Audience {
+    /// Parses an audience name.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        match value {
+            "*" | "any" => Ok(Self::Any),
+            "public" => Ok(Self::Public),
+            "private" => Ok(Self::Private),
+            other => Err(ParseError::capability(
+                other,
+                "an audience is `public`, `private`, or `*` for every audience",
+            )),
+        }
+    }
+
+    /// The audience as written in a capability string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Any => "*",
+            Self::Public => "public",
+            Self::Private => "private",
+        }
+    }
+
+    /// `true` when a grant for `self` covers `other`.
+    pub fn covers(&self, other: &Self) -> bool {
+        self == &Self::Any || self == other
+    }
+}
+
+impl fmt::Display for Audience {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Audience {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
 /// A category of action an execution may be authorised to perform.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -150,8 +222,33 @@ pub enum Capability {
     TestExecution,
     /// Run an arbitrary command in the execution sandbox.
     CommandExecution,
-    /// Read from the network.
-    NetworkRead,
+    /// Read from the network, scoped by the audience the material was addressed to.
+    ///
+    /// # Which reads each audience covers
+    ///
+    /// `network.read:public` covers a read of anything published to an unbounded audience — a
+    /// public channel, a public repository, a page on the open web. `network.read:private` covers a
+    /// read of correspondence addressed to a bounded audience: a direct message, a group direct
+    /// message, a private channel, a mailbox, a ticket's internal comment. Unscoped `network.read`
+    /// is both, and `aep/1` puts `network.read:private` in its approval floor, so a profile cannot
+    /// grant the unscoped form outright without saying what happens to the private half.
+    ///
+    /// # Membership is irrelevant
+    ///
+    /// A denial of `network.read:private` says nothing about what the credential can reach. A token
+    /// that *can* read a direct message is exactly the case the denial is for: the hazard is an
+    /// agent reading a private conversation it had access to and restating it into a shared corpus.
+    /// "The bot is not in that channel" is not the rule, and a harness must not treat a successful
+    /// read as evidence that the read was permitted.
+    ///
+    /// # A harness that cannot tell must deny, not guess
+    ///
+    /// A harness that cannot decide which audience a read will reach refuses the read. The
+    /// vocabulary makes that the default rather than a discipline somebody has to remember: a read
+    /// that will not say its audience asks for [`Audience::Any`], and `Audience::Public` does not
+    /// cover `Audience::Any` — coverage widens from the wildcard outwards, never inwards — so a
+    /// profile granting only `network.read:public` answers `NotGranted` to it.
+    NetworkRead(Audience),
     /// Send state-changing network requests.
     NetworkWrite,
     /// Query telemetry: metrics, logs, traces.
@@ -181,13 +278,16 @@ pub enum Capability {
 }
 
 impl Capability {
-    /// Every capability that takes no environment, for vocabulary listing and diagnostics.
+    /// Every capability that takes no scope, for vocabulary listing and diagnostics.
+    ///
+    /// The scoped ones are in [`Self::SCOPED`], and the two lists are joined by
+    /// [`Capability::parse`]'s refusal, so a name is never missing from the diagnostic an adopter
+    /// meets.
     pub const SIMPLE: &'static [Self] = &[
         Self::RepositoryRead,
         Self::RepositoryWrite,
         Self::TestExecution,
         Self::CommandExecution,
-        Self::NetworkRead,
         Self::NetworkWrite,
         Self::TelemetryRead,
         Self::ProductionRead,
@@ -201,14 +301,44 @@ impl Capability {
         Self::ApprovalRequest,
     ];
 
-    /// The capability name without any environment suffix.
+    /// Every capability that takes a scope, with the scope vocabulary a document may write.
+    ///
+    /// A pair rather than a `Capability`, because what an adopter needs from the diagnostic is the
+    /// *spelling* — `network.read[:public|private]` — and no single value of the type carries it.
+    /// `crates/aep-driver/tests/tool_config.rs` holds this list and the driver's tool candidates
+    /// against each other, so a new scoped capability fails a test instead of silently never being
+    /// offered.
+    pub const SCOPED: &'static [(&'static str, &'static str)] = &[
+        ("network.read", "public|private"),
+        ("deployment.create", "env"),
+        ("deployment.rollback", "env"),
+    ];
+
+    /// Every capability name a document may write, as one list, for a refusal to name.
+    fn vocabulary() -> String {
+        let mut names: Vec<String> = Self::SIMPLE
+            .iter()
+            .map(|capability| capability.name().to_owned())
+            .collect();
+        names.extend(
+            Self::SCOPED
+                .iter()
+                .map(|(name, scope)| format!("{name}[:{scope}]")),
+        );
+        match names.split_last() {
+            Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+            None => String::new(),
+        }
+    }
+
+    /// The capability name without any scope suffix.
     pub fn name(&self) -> &'static str {
         match self {
             Self::RepositoryRead => "repository.read",
             Self::RepositoryWrite => "repository.write",
             Self::TestExecution => "tests.execute",
             Self::CommandExecution => "command.execute",
-            Self::NetworkRead => "network.read",
+            Self::NetworkRead(_) => "network.read",
             Self::NetworkWrite => "network.write",
             Self::TelemetryRead => "telemetry.read",
             Self::ProductionRead => "production.read",
@@ -233,14 +363,34 @@ impl Capability {
         }
     }
 
+    /// The scope this capability is narrowed to, or `None` when it names every scope.
+    ///
+    /// `deployment.create:production` is scoped to an environment and `network.read:private` to an
+    /// audience; the unscoped spelling of either is the wildcard and answers `None`, because that
+    /// is how it is written back out.
+    pub fn scope(&self) -> Option<&str> {
+        match self {
+            Self::Deploy(environment) | Self::Rollback(environment) => {
+                (environment != &Environment::Any).then_some(environment.as_str())
+            }
+            Self::NetworkRead(audience) => {
+                (audience != &Audience::Any).then_some(audience.as_str())
+            }
+            _ => None,
+        }
+    }
+
     /// `true` when holding `self` authorises `other`.
     ///
-    /// Environment wildcards are the only widening: `deployment.create` covers
-    /// `deployment.create:production`.
+    /// Scope wildcards are the only widening: `deployment.create` covers
+    /// `deployment.create:production`, and `network.read` covers `network.read:private`. It never
+    /// runs the other way — `network.read:public` does not cover an unscoped read, which is what
+    /// makes a read that will not say its audience refusable.
     pub fn covers(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Deploy(mine), Self::Deploy(theirs))
             | (Self::Rollback(mine), Self::Rollback(theirs)) => mine.covers(theirs),
+            (Self::NetworkRead(mine), Self::NetworkRead(theirs)) => mine.covers(theirs),
             _ => self == other,
         }
     }
@@ -256,24 +406,31 @@ impl Capability {
         }
     }
 
-    /// Parses a capability string, such as `deployment.create:staging`.
+    /// Parses a capability string, such as `deployment.create:staging` or `network.read:private`.
     pub fn parse(value: &str) -> Result<Self, ParseError> {
-        let (name, environment) = match value.split_once(':') {
-            Some((name, environment)) => (name, Some(environment)),
+        let (name, scope) = match value.split_once(':') {
+            Some((name, scope)) => (name, Some(scope)),
             None => (value, None),
         };
         let with_environment = |constructor: fn(Environment) -> Self| -> Result<Self, ParseError> {
-            let environment = match environment {
+            let environment = match scope {
                 Some(raw) => Environment::parse(raw)?,
                 None => Environment::Any,
             };
             Ok(constructor(environment))
         };
+        let with_audience = |constructor: fn(Audience) -> Self| -> Result<Self, ParseError> {
+            let audience = match scope {
+                Some(raw) => Audience::parse(raw)?,
+                None => Audience::Any,
+            };
+            Ok(constructor(audience))
+        };
         let simple = |capability: Self| -> Result<Self, ParseError> {
-            if environment.is_some() {
+            if scope.is_some() {
                 return Err(ParseError::capability(
                     value,
-                    format!("`{name}` does not take an environment"),
+                    format!("`{name}` does not take a scope"),
                 ));
             }
             Ok(capability)
@@ -284,7 +441,7 @@ impl Capability {
             "repository.write" => simple(Self::RepositoryWrite),
             "tests.execute" | "test.execute" => simple(Self::TestExecution),
             "command.execute" => simple(Self::CommandExecution),
-            "network.read" => simple(Self::NetworkRead),
+            "network.read" => with_audience(Self::NetworkRead),
             "network.write" => simple(Self::NetworkWrite),
             "telemetry.read" | "telemetry.query" => simple(Self::TelemetryRead),
             "production.read" => simple(Self::ProductionRead),
@@ -301,13 +458,8 @@ impl Capability {
             unknown => Err(ParseError::capability(
                 value,
                 format!(
-                    "{unknown:?} is not a capability; known capabilities are {}, \
-                     deployment.create[:env] and deployment.rollback[:env]",
-                    Self::SIMPLE
-                        .iter()
-                        .map(Self::name)
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    "{unknown:?} is not a capability; known capabilities are {}",
+                    Self::vocabulary()
                 ),
             )),
         }
@@ -316,9 +468,9 @@ impl Capability {
 
 impl fmt::Display for Capability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.environment() {
-            Some(Environment::Any) | None => f.write_str(self.name()),
-            Some(environment) => write!(f, "{}:{}", self.name(), environment),
+        match self.scope() {
+            None => f.write_str(self.name()),
+            Some(scope) => write!(f, "{}:{}", self.name(), scope),
         }
     }
 }
@@ -358,14 +510,18 @@ impl schemars::JsonSchema for Capability {
             .iter()
             .map(|capability| serde_json::Value::String(capability.name().to_owned()))
             .collect();
-        examples.push(serde_json::Value::String(
-            "deployment.create:staging".to_owned(),
-        ));
-        examples.push(serde_json::Value::String(
-            "deployment.rollback:production".to_owned(),
-        ));
+        for scoped in [
+            "network.read",
+            "network.read:public",
+            "network.read:private",
+            "deployment.create:staging",
+            "deployment.rollback:production",
+        ] {
+            examples.push(serde_json::Value::String(scoped.to_owned()));
+        }
         schema.metadata().description = Some(
-            "A semantic capability, such as `repository.write` or `deployment.create:staging`."
+            "A semantic capability, such as `repository.write`, `network.read:private` or \
+             `deployment.create:staging`."
                 .to_owned(),
         );
         schema.metadata().examples = examples;
@@ -680,6 +836,107 @@ mod tests {
             capability("deployment.create").to_string(),
             "deployment.create"
         );
+    }
+
+    #[test]
+    fn parses_and_renders_audience_scoped_network_reads() {
+        assert_eq!(
+            capability("network.read"),
+            Capability::NetworkRead(Audience::Any),
+            "an unscoped read is the wildcard, the way an unscoped deployment is"
+        );
+        assert_eq!(
+            capability("network.read:private"),
+            Capability::NetworkRead(Audience::Private),
+            "the audience suffix has to reach the variant, or every profile that writes one is \
+             granting or denying something else entirely"
+        );
+        assert_eq!(capability("network.read").to_string(), "network.read");
+        assert_eq!(
+            capability("network.read:public").to_string(),
+            "network.read:public"
+        );
+
+        let error = Capability::parse("network.read:dm").expect_err("`dm` is not an audience");
+        assert!(
+            error.to_string().contains("`public`, `private`"),
+            "the refusal has to name the audiences that exist, or the writer guesses again: {error}"
+        );
+    }
+
+    #[test]
+    fn a_denied_private_read_is_not_reopened_by_a_broad_network_grant() {
+        // The state where the rule is load-bearing: the profile grants the broad read *and* denies
+        // the narrow one. A profile granting nothing answers `NotGranted` to a private read whether
+        // or not this rule holds, and would be a test of nothing.
+        let mut policy = CapabilityPolicy::allowing([capability("network.read")]);
+        policy.restrict(&CapabilityPolicy::denying([capability(
+            "network.read:private",
+        )]));
+
+        assert!(
+            policy
+                .allow
+                .contains(&Capability::NetworkRead(Audience::Any))
+                && policy
+                    .deny
+                    .contains(&Capability::NetworkRead(Audience::Private)),
+            "the fixture must hold the broad grant and the narrow denial at once, or the denial is \
+             not being asked to beat anything: {policy:?}"
+        );
+
+        assert_eq!(
+            policy.decide(&capability("network.read:private")),
+            CapabilityDecision::Denied,
+            "an agent granted the broad read may still not read a direct message: deny beats \
+             allow, and it beats it across scopes"
+        );
+        assert_eq!(
+            policy.matching_entry(&capability("network.read:private")),
+            Some(&Capability::NetworkRead(Audience::Private)),
+            "the entry reported as the reason must be the denial that decided, not the grant it beat"
+        );
+        assert_eq!(
+            policy.decide(&capability("network.read:public")),
+            CapabilityDecision::Allowed,
+            "and the public read is still granted — denying one audience is not withdrawing the \
+             capability, which is the whole point of scoping it"
+        );
+    }
+
+    #[test]
+    fn a_read_that_will_not_say_its_audience_is_not_covered_by_a_public_grant() {
+        let policy = CapabilityPolicy::allowing([capability("network.read:public")]);
+        assert_eq!(
+            policy.decide(&capability("network.read")),
+            CapabilityDecision::NotGranted,
+            "a harness that cannot tell a direct message from a channel asks for the wildcard, and \
+             a public grant does not cover it: denying rather than guessing is the default here, \
+             not a discipline"
+        );
+        assert!(policy
+            .decide(&capability("network.read:public"))
+            .is_allowed());
+    }
+
+    #[test]
+    fn the_unknown_capability_diagnostic_names_the_scoped_capabilities_too() {
+        // The spelling an adopter reached for before this existed, and the list they are handed
+        // instead. A name missing from here is a name nobody can find.
+        let error = Capability::parse("private_message.read").expect_err("not a capability");
+        let rendered = error.to_string();
+        for expected in [
+            "repository.read",
+            "network.read[:public|private]",
+            "deployment.create[:env]",
+            "deployment.rollback[:env]",
+        ] {
+            assert!(
+                rendered.contains(expected),
+                "the refusal must name `{expected}`; it is the only vocabulary listing most \
+                 adopters ever meet: {rendered}"
+            );
+        }
     }
 
     #[test]

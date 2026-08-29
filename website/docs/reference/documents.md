@@ -223,7 +223,9 @@ facts:                           # profile-level context facts
 
 Extending can only make completion harder: conditions are conjoined, a principle may be added or
 dropped, and a denial cannot be granted back. The protocol's approval floor applies on top:
-`production.write` and `deployment.create:production` may never appear in `allow`.
+`production.write`, `deployment.create:production` and `network.read:private` may never appear in
+`allow` — and a broad grant counts as granting what it covers, so `allow: [network.read]` needs
+`deny: [network.read:private]` beside it.
 
 ## Artifact lifecycle
 

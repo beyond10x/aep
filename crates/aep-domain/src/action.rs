@@ -3,7 +3,7 @@
 //! An action is what a harness asks the protocol about *before* doing it. Each action maps to
 //! exactly one [`Capability`], so authorisation is a lookup rather than a judgement call.
 
-use crate::capability::{Capability, Environment};
+use crate::capability::{Audience, Capability, Environment};
 use crate::evidence::TestSuite;
 use crate::ids::{ApprovalId, ToolRef};
 
@@ -255,8 +255,12 @@ impl Action {
             Self::RepositoryWrite(_) => Capability::RepositoryWrite,
             Self::TestExecute(_) => Capability::TestExecution,
             Self::CommandExecute(_) | Self::ToolInvoke(_) => Capability::CommandExecution,
+            // A `NetworkRequest` says what it will fetch, never who the material was addressed
+            // to, so a read asks for the audience wildcard rather than assuming the safe half of
+            // it. A profile granting only `network.read:public` therefore refuses this request:
+            // guessing an audience is the failure the scope exists to prevent.
             Self::NetworkRequest(request) => match request.intent {
-                NetworkIntent::Read => Capability::NetworkRead,
+                NetworkIntent::Read => Capability::NetworkRead(Audience::Any),
                 NetworkIntent::Write => Capability::NetworkWrite,
             },
             Self::TelemetryQuery(_) => Capability::TelemetryRead,
@@ -391,7 +395,11 @@ mod tests {
             url: "https://example.test/deploy".to_owned(),
             intent: NetworkIntent::Write,
         });
-        assert_eq!(read.required_capability(), Capability::NetworkRead);
+        assert_eq!(
+            read.required_capability(),
+            Capability::NetworkRead(Audience::Any),
+            "a request that does not say which audience it reaches asks for every audience"
+        );
         assert_eq!(write.required_capability(), Capability::NetworkWrite);
     }
 }

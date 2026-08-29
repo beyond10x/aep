@@ -237,23 +237,35 @@ pub fn resolve(task: &Task, registry: &Registry) -> Result<ExecutionPlan, Valida
         }
     }
 
-    // The protocol's approval floor: some capabilities must never be granted outright.
+    // The protocol's approval floor: some capabilities must never be granted outright. A grant
+    // that covers a floored entry the policy itself denies has already answered the floor —
+    // `allow: [network.read]` beside `deny: [network.read:private]` — which is what
+    // `Protocol::floor_refusing` decides.
     for capability in crate::registry::granted_outright(&policy) {
-        if protocol.needs_approval_floor(capability) {
+        if let Some(floor) = protocol.floor_refusing(&policy, capability) {
+            let detail = if floor == capability {
+                format!(
+                    "`{capability}` is granted outright, but protocol {} requires it to be behind \
+                     approval or denied",
+                    protocol.reference()
+                )
+            } else {
+                format!(
+                    "`{capability}` is granted outright and covers `{floor}`, which protocol {} \
+                     requires to be behind approval or denied",
+                    protocol.reference()
+                )
+            };
             errors.push(
                 ValidationError::new(
                     ValidationCode::ProductionWriteWithoutApproval,
                     format!("profile {}.capabilities", profile.id),
-                    format!(
-                        "`{capability}` is granted outright, but protocol {} requires it to be \
-                         behind approval or denied",
-                        protocol.reference()
-                    ),
+                    detail,
                 )
-                .with_hint(
-                    "move it to `require_approval`, or add it to `deny`; anyone acting under this \
-                     profile could otherwise change production with no approval recorded",
-                ),
+                .with_hint(format!(
+                    "put `{floor}` in `require_approval`, or in `deny`; anyone acting under this \
+                     profile could otherwise exercise it with nothing recorded"
+                )),
             );
         }
     }
@@ -438,6 +450,106 @@ mod tests {
             plan.capability_policy.decide(&Capability::ProductionWrite),
             CapabilityDecision::NotGranted,
             "capabilities nobody granted are not granted"
+        );
+    }
+
+    /// A corpus reader: it may read public material, and may never read a direct message.
+    const READS_PUBLIC_DENIES_PRIVATE: &str = r"
+id: test.corpus
+title: Corpus reader
+protocol: aep/1
+workflow: test/linear
+principles: []
+capabilities:
+  allow: [repository.read, network.read]
+  deny: ['network.read:private']
+completion:
+  - tests.unit.failed == 0
+";
+
+    /// The same profile with the one line the adopter reported nothing would catch.
+    const FORGOT_THE_DENIAL: &str = r"
+id: test.forgetful
+title: Forgetful corpus reader
+protocol: aep/1
+workflow: test/linear
+principles: []
+capabilities:
+  allow: [repository.read, network.read]
+completion:
+  - tests.unit.failed == 0
+";
+
+    fn corpus_task(profile: &str) -> aep_domain::task::Task {
+        fixtures::task(&format!(
+            "id: ING-1\nkind: feature\nobjective: build a corpus\nprotocol: aep/1\nprofile: {profile}\n"
+        ))
+    }
+
+    #[test]
+    fn a_resolved_plan_denies_the_private_read_the_profile_denied() {
+        let registry = fixtures::registry(
+            &[fixtures::PROTOCOL],
+            &[],
+            &[fixtures::WORKFLOW],
+            &[READS_PUBLIC_DENIES_PRIVATE],
+        );
+        let plan = resolve(&corpus_task("test.corpus"), &registry).expect("resolves");
+
+        // The state where the rule is load-bearing: the broad read really is granted. A profile
+        // granting nothing would answer `NotGranted` to the private read either way.
+        assert!(
+            plan.capability_policy
+                .decide(&"network.read:public".parse::<Capability>().expect("parses"))
+                .is_allowed(),
+            "the fixture has to grant the broad read, or the denial is beating nothing: {:?}",
+            plan.capability_policy
+        );
+        assert_eq!(
+            plan.capability_policy.decide(
+                &"network.read:private"
+                    .parse::<Capability>()
+                    .expect("parses")
+            ),
+            CapabilityDecision::Denied,
+            "the plan an agent runs under has to carry the denial through the merge chain; a rule \
+             that only exists in the profile document is the prose this replaces"
+        );
+        assert!(
+            plan.capability_rationale.iter().any(|grant| {
+                grant.effect == CapabilityDecision::Denied
+                    && grant.capability.to_string() == "network.read:private"
+            }),
+            "and the plan says which document denied it: {:?}",
+            plan.capability_rationale
+        );
+    }
+
+    #[test]
+    fn a_profile_that_forgot_the_private_denial_is_refused_by_the_floor() {
+        let registry = fixtures::registry(
+            &[fixtures::PROTOCOL],
+            &[],
+            &[fixtures::WORKFLOW],
+            &[FORGOT_THE_DENIAL],
+        );
+        // `expect_err` here would print the whole resolved plan on a failure, which is the one
+        // moment a reader needs a sentence rather than a page.
+        let Err(errors) = resolve(&corpus_task("test.forgetful"), &registry) else {
+            panic!(
+                "a profile granting `network.read` outright, with nothing said about the private \
+                 half, resolved clean — which is the defect the adopter reported"
+            )
+        };
+
+        assert!(
+            errors.contains(ValidationCode::ProductionWriteWithoutApproval),
+            "{errors}"
+        );
+        assert!(
+            errors.to_string().contains("network.read:private"),
+            "the refusal has to name the entry that was forgotten, or the reader is told a broad \
+             grant is wrong and not what to write instead: {errors}"
         );
     }
 

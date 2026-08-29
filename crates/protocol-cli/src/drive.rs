@@ -49,7 +49,7 @@ use aep_domain::action::{
     Action, ActionRequest, CommandExecute, NetworkIntent, NetworkRequest, RepositoryRead,
     RepositoryWrite,
 };
-use aep_domain::capability::Capability;
+use aep_domain::capability::{Audience, Capability};
 use aep_domain::entity::ActorRef;
 use aep_domain::evidence::{
     ChangeSet, ContractResult, Evidence, EvidenceKind, Producer, Provenance, StaticAnalysisResult,
@@ -2321,7 +2321,9 @@ fn allowed_tools(config: &ToolConfig) -> Vec<String> {
     if config.admits(&Capability::RepositoryWrite) {
         tools.extend(["Edit", "Write", "NotebookEdit"].map(ToOwned::to_owned));
     }
-    if config.admits(&Capability::NetworkRead) {
+    // `network.read:private`, not the wildcard: `TOOL_CANDIDATES` asks the strictest audience
+    // question because neither table can tell which audience a URL will reach.
+    if config.admits(&Capability::NetworkRead(Audience::Private)) {
         tools.extend(["WebFetch", "WebSearch"].map(ToOwned::to_owned));
     }
     if config.shell_offered() {
@@ -3850,7 +3852,7 @@ fn metaharness_operations(config: &ToolConfig) -> Vec<&'static str> {
     if config.admits(&Capability::RepositoryWrite) {
         operations.extend(["file.write", "file.edit"]);
     }
-    if config.admits(&Capability::NetworkRead) {
+    if config.admits(&Capability::NetworkRead(Audience::Private)) {
         operations.push("web.read");
     }
     if config.shell_offered() {
@@ -5532,7 +5534,7 @@ mod tests {
             Capability::RepositoryRead,
             Capability::RepositoryWrite,
             Capability::CommandExecution,
-            Capability::NetworkRead,
+            Capability::NetworkRead(Audience::Any),
         ]);
         assert!(
             !metaharness_operations(&everything).contains(&"subagent.spawn"),
@@ -6309,10 +6311,10 @@ mod tests {
         // admitted and the session simply has no tool, which the session-start audit reports.
         let networked = tool_config(&CapabilityPolicy::allowing([
             Capability::RepositoryRead,
-            Capability::NetworkRead,
+            Capability::NetworkRead(Audience::Any),
         ]));
         assert!(
-            networked.admits(&Capability::NetworkRead),
+            networked.admits(&Capability::NetworkRead(Audience::Private)),
             "the shared decision still admits it"
         );
         assert_eq!(
@@ -7004,7 +7006,7 @@ profile: test.reading
             Capability::RepositoryRead,
             Capability::RepositoryWrite,
             Capability::CommandExecution,
-            Capability::NetworkRead,
+            Capability::NetworkRead(Audience::Any),
             Capability::Deploy(Environment::Production),
         ]);
         assert!(

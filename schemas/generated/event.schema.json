@@ -683,13 +683,12 @@
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Capability": {
-      "description": "A semantic capability, such as `repository.write` or `deployment.create:staging`.",
+      "description": "A semantic capability, such as `repository.write`, `network.read:private` or `deployment.create:staging`.",
       "examples": [
         "repository.read",
         "repository.write",
         "tests.execute",
         "command.execute",
-        "network.read",
         "network.write",
         "telemetry.read",
         "production.read",
@@ -701,6 +700,9 @@
         "planning.write",
         "review.request",
         "approval.request",
+        "network.read",
+        "network.read:public",
+        "network.read:private",
         "deployment.create:staging",
         "deployment.rollback:production"
       ],

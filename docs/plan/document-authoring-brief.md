@@ -14,7 +14,7 @@ rule exists where the reason is not obvious; never restate the YAML in prose.
 
 ```text
 repository.read  repository.write  tests.execute  command.execute
-network.read  network.write  telemetry.read
+network.read[:audience]  network.write  telemetry.read
 production.read  production.write
 deployment.create[:environment]  deployment.rollback[:environment]
 secret.read  artifact.read  artifact.write  planning.read  planning.write
@@ -23,8 +23,17 @@ review.request  approval.request
 
 Environments: `development`, `test`, `staging`, `production`, or omitted (meaning every environment).
 
-**Approval floor** — `production.write` and `deployment.create:production` may never appear in a
-profile's `allow`. Put them in `require_approval` or `deny`. Resolution refuses otherwise.
+Audiences: `public`, `private`, or omitted (meaning every audience). `network.read:private` is a read
+of correspondence addressed to a bounded audience — a direct message, a group DM, a private channel,
+a mailbox, a ticket's internal comment. Membership is irrelevant: a token that *can* read one is the
+case the distinction exists for. A harness that cannot tell a direct message from a public channel
+refuses the read rather than guessing, and the vocabulary makes that the default — a read that will
+not say its audience asks for the wildcard, which `network.read:public` does not cover.
+
+**Approval floor** — `production.write`, `deployment.create:production` and `network.read:private`
+may never appear in a profile's `allow`. Put them in `require_approval` or `deny`. Resolution refuses
+otherwise, and a broad grant counts: `allow: [network.read]` is refused unless
+`deny: [network.read:private]` stands beside it.
 
 **Evidence kinds**:
 
