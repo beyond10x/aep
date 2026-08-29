@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:review-result-cannot-be-authored
 kind: story
-status: draft
+status: implemented
 title: A review-result cannot be authored, retired or removed through the CLI
 summary: 'Second adopter (substrate, 2026-08-29): new has no body input, body and move-to-archived are both refused as immutable, and the help sanctions rm while validate flags it. Three refusals, no legal path.'
 owner: protocol
@@ -12,7 +12,8 @@ tags:
 - store
 relations:
 - informed_by: story:adopter-bugs
-revision: 2
+- serves: vision:O2
+revision: 5
 ---
 # Story: A review-result cannot be authored, retired or removed through the CLI
 
