@@ -97,6 +97,20 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+* **`protocol workflow flow --map` no longer takes a step map and throws it away.** The flag was
+  accepted, its own help promised that each node would carry *what a harness actually does in that
+  state*, and the projected document came out identical with it and without it — every node holding
+  the state's name and summary and nothing a harness could run. It now carries the step into the
+  node: a state with one step keeps one node and gains that step's fields, a state with several
+  becomes a group named for the state whose steps are chained in the order the map wrote them, and a
+  state the map is silent about is unchanged. An `llm` step travels as its `prompt`, `context`,
+  `scope` — written `<glob>=<word>` in the map's own order, because first match wins — `harness` and
+  description; a `command` step as its argv and the evidence running it establishes; an `operator`
+  step as what it asks the person for. The header names the map and the pin it was written against,
+  so a projection of `development/default` can be told from one of `development/checks`. A map
+  pinned to another version of the workflow being projected is refused before anything is written,
+  in the same words `protocol drive run` refuses it in. **Without `--map` the output is byte for
+  byte what it was**, which is what the b10x harness's committed fixture walks.
 * **A logged write that changed nothing no longer reads as a hand-edited revision.** `protocol
   artifact body` handed an empty body records an `update` event at the next revision with
   `changed: {}`; `validate` compared the document's revision against the last event that *changed
