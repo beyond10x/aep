@@ -2924,9 +2924,11 @@ fn answer(args: &TransitionArgs, path: &str, moment: Moment) -> Result<Answer> {
 
 /// The state a flow node path stands for at this moment.
 ///
-/// `protocol workflow flow` names a step node after its state and a retreat group
-/// `<first>-to-<last>` (or `<state>-again` for a one-state retreat); the root is `root`. Entering
-/// a group is entering its first state, leaving it is leaving its last.
+/// `protocol workflow flow` emits every state as a group named for it and a retreat as a group
+/// `<first>-to-<last>` (or `<state>-again` for a one-state retreat) holding them; the root is
+/// `root`. The loop asks at group boundaries only, so the leaf of a path here is a state, a
+/// retreat or the root. Entering a retreat is entering its first state, leaving it is leaving its
+/// last — the same answers the states inside give one by one.
 fn flow_state(path: &str, moment: Moment) -> Option<StateId> {
     let leaf = path.rsplit('.').next().unwrap_or(path);
     if leaf.is_empty() || leaf == "root" {

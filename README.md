@@ -71,8 +71,9 @@ and nine principles, a workflow and twelve capability decisions are derived from
 * **`protocol workflow flow` projects the workflow into the document the b10x loop walks natively**,
   with `--map` carrying each state's step into its node. An honest projection and not an
   equivalence: retreats become repeating groups, terminal states are dropped, and no guard travels,
-  so the governor stays a program the loop asks at every section boundary. `protocol workflow
-  instruct` writes the same workflow out in words.
+  so the governor stays a program the loop asks at every section boundary — and every state is a
+  section, so that boundary is every state's. `protocol workflow instruct` writes the same
+  workflow out in words.
 * **`protocol trace check` reads the run back.** An agent's transcript is judged against a typed
   specification — fifty-one expectation kinds — so *the agent followed the rules* is a verdict a program
   reached from the record, not a claim the agent made about itself. Its exit codes distinguish

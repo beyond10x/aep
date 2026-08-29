@@ -361,7 +361,11 @@ Read the projection for what it is. A retreat becomes a group that repeats, term
 dropped, and **no guard travels**: the flow says what runs in what order, and nothing in it can
 refuse a move. The refusing is done by a `transition` hook the loop asks before a section is entered
 and after it leaves — exit `2` at the entry skips the section as failed, exit `2` on a clean exit
-sends the section back for another attempt, and a hook that cannot answer is read as a refusal. That
+sends the section back for another attempt, and a hook that cannot answer is read as a refusal.
+**Every state is a section**: the projection emits each non-terminal state as a group named for it,
+holding its steps — one node when the map gave it one step or none — because the loop asks the
+hook at a group boundary and nowhere else, and a state that were a bare node would be a state the
+governor is never asked about. A retreat is therefore a section of sections. That
 hook is where the engine belongs, and **`protocol drive transition` is the verb that answers it**:
 it reads the loop's JSON on stdin and answers `enter` from `evaluate` and `leave` from `transition`
 on a copy of the execution, in the engine's own words. Declare it in the hooks file:

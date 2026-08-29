@@ -237,7 +237,7 @@ whether the shape fits.
 | Command | Does |
 |---|---|
 | `protocol workflow instruct [--id adp/default] [--root .] [--out f]` | the workflow as instructions; without `--id`, every workflow the tree declares, into a directory |
-| `protocol workflow flow --id adp/default [--root .] [--map <file-or-id>] [--max-attempts 3] [--out f]` | the projection; with `--map`, each node carries what a harness does in that state — an `llm` step as its prompt, context, write scope and harness, a `command` step as its argv and the evidence it establishes, an `operator` step as what it asks for — and a state with several steps becomes a group chained in the map's order |
+| `protocol workflow flow --id adp/default [--root .] [--map <file-or-id>] [--max-attempts 3] [--out f]` | the projection; with `--map`, each node carries what a harness does in that state — an `llm` step as its prompt, context, write scope and harness, a `command` step as its argv and the evidence it establishes, an `operator` step as what it asks for. Every state is a group named for it — its steps chained in the map's order, or one node when the map gave it one step or none — so a loop that asks its `transition` hook at every section boundary asks it at every state |
 
 Without `--map` the nodes carry the state's summary and nothing a harness could run, which is enough
 to answer whether the shape fits and not enough to run. The header names the map and the pin it was

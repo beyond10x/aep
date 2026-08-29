@@ -39,15 +39,27 @@
 //! one, each node's `run` carries the step's own fields, and the mapping between the two documents
 //! is this:
 //!
-//! | the state's steps | what is emitted |
+//! | the state's steps | what the state's group holds |
 //! |---|---|
 //! | none, or the state is absent from the map | one node, `run` as it always was: `state` and `summary` |
 //! | exactly one | one node, that step's fields beside `state` and `summary` |
-//! | several | a group named for the state, its steps chained by `needs` in the order the map wrote them |
+//! | several | its steps, chained by `needs` in the order the map wrote them |
 //!
-//! **The group is named for the state and not for the steps**, because a state that becomes a
-//! group is still what its neighbours' `needs` name — `adversarial_verify` waits for `verify`
-//! whether `verify` is one node or six, and an edge may only join siblings.
+//! # Every state is a section
+//!
+//! **Every non-terminal state is emitted as a group named for the state**, whatever the map gave
+//! it — one node, several or none. The b10x loop asks its `transition` hook on each side of a
+//! *group* boundary and nowhere else (harness design 0003 § 3), so a state that were a bare node
+//! would be a state the governor is never asked about; the fifth paid native walk
+//! (2026-08-29) was consulted four times, all at `root`, because no state of a bare projection was
+//! a group. A group of one is the price of being governed at every state, and it is a small one.
+//!
+//! **The group is named for the state and not for the steps**, because it is what its neighbours'
+//! `needs` name — `adversarial_verify` waits for `verify` whether `verify` holds one node or six,
+//! and an edge may only join siblings. The nodes inside are `<state>-1`, `<state>-2`, … in the
+//! map's order, and each carries `state:` so a reader of the record knows where it is from the
+//! payload alone. A retreat span is therefore a group of groups: `implement-to-review` repeats,
+//! and the four states inside it are each a section of their own.
 //!
 //! **Order is never sorted anywhere here.** A step map's steps are the author's order, and a
 //! step's `scope:` is a first-match-wins list, so re-ordering either changes what the document
@@ -125,7 +137,8 @@ enum Emitted<'a> {
 struct Run<'a> {
     /// Which state of the workflow this node is in.
     state: String,
-    /// The state's own summary, on a node that is the whole state. Empty otherwise.
+    /// The state's own summary, on a node that is the whole of the state's work — the only node
+    /// of its group. Empty on a step among several, where the group carries it as a comment.
     summary: String,
     /// The step this node runs, when a map said what it is.
     step: Option<&'a Step>,
@@ -278,12 +291,13 @@ fn project(workflow: &Workflow, max_attempts: u32, map: Option<&StepMap>) -> Res
     Ok(render(workflow, &nodes, &layout, map))
 }
 
-/// One state, as either a node or the sub-tree its steps make it.
+/// One state, as the section it is: a group named for it, holding its steps.
 ///
-/// The three cases are the module's table. A state the map is silent about is **not** an error —
+/// The three cases are the module's table, and all three are a group (module header, *Every
+/// state is a section*). A state the map is silent about is **not** an error —
 /// `StepMap::steps_for` says so, and a workflow state whose transition is unguarded needs no work
-/// done in it — so it keeps the payload it had before there was a map at all rather than
-/// disappearing or acquiring an empty one.
+/// done in it — so its one node keeps the payload it had before there was a map at all rather
+/// than disappearing or acquiring an empty one.
 fn node_for<'a>(
     workflow: &Workflow,
     map: Option<&'a StepMap>,
@@ -292,45 +306,48 @@ fn node_for<'a>(
 ) -> Emitted<'a> {
     let summary = summary_of(workflow, state);
     let steps = map.map_or(&[][..], |map| map.steps_for(state));
-    match steps {
-        [] | [_] => Emitted::Step {
-            id: state.to_string(),
-            needs,
-            run: Run {
-                state: state.to_string(),
-                summary,
-                step: steps.first(),
-            },
-        },
-        several => Emitted::Group {
-            id: state.to_string(),
-            needs,
-            // Only a retreat repeats. A state's steps run once each, in order, and a bound here
-            // would re-run a command step the engine has already recorded a verdict for.
-            repeat: None,
-            comment: (!summary.is_empty()).then_some(summary),
-            nodes: several
-                .iter()
-                .enumerate()
-                .map(|(offset, step)| Emitted::Step {
-                    // Numbered from the state, so a node reads as what it is from its path alone:
-                    // a step has no id of its own in a map, and a description is prose.
-                    id: format!("{state}-{}", offset + 1),
-                    needs: if offset == 0 {
-                        Vec::new()
+    // A state with no step still holds one node: a group that runs nothing is refused by the
+    // notation, and the node is what carries the summary a harness sends when no map gave it a
+    // prompt.
+    let steps: Vec<Option<&'a Step>> = if steps.is_empty() {
+        vec![None]
+    } else {
+        steps.iter().map(Some).collect()
+    };
+    let alone = steps.len() == 1;
+    Emitted::Group {
+        id: state.to_string(),
+        needs,
+        // Only a retreat repeats. A state's steps run once each, in order, and a bound here
+        // would re-run a command step the engine has already recorded a verdict for.
+        repeat: None,
+        // The summary is the state's and the group is the state. On a node that is alone it is
+        // the payload; among several it would read as a description of one step, so it is the
+        // group's comment instead.
+        comment: (!alone && !summary.is_empty()).then(|| summary.clone()),
+        nodes: steps
+            .into_iter()
+            .enumerate()
+            .map(|(offset, step)| Emitted::Step {
+                // Numbered from the state, so a node reads as what it is from its path alone:
+                // a step has no id of its own in a map, and a description is prose.
+                id: format!("{state}-{}", offset + 1),
+                needs: if offset == 0 {
+                    Vec::new()
+                } else {
+                    vec![format!("{state}-{offset}")]
+                },
+                run: Run {
+                    state: state.to_string(),
+                    summary: if alone {
+                        summary.clone()
                     } else {
-                        vec![format!("{state}-{offset}")]
+                        String::new()
                     },
-                    run: Run {
-                        state: state.to_string(),
-                        // The summary is the state's and the group is the state; repeating it on
-                        // every step inside would make it read as a description of that step.
-                        summary: String::new(),
-                        step: Some(step),
-                    },
-                })
-                .collect(),
-        },
+                    step,
+                },
+            })
+            .collect(),
     }
 }
 
@@ -406,7 +423,11 @@ fn render(
          # A retreat is a group that repeats, which is `b10x-harness-flow`'s own shape for one: a\n\
          # DAG has no back-edge, and every state a retreat spans is gathered into a sub-tree that\n\
          # re-runs whole. Its bound is a number given on the command line, because the source bounds\n\
-         # a retreat with the engine's iteration budget and that is not in the document.\n",
+         # a retreat with the engine's iteration budget and that is not in the document.\n\
+         #\n\
+         # Every state is a section: a group named for the state, holding its steps — one node when\n\
+         # the map gave it one step or none. The loop asks its `transition` hook only at a group's\n\
+         # boundaries, so this is what makes a governor's *every section* mean every state.\n",
         workflow.id,
         workflow.version.get(),
         if dropped.is_empty() {
@@ -666,9 +687,10 @@ mod tests {
         assert_eq!(group["repeat"]["max"].as_u64(), Some(3));
     }
 
-    /// The projection as it stood before `--map` was read, which is the fixture the b10x harness
-    /// walks in its own suite. A golden rather than a property, because *these bytes* are what the
-    /// other repository committed.
+    /// The projection without a map, byte for byte — the document the b10x harness commits as
+    /// `harness-flow/fixtures/adp-default.projected.yaml` and walks in its own suite. A golden
+    /// rather than a property, because *these bytes* are what the other repository holds: when
+    /// this changes, that fixture is refreshed from this verb, not edited by hand.
     const NO_MAP: &str = r#"# Projected from `adp/default/2` by `protocol workflow flow`. Do not edit.
 #
 # **An ordering, not a government.** 11 guard(s) in the source decide whether a run
@@ -685,54 +707,74 @@ mod tests {
 # re-runs whole. Its bound is a number given on the command line, because the source bounds
 # a retreat with the engine's iteration budget and that is not in the document.
 #
+# Every state is a section: a group named for the state, holding its steps — one node when
+# the map gave it one step or none. The loop asks its `transition` hook only at a group's
+# boundaries, so this is what makes a governor's *every section* mean every state.
+#
 # 10 state(s) in 9 layer(s) of the source; 5 node(s) here.
 id: adp/default
 root:
   id: root
   nodes:
     - id: receive
-      run:
-        state: receive
-        summary: "Take in the request and record what is being asked for, unedited."
+      nodes:
+        - id: receive-1
+          run:
+            state: receive
+            summary: "Take in the request and record what is being asked for, unedited."
     - id: specify
       needs: [receive]
-      run:
-        state: specify
-        summary: "State the required behaviour. Anything left only in the prompt cannot be checked later, so this is where an objective becomes something a verifier can disagree with."
+      nodes:
+        - id: specify-1
+          run:
+            state: specify
+            summary: "State the required behaviour. Anything left only in the prompt cannot be checked later, so this is where an objective becomes something a verifier can disagree with."
     - id: decompose
       needs: [specify]
-      run:
-        state: decompose
-        summary: "Break the specification into units that can each be implemented and verified on their own."
+      nodes:
+        - id: decompose-1
+          run:
+            state: decompose
+            summary: "Break the specification into units that can each be implemented and verified on their own."
     - id: establish_verifiers
       needs: [decompose]
-      run:
-        state: establish_verifiers
-        summary: "Write the tests, contracts and checks that will decide whether the work is done — before there is an implementation for them to be shaped around."
+      nodes:
+        - id: establish_verifiers-1
+          run:
+            state: establish_verifiers
+            summary: "Write the tests, contracts and checks that will decide whether the work is done — before there is an implementation for them to be shaped around."
     # the retreat: verify -> implement, adversarial_verify -> implement, review -> implement
     - id: implement-to-review
       needs: [establish_verifiers]
       repeat: {max: 3}
       nodes:
         - id: implement
-          run:
-            state: implement
-            summary: "Make the smallest change that satisfies the decomposed unit and its verifiers."
+          nodes:
+            - id: implement-1
+              run:
+                state: implement
+                summary: "Make the smallest change that satisfies the decomposed unit and its verifiers."
         - id: verify
           needs: [implement]
-          run:
-            state: verify
-            summary: "Run the verifiers established earlier against the change."
+          nodes:
+            - id: verify-1
+              run:
+                state: verify
+                summary: "Run the verifiers established earlier against the change."
         - id: adversarial_verify
           needs: [verify]
-          run:
-            state: adversarial_verify
-            summary: "Try to break what the previous state just declared working: mutants, edge cases, property violations, contract drift."
+          nodes:
+            - id: adversarial_verify-1
+              run:
+                state: adversarial_verify
+                summary: "Try to break what the previous state just declared working: mutants, edge cases, property violations, contract drift."
         - id: review
           needs: [adversarial_verify]
-          run:
-            state: review
-            summary: "Judge the change as a whole — intent, fit and risk, not just green checks."
+          nodes:
+            - id: review-1
+              run:
+                state: review
+                summary: "Judge the change as a whole — intent, fit and risk, not just green checks."
 "#;
 
     /// The two shipped maps, read from the tree they ship in and checked against the workflow they
@@ -801,18 +843,18 @@ root:
             .collect()
     }
 
-    /// The projection the other repository committed as its fixture, byte for byte.
+    /// The projection the other repository holds as its fixture, byte by byte.
     ///
-    /// `--map` is an addition and not a change: a caller who does not pass one gets the document
-    /// they got before this verb could read a map at all, and `harness-flow`'s
-    /// `fixtures/adp-default.projected.yaml` — which is these bytes — keeps walking.
+    /// `--map` is an addition and not a change: a caller who does not pass one gets the same shape
+    /// with the same payloads, and `harness-flow`'s `fixtures/adp-default.projected.yaml` — which
+    /// is these bytes — keeps walking.
     #[test]
     fn a_projection_without_a_map_is_the_document_it_always_was() {
         assert_eq!(project(&workflow(), 3, None).expect("projects"), NO_MAP);
     }
 
     /// The other half of it: nothing a harness could *run* appears without a map, and the shape is
-    /// the fixture's — five nodes, the last a repeating group of four.
+    /// the fixture's — five sections, the last a repeating group of four sections.
     #[test]
     fn without_a_map_a_node_says_which_state_it_is_and_nothing_more() {
         let document = project(&workflow(), 3, None).expect("projects");
@@ -851,6 +893,72 @@ root:
         );
     }
 
+    /// The reason a one-step state is a group of one: the b10x loop asks its `transition` hook at
+    /// a group boundary and nowhere else, so a state that were a bare node would be a state the
+    /// governor is never asked about. With or without a map, every non-terminal state is a group
+    /// named for it, every node inside is `<state>-<n>` and says which state it is in, and only a
+    /// retreat repeats.
+    #[test]
+    fn every_state_is_a_section_so_a_governor_asked_at_every_section_is_asked_at_every_state() {
+        let workflow = workflow();
+        let map = shipped("default.yaml");
+        for (name, map) in [("without a map", None), ("with a map", Some(&map))] {
+            let document = project(&workflow, 3, map).expect("projects");
+            let parsed: serde_yaml::Value = serde_yaml::from_str(&document).expect("valid YAML");
+            let mut sections: Vec<(String, serde_yaml::Value)> = Vec::new();
+            groups(&parsed["root"], &mut sections);
+            for state in workflow
+                .states
+                .values()
+                .filter(|state| !state.is_terminal())
+            {
+                let (_, group) = sections
+                    .iter()
+                    .find(|(id, _)| *id == state.id.to_string())
+                    .unwrap_or_else(|| panic!("{name}: `{}` is not a section", state.id));
+                assert!(
+                    group.get("repeat").is_none(),
+                    "{name}: only a retreat repeats"
+                );
+                let inside = group["nodes"].as_sequence().expect("a group holds nodes");
+                assert!(!inside.is_empty(), "{name}: a section that runs nothing");
+                for (offset, node) in inside.iter().enumerate() {
+                    assert_eq!(
+                        node["id"].as_str(),
+                        Some(format!("{}-{}", state.id, offset + 1).as_str()),
+                        "{name}: numbered from the state"
+                    );
+                    assert_eq!(
+                        node["run"]["state"].as_str(),
+                        Some(state.id.to_string().as_str()),
+                        "{name}: every node says which state it is in"
+                    );
+                }
+            }
+            let repeating: Vec<&str> = sections
+                .iter()
+                .filter(|(_, group)| group.get("repeat").is_some())
+                .map(|(id, _)| id.as_str())
+                .collect();
+            assert_eq!(repeating, ["implement-to-review"], "{name}");
+        }
+    }
+
+    /// Every group below `root`, by id, in document order.
+    fn groups(node: &serde_yaml::Value, into: &mut Vec<(String, serde_yaml::Value)>) {
+        let Some(nodes) = node.get("nodes").and_then(serde_yaml::Value::as_sequence) else {
+            return;
+        };
+        for inner in nodes {
+            if inner.get("nodes").is_some() {
+                if let Some(id) = inner.get("id").and_then(serde_yaml::Value::as_str) {
+                    into.push((id.to_owned(), inner.clone()));
+                }
+                groups(inner, into);
+            }
+        }
+    }
+
     /// What `--map` is for: a node a harness can act on rather than a name it can print.
     #[test]
     fn a_state_with_one_llm_step_carries_the_prompt_the_scope_and_the_harness() {
@@ -859,7 +967,7 @@ root:
         let runs = runs(&document);
 
         for state in ["receive", "specify", "decompose"] {
-            let run = runs.get(state).expect(state);
+            let run = runs.get(&format!("{state}-1")).expect(state);
             assert_eq!(
                 keys(run),
                 [
@@ -900,7 +1008,7 @@ root:
     fn the_scope_of_a_step_is_written_in_the_order_the_map_wrote_it() {
         let map = shipped("default.yaml");
         let document = project(&workflow(), 3, Some(&map)).expect("projects");
-        let scope = strings(runs(&document).get("receive").expect("receive"), "scope");
+        let scope = strings(runs(&document).get("receive-1").expect("receive"), "scope");
         assert_eq!(
             scope,
             [
@@ -994,13 +1102,13 @@ root:
         assert_eq!(run["evidence"]["suite"].as_str(), Some("unit"));
     }
 
-    /// An operator step travels as what it asks the person for. `review` is one step, so it stays
-    /// one node — a group of one would be a sub-tree nothing branches inside.
+    /// An operator step travels as what it asks the person for. `review` is one step, and it is
+    /// still a section of one: the governor is asked on both sides of it like every other state.
     #[test]
-    fn an_operator_step_carries_what_it_asks_and_a_state_of_one_step_stays_one_node() {
+    fn an_operator_step_carries_what_it_asks_and_a_state_of_one_step_is_a_section_of_one() {
         let map = shipped("default.yaml");
         let document = project(&workflow(), 3, Some(&map)).expect("projects");
-        let run = runs(&document).remove("review").expect("review");
+        let run = runs(&document).remove("review-1").expect("review");
         assert_eq!(run["kind"].as_str(), Some("operator"));
         assert!(
             run["prompt"]
@@ -1017,9 +1125,9 @@ root:
         let map = checked(one_state("adp/default/2"), &workflow()).expect("applies");
         let document = project(&workflow(), 3, Some(&map)).expect("projects");
         let runs = runs(&document);
-        assert_eq!(runs["receive"]["kind"].as_str(), Some("llm"));
+        assert_eq!(runs["receive-1"]["kind"].as_str(), Some("llm"));
         assert_eq!(
-            keys(&runs["specify"]),
+            keys(&runs["specify-1"]),
             ["state", "summary"],
             "the map says nothing about `specify`"
         );
