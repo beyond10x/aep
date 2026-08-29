@@ -242,6 +242,26 @@ pub(crate) struct B10xOptions {
     #[arg(long = "claude-model", value_name = "MODEL")]
     #[serde(default)]
     claude_model: Option<String>,
+    /// A delegated cgroup subtree, so a confined `b10x` step may execute.
+    ///
+    /// **Without it the arm cannot attempt a test-first task, and metaharness says why:** *"a run
+    /// that may not execute its suite cannot see a test fail before writing the code, so it will
+    /// not write the code."* Substrate publishes no `run` entry without a subtree to start a
+    /// process in, so the catalogue behind the loop's three verbs stays read-only and the arm can
+    /// read a repository and change nothing in it.
+    ///
+    /// Passing it also turns on `--substrate-embedded`, because the two are one decision: confining
+    /// a workspace and being allowed to execute inside it are the same intent, and a run given one
+    /// without the other is a run that can write and not test, or test and not write. Embedded
+    /// rather than a daemon socket, on metaharness's own advice — *"right for a run on the
+    /// operator's own machine, wrong for anything multi-tenant"* — which is what a driven dogfood
+    /// run is.
+    ///
+    /// The subtree must be delegated to this user and hold `cpu`, `memory` and `pids`. On a systemd
+    /// machine that is `/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service`.
+    #[arg(long = "b10x-cgroup-root", value_name = "DIR")]
+    #[serde(default)]
+    cgroup_root: Option<PathBuf>,
 }
 
 impl B10xOptions {
@@ -2374,7 +2394,7 @@ fn machine_preflights(map: &StepMap, project: &Path, b10x: &B10xOptions) -> Opti
     if let Some(refusal) = b10x_preflight(map, b10x) {
         return Some(refusal);
     }
-    if let Some(note) = b10x_read_only_note(map, project) {
+    if let Some(note) = b10x_read_only_note(map, project, b10x) {
         outln!("note: {note}");
     }
     None
@@ -2513,17 +2533,34 @@ fn b10x_preflight(map: &StepMap, options: &B10xOptions) -> Option<String> {
 /// It is a note and not a refusal for a second reason: what a state admits is decided per state by
 /// the engine at run time, and a pre-flight reading a map cannot know whether any state will reach
 /// for a write.
-fn b10x_read_only_note(map: &StepMap, working_directory: &Path) -> Option<String> {
+fn b10x_read_only_note(
+    map: &StepMap,
+    working_directory: &Path,
+    options: &B10xOptions,
+) -> Option<String> {
     if b10x_step_count(map) == 0 {
         return None;
     }
+    // Said only when it is true. The first version of this note was unconditional, and it told an
+    // operator who had done everything right — named the worktree `ws_…`, delegated a subtree —
+    // that their arm could not write. A warning that fires when the thing it warns about is not
+    // happening teaches a reader to stop reading warnings.
+    if options.cgroup_root.is_some() && adoptable(working_directory) {
+        return None;
+    }
+    let why = if adoptable(working_directory) {
+        "the workspace is adoptable but no `--b10x-cgroup-root` was given, so substrate publishes \
+         no `run` entry and the catalogue stays read-only"
+    } else {
+        "substrate represents a workspace only when its directory name starts with `ws_`, and this \
+         one does not — a governed tree is usually the operator's own repository. A worktree \
+         created for the run can be named to be adoptable"
+    };
     Some(format!(
-        "a driven `{B10X_HARNESS}` session is **read-only** over {}. The loop publishes the tools \
-         the machine can confine, substrate represents a workspace only when its directory name \
-         starts with `ws_`, and a governed tree is the operator's repository — so no driven \
-         session of this arm is confined and `file_write`, `file_edit` and `run` are not \
-         published to it. A state that admits `repository.write` will say so at session start, in \
-         the note beside this one.",
+        "a driven `{B10X_HARNESS}` session is **read-only** over {}: {why}. So `file_write`, \
+         `file_edit` and `run` are not published to it, and this arm cannot attempt a task that \
+         has to change a file — a run that may not execute its suite cannot see a test fail before \
+         writing the code, so it will not write the code.",
         working_directory.display()
     ))
 }
@@ -2961,6 +2998,21 @@ fn b10x_argv(
         // rather than launching a run with no credential under a flag that claims one.
         if options.api_key { "api-key" } else { "none" }.to_owned(),
     ];
+    // **Confinement and execution, or neither.** Substrate represents a workspace only when its
+    // directory name starts with `ws_`, so a run over an ordinary checkout is read-only whatever
+    // is asked for — and asking anyway would turn every driven step into a launch refusal. When the
+    // workspace *is* adoptable and a subtree was named, both travel: `--substrate-embedded` makes
+    // `file_write` and `file_edit` appear in the catalogue, and `--cgroup-root` makes `run` appear.
+    // One without the other is an arm that can write and not test, or test and not write.
+    if let Some(root) = options
+        .cgroup_root
+        .as_ref()
+        .filter(|_| adoptable(working_directory))
+    {
+        argv.push("--substrate-embedded".to_owned());
+        argv.push("--cgroup-root".to_owned());
+        argv.push(root.display().to_string());
+    }
     for rule in scope {
         for path in &rule.paths {
             argv.push("--write-scope".to_owned());
@@ -2976,6 +3028,24 @@ fn b10x_argv(
     argv.push("-p".to_owned());
     argv.push(prompt.to_owned());
     argv
+}
+
+/// Whether substrate will represent this directory as a workspace.
+///
+/// Its rule, replicated rather than depended on: a directory name starting with `ws_`
+/// (`SUBSTRATE_WORKSPACE_PREFIX` in metaharness's builder). A governed tree is usually the
+/// operator's own repository and is not named that, which is why a driven `b10x` arm is read-only
+/// by default and says so — and why a worktree created for a run *can* be named to be adoptable,
+/// which is the whole of the arrangement.
+///
+/// A relative path has no useful file name — `.` is not `ws_anything` — so a caller who passes
+/// `--project .` from inside an adoptable directory gets the read-only arm and a note saying so.
+/// That is a real trap and the note is where it is caught.
+fn adoptable(working_directory: &Path) -> bool {
+    working_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("ws_"))
 }
 
 /// The instant the driver just observed something, from the wall clock.
@@ -3159,6 +3229,17 @@ mod tests {
     /// The harness is spelled as a literal rather than through a constant, deliberately: this is
     /// the string a step map author writes, and a test that read it out of the same constant the
     /// selector reads would pass whatever that constant said.
+    /// A one-step map whose `llm` step names the native harness.
+    fn b10x_map() -> StepMap {
+        aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/b10x\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: llm\n        prompt: do it\n\
+             \x20       harness: b10x\n",
+            None,
+        )
+        .expect("the map validates")
+    }
+
     fn b10x_step() -> LlmStep {
         LlmStep {
             context: Vec::new(),
@@ -4281,6 +4362,91 @@ mod tests {
         assert_eq!(
             operations,
             ["dir.list", "file.read", "search", "skill.load"]
+        );
+    }
+
+    /// A confined workspace publishes the tools the arm needs, and an ordinary one says why not.
+    ///
+    /// The native arm could read a repository and change nothing in it, so a comparison against it
+    /// measured an arm that could not attempt the work. Substrate represents a workspace only when
+    /// its directory name starts with `ws_`, and publishes `run` only with a delegated subtree —
+    /// metaharness states the consequence plainly: *a run that may not execute its suite cannot see
+    /// a test fail before writing the code, so it will not write the code.*
+    ///
+    /// The two travel together on purpose. An arm given confinement without execution can write and
+    /// not test; given execution without confinement it is refused at launch.
+    #[test]
+    fn a_confined_workspace_gets_the_flags_that_let_the_arm_write_and_an_ordinary_one_does_not() {
+        let with_subtree = B10xOptions {
+            endpoint: Some("http://127.0.0.1:18080".to_owned()),
+            model: Some("qwen3.8-27b".to_owned()),
+            cgroup_root: Some(PathBuf::from("/sys/fs/cgroup/u")),
+            ..B10xOptions::default()
+        };
+        let confined = b10x_argv(
+            &with_subtree,
+            Path::new("/home/op/.cache/ws_run"),
+            &[],
+            &[],
+            "do the thing",
+        );
+        let joined = confined.join(" ");
+        assert!(
+            joined.contains("--substrate-embedded"),
+            "an adoptable workspace with a subtree is confined: {joined}"
+        );
+        assert!(
+            joined.contains("--cgroup-root /sys/fs/cgroup/u"),
+            "and may execute, or it cannot see a test fail: {joined}"
+        );
+
+        // An ordinary checkout: asking would be a launch refusal, so nothing is asked.
+        let ordinary = b10x_argv(
+            &with_subtree,
+            Path::new("/home/op/engineering-protocols"),
+            &[],
+            &[],
+            "do the thing",
+        );
+        assert!(
+            !ordinary.join(" ").contains("--substrate"),
+            "substrate adopts no workspace here and asking would refuse the launch"
+        );
+        assert!(
+            b10x_read_only_note(
+                &b10x_map(),
+                Path::new("/home/op/engineering-protocols"),
+                &with_subtree
+            )
+            .is_some_and(|note| note.contains("does not")),
+            "and the operator is told which half is missing"
+        );
+
+        // Adoptable but no subtree: confined and unable to run its suite, which is its own note.
+        let no_subtree = B10xOptions {
+            cgroup_root: None,
+            ..with_subtree.clone()
+        };
+        assert!(
+            b10x_read_only_note(
+                &b10x_map(),
+                Path::new("/home/op/.cache/ws_run"),
+                &no_subtree
+            )
+            .is_some_and(|note| note.contains("no `--b10x-cgroup-root`")),
+            "the other half, named as the other half"
+        );
+
+        // And when both hold, the note does not fire at all: a warning that cries wolf is one a
+        // reader learns to skip.
+        assert!(
+            b10x_read_only_note(
+                &b10x_map(),
+                Path::new("/home/op/.cache/ws_run"),
+                &with_subtree
+            )
+            .is_none(),
+            "everything the note warns about is satisfied, so it says nothing"
         );
     }
 
