@@ -40,6 +40,7 @@
 //!   does not have. Named here rather than discovered later.
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, ExitCode, Stdio};
@@ -175,6 +176,18 @@ pub(crate) enum DriveCommand {
     Status(StatusArgs),
     /// Continue a run that stopped, re-taking the store lock.
     Resume(ResumeArgs),
+    /// Answer one `before-call` hook consultation from the native loop, on stdin.
+    ///
+    /// **The same rule the vendor arm enforces in-process, reachable as a program.** `decide_tool`
+    /// runs inside this process for a `claude` step because that arm's calls come back through the
+    /// metaharness seam. The native loop decides in-process and consults hooks instead, so the rule
+    /// has to be *spawnable*; this is the spelling that makes it so, and it calls the same
+    /// `store_integrity` rather than restating it. A second copy of a rule is a second rule.
+    ///
+    /// Reads the `--hooks` protocol on stdin and answers with an exit status: `0` proceeds, `2`
+    /// blocks with `{"reason": …}` on stdout. Not for people to run.
+    #[command(hide = true)]
+    Hook,
 }
 
 /// Where the run's inputs are.
@@ -402,6 +415,7 @@ pub(crate) fn run(command: DriveCommand) -> Result<ExitCode> {
         DriveCommand::Run(args) => start(&args),
         DriveCommand::Status(args) => status(&args),
         DriveCommand::Resume(args) => resume(&args),
+        DriveCommand::Hook => Ok(hook()),
     }
 }
 
@@ -1425,6 +1439,37 @@ impl CliExecutors {
     }
 
     /// The step's sealed frame document, written beside the transcript it governs.
+    /// Writes the hook file a native step's loop consults, and answers with its path.
+    ///
+    /// **This is the native arm's half of `decide_tool`.** The vendor arm's calls come back through
+    /// the metaharness seam and are answered in this process; the native loop decides in-process and
+    /// consults programs, so the same rule is declared here as a program to spawn — `protocol drive
+    /// hook`, this binary by the path `driven_programs` already names, calling the same
+    /// `store_integrity`.
+    ///
+    /// Scoped to `file_write` and `file_edit` because those are the entries that can reach a
+    /// planning document; the hook itself proceeds for anything else, so the two agree rather than
+    /// one relying on the other. `run` is deliberately absent: what a program may *be* is decided by
+    /// the allowlist before the run starts, which is the stronger answer and the one already made.
+    fn write_hooks_document(transcripts: &Path) -> Result<PathBuf, String> {
+        let binary = std::env::current_exe()
+            .map_err(|error| format!("cannot name this binary for the hook file: {error}"))?;
+        let document = serde_json::json!({
+            "version": 1,
+            "hooks": [{
+                "on": "before-call",
+                "tools": ["file_write", "file_edit"],
+                "command": [binary.display().to_string(), "drive", "hook"],
+            }],
+        });
+        let path = transcripts.join("hooks.json");
+        let rendered = serde_json::to_string_pretty(&document)
+            .map_err(|error| format!("cannot render the hook file: {error}"))?;
+        fs::write(&path, rendered)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+        Ok(path)
+    }
+
     fn write_frame_document(
         &self,
         context: &StepContext<'_>,
@@ -1469,6 +1514,7 @@ impl CliExecutors {
         frame_file: &Path,
         prompt: &str,
         context: &StepContext<'_>,
+        hooks: Option<&Path>,
     ) -> Vec<String> {
         match harness {
             // **The actor is derived here, beside the argv it belongs to.** `session_env` sets the
@@ -1494,6 +1540,7 @@ impl CliExecutors {
                 &step.context,
                 prompt,
                 context.tools,
+                hooks,
             ),
         }
     }
@@ -1537,12 +1584,22 @@ impl CliExecutors {
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
 
+        // The native arm's content rule travels as a file; the vendor arm answers in this process
+        // and needs none. Failing to write it refuses the step rather than running without it.
+        let hooks = match harness {
+            Harness::B10x => match Self::write_hooks_document(&transcripts) {
+                Ok(path) => Some(path),
+                Err(reason) => return StepOutcome::NoVerdict { reason },
+            },
+            Harness::ClaudeCode => None,
+        };
         let argv = self.argv_for(
             harness,
             step,
             &frame_file,
             &prompt_for(step, context),
             context,
+            hooks.as_deref(),
         );
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
@@ -1600,39 +1657,56 @@ impl CliExecutors {
         let status = child.wait();
         let stderr_text = stderr_thread.join().unwrap_or_default();
 
-        match status {
-            Ok(status) if status.success() => {
-                // An `llm` step never carries evidence, and the type is what makes that true.
-                // What the model achieved that is checkable is observed by the command step
-                // after it.
-                StepOutcome::Nothing
-            }
-            Ok(status) => {
-                let tail: String = stderr_text
-                    .lines()
-                    .rev()
-                    .take(3)
-                    .collect::<Vec<_>>()
-                    .join(" | ");
-                StepOutcome::NoVerdict {
-                    reason: format!(
-                        "metaharness exited {}; {}the event stream is at {}",
-                        status
-                            .code()
-                            .map_or_else(|| "on a signal".to_owned(), |code| code.to_string()),
-                        if tail.is_empty() {
-                            String::new()
-                        } else {
-                            format!("it said: {tail}; ")
-                        },
-                        transcript.display()
-                    ),
-                }
-            }
-            Err(error) => StepOutcome::NoVerdict {
-                reason: format!("waiting on metaharness failed: {error}"),
-            },
+        metaharness_outcome(status, &stderr_text, &transcript)
+    }
+}
+
+/// What the step made of the harness having stopped.
+///
+/// Split out of [`CliExecutors::run_llm_metaharness`] so the spawn and the verdict are readable
+/// apart;
+/// the mapping is the whole reason a non-zero exit is not simply a panic.
+///
+/// A failed exit carries the **last three lines of stderr, not the first**: a harness that dies
+/// says why at the end, and a head would quote its banner. The transcript path is named either
+/// way, because the reader's next move is to open it rather than to re-run.
+fn metaharness_outcome(
+    status: std::io::Result<std::process::ExitStatus>,
+    stderr_text: &str,
+    transcript: &Path,
+) -> StepOutcome {
+    match status {
+        Ok(status) if status.success() => {
+            // An `llm` step never carries evidence, and the type is what makes that true.
+            // What the model achieved that is checkable is observed by the command step
+            // after it.
+            StepOutcome::Nothing
         }
+        Ok(status) => {
+            let tail: String = stderr_text
+                .lines()
+                .rev()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" | ");
+            StepOutcome::NoVerdict {
+                reason: format!(
+                    "metaharness exited {}; {}the event stream is at {}",
+                    status
+                        .code()
+                        .map_or_else(|| "on a signal".to_owned(), |code| code.to_string()),
+                    if tail.is_empty() {
+                        String::new()
+                    } else {
+                        format!("it said: {tail}; ")
+                    },
+                    transcript.display()
+                ),
+            }
+        }
+        Err(error) => StepOutcome::NoVerdict {
+            reason: format!("waiting on metaharness failed: {error}"),
+        },
     }
 }
 
@@ -1959,12 +2033,19 @@ fn surface_lines(harness: Harness, tools: &ToolConfig) -> String {
     // composed command is not a thing that can be written. The program restriction still has to be
     // stated, because a declared program set is only cheap to obey when it is known.
     if tools.shell_offered() && !harness.adjudicates() {
-        lines.push_str(
+        // **The path, not the name.** The CLI is not on this sandbox's `PATH` and is not at the
+        // path it occupies on the host: it is mounted read-only at one place, and a step told to
+        // reach the store "through `protocol`" and given no spelling that resolves will hand-write
+        // the store instead — which is exactly what EVAL-1/1 did, twice, for two different reasons.
+        let _ = write!(
+            lines,
             "\n`run` takes an argv **list** and starts one program. Nothing is composed, \
              redirected or substituted — there is no shell here to do it with — and the only \
-             program it will start is `protocol`, and only `protocol artifact …` and `protocol \
-             trace …`. Building and testing are `command` steps the driver runs itself, so that \
-             their records carry a verifier's provenance instead of yours.\n",
+             program it will start is `{DRIVEN_DRIVER}`, and only `{DRIVEN_DRIVER} artifact …` \
+             and `{DRIVEN_DRIVER} trace …`. That is the whole path and it is not on `PATH`; the \
+             bare name `protocol` does not resolve here. Building and testing are `command` steps \
+             the driver runs itself, so that their records carry a verifier's provenance instead \
+             of yours.\n",
         );
     } else if tools.shell_offered() {
         lines.push_str(
@@ -2534,11 +2615,85 @@ fn decide_tool(
 /// All native file-writing tools are denied under the store. Bodies move through `artifact body`,
 /// just as status and relations move through their own verbs; otherwise the same document still
 /// has two writers and only one of them validates the store before committing its change.
+/// Answers one `before-call` consultation from the native loop's hook port.
+///
+/// # Why this exists at all
+///
+/// The two arms enforce the same decision at different moments. The vendor arm's calls come back
+/// through the metaharness seam and are answered by [`decide_tool`] inside this process. The native
+/// loop makes its decisions in-process and consults **programs** — so the same rule has to be
+/// runnable as one, and this is it. It calls [`store_integrity`] rather than restating the rule,
+/// because a second copy of a rule is a second rule and they diverge on the day one is edited.
+///
+/// # The entry names differ and the rule does not
+///
+/// The loop names the *invoked entry* — `file_write`, `file_edit` — where the vendor names a tool:
+/// `Write`, `Edit`. `store_integrity` reads `file_path` from the arguments either way, which both
+/// spellings carry, so the mapping is only about which name reaches the message a model reads.
+///
+/// # Fail closed is the loop's rule, not ours
+///
+/// Anything unreadable here exits non-zero without `2`, which the loop's port records as
+/// `Failed` — *fail closed* before a call. So a malformed document refuses the call rather than
+/// letting it through, and this function does not have to decide that for itself.
+fn hook() -> ExitCode {
+    let mut document = String::new();
+    if std::io::Read::read_to_string(&mut std::io::stdin(), &mut document).is_err() {
+        eprintln!("the hook document could not be read from stdin");
+        return ExitCode::from(1);
+    }
+    let Ok(document) = serde_json::from_str::<serde_json::Value>(&document) else {
+        eprintln!("the hook document is not JSON");
+        return ExitCode::from(1);
+    };
+    // Only `before-call` can refuse anything; every other point proceeds. Stated rather than
+    // assumed, so a file that ever declares this program at `after-call` does not silently block.
+    if document["hook"].as_str() != Some("before-call") {
+        return ExitCode::SUCCESS;
+    }
+    let entry = document["entry"].as_str().unwrap_or_default();
+    // A hook declared for entries this rule says nothing about proceeds. The `tools` list in the
+    // hooks file is what scopes it; this is the belt.
+    if !matches!(entry, "file_write" | "file_edit") {
+        return ExitCode::SUCCESS;
+    }
+    // **The loop's own spelling.** `file_write` and `file_edit` both take `path`; `file_path` is the
+    // vendor's word and reading it here answered `None` for every call, which this rule then read as
+    // "no planning file involved" and allowed. `file_path` stays as a fallback rather than a
+    // pretence that only one spelling can arrive.
+    let arguments = &document["call"]["arguments"];
+    let target = arguments["path"]
+        .as_str()
+        .or_else(|| arguments["file_path"].as_str())
+        .unwrap_or_default();
+    // The entry name, not a vendor tool name: the model reads this sentence and has no `Edit`.
+    match store_integrity_at(entry, target) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(reason) => {
+            outln!("{}", serde_json::json!({ "reason": reason }));
+            ExitCode::from(2)
+        }
+    }
+}
+
 fn store_integrity(tool: &str, input: &serde_json::Value) -> Result<(), String> {
     let target = match tool {
         "NotebookEdit" => input["notebook_path"].as_str().unwrap_or_default(),
         _ => input["file_path"].as_str().unwrap_or_default(),
     };
+    store_integrity_at(tool, target)
+}
+
+/// The rule itself, over a path the caller has already extracted.
+///
+/// **Split out because the two arms spell the argument differently and the rule does not.** The
+/// vendor's `Edit` carries `file_path`; the native loop's `file_edit` carries `path`, and its
+/// `NotebookEdit` does not exist at all. A shared rule that reached into a `Value` for a key name
+/// was a rule that silently allowed everything on whichever arm it guessed wrong about — which is
+/// exactly what happened: the hook read `file_path`, the loop sent `path`, the target came back
+/// empty, and `revision: 99` was written to a planning document by a hook that reported success.
+/// The extraction belongs to whoever knows the call shape; the decision belongs here.
+fn store_integrity_at(tool: &str, target: &str) -> Result<(), String> {
     if !target.contains(".engineering/planning/") {
         return Ok(());
     }
@@ -2719,38 +2874,38 @@ impl Harness {
 /// publishes a `run` that could start anything else. The second is the stronger of the two — a
 /// program not on the list has no tool to reach it — which is the whole argument for that loop.
 fn driven_programs(config: &ToolConfig) -> Vec<String> {
-    // **The CLI by absolute path, because the confined exec has its own `PATH` and ours is not on
-    // it.** A confined session ran `protocol artifact list`, got `exit 127, env: 'protocol': No
-    // such file or directory`, and reasoned its way to writing the store's files directly — which
-    // the write scope then refused, so the step achieved nothing twice over. The driver *is*
-    // `protocol`, so it names itself, which also pins the build the run's evidence is recorded
-    // against.
+    // **The driver is not declared here at all any more, and that is the correction.**
     //
-    // **The bare name is not kept beside it, and that is the correction.** It was, "for a sandbox
-    // whose `PATH` does carry one" — but this one does not, and allow-listing a program that
-    // cannot be found is worse than not allow-listing it. A declared program passes admission and
-    // then dies at exec with `127`, which a model reads as *the command is wrong* rather than *the
-    // spelling is wrong*; a program outside the set is refused **here**, by name, listing the set,
-    // with nothing sent to the daemon (`harness_substrate::tools`), so the refusal itself shows the
-    // spelling that works.
+    // Two spellings were tried and both failed, for two different reasons that looked the same
+    // from inside the sandbox. The bare name failed because the confined exec has its own `PATH`.
+    // The absolute host path then failed because the sandbox is not this filesystem: it binds
+    // `/usr`, `/bin`, `/lib`, `/lib64` and the workspace, and nothing else, so a path outside
+    // those is not there to run. The comment that used to sit here blamed `PATH` for both, which
+    // is why the second spelling was expected to work.
     //
-    // Measured on run EVAL-1/1 at 8783e3c. The session proved the absolute path worked on its
-    // second call — `<path>/protocol skill load planning` — then used the bare name on its third,
-    // fourth and sixth, took `127` each time, gave up on the CLI and hand-wrote the store's
-    // frontmatter with `file_write`, omitting `id`. The store ended unparseable. Every one of those
-    // turns was bought by a list that said yes to a word the machine could not resolve.
-    let mut programs = match std::env::current_exe() {
-        Ok(binary) => vec![binary.display().to_string()],
-        // No absolute path to offer, so the bare name is the only spelling there is. A sandbox
-        // whose `PATH` carries one is the case this branch is for; one that does not will refuse
-        // at exec, and there is nothing better to declare.
-        Err(_) => vec!["protocol".to_owned()],
-    };
+    // Measured twice. On EVAL-1/1 at 8783e3c the bare name took `127` three times and the session
+    // hand-wrote the store's frontmatter with `file_write`, omitting `id`, leaving the store
+    // unparseable. On EVAL-1/1 at 3d8ac3b the absolute path was allow-listed, admitted, and still
+    // found nothing: the session said so in its own words — *"the `protocol` binary ... does not
+    // exist in the accessible filesystem"* — and the run ended with zero artifacts.
+    //
+    // An allow-list decides what a `run` may **name**; only a mount decides what the sandbox
+    // **contains**. So the driver travels as `--driver` instead ([`b10x_argv`]), which stages the
+    // one file, mounts it read-only, and adds its mounted path to the loop's own allow-list. One
+    // declaration, made where it can be honoured.
+    let mut programs = Vec::new();
     if config.admits(&Capability::RepositoryRead) || config.admits(&Capability::ArtifactRead) {
         programs.extend(READ_ONLY_PROGRAMS.iter().map(|name| (*name).to_owned()));
     }
     programs
 }
+
+/// Where the staged driver appears inside a confined run, and therefore what an argv must name.
+///
+/// The loop's own constant, repeated here because the two sides are separate binaries: the harness
+/// mounts at this path and this is the path the run's instructions have to quote. A test pins the
+/// pair rather than a comment asking a reader to keep them level.
+pub(crate) const DRIVEN_DRIVER: &str = "/toolchain/driver/protocol";
 
 /// The neutral operations an admitted capability set reaches, as `available_operations` spells them.
 ///
@@ -3641,6 +3796,7 @@ fn b10x_argv(
     context_files: &[String],
     prompt: &str,
     config: &ToolConfig,
+    hooks: Option<&Path>,
 ) -> Vec<String> {
     let mut argv = vec![
         METAHARNESS_BINARY.to_owned(),
@@ -3702,6 +3858,27 @@ fn b10x_argv(
             argv.push("--allow-program".to_owned());
             argv.push(program);
         }
+        // **And the driver itself travels as a mount, not as a name.** Allow-listing it by its
+        // path on this host admitted the name and nothing else: the sandbox binds `/usr`, `/bin`,
+        // `/lib`, `/lib64` and the workspace, so the file was never there and every call died at
+        // `ENOENT`. `--driver` stages exactly this binary into a private directory, mounts it
+        // read-only at `/toolchain/driver`, and adds the mounted path to the loop's own allowlist
+        // — so the step's instructions can name `DRIVEN_DRIVER` and have it be true.
+        //
+        // Read-only is the point as much as present is: this is the binary that records the run's
+        // evidence, and a run that could rewrite it has no evidence to show.
+        if let Ok(binary) = std::env::current_exe() {
+            argv.push("--driver".to_owned());
+            argv.push(binary.display().to_string());
+        }
+    }
+    // **The content-level refusal, which the write scope cannot express.** A scope answers *which
+    // paths*; the store's rule is about *which fields* — a step legitimately writes under
+    // `.engineering/planning`, and must not hand-edit the frontmatter the CLI owns. Without this the
+    // native arm's whole enforcement is which tools exist, and `file_write` has to exist.
+    if let Some(hooks) = hooks {
+        argv.push("--hooks".to_owned());
+        argv.push(hooks.display().to_string());
     }
     for rule in scope {
         for path in &rule.paths {
@@ -5179,6 +5356,7 @@ mod tests {
             &[],
             "do the thing",
             &executing,
+            None,
         );
         let allowed: Vec<&String> = argv
             .windows(2)
@@ -5191,24 +5369,37 @@ mod tests {
         // that cannot be found is admitted and then fails at exec; one that is not declared is
         // refused here, by name, listing the set — which is the only form of this answer that tells
         // the model the spelling that works.
-        // The CLI is declared as the running binary's own path. Under `cargo test` that path is
-        // the test executable rather than `protocol`, which is why this asserts the *shape* — one
-        // declared program that is not a reader, and it resolves without a `PATH` — instead of the
-        // name. `driven_programs` names `current_exe()` either way.
+        // **The CLI is not on this list at all, and that is the fix.** Two spellings were tried
+        // here and both failed from inside the sandbox: the bare name, because the confined exec
+        // has its own `PATH`; then the absolute host path, because the sandbox binds `/usr`,
+        // `/bin`, `/lib`, `/lib64` and the workspace and is not this filesystem. An allow-list
+        // decides what a `run` may name; only a mount decides what the sandbox contains. So the
+        // driver travels as `--driver`, and the loop allow-lists the mounted path itself.
         let cli: Vec<&&String> = allowed
             .iter()
             .filter(|name| !READ_ONLY_PROGRAMS.contains(&name.as_str()))
             .collect();
-        assert_eq!(
-            cli.len(),
-            1,
-            "exactly one CLI is declared, and it is the driver itself: {argv:?}"
-        );
         assert!(
-            cli[0].starts_with('/'),
-            "the CLI is declared by path: a bare name passes admission and then dies at exec with \
-             `127`, which reads as a wrong command rather than a wrong spelling — run EVAL-1/1 \
-             spent four turns on that and then hand-wrote the store: {allowed:?}"
+            cli.is_empty(),
+            "the CLI is not declared as a program: a path this sandbox does not hold is admitted \
+             and then dies at `ENOENT`, which reads as a wrong command rather than a missing \
+             file — EVAL-1/1 took that twice and hand-wrote the store both times: {argv:?}"
+        );
+        let driver = argv
+            .iter()
+            .position(|word| word == "--driver")
+            .expect("the driver travels as a mount");
+        assert!(
+            Path::new(&argv[driver + 1]).is_absolute(),
+            "and it is staged from a real path on this host: {argv:?}"
+        );
+        // The two sides are separate binaries, so the path the instructions quote and the path the
+        // loop mounts at are pinned together here rather than by a comment asking a reader to keep
+        // them level.
+        assert_eq!(
+            DRIVEN_DRIVER, "/toolchain/driver/protocol",
+            "the loop mounts a declared driver at `/toolchain/driver`; a step told any other path \
+             is told one that does not resolve"
         );
         for reader in READ_ONLY_PROGRAMS {
             assert!(
@@ -5227,6 +5418,7 @@ mod tests {
             &[],
             "do the thing",
             &reading_only,
+            None,
         );
         assert!(
             !quiet.iter().any(|word| word == "--allow-program"),
@@ -5302,6 +5494,7 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
+            None,
         );
         let joined = confined.join(" ");
         assert!(
@@ -5321,6 +5514,7 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
+            None,
         );
         assert!(
             !ordinary.join(" ").contains("--substrate"),
@@ -5515,6 +5709,7 @@ mod tests {
             &step.context,
             "do the thing",
             &config(&[Capability::RepositoryRead, Capability::CommandExecution]),
+            None,
         );
         assert_eq!(argv[0], "metaharness");
         assert_eq!(argv[1], "run");
@@ -5566,6 +5761,7 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
+            None,
         );
         assert!(authenticated
             .windows(2)
@@ -5640,6 +5836,7 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
+            None,
         );
         let after = |flag: &str| {
             argv.windows(2)
@@ -5669,6 +5866,7 @@ mod tests {
             &[],
             "do the thing",
             &config(&[Capability::RepositoryRead]),
+            None,
         );
         assert!(
             !sourceless
