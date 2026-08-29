@@ -6,6 +6,8 @@ description: What has been delivered in which order, what is deferred by decisio
 
 # Roadmap and proposals
 
+Serves **O2**, **O3** and **O6** of `atlas/ROADMAP.md`, the collection's objectives; this page orders the work inside this repository.
+
 The repository keeps design proposals in `docs/design/`, and holds a strict line: **a proposal is
 not a work order**, however long and however recent. Work is sequenced by plan pages in
 `docs/plan/`, and each wave must be falsifiable by the one before it — a generated artifact nothing

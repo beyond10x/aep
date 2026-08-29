@@ -8,6 +8,18 @@ migration with an ADR — live in `atlas/AGENTS.md` and are not restated here.
 
 `README.md` and `website/` orient a reader. This file says what must not break.
 
+## Serves
+
+The objectives of the collection this repository moves, by id from `atlas/ROADMAP.md` — the only
+cross-repository roadmap, and the page that says what each id means and which evidence closes it:
+
+- **O2 — decisions as data, with evidence.** Engineering method and system intent as typed, executable rules over evidence, with the artifact model running on the entity kernel (atlas ADR 0002).
+- **O3 — any harness, observed and compared.** The governor both arms are measured under (atlas ADR 0004), and the four-arm eval that measures them.
+- **O6 — self-improvement, built into all of it.** A driven run scores itself, and the planning store keeps the record the next run reads.
+
+A change here that moves none of these is a question for the operator, not a task.
+`atlas/scripts/check-map.sh` fails a repository whose `AGENTS.md` names no objective.
+
 ## What this repository is
 
 A machine-executable specification of engineering methodology: principles, workflows, capabilities,
