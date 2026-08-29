@@ -42,15 +42,15 @@ $B trace inspect --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYj
 ```
 
 ```text
-transcript   sha256:6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
+transcript   sha256:53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
 events       36 total — 6 assistant_text, 2 assistant_thinking, 1 rate_limit, 1 run_outcome, 1 session_start, 1 synthetic_injection, 2 thinking_estimate, 11 tool_call, 11 tool_result
 unread       0 event(s) the adapter could not read
 requests     19 assistant events, 8 api requests
-tool         Bash: 4 call(s), 0 error(s), in 1116B, results 2739B
-tool         Edit: 3 call(s), 0 error(s), in 6863B, results 637B
-tool         Read: 3 call(s), 0 error(s), in 361B, results 4656B
+tool         Bash: 4 call(s), 0 error(s), in 1116B, results 2755B
+tool         Edit: 3 call(s), 0 error(s), in 6875B, results 649B
+tool         Read: 3 call(s), 0 error(s), in 373B, results 4656B
 tool         Skill: 1 call(s), 0 error(s), in 423B, results 47B
-tools-total  11 call(s), results 8079B into context
+tools-total  11 call(s), results 8107B into context
 repeated     0 identical call group(s)
 step         1. Skill (event 5): gen 1486ms, exec 35ms
 step         2. Bash (event 10): gen 1290ms, exec 187ms
@@ -106,7 +106,7 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```
 
 ```text
-planning-plugin/eval against transcript sha256:6522e1ebe318… — 41 ok, 0 gap, 0 unk
+planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
   The planning plugin behaves as its skill says it does
   ok        our-plugin-loaded                              engineering-protocols 0.1.0 from engineering-protocols@inline is loaded at event 0
   ok        nothing-else-loaded                            exactly engineering-protocols loaded at event 0
@@ -132,7 +132,7 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```text
   ok (adv)  served-at-standard-speed                       usage.speed = standard at event 35
 spec sha256:8eca7c40a57e…  adapter claude-code/stream-json
-note: this report quotes command strings and file paths read out of the transcript; `--redact` replaces them with digests. Transcript sha256:6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
+note: this report quotes command strings and file paths read out of the transcript; `--redact` replaces them with digests. Transcript sha256:53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
 conformant: the run satisfies every expectation the specification states (exit 0)
 ```
 
@@ -154,7 +154,7 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```
 
 ```text
-planning-plugin/eval against transcript sha256:6522e1ebe318… — 41 ok, 0 gap, 0 unk
+planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
   The planning plugin behaves as its skill says it does
   ok        our-plugin-loaded                              sha256:254fa2a0a580 at event 0
   ok        nothing-else-loaded                            sha256:90325e36d98d at event 0
@@ -197,7 +197,7 @@ $B trace evidence --spec conformance/trace/expectations.trace.yaml \
 - kind: trace_conformance
   specification: planning-plugin/eval
   spec_digest: 8eca7c40a57e3f45d311c9499102980cb8846c3045ca407e6a3148abc3b8f74f
-  transcript_digest: 6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
+  transcript_digest: 53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
   status: passed
   expectations_total: 41
   expectations_gapped: 0

@@ -135,7 +135,7 @@ one set.
 
 ```console
 $ protocol trace check --spec …/expectations.trace.yaml --transcript "$WORK/result.jsonl"
-planning-plugin/eval against transcript sha256:6522e1ebe318… — 41 ok, 0 gap, 0 unk
+planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
   ok        skill-completed          engineering-protocols:planning completed 1 time(s) with
                                      success=true, at least 1 at events 5, 6
   ok        created-through-the-cli  Bash(command ~ "protocol artifact new") called 2 time(s),
