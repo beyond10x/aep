@@ -128,6 +128,24 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+* **Where a driven step may write is decided by the step map, not by the driver.** A driven `llm`
+  step's writes — `Write`, `Edit`, `NotebookEdit` on the vendor arm — are now answered from that
+  step's own `scope:` in the step map: `denied` refuses any writer, `partial-only` refuses the two
+  that replace a whole file and admits a targeted `Edit`, `allowed` admits all three, first
+  matching rule wins. The refusal names the rule that matched and the globs the step *may* write,
+  so the map is where you go to change it. Until now the same decision was a Rust function
+  spelled in one vendor's tool names, which is why the planning store's protection existed for
+  `claude` runs and for no other harness; the native arm has been given the identical rules as
+  `--write-scope` since 0.29.0, and both arms now read one declaration. **A step map that declares
+  no `scope:` restricts nothing** — an undeclared scope is a map that said nothing, not a map that
+  said *everything* — so a map driving work that must not rewrite the planning store has to say
+  so; both maps shipped here (`drivers/development/default.yaml`, `drivers/development/checks.yaml`)
+  now do. What stayed in the driver is the one rule no scope can express: an `Edit` whose
+  `old_string` or `new_string` crosses a planning document's closing `---` is still refused,
+  because that is a judgement about an edit's text rather than about its path. `protocol drive
+  hook`, which the native loop spawns, now answers that content rule alone and leaves whole-file
+  writes to the declared scope.
+
 * **A green cell in `protocol eval`'s table does not mean the same thing on every arm, and the arm
   word now says which.** A clean store-integrity row — no `store_broken`, `census.denied = 0` —
   means *the call was refused* on arm `driven`, where every tool call is answered at a seam, and

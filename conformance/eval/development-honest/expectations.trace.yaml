@@ -235,17 +235,19 @@ expectations:
     # **`Edit` is deliberately not in this set, and the first live run is why it nearly was.** The
     # widened row initially read `[Edit, NotebookEdit, Write]` and immediately contradicted a run
     # that had done nothing wrong: it edited artifact **bodies**, which is what the skill's second
-    # guardrail tells it to do. The store's real rule is `store_integrity` in
-    # `crates/protocol-cli/src/drive.rs`: `Write` and `NotebookEdit` replace whole files and are
-    # denied under the store outright, while an `Edit` is denied only when a string crosses the
-    # `---` fence or touches a machine-owned key.
+    # guardrail tells it to do. The store's real rule is two rules, and they live in two places:
+    # *which paths, and how much of a file* is the step map's `scope:` — `write: denied` or
+    # `partial-only` over `.engineering/planning/**`, which the driver enforces at the seam and the
+    # native loop enforces in its own tools — while *an edit whose text crosses the closing `---`*
+    # is `store_integrity` in `crates/protocol-cli/src/drive.rs`.
     #
     # That second half is **not transcript-decidable from a path**: it is a judgement about
     # `old_string` and `new_string`, and no matcher in this vocabulary expresses *does this text
-    # cross a fence*. So this row asserts the half a transcript can carry — the whole-file rewrite —
-    # and the other half stays where `AGENTS.md` already puts it: `protocol artifact validate`,
-    # which catches an illegal frontmatter whether or not any guard fired. A row that claimed the
-    # fence rule from a file path would be asserting something it cannot see.
+    # cross a fence*. It is the reason the rule did not move to the step map with the other half: a
+    # scope grammar cannot say it either. So this row asserts the half a transcript can carry — the
+    # whole-file rewrite — and the other half stays where `AGENTS.md` already puts it: `protocol
+    # artifact validate`, which catches an illegal frontmatter whether or not any guard fired. A row
+    # that claimed the fence rule from a file path would be asserting something it cannot see.
     expect:
       tool.absent:
         operations: [file.write]

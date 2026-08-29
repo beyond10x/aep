@@ -79,6 +79,12 @@ use aep_engine::project::project_directory;
 use aep_engine::{Engine, ProtocolEngine, Registry, TransitionResult};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
+// The one glob matcher in the workspace, and the one a step map's `scope:` is decided with. Taken
+// from `trace-domain` rather than written again here for the reason `AGENTS.md` gives about a
+// second copy of a rule: two matchers would disagree about `*` the first time either was touched,
+// and this one is already property-tested against the paths the design writes
+// (`crates/trace-domain/src/matcher.rs`).
+use trace_domain::matcher::glob_matches;
 
 /// The directory inside `.engineering` that holds runs.
 const RUNS_DIRECTORY: &str = "runs";
@@ -178,11 +184,13 @@ pub(crate) enum DriveCommand {
     Resume(ResumeArgs),
     /// Answer one `before-call` hook consultation from the native loop, on stdin.
     ///
-    /// **The same rule the vendor arm enforces in-process, reachable as a program.** `decide_tool`
-    /// runs inside this process for a `claude` step because that arm's calls come back through the
-    /// metaharness seam. The native loop decides in-process and consults hooks instead, so the rule
-    /// has to be *spawnable*; this is the spelling that makes it so, and it calls the same
-    /// `store_integrity` rather than restating it. A second copy of a rule is a second rule.
+    /// **The same content rule the vendor arm enforces in-process, reachable as a program.**
+    /// `decide_tool` runs inside this process for a `claude` step because that arm's calls come
+    /// back through the metaharness seam. The native loop decides in-process and consults hooks
+    /// instead, so the rule has to be *spawnable*; this is the spelling that makes it so, and it
+    /// calls the same `store_integrity_at` rather than restating it. A second copy of a rule is a
+    /// second rule. Where a step may write at all is not asked here: that is the step map's
+    /// `scope:`, which reaches this loop as `--write-scope`.
     ///
     /// Reads the `--hooks` protocol on stdin and answers with an exit status: `0` proceeds, `2`
     /// blocks with `{"reason": …}` on stdout. Not for people to run.
@@ -1505,16 +1513,19 @@ impl CliExecutors {
     /// The step's sealed frame document, written beside the transcript it governs.
     /// Writes the hook file a native step's loop consults, and answers with its path.
     ///
-    /// **This is the native arm's half of `decide_tool`.** The vendor arm's calls come back through
-    /// the metaharness seam and are answered in this process; the native loop decides in-process and
-    /// consults programs, so the same rule is declared here as a program to spawn — `protocol drive
-    /// hook`, this binary by the path `driven_programs` already names, calling the same
-    /// `store_integrity`.
+    /// **This is the native arm's half of the content rule.** The vendor arm's calls come back
+    /// through the metaharness seam and reach `store_integrity` in this process; the native loop
+    /// decides in-process and consults programs, so the same rule is declared here as a program to
+    /// spawn — `protocol drive hook`, this binary by the path `driven_programs` already names,
+    /// calling the same `store_integrity_at`.
     ///
-    /// Scoped to `file_write` and `file_edit` because those are the entries that can reach a
-    /// planning document; the hook itself proceeds for anything else, so the two agree rather than
-    /// one relying on the other. `run` is deliberately absent: what a program may *be* is decided by
-    /// the allowlist before the run starts, which is the stronger answer and the one already made.
+    /// Scoped to `file_edit` alone, because the fence rule is about the text an edit quotes.
+    /// `file_write` replaces a whole file, which is the question the step map's `scope:` answers
+    /// and `--write-scope` carries to this loop's own tools — asking a hook about it as well would
+    /// be a second copy of that rule. The hook itself proceeds for any other entry, so the two
+    /// agree rather than one relying on the other. `run` is deliberately absent: what a program may
+    /// *be* is decided by the allowlist before the run starts, which is the stronger answer and the
+    /// one already made.
     fn write_hooks_document(transcripts: &Path) -> Result<PathBuf, String> {
         let binary = std::env::current_exe()
             .map_err(|error| format!("cannot name this binary for the hook file: {error}"))?;
@@ -1522,7 +1533,7 @@ impl CliExecutors {
             "version": 1,
             "hooks": [{
                 "on": "before-call",
-                "tools": ["file_write", "file_edit"],
+                "tools": ["file_edit"],
                 "command": [binary.display().to_string(), "drive", "hook"],
             }],
         });
@@ -1711,9 +1722,16 @@ impl CliExecutors {
                 };
             }
         };
+        // **The declaration, handed to the seam.** The same `scope:` the native arm receives as
+        // `--write-scope` decides this arm's writes too, so the rule a run is held to is the one a
+        // person reads in the step map rather than one written into a policy function.
         let adjudication = answer_events(
             harness,
             context,
+            WriteSurface {
+                scope: &step.scope,
+                root: &self.working_directory,
+            },
             events,
             &mut commands,
             &mut transcript_file,
@@ -2464,6 +2482,7 @@ fn engine_refusal(decision: &Decision) -> String {
 fn answer_events(
     harness: Harness,
     context: &StepContext<'_>,
+    surface: WriteSurface<'_>,
     events: impl std::io::Read,
     commands: &mut impl std::io::Write,
     transcript: &mut impl std::io::Write,
@@ -2545,7 +2564,7 @@ fn answer_events(
             let call_id = event["call_id"].as_str().unwrap_or_default();
             let name = event["name"].as_str().unwrap_or_default();
             let deny = |reason: String| serde_json::json!({ "decision": "deny", "reason": reason });
-            let decision = match decide_tool(context, name, &event["input"]) {
+            let decision = match decide_tool(context, surface, name, &event["input"]) {
                 Err(reason) => deny(format!("the driver's per-call policy refuses: {reason}")),
                 // Nothing renders this call as an action — `Skill` and `WebSearch` are the two, and
                 // [`action_for`] says why — so the engine is not consulted and the policy's allow
@@ -2653,10 +2672,14 @@ const METAHARNESS_EVENT_FORMAT: &str = "metaharness.event/1";
 /// 2. **the per-state allowlist**: the tool must render from a capability this state admits,
 ///    which is what `--allowedTools` used to carry (and can no longer, because a bare
 ///    `--allowedTools` entry auto-approves the whole tool before any seam is consulted);
-/// 3. **store integrity** (`Edit`/`Write`/`NotebookEdit`): every planning-store mutation crosses
-///    the `protocol artifact` surface, in every state of every workflow.
+/// 3. **the step's declared write scope** (`Edit`/`Write`/`NotebookEdit`): where this step may
+///    write and how much of a file it may replace, read off the step map's `scope:` rather than
+///    written here — the same declaration the native loop is handed as `--write-scope`;
+/// 4. **store integrity** (`Edit`): an edit's text may not cross a planning document's closing
+///    `---`. A question about **content**, which is the one thing no scope can answer.
 fn decide_tool(
     context: &StepContext<'_>,
+    surface: WriteSurface<'_>,
     tool: &str,
     input: &serde_json::Value,
 ) -> Result<(), String> {
@@ -2672,31 +2695,152 @@ fn decide_tool(
         ));
     }
     match tool {
-        "Edit" | "Write" | "NotebookEdit" => store_integrity(tool, input),
+        "Edit" | "Write" | "NotebookEdit" => {
+            declared_write(surface, tool, input)?;
+            store_integrity(tool, input)
+        }
         _ => Ok(()),
     }
 }
 
-/// The planning store has one writer: `protocol artifact`.
+/// One `llm` step's declared write surface, as the seam reads it.
 ///
-/// All native file-writing tools are denied under the store. Bodies move through `artifact body`,
-/// just as status and relations move through their own verbs; otherwise the same document still
-/// has two writers and only one of them validates the store before committing its change.
-/// Answers one `before-call` consultation from the native loop's hook port.
+/// Two values, because a glob is only decidable against a path once you know what it is relative
+/// to: the map writes `crates/**`, the vendor sends `/operator/repo/crates/aep-domain/src/lib.rs`,
+/// and a rule matched against the second answers about a repository nobody named.
+#[derive(Debug, Clone, Copy)]
+struct WriteSurface<'a> {
+    /// The step's `scope:`, in the order the map wrote it — first match wins, so it is never
+    /// sorted.
+    ///
+    /// Empty is **no scope declared**, which is not the same as a scope that allows everything
+    /// (`aep_driver_spec::map::LlmStep::scope`). A map that said nothing restricts nothing here,
+    /// and the way to restrict a step is to say so in the map.
+    scope: &'a [ScopeRule],
+    /// The working tree the scope's globs are written against.
+    root: &'a Path,
+}
+
+/// The step map's `scope:`, enforced at the seam this arm has.
+///
+/// **The rule is read from the declaration; it is not written here.** Where a driven step may
+/// write is a property of the work, so it belongs in a document a person can read —
+/// `drivers/development/default.yaml` — rather than in a Rust function spelled in one vendor's
+/// tool names, which is what it was for a year and which every other arm walked straight past.
+/// The native loop is handed the same rules as `--write-scope` ([`b10x_argv`]) and enforces them
+/// in its own tools; this is the vendor arm's half of the one declaration.
+///
+/// # Granularity is the harness's fact, and this is the harness
+///
+/// [`WriteScope::PartialOnly`] says *part of a file may be changed; a whole file may never be
+/// replaced*, and deliberately names no operation — which of a harness's tools replace a whole
+/// file is that harness's business, as `WriteScope`'s own documentation says. Here it is:
+/// `Write` and `NotebookEdit` replace one, `Edit` changes part of one.
+///
+/// # Why falling off the end of a scope is not a decision
+///
+/// Validation refuses a scope whose last rule does not name `**`
+/// (`aep_driver_spec::map::validated_scope`), so a declared scope has an answer for every path and
+/// this function cannot reach its end with a rule left to find. The `None` arm is what a
+/// hand-built scope in a test would hit, and it allows rather than inventing a verdict the
+/// document does not contain.
+fn declared_write(
+    surface: WriteSurface<'_>,
+    tool: &str,
+    input: &serde_json::Value,
+) -> Result<(), String> {
+    if surface.scope.is_empty() {
+        return Ok(());
+    }
+    let target = match tool {
+        "NotebookEdit" => input["notebook_path"].as_str().unwrap_or_default(),
+        _ => input["file_path"].as_str().unwrap_or_default(),
+    };
+    let subject = scope_subject(surface.root, target);
+    let Some(rule) = surface
+        .scope
+        .iter()
+        .find(|rule| rule.paths.iter().any(|glob| glob_matches(glob, subject)))
+    else {
+        return Ok(());
+    };
+    let matched = rule.paths.join("`, `");
+    // The guarded arm is the granularity one and it comes before the catch-all, so a
+    // `partial-only` rule refuses the two tools that replace a whole file and admits `Edit`.
+    match rule.write {
+        WriteScope::Denied => Err(format!(
+            "`{tool}` cannot write `{subject}`: this step's declared write scope answers `denied` \
+             for it, on the rule `{matched}`. This step may write {}. Everything else is changed \
+             through the verb that owns it — a planning artifact through `protocol artifact` \
+             (`new`, `body`, `move`, `relate`), which is why a file writer is denied there.",
+            writable(surface.scope)
+        )),
+        WriteScope::PartialOnly if tool == "Write" || tool == "NotebookEdit" => Err(format!(
+            "`{tool}` replaces the whole of `{subject}`, and this step's declared write scope \
+             answers `partial-only` for it, on the rule `{matched}`: part of a file may be \
+             changed, a whole file may never be replaced. Make the change with `Edit`."
+        )),
+        WriteScope::Allowed | WriteScope::PartialOnly => Ok(()),
+    }
+}
+
+/// The globs a scope leaves writable, for a refusal to name.
+///
+/// A refusal that says only *no* costs the next turn finding out where *yes* is, and the answer is
+/// already in the declaration this refusal came from.
+fn writable(scope: &[ScopeRule]) -> String {
+    let allowed: Vec<&str> = scope
+        .iter()
+        .filter(|rule| rule.write != WriteScope::Denied)
+        .flat_map(|rule| rule.paths.iter().map(String::as_str))
+        .collect();
+    if allowed.is_empty() {
+        "nothing: every rule of its scope is `denied`".to_owned()
+    } else {
+        format!("`{}`", allowed.join("`, `"))
+    }
+}
+
+/// The path a scope's globs are written against.
+///
+/// A step map writes `crates/**`, relative to the working tree. Claude Code sends the absolute
+/// path it opened, so stripping the tree is what makes the two the same subject. A path that is
+/// **not** under the tree is handed over unchanged rather than mangled: every validated scope ends
+/// in a `**` catch-all, so an outsider still gets an answer instead of slipping through a
+/// prefix that did not match.
+fn scope_subject<'a>(root: &Path, target: &'a str) -> &'a str {
+    let Some(root) = root.to_str() else {
+        return target;
+    };
+    let root = root.trim_end_matches('/');
+    match target.strip_prefix(root) {
+        Some(rest) if rest.is_empty() => rest,
+        Some(rest) => rest.strip_prefix('/').unwrap_or(target),
+        None => target,
+    }
+}
+
+/// A planning document's frontmatter is the CLI's: an edit may not cross the closing `---`.
+///
+/// Answers one `before-call` consultation from the native loop's hook port, with the **content**
+/// tier and only that. Where the loop may write at all, and whether it may replace a whole file,
+/// is declared in the step map's `scope:` and travels to that arm as `--write-scope`, which its own
+/// tools enforce before this program is ever spawned.
 ///
 /// # Why this exists at all
 ///
 /// The two arms enforce the same decision at different moments. The vendor arm's calls come back
 /// through the metaharness seam and are answered by [`decide_tool`] inside this process. The native
 /// loop makes its decisions in-process and consults **programs** — so the same rule has to be
-/// runnable as one, and this is it. It calls [`store_integrity`] rather than restating the rule,
+/// runnable as one, and this is it. It calls [`store_integrity_at`] rather than restating the rule,
 /// because a second copy of a rule is a second rule and they diverge on the day one is edited.
 ///
 /// # The entry names differ and the rule does not
 ///
-/// The loop names the *invoked entry* — `file_write`, `file_edit` — where the vendor names a tool:
-/// `Write`, `Edit`. `store_integrity` reads `file_path` from the arguments either way, which both
-/// spellings carry, so the mapping is only about which name reaches the message a model reads.
+/// The loop names the *invoked entry* — `file_edit` — where the vendor names a tool: `Edit`. It
+/// spells the arguments differently too: `path`, `old` and `new` against `file_path`,
+/// `old_string` and `new_string`. Both spellings are read here, because a rule that guessed one
+/// of them is a rule that silently allows everything on the other arm.
 ///
 /// # Fail closed is the loop's rule, not ours
 ///
@@ -2721,20 +2865,31 @@ fn hook() -> ExitCode {
     let entry = document["entry"].as_str().unwrap_or_default();
     // A hook declared for entries this rule says nothing about proceeds. The `tools` list in the
     // hooks file is what scopes it; this is the belt.
-    if !matches!(entry, "file_write" | "file_edit") {
+    //
+    // **`file_write` is deliberately not here.** It replaces a whole file, which is a question of
+    // granularity and path — the one the step map's `scope:` answers and `--write-scope` carries to
+    // this loop's own tools. Asking this program about it too would be a second copy of that rule,
+    // in the place least likely to be read.
+    if entry != "file_edit" {
         return ExitCode::SUCCESS;
     }
-    // **The loop's own spelling.** `file_write` and `file_edit` both take `path`; `file_path` is the
-    // vendor's word and reading it here answered `None` for every call, which this rule then read as
-    // "no planning file involved" and allowed. `file_path` stays as a fallback rather than a
-    // pretence that only one spelling can arrive.
+    // **The loop's own spelling.** `file_edit` takes `path`, `old` and `new`; `file_path`,
+    // `old_string` and `new_string` are the vendor's words, and reading only those answered `None`
+    // for every call once, which this rule then read as "no planning file involved" and allowed.
+    // Both spellings are read rather than a pretence that only one can arrive.
     let arguments = &document["call"]["arguments"];
-    let target = arguments["path"]
-        .as_str()
-        .or_else(|| arguments["file_path"].as_str())
-        .unwrap_or_default();
-    // The entry name, not a vendor tool name: the model reads this sentence and has no `Edit`.
-    match store_integrity_at(entry, target) {
+    let field = |loop_word: &str, vendor_word: &str| -> &str {
+        arguments[loop_word]
+            .as_str()
+            .or_else(|| arguments[vendor_word].as_str())
+            .unwrap_or_default()
+    };
+    let target = field("path", "file_path");
+    let edits = [
+        ("old", field("old", "old_string")),
+        ("new", field("new", "new_string")),
+    ];
+    match store_integrity_at(target, &edits) {
         Ok(()) => ExitCode::SUCCESS,
         Err(reason) => {
             outln!("{}", serde_json::json!({ "reason": reason }));
@@ -3031,27 +3186,62 @@ fn store_integrity(tool: &str, input: &serde_json::Value) -> Result<(), String> 
         "NotebookEdit" => input["notebook_path"].as_str().unwrap_or_default(),
         _ => input["file_path"].as_str().unwrap_or_default(),
     };
-    store_integrity_at(tool, target)
+    store_integrity_at(
+        target,
+        &[
+            (
+                "old_string",
+                input["old_string"].as_str().unwrap_or_default(),
+            ),
+            (
+                "new_string",
+                input["new_string"].as_str().unwrap_or_default(),
+            ),
+        ],
+    )
 }
 
-/// The rule itself, over a path the caller has already extracted.
+/// The rule itself, over a path and the strings the caller has already extracted.
 ///
-/// **Split out because the two arms spell the argument differently and the rule does not.** The
-/// vendor's `Edit` carries `file_path`; the native loop's `file_edit` carries `path`, and its
-/// `NotebookEdit` does not exist at all. A shared rule that reached into a `Value` for a key name
-/// was a rule that silently allowed everything on whichever arm it guessed wrong about — which is
-/// exactly what happened: the hook read `file_path`, the loop sent `path`, the target came back
-/// empty, and `revision: 99` was written to a planning document by a hook that reported success.
-/// The extraction belongs to whoever knows the call shape; the decision belongs here.
-fn store_integrity_at(tool: &str, target: &str) -> Result<(), String> {
+/// # Why this half is code and the other half is a declaration
+///
+/// *No whole-file replacement under the store* is a question about a **path** and a
+/// **granularity**, and both are things a scope can say — so it says them, in
+/// `drivers/development/default.yaml`, where a person reading the workflow can find the rule that
+/// governs the run. [`declared_write`] enforces it on this arm and `--write-scope` enforces it on
+/// the native one, from that one declaration.
+///
+/// *Text crossing the closing `---`* is a question about the **content** of an edit: which part of
+/// a file this is, not which file. No scope grammar expresses it — the eval corpus says the same
+/// thing about a transcript, that this half is "not transcript-decidable from a path"
+/// (`conformance/eval/development-honest/expectations.trace.yaml`) — so it stays here, and the
+/// store's directory appears below as the **address of the documents whose frontmatter has a
+/// machine owner**, never as a rule about where a step may write.
+///
+/// # Split out because the two arms spell the argument differently and the rule does not
+///
+/// The vendor's `Edit` carries `old_string`/`new_string`; the native loop's `file_edit` carries
+/// `old`/`new`, and its `NotebookEdit` does not exist at all. A shared rule that reached into a
+/// `Value` for a key name was a rule that silently allowed everything on whichever arm it guessed
+/// wrong about — which is exactly what happened once: the hook read `file_path`, the loop sent
+/// `path`, the target came back empty, and `revision: 99` was written to a planning document by a
+/// hook that reported success. The extraction belongs to whoever knows the call shape; the
+/// decision belongs here.
+fn store_integrity_at(target: &str, edits: &[(&str, &str)]) -> Result<(), String> {
     if !target.contains(".engineering/planning/") {
         return Ok(());
     }
-    Err(format!(
-        "`{tool}` cannot write {target}: planning-store files are mutated only through `protocol \
-         artifact`. Use `artifact body <id> --from <path|->` for prose, `artifact move` for \
-         status, `artifact relate` for relations, and `artifact new` for creation."
-    ))
+    for (field, text) in edits {
+        if text.lines().any(|line| line.trim() == "---") {
+            return Err(format!(
+                "the edit's `{field}` crosses the `---` frontmatter fence of {target}. Edit only \
+                 below the closing fence; the frontmatter is the CLI's — `protocol artifact move` \
+                 for status, `artifact relate` for relations, `artifact new` for creation, and \
+                 `artifact body <id> --from <path|->` for the prose underneath."
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The per-state shell surface: one simple invocation of `protocol artifact …` or
@@ -4658,7 +4848,7 @@ mod tests {
         // be worse than saying nothing — it would be an instruction to do what will be denied.
         for tool in &admitted {
             assert!(
-                decide_tool(&context, tool, &serde_json::json!({})).is_ok()
+                decide_tool(&context, no_scope(), tool, &serde_json::json!({})).is_ok()
                     || tool == "Bash"
                     || matches!(tool.as_str(), "Edit" | "Write" | "NotebookEdit"),
                 "the prompt names `{tool}` and the policy refuses it"
@@ -4793,7 +4983,12 @@ mod tests {
             preceding_llm: None,
         };
         let bash = |command: &str| {
-            decide_tool(&context, "Bash", &serde_json::json!({ "command": command }))
+            decide_tool(
+                &context,
+                no_scope(),
+                "Bash",
+                &serde_json::json!({ "command": command }),
+            )
         };
 
         for reading in [
@@ -4840,6 +5035,7 @@ mod tests {
         assert!(
             decide_tool(
                 &deaf,
+                no_scope(),
                 "Bash",
                 &serde_json::json!({ "command": "grep -r x ." })
             )
@@ -4901,7 +5097,13 @@ mod tests {
         // Everything the prompt tells the session not to do must actually be refused. Otherwise the
         // instruction is a superstition the run pays for in capability.
         let refused = |command: &str| {
-            decide_tool(&context, "Bash", &serde_json::json!({ "command": command })).is_err()
+            decide_tool(
+                &context,
+                no_scope(),
+                "Bash",
+                &serde_json::json!({ "command": command }),
+            )
+            .is_err()
         };
         // `ls` and `cat` were on this list until the readers were admitted, and this test is
         // where that change had to be argued: what is forbidden is what *writes* or what runs a
@@ -4923,6 +5125,7 @@ mod tests {
         assert!(
             decide_tool(
                 &context,
+                no_scope(),
                 "Bash",
                 &serde_json::json!({ "command": "protocol artifact list" })
             )
@@ -5414,6 +5617,18 @@ mod tests {
         }
     }
 
+    /// A step whose map declared no `scope:` at all, which restricts nothing.
+    ///
+    /// The default for every test that is about a different layer. It is deliberately *not* an
+    /// allow-everything scope: an undeclared scope and a scope that allows are different documents
+    /// and the seam answers them differently, and a helper that blurred the two would hide which.
+    fn no_scope() -> WriteSurface<'static> {
+        WriteSurface {
+            scope: &[],
+            root: Path::new("/repo"),
+        }
+    }
+
     /// The retired `driven-surface.sh`, case for case: the grant is held to one simple
     /// `protocol artifact|trace` invocation, and a state with no shell says so by name.
     #[test]
@@ -5422,7 +5637,12 @@ mod tests {
         let shell = config(&[Capability::CommandExecution]);
         let context = policy_context(&state, &shell);
         let bash = |command: &str| {
-            decide_tool(&context, "Bash", &serde_json::json!({ "command": command }))
+            decide_tool(
+                &context,
+                no_scope(),
+                "Bash",
+                &serde_json::json!({ "command": command }),
+            )
         };
 
         assert!(bash("protocol artifact list").is_ok());
@@ -5447,6 +5667,7 @@ mod tests {
         let context = policy_context(&state, &no_shell);
         let refusal = decide_tool(
             &context,
+            no_scope(),
             "Bash",
             &serde_json::json!({ "command": "protocol artifact list" }),
         )
@@ -5457,34 +5678,202 @@ mod tests {
         );
     }
 
-    /// Every native file writer is refused under the planning store; the CLI is its sole writer.
+    /// A planning document's frontmatter is the CLI's: an edit may not cross the closing `---`.
+    ///
+    /// **The half that stayed in code, and the fixture exists to make it load-bearing.** The
+    /// step's declared scope answers `partial-only` for the store here, so the declaration
+    /// *admits* a targeted edit and the fence is the only thing left that can refuse one. Under
+    /// `drivers/development/default.yaml`'s own `denied` the scope refuses first and this test
+    /// would pass with the fence rule deleted — which is why the admitted edit is asserted before
+    /// the refused ones.
     #[test]
     fn the_planning_stores_frontmatter_is_the_clis() {
         let state: StateId = "implement".parse().expect("a state id");
         let writing = config(&[Capability::RepositoryWrite, Capability::RepositoryRead]);
         let context = policy_context(&state, &writing);
+        let scope = vec![
+            ScopeRule {
+                paths: vec![".engineering/planning/**".to_owned()],
+                write: WriteScope::PartialOnly,
+            },
+            ScopeRule {
+                paths: vec!["**".to_owned()],
+                write: WriteScope::Allowed,
+            },
+        ];
+        let surface = WriteSurface {
+            scope: &scope,
+            root: Path::new("/repo"),
+        };
         let store_file = "/repo/.engineering/planning/story/one.md";
-
-        let write = serde_json::json!({ "file_path": store_file, "content": "x" });
-        assert!(decide_tool(&context, "Write", &write).is_err());
-        let notebook = serde_json::json!({ "notebook_path": store_file });
-        assert!(decide_tool(&context, "NotebookEdit", &notebook).is_err());
-
         let edit = |old: &str, new: &str| {
             decide_tool(
                 &context,
+                surface,
                 "Edit",
                 &serde_json::json!({ "file_path": store_file, "old_string": old, "new_string": new }),
             )
         };
-        let refusal = edit("a body sentence", "a better body sentence")
-            .expect_err("even body edits cross the CLI surface");
-        assert!(refusal.contains("artifact body"), "{refusal}");
-        assert!(edit("---", "-- -").is_err());
-        assert!(edit("a line", "status: done").is_err());
 
-        let elsewhere = serde_json::json!({ "file_path": "/repo/src/lib.rs", "content": "x" });
-        assert!(decide_tool(&context, "Write", &elsewhere).is_ok());
+        // The state the rule is load-bearing in: the declaration says a body edit here is fine.
+        assert!(
+            edit("a body sentence", "a better body sentence").is_ok(),
+            "the declared scope admits a targeted edit under the store, so anything refused below \
+             is refused by the fence rule and not by the scope"
+        );
+
+        let quoted = edit("---", "-- -").expect_err("an edit that quotes the fence is refused");
+        assert!(
+            quoted.contains("crosses the `---` frontmatter fence"),
+            "{quoted}"
+        );
+        assert!(
+            quoted.contains("old_string"),
+            "and names the field it read it in: {quoted}"
+        );
+        let padded = edit("  ---  ", "x").expect_err("a padded fence line is still the fence");
+        assert!(padded.contains("frontmatter fence"), "{padded}");
+        let written = edit("a body sentence", "---\nstatus: done\n---\nprose")
+            .expect_err("an edit that writes a fence is refused too");
+        assert!(
+            written.contains("new_string"),
+            "the replacement text is read as well as the quoted one: {written}"
+        );
+
+        // Content, not path: the same three dashes outside the store are three dashes.
+        let elsewhere = decide_tool(
+            &context,
+            surface,
+            "Edit",
+            &serde_json::json!({
+                "file_path": "/repo/docs/design/a.md",
+                "old_string": "---",
+                "new_string": "***",
+            }),
+        );
+        assert!(
+            elsewhere.is_ok(),
+            "a horizontal rule in a design document is not a store fence"
+        );
+    }
+
+    /// A whole-file store rewrite is refused from the **declaration**, not from a function.
+    ///
+    /// **This is the acceptance of `story:retire-store-integrity-paths`.** The rule used to be a
+    /// Rust function written in one vendor's tool names, which every other arm walked straight
+    /// past; it is now the step map's `scope:`, which a person can read and both arms are held to.
+    /// So the test reads the committed `drivers/development/default.yaml` rather than a fixture: a
+    /// fixture would keep passing on the day the map lost its declaration, which is exactly the
+    /// failure this story exists to make impossible.
+    #[test]
+    fn a_whole_file_store_rewrite_is_refused_by_the_committed_maps_declaration() {
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("the workspace root exists");
+        let path = repository.join("drivers/development/default.yaml");
+        let text = fs::read_to_string(&path).expect("the committed step map is readable");
+        let map = aep_schema::parse::step_map(&text, Some(&path.display().to_string()))
+            .expect("the committed step map validates");
+        let state: StateId = "implement".parse().expect("a state id");
+        let Some(Step::Llm(step)) = map
+            .states
+            .get(&state)
+            .expect("the committed map drives `implement`")
+            .steps
+            .first()
+        else {
+            panic!("`implement`'s first step is the `llm` one this test is about");
+        };
+
+        // The declaration this test is about, asserted before what it decides. Without this the
+        // test would pass on a map that had stopped saying anything about the store.
+        assert!(
+            step.scope
+                .iter()
+                .any(|rule| rule.write == WriteScope::Denied
+                    && rule
+                        .paths
+                        .iter()
+                        .any(|glob| glob == ".engineering/planning/**")),
+            "the committed map still declares the planning store denied to this step's file \
+             writers: {:?}",
+            step.scope
+        );
+
+        let writing = config(&[Capability::RepositoryWrite, Capability::RepositoryRead]);
+        let context = policy_context(&state, &writing);
+        let surface = WriteSurface {
+            scope: &step.scope,
+            root: Path::new("/repo"),
+        };
+        let store_file = "/repo/.engineering/planning/story/one.md";
+
+        let whole = decide_tool(
+            &context,
+            surface,
+            "Write",
+            &serde_json::json!({ "file_path": store_file, "content": "---\nid: x\n---\n" }),
+        )
+        .expect_err("a whole-file rewrite of an artifact is refused");
+        assert!(
+            whole.contains("declared write scope answers `denied`"),
+            "and the refusal says the declaration is what refused it: {whole}"
+        );
+        assert!(
+            whole.contains(".engineering/planning/**"),
+            "naming the rule that matched, so the map is where a reader goes: {whole}"
+        );
+        assert!(
+            whole.contains("protocol artifact"),
+            "and what to use instead: {whole}"
+        );
+
+        let notebook = decide_tool(
+            &context,
+            surface,
+            "NotebookEdit",
+            &serde_json::json!({ "notebook_path": store_file }),
+        );
+        assert!(
+            notebook.is_err(),
+            "the other whole-file writer is read from its own argument name and refused too"
+        );
+        assert!(
+            decide_tool(
+                &context,
+                surface,
+                "Edit",
+                &serde_json::json!({
+                    "file_path": store_file,
+                    "old_string": "a body sentence",
+                    "new_string": "another",
+                }),
+            )
+            .is_err(),
+            "`denied` is denied to every writer, not only the whole-file ones"
+        );
+
+        // The same declaration's other two rules, so the test is about a scope being *read* and
+        // not about one path being special-cased.
+        assert!(
+            decide_tool(
+                &context,
+                surface,
+                "Write",
+                &serde_json::json!({ "file_path": "/repo/crates/aep-domain/src/lib.rs", "content": "x" }),
+            )
+            .is_ok(),
+            "the map allows `crates/**` to this step"
+        );
+        let outside = decide_tool(
+            &context,
+            surface,
+            "Write",
+            &serde_json::json!({ "file_path": "/repo/target/debug/x", "content": "x" }),
+        )
+        .expect_err("the catch-all denies what nobody named");
+        assert!(outside.contains("`**`"), "{outside}");
     }
 
     /// The allowlist that used to ride on `--allowedTools`, now a decision with a reason: a tool
@@ -5495,16 +5884,21 @@ mod tests {
         let reading = config(&[Capability::RepositoryRead]);
         let context = policy_context(&state, &reading);
 
-        assert!(decide_tool(&context, "Read", &serde_json::json!({})).is_ok());
-        assert!(decide_tool(&context, "Skill", &serde_json::json!({})).is_ok());
-        let refusal = decide_tool(&context, "Edit", &serde_json::json!({ "file_path": "/x" }))
-            .expect_err("no write capability in this state");
+        assert!(decide_tool(&context, no_scope(), "Read", &serde_json::json!({})).is_ok());
+        assert!(decide_tool(&context, no_scope(), "Skill", &serde_json::json!({})).is_ok());
+        let refusal = decide_tool(
+            &context,
+            no_scope(),
+            "Edit",
+            &serde_json::json!({ "file_path": "/x" }),
+        )
+        .expect_err("no write capability in this state");
         assert!(
             refusal.contains("not offered in state `specify`"),
             "{refusal}"
         );
         assert!(
-            decide_tool(&context, "Task", &serde_json::json!({})).is_err(),
+            decide_tool(&context, no_scope(), "Task", &serde_json::json!({})).is_err(),
             "a subagent is never offered"
         );
     }
@@ -6407,6 +6801,7 @@ mod tests {
         let tally = answer_events(
             Harness::B10x,
             &context,
+            no_scope(),
             observed.as_bytes(),
             &mut commands,
             &mut transcript,
@@ -6756,6 +7151,7 @@ profile: test.reading
     /// stdin — the same object metaharness reads, never a summary of it.
     fn decide_through_the_seam(
         context: &StepContext<'_>,
+        surface: WriteSurface<'_>,
         engine: &Engine,
         execution: &mut aep_engine::execution::Execution,
         tool: &str,
@@ -6770,6 +7166,7 @@ profile: test.reading
             answer_events(
                 Harness::ClaudeCode,
                 context,
+                surface,
                 requested(tool, input).as_bytes(),
                 &mut commands,
                 &mut transcript,
@@ -6810,11 +7207,18 @@ profile: test.reading
             "new_string": "b",
         });
         assert!(
-            decide_tool(&context, "Edit", &input).is_ok(),
+            decide_tool(&context, no_scope(), "Edit", &input).is_ok(),
             "the policy layer admits this call, so the engine is the layer under test"
         );
 
-        let command = decide_through_the_seam(&context, &engine, &mut execution, "Edit", &input);
+        let command = decide_through_the_seam(
+            &context,
+            no_scope(),
+            &engine,
+            &mut execution,
+            "Edit",
+            &input,
+        );
 
         assert_eq!(command["command"], "tool.decide");
         assert_eq!(command["call_id"], "call-1");
@@ -6861,7 +7265,14 @@ profile: test.reading
         let context = policy_context(&state, &shell);
         let input = serde_json::json!({ "command": "cargo test" });
 
-        let command = decide_through_the_seam(&context, &engine, &mut execution, "Bash", &input);
+        let command = decide_through_the_seam(
+            &context,
+            no_scope(),
+            &engine,
+            &mut execution,
+            "Bash",
+            &input,
+        );
 
         assert_eq!(command["decision"]["decision"], "deny");
         let reason = command["decision"]["reason"]
@@ -6888,7 +7299,14 @@ profile: test.reading
         let context = policy_context(&state, &reading);
         let input = serde_json::json!({ "skill": "planning" });
 
-        let command = decide_through_the_seam(&context, &engine, &mut execution, "Skill", &input);
+        let command = decide_through_the_seam(
+            &context,
+            no_scope(),
+            &engine,
+            &mut execution,
+            "Skill",
+            &input,
+        );
 
         assert_eq!(command["decision"]["decision"], "allow");
         assert!(
