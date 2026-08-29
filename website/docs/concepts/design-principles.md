@@ -44,8 +44,9 @@ A capability no document mentions is not granted. Precedence is fixed — `deny`
 `require_approval` beats `allow` — and a later document cannot grant a denial back, so a `deny` is a
 safety envelope, not an opening bid. A principle may only restrict; only a profile or protocol may
 grant. Above all of it sits the approval floor: `aep/1` refuses to *resolve* a profile that grants
-`production.write` outright, so the misconfiguration cannot exist, rather than being caught in
-review.
+`production.write` or `network.read:private` outright, so the misconfiguration cannot exist, rather
+than being caught in review. A profile that forgot to say an agent may never read a direct message
+no longer validates clean.
 
 **Enforced by:** `CapabilityPolicy::decide` and tests that construct the state where each precedence
 link is load-bearing before asserting the outcome — verified by mutation, not by reading.

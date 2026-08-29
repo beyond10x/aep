@@ -57,8 +57,11 @@ Two rules shape who may say what:
 * A **principle may only restrict** (deny or require approval). Only a profile or a protocol may
   grant.
 * The protocol holds an **approval floor**: `aep/1` refuses to resolve any profile that puts
-  `production.write` or `deployment.create:production` in its `allow` list. The mistake cannot be
-  made, rather than being caught in review.
+  `production.write`, `deployment.create:production` or `network.read:private` in its `allow` list.
+  The mistake cannot be made, rather than being caught in review. A broad grant counts as granting
+  what it covers, so `allow: [network.read]` is refused on its own and accepted beside
+  `deny: [network.read:private]` — which is how a profile says *read the public channels, never a
+  direct message*.
 
 Every action an agent might take maps to exactly one capability
 (`repository.write`, `tests.execute`, `secret.read`, …), so authorisation is a lookup, not a

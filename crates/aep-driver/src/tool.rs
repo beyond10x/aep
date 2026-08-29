@@ -34,27 +34,37 @@
 //! means giving this function the `Protocol` as well, which changes the published adapter surface,
 //! so it is recorded here rather than taken unilaterally.
 
-use aep_domain::capability::{Capability, CapabilityDecision, CapabilityPolicy, Environment};
+use aep_domain::capability::{
+    Audience, Capability, CapabilityDecision, CapabilityPolicy, Environment,
+};
 use aep_driver_spec::tool::ToolConfig;
 
-/// The capabilities the tool table asks about, each at its **widest-reaching** scoped form.
+/// The capabilities the tool table asks about, each at its **strictest** scoped form.
 ///
-/// `Capability::SIMPLE` plus `deployment.create:production` and `deployment.rollback:production`.
-/// The scoped spelling is the load-bearing part: `decide` answers about the capability it is handed,
-/// and `Deploy(Environment::Any)` is *not* covered by an `approval_required` entry for
-/// `Deploy(Environment::Production)` — coverage widens from the wildcard outwards, never inwards.
-/// Asking about the production form is therefore asking the strictest available question, and a
-/// policy that gates production deployment answers `RequiresApproval` to it.
+/// `Capability::SIMPLE` plus `deployment.create:production`, `deployment.rollback:production` and
+/// `network.read:private`. The scoped spelling is the load-bearing part: `decide` answers about the
+/// capability it is handed, and `Deploy(Environment::Any)` is *not* covered by an
+/// `approval_required` entry for `Deploy(Environment::Production)` — coverage widens from the
+/// wildcard outwards, never inwards. Asking about the production form is therefore asking the
+/// strictest available question, and a policy that gates production deployment answers
+/// `RequiresApproval` to it.
 ///
-/// The sixteen simple capabilities are spelled out rather than spliced from `Capability::SIMPLE`
+/// `network.read` is asked at `:private` for the same reason and one of its own: this table has no
+/// way to tell, at the moment a tool is offered, which audience the model will point it at. A
+/// harness that cannot tell denies rather than guesses, so the web tools are offered only to a
+/// policy that would permit the private read as well. A profile granting `network.read:public`
+/// alone therefore holds no web tool here — which is the honest answer for a table whose entries
+/// take an arbitrary URL, not an omission.
+///
+/// The fifteen simple capabilities are spelled out rather than spliced from `Capability::SIMPLE`
 /// because a `const` slice cannot be concatenated. `tests/tool_config.rs` asserts the two lists
-/// agree, so a seventeenth simple capability fails a test instead of silently never being offered.
+/// agree, so a sixteenth simple capability fails a test instead of silently never being offered.
 pub const TOOL_CANDIDATES: &[Capability] = &[
     Capability::RepositoryRead,
     Capability::RepositoryWrite,
     Capability::TestExecution,
     Capability::CommandExecution,
-    Capability::NetworkRead,
+    Capability::NetworkRead(Audience::Private),
     Capability::NetworkWrite,
     Capability::TelemetryRead,
     Capability::ProductionRead,

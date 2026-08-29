@@ -277,7 +277,7 @@ authorisation is a lookup rather than a judgement:
 | `RepositoryRead` / `RepositoryWrite` | `repository.read` / `repository.write` |
 | `TestExecute` | `tests.execute` |
 | `CommandExecute`, `ToolInvoke` | `command.execute` |
-| `NetworkRequest { intent }` | `network.read` or `network.write`, by intent |
+| `NetworkRequest { intent }` | `network.read` or `network.write`, by intent. A request says what it fetches, never who the material was addressed to, so a read asks for the unscoped `network.read` — the audience wildcard — and a profile granting only `network.read:public` refuses it. Classify the audience where you can and ask for the scoped form; where you cannot, this is the refusal you want |
 | `Deploy { environment }` | `deployment.create[:environment]` |
 | `ProductionMutate` | `production.write` |
 | `SecretRead` | `secret.read` |

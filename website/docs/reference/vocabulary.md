@@ -16,7 +16,7 @@ Nothing else may appear in any `capabilities:` block:
 
 ```text
 repository.read  repository.write  tests.execute  command.execute
-network.read  network.write  telemetry.read
+network.read[:audience]  network.write  telemetry.read
 production.read  production.write
 deployment.create[:environment]  deployment.rollback[:environment]
 secret.read  artifact.read  artifact.write  planning.read  planning.write
@@ -25,8 +25,19 @@ review.request  approval.request
 
 Environments: `development`, `test`, `staging`, `production`, or omitted (every environment).
 
-**Approval floor:** `production.write` and `deployment.create:production` may never appear in a
-profile's `allow`; resolution refuses otherwise.
+Audiences: `public`, `private`, or omitted (every audience). `network.read:private` covers a read of
+correspondence addressed to a bounded audience — a direct message, a group DM, a private channel, a
+mailbox, a ticket's internal comment; `network.read:public` covers material published to an
+unbounded one. **Membership is irrelevant**: a token that *can* read a direct message is exactly the
+case a denial is for. A harness that cannot tell which audience a read will reach must refuse it
+rather than guess, and it does not have to remember to — a read that does not say its audience asks
+for the unscoped wildcard, and `network.read:public` does not cover that.
+
+**Approval floor:** `production.write`, `deployment.create:production` and `network.read:private` may
+never appear in a profile's `allow`; resolution refuses otherwise. A broad grant counts as granting
+what it covers, so `allow: [network.read]` is refused on its own and accepted beside
+`deny: [network.read:private]` — which is how a profile says *read the public channels, never a
+DM*.
 
 ## Evidence kinds
 

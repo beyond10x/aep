@@ -23,7 +23,7 @@
 use std::collections::BTreeSet;
 
 use crate::artifact::ArtifactKind;
-use crate::capability::Capability;
+use crate::capability::{Capability, CapabilityDecision, CapabilityPolicy};
 use crate::error::{ValidationCode, ValidationError, ValidationErrors};
 use crate::evidence::EvidenceKind;
 use crate::facts::{FactPath, FactPattern, Scales};
@@ -120,6 +120,36 @@ impl Protocol {
         self.approval_floor
             .iter()
             .any(|floor| floor.covers(capability) || capability.covers(floor))
+    }
+
+    /// The floor entry that refuses an outright grant of `capability` under `policy`, if any.
+    ///
+    /// [`Self::needs_approval_floor`] asks whether a capability is floored at all, which is the
+    /// question the runtime gate asks of one request. This asks the profile's question — *has this
+    /// policy already answered the floor?* — and a floored entry the policy **denies** has been
+    /// answered. `allow: [network.read]` beside `deny: [network.read:private]` grants the public
+    /// read and forbids the private one, which is what the floor asked for, so the broad grant
+    /// stands.
+    ///
+    /// Only a denial counts, and deliberately. An approval gate on a narrow slice beside a broad
+    /// outright grant is not the same answer: the grant still decides `Allowed` for every scope the
+    /// gate does not name, and refusing that shape is the floor's whole job. A denial cannot be
+    /// argued back — nothing downstream grants past it — which is what makes it strong enough to
+    /// leave a wildcard grant standing.
+    ///
+    /// The denial has to be of *this* floor entry, not of something else the policy happens to
+    /// forbid: it is `decide(floor)` that is consulted, so a floor covering more than the grant
+    /// does — `deployment.create` for every environment, against a profile granting staging and
+    /// denying production — is not discharged by a denial that never reached it.
+    pub fn floor_refusing<'a>(
+        &'a self,
+        policy: &CapabilityPolicy,
+        capability: &Capability,
+    ) -> Option<&'a Capability> {
+        self.approval_floor.iter().find(|floor| {
+            let overlaps = floor.covers(capability) || capability.covers(floor);
+            overlaps && policy.decide(floor) != CapabilityDecision::Denied
+        })
     }
 
     /// `true` when a predicate may read `path`.
@@ -339,6 +369,102 @@ scales:
         assert!(parsed.declares_evidence(EvidenceKind::TestResult));
         assert!(parsed.is_observable(&"tests.unit.failed".parse().expect("path")));
         assert!(!parsed.is_observable(&"metric.error_rate".parse().expect("path")));
+    }
+
+    /// A protocol that floors the private half of the read, the way `aep/1` does.
+    const CORPUS: &str = r"
+id: aep
+version: 1
+title: Agentic Engineering Protocol
+capabilities: [repository.read, network.read, production.write]
+approval_floor: [production.write, 'network.read:private']
+evidence_kinds: [test_result, approval]
+verifiers: [test-runner, human-approval]
+observables: ['tests.**', 'task.**']
+";
+
+    #[test]
+    fn a_broad_read_beside_the_denial_the_floor_asked_for_is_not_refused() {
+        use crate::capability::Audience;
+
+        let protocol = protocol(CORPUS).expect("validates");
+        let broad = Capability::NetworkRead(Audience::Any);
+        let private = Capability::NetworkRead(Audience::Private);
+
+        let mut answered = CapabilityPolicy::allowing([broad.clone()]);
+        answered.restrict(&CapabilityPolicy::denying([private.clone()]));
+        assert_eq!(
+            answered.decide(&private),
+            CapabilityDecision::Denied,
+            "the fixture has to reach the state where the denial is in force, or the floor is \
+             being asked an easier question than the one under test"
+        );
+        assert_eq!(
+            protocol.floor_refusing(&answered, &broad),
+            None,
+            "a profile that grants the broad read and denies the private one has answered the \
+             floor; refusing it would leave `deny` no way to say what the floor asked for"
+        );
+
+        let forgetful = CapabilityPolicy::allowing([broad.clone()]);
+        assert_eq!(
+            protocol.floor_refusing(&forgetful, &broad),
+            Some(&private),
+            "and a profile that forgot the denial is refused, naming the entry it forgot — which \
+             is the whole difference between this and validating clean"
+        );
+
+        let gated = CapabilityPolicy {
+            allow: [broad.clone()].into_iter().collect(),
+            approval_required: [private.clone()].into_iter().collect(),
+            ..CapabilityPolicy::empty()
+        };
+        assert_eq!(
+            protocol.floor_refusing(&gated, &broad),
+            Some(&private),
+            "an approval gate on the narrow slice is not the same answer: the wildcard grant still \
+             decides `Allowed` for every scope the gate does not name"
+        );
+    }
+
+    #[test]
+    fn a_floor_wider_than_the_grant_is_not_answered_by_denying_a_slice_of_it() {
+        use crate::capability::Environment;
+
+        // The direction that must keep refusing. It is `decide(floor)` that is consulted, not
+        // "does this policy deny anything": a floor on `deployment.create` for every environment
+        // is not answered by denying production, because the policy's answer for the floor entry
+        // itself is `NotGranted`, never `Denied`.
+        let protocol = protocol(
+            r"
+id: aep
+version: 1
+title: Agentic Engineering Protocol
+capabilities: [deployment.create]
+approval_floor: [deployment.create]
+evidence_kinds: [test_result, approval]
+verifiers: [test-runner, human-approval]
+observables: ['task.**']
+",
+        )
+        .expect("validates");
+
+        let mut policy = CapabilityPolicy::allowing([Capability::Deploy(Environment::Staging)]);
+        policy.restrict(&CapabilityPolicy::denying([Capability::Deploy(
+            Environment::Production,
+        )]));
+
+        assert_eq!(
+            policy.decide(&Capability::Deploy(Environment::Production)),
+            CapabilityDecision::Denied,
+            "the fixture must hold a real denial, or this asserts nothing about denials"
+        );
+        assert_eq!(
+            protocol.floor_refusing(&policy, &Capability::Deploy(Environment::Staging)),
+            Some(&Capability::Deploy(Environment::Any)),
+            "a denial of one environment is not a denial of `deployment.create` for every \
+             environment, so the floor on the wildcard is still open and still refuses"
+        );
     }
 
     #[test]

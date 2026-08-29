@@ -16,6 +16,10 @@ capabilities:
   - repository.write
   - tests.execute
   - command.execute
+  # Scoped by audience: `network.read:public` for material published to an unbounded audience,
+  # `network.read:private` for correspondence addressed to a bounded one — a direct message, a
+  # group DM, a private channel, a mailbox, a ticket's internal comment. Unscoped is both, and the
+  # approval floor below is why an unscoped grant has to say what happens to the private half.
   - network.read
   - network.write
   - telemetry.read
@@ -37,6 +41,12 @@ capabilities:
 approval_floor:
   - production.write
   - deployment.create:production
+  # An agent reading a private conversation and restating it into a shared corpus is the outcome
+  # no review catches after the fact, so the profile has to say what happens to it. `deny` is the
+  # answer that discharges this: a profile may still write `allow: [network.read]` as long as
+  # `deny: [network.read:private]` stands beside it. Membership is not the control — a token that
+  # *can* read a DM is exactly the case this exists for.
+  - network.read:private
 
 evidence_kinds:
   - test_result

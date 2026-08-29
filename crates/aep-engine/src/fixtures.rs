@@ -19,6 +19,7 @@ capabilities:
   - repository.write
   - tests.execute
   - command.execute
+  - network.read
   - telemetry.read
   - production.read
   - production.write
@@ -32,6 +33,7 @@ capabilities:
 approval_floor:
   - production.write
   - deployment.create:production
+  - network.read:private
 evidence_kinds:
   - test_result
   - static_analysis

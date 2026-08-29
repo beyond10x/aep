@@ -5,7 +5,9 @@
 //! not: the ordering lives in `CapabilityPolicy::decide`, the three sets are independent — `grant`
 //! extends all three — and membership is by `covers` rather than equality.
 
-use aep_domain::capability::{Capability, CapabilityDecision, CapabilityPolicy, Environment};
+use aep_domain::capability::{
+    Audience, Capability, CapabilityDecision, CapabilityPolicy, Environment,
+};
 use aep_driver::tool::{tool_config, TOOL_CANDIDATES};
 
 /// The pairing the shipped profiles avoid **in a comment**, which is why it is a fixture here.
@@ -95,23 +97,65 @@ fn every_simple_capability_is_a_candidate_and_the_scoped_ones_ask_about_producti
     }
     assert_eq!(
         TOOL_CANDIDATES.len(),
-        Capability::SIMPLE.len() + 2,
-        "the candidates are the simple capabilities plus the two that take an environment"
+        Capability::SIMPLE.len() + Capability::SCOPED.len(),
+        "the candidates are the simple capabilities plus one for each that takes a scope"
     );
     for scoped in [
         Capability::Deploy(Environment::Production),
         Capability::Rollback(Environment::Production),
+        Capability::NetworkRead(Audience::Private),
     ] {
         assert!(
             TOOL_CANDIDATES.contains(&scoped),
-            "`{scoped}` must be asked about at its production scope: `covers` widens from the \
-             wildcard outwards, so asking about `Any` would step around an approval scoped to \
-             production"
+            "`{scoped}` must be asked about at its strictest scope: `covers` widens from the \
+             wildcard outwards, so asking about `Any` would step around a narrow denial or gate"
         );
     }
+    for wildcard in [
+        Capability::Deploy(Environment::Any),
+        Capability::NetworkRead(Audience::Any),
+    ] {
+        assert!(
+            !TOOL_CANDIDATES.contains(&wildcard),
+            "asking about `{wildcard}` is the question a narrow denial cannot answer"
+        );
+    }
+}
+
+#[test]
+fn a_denied_private_read_takes_the_web_tools_away_from_a_profile_that_grants_the_broad_read() {
+    // The driver cannot tell which audience a URL will reach, so it asks the private question. A
+    // profile that grants the broad read gets the tools; the same profile with the denial the
+    // protocol's floor asks for does not, because the tool it would be offered is one that could
+    // reach the thing it just denied.
+    fn offers_a_network_read(policy: &CapabilityPolicy) -> bool {
+        tool_config(policy)
+            .capabilities()
+            .iter()
+            .any(|capability| matches!(capability, Capability::NetworkRead(_)))
+    }
+
+    let broad = CapabilityPolicy::allowing([Capability::NetworkRead(Audience::Any)]);
     assert!(
-        !TOOL_CANDIDATES.contains(&Capability::Deploy(Environment::Any)),
-        "asking about the wildcard is the question a narrow approval gate cannot answer"
+        offers_a_network_read(&broad),
+        "the fixture has to start from a policy that does get a network read, or the denial below \
+         is taking nothing away"
+    );
+
+    let mut denied = broad.clone();
+    denied.restrict(&CapabilityPolicy::denying([Capability::NetworkRead(
+        Audience::Private,
+    )]));
+    assert!(
+        !offers_a_network_read(&denied),
+        "a profile that may never read a direct message is offered no tool that could reach one: \
+         this table cannot classify a URL, so it has to ask the strictest audience question"
+    );
+    assert_eq!(
+        denied.decide(&Capability::NetworkRead(Audience::Public)),
+        CapabilityDecision::Allowed,
+        "and the public read it was granted is still granted — the tool table is conservative, the \
+         policy is not wrong"
     );
 }
 
