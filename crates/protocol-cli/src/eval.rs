@@ -5,13 +5,18 @@
 //!
 //! # What this assembles, and what it refuses to assemble
 //!
-//! A three-arm evaluation runs the same cases three ways — **raw** instructions, the shipped
-//! **plugin**, and a **driven** run whose tool calls an enforcer decides — against more than one
-//! harness. Each run leaves two documents: a `eval.run-manifest/1` saying what was run and under
-//! which arm, and the `trace-report/1` record `protocol trace check --format json` writes about its
-//! transcript. This verb reads those pairs and reports, per harness × arm × workflow and per
-//! expectation, **how many facts held, how many were contradicted, and how many nobody could find
-//! out**.
+//! The evaluation runs the same cases under each arm — **raw** instructions, the shipped
+//! **plugin**, a **driven** run whose tool calls an enforcer decides, and a **native** run whose
+//! published toolset is the policy — against more than one harness. Each run leaves two documents:
+//! a `eval.run-manifest/1` saying what was run and under which arm, and the `trace-report/1` record
+//! `protocol trace check --format json` writes about its transcript. This verb reads those pairs
+//! and reports, per harness × arm × workflow and per expectation, **how many facts held, how many
+//! were contradicted, and how many nobody could find out**.
+//!
+//! The arms are not four ways of saying the same thing, and the difference decides what a clean
+//! cell means: on `driven` a call was answered at a seam, on `raw` and `native` nothing adjudicated
+//! anything. `Arm` carries the model per variant and the rendering repeats it under the table
+//! whenever a `native` cell is printed.
 //!
 //! It computes no score, and that is a rule rather than an omission. A scalar would have to fold
 //! the third column into one of the other two — the only two ways to do it are to count an
@@ -83,25 +88,44 @@ const DIGEST_WIDTH: usize = 64;
 /// so nothing downstream has to round.
 const MICRO_USD: u64 = 1_000_000;
 
-// --- the three arms ---------------------------------------------------------------------------
+// --- the arms ------------------------------------------------------------------------------------
 
 /// Which arm a run belongs to.
 ///
-/// Closed, because the three arms are the design of the evaluation rather than a label somebody
-/// picked: raw instructions, the shipped plugin, and a driven run whose calls an enforcer decides.
-/// A fourth arm is a change to the programme, and it should stop here rather than appear as a new
-/// row nobody planned.
+/// Closed, because the arms are the design of the evaluation rather than a label somebody picked:
+/// raw instructions, the shipped plugin, a driven run whose calls an enforcer decides, and our own
+/// loop where the published toolset is the policy. Another arm is a change to the programme, and it
+/// should stop here rather than appear as a new row nobody planned.
 ///
-/// The declaration order is the programme's order — a, b, c — and `Ord` follows it. Sorting
-/// alphabetically would print `driven`, `plugin`, `raw`, which reads the experiment backwards.
+/// The declaration order is the programme's order — a, b, c, d — and `Ord` follows it. Sorting
+/// alphabetically would print `driven`, `native`, `plugin`, `raw`, which reads the experiment
+/// backwards.
+///
+/// # The word is also the enforcement model, and that is the only label a cell gets
+///
+/// Nothing in the matrix says *enforced* beside *complied*, so the arm has to carry it. Each
+/// variant below states its model in a line, and the rule for reading a store-integrity row off
+/// one is in `docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1 — the reason it is a
+/// reading rule and not a column is that a column is a change to a printed table's format, which
+/// is the operator's decision and not this type's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 enum Arm {
     /// The instructions alone: no plugin, no enforcement.
+    ///
+    /// **Enforcement model: none.** Nothing on this arm was ever in a position to refuse, so every
+    /// cell is compliance — what the model chose to do, never what it was stopped from doing.
     Raw,
     /// The shipped plugin is installed, and nothing decides the agent's calls.
+    ///
+    /// **Enforcement model: policy injected into a vendor's loop.** A refusal here is the vendor
+    /// hook's, and it reaches only as far as what the vendor shows the hook.
     Plugin,
     /// The run is driven, and every tool call is decided at a seam.
+    ///
+    /// **Enforcement model: a per-call seam.** Every admitted call is put to the driver and
+    /// answered before it runs, so a store-integrity cell on this arm *can* say **enforced**: the
+    /// refusal is in the run's own record, as a `tool.decided` event and in the census.
     Driven,
     /// The loop is ours, and the published toolset **is** the policy.
     ///
@@ -110,11 +134,17 @@ enum Arm {
     /// seam. Here there is no vendor loop: the tools a run may call are computed from what the
     /// machine can confine and published, so a tool outside the surface is not refused — it does
     /// not exist. What this arm measures is whether *that* changes what a model does.
+    ///
+    /// **Enforcement model: publication by absence, which is not enforcement on a path.** Nothing
+    /// adjudicates a call here, so a store-integrity cell — `store_broken` absent,
+    /// `census.denied = 0` — says **compliance, or not observable, and never enforced**, unless the
+    /// run carried a `scope:` or a loop hook that was in a position to refuse. A clean row on this
+    /// arm means what a clean row on `raw` means.
     Native,
 }
 
 impl Arm {
-    /// Reads the word a manifest wrote, or nothing when it is not one of the three.
+    /// Reads the word a manifest wrote, or nothing when it is not one of the arms.
     fn parse(written: &str) -> Option<Self> {
         match written {
             "raw" => Some(Self::Raw),
@@ -136,7 +166,14 @@ impl Arm {
     }
 
     /// Every arm, in programme order, for a refusal that lists what was expected.
-    const ALL: [Self; 3] = [Self::Raw, Self::Plugin, Self::Driven];
+    ///
+    /// It is the *whole* list or it is a lie: this array is the only thing `EVAL-MANIFEST-002`
+    /// prints, so an arm missing from it is an arm the refusal tells a reader does not exist.
+    /// `dce6db5` added `Native` to the enum, to `parse` and to `as_str` and left this array at
+    /// three, so the refusal that exists to *list the arms* omitted one — which is why
+    /// `the_arms_the_refusal_lists_are_every_arm_the_type_has` checks it against
+    /// `ValueEnum::value_variants` rather than against a second hand-written list.
+    const ALL: [Self; 4] = [Self::Raw, Self::Plugin, Self::Driven, Self::Native];
 }
 
 impl fmt::Display for Arm {
@@ -225,7 +262,7 @@ enum Refusal {
         /// What it claimed instead, where it claimed anything.
         found: Option<String>,
     },
-    /// The `arm` is not one of the three.
+    /// The `arm` is not one the programme has.
     ArmUnknown {
         /// The word the manifest wrote.
         written: String,
@@ -336,8 +373,8 @@ impl fmt::Display for Refusal {
             ),
             Self::ArmUnknown { written } => write!(
                 f,
-                "`{written}` is not one of the three arms this evaluation has: {}. A fourth arm is \
-                 a change to the programme, not a label",
+                "`{written}` is not one of the arms this evaluation has: {}. Another arm is a \
+                 change to the programme, not a label",
                 Arm::ALL
                     .iter()
                     .map(|arm| format!("`{arm}`"))
@@ -1280,6 +1317,11 @@ pub(crate) enum EvalCommand {
     /// each of them three counts: held, contradicted, and nobody found out. No score, no ranking
     /// and no percentage: see the [module documentation](self) for why a scalar cannot be produced
     /// here honestly.
+    ///
+    /// The arm word is also the enforcement model, and there is no column for it. On `driven` every
+    /// call was answered at a seam, so a clean store-integrity row can mean *refused*; on `raw` and
+    /// `native` nothing adjudicated anything, so the same row means only that the model did not do
+    /// it. A rendering that prints a `native` cell says so under the table.
     Matrix(MatrixArgs),
     /// Run one arm of one case and leave the three documents `eval matrix` reads.
     ///
@@ -1390,6 +1432,22 @@ fn to_text(matrix: &Matrix) -> String {
             (&cell.counts.unobservable.to_string(), 12),
             (&cell.counts.advisory.to_string(), 9),
         ]));
+    }
+
+    // The arm's own word is the only enforcement label a cell gets, and one of the four does not
+    // mean what the column above reads as. Printed only when a `native` cell is in the table, and
+    // as a line rather than a column: a column is a change to this table's format, which is the
+    // operator's decision (`docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1, § 8
+    // OQ4).
+    if matrix.cells.iter().any(|cell| cell.arm == Arm::Native) {
+        lines.push(String::new());
+        lines.push(
+            "reading a `native` cell: nothing on that arm adjudicates a call, so a clean \
+             store-integrity row is compliance or not observable, and never enforced — unless the \
+             run carried a `scope:` or a loop hook that could refuse. `denied: 0` there says \
+             nobody asked, not that nothing was refused."
+                .to_owned(),
+        );
     }
 
     lines.push(String::new());
@@ -2827,8 +2885,15 @@ pub(crate) struct RunArgs {
     corpus: PathBuf,
     /// Which arm this run belongs to.
     ///
-    /// `driven` is refused for a spawn and accepted for `--stream`: a driven run is launched by
-    /// `protocol drive run`, and this verb reads the stream it wrote.
+    /// `driven` and `native` are refused for a spawn and accepted for `--stream`: a driven run is
+    /// launched by `protocol drive run` and a native run by `b10x-harness`, and this verb reads the
+    /// stream each of them wrote.
+    ///
+    /// The word is also the run's enforcement model, because that is the only label a matrix cell
+    /// ever carries. `driven` answers every call at a seam; `plugin` injects a policy into a
+    /// vendor's loop; `raw` and `native` adjudicate nothing at all — so a clean store-integrity row
+    /// on a `native` cell is compliance or not observable, and never enforced, unless the run
+    /// carried a `scope:` or a loop hook that was in a position to refuse.
     #[arg(long, value_enum)]
     arm: Arm,
     /// Which harness runs it.
@@ -3102,12 +3167,46 @@ observed_at: 2026-08-23
     #[test]
     fn an_arm_this_evaluation_does_not_have_is_refused_by_name() {
         let refusals = read(&HONEST.replace("arm: plugin", "arm: hybrid"))
-            .expect_err("a fourth arm is a change to the programme");
+            .expect_err("another arm is a change to the programme");
         assert_eq!(codes(&refusals), ["EVAL-MANIFEST-002"]);
         let sentence = refusals[0].to_string();
         assert!(
-            sentence.contains("`raw`, `plugin`, `driven`"),
-            "the refusal lists the three arms there are: {sentence}"
+            sentence.contains("`raw`, `plugin`, `driven`, `native`"),
+            "the refusal lists the arms there are, in programme order: {sentence}"
+        );
+    }
+
+    #[test]
+    fn the_arms_the_refusal_lists_are_every_arm_the_type_has() {
+        // `Arm::ALL` is the whole content of `EVAL-MANIFEST-002`, so an arm missing from it is an
+        // arm the refusal tells a reader does not exist — which is what `native` was between
+        // `dce6db5`, the commit that added it to the enum, to `parse` and to `as_str`, and this
+        // one. The second list is `ValueEnum`'s, derived from the variants themselves, so this
+        // cannot be satisfied by editing a second hand-written array to match the first.
+        assert_eq!(
+            Arm::ALL.as_slice(),
+            <Arm as ValueEnum>::value_variants(),
+            "every variant, in declaration order, which is the programme's order"
+        );
+        for arm in Arm::ALL {
+            assert_eq!(
+                Arm::parse(arm.as_str()),
+                Some(arm),
+                "and each word the refusal offers round-trips through `parse`"
+            );
+        }
+
+        let sentence = Refusal::ArmUnknown {
+            written: "b10x".to_owned(),
+        }
+        .to_string();
+        assert!(
+            sentence.contains("`native`"),
+            "the fourth arm is named where a reader is told what the arms are: {sentence}"
+        );
+        assert!(
+            !sentence.contains("three arms") && !sentence.contains("A fourth arm"),
+            "and the sentence states no count, so the next arm does not make it wrong: {sentence}"
         );
     }
 
@@ -3476,6 +3575,39 @@ observed_at: 2026-08-23
         assert!(
             text.contains("No arm is ranked and no score is computed"),
             "and the text rendering says so where a reader will look for one: {text}"
+        );
+    }
+
+    #[test]
+    fn a_table_holding_a_native_cell_says_how_to_read_it_and_one_without_stays_silent() {
+        // The reading rule of `docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1: the
+        // arm word is the only enforcement label a cell gets, and on this arm a clean row is
+        // compliance rather than a refusal. Printed as a line under the table it qualifies, not as
+        // a column — § 8 OQ4 leaves the column to the operator.
+        let native = to_text(
+            &assemble(vec![(
+                manifest_of(Arm::Native, &"7".repeat(DIGEST_WIDTH)),
+                record_value(&"7".repeat(DIGEST_WIDTH), "d", Outcome::Held),
+            )])
+            .expect("one native run"),
+        );
+        assert!(
+            native.contains("reading a `native` cell")
+                && native.contains("never enforced")
+                && native.contains("nobody asked"),
+            "a native cell carries the rule for reading it: {native}"
+        );
+
+        let driven = to_text(
+            &assemble(vec![(
+                manifest_of(Arm::Driven, &"8".repeat(DIGEST_WIDTH)),
+                record_value(&"8".repeat(DIGEST_WIDTH), "d", Outcome::Held),
+            )])
+            .expect("one driven run"),
+        );
+        assert!(
+            !driven.contains("reading a `native` cell"),
+            "and a table with no native cell in it says nothing about one: {driven}"
         );
     }
 

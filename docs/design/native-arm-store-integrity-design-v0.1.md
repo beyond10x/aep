@@ -441,6 +441,10 @@ is somebody else's uncommitted work in progress that this note reports rather th
 
 1. Whether the eval's step map gains a `scope:` key. That is a work order and needs a plan page or a
    store item.
+   *Decided 2026-08-29: yes — the eval map declares `scope:` with `.engineering/planning/**` =
+   `denied` and a `**` catch-all; the plan page carries the owed row
+   (`docs/plan/eval-program-three-arms.md`); the map change is in metaharness
+   `evals/engineering-protocols/driven.steps.yaml`.*
 2. `denied` versus `partial-only` for arms other than the driven one. § 6 argues `denied` for this
    eval; it says nothing about `eval-case/development-default`.
 3. Anything about writer-side identity or D-3 (see O3).
@@ -461,18 +465,46 @@ is somebody else's uncommitted work in progress that this note reports rather th
 2. Should `run-driven.sh`'s census on this arm read the loop's own `--json` record rather than the
    metaharness stream, given that the stream deliberately drops the bytes?
 3. Does anything else in the eval read `.content` on a b10x stream and therefore silently never fire?
+   *Answered 2026-08-29: one read, `run-driven.sh`'s census (design § 5 item 1), in the peer's
+   hunk; nothing else under `evals/` reads `.content`.*
 4. Should `protocol eval`'s table carry an *enforcement model* column, or is the arm word plus a
    documented reading rule enough?
 5. Should `drift.rs`'s `pre_provider` count become a **finding** when the store is a driven run's
    scratch store, where a document with no events can only have arrived out of band?
+   *Answered 2026-08-29 in two halves: a revision above the highest the journal records is now a
+   `forged` finding in `protocol artifact validate` (detection, no enforcement); `pre_provider`
+   stays a count in the store and the eval reads it as out-of-band on its scratch store
+   (`run-driven.sh`), because there the premise "every document came from the CLI" is the eval's
+   own.*
 6. `Arm::ALL` omits `Native` (`eval.rs:138-139`). Deliberate, or the three-arm array outliving the
    fourth arm?
+   *Answered 2026-08-29: stale — `dce6db5` added the variant and did not touch the array
+   `65c5b1b` wrote; `ALL` is now the four arms and the refusal no longer counts them.*
 7. Should a driven native step **refuse to launch** without a hook file, the way a missing `context:`
    file refuses the run? A run measured with one tier switched off and no note saying so is the
    silence `Withheld` exists to close, one layer up.
+   *Answered 2026-08-29 in two halves. **The refusal half already holds, and needs no code.** A
+   declared-but-absent `--context` file refuses in `prepare` (`harness-cli/src/lib.rs:1636-1641`
+   on `origin/main`, `RunFailure::Refused`, exit 1, nothing written), and a declared-but-absent
+   `--hooks` file refuses the same way through `Hooks::load` (`harness-cli/src/hooks.rs:162-165`,
+   propagated with `?` from `prepare`): stderr `reading the hooks file '<path>': No such file or
+   directory`, exit 1, no session. Both are pinned by tests in
+   `crates/harness-cli/tests/context.rs`, landing in this wave. **The record half is deferred and
+   is not in this wave.** Writing `hooks: none declared` — or `context: none declared` — as an
+   explicit key on `session.started` contradicts the `withheld` convention, whose
+   `skip_serializing_if = "Vec::is_empty"` is what keeps an old record and a new one
+   byte-identical (`harness-loop/src/event.rs:46-61`); reconciling the two is a two-repository
+   protocol change (harness `Started` plus metaharness `SessionStarted`) and its own commit. Until
+   then the default is: a step that declares no file launches, and absence in the record reads
+   *not declared*, exactly as an absent `withheld` does (a12).*
 8. `approval-resolved` emits nothing on this wire (`seam.rs:316-326`) and, with `--approve-up-to
    high` replacing `--yes`, the loop's approver can now deny. Does that decision owe the record a
    line, and does answering yes reopen invariant 9's boundary?
+   *Answered 2026-08-29: the loop's approver denying a call is a fact about the run and crosses
+   the wire as a `warning` with a code (the same shape as a hook block, `hook-refused`), never as
+   `tool.decided` — the adapter transcribes a decision the loop took; it takes none, so invariant
+   9 holds exactly as it does for `hook-ran`. Lands in `seam.rs` beside the `hook-ran` arm
+   (peer's in-flight change).*
 
 ## 9. Refusals worth writing down
 

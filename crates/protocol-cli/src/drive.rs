@@ -6862,4 +6862,133 @@ profile: test.reading
              {absent}"
         );
     }
+
+    /// The committed step map compiles into an exact argv, with nobody naming a flag.
+    ///
+    /// **This is the acceptance bullet of `story:compile-scope-into-a-run` that had no test.**
+    /// Every other argv test here builds its own step, so all of them would still pass if
+    /// `drivers/development/default.yaml` lost its `scope:` tomorrow: the declaration and the
+    /// compile were only ever checked against each other through a fixture. This one reads the
+    /// committed file, takes the step `receive` declares, and asserts the whole vector the driver
+    /// would launch, in order.
+    ///
+    /// It goes through [`CliExecutors::argv_for`] rather than calling [`b10x_argv`] directly, which
+    /// closes the other half of the same bullet: nothing else asserted that the caller hands the
+    /// compile the **step's own** `scope` and `context` rather than something it assembled.
+    ///
+    /// **The tool config admits reading and not execution, deliberately.** With
+    /// [`Capability::CommandExecution`] the argv gains `--allow-program` naming this process's own
+    /// absolute path ([`driven_programs`], from `std::env::current_exe`), which is a different
+    /// string in every checkout and under every runner — so an *exact* assertion could only be
+    /// written by computing it the same way, and would then assert nothing. What this bullet is
+    /// about is the scope and the context, and both are here in full.
+    ///
+    /// The declared context file is asserted to exist in this checkout, which catches a map naming
+    /// a file a later commit moved. It is **not** the run-time refusal for an absent context file:
+    /// that one belongs to the loop (`harness-cli` reads the declared files and refuses the launch)
+    /// and is recorded as still untested on the story.
+    #[test]
+    fn the_committed_step_map_compiles_into_the_exact_argv_a_native_run_is_launched_with() {
+        let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("the workspace root exists");
+        let path = repository.join("drivers/development/default.yaml");
+        let text = fs::read_to_string(&path).expect("the committed step map is readable");
+        let map = aep_schema::parse::step_map(&text, Some(&path.display().to_string()))
+            .expect("the committed step map validates");
+
+        let state: StateId = "receive".parse().expect("a state id");
+        let Some(Step::Llm(step)) = map
+            .states
+            .get(&state)
+            .expect("the committed map drives `receive`")
+            .steps
+            .first()
+        else {
+            panic!("`receive`'s first step is the `llm` one this test is about");
+        };
+
+        // The argv is built from the committed declaration, so assert the declaration is still the
+        // one this test was written against before asserting what it renders as.
+        assert_eq!(
+            step.context,
+            vec!["integrations/claude-code/skills/planning/SKILL.md".to_owned()],
+            "the committed map gives `receive` exactly one context file"
+        );
+        assert!(
+            repository.join(&step.context[0]).is_file(),
+            "and it is a file in this checkout"
+        );
+        assert_eq!(
+            step.scope.len(),
+            3,
+            "three rules, the last of them the catch-all validation requires"
+        );
+
+        let executors = CliExecutors::new(
+            PathBuf::from("/operator/repo"),
+            PathBuf::from("/runs/T-1/1"),
+            // A plugin directory is a vendor mechanism and this arm has none. Passing one is what
+            // proves the b10x branch renders none.
+            vec![PathBuf::from("/plugins/claude-code")],
+            "adp/default".to_owned(),
+            "1".to_owned(),
+            B10xOptions {
+                endpoint: Some("http://127.0.0.1:8080".to_owned()),
+                model: Some("a-model".to_owned()),
+                api_key: false,
+                ..B10xOptions::default()
+            },
+            None,
+        );
+        let tools = config(&[Capability::RepositoryRead]);
+        let task = driven_task();
+        let context = step_context(&tools, &state, &task);
+
+        let argv = executors.argv_for(
+            Harness::B10x,
+            step,
+            Path::new("/runs/T-1/1/transcripts/receive-0-1.frame.json"),
+            "do the thing",
+            &context,
+            None,
+        );
+
+        assert_eq!(
+            argv,
+            vec![
+                "metaharness",
+                "run",
+                "b10x",
+                "--hermetic",
+                "--cwd",
+                "/operator/repo",
+                "--model-endpoint",
+                "http://127.0.0.1:8080",
+                "--model",
+                "a-model",
+                "--credentials",
+                "none",
+                "--write-scope",
+                ".engineering/planning/**=denied",
+                "--write-scope",
+                "crates/**=allowed",
+                "--write-scope",
+                "docs/**=allowed",
+                "--write-scope",
+                "conformance/**=allowed",
+                "--write-scope",
+                "drivers/**=allowed",
+                "--write-scope",
+                "**=denied",
+                "--context",
+                "integrations/claude-code/skills/planning/SKILL.md",
+                "-p",
+                "do the thing",
+            ],
+            "the committed map's `receive` step, compiled: its six `--write-scope` rules in the \
+             order the document writes them, then its one `--context` file, and no frame"
+        );
+    }
 }

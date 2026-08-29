@@ -177,6 +177,19 @@ belongs in the commit message or in `docs/design/`.
   `file.edit` was told, once per state, that it lacked all five. An audit that fires on a session
   holding exactly what it needs is worse than no audit, because the next true one is read as noise.
 
+* **A shipped conformance spec now gates the *outcome* of the call it counts.**
+  `conformance/trace/expectations.trace.yaml`'s `created-through-the-cli` is a `tool.called` row:
+  it says a `protocol artifact new` was reached for, and nothing at all about what came back — so
+  a recorded run whose only creating call errored satisfied it, and the eval passed on a store
+  that got nothing. A second row beside it, `the-creating-call-succeeded`, decides the outcome
+  over the same selector. It is a `tool.error_rate` at `at_most: 0.99` — *not every such call
+  failed*, deliberately not *none did*: a refused chained command line followed by a clean
+  re-issue is correct behaviour under the plugin's own guardrails, and a zero bound would report
+  the guardrail working as a `gap`. The scope names `tools: [Bash, run]` **and**
+  `operations: [command.execute, shell]`, which union, so the row decides on the native arm
+  instead of going `unk` there. Against the committed fixtures it reads `ok` on both plugin-eval
+  transcripts (0 of 2 calls failed) and `ok` on the driven honest step (1 of 2, rate 0.500).
+
 ### Added
 
 * **Both harnesses can be pointed at one gateway, which is what makes a harness comparison one.**
