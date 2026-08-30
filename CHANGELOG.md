@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Entity, relation and audit queries now validate and apply their opaque `offset-<n>` cursors after
+  deterministic filtering and ordering, advance by the number returned, and stop emitting a cursor
+  when no matches remain instead of repeating the first page.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added

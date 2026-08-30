@@ -101,7 +101,7 @@ impl QueryService for MemoryBackend {
                 .map(envelope)
                 .collect();
 
-            Ok(paginate(items, query.limit))
+            Page::paginate(items, query.limit, query.after.as_ref())
         })
     }
 
@@ -125,7 +125,7 @@ impl QueryService for MemoryBackend {
                 .filter(|relation| query.kind.is_none_or(|kind| relation.kind == kind))
                 .cloned()
                 .collect();
-            Ok(paginate(items, query.limit))
+            Page::paginate(items, query.limit, query.after.as_ref())
         })
     }
 
@@ -182,7 +182,7 @@ impl QueryService for MemoryBackend {
                 .filter(|record| !query.rejected_only || record.is_rejection())
                 .cloned()
                 .collect();
-            Ok(paginate(items, query.limit))
+            Page::paginate(items, query.limit, query.after.as_ref())
         })
     }
 
@@ -270,19 +270,5 @@ fn check_consistency(store: &Store, consistency: &QueryConsistency) -> Result<()
         Some(token) => Err(QueryError::ConsistencyTimeout {
             token: token.to_string(),
         }),
-    }
-}
-
-/// Applies a limit, reporting whether more results were available.
-fn paginate<T>(mut items: Vec<T>, limit: Option<usize>) -> Page<T> {
-    match limit {
-        Some(limit) if items.len() > limit => {
-            items.truncate(limit);
-            Page {
-                items,
-                next: Some(aep_contract::query::Cursor(format!("offset-{limit}"))),
-            }
-        }
-        _ => Page::complete(items),
     }
 }
