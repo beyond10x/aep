@@ -68,9 +68,11 @@ fn a_capability_that_was_never_granted_is_no_tool_and_a_denied_one_is_not_either
 
     assert!(
         !tools.shell_offered(),
-        "no development profile grants `command.execute`, so a development `llm` step holds no \
-         shell: `cargo test` runs as a `command` step the driver executes, not as a tool the model \
-         holds"
+        "this fixture never granted `command.execute`, and `NotGranted` maps to no tool. The \
+         reason stated here used to be `no development profile grants command.execute`, which is \
+         false: `profiles/development-driven.yaml:78` grants it deliberately so a driven step can \
+         reach the `protocol` CLI. The property is the mechanism — a shell is rendered exactly \
+         when `command.execute` is admitted — and `tests/shell_echo.rs` asserts it both ways"
     );
     assert!(
         !tools.admits(&Capability::CommandExecution),
@@ -174,5 +176,89 @@ fn an_empty_policy_offers_nothing_and_the_two_constant_answers_stand() {
         !tools.subagents_offered(),
         "a subagent's tool set is derived by nothing here, so it would be a route around the \
          per-state allowlist"
+    );
+}
+
+/// One capability in `allow`, `approval_required` **and** `deny` at once.
+///
+/// Not a contrived shape. `CapabilityPolicy::grant` extends all three sets, and nothing removes an
+/// entry from `allow` when a narrowing document adds the same one to the other two — so a profile
+/// assembled from a wide grant, an approval gate and a floor denial genuinely holds the *same*
+/// capability three times. The capability is spelled at the exact scope `TOOL_CANDIDATES` asks
+/// about, so `covers` is equality here and this fixture is about the three sets alone; the
+/// widening question is `policy_with_a_wide_grant_and_a_narrow_gate`'s.
+fn policy_holding_one_capability_in_all_three_sets() -> CapabilityPolicy {
+    CapabilityPolicy {
+        allow: [Capability::Deploy(Environment::Production)]
+            .into_iter()
+            .collect(),
+        approval_required: [Capability::Deploy(Environment::Production)]
+            .into_iter()
+            .collect(),
+        deny: [Capability::Deploy(Environment::Production)]
+            .into_iter()
+            .collect(),
+    }
+}
+
+#[test]
+fn a_capability_held_in_all_three_sets_at_once_is_handed_over_as_no_tool() {
+    let gated = Capability::Deploy(Environment::Production);
+
+    // Two facts that make the assertions below load-bearing rather than vacuous: the table does ask
+    // about this capability, and a policy that only allows it does get the tool. Without both, the
+    // test would pass on a tool nobody was ever going to be offered.
+    assert!(
+        TOOL_CANDIDATES.contains(&gated),
+        "the fixture has to name a capability the table asks about"
+    );
+    assert!(
+        tool_config(&CapabilityPolicy::allowing([gated.clone()])).admits(&gated),
+        "`allow` on its own does hand `{gated}` over, so what follows takes a tool away rather \
+         than asserting about one that was never on offer"
+    );
+
+    let policy = policy_holding_one_capability_in_all_three_sets();
+    for (set, name) in [
+        (&policy.allow, "allow"),
+        (&policy.approval_required, "approval_required"),
+        (&policy.deny, "deny"),
+    ] {
+        assert!(
+            set.contains(&gated),
+            "the fixture's whole point is that `{gated}` is in `{name}` at the same time as the \
+             other two sets"
+        );
+    }
+
+    let tools = tool_config(&policy);
+    assert!(
+        !tools.admits(&gated),
+        "a capability a principle gated and a floor denied is offered as no tool, however wide the \
+         grant sitting beside them in `allow`: reading the tool set out of `allow` is F3, and this \
+         is the fixture where all three sets answer differently about one capability"
+    );
+    assert!(
+        !tools.capabilities().contains(&gated),
+        "and it is absent from the set itself, not merely unreported by `admits`: {:?}",
+        tools.capabilities()
+    );
+
+    // And it is the approval gate that keeps the tool away, not only the denial. With `deny`
+    // emptied the capability is still in `allow`, still gated, and still no tool — which is the
+    // property in its own right, since an approval is granted by a human at a step boundary and
+    // never by a model holding the tool.
+    let mut gated_but_not_denied = policy.clone();
+    gated_but_not_denied.deny.clear();
+    assert_eq!(
+        gated_but_not_denied.decide(&gated),
+        CapabilityDecision::RequiresApproval,
+        "with the denial lifted the gate is what remains, or the assertion below is re-testing the \
+         denial under another name"
+    );
+    assert!(
+        !tool_config(&gated_but_not_denied).admits(&gated),
+        "`RequiresApproval` maps to no tool: an approval-gated capability never appears in a \
+         step's tool set"
     );
 }
