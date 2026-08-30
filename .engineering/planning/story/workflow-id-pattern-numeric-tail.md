@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:workflow-id-pattern-numeric-tail
 kind: story
-status: active
+status: implemented
 title: A published pattern that still calls three step maps valid
 relations:
 - decomposes: epic:reference-driver
 - informed_by: story:driver-spec-crate
 - serves: vision:O3
-revision: 4
+revision: 5
 ---
 # Story: A published pattern that still calls three step maps valid
 

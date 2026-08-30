@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:skill-text-cannot-instruct-a-direct-store-write
 kind: story
-status: active
+status: archived
 title: A skill that instructs a direct store write fails the build
 summary: The prohibition on hand-editing planning artifacts is guarded by a test that reads each installed skill's text, not its path.
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 4
+revision: 7
 ---
 # Story: a skill that instructs a direct store write fails the build
 
@@ -75,3 +75,58 @@ Derived 2026-08-30 by `story-scoper`. Every line is **cited** (read from the sto
 - **Would collide with:** any unit editing skill prose under `integrations/**/SKILL.md` or `integrations/**/references/*.md` — the collision is **semantic, not textual**: a wave rewriting a skill can trip this new guard, and this guard's pattern set can refuse that rewrite. Also any unit adding a pattern-set document under `integrations/`, or editing `crates/protocol-cli/tests/workflow_coverage.rs`. It does **not** collide with `crates/protocol-cli/src/`, nor with `crates/protocol-cli/Cargo.toml`
 
 **Not established.** *"Every installed skill under `integrations/`"* resolves to five `SKILL.md` files, but `integrations/claude-code/agents/*.md` (six files), `integrations/codex/AGENTS.planning.md` and `skills/*/references/*.md` (two files) ship the same way and could carry the same regression; the story does not say whether they are in. Where the pattern set lives is a real fork: a `const` in the test file changes nothing outside `crates/protocol-cli/tests/`, while a committed data document in the style of `integrations/workflow-coverage.yaml` adds a file under `integrations/` and changes the collision answer. There is no `informed_by` edge to lean on — the defect site came from the body and from `story:adopter-schema-contract-tooling`'s closing section.
+
+## Archived 2026-08-30 — the premise was wrong, and the store already answers it
+
+**The acceptance asked for the wrong instrument.** It asked for a test that reads every installed
+skill's text and refuses one that instructs a direct store write. That test was built, attacked
+twice, corrected three times, and **deleted before release**. What survives is the three shipped
+sentences it caused to be corrected.
+
+**The defect is real and is already caught, one step later and deterministically.** A document
+edited outside a command has a revision no event supports. Measured in a scratch store:
+
+```console
+$ sed -i 's/^status: draft$/status: active/' <store>/story/probe.md
+$ protocol artifact validate
+1 problem(s):
+  - story:probe drifted from its log: status disagrees with event story:probe@1#0~584ad5e7de54a3c7
+    — an edit made outside a command is a change nothing decided
+VALIDATE EXIT=1
+```
+
+`protocol artifact validate` is already a gate step: `plan-check` is
+`cargo run -q -p protocol-cli --bin protocol -- artifact validate` (`Taskfile.yml`). So the build
+already fails on the **consequence**. The deleted guard aimed at the **instruction** — English prose
+— which is a strictly harder target with a false-positive rate, for a defect the cheaper check
+already caught.
+
+**Why it could not converge, measured.** The guard reached **2,153 lines of Rust** classifying
+sentences across 18 markdown files. Two adversarial passes and three correction rounds went into it —
+roughly three hours of agent time. Attack 1 measured 26 of 32 realistic instructions escaping;
+attack 2 measured 188 of 214 list entries deletable with the suite still green. Both were fixed, and
+the mutant kill rate reached 283 of 284 over a stated sweep.
+
+Then the base branch moved, somebody edited a skill in the ordinary way, and it went red on **two
+false positives**:
+
+- `integrations/claude-code/skills/planning/SKILL.md:39` — *"the six that are missing from it write
+  — new, move, relate, body, evidence, catch-up"*. A list of `protocol artifact` subcommand names,
+  read as a hand-edit instruction because `body` is also a store surface.
+- `integrations/claude-code/skills/wave/SKILL.md:389` — *"you record why in the artifact you write"*.
+  A relative clause; the object precedes the verb, which the both-directions search made visible.
+
+Both sentences are correct. It also went red because a new document was added, since the corpus is
+pinned in both directions — so adding any `.md` to the plugin reddens the build until a Rust list is
+edited. **A guard that fails when the prose it polices changes is a guard somebody disables**, and
+prose is the thing that changes most in this repository: the shipped skills *are* the product.
+
+**Two limits worth keeping in mind for whoever revisits this.**
+`protocol artifact validate` reports **76 documents predate the event log**; those cannot be
+drift-checked. Every new write carries events, so that number only falls. And the deleted guard
+never scanned the three `.json`, one `.yaml` and one `.sh` file under `integrations/` that also
+carry model-visible instruction text — `plugin.json`'s `longDescription` and `defaultPrompt` among
+them.
+
+**What landed and stays:** the three corrected sentences, and an `AGENTS.md` safety-envelope bullet
+that now names `validate` as what enforces the rule rather than a scan that no longer exists.

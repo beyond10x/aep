@@ -927,6 +927,7 @@
     "ApprovalId": {
       "description": "approval identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactKind": {
@@ -960,7 +961,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactObservation": {
       "description": "What was observed about an artifact.",
@@ -1024,6 +1026,7 @@
     "ClaimId": {
       "description": "claim identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Counterexample": {
@@ -1129,7 +1132,8 @@
         "production"
       ],
       "type": "string",
-      "pattern": "^(\\*|[a-z][a-z0-9-]*)$"
+      "maxLength": 200,
+      "pattern": "^(\\*|[a-z][a-z0-9]*(-[a-z0-9]+)*)$"
     },
     "FactPath": {
       "description": "Dotted path to an observable value, such as `tests.unit.failed`.",
@@ -1445,7 +1449,8 @@
     "ServiceId": {
       "description": "service identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "Severity": {
       "description": "How serious a review finding is.",
@@ -1498,7 +1503,8 @@
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$"
+      "maxLength": 401,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "TestSuite": {
       "description": "Which body of tests was run.",
@@ -1515,12 +1521,14 @@
         "smoke"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^([a-z][a-z0-9]*(-[a-z0-9]+)*|end_to_end)$"
     },
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "TranscriptDigest": {
       "description": "A digest of the transcript a trace-conformance check read, as `sha256sum` writes it: 64 lower-case hexadecimal characters.",
@@ -1581,7 +1589,8 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }
 }

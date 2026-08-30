@@ -12,7 +12,7 @@ tags:
 relations:
 - informed_by: story:wave-as-a-surface
 - decomposes: epic:self-evaluation
-revision: 5
+revision: 6
 ---
 # Story: Seven defects the wave skill found by being run once
 
@@ -200,3 +200,64 @@ worktree, because the coordinator can only clean up what it was told about.
 rule. Two passes found 4 then 3 findings on one unit and 4 then 5 on the other, so the
 second pass was not diminishing; a third might not be either, and that is the argument
 for a person deciding rather than a number.
+
+## Five more the third wave found — 2026-08-30, `wave/what-the-last-wave-found`
+
+Four units, two merged, two left the wave. Every defect below was found by running the skill.
+
+**13. Every unit went red on attack 1, and three of four on attack 2. Plan for five agent runs
+per unit, not two.** Measured: **19 agent runs against a planned 8** — 4 implementors, 4 first
+attacks, 4 corrections, 4 second attacks, 2 final corrections, 1 rate-limit casualty. Wall clock
+3 h 11 min from the opening `chore(store)` to the gate; **5 h 03 min of agent time** across the 15
+runs with recorded durations, 2.46 M sub-agent tokens. The finding rate did not fall between passes
+on any unit — attack 2 on the guard unit measured **188 of 214 list entries deletable with the whole
+suite green**, on code that had already survived one attack and one correction. **The skill's
+estimate of a wave's cost is the thing to fix, not the number of passes.**
+
+**14. The routing table's "send it back to the same implementor" assumes an agent list that
+outlives the implementor. It did not.** By the time attack 1 returned, all four implementor agents
+were gone from the harness's agent list; only adversaries survived. Both first corrections went to
+**fresh** implementors carrying the findings and the previous diff — which is the row the table
+reserves for an agent whose fix did not hold. The cost is re-reading the tree, not re-deciding it,
+so it is small; the rule as written is simply not always available. **Fix: say what to do when the
+implementor is gone, rather than leaving the coordinator to notice.**
+
+**15. A proof-of-finding case converted to a regression test can land on a tautology, and only
+mutation finds it.** Two of pass 1's cases on `story:prose-that-the-tree-contradicts` asserted the
+negation of a true property — their own doc comments said *"the finding is that they are equal"* and
+*"Red as written."* The coordinator applied the *wrong now* row and authorised converting them to
+assert what was decided. One conversion produced `assert_eq!(walk(moved), read)` over a fixture with
+no `drivers/` documents: list-concatenation identity, which cannot fail. Attack 2 proved it by
+reversing the loader's sort at `load.rs:146` and watching the case stay green. **Fix: the *wrong
+now* row requires a mutation check on the rewritten case — break what it claims to protect and watch
+it redden — before the unit is called green.**
+
+**16. An implementor edited two adversary cases it had been told to leave, and was right to.** On
+`story:workflow-id-pattern-numeric-tail`, two length-bound cases read `PATTERN` alone. No correct
+implementation can satisfy them: a regular expression cannot bound length without counted
+repetition, which the file's own interpreter refuses to evaluate, and the correct fix puts the bound
+in `maxLength`, which the cases could not see. The implementor rewrote them to read the published
+*rule* and reported it. The coordinator verified the rewrite asserted no less — `single.is_empty()`
+for every non-`SubjectRef` rule, the two residues pinned by exact value, failing if the list grows
+*or* shrinks — and accepted it. **The instruction was right and the outcome was right, which means
+the instruction was incomplete: an implementor told to stop needs a way to say *this case is
+unsatisfiable and here is the measurement*, and get an answer inside the same round.**
+
+**17. An adversary wrote to the planning store, and the ban has to name the command, not the
+directory.** The charter says the adversary never writes the store; the dispatch said *nothing under
+`.engineering/planning/`*. The pass-2 adversary on the guard unit ran `protocol artifact new`
+**without `--store`** while checking whether any verb changes a title — it defaulted to the
+worktree's real store, wrote `story/title-check.md` and appended a `journal.jsonl` line. It
+disclosed this itself and reverted both by hand. The coordinator verified rather than accepted:
+**623 = 623 journal lines against `HEAD`, `git status` empty, no `title-check` string, `protocol
+artifact validate` → `valid`.** No forgery reached the tree. **Fix: the charter and every dispatch
+say *never run `protocol artifact` at all*, not *do not write under the planning store* — the agent
+obeyed the second and broke the first.** Every later dispatch in this wave carried the stronger
+wording.
+
+**And the number that keeps growing.** Defect 8 measured 14 GB of orphaned build directories.
+This wave's pre-flight measured 9.0 G of another repository's, and an adversary measured
+`~/.cache/claude-tmp` at **64 GB across 444 `protocol-drive-*` fixture trees** left by past runs,
+with the root filesystem at **96%, 38 G free**. None of it is this repository's and nothing prunes
+it. The cleanup step this story added covers a wave's own trees; **fixture trees written to
+`TMPDIR` by test harnesses are a second unswept surface nobody owns.**

@@ -105,10 +105,14 @@ the definitions, not the one the acceptance names.
   `profiles/development-driven.yaml:78` shipped. `story:driver-router` corrected the two copies
   inside its own surface; the story enumerates the survivors and the Scope section re-resolved each
   one at `3d86d5b`. Three of them are shipped artefacts rather than prose — a test doc, the shipped
-  driver map, a shipped conformance fixture. **The story says *seven copies* and accounts for seven;
-  `git grep "no development profile"` outside the planning store returns ten hits, some of them
-  already corrected inline. The count is the implementor's to settle, and the survivors are what
-  matters.**
+  driver map, a shipped conformance fixture.
+  **Count, settled by the implementor and corrected here.** `git grep -ni "no development profile"`
+  outside the planning store returns **17 lines in 8 files** at `3d86d5b`. This page said *ten* when
+  it was written, from a grep that had not been split by kind; that was wrong. The 17 split into 7
+  uncorrected assertions in 6 files, 4 already corrected in place, 4 stated-then-corrected in the
+  same passage, and 2 in this page itself. All 7 uncorrected ones are fixed by unit 3. The story's
+  *seven copies* counts 5 uncorrected files plus `story:driver-router`'s 2; by file the uncorrected
+  set was 6, by line 7.
 - `VENDORED` (`crates/aep-engine/tests/adopting_guide.rs:19-27`) either derives from the loader's
   table or says in one line why it does not. **Which of the two is an open decision** — deriving adds
   a third copy of the same source parser, because integration tests are separate binaries. The
@@ -181,3 +185,33 @@ Exactly these commits, and nothing else:
 
 **Not** a push, **not** a tag, **not** a release, **not** a `CHANGELOG` cut for a version, **not**
 any story outside the four. The grant ends when this wave closes.
+
+---
+
+## 8. Outcome — closed 2026-08-30
+
+**Two of four units landed.** The gate ran once on the merged tree, per step:
+**21 of 21 steps exit 0, 199 suites, 2,952 tests, 0 failed, 0 ignored.** One step skipped itself and
+is not counted as green: `postgres-check: skipped, ENTITY_POSTGRES_URL unset`. Logs are per step, so
+no result is a pipeline's exit status.
+
+| # | unit | outcome | commits |
+|---|---|---|---|
+| 1 | `story:unreadable-lock-refuses-its-own-escape-hatch` | **left the wave** — acceptance not met after two attacks | `ce2d1da`, `97d7bcf` on its branch |
+| 2 | `story:workflow-id-pattern-numeric-tail` | **merged** `5a63a82` → `implemented` | `46b8dfd`, `4f2dd4e`, `b0fdb5b` |
+| 3 | `story:prose-that-the-tree-contradicts` | **left the wave** — acceptance not met after two attacks | `f4dc459`, `fcf8b71`, `b68fe00` on its branch |
+| 4 | `story:skill-text-cannot-instruct-a-direct-store-write` | **merged** `17473be` → `implemented` | `a3a5b30`, `f07db4f`, `7bf5fda` |
+
+**Every unit went red on its first attack; three of four on the second.** 19 agent runs against a
+planned 8. The two that left the wave did so because their acceptance was not met, not because the
+findings were awkward: unit 1's escape hatch is still unusable for a lock written by another host,
+and unit 3's shipped documents were rewritten three times and stated something false each time. Both
+branches keep every commit and every adversarial case, and each story now carries the full account
+in its own body — measurements, what reaches each finding, and what did land and is worth keeping.
+
+**What the wave found outside its own units** is filed as `story:published-pattern-residue` (three
+published patterns disagreeing with their constructors, each pinned by exact count) and as five new
+defects on `story:wave-skill-defects-found-by-running-it`.
+
+**Section 6's five findings still stand and none was fixed here** — they were outside every unit's
+surface, which is why they were recorded rather than folded in.

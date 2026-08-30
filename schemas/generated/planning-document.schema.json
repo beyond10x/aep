@@ -132,7 +132,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactRelation": {
       "description": "A single-entry mapping from a relation name to an artifact reference, such as `{designs: spec:passkeys-auth}`.",

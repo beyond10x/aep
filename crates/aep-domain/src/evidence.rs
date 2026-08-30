@@ -150,7 +150,14 @@ impl schemars::JsonSchema for TestSuite {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             ..Default::default()
         };
-        schema.string().pattern = Some("^[a-z][a-z0-9-]*$".to_owned());
+        // `parse` sends anything it does not name to `PrincipleId::new`, so `Charset::Kebab`'s
+        // rule is this schema's rule, taken from `aep-domain` rather than paraphrased: the
+        // paraphrase this replaces put `-` inside the character class, so it called `e2e-` and
+        // `a--b` valid that `TestSuite::parse` refuses. `end_to_end` is spelled out beside it
+        // because `parse` takes it as an alias for `e2e` and no kebab rule ever will.
+        schema.string().pattern =
+            Some(crate::identifier_pattern!(Kebab, "^(", "|end_to_end)$").to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
         schema.metadata().description = Some("Which body of tests was run.".to_owned());
         schema.metadata().examples = TestSuite::NAMED
             .iter()

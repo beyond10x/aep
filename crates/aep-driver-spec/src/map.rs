@@ -78,7 +78,11 @@ pub struct StepMapId(String);
 
 impl StepMapId {
     /// The pattern published in generated JSON Schema.
-    pub const PATTERN: &'static str = "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$";
+    ///
+    /// `Charset::Dotted`'s own pattern, taken from `aep-domain` rather than written here: this
+    /// constant was a fourth copy of that rule, and it had already drifted from
+    /// [`Self::new`] — it called `development/2` valid, which this constructor refuses.
+    pub const PATTERN: &'static str = aep_domain::identifier_pattern!(Dotted, "^", "$");
 
     /// Parses and validates an identifier.
     pub fn new(value: impl Into<String>) -> Result<Self, ParseError> {
@@ -87,9 +91,10 @@ impl StepMapId {
         if value.is_empty() {
             return reject("must not be empty".to_owned());
         }
-        if value.len() > 200 {
+        if value.len() > aep_domain::ids::MAX_LENGTH as usize {
             return reject(format!(
-                "must be at most 200 characters, got {}",
+                "must be at most {} characters, got {}",
+                aep_domain::ids::MAX_LENGTH,
                 value.len()
             ));
         }
@@ -174,6 +179,9 @@ impl schemars::JsonSchema for StepMapId {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        // The same bound `Self::new` applies, published because a `pattern` cannot express one:
+        // without it the schema calls a 201-character step-map id valid and the loader refuses it.
+        schema.string().max_length = Some(aep_domain::ids::MAX_LENGTH);
         schema.metadata().description =
             Some("Identifier of a step map, such as `development/default`.".to_owned());
         schema.into()

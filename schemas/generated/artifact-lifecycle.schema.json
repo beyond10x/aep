@@ -89,7 +89,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactStatus": {
       "description": "Artifact status. The named vocabulary is listed in `examples`; any other name a lifecycle document declares is carried verbatim, so a rung is a line in a YAML file rather than a release of the engine.",

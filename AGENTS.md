@@ -538,6 +538,20 @@ surfaces.
   approval: `crates/aep-driver/tests/evidence_scan.rs` refuses any construction of an
   `Evidence::Approval` or a `Producer::Human` in shipped driver code, because nothing below the
   driver would stop a harness writing its own approval and unlocking a capability with it.
+* **No document this repository ships may tell its reader to write the planning store by hand.**
+  `protocol artifact` is the store's only writer and every surface under `integrations/` says so in
+  prose — which is where the rule regressed once already, when the planning skill *told* agents to
+  patch bodies directly.
+  *Enforced by* `protocol artifact validate`, which the gate runs as `plan-check`. It catches the
+  **consequence** rather than the instruction: a document edited outside a command has a revision
+  no event supports, and validate reports *"an edit made outside a command is a change nothing
+  decided"* and exits 1. Deterministic, and it cannot produce a false positive.
+  **A prose scan over the shipped skills was built for this and removed on 2026-08-30.** It was
+  2,153 lines of Rust classifying English, it went red on ordinary edits to skill text — a list of
+  CLI verb names, the phrase *the artifact you write* — and a guard that fails when the prose it
+  polices changes is a guard somebody disables. Reviewing shipped prose is a person's job.
+  Its one real gap is validate's: **76 documents predate the event log** and cannot be drift-checked.
+  Every new write carries events, so that number only falls.
 * **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
   grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
   a profile's grant is a specification change with a design page, never a convenience.

@@ -226,6 +226,36 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+* **Thirteen published JSON Schemas now refuse identifiers they used to accept, and bound their
+  length.** A published `pattern` and the constructor it is published for were two hand-written
+  statements of one rule, so they drifted: `adp/2` was valid to an editor and an error to the
+  loader, and the step maps an editor called fine would not load. Every published pattern in
+  `aep-domain` and `aep-driver-spec` is now derived from one body per charset — fourteen
+  identifiers and references, not the two the defect was reported against, because fixing one of
+  two leaves the defect. `maxLength` carries the 200-character bound a regular expression cannot
+  express without counted repetition, from the single `aep_domain::ids::MAX_LENGTH` that
+  `validate` reads. **A document that loads today still loads**: every change is a tightening
+  toward the constructor, verified over 56,594 strings with zero divergences.
+  **Three divergences of the same class are left open and pinned by exact count**, so the case
+  goes red the day one moves: `FactPattern` puts `*` inside its character class (96, all
+  schema-looser; the three shipped protocols' 46 observables all agree today), `EntityType` and
+  `DomainEventType` accept an empty or bare-hyphen segment (66 and 49; neither type appears in any
+  generated schema), and `ArtifactId` refuses a leading separator its constructor takes (601, all
+  schema-stricter).
+
+* **Three shipped skill documents no longer suggest editing a planning artifact by hand.**
+  `protocol artifact` is the store's only writer.
+  `skills/planning/references/store-conventions.md` said correcting a title by hand is harmless; it
+  now says the title is set by `protocol artifact new --title` and no verb changes one afterwards,
+  which was checked against `replace_body`. Both planning skills said *put that evidence in the
+  artifact* and now name `protocol artifact body`.
+  **A source scan that read shipped prose and failed the build on it was written for this and
+  removed before release.** The store already catches the defect where it lands rather than where
+  it is described: a document edited outside a command has a revision no event supports, and
+  `protocol artifact validate` — which the gate runs as `plan-check` — reports it and exits 1. The
+  prose scan was 2,153 lines classifying English and went red on ordinary edits to skill text, and
+  a check that fails when the prose it polices changes is one somebody switches off.
+
 * **The wave skill absorbs the two retros written on 2026-08-30**, one from harness wave 3
   (`docs/reviews/2026-08-30-wave-3-retro.md`) and one from substrate's byte-plane wave — eighteen
   changes, none of which had reached `skills/wave/SKILL.md` when the retros were filed. The wave
