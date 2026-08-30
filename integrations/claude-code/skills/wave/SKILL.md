@@ -67,24 +67,21 @@ back, writing a shared file an implementor was held off, merging the integration
 base once the gate is green. Asking about one of those does not make the work safer; it stops a
 loop that was running.
 
-**The operator does not need to hear the machine working.** An implementor going green and its
-adversary approving is the *expected outcome*, and an expected outcome is not news. Neither is a
-merge that applied cleanly, a finding that was found and then fixed, or a store move the facts
-already settled. Report a **deviation**: a unit that leaves the wave, a gate you cannot get green,
-a decision you genuinely cannot take, an incident, or a fact that changes what the operator would
-do next. If nothing has deviated, say nothing and keep going.
-
-**A deviation you have already reported is not news either.** Say it once, put it where it lives —
-a blocker artifact, a story, the wave page — and then stop repeating it. Re-listing the same open
-decision in every report does not raise its priority; it teaches the operator that your reports are
-mostly things they have already read, which is how the one new line in the fifteenth report gets
-missed. If it is genuinely blocking and genuinely unanswered, that is a reason to take the default
-you published and keep going, not a reason to ask again.
+**Report by exception; the shape is the operator's, not this skill's.** How anything reaches a human
+is governed by the operator's own output rules, wherever their harness keeps them — this file does
+not restate them and must not grow a copy. What is specific to a wave is only *what counts as news*:
+an implementor going green, an adversary approving, a merge applying cleanly and a store move the
+facts already settled are the **expected outcome**, and an expected outcome is not news. Report a
+deviation — a unit that leaves the wave, a gate you cannot get green, a decision you genuinely
+cannot take, an incident. If nothing has deviated, say nothing and keep going.
 
 This overrides the Agent tool's standing "relay what matters" for the duration of a wave. That
 instruction bounds neither how often you relay nor how much, and a wave produces a completion
 notification every few minutes: followed literally it converts the loop into a status feed. *What
 matters* is the load-bearing half. Almost none of a healthy wave matters.
+
+A sub-agent's report is **input to you, never output to the operator.** Its register is not yours to
+pass on: take the findings, drop the voice.
 
 **Why you own every store write.** The planning store's journal is append-only and committed, and
 nothing merges it. Two branches that each move their own story both append to the tail, and the
