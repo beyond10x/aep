@@ -57,8 +57,18 @@ tasks:
     # Docusaurus resolves every markdown link at build time, so a link into the repository tree
     # from a page under `website/docs/` fails the build rather than 404ing for a reader. Repository
     # files are linked by absolute GitHub URL; only site pages are linked relatively.
+    #
+    # `npm ci` first, and it is not optional. This task's `desc` says it is what CI's `Website`
+    # workflow does; CI runs `npm ci` (`.github/workflows/pages.yml:75`) and then `npm run build`
+    # (`:85`), and this ran only the second. That made the step pass on any checkout where somebody
+    # had installed once and fail `127 docusaurus: command not found` on every fresh one — a wave's
+    # integration worktree, a new clone, a colleague's machine. A gate whose result depends on
+    # whether a directory `git` does not track happens to be there is not a gate, and this is the
+    # same shape as the eleven red releases `check`'s own description records: a step that claims
+    # a scope it does not cover.
     dir: website
     cmds:
+      - npm ci
       - npm run build
 
   # `cargo xtask fmt`, not `cargo fmt --all`: `--all` also formats every member's local path
