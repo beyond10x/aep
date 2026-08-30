@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:driver-run-state-integrity
 kind: story
-status: active
+status: implemented
 title: A resumed run sees one committed generation and no silent repeat
 summary: Commit snapshot and cursor together and expose uncertain attempts for explicit resolution.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O6
-revision: 3
+revision: 4
 ---
 ## Finding
 

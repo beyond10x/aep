@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:durable-command-batches
 kind: story
-status: active
+status: implemented
 title: One command is one durable optimistic transaction
 summary: Adopt an atomic runtime batch SPI and remove stale overwrite and partial success.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## Finding
 

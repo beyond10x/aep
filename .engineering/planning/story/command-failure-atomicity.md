@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:command-failure-atomicity
 kind: story
-status: active
+status: implemented
 title: A refused command changes no semantic state
 summary: Stage memory mutations and record exactly one refusal audit.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## Finding
 

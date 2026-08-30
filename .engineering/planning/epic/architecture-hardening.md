@@ -2,14 +2,14 @@
 format: aep.planning-md/1
 id: epic:architecture-hardening
 kind: epic
-status: active
+status: implemented
 title: Architecture review findings are closed by executable contracts
 summary: Make command, persistence, loading, status and query boundaries fail closed.
 relations:
 - serves: vision:O2
 - serves: vision:O3
 - serves: vision:O6
-revision: 3
+revision: 4
 ---
 ## Intent
 

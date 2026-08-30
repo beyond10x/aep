@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:authoritative-gate-status
 kind: story
-status: active
+status: implemented
 title: CI and prose derive from the executable gate and durable status sources
 summary: Remove a second CI gate and hand-maintained current-state claims.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O6
-revision: 3
+revision: 4
 ---
 ## Finding
 

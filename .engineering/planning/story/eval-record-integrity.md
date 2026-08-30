@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:eval-record-integrity
 kind: story
-status: active
+status: implemented
 title: An eval record cannot omit the facts that bind its verdict
 summary: Require identity, digests and expectations and always verify them.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O3
-revision: 3
+revision: 4
 ---
 ## Finding
 

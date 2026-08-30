@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:pagination-cursors
 kind: story
-status: active
+status: implemented
 title: Every query cursor advances through deterministic pages
 summary: Parse and apply offsets for entity, relation and audit queries.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## Finding
 

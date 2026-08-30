@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:sealed-ess-states
 kind: story
-status: active
+status: implemented
 title: Validated ESS and compiled IR cannot be forged
 summary: Seal public fields and make compilation begin with complete validation.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## Finding
 

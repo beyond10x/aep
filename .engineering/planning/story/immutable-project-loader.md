@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:immutable-project-loader
 kind: story
-status: active
+status: implemented
 title: Project acquisition is an immutable edge outside the engine
 summary: Move IO loading out of the engine and verify pinned Git snapshots before reuse.
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## Finding
 
