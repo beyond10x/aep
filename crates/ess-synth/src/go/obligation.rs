@@ -75,7 +75,7 @@ pub(super) fn conversion_package(
     let emit = Emit::new(ir, layout, package, None);
 
     let mut owed = Vec::new();
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         let source = conversion_source(conversion);
         if mechanical_conversion(ir, conversion).is_some()
             || refusals.refuses_kind(CapabilityKind::Conversion, &source)
@@ -234,7 +234,7 @@ pub(super) fn domain_obligations(
 /// The behaviours and queries one bounded context owes, in declaration order.
 fn owed_by_domain(emit: &Emit<'_>, plan: &SynthesisPlan, refusals: &TargetRefusals) -> Vec<Seam> {
     let mut seams: Vec<Seam> = Vec::new();
-    for command in emit.ir.commands.values() {
+    for command in emit.ir.commands().values() {
         let source = command.name.to_string();
         if !emit.owns(&command.name)
             || refusals.refuses_kind(CapabilityKind::CommandBehavior, &source)
@@ -260,7 +260,7 @@ fn owed_by_domain(emit: &Emit<'_>, plan: &SynthesisPlan, refusals: &TargetRefusa
             zero: "nil".to_owned(),
         });
     }
-    for view in emit.ir.views.values() {
+    for view in emit.ir.views().values() {
         let source = view.name.to_string();
         if !emit.owns(&view.name) || refusals.refuses_kind(CapabilityKind::ViewQuery, &source) {
             continue;

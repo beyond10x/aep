@@ -22,7 +22,7 @@ use ess_conformance::synthesize;
 use ess_diff::graph::ImpactClass;
 use ess_diff::{impact, EssImpact, ImpactRefusal, Invalidation};
 use ess_domain::name::QualifiedName;
-use support::compiled;
+use support::{compiled, compiled_with};
 
 /// The suite the `before` half of the fixture pair obliges.
 ///
@@ -420,72 +420,24 @@ fn a_suite_resting_on_a_construct_no_graph_has_a_node_for_owes_the_whole_suite()
 }
 
 #[test]
-fn an_erased_payload_mapping_is_named_by_the_delta_and_narrowed_rather_than_owing_everything() {
-    // The mutation the wave-5 fail-closed test used to make, with W7.2's opposite outcome: an
-    // outcome's `payload:` lives in the command family, which the delta now compares, so erasing
-    // one arrives as a named change entry and a *narrowing* — the catch-all no longer fires for
-    // it. This is the shrink of mechanism 6, proven by the construct that motivated the mechanism.
-    let before = compiled("examples/billing");
-    let mut after = compiled("examples/billing");
-    let settled = after
-        .commands
-        .get_mut(&QualifiedName::new("billing.invoice.PayInvoice").expect("a name"))
-        .expect("the fixture declares it")
-        .outcomes
-        .iter_mut()
-        .find(|outcome| outcome.name.as_str() == "settled")
-        .expect("the branch exists");
-    assert!(
-        !settled.payload.is_empty(),
-        "the fixture declares where `InvoicePaid`'s fields come from, or there is nothing to erase"
-    );
-    settled.payload.clear();
-
-    let suite = synthesize(&before).suite;
-    let report = impact(&before, &after, Some(&suite), None)
-        .expect("one system, and the earlier one's suite");
-
-    let ids: Vec<String> = report
-        .delta
-        .changes()
-        .iter()
-        .map(|change| change.id().to_string())
-        .collect();
-    assert_eq!(
-        ids,
-        vec!["command/billing.invoice.PayInvoice/outcome-payload-changed/settled".to_owned()],
-        "the edit that used to arrive as an empty delta now has a name"
-    );
-    let Some(Invalidation::Narrowed { .. }) = &report.invalidation else {
-        panic!(
-            "a change the delta can name is narrowed through the graph, not owed whole: {:?}",
-            report.invalidation
-        );
-    };
-    assert!(
-        report
-            .churn
-            .conformance_scenarios_invalidated
-            .expect("a suite was given")
-            > 0,
-        "the command moved, so something that rests on it is owed"
-    );
-}
-
-#[test]
 fn a_change_in_a_family_the_delta_still_does_not_compare_owes_the_whole_suite() {
     // Fail-closed mechanism 6, on what remains after W7.2's shrink: the topology has no change
     // family, so flipping one workload's statelessness produces two different models and an
     // **empty** delta — no change entry has a vocabulary for it — and an empty delta narrowing to
     // nothing would be a survival claim about a model that moved. So it is not narrowed at all.
     let before = compiled("examples/billing");
-    let mut after = compiled("examples/billing");
-    let workload = after
-        .workloads
-        .values_mut()
-        .next()
-        .expect("billing declares workloads");
-    workload.stateless = !workload.stateless;
+    let after = compiled_with("examples/billing", |documents| {
+        let workload = documents
+            .iter_mut()
+            .filter_map(|(_, document)| document.topology.as_mut())
+            .flat_map(|topology| topology.workloads.values_mut())
+            .next()
+            .expect("billing declares workloads");
+        workload.stateless = Some(false);
+        if let Some(replicas) = &mut workload.replicas {
+            replicas.min = 1;
+        }
+    });
 
     let suite = synthesize(&before).suite;
     let report = impact(&before, &after, Some(&suite), None)
@@ -520,13 +472,14 @@ fn a_domains_naming_moving_owes_the_whole_suite_because_no_family_compares_a_dom
     // constructs' own declarations, each compared by its own family, and folding them in here
     // would send every added type to `Whole` and erase the narrowing.
     let before = compiled("examples/billing");
-    let mut after = compiled("examples/billing");
-    let domain = after
-        .domains
-        .values_mut()
-        .next()
-        .expect("billing declares domains");
-    domain.naming.display = Some("Renamed on the page".to_owned());
+    let after = compiled_with("examples/billing", |documents| {
+        let domain = documents
+            .iter_mut()
+            .map(|(_, document)| document)
+            .find(|document| document.domain.is_some())
+            .expect("billing declares domains");
+        domain.naming.display = Some("Renamed on the page".to_owned());
+    });
 
     let suite = synthesize(&before).suite;
     let report = impact(&before, &after, Some(&suite), None)

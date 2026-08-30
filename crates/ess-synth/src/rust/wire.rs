@@ -59,28 +59,28 @@ pub(crate) fn module(surface: &dyn Surface) -> String {
     let mut out = String::new();
     out.push_str(HEADER);
 
-    for declared in surface.ir().types.values() {
+    for declared in surface.ir().types().values() {
         if !surface.presents_type(&declared.name) {
             continue;
         }
         named_type(&mut out, surface, declared);
     }
-    for event in surface.ir().events.values() {
+    for event in surface.ir().events().values() {
         if surface.presents_event(&event.name) {
             event_encoder(&mut out, surface, event);
         }
     }
-    for error in surface.ir().errors.values() {
+    for error in surface.ir().errors().values() {
         if surface.presents_error(&error.name) {
             error_encoder(&mut out, surface, error);
         }
     }
-    for view in surface.ir().views.values() {
+    for view in surface.ir().views().values() {
         if surface.presents_view(&view.name) {
             view_encoder(&mut out, surface, view);
         }
     }
-    for command in surface.ir().commands.values() {
+    for command in surface.ir().commands().values() {
         if surface.presents_command(&command.name) {
             command_encoder(&mut out, surface, command);
             command_decoder(&mut out, surface, command);

@@ -88,7 +88,7 @@ impl Generator for Docs {
         // are each one system-wide question. A domain page derives from its own context — plus the
         // bindings and components, which reach across contexts by design — and says so.
         let mut out = vec![readme(ir, &mint.whole())];
-        for domain in ir.domains.values() {
+        for domain in ir.domains().values() {
             out.push(domain_page(ir, domain, &domain_slice(ir, domain, mint)));
         }
         out.push(interactions_page(ir, &mint.whole()));
@@ -140,7 +140,7 @@ const GAPS: &[Gap] = &[];
 /// The index: what the system is, how it fits together, and where everything else is.
 fn readme(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
     let mut body = String::new();
-    if let Some(summary) = &ir.summary {
+    if let Some(summary) = ir.summary() {
         let _ = writeln!(body, "{summary}\n");
     }
 
@@ -157,7 +157,7 @@ fn readme(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
     );
 
     let _ = writeln!(body, "## Bounded contexts\n");
-    for domain in ir.domains.values() {
+    for domain in ir.domains().values() {
         let _ = writeln!(body, "{}", domain_index_entry(ir, domain));
     }
 
@@ -167,14 +167,14 @@ fn readme(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
         "A component is a unit of ownership, not a deployment. How many of each runs, and what each \
          needs, is [the topology](topology.md).\n"
     );
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         let _ = writeln!(body, "{}\n", component_prose(ir, component));
     }
 
     let _ = writeln!(body, "## The other pages\n");
     let _ = writeln!(body, "| page | what is on it |");
     let _ = writeln!(body, "|---|---|");
-    for domain in ir.domains.values() {
+    for domain in ir.domains().values() {
         let _ = writeln!(
             body,
             "| [{}]({}) | the `{}` vocabulary: its types, entities, views, commands, events, \
@@ -209,7 +209,7 @@ fn readme(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
 
     page(
         "README.md".to_owned(),
-        &format!("{} {}", ir.system, ir.version),
+        &format!("{} {}", ir.system(), ir.version()),
         &body,
         provenance,
     )
@@ -276,12 +276,12 @@ fn domain_slice(ir: &EssIr, domain: &ResolvedDomain, mint: &ProvenanceMint) -> S
             .map(|handle| ActorRef::from(handle).into()),
     );
     seeds.extend(
-        ir.bindings
+        ir.bindings()
             .keys()
             .map(|name| BindingRef::new(name.clone()).into()),
     );
     seeds.extend(
-        ir.components
+        ir.components()
             .keys()
             .map(|name| ComponentRef::new(name.clone()).into()),
     );
@@ -321,7 +321,8 @@ fn domain_page(ir: &EssIr, domain: &ResolvedDomain, provenance: &SlicedProvenanc
     let _ = writeln!(
         body,
         "`{}` is one of {}'s bounded contexts. [Back to the index](../README.md).\n",
-        domain.name, ir.system
+        domain.name,
+        ir.system()
     );
 
     types_section(ir, domain, &mut body);
@@ -356,10 +357,10 @@ fn interactions_page(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
          a demo.\n\n[Back to the index](README.md).\n\n",
     );
 
-    if ir.bindings.is_empty() {
+    if ir.bindings().is_empty() {
         body.push_str("This system declares no bindings: nothing here reacts to anything.\n\n");
     }
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         binding_section(ir, binding, &mut body);
     }
 
@@ -403,10 +404,10 @@ fn crossings_page(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
          specification says they may.\n\n",
     );
 
-    if ir.conversions.is_empty() {
+    if ir.conversions().is_empty() {
         body.push_str("This system declares no crossings. Every type is used only as itself.\n\n");
     }
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         let _ = writeln!(
             body,
             "## `{}` may be used as `{}`\n",
@@ -447,7 +448,7 @@ fn topology_page(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
          hosting.\n\n",
     );
 
-    for workload in ir.workloads.values() {
+    for workload in ir.workloads().values() {
         let component = ir.component(&workload.component);
         let _ = writeln!(body, "## `{}`\n", component.name);
         if let Some(summary) = &component.naming.summary {
@@ -467,9 +468,9 @@ fn topology_page(ir: &EssIr, provenance: &SlicedProvenance) -> Artifact {
     }
 
     let idle: Vec<_> = ir
-        .components
+        .components()
         .keys()
-        .filter(|name| !ir.workloads.contains_key(*name))
+        .filter(|name| !ir.workloads().contains_key(*name))
         .collect();
     if !idle.is_empty() {
         let _ = writeln!(body, "## Components that run nowhere\n");
@@ -559,7 +560,7 @@ fn referenced_types(ir: &EssIr) -> BTreeSet<QualifiedName> {
             out.insert(handle.name().clone());
         }
     };
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         match &declared.body {
             ResolvedBody::Newtype { of, .. } => note(of),
             ResolvedBody::Struct { fields, .. } => {
@@ -575,33 +576,33 @@ fn referenced_types(ir: &EssIr) -> BTreeSet<QualifiedName> {
             }
         }
     }
-    for entity in ir.entities.values() {
+    for entity in ir.entities().values() {
         note(&entity.identity.type_ref);
         for field in &entity.fields {
             note(&field.type_ref);
         }
     }
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         for field in &view.fields {
             note(&field.type_ref);
         }
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for field in &command.input {
             note(&field.type_ref);
         }
     }
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         for field in &event.fields {
             note(&field.type_ref);
         }
     }
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         for field in &error.fields {
             note(&field.type_ref);
         }
     }
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         note(&conversion.from);
         note(&conversion.to);
     }
@@ -838,7 +839,7 @@ fn errors_section(ir: &EssIr, domain: &ResolvedDomain, body: &mut String) {
 /// the sentence saying `Email` may become somebody else's address has to be.
 fn crossings_section(ir: &EssIr, domain: &ResolvedDomain, body: &mut String) {
     let relevant: Vec<_> = ir
-        .conversions
+        .conversions()
         .iter()
         .filter(|conversion| {
             touches(&conversion.from, &domain.name) || touches(&conversion.to, &domain.name)
@@ -1550,7 +1551,7 @@ fn field_bullet(field: &ResolvedField) -> String {
 /// specification is the only possible source of, which is the reverse of the truth.
 fn emitters(ir: &EssIr, event: &ResolvedEvent) -> Vec<String> {
     let mut out = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         if let ResolvedFailure::Escalate { emits } = binding.on_failure() {
             if emits.name() == &event.name {
                 out.push(format!(
@@ -1561,7 +1562,7 @@ fn emitters(ir: &EssIr, event: &ResolvedEvent) -> Vec<String> {
             }
         }
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         let branches: Vec<_> = command
             .outcomes
             .iter()
@@ -1589,7 +1590,7 @@ fn emitters(ir: &EssIr, event: &ResolvedEvent) -> Vec<String> {
 /// Which command and branch reports an error.
 fn reporters(ir: &EssIr, error: &ResolvedError) -> Vec<String> {
     let mut out = Vec::new();
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         let branches: Vec<_> = command
             .outcomes
             .iter()
@@ -2013,7 +2014,7 @@ fn touches(reference: &ess_compiler::ir::ResolvedTypeRef, domain: &QualifiedName
 /// The bindings that rely on a crossing, and the input each of them fills with it.
 fn crossing_users(ir: &EssIr, conversion: &ResolvedConversion) -> Vec<String> {
     let mut out = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         for mapping in &binding.mapping {
             let crossed = matches!(
                 &mapping.value,
@@ -2036,7 +2037,7 @@ fn crossing_users(ir: &EssIr, conversion: &ResolvedConversion) -> Vec<String> {
 /// Events no binding reacts to.
 fn unread_events(ir: &EssIr) -> Vec<&QualifiedName> {
     let reactions = ir.reactions();
-    ir.events
+    ir.events()
         .keys()
         .filter(|name| !reactions.keys().any(|handle| handle.name() == *name))
         .collect()

@@ -871,14 +871,14 @@ pub fn impact(
 /// documentation said it would.
 fn uncompared_families(ir: &EssIr) -> String {
     let domain_namings: BTreeMap<&QualifiedName, &ess_domain::name::Naming> = ir
-        .domains
+        .domains()
         .iter()
         .map(|(name, domain)| (name, &domain.naming))
         .collect();
     serde_json::to_string(&serde_json::json!({
-        "conversions": ir.conversions,
+        "conversions": ir.conversions(),
         "domain_namings": domain_namings,
-        "workloads": ir.workloads,
+        "workloads": ir.workloads(),
     }))
     .unwrap_or_else(|error| {
         panic!("the IR serialises, as every projection already relies on: {error}")
@@ -1450,27 +1450,18 @@ mod tests {
 
     /// A compiled specification with nothing in it.
     ///
-    /// Built by hand rather than compiled, because these three tests are about the algebra and not
-    /// about any specification: what they need is a graph that reaches nothing, so that a narrowing
-    /// would report zero and the fail-closed arm is the only thing that can save it.
+    /// Even this deliberately empty fixture enters through the raw document and compiler boundary:
+    /// the algebra does not need a special way to forge an IR.
     fn empty_ir() -> EssIr {
-        EssIr {
-            system: name("catalog"),
-            version: Version::V1,
-            naming: ess_domain::name::Naming::default(),
-            summary: None,
-            domains: BTreeMap::new(),
-            types: BTreeMap::new(),
-            conversions: Vec::new(),
-            entities: BTreeMap::new(),
-            commands: BTreeMap::new(),
-            events: BTreeMap::new(),
-            errors: BTreeMap::new(),
-            views: BTreeMap::new(),
-            actors: BTreeMap::new(),
-            bindings: BTreeMap::new(),
-            components: BTreeMap::new(),
-            workloads: BTreeMap::new(),
-        }
+        let raw =
+            ess_domain::spec::RawSpecFile::parse("format: ess/1\nsystem: catalog\nversion: v1\n")
+                .expect("the fixture parses");
+        let specification = ess_domain::spec::Specification::assemble([(
+            ess_domain::system::Source::new("empty.yaml"),
+            raw,
+        )])
+        .expect("the empty fixture validates");
+        ess_compiler::resolve::compile(&specification, &ess_compiler::source::SourceMap::new())
+            .expect("the empty fixture resolves")
     }
 }

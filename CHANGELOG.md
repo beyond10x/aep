@@ -22,6 +22,15 @@ belongs in the commit message or in `docs/design/`.
   deterministic filtering and ordering, advance by the number returned, and stop emitting a cursor
   when no matches remain instead of repeating the first page.
 
+### Changed
+
+* **Validated ESS specifications and compiled IR are sealed.** `Specification` and `EssIr` expose
+  read-only accessors instead of public fields, so raw files and the compiler are now the only
+  construction entrances. Compilation re-runs complete validation before resolution, downstream
+  projections consume the accessor surface, and provenance refuses a serialization failure instead
+  of hashing empty bytes. Tests that forged invalid validated or resolved records were replaced by
+  raw-document fixtures and a boundary regression.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added

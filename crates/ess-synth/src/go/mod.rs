@@ -311,7 +311,7 @@ pub fn workspace(ir: &EssIr, plan: &SynthesisPlan) -> Emission {
             &mut stubbed,
         ));
     }
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         artifacts.extend(port::component_package(
             ir,
             plan,
@@ -399,7 +399,7 @@ fn assert_bijection(
 /// `true` when the module needs the refusal type at all: something is owed, or there is an
 /// interaction layer whose ports return one.
 fn wants_obligations(ir: &EssIr, plan: &SynthesisPlan) -> bool {
-    plan.obligations().next().is_some() || !ir.components.is_empty() || !ir.bindings.is_empty()
+    plan.obligations().next().is_some() || !ir.components().is_empty() || !ir.bindings().is_empty()
 }
 
 /// What this target emits with a weaker guarantee than the first target's, stated once per rule.
@@ -590,7 +590,7 @@ fn domain_package(
     let package = layout.package(domain);
     let emit = Emit::new(ir, layout, package, Some(domain));
     let resolved = ir
-        .domains
+        .domains()
         .get(domain)
         .expect("the layout only knows domains the IR declares");
 

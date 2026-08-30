@@ -43,7 +43,7 @@ impl TargetRefusals {
         acceptors: &BTreeMap<QualifiedName, ComponentName>,
     ) -> Self {
         let mut refused = BTreeMap::new();
-        for command in ir.commands.values() {
+        for command in ir.commands().values() {
             let source = command.name.to_string();
             if !plan.is_generated(CapabilityKind::CommandContract, &source) {
                 continue;
@@ -52,7 +52,7 @@ impl TargetRefusals {
                 continue;
             }
             let claimants = ir
-                .components
+                .components()
                 .values()
                 .filter(|component| {
                     component
@@ -84,7 +84,7 @@ impl TargetRefusals {
                 detail,
             );
         }
-        for component in ir.components.values() {
+        for component in ir.components().values() {
             let source = component.name.to_string();
             if !plan.is_generated(CapabilityKind::ComponentTransport, &source) {
                 continue;
@@ -136,7 +136,7 @@ impl TargetRefusals {
 /// through a binding, and "which port does this land on" is the same question either way.
 pub(crate) fn acceptors(ir: &EssIr) -> BTreeMap<QualifiedName, ComponentName> {
     let mut out: BTreeMap<QualifiedName, Vec<&ComponentName>> = BTreeMap::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         for accepted in &component.accepts {
             out.entry(accepted.name().clone())
                 .or_default()

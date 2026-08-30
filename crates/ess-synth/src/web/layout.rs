@@ -27,7 +27,7 @@ impl Layout {
     /// Derives the layout of a resolved specification.
     pub fn of(ir: &EssIr) -> Self {
         let rust = RustLayout::of(ir);
-        let mut package = format!("{}-web", ir.system.segments().join("-"));
+        let mut package = format!("{}-web", ir.system().segments().join("-"));
         // Repaired the way the Rust target repairs a component package, and for the same reason:
         // a system whose own name makes `{system}-web` collide with a crate that already exists
         // must still emit, and a deterministic rename that can itself collide is a collision with
@@ -35,7 +35,7 @@ impl Layout {
         while package == rust.package()
             || package == rust.system_package()
             || ir
-                .components
+                .components()
                 .keys()
                 .any(|component| rust.component_package(component) == package)
         {

@@ -185,7 +185,7 @@ impl Generator for AsyncApi {
     }
 
     fn generate(&self, ir: &EssIr, mint: &ProvenanceMint) -> Vec<Artifact> {
-        ir.components
+        ir.components()
             .values()
             .map(|component| {
                 let sliced = component_slice(ir, component, mint);
@@ -433,17 +433,17 @@ fn component_slice(
 ) -> SlicedProvenance {
     let mut seeds: Vec<EssSemanticRef> = vec![ComponentRef::new(component.name.clone()).into()];
     seeds.extend(
-        ir.bindings
+        ir.bindings()
             .keys()
             .map(|name| BindingRef::new(name.clone()).into()),
     );
     seeds.extend(
-        ir.commands
+        ir.commands()
             .keys()
             .map(|name| CommandRef::new(name.clone()).into()),
     );
     seeds.extend(
-        ir.components
+        ir.components()
             .keys()
             .map(|name| ComponentRef::new(name.clone()).into()),
     );
@@ -483,7 +483,7 @@ fn document(ir: &EssIr, component: &ResolvedComponent, provenance: &Provenance) 
         asyncapi: ASYNCAPI_VERSION,
         info: Info {
             title: component_title(component).to_owned(),
-            version: ir.version.to_string(),
+            version: ir.version().to_string(),
             description: Some(describe(ir, component)),
             component: component.name.to_string(),
             provenance: provenance.clone(),
@@ -559,12 +559,13 @@ fn component_title(component: &ResolvedComponent) -> &str {
 fn describe(ir: &EssIr, component: &ResolvedComponent) -> String {
     let mut parts = vec![format!(
         "`{}` in the `{}` specification.",
-        component.name, ir.system
+        component.name,
+        ir.system()
     )];
     if let Some(summary) = component.naming.summary.as_deref() {
         parts.push(summary.to_owned());
     }
-    if let Some(summary) = ir.summary.as_deref() {
+    if let Some(summary) = ir.summary().as_deref() {
         parts.push(summary.to_owned());
     }
     parts.push(
@@ -684,7 +685,7 @@ fn send(ir: &EssIr, event: &ResolvedEvent, reactions: &Reactions<'_>) -> Operati
 /// model.
 fn state_changes(ir: &EssIr, event: &ResolvedEvent) -> Vec<String> {
     let mut out = Vec::new();
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for outcome in &command.outcomes {
             if !outcome.emits.iter().any(|it| it.name() == &event.name) {
                 continue;
@@ -787,7 +788,7 @@ fn consumer(ir: &EssIr, binding: &ResolvedBinding) -> Consumer {
     // nothing owns the domain at all, which §5 permits while decomposition is partial, and the first
     // by name is then taken so the projection is at least deterministic about which it names.
     let handled_by = ir
-        .components
+        .components()
         .values()
         .find(|component| component.accepts.contains(&binding.command))
         .map(|component| component.name.to_string());

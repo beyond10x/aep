@@ -53,8 +53,8 @@ impl Provenance {
     /// derives from less than the whole model narrows through [`ProvenanceMint::of_seeds`].
     pub fn of(ir: &EssIr) -> Self {
         Self {
-            system: ir.system.to_string(),
-            specification_version: ir.version.to_string(),
+            system: ir.system().to_string(),
+            specification_version: ir.version().to_string(),
             source_digest: digest(ir),
             contract_digest: slice_digest(ir, None),
         }
@@ -156,7 +156,8 @@ fn digest(ir: &EssIr) -> String {
 
     use std::fmt::Write as _;
 
-    let json = serde_json::to_vec(ir).unwrap_or_default();
+    let json = serde_json::to_vec(ir)
+        .unwrap_or_else(|error| panic!("cannot digest an IR that does not serialize: {error}"));
     let hash = Sha256::digest(&json);
     let mut out = String::with_capacity(64);
     for byte in &hash {
@@ -295,51 +296,51 @@ fn slice_digest(
             })
             .collect(),
         None => ir
-            .domains
+            .domains()
             .keys()
             .map(|name| EssSemanticRef::from(ess_compiler::refs::DomainRef::new(name.clone())))
             .chain(
-                ir.types
+                ir.types()
                     .keys()
                     .map(|name| ess_compiler::refs::DeclaredTypeRef::new(name.clone()).into()),
             )
             .chain(
-                ir.entities
+                ir.entities()
                     .keys()
                     .map(|name| ess_compiler::refs::EntityRef::new(name.clone()).into()),
             )
             .chain(
-                ir.commands
+                ir.commands()
                     .keys()
                     .map(|name| ess_compiler::refs::CommandRef::new(name.clone()).into()),
             )
             .chain(
-                ir.events
+                ir.events()
                     .keys()
                     .map(|name| ess_compiler::refs::EventRef::new(name.clone()).into()),
             )
             .chain(
-                ir.errors
+                ir.errors()
                     .keys()
                     .map(|name| ess_compiler::refs::ErrorRef::new(name.clone()).into()),
             )
             .chain(
-                ir.views
+                ir.views()
                     .keys()
                     .map(|name| ess_compiler::refs::ViewRef::new(name.clone()).into()),
             )
             .chain(
-                ir.actors
+                ir.actors()
                     .keys()
                     .map(|name| ess_compiler::refs::ActorRef::new(name.clone()).into()),
             )
             .chain(
-                ir.bindings
+                ir.bindings()
                     .keys()
                     .map(|name| ess_compiler::refs::BindingRef::new(name.clone()).into()),
             )
             .chain(
-                ir.components
+                ir.components()
                     .keys()
                     .map(|name| ess_compiler::refs::ComponentRef::new(name.clone()).into()),
             )
@@ -351,13 +352,13 @@ fn slice_digest(
 
     let document = serde_json::json!({
         "constructs": constructs,
-        "conversions": ir.conversions,
+        "conversions": ir.conversions(),
 
-        "naming": ir.naming,
-        "summary": ir.summary,
-        "system": ir.system,
-        "version": ir.version,
-        "workloads": ir.workloads,
+        "naming": ir.naming(),
+        "summary": ir.summary(),
+        "system": ir.system(),
+        "version": ir.version(),
+        "workloads": ir.workloads(),
     });
 
     let json = serde_json::to_vec(&document).unwrap_or_else(|error| {
@@ -386,16 +387,16 @@ fn construct_content(ir: &EssIr, member: &EssSemanticRef) -> Option<serde_json::
         }
     }
     match member {
-        EssSemanticRef::Domain { name } => Some(body(ir.domains.get(name.name()))),
-        EssSemanticRef::Type { name } => Some(body(ir.types.get(name.name()))),
-        EssSemanticRef::Entity { name } => Some(body(ir.entities.get(name.name()))),
-        EssSemanticRef::Command { name } => Some(body(ir.commands.get(name.name()))),
-        EssSemanticRef::Event { name } => Some(body(ir.events.get(name.name()))),
-        EssSemanticRef::Error { name } => Some(body(ir.errors.get(name.name()))),
-        EssSemanticRef::View { name } => Some(body(ir.views.get(name.name()))),
-        EssSemanticRef::Actor { name } => Some(body(ir.actors.get(name.name()))),
-        EssSemanticRef::Binding { name } => Some(body(ir.bindings.get(name.name()))),
-        EssSemanticRef::Component { name } => Some(body(ir.components.get(name.name()))),
+        EssSemanticRef::Domain { name } => Some(body(ir.domains().get(name.name()))),
+        EssSemanticRef::Type { name } => Some(body(ir.types().get(name.name()))),
+        EssSemanticRef::Entity { name } => Some(body(ir.entities().get(name.name()))),
+        EssSemanticRef::Command { name } => Some(body(ir.commands().get(name.name()))),
+        EssSemanticRef::Event { name } => Some(body(ir.events().get(name.name()))),
+        EssSemanticRef::Error { name } => Some(body(ir.errors().get(name.name()))),
+        EssSemanticRef::View { name } => Some(body(ir.views().get(name.name()))),
+        EssSemanticRef::Actor { name } => Some(body(ir.actors().get(name.name()))),
+        EssSemanticRef::Binding { name } => Some(body(ir.bindings().get(name.name()))),
+        EssSemanticRef::Component { name } => Some(body(ir.components().get(name.name()))),
         EssSemanticRef::Outcome { .. } | EssSemanticRef::Transition { .. } => None,
     }
 }

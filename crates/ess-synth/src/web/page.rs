@@ -27,7 +27,7 @@ pub(super) fn html(bridge: &Bridge<'_>) -> String {
     let ir = bridge.ir;
     let regenerate = format!("{REGENERATE} --target {}", super::TARGET);
     let mut out = bridge.plan.provenance.html_comment_for(&regenerate);
-    let title = format!("{} {}", ir.naming.display_or(&ir.system), ir.version);
+    let title = format!("{} {}", ir.naming().display_or(ir.system()), ir.version());
     let _ = write!(
         out,
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta \

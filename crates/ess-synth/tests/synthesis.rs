@@ -151,41 +151,45 @@ fn every_construct_of_the_specification_appears_in_the_plan() {
             missing.push(format!("{kind:?} {source}"));
         }
     };
-    for name in ir.types.keys() {
+    for name in ir.types().keys() {
         require(CapabilityKind::DomainType, name.to_string());
     }
-    for name in ir.entities.keys() {
+    for name in ir.entities().keys() {
         require(CapabilityKind::EntityLifecycle, name.to_string());
     }
-    for name in ir.commands.keys() {
+    for name in ir.commands().keys() {
         require(CapabilityKind::CommandContract, name.to_string());
         require(CapabilityKind::CommandBehavior, name.to_string());
     }
-    for name in ir.events.keys() {
+    for name in ir.events().keys() {
         require(CapabilityKind::EventType, name.to_string());
     }
-    for name in ir.errors.keys() {
+    for name in ir.errors().keys() {
         require(CapabilityKind::ErrorType, name.to_string());
     }
-    for name in ir.views.keys() {
+    for name in ir.views().keys() {
         require(CapabilityKind::ViewType, name.to_string());
         require(CapabilityKind::ViewQuery, name.to_string());
     }
-    for name in ir.actors.keys() {
+    for name in ir.actors().keys() {
         require(CapabilityKind::ActorGrants, name.to_string());
     }
-    for name in ir.bindings.keys() {
+    for name in ir.bindings().keys() {
         require(CapabilityKind::BindingTransformation, name.to_string());
         require(CapabilityKind::BindingDelivery, name.to_string());
         // The billing binding escalates, so the escalation is a capability of its own — the
         // declared event exists, and filling it is owed.
         require(CapabilityKind::BindingEscalation, name.to_string());
     }
-    for name in ir.components.keys() {
+    for name in ir.components().keys() {
         require(CapabilityKind::ComponentPort, name.to_string());
         require(CapabilityKind::Workload, name.to_string());
     }
-    assert_eq!(ir.conversions.len(), 1, "the example declares one crossing");
+    assert_eq!(
+        ir.conversions().len(),
+        1,
+        "the example declares one crossing"
+    );
     require(
         CapabilityKind::Conversion,
         "billing.invoice.Email -> billing.email.EmailAddress".to_owned(),

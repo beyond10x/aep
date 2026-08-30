@@ -115,27 +115,27 @@ pub struct RawSpecFile {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Specification {
     /// The system and its domains.
-    pub system: SystemSpec,
+    system: SystemSpec,
     /// Every entity.
-    pub entities: BTreeMap<QualifiedName, EntitySpec>,
+    entities: BTreeMap<QualifiedName, EntitySpec>,
     /// Every command.
-    pub commands: BTreeMap<QualifiedName, CommandSpec>,
+    commands: BTreeMap<QualifiedName, CommandSpec>,
     /// Every event.
-    pub events: BTreeMap<QualifiedName, EventSpec>,
+    events: BTreeMap<QualifiedName, EventSpec>,
     /// Every error a command may name.
-    pub errors: BTreeMap<QualifiedName, ErrorSpec>,
+    errors: BTreeMap<QualifiedName, ErrorSpec>,
     /// Every view.
-    pub views: BTreeMap<QualifiedName, ViewSpec>,
+    views: BTreeMap<QualifiedName, ViewSpec>,
     /// Every actor.
-    pub actors: BTreeMap<QualifiedName, ActorSpec>,
+    actors: BTreeMap<QualifiedName, ActorSpec>,
     /// Every component.
-    pub components: BTreeMap<crate::component::ComponentName, crate::component::ComponentSpec>,
+    components: BTreeMap<crate::component::ComponentName, crate::component::ComponentSpec>,
     /// Every binding.
-    pub bindings: BTreeMap<crate::binding::BindingName, crate::binding::BindingSpec>,
+    bindings: BTreeMap<crate::binding::BindingName, crate::binding::BindingSpec>,
     /// The system's runtime shape, empty when nothing is stated.
-    pub topology: crate::topology::Topology,
+    topology: crate::topology::Topology,
     /// Which type crossings are permitted, and why.
-    pub conversions: crate::types::ConversionRegistry,
+    conversions: crate::types::ConversionRegistry,
 }
 
 impl RawSpecFile {
@@ -155,6 +155,63 @@ impl RawSpecFile {
 }
 
 impl Specification {
+    /// The system and its domains.
+    pub fn system(&self) -> &SystemSpec {
+        &self.system
+    }
+
+    /// Every entity, indexed by identity.
+    pub fn entities(&self) -> &BTreeMap<QualifiedName, EntitySpec> {
+        &self.entities
+    }
+
+    /// Every command, indexed by identity.
+    pub fn commands(&self) -> &BTreeMap<QualifiedName, CommandSpec> {
+        &self.commands
+    }
+
+    /// Every event, indexed by identity.
+    pub fn events(&self) -> &BTreeMap<QualifiedName, EventSpec> {
+        &self.events
+    }
+
+    /// Every declared error, indexed by identity.
+    pub fn errors(&self) -> &BTreeMap<QualifiedName, ErrorSpec> {
+        &self.errors
+    }
+
+    /// Every view, indexed by identity.
+    pub fn views(&self) -> &BTreeMap<QualifiedName, ViewSpec> {
+        &self.views
+    }
+
+    /// Every actor, indexed by identity.
+    pub fn actors(&self) -> &BTreeMap<QualifiedName, ActorSpec> {
+        &self.actors
+    }
+
+    /// Every component, indexed by identity.
+    pub fn components(
+        &self,
+    ) -> &BTreeMap<crate::component::ComponentName, crate::component::ComponentSpec> {
+        &self.components
+    }
+
+    /// Every binding, indexed by identity.
+    pub fn bindings(&self) -> &BTreeMap<crate::binding::BindingName, crate::binding::BindingSpec> {
+        &self.bindings
+    }
+
+    /// The system's runtime shape.
+    pub fn topology(&self) -> &crate::topology::Topology {
+        &self.topology
+    }
+
+    /// The permitted type crossings.
+    pub fn conversions(&self) -> &crate::types::ConversionRegistry {
+        &self.conversions
+    }
+
     /// Assembles a specification from parsed files, then checks every reference in it.
     ///
     /// Both passes accumulate: a specification with a missing type, an unknown event and a view over

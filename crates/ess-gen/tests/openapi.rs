@@ -1523,7 +1523,7 @@ fn the_document_a_server_hands_out_is_the_committed_one_in_the_other_dialect() {
     // `openapi::json`, and the repository commits `openapi::OpenApi`'s YAML. Two renderings, one
     // document — checked by parsing both, because a byte comparison across dialects says nothing.
     let ir = billing();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         let committed = document(&ir, &component.name.to_string());
         let served: Value = serde_json::from_str(&ess_gen::openapi::json(&ir, component))
             .expect("the served document is JSON");

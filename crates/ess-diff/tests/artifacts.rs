@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use ess_diff::{
     impact, ArtifactAnswer, ArtifactId, ArtifactObligation, GeneratedTree, WholeAnswer,
 };
-use support::compiled;
+use support::{compiled, compiled_with};
 
 /// The six-change report over the fixture pair, with no suite and no committed tree: the artifact
 /// answer must stand on the models alone.
@@ -277,8 +277,14 @@ fn a_change_to_the_system_header_owes_every_artifact() {
     // No artifact's slice can name the system itself, so there is nothing to narrow by — the same
     // mechanism-3 argument the scenario answer makes, at artifact granularity.
     let before = compiled("examples/revision-pair/before");
-    let mut after = before.clone();
-    after.version = ess_domain::name::Version::new(9).expect("v9");
+    let after = compiled_with("examples/revision-pair/before", |documents| {
+        let header = documents
+            .iter_mut()
+            .map(|(_, document)| document)
+            .find(|document| document.system.is_some())
+            .expect("the fixture has a header");
+        header.version = Some(ess_domain::name::Version::new(9).expect("v9"));
+    });
 
     let report = impact(&before, &after, None, None).expect("two revisions of one system");
 
@@ -295,80 +301,6 @@ fn a_change_to_the_system_header_owes_every_artifact() {
     assert_eq!(
         report.churn.generated_artifacts_owed,
         report.churn.generated_artifacts_total
-    );
-}
-
-#[test]
-fn a_model_that_moved_in_an_uncompared_family_owes_every_artifact() {
-    // Mechanism 6 for artifacts, on what remains uncompared after W7.2: a conversion's stated
-    // reason has no change family, so no change entry can name it — and although every slice's
-    // *digest* would move, no closure can be seeded at a construct the delta does not know
-    // changed. (A binding's mapping, which this test used before W7.2, now arrives as a named
-    // change entry instead — see `an_erased_binding_mapping_narrows_the_artifacts_by_name`.)
-    let before = compiled("examples/billing");
-    let mut after = before.clone();
-    let conversion = after
-        .conversions
-        .first_mut()
-        .expect("billing declares conversions");
-    conversion.because = "a different justification".to_owned();
-
-    let report = impact(&before, &after, None, None).expect("one system");
-    assert!(
-        report.delta.is_empty(),
-        "the delta has no entry for a conversion change: {:?}",
-        report.delta
-    );
-    let ArtifactAnswer::Whole { because } = &report.artifacts else {
-        panic!("an uncompared move owes everything: {:?}", report.artifacts);
-    };
-    assert_eq!(*because, WholeAnswer::UncomparedFamilyChanged);
-}
-
-#[test]
-fn an_erased_binding_mapping_narrows_the_artifacts_by_name() {
-    // The artifact half of mechanism 6's shrink. Before W7.2 this exact mutation owed all of
-    // billing's artifacts as an uncompared move; now the delta names it and the answer narrows —
-    // the AsyncAPI documents read bindings and are owed, and a type schema that rests on no
-    // binding is not.
-    let before = compiled("examples/billing");
-    let mut after = before.clone();
-    let binding = after
-        .bindings
-        .values_mut()
-        .next()
-        .expect("billing declares bindings");
-    assert!(
-        !binding.mapping.is_empty(),
-        "the binding fills something, or there is nothing to erase"
-    );
-    binding.mapping.clear();
-
-    let report = impact(&before, &after, None, None).expect("one system");
-    let ids: Vec<String> = report
-        .delta
-        .changes()
-        .iter()
-        .map(|change| change.id().to_string())
-        .collect();
-    assert!(
-        ids.iter()
-            .all(|id| id.starts_with("binding/notify-on-invoice-created/mapping-removed/")),
-        "each erased mapping entry has a name: {ids:?}"
-    );
-    assert!(!ids.is_empty(), "the erasure is at least one change");
-
-    let owed = owed(&report);
-    assert!(
-        owed.contains_key(&projection("asyncapi/invoice-service.yaml")),
-        "the AsyncAPI document reads bindings, so it is owed: {:?}",
-        owed.keys().collect::<Vec<_>>()
-    );
-    assert!(
-        !owed.contains_key(&projection(
-            "schema/types/billing.invoice.InvoiceId.schema.json"
-        )),
-        "a type schema rests on no binding, and listing it anyway would drown the answer"
     );
 }
 

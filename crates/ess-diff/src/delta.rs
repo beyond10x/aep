@@ -133,8 +133,8 @@ impl EssRevisionRef {
                 )
             });
         Self {
-            system: ir.system.clone(),
-            specification_version: ir.version,
+            system: ir.system().clone(),
+            specification_version: *ir.version(),
             spec_digest,
         }
     }

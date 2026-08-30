@@ -116,7 +116,7 @@ fn enumeration(out: &mut String, emit: &Emit<'_>, declared: &ResolvedType, varia
 
 /// The entity whose synthesised state enum this is, when it is one.
 fn state_owner<'a>(ir: &'a EssIr, type_name: &QualifiedName) -> Option<&'a QualifiedName> {
-    ir.entities
+    ir.entities()
         .values()
         .find(|entity| entity.state_type.name() == type_name)
         .map(|entity| &entity.name)

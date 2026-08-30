@@ -587,19 +587,19 @@ fn message_construct(document: &Value) -> Option<Construct> {
 /// nothing to compare it with.
 fn published_by_openapi(ir: &EssIr) -> Published {
     let mut wanted = BTreeMap::new();
-    for name in ir.types.keys() {
+    for name in ir.types().keys() {
         wanted.insert(
             name.to_string(),
             Construct::new(NAMED_TYPE, name.to_string()),
         );
     }
-    for name in ir.commands.keys() {
+    for name in ir.commands().keys() {
         wanted.insert(
             format!("{name}.Input"),
             Construct::new(COMMAND_INPUT, name.to_string()),
         );
     }
-    for name in ir.errors.keys() {
+    for name in ir.errors().keys() {
         wanted.insert(
             format!("{name}.Error"),
             Construct::new(ERROR_PAYLOAD, name.to_string()),
@@ -611,13 +611,13 @@ fn published_by_openapi(ir: &EssIr) -> Published {
 /// What the `asyncapi` projection publishes, per construct.
 fn published_by_asyncapi(ir: &EssIr) -> Published {
     let mut wanted = BTreeMap::new();
-    for name in ir.types.keys() {
+    for name in ir.types().keys() {
         wanted.insert(
             format!("type.{name}"),
             Construct::new(NAMED_TYPE, name.to_string()),
         );
     }
-    for name in ir.events.keys() {
+    for name in ir.events().keys() {
         wanted.insert(
             format!("event.{name}"),
             Construct::new(EVENT_PAYLOAD, name.to_string()),
@@ -892,7 +892,7 @@ fn the_agreement_check_compares_the_constructs_the_defect_was_about_rather_than_
 
 /// Every newtype the specification declares, by qualified name.
 fn newtypes(ir: &EssIr) -> BTreeMap<String, String> {
-    ir.types
+    ir.types()
         .iter()
         .filter_map(|(name, declared)| match &declared.body {
             ResolvedBody::Newtype { of, .. } => Some((name.to_string(), of.to_string())),
@@ -926,25 +926,25 @@ fn newtype_fields(ir: &EssIr) -> Vec<(Construct, String, String)> {
         }
     };
 
-    for (name, command) in &ir.commands {
+    for (name, command) in ir.commands() {
         carried(
             &Construct::new(COMMAND_INPUT, name.to_string()),
             &command.input,
         );
     }
-    for (name, event) in &ir.events {
+    for (name, event) in ir.events() {
         carried(
             &Construct::new(EVENT_PAYLOAD, name.to_string()),
             &event.fields,
         );
     }
-    for (name, error) in &ir.errors {
+    for (name, error) in ir.errors() {
         carried(
             &Construct::new(ERROR_PAYLOAD, name.to_string()),
             &error.fields,
         );
     }
-    for (name, kind) in &ir.types {
+    for (name, kind) in ir.types() {
         if let ResolvedBody::Struct { fields, .. } = &kind.body {
             carried(&Construct::new(NAMED_TYPE, name.to_string()), fields);
         }

@@ -254,7 +254,7 @@ fn every_component_gets_one_document_named_after_it() {
         ],
         "one document per component, and nothing else"
     );
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         let document = parsed(&ir, &format!("{component}.yaml"));
         assert_eq!(
             at(&document, &["info", "x-ess-component"]).as_str(),
@@ -910,13 +910,13 @@ fn every_event_in_the_billing_example_appears_in_some_document() {
     let ir = billing();
     let documents = documents(&ir);
     let rendered = documents.values().cloned().collect::<Vec<_>>().join("\n");
-    for name in ir.events.keys() {
+    for name in ir.events().keys() {
         assert!(
             rendered.contains(&format!("x-ess-event: {name}")),
             "`{name}` has no channel in any document"
         );
     }
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         assert!(
             rendered.contains(&format!("binding: {}", binding.name)),
             "binding `{}` appears in no document, so its delivery and failure semantics are lost",
@@ -924,7 +924,7 @@ fn every_event_in_the_billing_example_appears_in_some_document() {
         );
     }
     assert!(
-        ir.conversions
+        ir.conversions()
             .iter()
             .all(|conversion| rendered.contains(&conversion.because)),
         "a declared conversion used by a mapping carries its reason into the projection"

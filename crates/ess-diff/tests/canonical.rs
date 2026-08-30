@@ -240,11 +240,11 @@ fn a_system_still_has_no_naming_a_document_can_set() {
     for revision in ["before", "after"] {
         let ir = compiled(revision);
         assert!(
-            ir.naming.is_empty(),
+            ir.naming().is_empty(),
             "`{revision}` resolved a system naming ({:?}), so `SystemChange` now needs \
              wire-name, display-name and naming-summary variants and `system_changes` has to \
              compare them",
-            ir.naming
+            ir.naming()
         );
     }
 }
