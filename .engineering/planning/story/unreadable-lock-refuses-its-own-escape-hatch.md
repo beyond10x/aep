@@ -8,7 +8,7 @@ relations:
 - decomposes: epic:reference-driver
 - informed_by: story:protocol-drive-verb
 - serves: vision:O3
-revision: 4
+revision: 5
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 
@@ -83,3 +83,68 @@ Derived 2026-08-30 by `story-scoper`. Every line is **cited** (read from the sto
 - **Would collide with:** any unit touching `crates/protocol-cli/src/drive.rs` (its lock, `start`, `resume` or `status` paths) or `crates/protocol-cli/tests/drive_cli.rs`; secondarily anything editing `crates/aep-driver/src/lock.rs`
 
 **Not established.** **The red case named in the acceptance is not on `main`.** `crates/protocol-cli/tests/drive_cli.rs:2621` at `3d86d5b` is inside `adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_it` (starts `:2627`); `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error` exists only on branch `impl/protocol-drive-verb`, at `:2695`. `b216ce7` removed it from `main` deliberately and its message names this story as the owner — so it is restored from that branch, not found in place. The story says three verbs are wedged; the tree shows **four** call sites — `resume` (`drive.rs:820`, `take_lock` at `:889`) reads the lock too and the acceptance does not name it. Where the refusal wording lands is genuinely open: the `aep-driver` purity test blocks naming the file there, but a file-less *damaged lock* arm on `LockState::refusal` is still possible. The sibling precedent is a solution, not a location — `a_holder_cursor_that_will_not_parse_is_a_refusal_and_never_a_crash` (`drive_cli.rs:1593`) is handled inside `Holder::holder_state` by `.ok()?`, a swallow rather than a refusal message.
+
+## Left the wave of 2026-08-30 — the work is on a branch, unmerged
+
+**Status: two full adversarial passes spent, still red on its own acceptance.** The wave's routing
+budget is two attacks; after them a unit goes to a person rather than a third round. This one did.
+Nothing here is lost — the branch holds every commit and every case.
+
+| | |
+|---|---|
+| branch | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
+| commits | `ce2d1da` (first implementation), `97d7bcf` (correction after attack 1) |
+| suite at `97d7bcf` | `cargo test -p protocol-cli --no-fail-fast` → 25 suites, 557 passed, exit 0 |
+| suite with attack 2's cases | exit 101, 558 passed, 4 failed |
+| adversarial cases on the branch | 9 — 5 from pass 1 (all now green), 4 from pass 2 (red) |
+
+**Why it did not land: the acceptance is not met.** The story asks that an unreadable `lock.json`
+stop refusing `--take-lock`, the one documented route past it. After the correction, a damaged lock
+naming **another host** still refuses `--take-lock` — `Liveness::OtherHost` implies `!is_stale()`
+(`drive.rs:1770`) — and the refusal it prints names only routes on a machine that is not here:
+*"resume run `DRIVE-1/1` on a-machine-that-is-gone, or clear the lock there"*. There is no
+lock-clearing verb: `protocol drive` is `run`, `status`, `resume` and two hidden hooks
+(`website/docs/reference/cli.md:195`). The sibling arm's *"or delete the file"* is absent. So the
+escape hatch is unusable for the case it most obviously exists for, and closing that is a design
+decision about what `--take-lock` may do across hosts, not a defect fix.
+
+**What the correction did land, and it is worth keeping.** `read_lock` now maps only
+`ErrorKind::NotFound` to `Free`, so a file that will not read is damaged rather than free;
+`LockRead::DamagedNaming(Holder)` is fed by a `salvage()` that reads the prefix `serde_json` got
+through, so `--take-lock` puts the ordinary liveness question to a salvaged pid; and supersession
+unlinks before `create_new` because `fs::write` on a mode-`000` file is `EACCES` even for the owner.
+
+**Three findings attack 2 measured, each with what reaches it.**
+
+1. **`drive.rs:1552` — `Salvage::holder` requires both `pid` and `host`, and returns `None` if
+   either is missing.** Measured over all 95 byte offsets of a 94-byte `record_run` body: **18
+   offsets (40–57) hold a complete, correct `pid` and no `host`**, and every one is answered
+   `LockRead::Damaged` — the arm `--take-lock` replaces without asking. Verified end to end: a live
+   pid, replaced, a second driver started. Reaches it: `HeldLock::record_run` (`drive.rs:1357`) is
+   `fs::write`, truncate-then-write, so a crash mid-write produces exactly this. This inverts the
+   crate's own rule — `aep-driver/src/lock.rs:41` says treating an unanswerable liveness question as
+   dead is how two runs come to share a store.
+2. **`drive.rs:1698` — `replace_damaged_lock`'s doc claims the unlink plus `create_new` is atomic.**
+   It is two syscalls. Measured, 6 racers × 30 rounds: **7 rounds with 2–3 winners**, one leaving
+   `DRIVE-1/1` and `DRIVE-1/2` walking the same store. The race predates the correction
+   (`ce2d1da`'s `fs::write` raced the same way); the *claim* is new. Fix shape: create at a sibling
+   path and `rename` over.
+3. **`drive.rs:1774` — a salvaged supersession records no `stolen`.** Measured: a damaged lock
+   naming a dead local pid is superseded with no `note: this run took the lock from pid …` and no
+   `took_lock_from` in the cursor; the parseable control has both. Worse on `resume`:
+   `aep-driver/src/run.rs:558` only overwrites on `Some`, so a resume that superseded a damaged lock
+   leaves an *older* run's `took_lock_from` standing as the record of this one.
+
+**Two findings with nothing reaching them**, recorded so they are not rediscovered as new: a
+dangling symlink at `lock.json` reads `NotFound` and creates `AlreadyExists`, so `status` says
+`free` and `--take-lock` says *"released while it was being read"* for ever (`drive.rs:1523`) — no
+code in this tree creates one; and a salvaged empty `host` renders *"pid 1 on , another host"*
+(`drive.rs:1810`) — `host()` never returns empty.
+
+**What attack 2 could not break.** All 95 truncation offsets: `salvage` never names a partial pid.
+`[]`, `123`, `"a lock"` and a nested object name nobody. pid `0`, `4294967295`, `-1`, `"12"` and `1`
+all behave as documented. All 5 of pass 1's cases and the correction's own case still pass.
+
+**Owed if it is picked up again:** a `CHANGELOG.md` line — `AGENTS.md:669-672` requires one in the
+same commit for a rule that now refuses what it used to allow, and this change adds three
+user-visible strings.

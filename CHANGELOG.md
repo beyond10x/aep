@@ -126,6 +126,35 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+* **Thirteen published JSON Schemas now refuse identifiers they used to accept, and bound their
+  length.** A published `pattern` and the constructor it is published for were two hand-written
+  statements of one rule, so they drifted: `adp/2` was valid to an editor and an error to the
+  loader, and the step maps an editor called fine would not load. Every published pattern in
+  `aep-domain` and `aep-driver-spec` is now derived from one body per charset — fourteen
+  identifiers and references, not the two the defect was reported against, because fixing one of
+  two leaves the defect. `maxLength` carries the 200-character bound a regular expression cannot
+  express without counted repetition, from the single `aep_domain::ids::MAX_LENGTH` that
+  `validate` reads. **A document that loads today still loads**: every change is a tightening
+  toward the constructor, verified over 56,594 strings with zero divergences.
+  **Three divergences of the same class are left open and pinned by exact count**, so the case
+  goes red the day one moves: `FactPattern` puts `*` inside its character class (96, all
+  schema-looser; the three shipped protocols' 46 observables all agree today), `EntityType` and
+  `DomainEventType` accept an empty or bare-hyphen segment (66 and 49; neither type appears in any
+  generated schema), and `ArtifactId` refuses a leading separator its constructor takes (601, all
+  schema-stricter).
+
+* **A skill that tells its reader to edit a planning artifact by hand now fails the build.** The
+  planning store has one writer, and nothing refused a document that routed around it. A test now
+  walks all seventeen shipped documents under `integrations/` and names the file and the offending
+  line. Three shipped sentences were corrected because it refused them:
+  `skills/planning/references/store-conventions.md` said correcting a title by hand is harmless and
+  now says the title is set by `protocol artifact new --title` with no verb changing one
+  afterwards; both planning skills said *put that evidence in the artifact* and now name
+  `protocol artifact body`. The check reads the sentence a regression would write rather than the
+  four it was first given — 15 of 15 plainly-worded routing sentences are refused, against 2 of 15
+  when it was a phrase list — and `AGENTS.md` carries its three limits rather than a guarantee it
+  cannot keep.
+
 * **The website's claims about this repository are generated from the tag, not typed.**
   `cargo xtask status` already owned `docs/status.md`'s delivered-waves table; it now owns three
   more regions, and `status-check` — the second step of the gate — fails when any of them drifts.

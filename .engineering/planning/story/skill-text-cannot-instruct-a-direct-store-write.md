@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:skill-text-cannot-instruct-a-direct-store-write
 kind: story
-status: active
+status: implemented
 title: A skill that instructs a direct store write fails the build
 summary: The prohibition on hand-editing planning artifacts is guarded by a test that reads each installed skill's text, not its path.
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 4
+revision: 5
 ---
 # Story: a skill that instructs a direct store write fails the build
 
