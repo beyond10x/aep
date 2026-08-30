@@ -157,6 +157,37 @@ declare a `horizon`; past it the requirement reads `Unknown` rather than `False`
 check has not failed — nobody has run it. See
 [Evidence and completion](./concepts/evidence.md#the-two-times-on-a-record).
 
+## 6. Look at the plan in a browser
+
+Everything above is a terminal answering one question at a time. A plan is a shape, so there is one
+verb that draws it:
+
+```console
+$ $B serve
+protocol serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
+http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27
+```
+
+Open the URL it prints. You get the status columns `protocol artifact board` prints, and clicking a
+card shows what `show` and `explain` print — the artifact's fields, its body, and the rungs it may
+take next **with what each costs**, so a rung you have not earned says `needs 1 test_result, held 0`
+rather than waiting to refuse you.
+
+Clicking a rung moves the artifact, through the same decision `protocol artifact move` makes. If the
+ladder refuses, the refusal comes back with every status it *would* have permitted, each one a
+button — so the answer to the question a refusal creates is one click away.
+
+Three things worth knowing before you leave it open:
+
+* **It binds `127.0.0.1` and no flag widens it.** Reach it from another machine with `ssh -L`.
+* **The token in the URL is not authentication.** It proves you read the terminal, which is what
+  stops another page in the same browser writing to your store. A move it makes is attributed to
+  whoever a terminal move would be.
+* **`--read-only` answers reads and refuses every transition**, if you only want to look.
+
+The store is opened per request, so you can keep using the CLI in a terminal while the page is open
+and neither will show the other a stale answer.
+
 ## Machine output
 
 Every command above takes `--format json` or `--format yaml`. Refusals, decisions and evaluations
@@ -174,7 +205,7 @@ the JSON to programs.
 * [Check a transcript](./guides/check-a-transcript.md) — judge what an agent run actually did
   against a typed specification of what it was supposed to do.
 
-The CLI has seventeen top-level verbs; this page used five of them. `protocol drive` walks a
+The CLI has twenty-four top-level verbs; this page used six of them. `protocol drive` walks a
 workflow by running the steps a step map declares, and is the one that puts everything above
 together — [Where this stands](./status/where-this-stands.md) records what happened the first time
 it was pointed at a real story.

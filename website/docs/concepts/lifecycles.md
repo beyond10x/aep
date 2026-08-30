@@ -164,7 +164,8 @@ which is true in the world, and the ladder should not be kinder than the world.
 
 `correction-owed` is a rung rather than a flag for the same reason: it is the most expensive state
 an organisation can be in and the easiest one to leave undocumented, and a rung is a column
-`protocol artifact board` prints.
+`protocol artifact board` prints — and a column `protocol serve` draws in a browser, where the rungs
+an artifact may take next are buttons and the ones it has not earned carry their price.
 
 ## Every write is journalled
 
