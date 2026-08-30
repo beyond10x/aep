@@ -135,6 +135,7 @@
     "ApprovalId": {
       "description": "approval identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ApprovalRequirement": {
@@ -202,7 +203,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactRef": {
       "description": "Reference to an artifact, optionally pinned with `@<version>`.",
@@ -477,27 +479,32 @@
     "PrincipleId": {
       "description": "principle identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "PrincipleRef": {
       "description": "Reference to a principle, optionally pinned to a major version.",
       "type": "string",
-      "pattern": "^(principle:)?[a-z][a-z0-9-]*(/[1-9][0-9]*)?$"
+      "maxLength": 221,
+      "pattern": "^(principle:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(/[1-9][0-9]*)?$"
     },
     "ProfileId": {
       "description": "profile identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "ProfileVersionedRef": {
       "description": "Reference to a profile, optionally pinned to a major version.",
       "type": "string",
-      "pattern": "^(profile:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*(/[1-9][0-9]*)?$"
+      "maxLength": 219,
+      "pattern": "^(profile:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?(/[1-9][0-9]*)?$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
-      "pattern": "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$"
+      "maxLength": 220,
+      "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "RelationKind": {
       "description": "The meaning of an edge in the artifact graph.",
@@ -862,7 +869,8 @@
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$"
+      "maxLength": 401,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "Verifier": {
       "description": "A verifier class; the named classes are listed in `examples`, and any other name is treated as an external tool.",
@@ -882,12 +890,14 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "WorkflowRef": {
       "description": "Reference to a workflow, optionally pinned to a major version.",
       "type": "string",
-      "pattern": "^(workflow:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*(/[1-9][0-9]*)?$"
+      "maxLength": 220,
+      "pattern": "^(workflow:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?(/[1-9][0-9]*)?$"
     }
   }
 }

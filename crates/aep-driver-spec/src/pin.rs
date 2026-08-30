@@ -26,6 +26,15 @@ use aep_domain::error::{ValidationCode, ValidationError, ValidationErrors};
 use aep_domain::ids::WorkflowId;
 use aep_domain::version::{MajorVersion, WorkflowRef};
 
+/// The optional prefix a pin may spell, which the published pattern makes optional.
+const PREFIX: &str = "workflow:";
+
+/// How many digits the longest major version a pin can carry is written with.
+///
+/// A major version is a [`u32`], so `4294967295` is the longest one that parses, and the pattern's
+/// `[1-9][0-9]*` refuses a leading zero.
+const MAJOR_DIGITS: u32 = 10;
+
 /// A workflow reference that names a major version, such as `adp/default/1`.
 ///
 /// Obtained only by validating a [`WorkflowRef`], which is what makes possession of one the
@@ -62,15 +71,16 @@ impl PinnedWorkflowRef {
     /// Measured: every unit test in this crate stayed green under exactly that change, and the two
     /// evaluated cases above are what caught it.
     ///
-    /// **What is not closed:** `WorkflowId::PATTERN` is itself looser than `WorkflowId::new`,
-    /// which refuses an id whose last `.`/`/` component is a bare integer, so this pattern accepts
-    /// 183 pins the loader refuses — `adp/2/1` among them.
-    /// `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses` is **red on purpose**
-    /// and names them. The fix is one line in `aep-domain`, tracked as
-    /// `story:workflow-id-pattern-numeric-tail`; making this crate's copy stricter instead would
-    /// put back the second, drifting rule that the change above took out.
+    /// # Composed, not copied
+    ///
+    /// It is now literally the identifier's rule with a prefix and a version bolted on, because
+    /// `aep_domain::identifier_pattern!` hands back the charset's body as a literal and `concat!`
+    /// joins it in a `const`. Until `story:workflow-id-pattern-numeric-tail` that was not
+    /// possible without duplicating the body, and the duplicate was looser than `WorkflowId::new`
+    /// in a second way: `WorkflowId::PATTERN` itself did not carry the numeric-tail rule, so this
+    /// pattern called 183 pins valid that the loader refused, `adp/2/1` among them.
     pub const PATTERN: &'static str =
-        "^(workflow:)?[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*/[1-9][0-9]*$";
+        aep_domain::identifier_pattern!(Dotted, "^(workflow:)?", "/[1-9][0-9]*$");
 
     /// Builds a pin from an identifier and a major version, for a caller that has both already.
     pub fn new(id: WorkflowId, major: MajorVersion) -> Self {
@@ -156,6 +166,14 @@ impl schemars::JsonSchema for PinnedWorkflowRef {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        // `workflow:`, the identifier at its own bound, `/`, and a major version at the ten digits
+        // a `u32` is written with. A `pattern` cannot express a length bound and `WorkflowId::new`
+        // applies one, so without this the schema calls a 201-character pin valid and the loader
+        // refuses it. It still bounds the whole string rather than the identifier half, which is
+        // the residue `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses_past_\
+        // the_length_bound` pins by name.
+        let prefix = u32::try_from(PREFIX.len()).expect("the prefix is a short literal");
+        schema.string().max_length = Some(prefix + aep_domain::ids::MAX_LENGTH + 1 + MAJOR_DIGITS);
         schema.metadata().description = Some(
             "Reference to a workflow at a major version, such as `adp/default/1`. The version is \
              mandatory: a step map is an instruction sheet for one state graph."

@@ -680,6 +680,7 @@
     "ApprovalId": {
       "description": "approval identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Capability": {
@@ -744,6 +745,7 @@
     "EvidenceId": {
       "description": "evidence identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "EvidenceKind": {
@@ -777,16 +779,19 @@
     "ExecutionId": {
       "description": "execution identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "ObligationId": {
       "description": "obligation identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*(([./][a-z0-9]+([-_][a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*([-_][a-z0-9]+)*|[0-9]+([-_][a-z0-9]+)+))?$"
     },
     "PrincipleId": {
       "description": "principle identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Producer": {
@@ -905,21 +910,25 @@
     "ProfileId": {
       "description": "profile identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
-      "pattern": "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$"
+      "maxLength": 220,
+      "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "StateId": {
       "description": "state identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*(([./][a-z0-9]+([-_][a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*([-_][a-z0-9]+)*|[0-9]+([-_][a-z0-9]+)+))?$"
     },
     "TaskId": {
       "description": "task identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "TaskKind": {
@@ -938,12 +947,14 @@
         "documentation"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "VerificationStatus": {
       "description": "The outcome of a verification.",
@@ -996,12 +1007,14 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "WorkflowId": {
       "description": "workflow identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }
 }

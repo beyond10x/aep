@@ -4,20 +4,45 @@
 //! principle id cannot be passed where a state id is expected, and malformed ids are
 //! rejected at the parser boundary.
 //!
-//! Three charset rules are used:
+//! Four charset rules are used:
 //!
 //! | rule | shape | example |
 //! |---|---|---|
 //! | kebab | `[a-z][a-z0-9]*(-[a-z0-9]+)*` | `test-driven` |
 //! | dotted | kebab segments separated by `.` or `/` | `development.standard`, `adp/default` |
+//! | dotted-snake | as dotted, with `_` allowed inside a segment | `adversarial_verify` |
 //! | loose | alphanumeric segments separated by `.`, `-`, `_` or `/`, upper case allowed | `AUTH-142` |
 //!
 //! A trailing segment that is a bare integer is rejected for dotted ids, which keeps the
 //! `<id>/<major>` reference syntax unambiguous (see [`crate::version`]).
+//!
+//! Each rule is written twice — once as the crate-private `validate`, which the constructor
+//! runs, and once as a
+//! JSON Schema `pattern`, which an editor runs — and the two spellings must agree on every input
+//! or a document is valid to one and invalid to the other. [`identifier_pattern!`](crate::identifier_pattern) is the second
+//! spelling, in one place per rule, and every identifier and reference in the workspace composes
+//! its published pattern from it.
+//!
+//! The length bound is the part of `validate` a `pattern` cannot carry: bounding
+//! `[a-z][a-z0-9]*(-[a-z0-9]+)*` at [`MAX_LENGTH`] characters is a constraint on the sum of its
+//! parts, and a regular expression has no way to write one. It is published in the keyword that
+//! can, `maxLength`, beside every pattern here — without it the schema calls a 201-character
+//! identifier valid and the loader refuses it, which is the same defect one keyword along.
 
 use std::fmt;
 
 use crate::error::ParseError;
+
+/// The longest an identifier may be.
+///
+/// Published as `maxLength` beside every pattern these rules generate, because a `pattern` cannot
+/// express a length bound and `validate` does: without it the schema calls a 201-character
+/// identifier valid and the loader refuses it, which is the same one-rule-two-definitions defect
+/// [`identifier_pattern!`](crate::identifier_pattern) exists to remove, in a second keyword.
+///
+/// `validate` counts bytes and JSON Schema counts characters. Every charset here is ASCII-only, so
+/// a string the pattern accepts has one byte per character and the two counts are the same number.
+pub const MAX_LENGTH: u32 = 200;
 
 /// Charset rule applied to an identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,9 +87,9 @@ fn validate(value: &str, charset: Charset, kind: &'static str) -> Result<(), Par
     if value.is_empty() {
         return reject("must not be empty".to_owned());
     }
-    if value.len() > 200 {
+    if value.len() > MAX_LENGTH as usize {
         return reject(format!(
-            "must be at most 200 characters, got {}",
+            "must be at most {MAX_LENGTH} characters, got {}",
             value.len()
         ));
     }
@@ -110,9 +135,80 @@ fn validate(value: &str, charset: Charset, kind: &'static str) -> Result<(), Par
     Ok(())
 }
 
-/// Declares an identifier newtype with a charset rule and a JSON Schema pattern.
+/// The JSON Schema pattern for one charset rule, wrapped in `$prefix` and `$suffix`.
+///
+/// # Why this is a macro and not four `const`s
+///
+/// A published pattern is the *second* definition of a rule whose first definition is the
+/// crate-private `validate`, and the two have drifted every time they were written apart. `WorkflowId`'s
+/// pattern accepted `adp/2`, which `WorkflowId::new` refuses, so
+/// `schemas/generated/driver-steps.schema.json` called 183 step-map pins valid that the loader
+/// would not load; before that, `PinnedWorkflowRef` paraphrased the same rule with `-` inside the
+/// character class and accepted `adp-/1`. Both were found by evaluating the constant against the
+/// constructor, and both are the same defect: one identifier, two definitions.
+///
+/// So there is one definition per charset, here, and every identifier and every reference in the
+/// workspace composes its pattern from it — including `aep-driver-spec`'s `StepMapId` and
+/// `PinnedWorkflowRef`, which is why this is exported. `concat!` is what makes composition
+/// possible in a `const`:
+/// stable Rust cannot concatenate two `&'static str` constants, so the pieces have to still be
+/// literals when they meet.
+///
+/// `crates/aep-driver-spec/tests/published_pattern_evaluated.rs` evaluates every published pattern
+/// against its own constructor over a corpus, which is what keeps this honest — a pattern that is
+/// merely *shared* is still only as good as the one place it is written.
+///
+/// ```
+/// use aep_domain::identifier_pattern;
+/// use aep_domain::ids::WorkflowId;
+///
+/// assert_eq!(identifier_pattern!(Dotted, "^", "$"), WorkflowId::PATTERN);
+/// ```
+#[macro_export]
+macro_rules! identifier_pattern {
+    // Lower-case kebab: `test-driven`. Hyphens separate non-empty segments; they do not lead,
+    // trail or repeat, which is why `-` is between the groups and not inside the class.
+    (Kebab, $prefix:literal, $suffix:literal) => {
+        concat!($prefix, "[a-z][a-z0-9]*(-[a-z0-9]+)*", $suffix)
+    };
+    // Kebab segments joined by `.` or `/`: `adp/default`. The last `.`/`/` component may not be a
+    // bare integer, because `<id>/<major>` is a version reference — so the tail is spelled as an
+    // alternation of *has a letter in its first hyphen segment* and *is digits followed by at
+    // least one more hyphen segment*, which is `validate`'s rule and not an approximation of it.
+    (Dotted, $prefix:literal, $suffix:literal) => {
+        concat!(
+            $prefix,
+            "[a-z][a-z0-9]*(-[a-z0-9]+)*",
+            "(([./][a-z0-9]+(-[a-z0-9]+)*)*",
+            "[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?",
+            $suffix
+        )
+    };
+    // As `Dotted`, with `_` allowed beside `-` inside a component: `adversarial_verify`.
+    (DottedSnake, $prefix:literal, $suffix:literal) => {
+        concat!(
+            $prefix,
+            "[a-z][a-z0-9]*([-_][a-z0-9]+)*",
+            "(([./][a-z0-9]+([-_][a-z0-9]+)*)*",
+            "[./]([a-z0-9]*[a-z][a-z0-9]*([-_][a-z0-9]+)*|[0-9]+([-_][a-z0-9]+)+))?",
+            $suffix
+        )
+    };
+    // Mixed-case alphanumeric segments joined by `.`, `/`, `-` or `_`: `AUTH-142`. No numeric-tail
+    // rule, because a loose id is not a namespace path and carries no version reference syntax.
+    (Loose, $prefix:literal, $suffix:literal) => {
+        concat!(
+            $prefix,
+            "[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*",
+            $suffix
+        )
+    };
+}
+
+/// Declares an identifier newtype with a charset rule, whose JSON Schema pattern the
+/// charset decides.
 macro_rules! identifier {
-    ($(#[$meta:meta])* $name:ident, $charset:expr, $kind:literal, $pattern:literal) => {
+    ($(#[$meta:meta])* $name:ident, $charset:ident, $kind:literal) => {
         $(#[$meta])*
         #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
         #[serde(transparent)]
@@ -122,7 +218,7 @@ macro_rules! identifier {
             /// Parses and validates an identifier.
             pub fn new(value: impl Into<String>) -> Result<Self, ParseError> {
                 let value = value.into();
-                validate(&value, $charset, $kind)?;
+                validate(&value, Charset::$charset, $kind)?;
                 Ok(Self(value))
             }
 
@@ -135,7 +231,11 @@ macro_rules! identifier {
             ///
             /// Published in generated JSON Schema so that non-Rust consumers can apply the
             /// same rule.
-            pub const PATTERN: &'static str = $pattern;
+            ///
+            /// Derived from the charset by
+            /// [`identifier_pattern!`](crate::identifier_pattern), never written beside it: the
+            /// pattern and [`Self::new`] are two definitions of one rule, and they drift.
+            pub const PATTERN: &'static str = $crate::identifier_pattern!($charset, "^", "$");
         }
 
         impl fmt::Display for $name {
@@ -195,7 +295,8 @@ macro_rules! identifier {
                     instance_type: Some(schemars::schema::InstanceType::String.into()),
                     ..Default::default()
                 };
-                schema.string().pattern = Some($pattern.to_owned());
+                schema.string().pattern = Some(Self::PATTERN.to_owned());
+                schema.string().max_length = Some($crate::ids::MAX_LENGTH);
                 schema.metadata().description = Some(format!("{} identifier.", $kind));
                 schema.into()
             }
@@ -206,41 +307,36 @@ macro_rules! identifier {
 identifier!(
     /// Identifier of a protocol, such as `aep`, `adp` or `aop`.
     ProtocolId,
-    Charset::Kebab,
-    "protocol",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "protocol"
 );
 
 identifier!(
     /// Identifier of a principle, such as `test-driven`.
     PrincipleId,
-    Charset::Kebab,
-    "principle",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "principle"
 );
 
 identifier!(
     /// Identifier of a profile, such as `development.standard`.
     ProfileId,
-    Charset::Dotted,
-    "profile",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+    Dotted,
+    "profile"
 );
 
 identifier!(
     /// Identifier of a workflow, such as `adp/default`.
     WorkflowId,
-    Charset::Dotted,
-    "workflow",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+    Dotted,
+    "workflow"
 );
 
 identifier!(
     /// Identifier of a workflow state, such as `implement`.
     StateId,
-    Charset::DottedSnake,
-    "state",
-    "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+    DottedSnake,
+    "state"
 );
 
 identifier!(
@@ -250,65 +346,57 @@ identifier!(
     /// timed against phases (`before_implementation`), and states declare which phases they
     /// belong to.
     PhaseId,
-    Charset::Kebab,
-    "phase",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "phase"
 );
 
 identifier!(
     /// Identifier of an obligation within a principle.
     ObligationId,
-    Charset::DottedSnake,
-    "obligation",
-    "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+    DottedSnake,
+    "obligation"
 );
 
 identifier!(
     /// Identifier of an approval, such as `security-review`.
     ApprovalId,
-    Charset::Kebab,
-    "approval",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "approval"
 );
 
 identifier!(
     /// Identifier of a verified claim, such as `recovery` in `recovery_verified`.
     ClaimId,
-    Charset::Kebab,
-    "claim",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "claim"
 );
 
 identifier!(
     /// Reference to an external tool, such as `cargo-nextest`.
     ToolRef,
-    Charset::Dotted,
-    "tool",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+    Dotted,
+    "tool"
 );
 
 identifier!(
     /// Identifier of a service, such as `auth-api`.
     ServiceId,
-    Charset::Dotted,
-    "service",
-    "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+    Dotted,
+    "service"
 );
 
 identifier!(
     /// Identifier of an external provider holding artifacts, such as `linear` or `github`.
     ProviderId,
-    Charset::Kebab,
-    "provider",
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    Kebab,
+    "provider"
 );
 
 identifier!(
     /// Reference to a repository, such as `acme/payments`.
     RepositoryRef,
-    Charset::Loose,
-    "repository",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "repository"
 );
 
 identifier!(
@@ -318,17 +406,15 @@ identifier!(
     /// level gets a new [`RequestId`]. Keeping the two apart is what lets an audit trail show three
     /// attempts at one intended change rather than three changes.
     CommandId,
-    Charset::Loose,
-    "command",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "command"
 );
 
 identifier!(
     /// Identifier of one transport attempt.
     RequestId,
-    Charset::Loose,
-    "request",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "request"
 );
 
 identifier!(
@@ -338,65 +424,57 @@ identifier!(
     /// A design command, the review event it triggers, the protocol decision that follows and the
     /// implementation command after that share one correlation id and form a causation chain.
     CorrelationId,
-    Charset::Loose,
-    "correlation",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "correlation"
 );
 
 identifier!(
     /// A client-chosen key that makes a mutation safe to retry.
     IdempotencyKey,
-    Charset::Loose,
-    "idempotency key",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "idempotency key"
 );
 
 identifier!(
     /// Identifier of one audit record.
     AuditId,
-    Charset::Loose,
-    "audit",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "audit"
 );
 
 identifier!(
     /// Identifier of one domain event.
     EventId,
-    Charset::Loose,
-    "event",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "event"
 );
 
 identifier!(
     /// Identifier of one relation in the entity graph.
     RelationId,
-    Charset::Loose,
-    "relation",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "relation"
 );
 
 identifier!(
     /// Identifier of a task, such as `AUTH-142`.
     TaskId,
-    Charset::Loose,
-    "task",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "task"
 );
 
 identifier!(
     /// Identifier of a single unit of evidence.
     EvidenceId,
-    Charset::Loose,
-    "evidence",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "evidence"
 );
 
 identifier!(
     /// Identifier of a protocol execution.
     ExecutionId,
-    Charset::Loose,
-    "execution",
-    "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    Loose,
+    "execution"
 );
 
 /// What a piece of evidence or an approval is about, written `<kind>:<id>`.
@@ -447,7 +525,15 @@ impl SubjectRef {
     }
 
     /// The pattern published in generated JSON Schema.
-    pub const PATTERN: &'static str = "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$";
+    ///
+    /// Composed from the two charsets [`Self::new`] validates the halves against, rather than
+    /// paraphrased: the paraphrase it replaces took `[a-z][a-z0-9-]*` for the kind, so it accepted
+    /// `a-:x` and `a--b:x` that this constructor refuses, and `[A-Za-z0-9._/-]*` for the id, so it
+    /// refused `task:AUTH_142` that this constructor takes.
+    pub const PATTERN: &'static str = concat!(
+        identifier_pattern!(Kebab, "^", ":"),
+        identifier_pattern!(Loose, "", "$")
+    );
 }
 
 impl fmt::Display for SubjectRef {
@@ -494,6 +580,13 @@ impl schemars::JsonSchema for SubjectRef {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        // A kind, a `:` and an id, each half bounded by `validate`. The bound `Self::new` really
+        // applies is *per half*, and JSON Schema has no keyword for that: `maxLength` bounds the
+        // whole string, so `a:` followed by 201 characters stays inside 401 and is refused by the
+        // constructor. That residue is pinned by
+        // `crates/aep-driver-spec/tests/published_pattern_evaluated.rs`, which names it rather than
+        // leaving it to be rediscovered.
+        schema.string().max_length = Some(2 * MAX_LENGTH + 1);
         schema.metadata().description =
             Some("Subject of evidence, written `<kind>:<id>`.".to_owned());
         schema.into()

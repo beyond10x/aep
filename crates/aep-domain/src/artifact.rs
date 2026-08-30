@@ -719,7 +719,12 @@ impl schemars::JsonSchema for ArtifactKind {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             ..Default::default()
         };
-        schema.string().pattern = Some("^[a-z][a-z0-9-]*$".to_owned());
+        // `parse` sends anything it does not name to `PrincipleId::new`, so `Charset::Kebab`'s
+        // rule is this schema's rule. The paraphrase this replaces put `-` inside the character
+        // class and so called `adr-` and `a--b` valid that `ArtifactKind::parse` refuses. Every
+        // alias `parse` takes — `adr`, `ess`, `prd`, `spec`, `review` — is kebab-case already.
+        schema.string().pattern = Some(crate::identifier_pattern!(Kebab, "^", "$").to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
         schema.metadata().description = Some(
             "Artifact kind in kebab-case; the named vocabulary is listed in `examples`, and any \
              other kebab-case name is accepted as an organisation-specific kind."
