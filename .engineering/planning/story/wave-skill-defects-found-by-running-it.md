@@ -12,7 +12,7 @@ tags:
 relations:
 - informed_by: story:wave-as-a-surface
 - decomposes: epic:self-evaluation
-revision: 4
+revision: 5
 ---
 # Story: Seven defects the wave skill found by being run once
 
@@ -125,6 +125,55 @@ outside is where this repository's tests refuse to work. Inside the worktree ans
 is removed with the tree, and `CARGO_TARGET_TMPDIR` lands under the repository root. That is
 the recommendation — **inside, always, unless an adopting repository says otherwise** — and it
 reverses the skill's current wording rather than qualifying it.
+
+## Landed — 2026-08-30
+
+Fixes 1-6, 8 and 9 are in the plugin. Fix 7 has none by construction, and its routing answer is in
+the skill.
+
+| fix | where |
+|---|---|
+| 1. the adversary returns findings; the coordinator records them | `agents/adversary.md` § *Returning the judgement findings*, and every `review-result` instruction removed |
+| 2. green does not route to merge | `skills/wave/SKILL.md` § *Route the result* — a correction re-enters `adversarial_verify` |
+| 3. count a case that fails again after being fixed, not red rounds | same table, rewritten rows |
+| 4. attacking stops after two passes | same section |
+| 5. the implementor gates on the formatter and the linter | `agents/implementor.md` step 6 |
+| 6. an implementor checks the inferred lines of its scope first | `agents/implementor.md` § *Read before you write*, item 3 |
+| 7. two unsatisfiable cases | no fix exists; the routing sends the pair to a person |
+| 8. a wave takes its worktrees and build directories down | `SKILL.md` § *Take the worktrees down* |
+| 9. the build directory goes where the repository says | `SKILL.md` pre-flight row, and `references/branch-and-merge.md` |
+
+**Four of these were overridden by hand eight times each before they landed.** The wave of
+2026-08-30 dispatched eight adversaries, and every one carried a paragraph telling it to ignore its
+own charter's instruction to write a `review-result`. The correction rule was departed from twice
+with a written justification each time. The budget was applied from this story's Open Question
+default rather than from any rule. That is the finding worth keeping: **a defect recorded in a story
+and not carried into the plugin is a defect that gets re-litigated in every prompt**, and the cost
+is paid per dispatch, silently, by whoever writes the next one.
+
+## Three more the second wave found
+
+**10. Only `green` merges, and a coordinator will invent a fifth row.** Two units finished their
+final correction round red — correct adversarial cases, for real defects nobody was fixing that day
+— and the coordinator merged them anyway rather than letting them leave the wave, reasoning that
+deleting the cases would hide the defects. They were already filed as stories. The cost was not
+three known failures: `cargo test` without `--no-fail-fast` stops at the first failing target, so
+the deliberate red **deleted every result after it** and a gate run on `main` reported one failure
+in `aep-driver-spec` and nothing at all about `protocol-cli`. Fixed: `SKILL.md` now gives the three
+things a correct-but-unfixed case can be, and none of them is *merge it red*.
+
+**11. A whole-gate run does not survive, and one exit status is not a result.** Five of eight
+attempts to run `task check` were killed mid-flight by SIGTERM at different steps. `exit status 143`
+is a signal, not a verdict. Per-step exit capture turned an unreadable run into a full result.
+Recorded with two things a step's code cannot tell you: `postgres-check` **skipped itself and
+exited 0**, and `website` failed `127 command not found` because a fresh worktree has no
+`node_modules` — the gate cannot pass in the tree the skill tells you to run it in.
+
+**12. A deviation reported is not reported again.** The same open decision was re-listed in fifteen
+consecutive reports. The skill already said to report deviations and stay quiet otherwise; it did
+not say that a deviation, once reported, has been reported. Repeating it does not raise its
+priority — it teaches the reader that the reports are things they have already seen, which is how
+the one new line in the fifteenth gets missed.
 
 ## Acceptance
 

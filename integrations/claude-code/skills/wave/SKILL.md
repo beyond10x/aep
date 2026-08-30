@@ -74,6 +74,13 @@ already settled. Report a **deviation**: a unit that leaves the wave, a gate you
 a decision you genuinely cannot take, an incident, or a fact that changes what the operator would
 do next. If nothing has deviated, say nothing and keep going.
 
+**A deviation you have already reported is not news either.** Say it once, put it where it lives —
+a blocker artifact, a story, the wave page — and then stop repeating it. Re-listing the same open
+decision in every report does not raise its priority; it teaches the operator that your reports are
+mostly things they have already read, which is how the one new line in the fifteenth report gets
+missed. If it is genuinely blocking and genuinely unanswered, that is a reason to take the default
+you published and keep going, not a reason to ask again.
+
 This overrides the Agent tool's standing "relay what matters" for the duration of a wave. That
 instruction bounds neither how often you relay nor how much, and a wave produces a completion
 notification every few minutes: followed literally it converts the loop into a status feed. *What
@@ -197,6 +204,7 @@ the number rather than starting one that cannot finish.
 | free disk against a floor | below the floor. **Print the number**; "insufficient disk" is not actionable |
 | build cache wired up | a compiler cache is available but unset, and you are about to pay for N cold builds |
 | one measured build | you have never measured what one worktree costs. Measure it, record it, then choose N |
+| **the repository's own agent file** | you have not read it. `AGENTS.md` (or its equivalent) is where an adopting repository states the build, test and layout rules a wave has to obey — where build directories go, which gates are package-scoped, what a test fixture may assume. **Read it before you create the first tree.** This skill's defaults lose to it every time |
 
 **N is bounded by what you measured, not by what you were asked for.** A wave of five that fills
 the disk at agent four has produced nothing and destroyed four agents' work.
@@ -236,13 +244,30 @@ and may not edit the implementation.
 | Outcome | Do |
 |---|---|
 | green | merge the unit's branch into the integration branch |
-| **red, first time** | send it back to **the same implementor**, which still holds its context, with the adversary's findings |
-| **red, second time** | a **fresh** implementor, handed the findings, the previous diff, and what has already been tried |
-| **red, third time** | the unit **leaves the wave**. Record why |
+| **red, and no case has failed twice** | send it back to **the same implementor**, which still holds its context, with the findings |
+| **red, and a case failed again after being fixed** | a **fresh** implementor, handed the findings, the previous diff, and what has already been tried |
+| **red after two full attacks** | stop attacking. It goes to a person |
 
-The switch at the second failure is deliberate: an agent that has failed the same case twice has a
-wrong model of the problem, and a third round in the same context produces the same wrong fix in
-new words.
+**Count a case that fails again after being fixed — not red rounds.** These are different, and the
+difference decides whether an implementor keeps its context or loses it. An agent that fixed
+everything it was given and then failed on *new* ground found by a *new* attack has a working model
+of the problem and the freshest possible context; taking it off is a pure loss. An agent whose fix
+did not hold is the one with the wrong model, and that is what the switch is for. The first wave to
+run this skill fired the rule twice on red rounds, was defensible both times, and was wrong both
+times — which is worse than firing wrongly, because nobody notices.
+
+**Attacking has a budget, and it is two passes.** A correction re-enters `adversarial_verify` —
+`adp/default` runs `implement → verify → adversarial_verify`, so green does not route to merge and
+a second pass is the rule, not diligence. But the second pass is not the last one that would find
+something: on the wave of 2026-08-30 two units came back with 4 then 3 findings, and 4 then 5. A
+third would likely find more, and that is the argument for a person deciding rather than a number.
+After two attacks, hand it over — do not open a third.
+
+**Two adversarial cases can be mutually unsatisfiable, and no rule fixes that.** One wave produced a
+pair where satisfying either broke the other, differing only in a count the story's *Out of Scope*
+refused. The implementor was right to stop rather than satisfy both. A suite of adversarial cases is
+a specification, and two of them can disagree; when they do, that goes to a person and never to
+another correction round.
 
 A unit that leaves the wave is a **result**, not a failure to hide. A wave that reports only its
 successes has measured nothing.
@@ -309,6 +334,23 @@ a defect is severe from how bad it would be if it happened.
 2. **Read the gate's own exit status.** Not a pipeline's — a gate piped into anything reports the
    last command's status, and two commits have already been pushed here claiming a gate that never
    ran past its first step.
+
+   **Capture one exit status per step, not one for the run.** A whole-gate command is long enough to
+   be killed — by a harness timeout, by memory pressure, by a signal nobody sent on purpose — and a
+   gate that dies at step 10 of 21 tells you nothing about steps 11 to 21. `exit status 143` is a
+   signal, not a verdict, and reporting it as *the gate failed* is the same error as reading a
+   pipeline's status. Run the steps individually, record each one's own code, and you keep every
+   result the run got to before it died. On the wave of 2026-08-30 five of eight whole-gate attempts
+   were killed mid-flight; per-step capture is what turned that from nothing into a full result.
+
+   Two more things a step's exit code does not tell you, both seen on that wave:
+   **a step that skips itself still exits 0** — `postgres-check: skipped, ENTITY_POSTGRES_URL unset`
+   is indistinguishable in the status from a step that ran — and **a fresh worktree is not the
+   environment the gate expects**: the integration branch's tree has no `node_modules`, no
+   downloaded fixtures and none of whatever else was installed by hand in the main checkout, so a
+   step can fail `127 command not found` on a tree nobody has broken. Read what each step *printed*,
+   not only what it returned, and say which steps were skipped rather than folding them into a
+   count of green ones.
 3. Record the evidence the store requires for each story against the merge commit, then move each
    one to its terminal status through `protocol artifact move`.
 4. `protocol artifact validate`, and relay its output **verbatim**.

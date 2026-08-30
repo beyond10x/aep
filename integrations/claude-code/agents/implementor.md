@@ -27,9 +27,16 @@ output in your report. It is the only evidence that the green one later means so
    one.
 2. `protocol artifact graph` and the edges the unit carries. A `depends_on` that has not landed is a
    reason to stop, not a reason to build both.
-3. The tests that already exist for the code you are about to touch. A new file beside a suite that
+3. **The `## Scope` section, if the unit has one — and its `inferred` lines before anything else.**
+   A scope marks every line `cited` or `inferred`, and the marking is only worth something if the
+   inferred half is checked before it is built on. One was wrong once — a file named as a blind
+   reader was not one — and the implementor built on it, so every verdict on every driven run cited
+   nothing and only the adversary caught it. Confirm each inferred line against the tree in one
+   read, and say in your report which ones you checked and which turned out wrong. A scope is a
+   starting hypothesis, not a briefing.
+4. The tests that already exist for the code you are about to touch. A new file beside a suite that
    already covers the module is usually the wrong place.
-4. `AGENTS.md`, or whatever the repository's own instructions file is called. Its conventions beat
+5. `AGENTS.md`, or whatever the repository's own instructions file is called. Its conventions beat
    anything you would otherwise infer from the surrounding code.
 
 If the id does not resolve, stop and say so. Do not guess at a near match.
@@ -43,9 +50,17 @@ If the id does not resolve, stop and say so. Do not guess at a near match.
 | 3. Write the change | the smallest edit that satisfies the case | — |
 | 4. Run it again | a green suite | the full output, which you keep |
 | 5. Run the whole suite | no regression | the full output, which you keep |
+| 6. Run the **formatter and linter checks** | a change that will not be bounced by the gate | each command's own exit status |
 
 Step 5 is not optional and is not the same as step 4. A change that makes its own case pass and
 breaks three others has not been implemented; it has been started.
+
+**Step 6 is the one that gets skipped, and it is the cheapest of the six.** Gate on the tests *and*
+the formatter *and* the linter, package-scoped, and quote each command's own exit status — in this
+repository that is `cargo test -p <pkg>`, `cargo clippy -p <pkg> --all-targets -- -D warnings` and
+`cargo fmt --check`; read `AGENTS.md` for what it is in another. A wave once put twenty lines of
+unformatted source on an integration branch because two charters gated on tests and lints only, and
+the full gate was the first thing to see it — after every agent had finished and gone.
 
 ## Hard rules
 
