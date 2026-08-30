@@ -9,14 +9,11 @@
 //!
 //! # What the atomicity guarantee is
 //!
-//! Not chosen here. The story's first acceptance line — *written down first, as a decision with its
-//! rejected alternatives* — is met by citing the runtime's: a losing write is recorded as a
-//! [`Divergence`] and never swallowed (R-107); `catch_up` replays what the authority holds now and
-//! merges nothing (R-108); under `on_divergence: refuse` the replica is asked first so a refusal
-//! there leaves the authority untouched, and the one case that leaves — replica accepted, authority
-//! refused — is recorded as a divergence rather than described as impossible. A two-phase commit
-//! with a durable intent log is the rejected alternative, rejected by the runtime for the reason its
-//! module doc gives: it does not have one and does not pretend to.
+//! Contract commands and hydration use the policy's declared [`Authority`] directly. The authority
+//! receives the complete [`AtomicBatchStore`] transaction first; only an accepted authority batch
+//! is projected to the other side. A replica failure is a [`Divergence`] and never turns an
+//! authority success into a reported command failure. `catch_up` remains the explicit replay path
+//! and merges nothing.
 //!
 //! # Divergences survive the process
 //!
@@ -52,7 +49,9 @@ use aep_domain::time::Timestamp;
 use aep_domain::workspace::MemberName;
 use entity_core::{Decision, DomainEvent, EntityInstance};
 use entity_remote::Hybrid;
-use entity_store::{EventProvider, Expect, StateProvider, Store, StoreError};
+use entity_store::{
+    AtomicBatchStore, AtomicCommit, EventProvider, Expect, StateProvider, Store, StoreError,
+};
 
 /// The runtime's record of one disagreement, its four-word policy and the words themselves,
 /// re-exported so a caller of this crate names one `entity-runtime` pin: the workspace's.
@@ -68,49 +67,110 @@ pub const DIVERGENCES: &str = "divergences.jsonl";
 /// other. Every `Store` call is the hybrid's; the plan-shaped questions are answered by the local
 /// side.
 #[derive(Debug)]
-pub struct Composite<R>(Hybrid<MarkdownProvider, R>);
+pub struct Composite<R> {
+    local: MarkdownProvider,
+    replica: R,
+    policy: Policy,
+    divergences: Vec<Divergence>,
+}
 
 impl<R: Store> Composite<R> {
     /// The composite over the documents at `root` and `replica`, under `policy`.
     pub fn new(root: impl Into<PathBuf>, replica: R, policy: Policy) -> Self {
-        Self(Hybrid::new(MarkdownProvider::open(root), replica, policy))
+        Self {
+            local: MarkdownProvider::open(root),
+            replica,
+            policy,
+            divergences: Vec::new(),
+        }
     }
 
-    /// The hybrid itself, for its divergences and its policy.
-    pub const fn hybrid(&self) -> &Hybrid<MarkdownProvider, R> {
-        &self.0
+    /// Every divergence the replica has not reconciled.
+    pub fn divergences(&self) -> &[Divergence] {
+        &self.divergences
+    }
+
+    /// Remembers one divergence from an earlier process.
+    pub fn remember(&mut self, divergence: Divergence) {
+        if !self.divergences.contains(&divergence) {
+            self.divergences.push(divergence);
+        }
+    }
+
+    /// The declared policy. Commands and contract reads use its authority field; the other words
+    /// continue to govern explicit reconciliation outside the contract adapter.
+    pub const fn policy(&self) -> Policy {
+        self.policy
     }
 }
 
 impl<R: Store> StateProvider for Composite<R> {
     fn load(&self, entity: &str, id: &str) -> Result<Option<EntityInstance>, StoreError> {
-        self.0.load(entity, id)
+        match self.policy.authority {
+            Authority::Local => self.local.load(entity, id),
+            Authority::Remote => self.replica.load(entity, id),
+        }
     }
 
     fn ids(&self, entity: &str) -> Result<Vec<String>, StoreError> {
-        self.0.ids(entity)
+        match self.policy.authority {
+            Authority::Local => self.local.ids(entity),
+            Authority::Remote => self.replica.ids(entity),
+        }
     }
 }
 
 impl<R: Store> EventProvider for Composite<R> {
     fn events(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
-        self.0.events(entity, id)
+        match self.policy.authority {
+            Authority::Local => self.local.events(entity, id),
+            Authority::Remote => self.replica.events(entity, id),
+        }
     }
 }
 
-impl<R: Store> Store for Composite<R> {
+impl<R: AtomicBatchStore> Store for Composite<R> {
     fn commit(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
-        self.0.commit(decision, expect)
+        self.commit_batch(&[AtomicCommit::new(decision.clone(), expect)])
     }
 }
 
-impl<R: Store> PlanStore for Composite<R> {
+impl<R: AtomicBatchStore> AtomicBatchStore for Composite<R> {
+    fn commit_batch(&mut self, commits: &[AtomicCommit]) -> Result<(), StoreError> {
+        let replica_failure = match self.policy.authority {
+            Authority::Local => {
+                self.local.commit_batch(commits)?;
+                self.replica.commit_batch(commits).err()
+            }
+            Authority::Remote => {
+                self.replica.commit_batch(commits)?;
+                self.local.commit_batch(commits).err()
+            }
+        };
+        if let Some(error) = replica_failure {
+            for commit in commits {
+                let instance = &commit.decision.instance;
+                self.remember(Divergence {
+                    entity: instance.entity.clone(),
+                    id: instance.id.clone(),
+                    local_revision: instance.revision,
+                    detail: format!(
+                        "the authority committed its batch and the replica refused: {error}"
+                    ),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<R: AtomicBatchStore> PlanStore for Composite<R> {
     fn root(&self) -> &Path {
-        self.0.local().root()
+        self.local.root()
     }
 
     fn kinds(&self) -> Result<Vec<String>, StoreError> {
-        self.0.local().kinds()
+        self.local.kinds()
     }
 }
 
@@ -220,9 +280,9 @@ pub fn write_divergences(root: &Path, divergences: &[Divergence]) -> Result<(), 
 
 /// The contract over a plan kept in markdown and in a replica.
 #[derive(Debug)]
-pub struct HybridBackend<R: Store>(EntityBackend<Composite<R>, MarkdownProjection>);
+pub struct HybridBackend<R: AtomicBatchStore>(EntityBackend<Composite<R>, MarkdownProjection>);
 
-impl<R: Store> HybridBackend<R> {
+impl<R: AtomicBatchStore> HybridBackend<R> {
     /// Opens the plan at `root` with `replica` under `policy`, hydrating the contract from what the
     /// composite holds and remembering every divergence an earlier process wrote beside the plan.
     ///
@@ -245,7 +305,7 @@ impl<R: Store> HybridBackend<R> {
         let root = root.as_ref();
         let mut composite = Composite::new(root, replica, policy);
         for divergence in read_divergences(root)? {
-            composite.0.remember(divergence);
+            composite.remember(divergence);
         }
         let projection = MarkdownProjection::new(members, at, actor, lifecycles);
         Ok(Self(EntityBackend::shaped(composite, projection)?))
@@ -254,12 +314,12 @@ impl<R: Store> HybridBackend<R> {
     /// Every divergence outstanding: recorded by this process or handed back from the file.
     pub fn divergences(&self) -> Vec<Divergence> {
         self.0
-            .with_store(|composite| composite.hybrid().divergences().to_vec())
+            .with_store(|composite| composite.divergences().to_vec())
     }
 
     /// The policy in force.
     pub fn policy(&self) -> Policy {
-        self.0.with_store(|composite| composite.hybrid().policy())
+        self.0.with_store(Composite::policy)
     }
 
     /// The fault that made this backend untrustworthy, if one has happened.
@@ -287,14 +347,14 @@ impl<R: Store> HybridBackend<R> {
         let (root, divergences) = self.0.with_store(|composite| {
             (
                 composite.root().to_path_buf(),
-                composite.hybrid().divergences().to_vec(),
+                composite.divergences().to_vec(),
             )
         });
         write_divergences(&root, &divergences)
     }
 }
 
-impl<R: Store> CommandService for HybridBackend<R> {
+impl<R: AtomicBatchStore> CommandService for HybridBackend<R> {
     type Command = Command;
 
     async fn execute(
@@ -312,7 +372,7 @@ impl<R: Store> CommandService for HybridBackend<R> {
     }
 }
 
-impl<R: Store> QueryService for HybridBackend<R> {
+impl<R: AtomicBatchStore> QueryService for HybridBackend<R> {
     type AuditRecord = AuditRecord;
 
     async fn get(
@@ -381,14 +441,14 @@ pub fn catch_up<R: Store>(
     replica: R,
     policy: Policy,
 ) -> Result<CatchUp, CommandError> {
-    let mut composite = Composite::new(root, replica, policy);
+    let mut hybrid = Hybrid::new(MarkdownProvider::open(root), replica, policy);
     let recorded = read_divergences(root)?;
     let found = recorded.len();
     for divergence in recorded {
-        composite.0.remember(divergence);
+        hybrid.remember(divergence);
     }
-    composite.0.catch_up();
-    let outstanding = composite.hybrid().divergences().to_vec();
+    hybrid.catch_up();
+    let outstanding = hybrid.divergences().to_vec();
     write_divergences(root, &outstanding)?;
     Ok(CatchUp { found, outstanding })
 }

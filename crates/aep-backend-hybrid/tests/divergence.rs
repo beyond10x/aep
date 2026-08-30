@@ -15,7 +15,9 @@ use aep_domain::time::Timestamp;
 use entity_core::{Decision, DomainEvent, EntityInstance};
 use entity_remote::{Authority, OnDivergence, Policy, ReadPath, WhenUnreachable};
 use entity_sqlite::SqliteStore;
-use entity_store::{EventProvider, Expect, StateProvider, Store, StoreError};
+use entity_store::{
+    AtomicBatchStore, AtomicCommit, EventProvider, Expect, StateProvider, Store, StoreError,
+};
 
 fn scratch(name: &str) -> PathBuf {
     let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -61,6 +63,15 @@ impl<R: EventProvider> EventProvider for Down<R> {
 
 impl<R: Store> Store for Down<R> {
     fn commit(&mut self, _: &Decision, _: Expect) -> Result<(), StoreError> {
+        Err(StoreError::Unreachable {
+            provider: "replica".to_owned(),
+            detail: "the replica is not taking writes".to_owned(),
+        })
+    }
+}
+
+impl<R: AtomicBatchStore> AtomicBatchStore for Down<R> {
+    fn commit_batch(&mut self, _: &[AtomicCommit]) -> Result<(), StoreError> {
         Err(StoreError::Unreachable {
             provider: "replica".to_owned(),
             detail: "the replica is not taking writes".to_owned(),

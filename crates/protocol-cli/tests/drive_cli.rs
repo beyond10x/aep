@@ -925,14 +925,16 @@ fn a_relation_the_workspace_declares_does_not_stop_a_run_before_it_starts() {
 /// halfway through a run that has already spent a budget.
 #[test]
 fn the_checks_map_plans_against_the_repositorys_own_task() {
-    let registry = aep_engine::load::load_tree(&root()).expect("the document tree loads");
+    let documents = aep_project::load_tree_report(&root());
+    assert!(documents.failures.is_empty(), "{:?}", documents.failures);
     let text = std::fs::read_to_string(root().join(".engineering/task.yaml"))
         .expect("the repository's own task document is readable");
     let task = aep_schema::parse::task(&text, Some(".engineering/task.yaml")).expect("it parses");
-    let plan = aep_engine::resolve(&task, &registry).expect("it resolves");
+    let plan = aep_engine::resolve(&task, &documents.registry).expect("it resolves");
     let id = "development/checks".parse().expect("a step map id");
-    let map = registry
-        .step_map(&id)
+    let map = documents
+        .drivers
+        .get(&id)
         .expect("the checks map is in the tree");
 
     let refusals = map.check_run(&plan.protocol, &plan.workflow);

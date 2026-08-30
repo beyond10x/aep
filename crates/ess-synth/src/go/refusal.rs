@@ -100,7 +100,7 @@ fn refuse_declarations(
     plan: &SynthesisPlan,
     refused: &mut BTreeMap<Capability, String>,
 ) {
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         if let Some(refusal) = body_refusal(ir, &declared.body) {
             let refusal = refusal.under(format!("`{}`", declared.name));
             insert(
@@ -112,7 +112,7 @@ fn refuse_declarations(
             );
         }
     }
-    for entity in ir.entities.values() {
+    for entity in ir.entities().values() {
         let fields = std::iter::once(&entity.identity).chain(entity.fields.iter());
         if let Some(refusal) = fields_refusal(ir, fields) {
             let refusal = refusal.under(format!("`{}`", entity.name));
@@ -125,7 +125,7 @@ fn refuse_declarations(
             );
         }
     }
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         if let Some(refusal) = fields_refusal(ir, event.fields.iter()) {
             let refusal = refusal.under(format!("`{}`", event.name));
             insert(
@@ -137,7 +137,7 @@ fn refuse_declarations(
             );
         }
     }
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         if let Some(refusal) = fields_refusal(ir, error.fields.iter()) {
             let refusal = refusal.under(format!("`{}`", error.name));
             insert(
@@ -149,7 +149,7 @@ fn refuse_declarations(
             );
         }
     }
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         if let Some(refusal) = fields_refusal(ir, view.fields.iter()) {
             let refusal = refusal.under(format!("`{}`", view.name));
             let source = view.name.to_string();
@@ -161,7 +161,7 @@ fn refuse_declarations(
 
 /// A command, and everything its outcomes name.
 fn refuse_commands(ir: &EssIr, plan: &SynthesisPlan, refused: &mut BTreeMap<Capability, String>) {
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         let mut refusal = fields_refusal(ir, command.input.iter());
         for outcome in &command.outcomes {
             for event in &outcome.emits {
@@ -204,7 +204,7 @@ fn refuse_conversions(
     plan: &SynthesisPlan,
     refused: &mut BTreeMap<Capability, String>,
 ) {
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         let refusal = type_refusal(ir, &conversion.from)
             .map(|found| found.under(format!("`{}`", conversion.from)))
             .or_else(|| {
@@ -257,7 +257,7 @@ fn cascade(ir: &EssIr, plan: &SynthesisPlan, refused: &mut BTreeMap<Capability, 
     };
 
     let mut ports: BTreeMap<Capability, String> = BTreeMap::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         let mut because = None;
         for command in &component.accepts {
             because = because.or_else(|| {
@@ -291,7 +291,7 @@ fn cascade(ir: &EssIr, plan: &SynthesisPlan, refused: &mut BTreeMap<Capability, 
     }
 
     let mut bindings: BTreeMap<Capability, String> = BTreeMap::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let mut because = reason(
             refused,
             CapabilityKind::EventType,

@@ -206,18 +206,18 @@ fn the_fixture_compiles_from_the_files_it_lives_in() {
     let ir = compiled(FIXTURE);
 
     assert_eq!(
-        ir.system.to_string(),
+        ir.system().to_string(),
         "oracle",
         "the fixture is the `oracle` system"
     );
     assert_eq!(
-        ir.domains.len(),
+        ir.domains().len(),
         2,
         "two bounded contexts, so a binding crosses one: {:?}",
-        ir.domains.keys().collect::<Vec<_>>()
+        ir.domains().keys().collect::<Vec<_>>()
     );
     assert!(
-        !ir.bindings.is_empty() && !ir.components.is_empty(),
+        !ir.bindings().is_empty() && !ir.components().is_empty(),
         "a fixture for the oracle without components or bindings specifies nothing executable"
     );
 }
@@ -227,7 +227,7 @@ fn every_on_failure_policy_the_model_has_is_reachable_in_this_fixture() {
     let ir = compiled(FIXTURE);
 
     let used: Vec<Failure> = ir
-        .bindings
+        .bindings()
         .values()
         .map(|binding| binding.failure)
         .collect();
@@ -263,9 +263,9 @@ fn dropping_one_binding_leaves_others_with_scenarios_of_their_own() {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
     );
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let elsewhere = ir
-            .bindings
+            .bindings()
             .values()
             .filter(|other| other.event != binding.event)
             .count();
@@ -281,7 +281,7 @@ fn dropping_one_binding_leaves_others_with_scenarios_of_their_own() {
 fn the_command_every_binding_invokes_can_be_forced_to_fail() {
     let ir = compiled(FIXTURE);
 
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let command = ir.command(&binding.command);
         let forceable = command
             .outcomes
@@ -304,7 +304,7 @@ fn a_row_reaches_the_read_your_writes_view_after_a_single_command() {
     let ir = compiled(FIXTURE);
 
     let mut checked = 0_usize;
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         if view.consistency != Consistency::ReadYourWrites {
             continue;
         }
@@ -345,7 +345,7 @@ fn the_eventual_view_converges_on_a_state_the_creating_command_does_not_reach() 
     let ir = compiled(FIXTURE);
 
     let mut checked = 0_usize;
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         if view.consistency != Consistency::Eventual {
             continue;
         }
@@ -445,7 +445,7 @@ fn a_binding_maps_an_event_field_that_has_a_same_typed_sibling() {
     let ir = compiled(FIXTURE);
 
     let mut swappable = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let event = ir.event(&binding.event);
         for mapping in &binding.mapping {
             if let ResolvedMappingValue::EventField { field, type_ref } = &mapping.value {
@@ -484,13 +484,13 @@ const REQUIREMENTS: &[Requirement] = &[
     (
         "F-WRONG-EVENT",
         "an outcome emits an event, and another event exists to emit instead",
-        |ir| ir.events.len() >= 2 && ir.commands.values().any(|c| c.emits().next().is_some()),
+        |ir| ir.events().len() >= 2 && ir.commands().values().any(|c| c.emits().next().is_some()),
     ),
     (
         "F-REJECTION",
         "a command declares a refusal that changes nothing",
         |ir| {
-            ir.commands.values().any(|command| {
+            ir.commands().values().any(|command| {
                 command
                     .outcomes
                     .iter()
@@ -523,7 +523,7 @@ const REQUIREMENTS: &[Requirement] = &[
         "F-WRONG-MAPPING",
         "a mapped event field has a same-typed sibling to be swapped with",
         |ir| {
-            ir.bindings.values().any(|binding| {
+            ir.bindings().values().any(|binding| {
                 let event = ir.event(&binding.event);
                 binding.mapping.iter().any(|mapping| match &mapping.value {
                     ResolvedMappingValue::EventField { field, type_ref } => event
@@ -539,7 +539,7 @@ const REQUIREMENTS: &[Requirement] = &[
         "F-VIEW-RACE",
         "a read-your-writes view holds a row at a state a command reaches",
         |ir| {
-            ir.views.values().any(|view| {
+            ir.views().values().any(|view| {
                 view.consistency == Consistency::ReadYourWrites
                     && selecting_states(ir, &view.source)
                         .get(&view.name.to_string())
@@ -551,7 +551,7 @@ const REQUIREMENTS: &[Requirement] = &[
         "F-EXTERNAL-OUTCOME",
         "an outcome no input decides, which a scenario injects",
         |ir| {
-            ir.commands.values().any(|command| {
+            ir.commands().values().any(|command| {
                 command
                     .outcomes
                     .iter()
@@ -566,7 +566,7 @@ const REQUIREMENTS: &[Requirement] = &[
             [Consistency::ReadYourWrites, Consistency::Eventual]
                 .iter()
                 .all(|wanted| {
-                    ir.views.values().any(|view| {
+                    ir.views().values().any(|view| {
                         view.consistency == *wanted
                             && selecting_states(ir, &view.source)
                                 .get(&view.name.to_string())
@@ -579,7 +579,7 @@ const REQUIREMENTS: &[Requirement] = &[
         "C-REFUSAL-INPUT",
         "an element synthesis must refuse a check for rather than invent one (§18, §50)",
         |ir| {
-            ir.bindings
+            ir.bindings()
                 .values()
                 .any(|binding| binding.failure == Failure::Drop)
         },

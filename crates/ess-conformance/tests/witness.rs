@@ -178,7 +178,7 @@ fn compiled() -> EssIr {
 
 /// One of the fixture's commands.
 fn command<'ir>(ir: &'ir EssIr, name: &str) -> &'ir ResolvedCommand {
-    ir.commands
+    ir.commands()
         .get(&QualifiedName::new(name).expect("a valid name"))
         .expect("the fixture declares it")
 }

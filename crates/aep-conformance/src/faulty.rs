@@ -226,6 +226,7 @@ impl<B: QueryService<AuditRecord = AuditRecord>> QueryService for FaultyBackend<
             effective.relation = None;
             effective.organisation = None;
             effective.space = None;
+            effective.after = None;
         }
 
         match self.inner.query(&effective).await {

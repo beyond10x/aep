@@ -1,33 +1,30 @@
-# The `gate` job below mirrors `task check` in Taskfile.yml, step for step and in the same order. The
-# two must stay in step: a contributor who runs `task check` locally and lands a green change should
-# never be told something different by CI. If you add a step here, add it to the Taskfile, and the
-# other way round.
+# CI provisions the environment and delegates verification to the repository's one gate.
+# `cargo xtask status --check` fails if this workflow stops invoking `task check`, so the Taskfile
+# cannot quietly acquire a shorter CI-shaped twin again.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  # Callable, so `release.yml` can run *this* gate against a tag rather than a shorter copy of it.
-  # A release that verified something other than what CI verifies is a release nobody can read.
   workflow_call:
 
-# Cancel superseded runs on the same ref — a force-push should not leave stale jobs burning minutes.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  ENTITY_POSTGRES_URL: postgres://aep:aep@127.0.0.1:5432/aep
 
 jobs:
   gate:
     name: Gate
     runs-on: ubuntu-latest
-    # A hung job holds a runner for six hours on GitHub's default. Nothing here takes more than a few
-    # minutes, so these ceilings are only ever reached by a hang, never by honest work.
-    timeout-minutes: 30
-    # The one backend that needs a server gets one here, and nowhere else.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
@@ -44,282 +41,37 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch the annotated release record
+        run: git fetch --tags --force --prune origin
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
 
-      # The Test step runs `xtask`'s own tests, and those write both synthesised trees and then
-      # build them — `gofmt -l`, `go build ./...`, `go vet ./...` inside the Go module. The check
-      # never skips when the toolchain is missing (it fails and names it), so the toolchain has to
-      # be here. The version tracks the `go` directive the emitter pins, not whatever is newest.
+      - name: Install the declared MSRV toolchain
+        run: rustup toolchain install 1.85.0 --profile minimal
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.21"
 
-      # The same step writes the browser realization and then builds it, so `cargo test` needs the
-      # WebAssembly target and Node as well. Neither is optional: the check names what is missing
-      # rather than skipping, because a skipped check reads exactly like a passing one.
-      - run: rustup target add wasm32-unknown-unknown
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - uses: Swatinem/rust-cache@v2
-
-      # Ordered cheapest-first, as the Taskfile is: formatting tells you in seconds, tests take
-      # minutes, and there is no point compiling a branch that will fail on a missing newline.
-      # Through xtask rather than `cargo fmt --all`, because `--all` also formats local path
-      # dependencies — which would hand the synthesised workspaces under `generated/rust/` to
-      # rustfmt when the emitter owns their bytes. Mirrors `task fmt-check`.
-      - name: Format
-        run: cargo xtask fmt --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Test
-        run: cargo test --workspace
-
-      # The one backend that needs a server, against the service below. Mirrors `task postgres-check`.
-      - name: Postgres backend
-        env:
-          ENTITY_POSTGRES_URL: postgres://aep:aep@127.0.0.1:5432/aep
-        run: scripts/postgres-check.sh
-
-      # A step, not a job — the opposite call from `schemas` and `projections` below, and for a
-      # reason. Those two check committed artifacts for drift and are fixed by rerunning a generator,
-      # so each is its own kind of failure and earns its own compile. This one checks the source a
-      # contributor just edited, the same class of defect as Clippy, and it reuses the dependency
-      # build the Test step has already paid for: 2s marginal, against roughly two minutes for a
-      # separate job that would compile the whole dependency graph again to learn the same thing.
-      #
-      # Clippy already denies `missing_docs`, so this is not that. What only rustdoc sees is the rest
-      # of invariant 11: intra-doc links that resolve to nothing, public documentation pointing at
-      # private items, and redundant explicit link targets. Doc comments in this repository carry the
-      # design reasoning, so a link that goes nowhere is a real defect and not a cosmetic one.
-      # Mirrors `task doc-check`.
-      - name: Docs
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps
-
-  # Its own job so schema drift reads as schema drift. Folded into the gate it would surface as "one of
-  # four steps failed" behind a test log; here the failing check's name says that `schemas/generated/`
-  # no longer matches the Rust types, and the fix is `cargo xtask schema`.
-  schemas:
-    name: Schemas up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check generated schemas
-        run: cargo xtask schema --check
-
-  # Its own job for the reason `schemas` is: a stale delivered-waves record reads as a stale
-  # record, not as "the gate failed". The table in docs/status.md is derived from the annotated
-  # tags — the one status surface that kept going stale when it was maintained by hand — and this
-  # job fails when the committed block no longer matches what the tags say shipped. The fix is
-  # `cargo xtask status`. It is the one job that needs the tags: `actions/checkout` omits them by
-  # default, and the check fails loudly on a tagless clone rather than passing on an empty record.
-  status:
-    name: Delivered-waves record up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # `fetch-tags: true` alone is not enough: the default shallow, SHA-pinned fetch
-          # leaves the tags behind (actions/checkout#1471), and `xtask status --check` then
-          # refuses because a tagless clone reads exactly like a project that shipped nothing.
-          fetch-depth: 0
-          fetch-tags: true
-
-      # Belt and braces, and it earned both: on a **tag** ref — which is how `release.yml` calls
-      # this workflow — `fetch-tags` above still left the other tags behind, and the check failed
-      # on 0.24.0 with a record that was correct in the commit it was checking. An explicit fetch
-      # is cheap and does not depend on which ref triggered the run.
-      - name: Fetch the tags this check reads
-        run: git fetch --tags --force --prune origin
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check the delivered-waves record
+      - name: Install go-task
         run: |
-          echo "tags visible: $(git tag | wc -l)"
-          cargo xtask status --check
-
-      # Same job because it reads the same thing — the tags — and the fetch above is what makes
-      # either check possible. `protocol --version` prints the workspace version, so a version that
-      # does not move with the releases makes every build report the same string for ever, and an
-      # installed binary from three weeks ago cannot be told from the current one.
-      - name: Check the workspace version against the newest tag
-        run: cargo xtask version
-
-      # Reads only `Cargo.lock`. Two versions of `entity-core` were compiled into this workspace for
-      # two releases — one deciding every status move, one under the SQLite backend — and nothing in
-      # the gate said so. Mirrors `task dep-check`.
-      - name: Check the entity-runtime pin is one
-        run: cargo xtask deps
-
-      # Cheap, and it reads only source. A test body that appears in two crates is either a shared
-      # behaviour that belongs in a shared suite, or a test named for a property it does not assert.
-      - name: Check no test body is duplicated across crates
-        run: cargo xtask guards
-
-      # Reads the tags this job already fetched: a released `### Fixed` bullet must name something
-      # that existed at the previous release, or a user of that release cannot have hit it.
-      - name: Check released Fixed entries against the previous release
-        run: cargo xtask claims
-
-  # Its own job for the same reason as `schemas`: a stale projection reads as a stale projection.
-  # A generated OpenAPI document that no longer matches the specification is a contract someone is
-  # building against, and "the gate failed" would bury that behind a test log. The fix is
-  # `cargo xtask generate`.
-  projections:
-    name: Projections up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check generated projections
-        run: cargo xtask generate --check
-
-  # Its own job for the reason `projections` is: stale observation IR reads as stale observation
-  # IR. The committed `examples/k3d-dev-cluster/cluster.ir.json` is what IW2's graph and diagnosis
-  # work is reviewed against, and a document that no longer matches what its observation compiles
-  # to certifies a cluster state nobody observed. Since IW3 the same job also owns
-  # `simulation.json` and `drift.json` — the three-valued report and the snapshot comparison — and
-  # they are here for a sharper version of the same reason: a rule that quietly starts answering
-  # `false` where it answered `unknown` moves those bytes and nothing else. Since IW4 it owns the
-  # `projection/` tree as well, where the same argument is sharpest: those files are *changes to a
-  # cluster* that a reader is meant to review and apply, so a rule that starts writing a patch
-  # where it used to write an obligation has to arrive as a diff of the patch, not as a silent
-  # widening. That output is a tree and gets an orphan scan with it — a patch nothing generates
-  # any more still reads like a proposal. The fix is `cargo xtask infra`.
-  infra:
-    name: Observation IR, simulation, drift and projection up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check the committed observation IR, simulation, drift and projection
-        run: cargo xtask infra --check
-
-  # Its own job for the same reason again, and it is the reason that matters most here: a conformance
-  # suite is a contract an implementation is built against, and a stale one holds fewer checks than
-  # the specification requires — which no passing run can show. The failing check's name says that
-  # `suites/generated/` no longer matches what `examples/` obliges, and the fix is `cargo xtask
-  # suite`. Beside `projections` rather than inside it because `generated/` has one owner; see
-  # `xtask/src/main.rs`.
-  suites:
-    name: Conformance suites up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check generated conformance suites
-        run: cargo xtask suite --check
-
-  # Its own job for the reason `suites` is, plus four of its own: this check also runs `cargo
-  # check` *inside* each committed workspace, then the committed billing suite against that
-  # workspace linked with `examples/billing-realization`, then the browser boundary, then the
-  # dual-target demonstration — so it fails for five distinguishable reasons. A tree drifted from its specification (fix: `cargo xtask
-  # synth`); a tree matches and no longer builds — `cargo check` for the Rust workspace,
-  # `gofmt -l` / `go build` / `go vet` for the Go module, `cargo build --target
-  # wasm32-unknown-unknown` for the browser bridge — which is a defect in `ess-synth` rather than
-  # in any specification; the emitted page calls an export its module does not have, which is this
-  # format's dangling reference and fails at the click rather than at the build; or a linked system
-  # no longer holds — the honest linkage must pass all 27 scenarios, the deliberately corrupted one
-  # must fail exactly the scenario that exists to catch it, and the realized WebAssembly module
-  # must still answer the page; or the two applications synthesised from `examples/gatepass` no
-  # longer behave as one system — this step builds both, starts each on an ephemeral port, and
-  # compares their startup records outside `runtime`, every status, every body as a value, and the
-  # two documents they publish about themselves byte for byte. Folded into the gate, all five would
-  # read as "one of nine steps failed".
-  synthesis:
-    name: Synthesised trees up to date
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      # The second emitter's tree is checked with the Go toolchain, not with prose: `gofmt -l` must
-      # be empty (the emitter writes already-formatted source), `go build ./...` and `go vet ./...`
-      # must pass. Pinned to the `go` directive the emitter writes into every generated `go.mod`, so
-      # this job proves the committed module builds on the oldest toolchain it claims to support.
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      # The third emitter's tree is a WebAssembly module and the page that drives it, so this job
-      # needs the target it builds for and a JavaScript runtime to load the result outside a
-      # browser. The smoke test imports the committed `bridge.js` rather than reimplementing the
-      # boundary, which is what makes it a test of the page's own glue.
-      - run: rustup target add wasm32-unknown-unknown
+          go install github.com/go-task/task/v3/cmd/task@v3.52.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check the synthesised Rust, Go and browser trees, and run the dual-target demonstration
-        run: cargo xtask synth --check
-
-  # Its own job because it is its own toolchain, which a step in `gate` cannot be. `rust-version =
-  # "1.85"` in Cargo.toml is a promise to anyone who depends on these crates, and until this job
-  # existed nothing in the repository would have noticed it breaking.
-  #
-  # It builds and does not test, deliberately. `rust-version` is a promise about consuming the
-  # published crates, and a consumer never builds this workspace's dev-dependencies. `cargo test` on
-  # 1.85 does not compile and fail — it refuses to resolve at all, because the dev-dependency
-  # `jsonschema` pulls `idna 1.1` -> `idna_adapter 1.2.2` (requires 1.86) -> `icu_* 2.3` (requires
-  # 1.88). Running the tests on 1.85 would mean pinning those back or raising the declared MSRV, and
-  # that is a decision about what this repository supports rather than something CI should settle.
-  # Until it is taken, this job checks exactly the surface the promise covers: every lib and bin.
-  #
-  # `--locked` is load-bearing. Without it 1.85's MSRV-aware resolver may quietly select older
-  # versions than the committed Cargo.lock, and the job would then vouch for a dependency set that
-  # nobody actually ships.
-  msrv:
-    name: MSRV 1.85
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@1.85.0
-
-      # No extra cache key is needed here. rust-cache's default key already includes the rustc
-      # release, host and hash alongside the job id, so this job's 1.85 artifacts can never be handed
-      # to the stable jobs, nor theirs to it.
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build on the declared MSRV
-        run: cargo build --workspace --locked
+      - name: Run the repository gate
+        run: task check

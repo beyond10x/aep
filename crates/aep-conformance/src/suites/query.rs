@@ -15,7 +15,9 @@
 //! is checked instead is that everything returned satisfies the filter, and that nothing which
 //! satisfies it is missing.
 
-use aep_contract::query::{EntityEnvelope, EntityQuery, Page};
+use std::collections::BTreeSet;
+
+use aep_contract::query::{Cursor, EntityEnvelope, EntityQuery, Page};
 use aep_contract::testing::block_on;
 use aep_domain::artifact::RelationKind;
 use aep_domain::command::{Command, CreateRelation};
@@ -172,23 +174,77 @@ pub fn run<B: Backend>(backend: &B) -> SuiteReport {
     let mut truncated = EntityQuery::default().matching(MARKER, Node::from(MARKER));
     truncated.limit = Some(2);
     match find(backend, &truncated) {
-        Ok(page) => report.expect(
-            "a limit truncates the page and says where to continue from",
-            page.len() == 2 && page.has_more(),
-            format!(
-                "this suite created three entities; a limit of 2 returned {} of them and {} a \
-                 continuation",
-                page.len(),
-                if page.has_more() {
-                    "reported"
-                } else {
-                    "reported no"
+        Ok(page) => {
+            report.expect(
+                "a limit truncates the page and says where to continue from",
+                page.len() == 2 && page.has_more(),
+                format!(
+                    "this suite created three entities; a limit of 2 returned {} of them and {} a \
+                     continuation",
+                    page.len(),
+                    if page.has_more() {
+                        "reported"
+                    } else {
+                        "reported no"
+                    }
+                ),
+            );
+            let first: BTreeSet<_> = page
+                .items
+                .iter()
+                .map(|entity| entity.metadata.id.clone())
+                .collect();
+            let mut continuation = truncated.clone();
+            continuation.after = page.next;
+            match find(backend, &continuation) {
+                Ok(next) => {
+                    let second: BTreeSet<_> = next
+                        .items
+                        .iter()
+                        .map(|entity| entity.metadata.id.clone())
+                        .collect();
+                    report.expect(
+                        "an entity cursor advances to every remaining match without duplicates",
+                        first.is_disjoint(&second)
+                            && first.len() + second.len() == 3
+                            && !next.has_more(),
+                        format!(
+                            "the first page held {} distinct entities and the continuation held {} \
+                             distinct entities; overlap={:?}, next={:?}",
+                            first.len(),
+                            second.len(),
+                            first.intersection(&second).collect::<Vec<_>>(),
+                            next.next
+                        ),
+                    );
                 }
-            ),
-        ),
+                Err(error) => report.aborted(
+                    "an entity cursor advances to every remaining match without duplicates",
+                    error,
+                ),
+            }
+        }
         Err(error) => report.aborted(
             "a limit truncates the page and says where to continue from",
             error,
+        ),
+    }
+
+    let mut malformed = EntityQuery::default().matching(MARKER, Node::from(MARKER));
+    malformed.after = Some(Cursor("page-two".to_owned()));
+    match block_on(backend.query(&malformed)) {
+        Err(error) => report.expect(
+            "a malformed entity cursor is refused as an invalid query",
+            error.code() == "invalid",
+            format!(
+                "the malformed cursor was refused as `{}`: {error}",
+                error.code()
+            ),
+        ),
+        Ok(page) => report.expect(
+            "a malformed entity cursor is refused as an invalid query",
+            false,
+            format!("the malformed cursor returned {} entities", page.len()),
         ),
     }
 
@@ -313,6 +369,19 @@ mod tests {
             !report.passed(),
             "a filter that is accepted and ignored answers a question nobody asked, and the caller \
              cannot tell: {report}"
+        );
+    }
+
+    #[test]
+    fn a_backend_that_repeats_the_first_page_does_not_pass() {
+        let report = run(&FaultyBackend::new(
+            MemoryBackend::new(),
+            Fault::IgnoreQueryFilters,
+        ));
+        assert!(
+            report.failures().any(|check| check.name
+                == "an entity cursor advances to every remaining match without duplicates"),
+            "a repeating cursor went unnoticed: {report}"
         );
     }
 }

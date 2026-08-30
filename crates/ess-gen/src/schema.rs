@@ -105,10 +105,10 @@ impl Generator for JsonSchema {
         // Each document's slice is seeded at the one construct it is about. The closure brings in
         // everything the construct rests on — the types a payload reaches, however deep — so the
         // digest moves exactly when something this document could render moves.
-        for declared in ir.types.values() {
+        for declared in ir.types().values() {
             out.push(type_document(ir, declared, mint));
         }
-        for command in ir.commands.values() {
+        for command in ir.commands().values() {
             out.push(message_document(
                 ir,
                 &Message::of_command(command),
@@ -116,7 +116,7 @@ impl Generator for JsonSchema {
                 mint,
             ));
         }
-        for event in ir.events.values() {
+        for event in ir.events().values() {
             out.push(message_document(
                 ir,
                 &Message::of_event(event),
@@ -124,7 +124,7 @@ impl Generator for JsonSchema {
                 mint,
             ));
         }
-        for error in ir.errors.values() {
+        for error in ir.errors().values() {
             out.push(message_document(
                 ir,
                 &Message::of_error(error),

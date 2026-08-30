@@ -9,6 +9,51 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Memory-backed commands now publish their candidate state only after the complete command succeeds,
+  so a refused multi-effect command leaves no entity, relation, history, event, revision or
+  idempotency mutation and records exactly one rejection audit.
+- Durable contract commands now commit every entity, event, relation, audit and idempotency record
+  through one `entity-runtime` 0.14.0 atomic batch using the pre-command optimistic view. Failed or
+  stale batches publish no local prefix; markdown recovers a persisted batch intent before reads,
+  and hybrid contract access goes through its declared authority.
+- Entity, relation and audit queries now validate and apply their opaque `offset-<n>` cursors after
+  deterministic filtering and ordering, advance by the number returned, and stop emitting a cursor
+  when no matches remain instead of repeating the first page.
+
+* **Eval records cannot claim outcomes without naming and sealing their inputs.** The matrix reader
+  now refuses missing, null, empty, or malformed specification ids, specification digests,
+  transcript digests, and expectation rows with stable `EVAL-RECORD-*` codes. Expectations must be
+  non-empty and both digests are checked on every record; an absent or null verdict remains
+  unobservable.
+
+* **A resumed driven run cannot observe a mixed state or silently repeat an uncertain effect.**
+  Snapshot and cursor now publish together through a hash-verified immutable generation; complete
+  legacy pairs migrate before execution and partial or tampered pairs are refused. Every outside
+  attempt is persisted before dispatch and a resume requires its exact id through
+  `--retry-in-flight`, or an explicit `--record-in-flight-no-verdict`; dependency circuit counts
+  survive resume as part of the cursor.
+
+### Changed
+
+* **Validated ESS specifications and compiled IR are sealed.** `Specification` and `EssIr` expose
+  read-only accessors instead of public fields, so raw files and the compiler are now the only
+  construction entrances. Compilation re-runs complete validation before resolution, downstream
+  projections consume the accessor surface, and provenance refuses a serialization failure instead
+  of hashing empty bytes. Tests that forged invalid validated or resolved records were replaced by
+  raw-document fixtures and a boundary regression.
+
+* Project discovery, schema parsing and Git acquisition now live in the `aep-project` edge crate;
+  `aep-engine` retains only the semantic registry and no longer depends on schema or driver types.
+  Pinned Git sources use a bare object cache plus read-only, hash-manifested snapshots whose full
+  membership, modes and bytes are revalidated before reuse.
+
+* CI now provisions the declared Rust, MSRV, Go, Node, WebAssembly, PostgreSQL and go-task
+  environment and invokes `task check` once; release verification reuses that workflow. `cargo
+  xtask status --check` holds the delegation and every generated volatile status region, while
+  reader-facing current-state prose links to annotated tags, the planning store and gap register.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added

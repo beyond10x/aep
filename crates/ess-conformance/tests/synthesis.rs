@@ -32,6 +32,11 @@ use ess_domain::system::Source;
 
 /// An example directory, compiled from the files it lives in rather than from a copy inlined here.
 fn example(name: &str) -> EssIr {
+    example_with(name, |_| {})
+}
+
+/// An example directory whose raw documents may be narrowed before validation and compilation.
+fn example_with(name: &str, mut transform: impl FnMut(&mut RawSpecFile)) -> EssIr {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples")
         .join(name)
@@ -62,8 +67,9 @@ fn example(name: &str) -> EssIr {
             .display()
             .to_string();
         let text = std::fs::read_to_string(&path).expect("readable");
-        let raw = RawSpecFile::parse(&text)
+        let mut raw = RawSpecFile::parse(&text)
             .unwrap_or_else(|error| panic!("{label} is well formed: {error}"));
+        transform(&mut raw);
         sources.insert(label.clone(), text);
         parsed.push((Source::new(label), raw));
     }
@@ -215,7 +221,7 @@ fn every_declared_outcome_is_either_a_scenario_or_a_named_refusal_or_asserted_by
     let synthesis = synthesize(&ir);
 
     let declared: BTreeSet<String> = ir
-        .commands
+        .commands()
         .values()
         .flat_map(|command| {
             command
@@ -227,7 +233,7 @@ fn every_declared_outcome_is_either_a_scenario_or_a_named_refusal_or_asserted_by
     assert_eq!(declared.len(), 11, "the fixture declares eleven outcomes");
 
     let wrong_state: BTreeSet<String> = ir
-        .commands
+        .commands()
         .values()
         .flat_map(|command| {
             command
@@ -407,7 +413,7 @@ fn the_input_a_scenario_sends_is_re_decided_against_the_guard_it_claims_to_reach
     let ir = example("billing");
     let synthesis = synthesize(&ir);
     let command = ir
-        .commands
+        .commands()
         .get(&QualifiedName::new("billing.invoice.CreateInvoice").expect("valid"))
         .expect("the example declares it");
     let guard = when(
@@ -899,7 +905,7 @@ fn a_move_that_is_illegal_in_a_state_is_attempted_with_the_input_that_would_have
         .expect("the second payment carries an amount");
     let ir = example("billing");
     let command = ir
-        .commands
+        .commands()
         .get(&QualifiedName::new("billing.invoice.PayInvoice").expect("valid"))
         .expect("declared");
     let settled = command
@@ -956,7 +962,7 @@ fn an_illegal_move_requires_the_branch_and_the_declared_error_rather_than_merely
     let id = "billing.invoice.Invoice/state/Paid/refuses/billing.invoice.CancelInvoice";
 
     let cancel = ir
-        .commands
+        .commands()
         .get(&QualifiedName::new("billing.invoice.CancelInvoice").expect("valid"))
         .expect("declared");
     let paid = StateName::new("Paid").expect("a state name");
@@ -1189,13 +1195,13 @@ fn every_clause_of_every_binding_is_either_a_scenario_or_a_named_refusal() {
         let synthesis = synthesize(&example(system));
         let ir = example(system);
         assert_eq!(
-            ir.bindings.len(),
+            ir.bindings().len(),
             bindings,
             "the fixture declares {bindings}"
         );
 
         let mut expected: BTreeSet<String> = BTreeSet::new();
-        for name in ir.bindings.keys() {
+        for name in ir.bindings().keys() {
             for (_, aspect) in BindingAspect::ALL {
                 expected.insert(format!("{name}/binding/{aspect}"));
             }
@@ -1264,7 +1270,7 @@ fn a_binding_mapping_names_the_source_the_document_wrote_and_not_its_same_typed_
     // address this assertion would pass whether or not the synthesizer read the mapping at all.
     let ir = example("oracle-fixture");
     let placed = ir
-        .events
+        .events()
         .get(&QualifiedName::new("oracle.order.OrderPlaced").expect("valid"))
         .expect("declared");
     let same_typed: Vec<&str> = placed
@@ -1325,7 +1331,7 @@ fn an_at_least_once_binding_delivers_the_event_twice_and_requires_no_count() {
     // exists" fails a target doing exactly what the specification allows — what the scenario may
     // require is that the consequence is still observable after the same event arrives again.
     let ir = example("billing");
-    let binding = ir.bindings.values().next().expect("one binding");
+    let binding = ir.bindings().values().next().expect("one binding");
     assert_eq!(
         binding.delivery,
         Delivery::AtLeastOnce,
@@ -1385,7 +1391,7 @@ fn a_binding_that_escalates_requires_the_event_the_escalation_declares() {
         let ir = example(system);
         let synthesis = synthesize(&ir);
         let declared = ir
-            .bindings
+            .bindings()
             .values()
             .find(|binding| id.starts_with(binding.name.as_str()))
             .and_then(|binding| binding.escalation.clone())
@@ -1479,7 +1485,7 @@ fn a_binding_that_drops_its_failures_refuses_that_check_and_names_the_reason() {
     // is told — so the refusal says so, and says which word to write instead.
     let ir = example("oracle-fixture");
     let dropping = ir
-        .bindings
+        .bindings()
         .values()
         .find(|binding| binding.failure == Failure::Drop)
         .expect("the fixture declares a binding that drops");
@@ -1662,7 +1668,7 @@ fn an_invariant_over_a_field_no_view_publishes_refuses_rather_than_being_dropped
     // holding one check fewer than the specification requires.
     let ir = example("oracle-fixture");
     let order = ir
-        .entities
+        .entities()
         .get(&QualifiedName::new("oracle.order.Order").expect("valid"))
         .expect("declared");
     assert_eq!(
@@ -1675,7 +1681,7 @@ fn an_invariant_over_a_field_no_view_publishes_refuses_rather_than_being_dropped
         "the fixture declares the invariant this refusal is about"
     );
     assert!(
-        ir.views
+        ir.views()
             .values()
             .filter(|view| view.source.name() == &order.name)
             .all(|view| view.field("weight_grams").is_none()),
@@ -1752,10 +1758,11 @@ fn a_value_object_nothing_observable_holds_keeps_a_refusal_naming_what_would_clo
     // positions projected away, that unreachable holding is all that is left, and the type's
     // refusal comes back. Built by narrowing the example's views to their identity field, which is
     // a legal view set the specification could have declared.
-    let mut ir = example("billing");
-    for view in ir.views.values_mut() {
-        view.fields.retain(|field| field.name == "invoice_id");
-    }
+    let ir = example_with("billing", |document| {
+        for view in &mut document.views {
+            view.fields.retain(|field| field.name == "invoice_id");
+        }
+    });
     let synthesis = synthesize(&ir);
     let refusal = synthesis
         .refused(code(13))

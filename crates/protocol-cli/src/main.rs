@@ -29,7 +29,8 @@ use aep_domain::entity::{ActorRef, EntityId, EntityLocator, EntityRef};
 use aep_domain::task::Task;
 use aep_domain::time::Timestamp;
 use aep_engine::engine::{EvidenceSubmission, ProtocolEngine, TransitionResult};
-use aep_engine::{load_tree_report, Engine, Registry};
+use aep_engine::{Engine, Registry};
+use aep_project::load_tree_report;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use ess_compiler::diagnostic::Diagnostics;
@@ -1294,11 +1295,11 @@ fn project_file_problems() -> Vec<String> {
     let Ok(here) = std::env::current_dir() else {
         return Vec::new();
     };
-    let Some(project) = aep_engine::project::discover(&here) else {
+    let Some(project) = aep_project::project::discover(&here) else {
         return Vec::new();
     };
     let path = project
-        .join(aep_engine::project::project_directory())
+        .join(aep_project::project::project_directory())
         .join(aep_domain::project::PROJECT_FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -2036,15 +2037,15 @@ fn ess_validate(path: &Path, format: Format) -> Result<ExitCode> {
             ..
         } => {
             summary.files_read = files_read;
-            summary.system = Some(specification.system.name.to_string());
-            summary.version = Some(specification.system.version.to_string());
-            summary.domains = specification.system.domains.len();
-            summary.entities = specification.entities.len();
-            summary.commands = specification.commands.len();
-            summary.events = specification.events.len();
-            summary.errors = specification.errors.len();
-            summary.views = specification.views.len();
-            summary.actors = specification.actors.len();
+            summary.system = Some(specification.system().name.to_string());
+            summary.version = Some(specification.system().version.to_string());
+            summary.domains = specification.system().domains.len();
+            summary.entities = specification.entities().len();
+            summary.commands = specification.commands().len();
+            summary.events = specification.events().len();
+            summary.errors = specification.errors().len();
+            summary.views = specification.views().len();
+            summary.actors = specification.actors().len();
         }
         EssLoaded::Refused {
             files_read,
@@ -2232,15 +2233,15 @@ fn ess_compile(path: &Path, format: Format) -> Result<ExitCode> {
             outln!(
                 "{} {} — {files_read} file(s): {} domain(s), {} type(s), {} command(s), {} \
                  event(s), {} error(s), {} binding(s), {} component(s)",
-                ir.system,
-                ir.version,
-                ir.domains.len(),
-                ir.types.len(),
-                ir.commands.len(),
-                ir.events.len(),
-                ir.errors.len(),
-                ir.bindings.len(),
-                ir.components.len()
+                ir.system(),
+                ir.version(),
+                ir.domains().len(),
+                ir.types().len(),
+                ir.commands().len(),
+                ir.events().len(),
+                ir.errors().len(),
+                ir.bindings().len(),
+                ir.components().len()
             );
             outln!("compiled");
         }
@@ -3188,29 +3189,33 @@ fn ess_lookup<'a>(ir: &'a EssIr, name: &str, kind: Option<EssKind>) -> Vec<EssDe
 
     if let Ok(qualified) = ess_domain::name::QualifiedName::new(name) {
         if wanted(EssKind::Domain) {
-            found.extend(ir.domains.get(&qualified).map(EssDeclaration::Domain));
+            found.extend(ir.domains().get(&qualified).map(EssDeclaration::Domain));
         }
         if wanted(EssKind::Type) {
-            found.extend(ir.types.get(&qualified).map(EssDeclaration::Type));
+            found.extend(ir.types().get(&qualified).map(EssDeclaration::Type));
         }
         if wanted(EssKind::Command) {
-            found.extend(ir.commands.get(&qualified).map(EssDeclaration::Command));
+            found.extend(ir.commands().get(&qualified).map(EssDeclaration::Command));
         }
         if wanted(EssKind::Event) {
-            found.extend(ir.events.get(&qualified).map(EssDeclaration::Event));
+            found.extend(ir.events().get(&qualified).map(EssDeclaration::Event));
         }
         if wanted(EssKind::Error) {
-            found.extend(ir.errors.get(&qualified).map(EssDeclaration::Error));
+            found.extend(ir.errors().get(&qualified).map(EssDeclaration::Error));
         }
     }
     if wanted(EssKind::Binding) {
         if let Ok(binding) = ess_domain::binding::BindingName::new(name) {
-            found.extend(ir.bindings.get(&binding).map(EssDeclaration::Binding));
+            found.extend(ir.bindings().get(&binding).map(EssDeclaration::Binding));
         }
     }
     if wanted(EssKind::Component) {
         if let Ok(component) = ess_domain::component::ComponentName::new(name) {
-            found.extend(ir.components.get(&component).map(EssDeclaration::Component));
+            found.extend(
+                ir.components()
+                    .get(&component)
+                    .map(EssDeclaration::Component),
+            );
         }
     }
 
@@ -3249,33 +3254,37 @@ fn ess_undeclared(ir: &EssIr, name: &str, kind: Option<EssKind>) -> String {
         Some(kind) => format!(
             "`{name}` is not a declared {} in {} {}",
             kind.label(),
-            ir.system,
-            ir.version
+            ir.system(),
+            ir.version()
         ),
-        None => format!("`{name}` is not declared in {} {}", ir.system, ir.version),
+        None => format!(
+            "`{name}` is not declared in {} {}",
+            ir.system(),
+            ir.version()
+        ),
     }];
     if wanted(EssKind::Domain) {
-        lines.push(format!("  domains: {}", ess_listing(ir.domains.keys())));
+        lines.push(format!("  domains: {}", ess_listing(ir.domains().keys())));
     }
     if wanted(EssKind::Type) {
-        lines.push(format!("  types: {}", ess_listing(ir.types.keys())));
+        lines.push(format!("  types: {}", ess_listing(ir.types().keys())));
     }
     if wanted(EssKind::Command) {
-        lines.push(format!("  commands: {}", ess_listing(ir.commands.keys())));
+        lines.push(format!("  commands: {}", ess_listing(ir.commands().keys())));
     }
     if wanted(EssKind::Event) {
-        lines.push(format!("  events: {}", ess_listing(ir.events.keys())));
+        lines.push(format!("  events: {}", ess_listing(ir.events().keys())));
     }
     if wanted(EssKind::Error) {
-        lines.push(format!("  errors: {}", ess_listing(ir.errors.keys())));
+        lines.push(format!("  errors: {}", ess_listing(ir.errors().keys())));
     }
     if wanted(EssKind::Binding) {
-        lines.push(format!("  bindings: {}", ess_listing(ir.bindings.keys())));
+        lines.push(format!("  bindings: {}", ess_listing(ir.bindings().keys())));
     }
     if wanted(EssKind::Component) {
         lines.push(format!(
             "  components: {}",
-            ess_listing(ir.components.keys())
+            ess_listing(ir.components().keys())
         ));
     }
     lines.join("\n")
@@ -3379,7 +3388,7 @@ fn ess_render_declaration(ir: &EssIr, declaration: &EssDeclaration<'_>) {
                 ess_line("field", &ess_field(field));
             }
             // What reacts to it is the question this event is usually being looked up to answer.
-            for binding in ir.bindings.values() {
+            for binding in ir.bindings().values() {
                 if binding.event.name() == &event.name {
                     ess_line(
                         "triggers",
@@ -3791,7 +3800,7 @@ fn validate(
         workflows: outcome.registry.workflows().count(),
         profiles: outcome.registry.profiles().count(),
         lifecycles: outcome.registry.lifecycles().len(),
-        step_maps: outcome.registry.step_maps().count(),
+        step_maps: outcome.drivers.len(),
         problems: problems.clone(),
     };
 
@@ -3874,14 +3883,15 @@ fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
     }
 
     let here = std::env::current_dir().context("reading the working directory")?;
-    let directory = aep_engine::project::project_directory();
-    let root = aep_engine::project::discover(&here).with_context(|| {
+    let directory = aep_project::project::project_directory();
+    let root = aep_project::project::discover(&here).with_context(|| {
         format!(
             "no `{directory}/project.yaml` in {} or any parent, and no --task was given",
             here.display()
         )
     })?;
-    let project = aep_engine::project::load(&root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
+    let project =
+        aep_project::project::load(&root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
 
     // A flag still overrides what the project says, so a one-off run needs no edit to the project.
     let task = match &args.task {
@@ -4489,9 +4499,14 @@ fn print_table(rows: &[Vec<String>]) {
 
 /// Loads a document tree, failing if anything is wrong with it.
 fn load(root: &Path) -> Result<Registry> {
+    Ok(load_documents(root)?.registry)
+}
+
+/// Loads both semantic documents and edge-owned harness projections.
+fn load_documents(root: &Path) -> Result<aep_project::load::LoadOutcome> {
     let outcome = load_tree_report(root);
     if outcome.failures.is_empty() {
-        return Ok(outcome.registry);
+        return Ok(outcome);
     }
     let detail = outcome
         .failures

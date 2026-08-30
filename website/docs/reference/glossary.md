@@ -54,4 +54,4 @@ description: The project's terms, defined once.
 | **Observation bundle / infra IR** | A scanner-produced snapshot of a cluster (`infra-observation/1`) and its compiled, content-addressed form (`infra-ir/1`). |
 | **Expectation** | One clause of a declared infrastructure desired state (`infra-spec/1`), evaluated three-valued: `ok`, `gap`, `unk`. |
 | **Trace specification** | A `trace-spec/1` document of typed expectations over an agent transcript a harness already wrote. `protocol trace check` judges the finished run against it three-valued, citing event indices; nothing in the family starts an agent, calls a model or reaches a network, which is what makes the verdict reproducible and usable as evidence. |
-| **Gate** | The repository's own check suite, `task check` — twelve steps, all mirrored in CI, including every drift check, the MSRV build and the documentation site's own build. |
+| **Gate** | The repository's one check entry point, `task check`; CI provisions its environment and invokes it directly. Its ordered step list is generated into `AGENTS.md`, not copied here. |

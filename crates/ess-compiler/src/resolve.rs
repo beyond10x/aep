@@ -731,6 +731,10 @@ pub fn compile_locating(
     sources: &SourceMap,
     files: &[impl AsRef<str>],
 ) -> Result<EssIr, Diagnostics> {
+    let validation = specification.validate();
+    if !validation.is_empty() {
+        return Err(bridge(&validation, &Locator::new(sources, files)));
+    }
     Resolver::new(specification, Locator::new(sources, files)).run()
 }
 
@@ -765,8 +769,8 @@ struct Resolver<'a> {
 
 impl<'a> Resolver<'a> {
     fn new(spec: &'a Specification, locator: Locator<'a>) -> Self {
-        let mut registry = spec.system.types.clone();
-        for entity in spec.entities.values() {
+        let mut registry = spec.system().types.clone();
+        for entity in spec.entities().values() {
             // A collision between a lifecycle enum and a declared type is wave 1's rejection, and it
             // has already been reported by the time a `Specification` exists.
             let _ = registry.insert(entity.state_type());
@@ -807,11 +811,11 @@ impl<'a> Resolver<'a> {
         if self.diagnostics.has_errors() {
             return Err(self.diagnostics);
         }
-        Ok(EssIr {
-            system: self.spec.system.name.clone(),
-            version: self.spec.system.version,
-            naming: self.spec.system.naming.clone(),
-            summary: self.spec.system.summary.clone(),
+        Ok(EssIr::from_parts(crate::ir::EssIrParts {
+            system: self.spec.system().name.clone(),
+            version: self.spec.system().version,
+            naming: self.spec.system().naming.clone(),
+            summary: self.spec.system().summary.clone(),
             domains,
             types,
             conversions,
@@ -824,7 +828,7 @@ impl<'a> Resolver<'a> {
             bindings,
             components,
             workloads,
-        })
+        }))
     }
 
     // ---- reporting ------------------------------------------------------------------------
@@ -879,12 +883,12 @@ impl<'a> Resolver<'a> {
         // Returning `Ok` here would be an IR that is quietly missing something.
         let span = self
             .locator
-            .span("system", &[format!("system: {}", self.spec.system.name)]);
+            .span("system", &[format!("system: {}", self.spec.system().name)]);
         self.refuse(
             codes::UNVALIDATED_SPECIFICATION,
             format!(
                 "`{}` names something nothing declares, and this pass cannot build a handle for it",
-                self.spec.system.name
+                self.spec.system().name
             ),
             Vec::new(),
             Some(
@@ -1075,7 +1079,7 @@ impl<'a> Resolver<'a> {
 
     /// Every declared crossing, with both ends resolved.
     fn conversions(&mut self) -> Vec<ResolvedConversion> {
-        let declared: Vec<_> = self.spec.conversions.iter().cloned().collect();
+        let declared: Vec<_> = self.spec.conversions().iter().cloned().collect();
         let mut resolved = Vec::with_capacity(declared.len());
         for conversion in declared {
             let path = format!("conversions.{} -> {}", conversion.from, conversion.to);
@@ -1108,7 +1112,7 @@ impl<'a> Resolver<'a> {
     ) -> Found<EventHandle> {
         if events.contains_key(name) {
             Found::Handle(EventHandle::new(name.clone()))
-        } else if self.spec.events.contains_key(name) {
+        } else if self.spec.events().contains_key(name) {
             Found::Unresolved
         } else {
             Found::Missing
@@ -1123,7 +1127,7 @@ impl<'a> Resolver<'a> {
     ) -> Found<EntityHandle> {
         if entities.contains_key(name) {
             Found::Handle(EntityHandle::new(name.clone()))
-        } else if self.spec.entities.contains_key(name) {
+        } else if self.spec.entities().contains_key(name) {
             Found::Unresolved
         } else {
             Found::Missing
@@ -1138,7 +1142,7 @@ impl<'a> Resolver<'a> {
     ) -> Found<CommandHandle> {
         if commands.contains_key(name) {
             Found::Handle(CommandHandle::new(name.clone()))
-        } else if self.spec.commands.contains_key(name) {
+        } else if self.spec.commands().contains_key(name) {
             Found::Unresolved
         } else {
             Found::Missing
@@ -1153,7 +1157,7 @@ impl<'a> Resolver<'a> {
     ) -> Found<ErrorHandle> {
         if errors.contains_key(name) {
             Found::Handle(ErrorHandle::new(name.clone()))
-        } else if self.spec.errors.contains_key(name) {
+        } else if self.spec.errors().contains_key(name) {
             Found::Unresolved
         } else {
             Found::Missing
@@ -1190,7 +1194,7 @@ impl<'a> Resolver<'a> {
     /// A member with no owner is refused in *its own* family — `ESS-COMMAND-001` for a command —
     /// because that is where `ess-domain` reports it too, and one defect keeps one code.
     fn owner(&mut self, code: Code, name: &QualifiedName, kind: &str) -> Option<DomainHandle> {
-        if let Some(domain) = self.spec.system.owner_of(name) {
+        if let Some(domain) = self.spec.system().owner_of(name) {
             return Some(DomainHandle::new(domain.name.clone()));
         }
         let available = self.declared_domains();
@@ -1214,7 +1218,7 @@ impl<'a> Resolver<'a> {
     /// The names of every declared domain.
     fn declared_domains(&self) -> Vec<String> {
         self.spec
-            .system
+            .system()
             .domains
             .iter()
             .map(|domain| domain.name.to_string())
@@ -1223,7 +1227,7 @@ impl<'a> Resolver<'a> {
 
     /// Every event, with its payload resolved.
     fn events(&mut self) -> BTreeMap<QualifiedName, ResolvedEvent> {
-        let declared: Vec<EventSpec> = self.spec.events.values().cloned().collect();
+        let declared: Vec<EventSpec> = self.spec.events().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for event in declared {
             let path = format!("events.{}", event.name);
@@ -1248,7 +1252,7 @@ impl<'a> Resolver<'a> {
 
     /// Every error, with its payload resolved.
     fn errors(&mut self) -> BTreeMap<QualifiedName, ResolvedError> {
-        let declared: Vec<ErrorSpec> = self.spec.errors.values().cloned().collect();
+        let declared: Vec<ErrorSpec> = self.spec.errors().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for error in declared {
             let path = format!("errors.{}", error.name);
@@ -1278,7 +1282,7 @@ impl<'a> Resolver<'a> {
         errors: &BTreeMap<QualifiedName, ResolvedError>,
         entities: &BTreeMap<QualifiedName, ResolvedEntity>,
     ) -> BTreeMap<QualifiedName, ResolvedCommand> {
-        let declared: Vec<CommandSpec> = self.spec.commands.values().cloned().collect();
+        let declared: Vec<CommandSpec> = self.spec.commands().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for command in declared {
             let path = format!("commands.{}", command.name);
@@ -1334,7 +1338,8 @@ impl<'a> Resolver<'a> {
                     Found::Unresolved => complete = false,
                     Found::Missing => {
                         complete = false;
-                        let available = self.spec.events.keys().map(ToString::to_string).collect();
+                        let available =
+                            self.spec.events().keys().map(ToString::to_string).collect();
                         let span = self.locator.span(path.clone(), needles);
                         self.refuse_undeclared(
                             codes::COMMAND_UNDECLARED_REFERENCE,
@@ -1357,7 +1362,8 @@ impl<'a> Resolver<'a> {
                     }
                     Found::Missing => {
                         complete = false;
-                        let available = self.spec.errors.keys().map(ToString::to_string).collect();
+                        let available =
+                            self.spec.errors().keys().map(ToString::to_string).collect();
                         let span = self.locator.span(path.clone(), needles);
                         self.refuse_undeclared(
                             codes::COMMAND_UNDECLARED_REFERENCE,
@@ -1542,7 +1548,7 @@ impl<'a> Resolver<'a> {
             None
         } else if let Some(crossing) = self
             .spec
-            .conversions
+            .conversions()
             .iter()
             .find(|crossing| crossing.from == from && crossing.to == to)
         {
@@ -1660,7 +1666,12 @@ impl<'a> Resolver<'a> {
             Found::Handle(handle) => handle,
             Found::Unresolved => return None,
             Found::Missing => {
-                let available = self.spec.entities.keys().map(ToString::to_string).collect();
+                let available = self
+                    .spec
+                    .entities()
+                    .keys()
+                    .map(ToString::to_string)
+                    .collect();
                 let span = self.locator.span(format!("{path}.{verb}"), &needles);
                 self.refuse_undeclared(
                     codes::COMMAND_UNDECLARED_REFERENCE,
@@ -1851,7 +1862,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         types: &BTreeMap<QualifiedName, ResolvedType>,
     ) -> BTreeMap<QualifiedName, ResolvedEntity> {
-        let declared: Vec<EntitySpec> = self.spec.entities.values().cloned().collect();
+        let declared: Vec<EntitySpec> = self.spec.entities().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for entity in declared {
             let path = format!("entities.{}", entity.name);
@@ -1943,7 +1954,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         entities: &BTreeMap<QualifiedName, ResolvedEntity>,
     ) -> BTreeMap<QualifiedName, ResolvedView> {
-        let declared: Vec<ViewSpec> = self.spec.views.values().cloned().collect();
+        let declared: Vec<ViewSpec> = self.spec.views().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for view in declared {
             let path = format!("views.{}", view.name);
@@ -1955,7 +1966,12 @@ impl<'a> Resolver<'a> {
                 Found::Handle(handle) => Some(handle),
                 Found::Unresolved => None,
                 Found::Missing => {
-                    let available = self.spec.entities.keys().map(ToString::to_string).collect();
+                    let available = self
+                        .spec
+                        .entities()
+                        .keys()
+                        .map(ToString::to_string)
+                        .collect();
                     let span = self.locator.span(format!("{path}.source"), &needles);
                     self.refuse_undeclared(
                         code,
@@ -1996,7 +2012,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         commands: &BTreeMap<QualifiedName, ResolvedCommand>,
     ) -> BTreeMap<QualifiedName, ResolvedActor> {
-        let declared: Vec<ActorSpec> = self.spec.actors.values().cloned().collect();
+        let declared: Vec<ActorSpec> = self.spec.actors().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for actor in declared {
             let path = format!("actors.{}", actor.name);
@@ -2013,8 +2029,12 @@ impl<'a> Resolver<'a> {
                     Found::Unresolved => complete = false,
                     Found::Missing => {
                         complete = false;
-                        let available =
-                            self.spec.commands.keys().map(ToString::to_string).collect();
+                        let available = self
+                            .spec
+                            .commands()
+                            .keys()
+                            .map(ToString::to_string)
+                            .collect();
                         let span = self.locator.span(format!("{path}.may"), &needles);
                         self.refuse_undeclared(
                             code,
@@ -2058,13 +2078,13 @@ impl<'a> Resolver<'a> {
         commands: &BTreeMap<QualifiedName, ResolvedCommand>,
         events: &BTreeMap<QualifiedName, ResolvedEvent>,
     ) -> BTreeMap<ComponentName, ResolvedComponent> {
-        let declared: Vec<ComponentSpec> = self.spec.components.values().cloned().collect();
+        let declared: Vec<ComponentSpec> = self.spec.components().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for component in declared {
             let mut complete = true;
             let mut owns = BTreeSet::new();
             for domain in &component.owns {
-                if self.spec.system.domains.iter().any(|d| d.name == *domain) {
+                if self.spec.system().domains.iter().any(|d| d.name == *domain) {
                     owns.insert(DomainHandle::new(domain.clone()));
                 } else {
                     complete = false;
@@ -2122,12 +2142,12 @@ impl<'a> Resolver<'a> {
         &mut self,
         components: &BTreeMap<ComponentName, ResolvedComponent>,
     ) -> BTreeMap<ComponentName, ResolvedWorkload> {
-        let declared: Vec<Workload> = self.spec.topology.workloads.values().cloned().collect();
+        let declared: Vec<Workload> = self.spec.topology().workloads.values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for workload in declared {
             let name = workload.component.clone();
             if !components.contains_key(&name) {
-                if !self.spec.components.contains_key(&name) {
+                if !self.spec.components().contains_key(&name) {
                     self.off_contract = true;
                 }
                 continue;
@@ -2153,7 +2173,7 @@ impl<'a> Resolver<'a> {
         events: &BTreeMap<QualifiedName, ResolvedEvent>,
         commands: &BTreeMap<QualifiedName, ResolvedCommand>,
     ) -> BTreeMap<BindingName, ResolvedBinding> {
-        let declared: Vec<BindingSpec> = self.spec.bindings.values().cloned().collect();
+        let declared: Vec<BindingSpec> = self.spec.bindings().values().cloned().collect();
         let mut resolved = BTreeMap::new();
         for binding in declared {
             let path = format!("bindings.{}", binding.name);
@@ -2163,7 +2183,7 @@ impl<'a> Resolver<'a> {
             ];
             let event = self.event_of(&binding.event, events);
             if matches!(event, Found::Missing) {
-                let available = self.spec.events.keys().map(ToString::to_string).collect();
+                let available = self.spec.events().keys().map(ToString::to_string).collect();
                 let span = self.locator.span(path.clone(), &needles);
                 self.refuse_undeclared(
                     codes::BINDING_UNDECLARED_REFERENCE,
@@ -2185,7 +2205,8 @@ impl<'a> Resolver<'a> {
                     Found::Unresolved => escalation_resolved = false,
                     Found::Missing => {
                         escalation_resolved = false;
-                        let available = self.spec.events.keys().map(ToString::to_string).collect();
+                        let available =
+                            self.spec.events().keys().map(ToString::to_string).collect();
                         let mut escalation_needles = vec![format!("emits: {emitted}")];
                         escalation_needles.extend_from_slice(&needles);
                         let span = self.locator.span(
@@ -2208,7 +2229,12 @@ impl<'a> Resolver<'a> {
             }
             let command = self.command_of(&binding.command, commands);
             if matches!(command, Found::Missing) {
-                let available = self.spec.commands.keys().map(ToString::to_string).collect();
+                let available = self
+                    .spec
+                    .commands()
+                    .keys()
+                    .map(ToString::to_string)
+                    .collect();
                 let span = self.locator.span(path.clone(), &needles);
                 self.refuse_undeclared(
                     codes::BINDING_UNDECLARED_REFERENCE,
@@ -2365,7 +2391,7 @@ impl<'a> Resolver<'a> {
             None
         } else if let Some(crossing) = self
             .spec
-            .conversions
+            .conversions()
             .iter()
             .find(|crossing| crossing.from == from && crossing.to == to)
         {
@@ -2453,7 +2479,7 @@ impl<'a> Resolver<'a> {
     /// own something the IR cannot hand back.
     fn domains(&mut self, members: &Members<'_>) -> BTreeMap<QualifiedName, ResolvedDomain> {
         let mut resolved = BTreeMap::new();
-        for domain in &self.spec.system.domains {
+        for domain in &self.spec.system().domains {
             resolved.insert(
                 domain.name.clone(),
                 ResolvedDomain {

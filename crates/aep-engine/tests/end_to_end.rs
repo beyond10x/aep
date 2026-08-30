@@ -20,7 +20,8 @@ use aep_domain::task::Task;
 use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::{Seed, VerificationStatus, Verifier};
 use aep_engine::engine::{EvidenceSubmission, ProtocolEngine, TransitionResult};
-use aep_engine::{load_tree, Engine, FixedClock, Registry};
+use aep_engine::{Engine, FixedClock, Registry};
+use aep_project::load_tree;
 
 /// The digest of the resolved `billing/v3` model a conformance suite would be generated from.
 ///

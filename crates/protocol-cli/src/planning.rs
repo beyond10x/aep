@@ -31,7 +31,7 @@ use aep_domain::artifact::{
     ArtifactGraph, ArtifactId, ArtifactKind, ArtifactLifecycle, ArtifactRef, ArtifactStatus,
     RelationKind,
 };
-use aep_engine::project::project_directory;
+use aep_project::project::project_directory;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 
@@ -121,7 +121,7 @@ impl StoreLocation {
         }
         std::env::current_dir()
             .ok()
-            .and_then(|here| aep_engine::project::discover(&here))
+            .and_then(|here| aep_project::project::discover(&here))
             .unwrap_or_else(|| PathBuf::from("."))
     }
 
@@ -143,10 +143,10 @@ impl StoreLocation {
             return Ok(path.clone());
         }
         let here = std::env::current_dir().context("reading the working directory")?;
-        let Some(project) = aep_engine::project::discover(&here) else {
+        let Some(project) = aep_project::project::discover(&here) else {
             return Ok(PathBuf::from("."));
         };
-        aep_engine::project::load_paths(&project)
+        aep_project::project::load_paths(&project)
             .map(|paths| paths.protocols)
             .with_context(|| {
                 format!(
@@ -225,7 +225,7 @@ impl Plan {
     pub(crate) fn discovered() -> Result<Self> {
         let here = std::env::current_dir().context("reading the working directory")?;
         let directory = project_directory();
-        let project = aep_engine::project::discover(&here).with_context(|| {
+        let project = aep_project::project::discover(&here).with_context(|| {
             format!(
                 "no `--store` was given and no `{directory}/project.yaml` was found in {} \
                  or any parent; pass `--store <dir>` to say where the plan is",
@@ -1379,7 +1379,7 @@ fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
     // `load_workspace` joins the project directory itself; joining it here too looked right and
     // pointed at `.engineering/.engineering/workspace.yaml`, so every member read as undeclared and
     // every crossing as a dangling edge.
-    aep_engine::project::load_workspace(root).map_or_else(
+    aep_project::project::load_workspace(root).map_or_else(
         |_| Vec::new(),
         |workspace| {
             workspace.map_or_else(Vec::new, |workspace| {

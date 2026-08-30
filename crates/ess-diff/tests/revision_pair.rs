@@ -368,9 +368,13 @@ fn two_different_systems_are_refused_rather_than_reported_as_a_rewrite() {
         compile(&specification, &SourceMap::new()).expect("billing resolves")
     };
     let catalog = compiled("before");
-    assert_ne!(billing.system, catalog.system, "the fixture is two systems");
+    assert_ne!(
+        billing.system(),
+        catalog.system(),
+        "the fixture is two systems"
+    );
     assert!(
-        !billing.commands.is_empty() && !catalog.commands.is_empty(),
+        !billing.commands().is_empty() && !catalog.commands().is_empty(),
         "both sides declare something, so a delta was available to produce"
     );
 
@@ -379,8 +383,8 @@ fn two_different_systems_are_refused_rather_than_reported_as_a_rewrite() {
     assert_eq!(
         refusal,
         DiffRefusal::DifferentSystem {
-            before: billing.system.clone(),
-            after: catalog.system.clone(),
+            before: billing.system().clone(),
+            after: catalog.system().clone(),
         }
     );
     assert!(

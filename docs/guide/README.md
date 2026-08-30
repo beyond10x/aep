@@ -8,8 +8,9 @@ reasons; the protocol decides what the resulting facts permit.
 
 ## What is not built yet
 
-From the status report, [`docs/status.md`](../status.md). Everything else there is at 100% and
-gated by `task check`.
+The table below is adopter guidance, not the repository's live backlog. For current gaps and their
+closing evidence, read the [`gap register`](../plan/gap-register.md); for accepted work and status,
+read the [planning store](../../.engineering/planning/).
 
 | Missing | Consequence for you |
 |---|---|

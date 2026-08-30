@@ -79,16 +79,16 @@ fn billing() -> Specification {
 fn the_billing_specification_parses_and_validates() {
     let specification = billing();
 
-    assert_eq!(specification.system.name.to_string(), "billing");
-    assert_eq!(specification.system.version.to_string(), "v3");
-    assert_eq!(specification.system.format.to_string(), "ess/1");
-    assert_eq!(specification.system.domains.len(), 2);
+    assert_eq!(specification.system().name.to_string(), "billing");
+    assert_eq!(specification.system().version.to_string(), "v3");
+    assert_eq!(specification.system().format.to_string(), "ess/1");
+    assert_eq!(specification.system().domains.len(), 2);
 
     // Two contexts, and the members are owned by the right ones.
     let invoice: QualifiedName = "billing.invoice.CreateInvoice".parse().expect("a name");
     assert_eq!(
         specification
-            .system
+            .system()
             .owner_of(&invoice)
             .map(|domain| domain.name.to_string()),
         Some("billing.invoice".to_owned())
@@ -96,7 +96,7 @@ fn the_billing_specification_parses_and_validates() {
     let email: QualifiedName = "billing.email.SendEmail".parse().expect("a name");
     assert_eq!(
         specification
-            .system
+            .system()
             .owner_of(&email)
             .map(|domain| domain.name.to_string()),
         Some("billing.email".to_owned())
@@ -109,7 +109,7 @@ fn a_command_that_can_be_refused_says_so() {
     // that recorded only the happy one would generate a suite that never checks the other.
     let specification = billing();
     let create = specification
-        .commands
+        .commands()
         .get(&"billing.invoice.CreateInvoice".parse().expect("a name"))
         .expect("the example declares CreateInvoice");
 
@@ -139,7 +139,7 @@ fn an_outcome_the_input_cannot_decide_says_that_too() {
     // false` would have claimed the branch is unreachable, which is a different and false statement.
     let specification = billing();
     let send = specification
-        .commands
+        .commands()
         .get(&"billing.email.SendEmail".parse().expect("a name"))
         .expect("the example declares SendEmail");
 
@@ -164,7 +164,7 @@ fn a_projection_declares_how_it_must_be_asserted() {
     // and the usual fix — a sleep — makes the suite test the machine it runs on.
     let specification = billing();
     let view = specification
-        .views
+        .views()
         .get(&"billing.invoice.InvoiceById".parse().expect("a name"))
         .expect("the example declares InvoiceById");
 
@@ -176,7 +176,7 @@ fn a_projection_declares_how_it_must_be_asserted() {
 fn an_illegal_move_is_illegal_because_nobody_wrote_it() {
     let specification = billing();
     let invoice = specification
-        .entities
+        .entities()
         .get(&"billing.invoice.Invoice".parse().expect("a name"))
         .expect("the example declares Invoice");
 
@@ -204,7 +204,7 @@ fn every_move_the_invoice_can_make_names_the_command_that_makes_it() {
 
     let taker = |transition: &str| -> Vec<String> {
         specification
-            .commands
+            .commands()
             .values()
             .flat_map(|command| {
                 command.outcomes.iter().filter_map(move |outcome| {
@@ -234,7 +234,7 @@ fn every_move_the_invoice_can_make_names_the_command_that_makes_it() {
     // Every declared move, not just the three checked by name: the rule is total, and a fourth
     // transition added to the example without a command would fail here as well as in validation.
     let invoice = specification
-        .entities
+        .entities()
         .get(&"billing.invoice.Invoice".parse().expect("a name"))
         .expect("the example declares Invoice");
     for transition in &invoice.states.transitions {
@@ -248,7 +248,7 @@ fn every_move_the_invoice_can_make_names_the_command_that_makes_it() {
     // And creation, which is not a transition: an instance has to come from somewhere, and §20 asks
     // whose invariants to evaluate after `CreateInvoice`.
     let created = specification
-        .commands
+        .commands()
         .get(&"billing.invoice.CreateInvoice".parse().expect("a name"))
         .expect("the example declares CreateInvoice")
         .outcome(&"accepted".parse().expect("an outcome name"))
@@ -264,7 +264,7 @@ fn every_move_the_invoice_can_make_names_the_command_that_makes_it() {
 fn a_view_may_project_the_identity_and_the_state_as_well_as_the_fields() {
     let specification = billing();
     let invoice = specification
-        .entities
+        .entities()
         .get(&"billing.invoice.Invoice".parse().expect("a name"))
         .expect("the example declares Invoice");
 
@@ -341,12 +341,12 @@ fn types_used() -> (BTreeSet<String>, BTreeSet<&'static str>) {
         }
     };
 
-    for entity in specification.entities.values() {
+    for entity in specification.entities().values() {
         for field in entity.observable_fields() {
             collect(&field.type_ref);
         }
     }
-    for declared in specification.system.types.iter() {
+    for declared in specification.system().types.iter() {
         match &declared.body {
             TypeBody::Struct { fields, .. } => {
                 for field in fields {
@@ -376,7 +376,7 @@ fn the_example_declares_a_type_of_every_kind() {
 
     let specification = billing();
     let bodies: Vec<&TypeBody> = specification
-        .system
+        .system()
         .types
         .iter()
         .map(|declared| &declared.body)
@@ -436,28 +436,28 @@ fn the_example_shows_both_kinds_of_actor_and_both_consistency_levels() {
 
     assert!(
         specification
-            .actors
+            .actors()
             .values()
             .any(|actor| !actor.may.is_empty()),
         "no actor in the example may invoke anything, so `may` is unexercised"
     );
     assert!(
         specification
-            .actors
+            .actors()
             .values()
             .any(|actor| actor.may.is_empty()),
         "an actor that only observes is legal and should be shown to be"
     );
     assert!(
         specification
-            .views
+            .views()
             .values()
             .any(|view| view.consistency == Consistency::ReadYourWrites),
         "every view in the example is eventual, so `read_your_writes` is unexercised"
     );
     assert!(
         specification
-            .views
+            .views()
             .values()
             .any(|view| view.consistency == Consistency::Eventual),
         "no view in the example is a projection"
@@ -470,21 +470,21 @@ fn the_example_shows_a_filter_a_payload_and_an_overridden_wire_name() {
 
     assert!(
         specification
-            .views
+            .views()
             .values()
             .any(|view| view.filter.is_some()),
         "no view in the example filters"
     );
     assert!(
         specification
-            .errors
+            .errors()
             .values()
             .any(|error| !error.fields.is_empty()),
         "no error in the example carries a payload"
     );
     assert!(
         specification
-            .commands
+            .commands()
             .values()
             .any(|command| !command.naming.is_empty()),
         "no command in the example overrides its wire or display name"
@@ -495,13 +495,13 @@ fn the_example_shows_a_filter_a_payload_and_an_overridden_wire_name() {
 fn the_example_decomposes_into_components_that_own_the_domains() {
     let specification = billing();
 
-    assert_eq!(specification.components.len(), 2);
+    assert_eq!(specification.components().len(), 2);
     let owned: BTreeSet<String> = specification
-        .components
+        .components()
         .values()
         .flat_map(|component| component.owns.iter().map(ToString::to_string))
         .collect();
-    for domain in &specification.system.domains {
+    for domain in &specification.system().domains {
         assert!(
             owned.contains(&domain.name.to_string()),
             "`{}` is owned by no component: {owned:?}",
@@ -519,7 +519,7 @@ fn the_example_binds_one_context_to_the_other_and_says_what_happens_when_it_fail
 
     let specification = billing();
     let binding = specification
-        .bindings
+        .bindings()
         .values()
         .find(|binding| binding.name.as_str() == "notify-on-invoice-created")
         .expect("the example binds the two contexts");
@@ -545,7 +545,7 @@ fn the_examples_escalation_names_the_event_that_proves_it_happened() {
 
     let specification = billing();
     let binding = specification
-        .bindings
+        .bindings()
         .values()
         .find(|binding| binding.name.as_str() == "notify-on-invoice-created")
         .expect("the example binds the two contexts");
@@ -559,7 +559,7 @@ fn the_examples_escalation_names_the_event_that_proves_it_happened() {
 
     // Declared, so it has fields a scenario can assert on rather than being a bare name.
     let declared = specification
-        .events
+        .events()
         .get(emitted)
         .expect("the escalation event is declared");
     let carried: Vec<&str> = declared
@@ -578,7 +578,7 @@ fn the_example_shows_a_mapping_that_reads_the_event_and_one_that_does_not() {
 
     let specification = billing();
     let binding = specification
-        .bindings
+        .bindings()
         .values()
         .next()
         .expect("the example declares a binding");
@@ -607,9 +607,9 @@ fn the_example_declares_the_one_type_crossing_it_needs_and_says_why() {
     // someone added to make a build pass.
     let specification = billing();
 
-    assert_eq!(specification.conversions.len(), 1);
+    assert_eq!(specification.conversions().len(), 1);
     let conversion = specification
-        .conversions
+        .conversions()
         .iter()
         .next()
         .expect("the example declares one crossing");
@@ -618,11 +618,11 @@ fn the_example_declares_the_one_type_crossing_it_needs_and_says_why() {
     let from = &conversion.from;
     let to = &conversion.to;
     assert!(
-        specification.conversions.permits(from, to),
+        specification.conversions().permits(from, to),
         "the declared crossing is not permitted"
     );
     assert!(
-        !specification.conversions.permits(to, from),
+        !specification.conversions().permits(to, from),
         "a crossing is one-directional; the reverse is usually the unsafe one"
     );
 }
@@ -631,8 +631,8 @@ fn the_example_declares_the_one_type_crossing_it_needs_and_says_why() {
 fn the_example_states_a_runtime_shape_without_deploying_anything() {
     let specification = billing();
 
-    assert_eq!(specification.topology.workloads.len(), 2);
-    for workload in specification.topology.workloads.values() {
+    assert_eq!(specification.topology().workloads.len(), 2);
+    for workload in specification.topology().workloads.values() {
         assert!(
             workload.replicas.min >= 2,
             "`{}` runs a binding's listener; one instance leaves a window with nothing listening",

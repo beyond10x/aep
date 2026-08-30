@@ -34,6 +34,27 @@ pub type EntityEnvelope = Entity<Node>;
 #[serde(transparent)]
 pub struct Cursor(pub String);
 
+impl Cursor {
+    /// The deterministic offset encoded by a cursor this contract emits.
+    ///
+    /// # Errors
+    ///
+    /// [`QueryError::Invalid`] when the cursor was not emitted by this contract.
+    pub fn offset(&self) -> Result<usize, QueryError> {
+        let malformed = || QueryError::Invalid {
+            reason: format!(
+                "cursor `{}` is not an opaque pagination cursor emitted by this backend",
+                self.0
+            ),
+        };
+        let digits = self.0.strip_prefix("offset-").ok_or_else(malformed)?;
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(malformed());
+        }
+        digits.parse().map_err(|_| malformed())
+    }
+}
+
 /// One page of results.
 #[derive(
     Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
@@ -51,6 +72,30 @@ impl<T> Page<T> {
     /// A page that is the whole answer.
     pub fn complete(items: Vec<T>) -> Self {
         Self { items, next: None }
+    }
+
+    /// Applies an opaque offset and a limit to an already filtered, deterministically ordered set.
+    ///
+    /// # Errors
+    ///
+    /// [`QueryError::Invalid`] for a malformed cursor or a zero limit, which cannot advance.
+    pub fn paginate(
+        items: Vec<T>,
+        limit: Option<usize>,
+        after: Option<&Cursor>,
+    ) -> Result<Self, QueryError> {
+        let offset = after.map_or(Ok(0), Cursor::offset)?;
+        if limit == Some(0) {
+            return Err(QueryError::Invalid {
+                reason: "a page limit must be greater than zero".to_owned(),
+            });
+        }
+        let available = items.len();
+        let take = limit.unwrap_or(available.saturating_sub(offset));
+        let page: Vec<T> = items.into_iter().skip(offset).take(take).collect();
+        let next_offset = offset.saturating_add(page.len());
+        let next = (next_offset < available).then(|| Cursor(format!("offset-{next_offset}")));
+        Ok(Self { items: page, next })
     }
 
     /// How many results this page holds.
@@ -364,9 +409,26 @@ mod tests {
 
         let partial = Page {
             items: vec![1],
-            next: Some(Cursor("offset:1".to_owned())),
+            next: Some(Cursor("offset-1".to_owned())),
         };
         assert!(partial.has_more());
+    }
+
+    #[test]
+    fn pagination_advances_and_refuses_cursors_it_did_not_emit() {
+        let first = Page::paginate(vec![1, 2, 3], Some(2), None).expect("first page");
+        assert_eq!(first.items, [1, 2]);
+        assert_eq!(first.next, Some(Cursor("offset-2".to_owned())));
+        let second =
+            Page::paginate(vec![1, 2, 3], Some(2), first.next.as_ref()).expect("continuation");
+        assert_eq!(second.items, [3]);
+        assert!(!second.has_more());
+
+        let malformed = Page::paginate(vec![1], Some(1), Some(&Cursor("page-two".to_owned())))
+            .expect_err("not one of this contract's cursors");
+        assert_eq!(malformed.code(), "invalid");
+        let zero = Page::paginate(vec![1], Some(0), None).expect_err("cannot advance");
+        assert_eq!(zero.code(), "invalid");
     }
 
     #[test]

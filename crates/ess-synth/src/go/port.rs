@@ -55,8 +55,8 @@ pub(super) fn component_package(
             .as_deref()
             .unwrap_or(&component.name.to_string()),
         component.name,
-        ir.system,
-        ir.version
+        ir.system(),
+        ir.version()
     );
     if let Some(summary) = &component.naming.summary {
         let _ = write!(doc, "//\n// {}\n", summary.trim());
@@ -175,7 +175,7 @@ fn port(out: &mut String, emit: &Emit<'_>, component: &ResolvedComponent) {
             .unwrap_or(&component.name.to_string()),
     );
 
-    for command in emit.ir.commands.values() {
+    for command in emit.ir.commands().values() {
         if !component
             .accepts
             .iter()

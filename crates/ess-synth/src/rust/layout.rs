@@ -41,15 +41,15 @@ pub struct Layout {
 impl Layout {
     /// Derives the layout of a resolved specification.
     pub fn of(ir: &EssIr) -> Self {
-        let package = format!("{}-types", ir.system.segments().join("-"));
-        let system_package = format!("{}-system", ir.system.segments().join("-"));
-        let server_package = format!("{}-server", ir.system.segments().join("-"));
+        let package = format!("{}-types", ir.system().segments().join("-"));
+        let system_package = format!("{}-system", ir.system().segments().join("-"));
+        let server_package = format!("{}-server", ir.system().segments().join("-"));
         let component_packages =
             component_packages(ir, &[&package, &system_package, &server_package]);
 
         let modules = module_idents(ir);
         let mut owners = BTreeMap::new();
-        for domain in ir.domains.values() {
+        for domain in ir.domains().values() {
             for declared in &domain.types {
                 owners.insert(declared.name().clone(), domain.name.clone());
             }
@@ -217,7 +217,7 @@ impl Layout {
 ///    generated crate carries, `obligation` for the typed refusal an unmet obligation returns.
 fn module_idents(ir: &EssIr) -> BTreeMap<QualifiedName, String> {
     let mut candidates: BTreeMap<QualifiedName, String> = ir
-        .domains
+        .domains()
         .keys()
         .map(|domain| {
             let local = domain
@@ -233,9 +233,9 @@ fn module_idents(ir: &EssIr) -> BTreeMap<QualifiedName, String> {
         // Minus the system prefix, which every domain carries (`ess-domain` refuses one outside
         // the system's namespace): `duo.alpha.pay` and `duo.beta.pay` become `alpha_pay` and
         // `beta_pay`, not two modules that both start with the one word every module would share.
-        let prefix = ir.system.segments().len();
+        let prefix = ir.system().segments().len();
         candidates = ir
-            .domains
+            .domains()
             .keys()
             .map(|domain| {
                 let segments = domain.segments();
@@ -264,7 +264,7 @@ fn component_packages(ir: &EssIr, reserved: &[&str]) -> BTreeMap<ComponentName, 
     let mut taken: std::collections::BTreeSet<String> =
         reserved.iter().map(|name| (*name).to_owned()).collect();
     let mut packages = BTreeMap::new();
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         let mut candidate = component.to_string();
         while taken.contains(&candidate) {
             candidate.push_str("-component");

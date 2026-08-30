@@ -46,8 +46,8 @@ use aep_domain::WorkflowRef;
 use aep_driver::run::RunDirectory;
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus as DriverStatus};
 use aep_engine::execution::Snapshot;
-use aep_engine::project::project_directory;
 use aep_engine::registry::Registry;
+use aep_project::project::project_directory;
 use aep_render::obligations::Obligations;
 use aep_render::prose::{self, Instruction};
 use aep_render::run::{RunStatus, RunView};
@@ -331,7 +331,7 @@ fn run_directory(args: &RenderArgs, run: &str) -> Result<RunDirectory> {
     } else {
         let here = std::env::current_dir().context("reading the working directory")?;
         let directory = project_directory();
-        aep_engine::project::discover(&here).with_context(|| {
+        aep_project::project::discover(&here).with_context(|| {
             format!(
                 "no `--project` was given and no `{directory}/project.yaml` was found in \
                  {} or any parent",
@@ -569,11 +569,16 @@ fn watch(workflow: &Workflow, args: &RenderArgs, run: &str) -> Result<ExitCode> 
     }
 }
 
-/// The most recent modification time of the two documents a run writes.
+/// The modification time of the one pointer that publishes a run generation.
 ///
 /// `None` when neither can be read, which is a run directory that is being written to right now —
 /// the next tick will find it.
 fn touched(directory: &RunDirectory) -> Option<SystemTime> {
+    let current = directory.current_generation_path();
+    if current.exists() {
+        return std::fs::metadata(current).ok()?.modified().ok();
+    }
+    // A complete pre-generation run migrates when the first frame reads it.
     [directory.cursor_path(), directory.snapshot_path()]
         .iter()
         .filter_map(|path| std::fs::metadata(path).ok()?.modified().ok())

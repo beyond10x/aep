@@ -1101,41 +1101,148 @@ impl Driver<'_> {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct EssIr {
     /// The system's name.
-    pub system: QualifiedName,
+    system: QualifiedName,
     /// Its version.
-    pub version: Version,
+    version: Version,
     /// What it is called on the wire, and shown as.
-    pub naming: Naming,
+    naming: Naming,
     /// What the system is, in one paragraph.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
+    summary: Option<String>,
     /// Every bounded context, by name.
-    pub domains: BTreeMap<QualifiedName, ResolvedDomain>,
+    domains: BTreeMap<QualifiedName, ResolvedDomain>,
     /// Every type, by name.
-    pub types: BTreeMap<QualifiedName, ResolvedType>,
+    types: BTreeMap<QualifiedName, ResolvedType>,
     /// Every crossing the specification permits.
-    pub conversions: Vec<ResolvedConversion>,
+    conversions: Vec<ResolvedConversion>,
     /// Every entity, by name.
-    pub entities: BTreeMap<QualifiedName, ResolvedEntity>,
+    entities: BTreeMap<QualifiedName, ResolvedEntity>,
     /// Every command, by name.
-    pub commands: BTreeMap<QualifiedName, ResolvedCommand>,
+    commands: BTreeMap<QualifiedName, ResolvedCommand>,
     /// Every event, by name.
-    pub events: BTreeMap<QualifiedName, ResolvedEvent>,
+    events: BTreeMap<QualifiedName, ResolvedEvent>,
     /// Every error, by name.
-    pub errors: BTreeMap<QualifiedName, ResolvedError>,
+    errors: BTreeMap<QualifiedName, ResolvedError>,
     /// Every view, by name.
-    pub views: BTreeMap<QualifiedName, ResolvedView>,
+    views: BTreeMap<QualifiedName, ResolvedView>,
     /// Every actor, by name.
-    pub actors: BTreeMap<QualifiedName, ResolvedActor>,
+    actors: BTreeMap<QualifiedName, ResolvedActor>,
     /// Every binding, by name.
-    pub bindings: BTreeMap<BindingName, ResolvedBinding>,
+    bindings: BTreeMap<BindingName, ResolvedBinding>,
     /// Every component, by name.
-    pub components: BTreeMap<ComponentName, ResolvedComponent>,
+    components: BTreeMap<ComponentName, ResolvedComponent>,
     /// The runtime shape: one entry per component that runs.
-    pub workloads: BTreeMap<ComponentName, ResolvedWorkload>,
+    workloads: BTreeMap<ComponentName, ResolvedWorkload>,
+}
+
+/// Compiler-owned parts of a fully resolved specification.
+pub(crate) struct EssIrParts {
+    pub(crate) system: QualifiedName,
+    pub(crate) version: Version,
+    pub(crate) naming: Naming,
+    pub(crate) summary: Option<String>,
+    pub(crate) domains: BTreeMap<QualifiedName, ResolvedDomain>,
+    pub(crate) types: BTreeMap<QualifiedName, ResolvedType>,
+    pub(crate) conversions: Vec<ResolvedConversion>,
+    pub(crate) entities: BTreeMap<QualifiedName, ResolvedEntity>,
+    pub(crate) commands: BTreeMap<QualifiedName, ResolvedCommand>,
+    pub(crate) events: BTreeMap<QualifiedName, ResolvedEvent>,
+    pub(crate) errors: BTreeMap<QualifiedName, ResolvedError>,
+    pub(crate) views: BTreeMap<QualifiedName, ResolvedView>,
+    pub(crate) actors: BTreeMap<QualifiedName, ResolvedActor>,
+    pub(crate) bindings: BTreeMap<BindingName, ResolvedBinding>,
+    pub(crate) components: BTreeMap<ComponentName, ResolvedComponent>,
+    pub(crate) workloads: BTreeMap<ComponentName, ResolvedWorkload>,
 }
 
 impl EssIr {
+    /// Builds the IR from the compiler's resolved parts.
+    pub(crate) fn from_parts(parts: EssIrParts) -> Self {
+        Self {
+            system: parts.system,
+            version: parts.version,
+            naming: parts.naming,
+            summary: parts.summary,
+            domains: parts.domains,
+            types: parts.types,
+            conversions: parts.conversions,
+            entities: parts.entities,
+            commands: parts.commands,
+            events: parts.events,
+            errors: parts.errors,
+            views: parts.views,
+            actors: parts.actors,
+            bindings: parts.bindings,
+            components: parts.components,
+            workloads: parts.workloads,
+        }
+    }
+
+    /// The system's name.
+    pub fn system(&self) -> &QualifiedName {
+        &self.system
+    }
+    /// The specification version.
+    pub fn version(&self) -> &Version {
+        &self.version
+    }
+    /// The system's display and wire naming.
+    pub fn naming(&self) -> &Naming {
+        &self.naming
+    }
+    /// The system summary, when one was declared.
+    pub fn summary(&self) -> &Option<String> {
+        &self.summary
+    }
+    /// Every bounded context, by name.
+    pub fn domains(&self) -> &BTreeMap<QualifiedName, ResolvedDomain> {
+        &self.domains
+    }
+    /// Every resolved type, by name.
+    pub fn types(&self) -> &BTreeMap<QualifiedName, ResolvedType> {
+        &self.types
+    }
+    /// Every permitted type crossing.
+    pub fn conversions(&self) -> &[ResolvedConversion] {
+        &self.conversions
+    }
+    /// Every resolved entity, by name.
+    pub fn entities(&self) -> &BTreeMap<QualifiedName, ResolvedEntity> {
+        &self.entities
+    }
+    /// Every resolved command, by name.
+    pub fn commands(&self) -> &BTreeMap<QualifiedName, ResolvedCommand> {
+        &self.commands
+    }
+    /// Every resolved event, by name.
+    pub fn events(&self) -> &BTreeMap<QualifiedName, ResolvedEvent> {
+        &self.events
+    }
+    /// Every resolved error, by name.
+    pub fn errors(&self) -> &BTreeMap<QualifiedName, ResolvedError> {
+        &self.errors
+    }
+    /// Every resolved view, by name.
+    pub fn views(&self) -> &BTreeMap<QualifiedName, ResolvedView> {
+        &self.views
+    }
+    /// Every resolved actor, by name.
+    pub fn actors(&self) -> &BTreeMap<QualifiedName, ResolvedActor> {
+        &self.actors
+    }
+    /// Every resolved binding, by name.
+    pub fn bindings(&self) -> &BTreeMap<BindingName, ResolvedBinding> {
+        &self.bindings
+    }
+    /// Every resolved component, by name.
+    pub fn components(&self) -> &BTreeMap<ComponentName, ResolvedComponent> {
+        &self.components
+    }
+    /// Every runtime workload, by component.
+    pub fn workloads(&self) -> &BTreeMap<ComponentName, ResolvedWorkload> {
+        &self.workloads
+    }
+
     /// Every event that causes a command, and the bindings that make it so.
     ///
     /// On the IR rather than computed by each consumer because it is the graph the whole interaction

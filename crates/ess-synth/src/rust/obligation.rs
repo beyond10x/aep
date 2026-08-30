@@ -38,8 +38,9 @@ pub(super) fn obligation_module(
     provenance: &Provenance,
     stubbed: &mut std::collections::BTreeSet<crate::plan::Capability>,
 ) -> Option<Artifact> {
-    let needed =
-        plan.obligations().next().is_some() || !ir.components.is_empty() || !ir.bindings.is_empty();
+    let needed = plan.obligations().next().is_some()
+        || !ir.components().is_empty()
+        || !ir.bindings().is_empty();
     if !needed {
         return None;
     }
@@ -80,7 +81,7 @@ fn conversion_traits(
     stubbed: &mut std::collections::BTreeSet<crate::plan::Capability>,
 ) {
     let mut owed = Vec::new();
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         let source = conversion_source(conversion);
         if mechanical_conversion(ir, conversion).is_some() {
             continue;
@@ -173,7 +174,7 @@ pub(super) fn domain_obligations(
 /// The behaviours and queries one bounded context owes, in declaration order.
 fn owed_by_domain(emit: &Emit<'_>, plan: &SynthesisPlan) -> Vec<TraitStub> {
     let mut traits: Vec<TraitStub> = Vec::new();
-    for command in emit.ir.commands.values() {
+    for command in emit.ir.commands().values() {
         if !super::owned(emit, &command.name) {
             continue;
         }
@@ -198,7 +199,7 @@ fn owed_by_domain(emit: &Emit<'_>, plan: &SynthesisPlan) -> Vec<TraitStub> {
             answer: scoped(&format!("{type_name}Outcome")),
         });
     }
-    for view in emit.ir.views.values() {
+    for view in emit.ir.views().values() {
         if !super::owned(emit, &view.name) {
             continue;
         }

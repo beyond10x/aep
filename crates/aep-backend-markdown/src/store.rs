@@ -14,7 +14,7 @@
 //!
 //! [`MarkdownStore::load`] never stops at the first bad file. Fixing a plan one error per run is
 //! how a validation step becomes something people stop running — the same argument
-//! `aep_engine::load` makes for the document tree, and the same shape: [`StoreFailure`] is that
+//! `aep-project` makes for the document tree, and the same shape: [`StoreFailure`] is that
 //! module's `LoadFailure` with a store's vocabulary.
 //!
 //! # There is no delete

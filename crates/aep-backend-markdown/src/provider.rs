@@ -45,7 +45,7 @@
 //! line at all, loads with an empty log — a plan that predates the provider is a normal condition,
 //! and refusing it would refuse this repository's own store.
 //!
-//! # The order of a commit, and what a torn write leaves
+//! # Single commits and command batches
 //!
 //! `commit` checks `Expect` against the document's `revision`, writes the document through the
 //! store's temporary-file-and-rename path (one temporary per writer, `sync_all` before the rename),
@@ -56,6 +56,11 @@
 //! nothing, because nothing in the log is wrong; what is missing is the line that never landed.
 //! The other order — events first — would leave a recorded fact whose document did not change,
 //! which reads as a lie in the one file people trust most, so this provider takes the first.
+//!
+//! The stronger [`AtomicBatchStore`] path writes the complete ordered command to
+//! [`.aep-batch.pending.json`](PENDING_BATCH) before applying any entry. If the process stops after
+//! one document or before its events, every state and event read completes that intent
+//! idempotently before answering. The pending record is removed only after the whole batch lands.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -65,7 +70,9 @@ use std::path::{Path, PathBuf};
 use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactRelation, ArtifactStatus};
 use aep_domain::node::Node;
 use entity_core::{Decision, DomainEvent, EntityInstance};
-use entity_store::{check, EventProvider, Expect, StateProvider, Store, StoreError};
+use entity_store::{
+    check, AtomicBatchStore, AtomicCommit, EventProvider, Expect, StateProvider, Store, StoreError,
+};
 use serde_json::{Map, Value};
 
 use crate::document::PlanningDocument;
@@ -75,6 +82,47 @@ use crate::store::MarkdownStore;
 
 /// The field a document's markdown body travels under.
 pub const BODY_FIELD: &str = "body";
+
+/// The recoverable intent that makes a multi-document command one logical write.
+pub const PENDING_BATCH: &str = ".aep-batch.pending.json";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PendingBatch {
+    commits: Vec<PendingCommit>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PendingCommit {
+    decision: Decision,
+    expect: PendingExpect,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PendingExpect {
+    Absent,
+    Revision(u64),
+}
+
+impl From<Expect> for PendingExpect {
+    fn from(expect: Expect) -> Self {
+        match expect {
+            Expect::Absent => Self::Absent,
+            Expect::Revision(revision) => Self::Revision(revision),
+        }
+    }
+}
+
+impl From<PendingExpect> for Expect {
+    fn from(expect: PendingExpect) -> Self {
+        match expect {
+            PendingExpect::Absent => Self::Absent,
+            PendingExpect::Revision(revision) => Self::Revision(revision),
+        }
+    }
+}
 
 /// A store shaped like a plan: kinds as entity types, names as ids, documents as instances.
 ///
@@ -160,6 +208,79 @@ impl MarkdownProvider {
         PlanningDocument::parse(&text, Some(&Self::relative(entity, id)))
             .map(Some)
             .map_err(|error| backend("parsing", &path, &error))
+    }
+
+    /// Completes a batch whose intent was durable before an interruption.
+    fn recover_pending(&self) -> Result<(), StoreError> {
+        let path = self.store.root().join(PENDING_BATCH);
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(backend("reading", &path, &error)),
+        };
+        let pending: PendingBatch =
+            serde_json::from_str(&text).map_err(|error| backend("parsing", &path, &error))?;
+        let mut writer = self.clone();
+        for commit in pending.commits {
+            writer.apply_recoverable(&commit.decision, commit.expect.into())?;
+        }
+        fs::remove_file(&path).map_err(|error| backend("removing", &path, &error))
+    }
+
+    /// Applies one intended entry, completing an event append if its document already landed.
+    fn apply_recoverable(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
+        let instance = &decision.instance;
+        let held = self
+            .read(&instance.entity, &instance.id)?
+            .map(|document| instance_of(&instance.entity, &instance.id, &document));
+        if held.as_ref() == Some(instance) {
+            let present = self.events_raw(&instance.entity, &instance.id)?;
+            let missing: Vec<DomainEvent> = decision
+                .events
+                .iter()
+                .filter(|event| !present.contains(event))
+                .cloned()
+                .collect();
+            return self.append_events(&missing);
+        }
+        self.commit(decision, expect)
+    }
+
+    fn events_raw(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
+        let path = self.store.root().join(JOURNAL);
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(backend("reading", &path, &error)),
+        };
+        Ok(text
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .filter_map(|line| serde_json::from_str::<DomainEvent>(line).ok())
+            .filter(|event| event.entity == entity && event.id == id)
+            .collect())
+    }
+
+    fn append_events(&self, events: &[DomainEvent]) -> Result<(), StoreError> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let path = self.store.root().join(JOURNAL);
+        let mut lines = String::new();
+        for event in events {
+            lines.push_str(
+                &serde_json::to_string(event).map_err(|error| {
+                    StoreError::Backend(format!("serialising an event: {error}"))
+                })?,
+            );
+            lines.push('\n');
+        }
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut file| file.write_all(lines.as_bytes()))
+            .map_err(|error| backend("appending to", &path, &error))
     }
 }
 
@@ -387,12 +508,14 @@ fn tags_of(fields: &mut Map<String, Value>) -> Result<BTreeSet<String>, String> 
 
 impl StateProvider for MarkdownProvider {
     fn load(&self, entity: &str, id: &str) -> Result<Option<EntityInstance>, StoreError> {
+        self.recover_pending()?;
         Ok(self
             .read(entity, id)?
             .map(|document| instance_of(entity, id, &document)))
     }
 
     fn ids(&self, entity: &str) -> Result<Vec<String>, StoreError> {
+        self.recover_pending()?;
         let directory = self.store.root().join(entity);
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -421,21 +544,11 @@ impl StateProvider for MarkdownProvider {
 
 impl EventProvider for MarkdownProvider {
     fn events(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
-        let path = self.store.root().join(JOURNAL);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(backend("reading", &path, &error)),
-        };
+        self.recover_pending()?;
         // Only the lines that are events. The journal's older entries are another shape, read by
         // another reader (`crate::journal`), and a line that is neither is a half-written line from
         // a killed process — skipped here as it is there, rather than making the log unreadable.
-        Ok(text
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .filter_map(|line| serde_json::from_str::<DomainEvent>(line).ok())
-            .filter(|event| event.entity == entity && event.id == id)
-            .collect())
+        self.events_raw(entity, id)
     }
 }
 
@@ -462,24 +575,64 @@ impl Store for MarkdownProvider {
         written.map_err(|error| StoreError::Backend(error.to_string()))?;
 
         // Events after the document: see the module doc for what a failure here leaves.
-        if decision.events.is_empty() {
+        self.append_events(&decision.events)
+    }
+}
+
+impl AtomicBatchStore for MarkdownProvider {
+    fn commit_batch(&mut self, commits: &[AtomicCommit]) -> Result<(), StoreError> {
+        self.recover_pending()?;
+        if commits.is_empty() {
             return Ok(());
         }
-        let path = self.store.root().join(JOURNAL);
-        let mut lines = String::new();
-        for event in &decision.events {
-            lines.push_str(
-                &serde_json::to_string(event).map_err(|error| {
-                    StoreError::Backend(format!("serialising an event: {error}"))
-                })?,
-            );
-            lines.push('\n');
+
+        // Validate the full ordered batch before publishing its intent. Later entries see the
+        // transaction-local instance produced by earlier ones.
+        let mut view: BTreeMap<(String, String), Option<EntityInstance>> = BTreeMap::new();
+        for commit in commits {
+            let instance = &commit.decision.instance;
+            let key = (instance.entity.clone(), instance.id.clone());
+            if !view.contains_key(&key) {
+                let held = self
+                    .read(&instance.entity, &instance.id)?
+                    .map(|document| instance_of(&instance.entity, &instance.id, &document));
+                view.insert(key.clone(), held);
+            }
+            check(
+                &instance.entity,
+                &instance.id,
+                commit.expect,
+                view.get(&key)
+                    .and_then(|held| held.as_ref().map(|held| held.revision)),
+            )?;
+            view.insert(key, Some(instance.clone()));
         }
-        fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .and_then(|mut file| file.write_all(lines.as_bytes()))
-            .map_err(|error| backend("appending to", &path, &error))
+
+        let pending = PendingBatch {
+            commits: commits
+                .iter()
+                .map(|commit| PendingCommit {
+                    decision: commit.decision.clone(),
+                    expect: commit.expect.into(),
+                })
+                .collect(),
+        };
+        fs::create_dir_all(self.store.root())
+            .map_err(|error| backend("creating", self.store.root(), &error))?;
+        let path = self.store.root().join(PENDING_BATCH);
+        let temporary = self
+            .store
+            .root()
+            .join(format!("{PENDING_BATCH}.{}.tmp", std::process::id()));
+        let bytes = serde_json::to_vec(&pending)
+            .map_err(|error| StoreError::Backend(format!("serialising a batch intent: {error}")))?;
+        let mut file = fs::File::create(&temporary)
+            .map_err(|error| backend("creating", &temporary, &error))?;
+        file.write_all(&bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(|error| backend("writing", &temporary, &error))?;
+        fs::rename(&temporary, &path).map_err(|error| backend("publishing", &path, &error))?;
+
+        self.recover_pending()
     }
 }

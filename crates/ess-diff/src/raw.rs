@@ -88,7 +88,7 @@ impl TryFrom<RawEssDelta> for EssDelta {
         if raw.before.system != raw.after.system {
             errors.push(ValidationError::new(
                 ValidationCode::ConflictingDeclaration,
-                "delta.after.system",
+                "delta.after.system()",
                 format!(
                     "the two sides name different systems, `{}` and `{}`: a delta answers what \
                      moved between revisions of one system",

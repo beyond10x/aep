@@ -9,7 +9,10 @@ use aep_conformance::{Fault, FaultyBackend, Level};
 use entity_store::Store;
 
 /// Runs the sixteen suites at `Level::Full` and names every failing check.
-fn assert_conforms<S: Store>(backend: &EntityBackend<S>, provider: &str) {
+fn assert_conforms<S: Store + entity_store::AtomicBatchStore>(
+    backend: &EntityBackend<S>,
+    provider: &str,
+) {
     let report = aep_conformance::run(backend, Level::Full);
     assert!(
         report.passed(),
@@ -38,7 +41,9 @@ fn assert_conforms<S: Store>(backend: &EntityBackend<S>, provider: &str) {
 /// lesson of 2026-08-26, when a "rolls back both halves" test that asserted a pre-check refusal was
 /// cited as evidence for two releases. If this ever starts passing, the test beside it has stopped
 /// being evidence.
-fn assert_the_suites_catch_a_faulty<S: Store>(fresh: impl Fn() -> EntityBackend<S>) {
+fn assert_the_suites_catch_a_faulty<S: Store + entity_store::AtomicBatchStore>(
+    fresh: impl Fn() -> EntityBackend<S>,
+) {
     for fault in [
         Fault::ReplayApplies,
         Fault::IgnoreExpectedRevision,
@@ -86,10 +91,9 @@ fn the_suites_that_pass_over_a_sqlite_store_catch_an_adapter_that_is_wrong() {
 }
 
 #[test]
-fn a_latched_adapter_refuses_reads_as_well_as_writes() {
-    // `Unwritable` accepts nothing, so the first command applies in memory and fails to land; from
-    // then on the adapter must refuse to answer about state that is not durable — reads included,
-    // which is the half the latch once missed.
+fn a_failed_batch_leaves_the_adapter_clean_and_readable() {
+    // `Unwritable` accepts nothing. Candidate state never becomes the adapter's state, so the
+    // provider error is returned without poisoning later reads.
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
@@ -131,6 +135,16 @@ fn a_latched_adapter_refuses_reads_as_well_as_writes() {
             ))
         }
     }
+    impl entity_store::AtomicBatchStore for Unwritable {
+        fn commit_batch(
+            &mut self,
+            _commits: &[entity_store::AtomicCommit],
+        ) -> Result<(), entity_store::StoreError> {
+            Err(entity_store::StoreError::Backend(
+                "the disk is full".to_owned(),
+            ))
+        }
+    }
 
     let backend = EntityBackend::over(Unwritable::default()).expect("an empty store opens");
     let context = CommandContext::new(
@@ -159,14 +173,17 @@ fn a_latched_adapter_refuses_reads_as_well_as_writes() {
         error.to_string().contains("the disk is full"),
         "the refusal carries the provider's reason: {error}"
     );
-    assert!(backend.latched().is_some(), "and the adapter latches");
+    assert!(
+        backend.latched().is_none(),
+        "candidate memory was never published, so there is nothing to latch"
+    );
 
     let read = block_on(backend.get(
         &EntityRef::new("01MEM0000000000000001".parse().expect("an id")),
         aep_contract::QueryConsistency::Current,
     ));
     assert!(
-        matches!(read, Err(aep_contract::QueryError::Unavailable { .. })),
-        "a latched adapter does not answer a read from memory: {read:?}"
+        matches!(read, Err(aep_contract::QueryError::NotFound { .. })),
+        "the failed candidate is absent from memory: {read:?}"
     );
 }

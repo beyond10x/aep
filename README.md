@@ -115,41 +115,16 @@ this is deliberately not", and it is why that repository exists separately.
 
 ## Status
 
-**Shipped and tagged, adopted by nobody. Latest release `0.23.2` (2026-08-26).** Releases are cut
-per delivered wave; `docs/status.md` derives its delivered-waves table from the annotated tags, and
-`task status-check` fails the gate if the two disagree.
+Current state is deliberately not copied onto this page:
 
-Working today, all gated by `task check`: the AEP document tree, resolution, evidence-guarded
-workflows and the `protocol` CLI; evidence that carries an observation date and decays past a
-declared horizon; ESS specifications compiling to documentation, OpenAPI, AsyncAPI,
-JSON Schema, generated conformance suites, and structural skeletons in Rust, Go and a browser
-realization — with one specification run as two applications and compared in every gate run; a
-Kubernetes observation checked three-valued against a desired state, with gaps projected back as
-reviewable patches; a durable markdown planning store, which is the store this repository plans
-itself in; an agent transcript judged against a typed specification; a
-[Claude Code plugin](integrations/claude-code/) that plans through it; and the **reference driver**
-that walks a workflow rather than being steered along one, deciding each tool call in Rust
-(`decide_tool` in `crates/protocol-cli/src/drive.rs`) rather than in a hook script.
+- [`docs/status.md`](docs/status.md) derives the delivered-wave record from annotated tags.
+- [The planning store](.engineering/planning/) carries accepted work and its lifecycle state.
+- [`docs/plan/gap-register.md`](docs/plan/gap-register.md) carries open gaps and what closes them.
+- [`docs/VISION.md`](docs/VISION.md) lists proposals that neither accepted surface has taken up.
 
-Not working yet, stated plainly: `describe_type` reports no lifecycle, so a harness still cannot ask
-what a kind's ladder is (**D-P5**); `protocol conformance` runs only against the in-memory backend,
-so a durable store's conformance is shown by a Rust test rather than from the command line;
-generated code is structural, never behavioural — every algorithm
-remains a typed obligation; the conformance runner cannot reach an out-of-process implementation —
-holding your own system to a specification means depending on `ess-conformance` from your own tests;
-`independent: true` is self-declared, with no signature or attestation binding a verifier to its
-evidence.
-
-And nobody's work is governed by this yet. One outside tree has been written against the
-specification and validates, which is the first evidence that it is adoptable. This repository has
-driven exactly one real story of its own backlog end to end, and that run **blocked** four states
-short of the person it was meant to stop at, for two reasons the engine printed —
-[`docs/plan/harness-wave-4-governed-dogfood.md`](docs/plan/harness-wave-4-governed-dogfood.md) § W4.1
-is the record, kept as it ran. Built is not adopted.
-
-[`docs/status.md`](docs/status.md) is the full status report: the delivered waves (derived from the
-tags, drift-checked in the gate), the component tables, and every limitation with its consequence.
-The gate is the measurement — run `task check` rather than trusting a number written in prose.
+`cargo xtask status --check` holds those generated release and gate stamps to their sources. Run
+`task check` for the repository's verification result; its generated step list is in
+[`AGENTS.md` § Gate](AGENTS.md#gate).
 
 ## Where everything is
 
@@ -157,7 +132,7 @@ The gate is the measurement — run `task check` rather than trusting a number w
 |---|---|
 | [`docs/guide/`](docs/guide/) | the adopter's guide — start here |
 | [`docs/VISION.md`](docs/VISION.md) | why this exists, and how the two halves compose |
-| [`docs/status.md`](docs/status.md) | the status report: waves, components, limitations, and the full document index |
+| [`docs/status.md`](docs/status.md) | the annotated-tag delivery record and links to live planning state |
 | [`AGENTS.md`](AGENTS.md) | the working agreement, including the invariant register — every rule names the check that enforces it |
 | [`docs/design/`](docs/design/), [`docs/plan/`](docs/plan/) | designs — proposed until a plan page accepts them — and the plan pages that did |
 | [`crates/`](crates/) | the workspace: the protocol, the ESS toolchain, the infrastructure and trace domains, the driver and the CLI |
@@ -181,17 +156,16 @@ rather than skipping — a check that quietly passes without its toolchain reads
 that passed.
 
 ```console
-task check     # the ten-step gate. Run this; it is the measurement.
+task check     # the authoritative gate; run this rather than a copied command list
 ```
 
-`task check` runs, in order: `fmt-check`, `status-check`, `clippy`, `test`, `doc-check`,
-`schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`. The six `*-check`
-drift steps each assert that a committed tree still equals what its inputs produce — a generated
-file edited by hand fails the gate rather than surviving in the repository.
+The ordered step list is generated from `Taskfile.yml` into [`AGENTS.md` § Gate](AGENTS.md#gate), so
+this page does not maintain a second copy.
 
-The gate is **hermetic**: it calls no API and spends no money. The evals that do are separate tasks
-and are never steps of `check` — `task codex-eval` checks the Codex instruction surface for free,
-with no model call.
+The gate calls no paid or external API and spends no money. Its named `postgres-check` may use the
+loopback database supplied by CI; without one it reports the skipped integration honestly. Paid
+evals remain separate tasks and are never steps of `check` — `task codex-eval` checks the Codex
+instruction surface for free, with no model call.
 
 Published documentation: <https://beyond10x.github.io/engineering-protocols/>
 

@@ -20,7 +20,8 @@ use aep_domain::artifact::{
 use aep_domain::predicate::Truth;
 use aep_domain::task::Task;
 use aep_engine::evaluate::{evaluate, Requirement, RequirementSource};
-use aep_engine::{load_tree_report, Engine, Execution, Snapshot};
+use aep_engine::{Engine, Execution, Snapshot};
+use aep_project::load_tree_report;
 
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {

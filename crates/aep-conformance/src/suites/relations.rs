@@ -140,6 +140,38 @@ pub fn run<B: Backend>(backend: &B) -> SuiteReport {
         Err(error) => report.aborted("a kind filter returns only relations of that kind", error),
     }
 
+    let mut first_query = RelationQuery::from(design.unversioned());
+    first_query.limit = Some(1);
+    match edges(backend, &first_query) {
+        Ok(first) => {
+            let mut second_query = first_query;
+            second_query.after.clone_from(&first.next);
+            match edges(backend, &second_query) {
+                Ok(second) => report.expect(
+                    "a relation cursor advances without repeating an edge",
+                    first.len() == 1
+                        && second.len() == 1
+                        && first.items[0].id != second.items[0].id
+                        && !second.has_more(),
+                    format!(
+                        "two outgoing edges paged as first={:?}, second={:?}, next={:?}",
+                        first.items.iter().map(|edge| &edge.id).collect::<Vec<_>>(),
+                        second.items.iter().map(|edge| &edge.id).collect::<Vec<_>>(),
+                        second.next
+                    ),
+                ),
+                Err(error) => report.aborted(
+                    "a relation cursor advances without repeating an edge",
+                    error,
+                ),
+            }
+        }
+        Err(error) => report.aborted(
+            "a relation cursor advances without repeating an edge",
+            error,
+        ),
+    }
+
     let Ok(absent) = EntityId::new(ABSENT_ENTITY) else {
         report.aborted(
             "a relation to an entity that does not exist is refused",

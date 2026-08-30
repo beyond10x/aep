@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 
 use aep_domain::error::ValidationErrors;
 use aep_domain::task::Task;
-use aep_engine::{load_tree_report, resolve};
+use aep_engine::resolve;
+use aep_project::load_tree_report;
 
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {

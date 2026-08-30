@@ -538,7 +538,7 @@ impl SynthesisPlan {
 
 /// Every declared type is fully determined, the lifecycle-synthesised state enums included.
 fn plan_types(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::DomainType,
@@ -553,7 +553,7 @@ fn plan_types(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 /// are unexpressable in the generated state surface, which is this synthesis's rendering of "a
 /// move nobody declared is a move nobody may make".
 fn plan_entities(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for entity in ir.entities.values() {
+    for entity in ir.entities().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::EntityLifecycle,
@@ -566,7 +566,7 @@ fn plan_entities(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 
 /// A command's contract is generated; its behaviour is owed.
 fn plan_commands(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::CommandContract,
@@ -657,7 +657,7 @@ fn effect_phrase(effect: &ResolvedEffect) -> String {
 
 /// An event's payload is fully determined.
 fn plan_events(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::EventType,
@@ -670,7 +670,7 @@ fn plan_events(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 
 /// An error's payload is fully determined.
 fn plan_errors(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::ErrorType,
@@ -683,7 +683,7 @@ fn plan_errors(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 
 /// A view's row type is generated; serving it is owed.
 fn plan_views(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::ViewType,
@@ -721,7 +721,7 @@ fn view_contract(view: &ResolvedView) -> String {
 /// A crossing between two newtypes over one representation is mechanical and generated; any other
 /// declared crossing has a declared *permission* but no declared *computation*, so it is owed.
 fn plan_conversions(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         let disposition = if mechanical_conversion(ir, conversion).is_some() {
             SynthesisDisposition::Generated
         } else {
@@ -774,7 +774,7 @@ pub(crate) fn mechanical_conversion<'a>(
 /// Grants are refused, not owed: deriving anything grant-shaped from this plan would be a second
 /// grant path (review H8, and the wave's own decision on design §28).
 fn plan_actors(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for actor in ir.actors.values() {
+    for actor in ir.actors().values() {
         let grants = if actor.may.is_empty() {
             "observes only; it may invoke no command".to_owned()
         } else {
@@ -810,7 +810,7 @@ fn plan_actors(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 /// one component that accepts the command, and an escalation — the one failure policy that
 /// declares an event — is owed, because nothing declares how that event's fields are filled.
 fn plan_bindings(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::BindingTransformation,
@@ -918,7 +918,7 @@ pub(crate) fn accepting_components<'a>(
     ir: &'a EssIr,
     binding: &ResolvedBinding,
 ) -> Vec<&'a ResolvedComponent> {
-    ir.components
+    ir.components()
         .values()
         .filter(|component| component.accepts.contains(&binding.command))
         .collect()
@@ -1073,7 +1073,7 @@ fn undetermined_mappings(ir: &EssIr, binding: &ResolvedBinding) -> Vec<String> {
 /// publishes and which views its domains declare are all validated declarations, and the handlers
 /// behind the surface are the behaviour obligations the plan already carries.
 fn plan_components(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::ComponentPort,
@@ -1103,7 +1103,7 @@ fn plan_components(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
 
 /// A workload is a runtime requirement, and this synthesis emits no runtime.
 fn plan_workloads(ir: &EssIr, capabilities: &mut Vec<PlannedCapability>) {
-    for workload in ir.workloads.values() {
+    for workload in ir.workloads().values() {
         capabilities.push(PlannedCapability {
             capability: Capability {
                 kind: CapabilityKind::Workload,
