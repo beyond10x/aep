@@ -12,7 +12,7 @@ tags:
 relations:
 - informed_by: story:wave-as-a-surface
 - decomposes: epic:self-evaluation
-revision: 3
+revision: 4
 ---
 # Story: Seven defects the wave skill found by being run once
 
@@ -89,9 +89,9 @@ directory placed outside the worktree — which the same skill requires, so two 
 share one — survives `git worktree remove` untouched and is invisible to every `git`
 command there is. Measured on this machine on 2026-08-30: **14 GB** still standing at
 `~/.cache/claude-tmp/claude-1000/-home-timo-projects-engineering-protocols/ba00d8e0-.../scratchpad/eval/ws_eval`,
-last written **2026-08-24**, under a repository path (`~/projects/engineering-protocols`)
-this repository no longer occupies — so no session in the current tree would ever look
-there. Root filesystem at **91 %**, 75 G free of 848 G. **Fix: a closing step that reads
+last written **2026-08-24**, keyed to `~/projects/engineering-protocols` — a path that still
+exists and holds `.git/` and `.claude/` and no working tree, so nothing in the checkout
+being worked on names it. Root filesystem at **91 %**, 75 G free of 848 G. **Fix: a closing step that reads
 the untracked records out, removes each worktree, removes each build directory by the name
 it was written down under, and reports what `git worktree list` says afterwards — never
 `--force`, because a tree that refuses to go is holding uncommitted work and that is a

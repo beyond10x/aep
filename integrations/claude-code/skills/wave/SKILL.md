@@ -208,6 +208,44 @@ new words.
 A unit that leaves the wave is a **result**, not a failure to hide. A wave that reports only its
 successes has measured nothing.
 
+### Before you promote a finding, check the scenario is one somebody reaches
+
+An adversary is rewarded for constructing a break, and a fixture can break anything. **A red case
+proves the code does what the case says under the conditions the case builds. It does not prove
+anybody ever builds them.** Whether they do is the coordinator's to establish, and it is the step
+that is easy to skip because the failing test is right there and looks like the whole argument.
+
+So before a finding becomes a blocker, a story or a held unit, separate two things and write both:
+
+| | |
+|---|---|
+| **what was measured** | the assertion, the file and line, the exit status |
+| **what reaches it** | the caller, the flag, the default, the documented workflow — or *nothing found* |
+
+*Nothing found* is a real answer and often the right one. It does not make the finding worthless:
+a contract that says one thing while the code does another is still wrong, and saying so costs a
+doc line. It makes it a **different, smaller** finding, and the difference decides whether the unit
+is held or shipped.
+
+The failure this prevents, in the shape it actually takes: an adversary points two projects at one
+store with an explicit flag, both runs proceed, and the coordinator promotes it to *two runs walking
+one document set* — severity nobody measured, on a configuration nobody was shown to use. The
+verified defect underneath was two doc comments disagreeing with the code, which is a two-line fix
+and no decision at all.
+
+### What you write into the store carries its source
+
+You demand `file:line` from every agent you dispatch, and you are the only one of you that writes to
+the durable record. **Hold your own store writes to the rule you hold theirs to.** Every claim in an
+artifact you author is a quotation from a command's output, a `path:line`, or an agent's report —
+and anything you concluded rather than read is labelled as such, in the artifact, not only in the
+report.
+
+A wrong fact in a chat message is corrected by the next message. A wrong fact in the store is
+committed, is read later by somebody who was not here, and is indistinguishable from a checked one.
+Do not infer a directory is abandoned from its name, a scenario is common from a passing fixture, or
+a defect is severe from how bad it would be if it happened.
+
 ### Close it
 
 1. Run the **whole gate once**, on the integration branch.
