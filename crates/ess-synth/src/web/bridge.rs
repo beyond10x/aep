@@ -73,9 +73,10 @@ fn header(out: &mut String, bridge: &Bridge<'_>) {
     let _ = writeln!(
         out,
         "//! The `{}` system, {}, behind a WebAssembly boundary.",
-        ir.system, ir.version
+        ir.system(),
+        ir.version()
     );
-    if let Some(summary) = &ir.summary {
+    if let Some(summary) = ir.summary() {
         let _ = writeln!(out, "//!\n//! {}", summary.trim());
     }
     let _ = write!(
@@ -127,7 +128,7 @@ const NO_SYSTEM: &str =
 /// The bindings whose delivery the plan generates, with the port each lands on.
 fn deliveries<'a>(bridge: &'a Bridge<'a>) -> Vec<Delivery<'a>> {
     let mut out = Vec::new();
-    for binding in bridge.ir.bindings.values() {
+    for binding in bridge.ir.bindings().values() {
         if !bridge
             .plan
             .is_generated(CapabilityKind::BindingDelivery, &binding.name.to_string())
@@ -240,11 +241,11 @@ fn bound_impl(out: &mut String, bridge: &Bridge<'_>, deliveries: &[Delivery<'_>]
     let mut generics = rust_system::components_generics(ir);
     let mut bounds: Vec<String> = Vec::new();
     for (component_name, generic) in ir
-        .components
+        .components()
         .keys()
         .zip(rust_system::components_generics(ir))
     {
-        let component = &ir.components[component_name];
+        let component = &ir.components()[component_name];
         let list = port::bound_list(ir, layout, component, types);
         if !list.is_empty() {
             bounds.push(format!("    {generic}: {},", list.join(" + ")));
@@ -297,7 +298,7 @@ fn run_method(out: &mut String, bridge: &Bridge<'_>) {
         "    fn run(&mut self, command: &str, input: &json::Value) -> Result<String, BridgeError> \
          {\n        let mut out = String::new();\n        match command {\n",
     );
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         let Some(component) = bridge.acceptors.get(&command.name) else {
             continue;
         };
@@ -342,7 +343,7 @@ fn replay_method(out: &mut String, bridge: &Bridge<'_>) {
 fn logged<'a>(bridge: &'a Bridge<'a>) -> BTreeMap<&'a EventHandle, String> {
     let mut events: BTreeSet<&EventHandle> = bridge
         .ir
-        .components
+        .components()
         .values()
         .flat_map(|component| component.publishes.iter())
         .collect();
@@ -450,7 +451,7 @@ fn projected_method(out: &mut String, bridge: &Bridge<'_>) {
         "\n    fn projected(&self) -> String {\n        let mut out = String::new();\n        \
          out.push('{');\n",
     );
-    for view in bridge.ir.views.values() {
+    for view in bridge.ir.views().values() {
         let Some(component) = bridge.view_components.get(&view.name) else {
             continue;
         };
@@ -496,7 +497,7 @@ fn unrealized(out: &mut String, bridge: &Bridge<'_>) {
     );
 
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         for accepted in &component.accepts {
             let declared = accepted.name();
             let module = layout.module(layout.owner(declared));
@@ -544,7 +545,7 @@ fn installation(out: &mut String, bridge: &Bridge<'_>) {
     let layout = bridge.layout.rust();
 
     let mut arguments: Vec<String> = ir
-        .components
+        .components()
         .keys()
         .map(|component| {
             let package = RustLayout::crate_ident(layout.component_package(component));

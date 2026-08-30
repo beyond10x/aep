@@ -469,7 +469,7 @@ impl SemanticDependencyGraph {
     /// containment is recorded on the domain side only — and one rule that reads one place is better
     /// than two rules that have to agree.
     fn walk_domains(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.domains {
+        for (name, resolved) in ir.domains() {
             let domain = DomainRef::new(name.clone());
             self.node(domain.clone());
             for handle in &resolved.types {
@@ -526,7 +526,7 @@ impl SemanticDependencyGraph {
 
     /// A type rests on the types its body reaches. An enum rests on nothing.
     fn walk_types(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.types {
+        for (name, resolved) in ir.types() {
             let subject: EssSemanticRef = DeclaredTypeRef::new(name.clone()).into();
             self.node(subject.clone());
             match &resolved.body {
@@ -548,7 +548,7 @@ impl SemanticDependencyGraph {
     /// An entity rests on the types it holds and on the enum its lifecycle synthesised, and its
     /// declared moves rest on it.
     fn walk_entities(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.entities {
+        for (name, resolved) in ir.entities() {
             let entity = EntityRef::new(name.clone());
             let subject: EssSemanticRef = entity.clone().into();
             self.node(subject.clone());
@@ -578,7 +578,7 @@ impl SemanticDependencyGraph {
     /// A command rests on its input types; each outcome rests on the command and on everything the
     /// branch names.
     fn walk_commands(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.commands {
+        for (name, resolved) in ir.commands() {
             let command = CommandRef::new(name.clone());
             let subject: EssSemanticRef = command.clone().into();
             self.node(subject.clone());
@@ -635,7 +635,7 @@ impl SemanticDependencyGraph {
 
     /// An event rests on the types its payload reaches.
     fn walk_events(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.events {
+        for (name, resolved) in ir.events() {
             let subject: EssSemanticRef = EventRef::new(name.clone()).into();
             self.node(subject.clone());
             self.field_edges(&subject, &resolved.fields);
@@ -644,7 +644,7 @@ impl SemanticDependencyGraph {
 
     /// A declared error rests on the types its payload reaches.
     fn walk_errors(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.errors {
+        for (name, resolved) in ir.errors() {
             let subject: EssSemanticRef = ErrorRef::new(name.clone()).into();
             self.node(subject.clone());
             self.field_edges(&subject, &resolved.fields);
@@ -653,7 +653,7 @@ impl SemanticDependencyGraph {
 
     /// A view rests on the entity it projects and on the types it exposes.
     fn walk_views(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.views {
+        for (name, resolved) in ir.views() {
             let subject: EssSemanticRef = ViewRef::new(name.clone()).into();
             self.node(subject.clone());
             self.edge(
@@ -667,7 +667,7 @@ impl SemanticDependencyGraph {
 
     /// An actor rests on every command it may invoke.
     fn walk_actors(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.actors {
+        for (name, resolved) in ir.actors() {
             let subject: EssSemanticRef = ActorRef::new(name.clone()).into();
             self.node(subject.clone());
             for handle in &resolved.may {
@@ -683,7 +683,7 @@ impl SemanticDependencyGraph {
     /// A binding rests on the event it reacts to, the command it invokes, the types it maps and the
     /// event it escalates into.
     fn walk_bindings(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.bindings {
+        for (name, resolved) in ir.bindings() {
             let subject: EssSemanticRef = BindingRef::new(name.clone()).into();
             self.node(subject.clone());
             self.edge(
@@ -711,7 +711,7 @@ impl SemanticDependencyGraph {
 
     /// A component rests on what it owns, accepts and publishes.
     fn walk_components(&mut self, ir: &EssIr) {
-        for (name, resolved) in &ir.components {
+        for (name, resolved) in ir.components() {
             let subject: EssSemanticRef = ComponentRef::new(name.clone()).into();
             self.node(subject.clone());
             for handle in &resolved.owns {

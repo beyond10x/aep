@@ -250,10 +250,10 @@ impl Generator for OpenApi {
     }
 
     fn generate(&self, ir: &EssIr, mint: &ProvenanceMint) -> Vec<Artifact> {
-        // `ir.components` is a `BTreeMap`, so this order is the same on every machine. The file name
+        // `ir.components()` is a `BTreeMap`, so this order is the same on every machine. The file name
         // comes from the component's own name rather than its wire name: a wire name is free text
         // and a file name is not, and this path is not something a consumer reads off the wire.
-        ir.components
+        ir.components()
             .values()
             .map(|component| {
                 let sliced = component_slice(ir, component, mint);
@@ -307,12 +307,12 @@ fn component_slice(
 ) -> SlicedProvenance {
     let mut seeds: Vec<EssSemanticRef> = vec![ComponentRef::new(component.name.clone()).into()];
     seeds.extend(
-        ir.actors
+        ir.actors()
             .keys()
             .map(|name| ActorRef::new(name.clone()).into()),
     );
     seeds.extend(
-        ir.bindings
+        ir.bindings()
             .keys()
             .map(|name| BindingRef::new(name.clone()).into()),
     );
@@ -346,7 +346,7 @@ fn document(ir: &EssIr, component: &ResolvedComponent, provenance: &Provenance) 
                 .unwrap_or_else(|| component.name.to_string()),
             summary: component.naming.summary.clone(),
             description: description(ir, component),
-            version: ir.version.to_string(),
+            version: ir.version().to_string(),
             provenance: provenance.clone(),
             reached_by: (component.reached_by == Reach::Network)
                 .then(|| component.reached_by.as_str()),
@@ -366,7 +366,9 @@ fn document(ir: &EssIr, component: &ResolvedComponent, provenance: &Provenance) 
 fn description(ir: &EssIr, component: &ResolvedComponent) -> String {
     let mut text = format!(
         "The HTTP surface of `{}`, one of the components of `{}` {}.\n\n",
-        component.name, ir.system, ir.version
+        component.name,
+        ir.system(),
+        ir.version()
     );
     text.push_str(
         "Every path here is one semantic command, so the method is always POST and the path is the \
@@ -530,7 +532,7 @@ fn may_invoke(handle: &CommandHandle, grants: &Grants<'_>) -> Vec<String> {
 /// reader's first question is who imposed it.
 fn idempotency(ir: &EssIr, command: &ResolvedCommand) -> Option<Parameter> {
     let causes: Vec<String> = ir
-        .bindings
+        .bindings()
         .values()
         .filter(|binding| binding.command.name() == &command.name)
         .filter(|binding| match binding.delivery {

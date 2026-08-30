@@ -2036,15 +2036,15 @@ fn ess_validate(path: &Path, format: Format) -> Result<ExitCode> {
             ..
         } => {
             summary.files_read = files_read;
-            summary.system = Some(specification.system.name.to_string());
-            summary.version = Some(specification.system.version.to_string());
-            summary.domains = specification.system.domains.len();
-            summary.entities = specification.entities.len();
-            summary.commands = specification.commands.len();
-            summary.events = specification.events.len();
-            summary.errors = specification.errors.len();
-            summary.views = specification.views.len();
-            summary.actors = specification.actors.len();
+            summary.system = Some(specification.system().name.to_string());
+            summary.version = Some(specification.system().version.to_string());
+            summary.domains = specification.system().domains.len();
+            summary.entities = specification.entities().len();
+            summary.commands = specification.commands().len();
+            summary.events = specification.events().len();
+            summary.errors = specification.errors().len();
+            summary.views = specification.views().len();
+            summary.actors = specification.actors().len();
         }
         EssLoaded::Refused {
             files_read,
@@ -2232,15 +2232,15 @@ fn ess_compile(path: &Path, format: Format) -> Result<ExitCode> {
             outln!(
                 "{} {} — {files_read} file(s): {} domain(s), {} type(s), {} command(s), {} \
                  event(s), {} error(s), {} binding(s), {} component(s)",
-                ir.system,
-                ir.version,
-                ir.domains.len(),
-                ir.types.len(),
-                ir.commands.len(),
-                ir.events.len(),
-                ir.errors.len(),
-                ir.bindings.len(),
-                ir.components.len()
+                ir.system(),
+                ir.version(),
+                ir.domains().len(),
+                ir.types().len(),
+                ir.commands().len(),
+                ir.events().len(),
+                ir.errors().len(),
+                ir.bindings().len(),
+                ir.components().len()
             );
             outln!("compiled");
         }
@@ -3188,29 +3188,33 @@ fn ess_lookup<'a>(ir: &'a EssIr, name: &str, kind: Option<EssKind>) -> Vec<EssDe
 
     if let Ok(qualified) = ess_domain::name::QualifiedName::new(name) {
         if wanted(EssKind::Domain) {
-            found.extend(ir.domains.get(&qualified).map(EssDeclaration::Domain));
+            found.extend(ir.domains().get(&qualified).map(EssDeclaration::Domain));
         }
         if wanted(EssKind::Type) {
-            found.extend(ir.types.get(&qualified).map(EssDeclaration::Type));
+            found.extend(ir.types().get(&qualified).map(EssDeclaration::Type));
         }
         if wanted(EssKind::Command) {
-            found.extend(ir.commands.get(&qualified).map(EssDeclaration::Command));
+            found.extend(ir.commands().get(&qualified).map(EssDeclaration::Command));
         }
         if wanted(EssKind::Event) {
-            found.extend(ir.events.get(&qualified).map(EssDeclaration::Event));
+            found.extend(ir.events().get(&qualified).map(EssDeclaration::Event));
         }
         if wanted(EssKind::Error) {
-            found.extend(ir.errors.get(&qualified).map(EssDeclaration::Error));
+            found.extend(ir.errors().get(&qualified).map(EssDeclaration::Error));
         }
     }
     if wanted(EssKind::Binding) {
         if let Ok(binding) = ess_domain::binding::BindingName::new(name) {
-            found.extend(ir.bindings.get(&binding).map(EssDeclaration::Binding));
+            found.extend(ir.bindings().get(&binding).map(EssDeclaration::Binding));
         }
     }
     if wanted(EssKind::Component) {
         if let Ok(component) = ess_domain::component::ComponentName::new(name) {
-            found.extend(ir.components.get(&component).map(EssDeclaration::Component));
+            found.extend(
+                ir.components()
+                    .get(&component)
+                    .map(EssDeclaration::Component),
+            );
         }
     }
 
@@ -3249,33 +3253,37 @@ fn ess_undeclared(ir: &EssIr, name: &str, kind: Option<EssKind>) -> String {
         Some(kind) => format!(
             "`{name}` is not a declared {} in {} {}",
             kind.label(),
-            ir.system,
-            ir.version
+            ir.system(),
+            ir.version()
         ),
-        None => format!("`{name}` is not declared in {} {}", ir.system, ir.version),
+        None => format!(
+            "`{name}` is not declared in {} {}",
+            ir.system(),
+            ir.version()
+        ),
     }];
     if wanted(EssKind::Domain) {
-        lines.push(format!("  domains: {}", ess_listing(ir.domains.keys())));
+        lines.push(format!("  domains: {}", ess_listing(ir.domains().keys())));
     }
     if wanted(EssKind::Type) {
-        lines.push(format!("  types: {}", ess_listing(ir.types.keys())));
+        lines.push(format!("  types: {}", ess_listing(ir.types().keys())));
     }
     if wanted(EssKind::Command) {
-        lines.push(format!("  commands: {}", ess_listing(ir.commands.keys())));
+        lines.push(format!("  commands: {}", ess_listing(ir.commands().keys())));
     }
     if wanted(EssKind::Event) {
-        lines.push(format!("  events: {}", ess_listing(ir.events.keys())));
+        lines.push(format!("  events: {}", ess_listing(ir.events().keys())));
     }
     if wanted(EssKind::Error) {
-        lines.push(format!("  errors: {}", ess_listing(ir.errors.keys())));
+        lines.push(format!("  errors: {}", ess_listing(ir.errors().keys())));
     }
     if wanted(EssKind::Binding) {
-        lines.push(format!("  bindings: {}", ess_listing(ir.bindings.keys())));
+        lines.push(format!("  bindings: {}", ess_listing(ir.bindings().keys())));
     }
     if wanted(EssKind::Component) {
         lines.push(format!(
             "  components: {}",
-            ess_listing(ir.components.keys())
+            ess_listing(ir.components().keys())
         ));
     }
     lines.join("\n")
@@ -3379,7 +3387,7 @@ fn ess_render_declaration(ir: &EssIr, declaration: &EssDeclaration<'_>) {
                 ess_line("field", &ess_field(field));
             }
             // What reacts to it is the question this event is usually being looked up to answer.
-            for binding in ir.bindings.values() {
+            for binding in ir.bindings().values() {
                 if binding.event.name() == &event.name {
                     ess_line(
                         "triggers",

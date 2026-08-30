@@ -126,7 +126,7 @@ impl<'a> Bridge<'a> {
         layout: &'a Layout,
         refusals: &'a TargetRefusals,
     ) -> Self {
-        let system = (!ir.components.is_empty() || !ir.bindings.is_empty())
+        let system = (!ir.components().is_empty() || !ir.bindings().is_empty())
             .then(|| RustLayout::crate_ident(layout.rust().system_package()));
         Self {
             ir,
@@ -188,7 +188,7 @@ impl<'a> Bridge<'a> {
     /// The same question the Rust target asks to decide whether `System` takes a third type
     /// parameter, asked here because this bridge has to spell the same type.
     pub fn has_system_obligations(&self) -> bool {
-        self.ir.bindings.values().any(|binding| {
+        self.ir.bindings().values().any(|binding| {
             let source = binding.name.to_string();
             if !self
                 .plan
@@ -276,17 +276,17 @@ pub fn workspace(ir: &EssIr, plan: &SynthesisPlan) -> Emission {
     // Presented here rather than inside a renderer, because these three are surfaces of the model
     // that the page shows as tables rather than as code: a binding row, a component's grouping,
     // and the crossing a transformation reads a field through.
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         bridge.present(CapabilityKind::ComponentPort, &component.to_string());
     }
-    for binding in ir.bindings.keys() {
+    for binding in ir.bindings().keys() {
         bridge.present(CapabilityKind::BindingTransformation, &binding.to_string());
         bridge.present(CapabilityKind::BindingDelivery, &binding.to_string());
     }
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         bridge.present(CapabilityKind::Conversion, &conversion_source(conversion));
     }
-    for entity in ir.entities.keys() {
+    for entity in ir.entities().keys() {
         bridge.present(CapabilityKind::EntityLifecycle, &entity.to_string());
     }
 
@@ -465,7 +465,7 @@ fn workspace_manifest(layout: &Layout, provenance: &Provenance) -> Artifact {
 /// The bridge crate's manifest: a `cdylib` for the browser, an `rlib` for a host that links a
 /// realization into it.
 fn crate_manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artifact {
-    let system = ir.system.segments().join("-");
+    let system = ir.system().segments().join("-");
     let mut out = provenance.commented_for("#", &regenerate());
     let _ = write!(
         out,
@@ -479,15 +479,15 @@ fn crate_manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artif
          party at all: `cargo build` inside this tree is a gate step, and a step that resolves a \
          crate is a step that reaches the network.\n[dependencies]\n",
         layout.package(),
-        ir.system,
-        ir.version,
-        ir.version.get(),
+        ir.system(),
+        ir.version(),
+        ir.version().get(),
     );
     let mut packages = vec![layout.rust().package().to_owned()];
-    if !ir.components.is_empty() || !ir.bindings.is_empty() {
+    if !ir.components().is_empty() || !ir.bindings().is_empty() {
         packages.push(layout.rust().system_package().to_owned());
     }
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         packages.push(layout.rust().component_package(component).to_owned());
     }
     packages.sort();
@@ -528,7 +528,7 @@ fn readme(bridge: &Bridge<'_>) -> String {
     let regenerate = regenerate();
     let package = bridge.layout.package();
     let module = RustLayout::crate_ident(package);
-    let system = bridge.ir.system.segments().join("-");
+    let system = bridge.ir.system().segments().join("-");
     let mut out = bridge.plan.provenance.html_comment_for(&regenerate);
     let _ = write!(
         out,
@@ -564,7 +564,7 @@ fn readme(bridge: &Bridge<'_>) -> String {
          not instantiate WebAssembly from a `file://` URL:\n\n```console\n$ python3 -m \
          http.server\n$ open http://localhost:8000/{PAGE}\n```\n\n## The exports\n\n| export \
          | what it does |\n| --- | --- |\n",
-        bridge.ir.naming.display_or(&bridge.ir.system),
+        bridge.ir.naming().display_or(bridge.ir.system()),
     );
     for export in EXPORTS {
         let _ = writeln!(out, "| `{export}` | {} |", export_describes(export));

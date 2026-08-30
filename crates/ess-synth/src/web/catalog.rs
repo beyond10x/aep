@@ -39,13 +39,13 @@ pub(super) fn document(bridge: &Bridge<'_>) -> String {
     let ir = bridge.ir;
     let mut root = Map::new();
     root.insert("provenance".to_owned(), provenance(bridge));
-    root.insert("system".to_owned(), json!(ir.system.to_string()));
-    root.insert("version".to_owned(), json!(ir.version.to_string()));
+    root.insert("system".to_owned(), json!(ir.system().to_string()));
+    root.insert("version".to_owned(), json!(ir.version().to_string()));
     root.insert(
         "display".to_owned(),
-        json!(ir.naming.display_or(&ir.system)),
+        json!(ir.naming().display_or(ir.system())),
     );
-    if let Some(summary) = &ir.summary {
+    if let Some(summary) = ir.summary() {
         root.insert("summary".to_owned(), json!(summary.trim()));
     }
     let counts = bridge.plan.counts();
@@ -114,7 +114,7 @@ fn fields(declared: &[ResolvedField]) -> Value {
 /// The components, and what each one's port accepts and publishes.
 fn components(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for component in bridge.ir.components.values() {
+    for component in bridge.ir.components().values() {
         let name = QualifiedName::new(component.name.as_str()).ok();
         out.push(json!({
             "name": component.name.to_string(),
@@ -137,7 +137,7 @@ fn components(bridge: &Bridge<'_>) -> Value {
 /// with the entry, and the form is not offered.
 fn commands(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for command in bridge.ir.commands.values() {
+    for command in bridge.ir.commands().values() {
         let source = command.name.to_string();
         if !bridge
             .plan
@@ -223,7 +223,7 @@ fn effect(effect: &ess_compiler::ir::ResolvedEffect) -> Value {
 /// Every event the plan marks generated.
 fn events(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for event in bridge.ir.events.values() {
+    for event in bridge.ir.events().values() {
         if !bridge.presents_event(&event.name) {
             continue;
         }
@@ -240,7 +240,7 @@ fn events(bridge: &Bridge<'_>) -> Value {
 /// Every declared error the plan marks generated.
 fn errors(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for error in bridge.ir.errors.values() {
+    for error in bridge.ir.errors().values() {
         if !bridge.presents_error(&error.name) {
             continue;
         }
@@ -256,7 +256,7 @@ fn errors(bridge: &Bridge<'_>) -> Value {
 /// Every view, with the consistency and filter that decide what its rows mean.
 fn views(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for view in bridge.ir.views.values() {
+    for view in bridge.ir.views().values() {
         if !bridge.presents_view(&view.name) {
             continue;
         }
@@ -280,7 +280,7 @@ fn views(bridge: &Bridge<'_>) -> Value {
 fn entities(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
     let projections = bridge.ir.projections();
-    for entity in bridge.ir.entities.values() {
+    for entity in bridge.ir.entities().values() {
         if !bridge
             .plan
             .is_generated(CapabilityKind::EntityLifecycle, &entity.name.to_string())
@@ -289,7 +289,7 @@ fn entities(bridge: &Bridge<'_>) -> Value {
         }
         let handle = bridge
             .ir
-            .entities
+            .entities()
             .keys()
             .find(|name| **name == entity.name)
             .map(ToString::to_string);
@@ -322,7 +322,7 @@ fn entities(bridge: &Bridge<'_>) -> Value {
 /// Every binding, with the delivery guarantee and failure policy the transport is derived from.
 fn bindings(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for binding in bridge.ir.bindings.values() {
+    for binding in bridge.ir.bindings().values() {
         let source = binding.name.to_string();
         let (failure, escalation) = match binding.on_failure() {
             ResolvedFailure::Retry => ("retry", None),
@@ -347,7 +347,7 @@ fn bindings(bridge: &Bridge<'_>) -> Value {
 /// Every crossing the specification permits, and the reason its author gave.
 fn conversions(bridge: &Bridge<'_>) -> Value {
     let mut out = Vec::new();
-    for conversion in &bridge.ir.conversions {
+    for conversion in bridge.ir.conversions() {
         out.push(json!({
             "from": conversion.from.to_string(),
             "to": conversion.to.to_string(),
@@ -360,7 +360,7 @@ fn conversions(bridge: &Bridge<'_>) -> Value {
 /// The wire shape of every named type the page has to render or build.
 fn types(bridge: &Bridge<'_>) -> Value {
     let mut out = Map::new();
-    for declared in bridge.ir.types.values() {
+    for declared in bridge.ir.types().values() {
         if !bridge.presents_type(&declared.name) {
             continue;
         }
@@ -456,7 +456,7 @@ pub(super) fn view_components(
     ir: &EssIr,
 ) -> BTreeMap<QualifiedName, ess_domain::component::ComponentName> {
     let mut out = BTreeMap::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         for domain in &component.owns {
             for view in &ir.domain(domain).views {
                 out.insert(view.name().clone(), component.name.clone());

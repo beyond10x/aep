@@ -209,8 +209,8 @@ impl<'a> SystemGraph<'a> {
     /// is what makes two runs byte-identical rather than usually byte-identical.
     pub fn of(ir: &'a EssIr) -> Self {
         Self {
-            system: &ir.system,
-            version: ir.version.to_string(),
+            system: ir.system(),
+            version: ir.version().to_string(),
             groups: groups(ir),
             nodes: nodes(ir),
             edges: edges(ir),
@@ -371,21 +371,21 @@ impl GraphGroup<'_> {
 /// That order fixes the Mermaid identifiers, so it is part of the output rather than a detail.
 fn nodes(ir: &EssIr) -> Vec<GraphNode<'_>> {
     let mut out = Vec::new();
-    for actor in ir.actors.values() {
+    for actor in ir.actors().values() {
         out.push(GraphNode {
             kind: NodeKind::Actor,
             name: &actor.name,
             domain: actor.domain.name(),
         });
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         out.push(GraphNode {
             kind: NodeKind::Command,
             name: &command.name,
             domain: command.domain.name(),
         });
     }
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         out.push(GraphNode {
             kind: NodeKind::Event,
             name: &event.name,
@@ -407,16 +407,16 @@ fn nodes(ir: &EssIr) -> Vec<GraphNode<'_>> {
 /// like an empty box rather than like a component nobody declared.
 fn groups(ir: &EssIr) -> Vec<GraphGroup<'_>> {
     let mut out = Vec::new();
-    if !ir.actors.is_empty() {
+    if !ir.actors().is_empty() {
         out.push(GraphGroup {
             kind: GroupKind::Actors,
             label: WHO_MAY_ASK.to_owned(),
-            members: ir.actors.keys().collect(),
+            members: ir.actors().keys().collect(),
         });
     }
 
     let mut placed: BTreeSet<&QualifiedName> = BTreeSet::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         let mut members = Vec::new();
         for handle in &component.accepts {
             placed.insert(handle.name());
@@ -436,9 +436,9 @@ fn groups(ir: &EssIr) -> Vec<GraphGroup<'_>> {
     // Their own box rather than silently dropped: a command no component accepts is a hole in the
     // decomposition, and it should look like one.
     let loose: Vec<&QualifiedName> = ir
-        .commands
+        .commands()
         .keys()
-        .chain(ir.events.keys())
+        .chain(ir.events().keys())
         .filter(|name| !placed.contains(*name))
         .collect();
     if !loose.is_empty() {
@@ -454,12 +454,12 @@ fn groups(ir: &EssIr) -> Vec<GraphGroup<'_>> {
 
 /// The arrows: grants, then emissions, then bindings.
 ///
-/// Bindings come from `ir.bindings` rather than from `EssIr::reactions`, which groups the same
+/// Bindings come from `ir.bindings()` rather than from `EssIr::reactions`, which groups the same
 /// bindings by event. Both hold the same set; this one is ordered by the binding identifier, which
 /// is the order an author reads their own document in.
 fn edges(ir: &EssIr) -> Vec<GraphEdge<'_>> {
     let mut out = Vec::new();
-    for actor in ir.actors.values() {
+    for actor in ir.actors().values() {
         for handle in &actor.may {
             out.push(GraphEdge {
                 kind: EdgeKind::Grant,
@@ -471,7 +471,7 @@ fn edges(ir: &EssIr) -> Vec<GraphEdge<'_>> {
             });
         }
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for outcome in &command.outcomes {
             for handle in &outcome.emits {
                 out.push(GraphEdge {
@@ -488,7 +488,7 @@ fn edges(ir: &EssIr) -> Vec<GraphEdge<'_>> {
             }
         }
     }
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         out.push(GraphEdge {
             kind: EdgeKind::Binding,
             from: binding.event.name(),

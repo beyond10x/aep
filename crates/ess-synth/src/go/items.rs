@@ -39,7 +39,7 @@ pub(super) fn declarations(
     refusals: &TargetRefusals,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for declared in emit.ir.types.values() {
+    for declared in emit.ir.types().values() {
         if emit.owns(&declared.name)
             && cover(
                 plan,
@@ -52,7 +52,7 @@ pub(super) fn declarations(
             named_type(out, emit, declared);
         }
     }
-    for spec in emit.ir.entities.values() {
+    for spec in emit.ir.entities().values() {
         if emit.owns(&spec.name)
             && cover(
                 plan,
@@ -65,7 +65,7 @@ pub(super) fn declarations(
             super::entity::lifecycle(out, emit, spec);
         }
     }
-    for command in emit.ir.commands.values() {
+    for command in emit.ir.commands().values() {
         if emit.owns(&command.name)
             && cover(
                 plan,
@@ -78,7 +78,7 @@ pub(super) fn declarations(
             command_contract(out, emit, command);
         }
     }
-    for event in emit.ir.events.values() {
+    for event in emit.ir.events().values() {
         if emit.owns(&event.name)
             && cover(
                 plan,
@@ -91,7 +91,7 @@ pub(super) fn declarations(
             self::event(out, emit, event);
         }
     }
-    for error in emit.ir.errors.values() {
+    for error in emit.ir.errors().values() {
         if emit.owns(&error.name)
             && cover(
                 plan,
@@ -104,7 +104,7 @@ pub(super) fn declarations(
             self::error(out, emit, error);
         }
     }
-    for view in emit.ir.views.values() {
+    for view in emit.ir.views().values() {
         if emit.owns(&view.name)
             && cover(
                 plan,
@@ -127,7 +127,7 @@ pub(super) fn conversions(
     refusals: &TargetRefusals,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for declared in &emit.ir.conversions {
+    for declared in emit.ir.conversions() {
         let Some((from, to)) = mechanical_conversion(emit.ir, declared) else {
             continue;
         };
@@ -252,7 +252,7 @@ fn enumeration(out: &mut String, emit: &Emit<'_>, declared: &ResolvedType, varia
 
 /// The entity whose synthesised state enum this is, when it is one.
 fn state_owner<'a>(ir: &'a EssIr, type_name: &QualifiedName) -> Option<&'a QualifiedName> {
-    ir.entities
+    ir.entities()
         .values()
         .find(|entity| entity.state_type.name() == type_name)
         .map(|entity| &entity.name)

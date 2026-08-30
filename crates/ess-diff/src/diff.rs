@@ -100,10 +100,10 @@ impl std::error::Error for DiffRefusal {}
 /// with an empty delta, which is the answer when two source trees differ in every byte and mean the
 /// same thing.
 pub fn diff(before: &EssIr, after: &EssIr) -> Result<EssDelta, DiffRefusal> {
-    if before.system != after.system {
+    if before.system() != after.system() {
         return Err(DiffRefusal::DifferentSystem {
-            before: before.system.clone(),
-            after: after.system.clone(),
+            before: before.system().clone(),
+            after: after.system().clone(),
         });
     }
 
@@ -296,7 +296,7 @@ fn field_deltas(
 
 /// The specification itself: version, naming, summary.
 fn system_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    let subject = after.system.clone();
+    let subject = after.system().clone();
     let mut push = |changed: SystemChange| {
         changes.push(SemanticChange::System {
             subject: subject.clone(),
@@ -304,19 +304,19 @@ fn system_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChang
         });
     };
 
-    if before.version != after.version {
+    if before.version() != after.version() {
         push(SystemChange::VersionChanged {
-            before: before.version,
-            after: after.version,
+            before: *before.version(),
+            after: *after.version(),
         });
     }
     // `EssIr::naming` is not compared. No document shape an author can write populates it — see
     // `SystemChange` — so comparing it would be a walk that can only ever find nothing, wearing the
     // costume of a check.
-    if before.summary != after.summary {
+    if before.summary() != after.summary() {
         push(SystemChange::SummaryChanged {
-            before: before.summary.clone(),
-            after: after.summary.clone(),
+            before: before.summary().clone(),
+            after: after.summary().clone(),
         });
     }
 }
@@ -498,7 +498,7 @@ fn body_changes(before: &ResolvedBody, after: &ResolvedBody, mut push: impl FnMu
 
 /// Every difference between the two revisions' declared types.
 fn type_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.types, &after.types) {
+    for name in keys(before.types(), after.types()) {
         let subject = DeclaredTypeRef::new(name.clone());
         let mut push = |changed: TypeChange| {
             changes.push(SemanticChange::Type {
@@ -506,7 +506,7 @@ fn type_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>
                 changed,
             });
         };
-        match (before.types.get(name), after.types.get(name)) {
+        match (before.types().get(name), after.types().get(name)) {
             (None, Some(_)) => push(TypeChange::Added),
             (Some(_), None) => push(TypeChange::Removed),
             (Some(was), Some(is)) => compare_types(was, is, name, &mut push),
@@ -543,7 +543,7 @@ fn compare_types(
 
 /// Every difference between the two revisions' events.
 fn event_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.events, &after.events) {
+    for name in keys(before.events(), after.events()) {
         let subject = EventRef::new(name.clone());
         let mut push = |changed: EventChange| {
             changes.push(SemanticChange::Event {
@@ -551,7 +551,7 @@ fn event_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
                 changed,
             });
         };
-        match (before.events.get(name), after.events.get(name)) {
+        match (before.events().get(name), after.events().get(name)) {
             (None, Some(_)) => push(EventChange::Added),
             (Some(_), None) => push(EventChange::Removed),
             (Some(was), Some(is)) => {
@@ -618,7 +618,7 @@ fn event_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
 
 /// Every difference between the two revisions' declared errors.
 fn error_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.errors, &after.errors) {
+    for name in keys(before.errors(), after.errors()) {
         let subject = ErrorRef::new(name.clone());
         let mut push = |changed: ErrorChange| {
             changes.push(SemanticChange::Error {
@@ -626,7 +626,7 @@ fn error_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
                 changed,
             });
         };
-        match (before.errors.get(name), after.errors.get(name)) {
+        match (before.errors().get(name), after.errors().get(name)) {
             (None, Some(_)) => push(ErrorChange::Added),
             (Some(_), None) => push(ErrorChange::Removed),
             (Some(was), Some(is)) => {
@@ -683,7 +683,7 @@ fn error_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
 
 /// Every difference between the two revisions' actors — including the two grant relations.
 fn actor_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.actors, &after.actors) {
+    for name in keys(before.actors(), after.actors()) {
         let subject = ActorRef::new(name.clone());
         let mut push = |changed: ActorChange| {
             changes.push(SemanticChange::Actor {
@@ -691,7 +691,7 @@ fn actor_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
                 changed,
             });
         };
-        match (before.actors.get(name), after.actors.get(name)) {
+        match (before.actors().get(name), after.actors().get(name)) {
             (None, Some(_)) => push(ActorChange::Added),
             (Some(_), None) => push(ActorChange::Removed),
             (Some(was), Some(is)) => {
@@ -740,7 +740,7 @@ fn actor_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange
 
 /// Every difference between the two revisions' components.
 fn component_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.components, &after.components) {
+    for name in keys(before.components(), after.components()) {
         let subject = ComponentRef::new(name.clone());
         let mut push = |changed: ComponentChange| {
             changes.push(SemanticChange::Component {
@@ -748,7 +748,7 @@ fn component_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticCh
                 changed,
             });
         };
-        match (before.components.get(name), after.components.get(name)) {
+        match (before.components().get(name), after.components().get(name)) {
             (None, Some(_)) => push(ComponentChange::Added),
             (Some(_), None) => push(ComponentChange::Removed),
             (Some(was), Some(is)) => {
@@ -980,7 +980,7 @@ fn lifecycle_changes(was: &StateMachine, is: &StateMachine, push: &mut impl FnMu
 
 /// Every difference between the two revisions' entities.
 fn entity_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.entities, &after.entities) {
+    for name in keys(before.entities(), after.entities()) {
         let subject = EntityRef::new(name.clone());
         let mut push = |changed: EntityChange| {
             changes.push(SemanticChange::Entity {
@@ -988,7 +988,7 @@ fn entity_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChang
                 changed,
             });
         };
-        match (before.entities.get(name), after.entities.get(name)) {
+        match (before.entities().get(name), after.entities().get(name)) {
             (None, Some(_)) => push(EntityChange::Added),
             (Some(_), None) => push(EntityChange::Removed),
             (Some(was), Some(is)) => compare_entities(was, is, name, &mut push),
@@ -1119,7 +1119,7 @@ fn compare_entities(
 
 /// Every difference between the two revisions' commands.
 fn command_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.commands, &after.commands) {
+    for name in keys(before.commands(), after.commands()) {
         let subject = CommandRef::new(name.clone());
         let mut push = |changed: CommandChange| {
             changes.push(SemanticChange::Command {
@@ -1127,7 +1127,7 @@ fn command_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChan
                 changed,
             });
         };
-        match (before.commands.get(name), after.commands.get(name)) {
+        match (before.commands().get(name), after.commands().get(name)) {
             (None, Some(_)) => push(CommandChange::Added),
             (Some(_), None) => push(CommandChange::Removed),
             (Some(was), Some(is)) => compare_commands(was, is, name, &mut push),
@@ -1313,7 +1313,7 @@ fn outcome_changes(
 
 /// Every difference between the two revisions' views.
 fn view_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.views, &after.views) {
+    for name in keys(before.views(), after.views()) {
         let subject = ViewRef::new(name.clone());
         let mut push = |changed: ViewChange| {
             changes.push(SemanticChange::View {
@@ -1321,7 +1321,7 @@ fn view_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>
                 changed,
             });
         };
-        match (before.views.get(name), after.views.get(name)) {
+        match (before.views().get(name), after.views().get(name)) {
             (None, Some(_)) => push(ViewChange::Added),
             (Some(_), None) => push(ViewChange::Removed),
             (Some(was), Some(is)) => compare_views(was, is, name, &mut push),
@@ -1420,7 +1420,7 @@ fn compare_views(
 
 /// Every difference between the two revisions' bindings.
 fn binding_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChange>) {
-    for name in keys(&before.bindings, &after.bindings) {
+    for name in keys(before.bindings(), after.bindings()) {
         let subject = BindingRef::new(name.clone());
         let mut push = |changed: BindingChange| {
             changes.push(SemanticChange::Binding {
@@ -1428,7 +1428,7 @@ fn binding_changes(before: &EssIr, after: &EssIr, changes: &mut Vec<SemanticChan
                 changed,
             });
         };
-        match (before.bindings.get(name), after.bindings.get(name)) {
+        match (before.bindings().get(name), after.bindings().get(name)) {
             (None, Some(_)) => push(BindingChange::Added),
             (Some(_), None) => push(BindingChange::Removed),
             (Some(was), Some(is)) => compare_bindings(was, is, &mut push),

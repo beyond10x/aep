@@ -57,14 +57,14 @@ pub(super) fn system_package(
     covered: &mut BTreeSet<Capability>,
     stubbed: &mut BTreeSet<Capability>,
 ) -> Option<Artifact> {
-    if ir.components.is_empty() && ir.bindings.is_empty() {
+    if ir.components().is_empty() && ir.bindings().is_empty() {
         return None;
     }
     let package = layout.system();
     let emit = Emit::new(ir, layout, package, None);
 
     let mut deliveries: Vec<Delivery<'_>> = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let source = binding.name.to_string();
         if !super::cover(
             plan,
@@ -92,7 +92,7 @@ pub(super) fn system_package(
     }
 
     let components: Vec<&ResolvedComponent> = ir
-        .components
+        .components()
         .values()
         .filter(|component| {
             !refusals.refuses_kind(CapabilityKind::ComponentPort, &component.name.to_string())
@@ -107,7 +107,8 @@ pub(super) fn system_package(
     let owed = obligations(&mut body, &emit, plan, refusals, stubbed);
     assembled(&mut body, &emit, &components, &deliveries, &owed);
 
-    let doc = format!(
+    let doc =
+        format!(
         "// Package {} is the `{}` system, {}: its components assembled, its bindings wired, and \
          its one\n// transport.\n//\n// The transport is derived from the specification, not \
          chosen: `at_least_once` is the only\n// delivery guarantee the model declares, so \
@@ -116,7 +117,7 @@ pub(super) fn system_package(
          what each binding invoked. What no specification\n// determines — how an escalation event \
          is filled, behaviour behind the ports — stays an\n// obligation; see the PLAN.md beside \
          this module.\n",
-        package.name, ir.system, ir.version
+        package.name, ir.system(), ir.version()
     );
     Some(emit.file(&plan.provenance, &doc, &body))
 }
@@ -237,7 +238,7 @@ fn transformations(
     refusals: &TargetRefusals,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for binding in emit.ir.bindings.values() {
+    for binding in emit.ir.bindings().values() {
         let source = binding.name.to_string();
         if !super::cover(
             plan,
@@ -399,7 +400,7 @@ fn obligations(
 /// What the system owes, in binding order: owed transformations, then escalations.
 fn owed_by_system(emit: &Emit<'_>, plan: &SynthesisPlan, refusals: &TargetRefusals) -> Vec<Owed> {
     let mut owed = Vec::new();
-    for binding in emit.ir.bindings.values() {
+    for binding in emit.ir.bindings().values() {
         let source = binding.name.to_string();
         let pascal = name::exported(&source);
         if let Some(obligation) = plan.obligation_of(CapabilityKind::BindingTransformation, &source)
@@ -596,7 +597,7 @@ fn system_struct(
          through a component's\n// own port; the log and its delivery cursor are not, because \
          publishing happens by pumping,\n// not by writing history directly.\ntype {system} struct \
          {{",
-        emit.ir.system
+        emit.ir.system()
     );
     for component in components {
         let _ = writeln!(

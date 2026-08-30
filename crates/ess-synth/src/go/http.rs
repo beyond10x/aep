@@ -53,7 +53,7 @@ const TRANSPORT: &str = "http/1.1";
 
 /// Every component whose surface the specification says is reached from outside, in name order.
 pub(crate) fn served<'a>(ir: &'a EssIr, refusals: &TargetRefusals) -> Vec<&'a ResolvedComponent> {
-    ir.components
+    ir.components()
         .values()
         .filter(|component| component.reached_by == Reach::Network)
         .filter(|component| {
@@ -157,23 +157,23 @@ fn wire_file(
     };
 
     let mut body = String::from(WIRE_HELPERS);
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         if presents(CapabilityKind::DomainType, &declared.name) {
             type_encoder(&mut body, &emit, declared);
             type_decoder(&mut body, &emit, declared);
         }
     }
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         if presents(CapabilityKind::ErrorType, &error.name) {
             error_encoder(&mut body, &emit, error);
         }
     }
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         if presents(CapabilityKind::ViewType, &view.name) {
             view_encoder(&mut body, &emit, view);
         }
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         if presents(CapabilityKind::CommandContract, &command.name) {
             command_decoder(&mut body, &emit, command);
         }
@@ -840,7 +840,9 @@ fn surface_file(
              for a command surface is the OpenAPI document, and an OpenAPI document is an\n// HTTP \
              contract. The document is beside this file, served verbatim at \
              `/openapi.json`.\n",
-            component.name, ir.system, ir.version
+            component.name,
+            ir.system(),
+            ir.version()
         ),
         &body,
     )

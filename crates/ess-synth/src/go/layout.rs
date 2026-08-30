@@ -145,7 +145,7 @@ mod key {
 impl Layout {
     /// Derives the layout of a resolved specification for the Go target.
     pub fn of(ir: &EssIr, plan: &SynthesisPlan, refusals: &TargetRefusals) -> Self {
-        let module = format!("{MODULE_HOST}/{}", ir.system.segments().join("-"));
+        let module = format!("{MODULE_HOST}/{}", ir.system().segments().join("-"));
         let package = |name: &str, dir: &str| Package {
             name: name.to_owned(),
             dir: dir.to_owned(),
@@ -174,7 +174,7 @@ impl Layout {
             domains.insert(domain, package(&name.clone(), &dir));
         }
         let mut components = BTreeMap::new();
-        for component in ir.components.keys() {
+        for component in ir.components().keys() {
             let name = repair(
                 &mut taken,
                 name::package_ident(&component.to_string()),
@@ -185,7 +185,7 @@ impl Layout {
         }
 
         let mut owners = BTreeMap::new();
-        for domain in ir.domains.values() {
+        for domain in ir.domains().values() {
             for declared in &domain.types {
                 owners.insert(declared.name().clone(), domain.name.clone());
             }
@@ -454,29 +454,29 @@ impl Layout {
 
     /// Every name the specification itself spells.
     fn allocate_declared(&mut self, ir: &EssIr, taken: &mut BTreeMap<String, BTreeSet<String>>) {
-        for declared in ir.types.values() {
+        for declared in ir.types().values() {
             self.declare(taken, &declared.name);
         }
-        for entity in ir.entities.values() {
+        for entity in ir.entities().values() {
             self.declare(taken, &entity.name);
         }
-        for command in ir.commands.values() {
+        for command in ir.commands().values() {
             self.declare(taken, &command.name);
         }
-        for event in ir.events.values() {
+        for event in ir.events().values() {
             self.declare(taken, &event.name);
         }
-        for error in ir.errors.values() {
+        for error in ir.errors().values() {
             self.declare(taken, &error.name);
         }
-        for view in ir.views.values() {
+        for view in ir.views().values() {
             self.declare(taken, &view.name);
         }
     }
 
     /// A newtype's constructor, and one variant type per enum or union alternative.
     fn allocate_type_names(&mut self, ir: &EssIr, taken: &mut BTreeMap<String, BTreeSet<String>>) {
-        for declared in ir.types.values() {
+        for declared in ir.types().values() {
             let package = self.package_of(&declared.name).clone();
             let type_name = self.declared(&declared.name).to_owned();
             match &declared.body {
@@ -522,7 +522,7 @@ impl Layout {
         ir: &EssIr,
         taken: &mut BTreeMap<String, BTreeSet<String>>,
     ) {
-        for entity in ir.entities.values() {
+        for entity in ir.entities().values() {
             let package = self.package_of(&entity.name).clone();
             let type_name = self.declared(&entity.name).to_owned();
             let subject = entity.name.to_string();
@@ -571,7 +571,7 @@ impl Layout {
         ir: &EssIr,
         taken: &mut BTreeMap<String, BTreeSet<String>>,
     ) {
-        for command in ir.commands.values() {
+        for command in ir.commands().values() {
             let package = self.package_of(&command.name).clone();
             let type_name = self.declared(&command.name).to_owned();
             let subject = command.name.to_string();
@@ -601,7 +601,7 @@ impl Layout {
             );
         }
 
-        for view in ir.views.values() {
+        for view in ir.views().values() {
             let package = self.package_of(&view.name).clone();
             let type_name = self.declared(&view.name).to_owned();
             self.put(
@@ -619,7 +619,7 @@ impl Layout {
         ir: &EssIr,
         taken: &mut BTreeMap<String, BTreeSet<String>>,
     ) {
-        for conversion in &ir.conversions {
+        for conversion in ir.conversions() {
             let source = conversion_source(conversion);
             if let Some((from, to)) = mechanical_conversion(ir, conversion) {
                 let package = self.package_of(to.name()).clone();
@@ -669,7 +669,7 @@ impl Layout {
         ir: &EssIr,
         taken: &mut BTreeMap<String, BTreeSet<String>>,
     ) {
-        for component in ir.components.values() {
+        for component in ir.components().values() {
             let package = self.component(&component.name).clone();
             let subject = component.name.to_string();
             self.put(
@@ -737,7 +737,7 @@ impl Layout {
                 format!("SystemEvent{variant}"),
             );
         }
-        for binding in ir.bindings.values() {
+        for binding in ir.bindings().values() {
             let subject = binding.name.to_string();
             let pascal = name::exported(&subject);
             self.put(
@@ -882,7 +882,7 @@ impl Layout {
 /// rename an unrelated package that another package imports.
 fn domain_idents(ir: &EssIr) -> Vec<(QualifiedName, String)> {
     let candidates: Vec<(QualifiedName, String)> = ir
-        .domains
+        .domains()
         .keys()
         .map(|domain| {
             let local = domain
@@ -896,8 +896,8 @@ fn domain_idents(ir: &EssIr) -> Vec<(QualifiedName, String)> {
     if distinct.len() == candidates.len() {
         return candidates;
     }
-    let prefix = ir.system.segments().len();
-    ir.domains
+    let prefix = ir.system().segments().len();
+    ir.domains()
         .keys()
         .map(|domain| {
             let segments = domain.segments();
@@ -933,7 +933,7 @@ pub(crate) fn event_variants<'a>(
         .collect();
     let distinct: BTreeSet<&String> = candidates.values().collect();
     if distinct.len() != candidates.len() {
-        let prefix = ir.system.segments().len();
+        let prefix = ir.system().segments().len();
         candidates = events
             .iter()
             .map(|event| {
@@ -963,7 +963,7 @@ fn system_events(
     refusals: &TargetRefusals,
 ) -> BTreeSet<EventHandle> {
     let mut events: BTreeSet<EventHandle> = BTreeSet::new();
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         if refusals.refuses(&Capability {
             kind: crate::plan::CapabilityKind::ComponentPort,
             source: component.name.to_string(),
@@ -972,7 +972,7 @@ fn system_events(
         }
         events.extend(component.publishes.iter().cloned());
     }
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let capability = Capability {
             kind: crate::plan::CapabilityKind::BindingDelivery,
             source: binding.name.to_string(),

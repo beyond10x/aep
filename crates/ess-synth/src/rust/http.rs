@@ -106,7 +106,7 @@ impl Surface for Server<'_> {
 
 /// Every component whose surface the specification says is reached from outside, in name order.
 pub(crate) fn served(ir: &EssIr) -> Vec<&ResolvedComponent> {
-    ir.components
+    ir.components()
         .values()
         .filter(|component| component.reached_by == Reach::Network)
         .collect()
@@ -189,12 +189,12 @@ fn manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artifact {
         "\n[package]\nname = \"{package}\"\ndescription = \"The HTTP surface of the `{}` \
          specification, {}: the routes its components' declarations determine, generated.\"\n\
          version = \"{}.0.0\"\nedition = \"{EDITION}\"\n\n[dependencies]\n",
-        ir.system,
-        ir.version,
-        ir.version.get(),
+        ir.system(),
+        ir.version(),
+        ir.version().get(),
     );
     let mut dependencies = vec![layout.package().to_owned()];
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         dependencies.push(layout.component_package(component).to_owned());
     }
     dependencies.push(layout.system_package().to_owned());
@@ -218,7 +218,8 @@ fn lib_module(
     let _ = writeln!(
         out,
         "//! The HTTP surface of `{}` {}, synthesised.",
-        ir.system, ir.version
+        ir.system(),
+        ir.version()
     );
     out.push_str(
         "//!\n//! One module per component the specification declares is reached over a network, \
@@ -264,7 +265,9 @@ fn surface_module(
     let _ = writeln!(
         out,
         "//! The `{}` component of `{}` {}, on the wire.",
-        component.name, ir.system, ir.version
+        component.name,
+        ir.system(),
+        ir.version()
     );
     out.push_str(
         "//!\n//! The specification says this component's callers are not deployed with it, so its \
@@ -439,8 +442,8 @@ pub(crate) fn startup_facts(
     let mut starting = String::from("{");
     member(&mut starting, "log", log_format);
     member(&mut starting, "event", "system.starting");
-    member(&mut starting, "system", &ir.system.to_string());
-    member(&mut starting, "version", &ir.version.to_string());
+    member(&mut starting, "system", &ir.system().to_string());
+    member(&mut starting, "version", &ir.version().to_string());
     member(&mut starting, "model_digest", &provenance.source_digest);
     member(
         &mut starting,
@@ -450,7 +453,7 @@ pub(crate) fn startup_facts(
     let _ = write!(
         starting,
         ",\"components\":[{}]",
-        ir.components
+        ir.components()
             .keys()
             .map(|name| text(&name.to_string()))
             .collect::<Vec<_>>()
@@ -486,7 +489,7 @@ pub(crate) fn startup_facts(
     let mut ready = String::from("{");
     member(&mut ready, "log", log_format);
     member(&mut ready, "event", "system.ready");
-    member(&mut ready, "system", &ir.system.to_string());
+    member(&mut ready, "system", &ir.system().to_string());
     let _ = write!(ready, ",\"surfaces\":{surfaces}");
 
     vec![starting, serving, ready]

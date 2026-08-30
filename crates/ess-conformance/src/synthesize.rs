@@ -858,7 +858,7 @@ pub fn synthesize(ir: &EssIr) -> Synthesis {
     let mut refusals = Vec::new();
     let actors = granted_actors(ir);
 
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for outcome in &command.outcomes {
             // A wrong-state branch gets no scenario of its own, and this is the one place in the
             // file where "no scenario" is neither a refusal nor a defect. §10 asks for one scenario
@@ -1520,7 +1520,7 @@ fn rendered(guards: &[&Predicate], satisfy: bool) -> String {
 /// be enforcing a rule no document wrote. The model closes a *branch's* emissions, not the
 /// system's output.
 fn not_emitted(ir: &EssIr, emitted: &[EventRef]) -> Vec<EventRef> {
-    ir.events
+    ir.events()
         .values()
         .map(|event| EventRef::new(event.name.clone()))
         .filter(|event| !emitted.contains(event))
@@ -1586,7 +1586,7 @@ fn payload_shape(ir: &EssIr, event: &EventRef) -> PayloadShape {
     // one; a shape that described nothing would be a silently weaker assertion, which is the one
     // failure mode §36 rules out, so the absence is not quietly tolerated.
     let declared = ir
-        .events
+        .events()
         .get(event.name())
         .unwrap_or_else(|| panic!("`{event}` is an event this specification declares"));
     for field in &declared.fields {
@@ -2168,7 +2168,7 @@ fn invariants(
     refusals: &mut Vec<Refusal>,
 ) {
     let projections = ir.projections();
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for outcome in &command.outcomes {
             let Some(subject) = &outcome.subject else {
                 continue;
@@ -2323,7 +2323,7 @@ fn value_object_invariants(
     suite: &mut ConformanceSuite,
     refusals: &mut Vec<Refusal>,
 ) {
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         let invariants = match &declared.body {
             ResolvedBody::Newtype { invariants, .. } | ResolvedBody::Struct { invariants, .. } => {
                 invariants
@@ -2382,7 +2382,7 @@ fn positions_of<'a>(
     invariants: &[Invariant],
 ) -> Vec<(&'a ResolvedView, String)> {
     let mut positions = Vec::new();
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         for field in &view.fields {
             let mut found = Vec::new();
             reaches(
@@ -2521,7 +2521,7 @@ fn holds_at(
     field: &str,
     actors: &BTreeMap<QualifiedName, ActorRef>,
 ) -> Result<ConformanceScenario, RefusalCause> {
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         for outcome in &command.outcomes {
             let Some(subject) = &outcome.subject else {
                 continue;
@@ -2671,7 +2671,7 @@ fn bindings(
     suite: &mut ConformanceSuite,
     refusals: &mut Vec<Refusal>,
 ) {
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let subject = BindingRef::new(binding.name.clone());
         let event = EventRef::from(&binding.event);
         let Some((publisher, published_by)) = publisher(ir, &binding.event) else {
@@ -3044,7 +3044,7 @@ fn publisher<'ir>(
     ir: &'ir EssIr,
     event: &ess_compiler::ir::EventHandle,
 ) -> Option<(&'ir ResolvedCommand, &'ir ResolvedOutcome)> {
-    ir.commands.values().find_map(|command| {
+    ir.commands().values().find_map(|command| {
         command
             .outcomes
             .iter()
@@ -3122,7 +3122,7 @@ fn downstream(
 /// `ResolvedCommand`. Deterministic: the components are a [`BTreeMap`], and `ess-domain` refuses one
 /// command accepted by two components.
 fn accepting_component(ir: &EssIr, command: &QualifiedName) -> Option<ComponentRef> {
-    ir.components
+    ir.components()
         .values()
         .find(|component| {
             component

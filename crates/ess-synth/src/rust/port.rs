@@ -60,9 +60,9 @@ fn manifest(
          specification, {}: its port, generated.\"\nversion = \"{}.0.0\"\nedition = \
          \"{EDITION}\"\n\n[dependencies]\n{} = {{ path = \"../{}\" }}\n",
         component.name,
-        ir.system,
-        ir.version,
-        ir.version.get(),
+        ir.system(),
+        ir.version(),
+        ir.version().get(),
         layout.package(),
         layout.package(),
     );
@@ -91,8 +91,8 @@ fn lib_module(
             .as_deref()
             .unwrap_or(&component.name.to_string()),
         component.name,
-        ir.system,
-        ir.version
+        ir.system(),
+        ir.version()
     );
     if let Some(summary) = &component.naming.summary {
         out.push_str("//!\n");
@@ -182,7 +182,7 @@ fn port_struct(
         bounds.join(" + ")
     );
     let mut first = true;
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         let handle = component
             .accepts
             .iter()

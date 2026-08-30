@@ -118,7 +118,7 @@ pub fn workspace(ir: &EssIr, plan: &SynthesisPlan) -> Vec<Artifact> {
             &mut stubbed,
         ));
     }
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         artifacts.extend(port::component_crate(
             ir,
             plan,
@@ -173,7 +173,7 @@ pub(crate) fn event_variants<'a>(
         .collect();
     let distinct: BTreeSet<&String> = candidates.values().collect();
     if distinct.len() != candidates.len() {
-        let prefix = ir.system.segments().len();
+        let prefix = ir.system().segments().len();
         candidates = events
             .iter()
             .map(|event| {
@@ -197,10 +197,10 @@ pub(crate) fn event_variants<'a>(
 /// up into this repository's workspace, and it is what a consumer who vendors the directory gets.
 fn workspace_manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artifact {
     let mut members = vec![layout.package().to_owned()];
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         members.push(layout.component_package(component).to_owned());
     }
-    if !ir.components.is_empty() || !ir.bindings.is_empty() {
+    if !ir.components().is_empty() || !ir.bindings().is_empty() {
         members.push(layout.system_package().to_owned());
     }
     if !http::served(ir).is_empty() {
@@ -229,9 +229,9 @@ fn crate_manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artif
         "\n[package]\nname = \"{}\"\ndescription = \"Semantic types synthesised from the `{}` \
          specification, {}.\"\nversion = \"{}.0.0\"\nedition = \"{EDITION}\"\n\n[dependencies]\n",
         layout.package(),
-        ir.system,
-        ir.version,
-        ir.version.get()
+        ir.system(),
+        ir.version(),
+        ir.version().get()
     );
     Artifact::new(format!("crates/{}/Cargo.toml", layout.package()), out)
 }
@@ -248,9 +248,10 @@ fn lib_module(
     let _ = writeln!(
         out,
         "//! Semantic types synthesised from the `{}` specification, {}.",
-        ir.system, ir.version
+        ir.system(),
+        ir.version()
     );
-    if let Some(summary) = &ir.summary {
+    if let Some(summary) = ir.summary() {
         out.push_str("//!\n");
         let _ = writeln!(out, "//! {}", summary.trim());
     }
@@ -343,7 +344,7 @@ fn domain_module(
 ) -> Artifact {
     let emit = Emit { ir, layout, domain };
     let resolved = ir
-        .domains
+        .domains()
         .get(domain)
         .expect("the layout only knows domains the IR declares");
 
@@ -377,7 +378,7 @@ fn render_declarations(
     plan: &SynthesisPlan,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for declared in emit.ir.types.values() {
+    for declared in emit.ir.types().values() {
         if owned(emit, &declared.name)
             && cover(
                 plan,
@@ -389,7 +390,7 @@ fn render_declarations(
             items::named_type(out, emit, declared);
         }
     }
-    for spec in emit.ir.entities.values() {
+    for spec in emit.ir.entities().values() {
         if owned(emit, &spec.name)
             && cover(
                 plan,
@@ -401,7 +402,7 @@ fn render_declarations(
             entity::lifecycle(out, emit, spec);
         }
     }
-    for command in emit.ir.commands.values() {
+    for command in emit.ir.commands().values() {
         if owned(emit, &command.name)
             && cover(
                 plan,
@@ -413,7 +414,7 @@ fn render_declarations(
             items::command_contract(out, emit, command);
         }
     }
-    for event in emit.ir.events.values() {
+    for event in emit.ir.events().values() {
         if owned(emit, &event.name)
             && cover(
                 plan,
@@ -425,7 +426,7 @@ fn render_declarations(
             items::event(out, emit, event);
         }
     }
-    for error in emit.ir.errors.values() {
+    for error in emit.ir.errors().values() {
         if owned(emit, &error.name)
             && cover(
                 plan,
@@ -437,7 +438,7 @@ fn render_declarations(
             items::error(out, emit, error);
         }
     }
-    for view in emit.ir.views.values() {
+    for view in emit.ir.views().values() {
         if owned(emit, &view.name)
             && cover(
                 plan,
@@ -462,7 +463,7 @@ fn render_conversions(
     plan: &SynthesisPlan,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for conversion in &emit.ir.conversions {
+    for conversion in emit.ir.conversions() {
         let Some((from, to)) = crate::plan::mechanical_conversion(emit.ir, conversion) else {
             continue;
         };

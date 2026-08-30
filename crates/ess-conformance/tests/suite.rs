@@ -99,7 +99,7 @@ fn billing() -> EssIr {
 /// been given it by the IR.
 fn command_handle<'ir>(ir: &'ir EssIr, name: &str) -> &'ir CommandHandle {
     let owner = QualifiedName::new("billing.invoice").expect("valid");
-    ir.domains[&owner]
+    ir.domains()[&owner]
         .commands
         .iter()
         .find(|handle| handle.name().to_string() == name)
@@ -109,7 +109,7 @@ fn command_handle<'ir>(ir: &'ir EssIr, name: &str) -> &'ir CommandHandle {
 /// A declared type of the invoice domain, as a name that outlives the IR.
 fn declared_type(ir: &EssIr, name: &str) -> DeclaredTypeRef {
     let owner = QualifiedName::new("billing.invoice").expect("valid");
-    ir.domains[&owner]
+    ir.domains()[&owner]
         .types
         .iter()
         .find(|handle| handle.name().to_string() == name)
@@ -695,7 +695,7 @@ fn every_scenario_id_the_billing_model_can_produce_reads_back() {
     // driver, a refusal, and a binding — the constructs a later slice keys its scenarios on.
     let ir = billing();
     let invoice = QualifiedName::new("billing.invoice.Invoice").expect("valid");
-    let entity_handle = ir.domains[&QualifiedName::new("billing.invoice").expect("valid")]
+    let entity_handle = ir.domains()[&QualifiedName::new("billing.invoice").expect("valid")]
         .entities
         .iter()
         .find(|handle| handle.name() == &invoice)
@@ -709,7 +709,7 @@ fn every_scenario_id_the_billing_model_can_produce_reads_back() {
         .find(|transition| transition.name == "settle")
         .expect("`settle` is declared");
     let binding = ir
-        .bindings
+        .bindings()
         .values()
         .next()
         .expect("the example declares a binding");

@@ -23,6 +23,14 @@ use ess_domain::system::Source;
 /// If the example is missing, malformed or does not resolve. Each is a defect in the fixture rather
 /// than in what is being tested, so it fails loudly and names the file.
 pub fn compiled(example: &str) -> EssIr {
+    compiled_with(example, |_| {})
+}
+
+/// Compiles an example after a test edits its raw documents through the production entrance.
+pub fn compiled_with(
+    example: &str,
+    transform: impl FnOnce(&mut Vec<(Source, RawSpecFile)>),
+) -> EssIr {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join(example)
@@ -43,7 +51,7 @@ pub fn compiled(example: &str) -> EssIr {
     }
     files.sort();
 
-    let parsed: Vec<(Source, RawSpecFile)> = files
+    let mut parsed: Vec<(Source, RawSpecFile)> = files
         .iter()
         .map(|path| {
             let text = std::fs::read_to_string(path).expect("a readable document");
@@ -57,6 +65,7 @@ pub fn compiled(example: &str) -> EssIr {
             (Source::new(label), raw)
         })
         .collect();
+    transform(&mut parsed);
 
     let specification = Specification::assemble(parsed)
         .unwrap_or_else(|errors| panic!("`{example}` validates:\n{errors}"));

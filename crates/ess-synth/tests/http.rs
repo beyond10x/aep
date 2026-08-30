@@ -135,7 +135,7 @@ fn the_routes_a_server_answers_are_the_routes_the_contract_declares() {
     // sets, so a path served and not published — or published and not served — fails here.
     let ir = gatepass();
     let component = ir
-        .components
+        .components()
         .values()
         .next()
         .expect("the demonstration declares a component");
@@ -198,7 +198,7 @@ fn the_routes_a_server_answers_are_the_routes_the_contract_declares() {
 fn the_served_contract_is_the_document_the_projection_publishes() {
     let ir = gatepass();
     let component = ir
-        .components
+        .components()
         .values()
         .next()
         .expect("the demonstration declares a component");

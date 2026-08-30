@@ -233,7 +233,7 @@ fn every_page_says_which_specification_produced_it() {
         );
         assert_says(
             text,
-            &format!("generated from {} {}", ir.system, ir.version),
+            &format!("generated from {} {}", ir.system(), ir.version()),
             "an artifact that cannot say which specification produced it is one nobody can audit",
         );
         assert_says(text, "model digest", "two checkouts differ by their digest");
@@ -355,7 +355,7 @@ fn every_type_kind_reaches_a_page_including_the_tagged_union() {
 
     // Every declared type appears somewhere, not only the four hand-checked above.
     let all = everything(&docs);
-    for name in billing().types.keys() {
+    for name in billing().types().keys() {
         assert_says(
             &all,
             &name.to_string(),
@@ -559,10 +559,10 @@ fn an_events_payload_and_an_errors_payload_are_both_documented_field_by_field() 
 
     let all = everything(&docs);
     let ir = billing();
-    for name in ir.events.keys() {
+    for name in ir.events().keys() {
         assert_says(&all, &name.to_string(), "no event may be missing");
     }
-    for name in ir.errors.keys() {
+    for name in ir.errors().keys() {
         assert_says(&all, &name.to_string(), "no error may be missing");
     }
 }
@@ -705,7 +705,7 @@ fn a_components_ownership_and_a_workloads_replica_floor_are_both_documented() {
     assert_says(&topology, "- `publish` — `invoice-events`", "a requirement");
 
     let all = everything(&docs);
-    for name in billing().components.keys() {
+    for name in billing().components().keys() {
         assert_says(&all, name.as_str(), "no component may be missing");
     }
 }
@@ -1090,17 +1090,17 @@ fn every_name_the_ir_holds_appears_on_some_page() {
     let all = everything(&docs());
 
     let mut names: Vec<String> = Vec::new();
-    names.extend(ir.domains.keys().map(ToString::to_string));
-    names.extend(ir.types.keys().map(ToString::to_string));
-    names.extend(ir.entities.keys().map(ToString::to_string));
-    names.extend(ir.commands.keys().map(ToString::to_string));
-    names.extend(ir.events.keys().map(ToString::to_string));
-    names.extend(ir.errors.keys().map(ToString::to_string));
-    names.extend(ir.views.keys().map(ToString::to_string));
-    names.extend(ir.actors.keys().map(ToString::to_string));
-    names.extend(ir.bindings.keys().map(ToString::to_string));
-    names.extend(ir.components.keys().map(ToString::to_string));
-    for entity in ir.entities.values() {
+    names.extend(ir.domains().keys().map(ToString::to_string));
+    names.extend(ir.types().keys().map(ToString::to_string));
+    names.extend(ir.entities().keys().map(ToString::to_string));
+    names.extend(ir.commands().keys().map(ToString::to_string));
+    names.extend(ir.events().keys().map(ToString::to_string));
+    names.extend(ir.errors().keys().map(ToString::to_string));
+    names.extend(ir.views().keys().map(ToString::to_string));
+    names.extend(ir.actors().keys().map(ToString::to_string));
+    names.extend(ir.bindings().keys().map(ToString::to_string));
+    names.extend(ir.components().keys().map(ToString::to_string));
+    for entity in ir.entities().values() {
         names.push(entity.identity.name.clone());
         names.extend(entity.fields.iter().map(|field| field.name.clone()));
         names.extend(
@@ -1124,13 +1124,13 @@ fn every_name_the_ir_holds_appears_on_some_page() {
                 .map(|invariant| invariant.statement.clone()),
         );
     }
-    for view in ir.views.values() {
+    for view in ir.views().values() {
         names.extend(view.fields.iter().map(|field| field.name.clone()));
         if let Some(filter) = &view.filter {
             names.push(filter.to_string());
         }
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         names.extend(command.input.iter().map(|field| field.name.clone()));
         names.extend(
             command
@@ -1139,13 +1139,13 @@ fn every_name_the_ir_holds_appears_on_some_page() {
                 .map(|outcome| outcome.name.to_string()),
         );
     }
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         names.extend(event.fields.iter().map(|field| field.name.clone()));
     }
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         names.extend(error.fields.iter().map(|field| field.name.clone()));
     }
-    for conversion in &ir.conversions {
+    for conversion in ir.conversions() {
         names.push(
             conversion
                 .because
@@ -1227,7 +1227,7 @@ fn every_member_of_a_resolved_domain_reaches_the_page_of_the_context_it_belongs_
 
     let ir = billing();
     let domain = ir
-        .domains
+        .domains()
         .get(&ess_domain::name::QualifiedName::new("billing.invoice").expect("a name"))
         .expect("the invoice context");
     let json = serde_json::to_value(domain).expect("a domain serialises");

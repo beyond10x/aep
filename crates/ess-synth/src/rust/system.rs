@@ -58,7 +58,7 @@ pub(super) fn system_crate(
     covered: &mut BTreeSet<Capability>,
     stubbed: &mut BTreeSet<Capability>,
 ) -> Vec<Artifact> {
-    if ir.components.is_empty() && ir.bindings.is_empty() {
+    if ir.components().is_empty() && ir.bindings().is_empty() {
         return Vec::new();
     }
     vec![
@@ -76,13 +76,13 @@ fn manifest(ir: &EssIr, layout: &Layout, provenance: &Provenance) -> Artifact {
         "\n[package]\nname = \"{package}\"\ndescription = \"The `{}` system, {}: its bindings \
          and its one transport, generated.\"\nversion = \"{}.0.0\"\nedition = \
          \"{EDITION}\"\n\n[dependencies]\n{} = {{ path = \"../{}\" }}\n",
-        ir.system,
-        ir.version,
-        ir.version.get(),
+        ir.system(),
+        ir.version(),
+        ir.version().get(),
         layout.package(),
         layout.package(),
     );
-    for component in ir.components.keys() {
+    for component in ir.components().keys() {
         let dependency = layout.component_package(component);
         let _ = writeln!(out, "{dependency} = {{ path = \"../{dependency}\" }}");
     }
@@ -111,7 +111,7 @@ fn lib_module(
     let types = Layout::crate_ident(layout.package());
 
     let mut deliveries: Vec<Delivery<'_>> = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let source = binding.name.to_string();
         if !plan.is_generated(CapabilityKind::BindingDelivery, &source) {
             continue;
@@ -139,7 +139,7 @@ fn lib_module(
     // generated deliveries react to and escalate into — so an arm always has a variant to match
     // and an escalation always has one to publish.
     let mut events: BTreeSet<&EventHandle> = ir
-        .components
+        .components()
         .values()
         .flat_map(|component| component.publishes.iter())
         .collect();
@@ -157,7 +157,8 @@ fn lib_module(
         out,
         "//! The `{}` system, {}: its components assembled, its bindings wired, and its one \
          transport.",
-        ir.system, ir.version
+        ir.system(),
+        ir.version()
     );
     out.push_str(
         "//!\n//! The transport is derived from the specification, not chosen: `at_least_once` \
@@ -245,7 +246,7 @@ fn from_impls(
     layout: &Layout,
     variants: &std::collections::BTreeMap<&EventHandle, String>,
 ) {
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         let package = Layout::crate_ident(layout.component_package(&component.name));
         let events: BTreeSet<&EventHandle> = component.publishes.iter().collect();
         let component_variants = event_variants(ir, layout, &events);
@@ -275,7 +276,7 @@ fn transformations(
     types: &str,
     covered: &mut BTreeSet<Capability>,
 ) {
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let source = binding.name.to_string();
         if !plan.is_generated(CapabilityKind::BindingTransformation, &source) {
             continue;
@@ -371,7 +372,7 @@ fn system_obligations(
     types: &str,
 ) -> Vec<SystemObligation> {
     let mut owed = Vec::new();
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let source = binding.name.to_string();
         let pascal = name::pascal(&source);
         let ident = name::value_ident(&source);
@@ -528,7 +529,7 @@ fn system_struct(
     let with_obligations = !used_traits.is_empty();
 
     let mut generics: Vec<String> = ir
-        .components
+        .components()
         .keys()
         .map(|component| format!("{}Behaviors", name::pascal(&component.to_string())))
         .collect();
@@ -549,9 +550,9 @@ fn system_struct(
          through a component's own\n/// port; the log and its delivery cursor are not, because \
          publishing happens by pumping, not by\n/// writing history directly.\npub struct \
          System{angled} {{",
-        ir.system
+        ir.system()
     );
-    for (component_name, generic) in ir.components.keys().zip(components_generics(ir)) {
+    for (component_name, generic) in ir.components().keys().zip(components_generics(ir)) {
         let package = Layout::crate_ident(layout.component_package(component_name));
         let port = name::pascal(&component_name.to_string());
         let _ = writeln!(
@@ -611,7 +612,7 @@ fn constructor(
 ) {
     let _ = writeln!(out, "\nimpl{angled} System{angled} {{");
     let mut parameters: Vec<String> = ir
-        .components
+        .components()
         .keys()
         .zip(components_generics(ir))
         .map(|(component_name, generic)| {
@@ -636,7 +637,7 @@ fn constructor(
         },
         parameters.join(", ")
     );
-    for component_name in ir.components.keys() {
+    for component_name in ir.components().keys() {
         let _ = writeln!(
             out,
             "            {},",
@@ -671,7 +672,7 @@ fn constructor(
 
 /// The generic parameter names of the component fields, in component order.
 pub(crate) fn components_generics(ir: &EssIr) -> Vec<String> {
-    ir.components
+    ir.components()
         .keys()
         .map(|component| format!("{}Behaviors", name::pascal(&component.to_string())))
         .collect()
@@ -684,7 +685,7 @@ pub(crate) fn components_generics(ir: &EssIr) -> Vec<String> {
 /// artifact that has to spell the type: the system crate itself, the browser bridge and the server
 /// crate. One answer, because three would drift.
 pub(crate) fn has_obligations(ir: &EssIr, plan: &SynthesisPlan) -> bool {
-    ir.bindings.values().any(|binding| {
+    ir.bindings().values().any(|binding| {
         let source = binding.name.to_string();
         if !plan.is_generated(CapabilityKind::BindingDelivery, &source) {
             return false;
@@ -710,8 +711,8 @@ fn pump_impl(
     retries: bool,
 ) {
     let mut bounds: Vec<String> = Vec::new();
-    for (component_name, generic) in ir.components.keys().zip(components_generics(ir)) {
-        let component = &ir.components[component_name];
+    for (component_name, generic) in ir.components().keys().zip(components_generics(ir)) {
+        let component = &ir.components()[component_name];
         let list = super::port::bound_list(ir, layout, component, types);
         if !list.is_empty() {
             bounds.push(format!("    {generic}: {},", list.join(" + ")));
@@ -780,7 +781,7 @@ fn pump_impl(
         "\n    /// Moves every component's outbox onto the log, in component order.\n    fn \
          collect(&mut self) {\n",
     );
-    for component_name in ir.components.keys() {
+    for component_name in ir.components().keys() {
         let _ = writeln!(
             out,
             "        for event in self.{}.drain_outbox() {{\n            \

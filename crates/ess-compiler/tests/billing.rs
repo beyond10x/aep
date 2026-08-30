@@ -88,17 +88,17 @@ fn name(value: &str) -> QualifiedName {
 fn the_billing_specification_resolves() {
     let ir = compiled();
 
-    assert_eq!(ir.system.to_string(), "billing");
-    assert_eq!(ir.version.to_string(), "v3");
-    assert_eq!(ir.domains.len(), 2, "two bounded contexts");
+    assert_eq!(ir.system().to_string(), "billing");
+    assert_eq!(ir.version().to_string(), "v3");
+    assert_eq!(ir.domains().len(), 2, "two bounded contexts");
     assert!(
-        ir.summary.is_some(),
+        ir.summary().is_some(),
         "a docs projection needs the paragraph"
     );
-    assert_eq!(ir.components.len(), 2);
-    assert_eq!(ir.workloads.len(), 2);
-    assert_eq!(ir.bindings.len(), 1);
-    assert_eq!(ir.conversions.len(), 1);
+    assert_eq!(ir.components().len(), 2);
+    assert_eq!(ir.workloads().len(), 2);
+    assert_eq!(ir.bindings().len(), 1);
+    assert_eq!(ir.conversions().len(), 1);
 }
 
 #[test]
@@ -108,13 +108,13 @@ fn every_handle_in_the_ir_names_something_the_ir_holds() {
     // ignore.
     let ir = compiled();
 
-    for declared in ir.types.values() {
+    for declared in ir.types().values() {
         assert_eq!(
             ir.named_type(handle_of(&ir, &declared.name)).name,
             declared.name
         );
     }
-    for command in ir.commands.values() {
+    for command in ir.commands().values() {
         assert!(!ir.domain(&command.domain).name.to_string().is_empty());
         for field in &command.input {
             for leaf in field.type_ref.named_leaves() {
@@ -128,7 +128,7 @@ fn every_handle_in_the_ir_names_something_the_ir_holds() {
             let _ = ir.error(error);
         }
     }
-    for event in ir.events.values() {
+    for event in ir.events().values() {
         let _ = ir.domain(&event.domain);
         for field in &event.fields {
             for leaf in field.type_ref.named_leaves() {
@@ -136,17 +136,17 @@ fn every_handle_in_the_ir_names_something_the_ir_holds() {
             }
         }
     }
-    for error in ir.errors.values() {
+    for error in ir.errors().values() {
         let _ = ir.domain(&error.domain);
     }
-    for binding in ir.bindings.values() {
+    for binding in ir.bindings().values() {
         let _ = ir.event(&binding.event);
         let _ = ir.command(&binding.command);
         if let Some(escalation) = &binding.escalation {
             let _ = ir.event(escalation);
         }
     }
-    for component in ir.components.values() {
+    for component in ir.components().values() {
         for domain in &component.owns {
             let _ = ir.domain(domain);
         }
@@ -157,10 +157,10 @@ fn every_handle_in_the_ir_names_something_the_ir_holds() {
             let _ = ir.event(event);
         }
     }
-    for workload in ir.workloads.values() {
+    for workload in ir.workloads().values() {
         let _ = ir.component(&workload.component);
     }
-    for domain in ir.domains.values() {
+    for domain in ir.domains().values() {
         for declared in &domain.types {
             let _ = ir.named_type(declared);
         }
@@ -173,7 +173,7 @@ fn every_handle_in_the_ir_names_something_the_ir_holds() {
 /// A type handle for a name the IR declares, taken from the IR rather than constructed — which is
 /// the only way to obtain one.
 fn handle_of<'a>(ir: &'a EssIr, wanted: &QualifiedName) -> &'a ess_compiler::ir::TypeHandle {
-    ir.domains
+    ir.domains()
         .values()
         .flat_map(|domain| domain.types.iter())
         .find(|handle| handle.name() == wanted)
@@ -207,7 +207,7 @@ fn a_field_keeps_the_shape_of_its_type_rather_than_a_rendering_of_it() {
 #[test]
 fn the_crossing_between_two_contexts_is_recorded_with_the_reason_someone_gave_for_it() {
     let ir = compiled();
-    let binding = &ir.bindings[&BindingName::new("notify-on-invoice-created").expect("a name")];
+    let binding = &ir.bindings()[&BindingName::new("notify-on-invoice-created").expect("a name")];
 
     assert_eq!(
         binding.mapping.len(),
@@ -263,7 +263,7 @@ fn a_binding_that_escalates_carries_the_event_it_emits_as_a_handle() {
     // an event nobody declares.
     let ir = compiled();
     let binding = ir
-        .bindings
+        .bindings()
         .values()
         .find(|binding| binding.name.as_str() == "notify-on-invoice-created")
         .expect("the example binds the two contexts");
@@ -280,7 +280,7 @@ fn a_binding_that_escalates_carries_the_event_it_emits_as_a_handle() {
     // The escalation reaches a generated interface because the component that handles the binding
     // publishes it, which is what puts it in that component's AsyncAPI document.
     let handler = ir
-        .components
+        .components()
         .values()
         .find(|component| component.accepts.contains(&binding.command))
         .expect("a component accepts `SendEmail`");

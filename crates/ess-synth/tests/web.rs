@@ -215,13 +215,13 @@ fn the_page_names_no_construct_of_the_specification_it_was_generated_from() {
     let page = artifact(&web(), "index.html");
     let mut named = Vec::new();
     for declared in ir
-        .commands
+        .commands()
         .keys()
-        .chain(ir.events.keys())
-        .chain(ir.errors.keys())
-        .chain(ir.views.keys())
-        .chain(ir.types.keys())
-        .chain(ir.entities.keys())
+        .chain(ir.events().keys())
+        .chain(ir.errors().keys())
+        .chain(ir.views().keys())
+        .chain(ir.types().keys())
+        .chain(ir.entities().keys())
     {
         if page.contains(&declared.to_string()) {
             named.push(declared.to_string());
@@ -304,7 +304,7 @@ fn every_generated_type_crosses_the_boundary_in_both_directions() {
     let synthesis = web();
     let wire = artifact(&synthesis, "crates/billing-web/src/wire.rs");
     let mut missing = Vec::new();
-    for declared in ir.types.keys() {
+    for declared in ir.types().keys() {
         if !synthesis
             .plan
             .is_generated(CapabilityKind::DomainType, &declared.to_string())
