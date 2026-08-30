@@ -50,6 +50,8 @@ fn cursor(state: &str) -> DriverCursor {
         step: 0,
         visits: BTreeMap::new(),
         attempts: BTreeMap::new(),
+        in_flight: None,
+        circuit_failures: BTreeMap::new(),
         iterations: 0,
         status: RunStatus::Running,
         reasons: Vec::new(),

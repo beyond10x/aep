@@ -65,7 +65,7 @@ use aep_driver::executor::{
     StepOutcome,
 };
 use aep_driver::lock::{Liveness, LockState};
-use aep_driver::run::{DriveError, DriverOptions, RunDirectory, RunReport};
+use aep_driver::run::{DriveError, DriverOptions, InFlightResolution, RunDirectory, RunReport};
 use aep_driver::tool::TOOL_CANDIDATES;
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus, StolenLock};
 use aep_driver_spec::map::{
@@ -451,6 +451,16 @@ pub(crate) struct ResumeArgs {
     /// Take the store lock from a holder that is provably dead.
     #[arg(long)]
     take_lock: bool,
+    /// Retry the unresolved outside attempt with this exact persisted attempt id.
+    #[arg(
+        long,
+        value_name = "ATTEMPT",
+        conflicts_with = "record_in_flight_no_verdict"
+    )]
+    retry_in_flight: Option<String>,
+    /// Resolve an uncertain outside attempt as having produced no verdict.
+    #[arg(long, conflicts_with = "retry_in_flight")]
+    record_in_flight_no_verdict: bool,
 }
 
 /// Runs one `protocol drive` verb.
@@ -784,6 +794,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         // a note in the terminal lives exactly as long as the scrollback, which is not where
         // anybody looks a week later when two runs turn out to have overlapped.
         stolen_lock: lock.stolen().cloned(),
+        in_flight_resolution: None,
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),
@@ -911,6 +922,13 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         // most recent supersession is the answer to *which lock did this run take*; a resume that
         // stole nothing carries `None`, and the driver leaves any earlier theft where it is.
         stolen_lock: lock.stolen().cloned(),
+        in_flight_resolution: if let Some(id) = &args.retry_in_flight {
+            Some(InFlightResolution::Retry(id.clone()))
+        } else if args.record_in_flight_no_verdict {
+            Some(InFlightResolution::RecordNoVerdict)
+        } else {
+            None
+        },
     };
     let mut executors = CliExecutors::new(
         inputs.project.clone(),

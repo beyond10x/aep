@@ -28,6 +28,13 @@ belongs in the commit message or in `docs/design/`.
   non-empty and both digests are checked on every record; an absent or null verdict remains
   unobservable.
 
+* **A resumed driven run cannot observe a mixed state or silently repeat an uncertain effect.**
+  Snapshot and cursor now publish together through a hash-verified immutable generation; complete
+  legacy pairs migrate before execution and partial or tampered pairs are refused. Every outside
+  attempt is persisted before dispatch and a resume requires its exact id through
+  `--retry-in-flight`, or an explicit `--record-in-flight-no-verdict`; dependency circuit counts
+  survive resume as part of the cursor.
+
 ### Changed
 
 * **Validated ESS specifications and compiled IR are sealed.** `Specification` and `EssIr` expose

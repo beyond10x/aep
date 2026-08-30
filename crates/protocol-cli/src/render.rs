@@ -569,11 +569,16 @@ fn watch(workflow: &Workflow, args: &RenderArgs, run: &str) -> Result<ExitCode> 
     }
 }
 
-/// The most recent modification time of the two documents a run writes.
+/// The modification time of the one pointer that publishes a run generation.
 ///
 /// `None` when neither can be read, which is a run directory that is being written to right now —
 /// the next tick will find it.
 fn touched(directory: &RunDirectory) -> Option<SystemTime> {
+    let current = directory.current_generation_path();
+    if current.exists() {
+        return std::fs::metadata(current).ok()?.modified().ok();
+    }
+    // A complete pre-generation run migrates when the first frame reads it.
     [directory.cursor_path(), directory.snapshot_path()]
         .iter()
         .filter_map(|path| std::fs::metadata(path).ok()?.modified().ok())
