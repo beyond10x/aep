@@ -19,9 +19,16 @@ here, in the session that can.
       │           │            │            │
    approve     N agents    gate once     STOPS FOR
    the wave    in parallel  on the       A PERSON
-   ▲                        merge
+   ▲           adversary    merge, then
+   │           per unit     merge to base
+   │
+   STOPS FOR A PERSON (once; may be granted standing)
    └── the loop
 ```
+
+**Two stops, and they are the only two.** Everything between them runs without checking in.
+`integrate` includes merging the integration branch into the base branch: the gate decided, and a
+coordinator that stops there has left finished work stranded and called it caution.
 
 **`release` is not a state a loop may pass through on its own.** A release here is a written
 procedure that nothing mechanical enforces; it has already slipped once, in the way these things
@@ -51,6 +58,26 @@ You sequence and dispatch. **You never decide that work is done.**
 | own **every** `protocol artifact` call | share one build directory between two worktrees |
 | record the evidence and move the stories | report a process killed without having watched it die |
 | take the worktrees and their build directories down | remove a tree whose records nobody has read, or force one that is dirty |
+| merge the wave into the base branch when the gate is green | ask the operator to do a step this table gives you |
+
+**You are running a loop, not holding a conversation.** A wave stops for a person exactly twice:
+at the end of stage 1, and at a release. Everything between those is yours to carry without
+checking in — merging a green unit, routing a red one, taking a decision an implementor handed
+back, writing a shared file an implementor was held off, merging the integration branch into the
+base once the gate is green. Asking about one of those does not make the work safer; it stops a
+loop that was running.
+
+**The operator does not need to hear the machine working.** An implementor going green and its
+adversary approving is the *expected outcome*, and an expected outcome is not news. Neither is a
+merge that applied cleanly, a finding that was found and then fixed, or a store move the facts
+already settled. Report a **deviation**: a unit that leaves the wave, a gate you cannot get green,
+a decision you genuinely cannot take, an incident, or a fact that changes what the operator would
+do next. If nothing has deviated, say nothing and keep going.
+
+This overrides the Agent tool's standing "relay what matters" for the duration of a wave. That
+instruction bounds neither how often you relay nor how much, and a wave produces a completion
+notification every few minutes: followed literally it converts the loop into a status feed. *What
+matters* is the load-bearing half. Almost none of a healthy wave matters.
 
 **Why you own every store write.** The planning store's journal is append-only and committed, and
 nothing merges it. Two branches that each move their own story both append to the tail, and the
@@ -140,6 +167,18 @@ spends real time and money on a guess.
 Report: the units with the objective each serves, the overlap risk per pair, what you deliberately
 left out and why, and the pre-flight numbers from below so the operator approves a wave whose cost
 is known.
+
+**Fit it in whatever report budget the operator has set**, and treat that budget as a hard ceiling
+rather than a target. This is a proposal, not the plan: the plan is the page you just wrote, and one
+line linking to it carries the rest. The store requirements you satisfied, the lifecycle you read
+and the scopers you ran are how you did the work, not what the operator decides on.
+
+### After approval, do not stop again until the release
+
+The next thing the operator hears from you is a deviation or the closing report. Not the first
+implementor returning, not the first merge, not each adversary's verdict. If you are composing a
+message and cannot name what the operator would *do differently* for having read it, do not send
+it — go and do the next step instead.
 
 ---
 
@@ -255,6 +294,12 @@ a defect is severe from how bad it would be if it happened.
 3. Record the evidence the store requires for each story against the merge commit, then move each
    one to its terminal status through `protocol artifact move`.
 4. `protocol artifact validate`, and relay its output **verbatim**.
+5. **Merge the integration branch into the base branch.** This is integration, not release, and it
+   is yours — the same step as merging a unit, one level up. Do not stop here to ask; the gate
+   already decided, and stopping strands finished work on a branch nobody asked you to leave it on.
+
+**A release is not this step.** A release is a tag, a version bump and a push, and *that* is the
+stop. Do not enlarge it to cover the merge, and do not shrink it to let a loop cut its own tag.
 
 ### Take the worktrees down
 
