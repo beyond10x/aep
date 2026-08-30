@@ -29,7 +29,7 @@ whether it would be useful.
 | `agents/reverse-engineer.md` | drafts the first plan for a repository that has none: reads it through `protocol reverse scan` and `protocol reverse history`, creates draft artifacts that each cite the `path:line` they rest on, and reports what it could not cite as a question rather than filing it as work |
 | `agents/plan-reviewer.md` | read-only semantic audit: stories that no longer cover their epic, finished epics still open, stale work, missing acceptance statements. Proposes moves, performs none |
 | `agents/implementor.md` | implements one decomposed unit, test first: writes the case, runs it red, makes the smallest change that satisfies it, runs the whole suite. Reports the suite's own output. Never moves an artifact, never writes into the store |
-| `agents/adversary.md` | attacks a change that already passes: boundaries, mutants the suite would miss, contract drift, properties. Writes failing cases and may not edit what it attacks; records the residue it could not make into a case as an immutable `review-result` |
+| `agents/adversary.md` | attacks a change that already passes: boundaries, mutants the suite would miss, contract drift, properties. Writes failing cases and may not edit what it attacks; runs no `protocol artifact` command — its findings return in its report, and the coordinator decides what becomes a `review-result`, a story or nothing |
 | `agents/story-scoper.md` | works out where one story would actually land — crate, files, symbols, documents — and returns the `## Scope` section that says so, every line marked `cited` or `inferred`. Read-only, so many run at once; the caller writes what they return |
 
 The hooks and the eval that used to live here **migrated to the metaharness repository**
@@ -66,6 +66,17 @@ $ claude --plugin-dir ./integrations/claude-code
 ```
 
 The marketplace and the plugin share a name; the `@` form is `<plugin>@<marketplace>`.
+
+**Two load paths, and only one of them follows the tree.** A marketplace install is a snapshot at
+the commit it was installed from and updates only when `plugin.json`'s `version` moves; a
+`--plugin-dir` load reads the checkout. Running both at once lists every skill and agent twice.
+Every session recorded between 2026-08-29 and 2026-08-30 loaded the plugin from the checkout while
+the marketplace copy sat disabled at `0.1.0`, three agents and one skill behind. The version a
+session is running is the `**Skill version …**` line at the top of every skill, which the wave
+skill's stage-1 proposal quotes; `cargo xtask plugin` (gate step `plugin-check`) fails when that
+line, `plugin.json` and `roster.json` disagree, or when this directory changed since the newest
+release tag and the version did not. A skill or agent edited during a session is not what that
+session runs until `/reload-plugins`.
 
 ## What is deliberately absent
 

@@ -8,6 +8,7 @@
         "status": "draft",
         "title": "Golden epic",
         "path": "epic/golden.md",
+        "relations": [],
         "blocked_by": []
       },
       {
@@ -16,6 +17,16 @@
         "status": "draft",
         "title": "Golden three",
         "path": "story/golden-three.md",
+        "relations": [
+          {
+            "relation": "decomposes",
+            "target": "epic:golden"
+          },
+          {
+            "relation": "depends_on",
+            "target": "story:golden-one"
+          }
+        ],
         "blocked_by": []
       },
       {
@@ -24,6 +35,12 @@
         "status": "draft",
         "title": "Golden two",
         "path": "story/golden-two.md",
+        "relations": [
+          {
+            "relation": "decomposes",
+            "target": "epic:golden"
+          }
+        ],
         "blocked_by": []
       }
     ]
@@ -37,6 +54,12 @@
         "status": "proposed",
         "title": "Golden one",
         "path": "story/golden-one.md",
+        "relations": [
+          {
+            "relation": "decomposes",
+            "target": "epic:golden"
+          }
+        ],
         "blocked_by": []
       }
     ]

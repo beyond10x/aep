@@ -24,6 +24,13 @@
 //! are unchanged, because this plan holds no blocker and an unblocked row prints exactly what it
 //! printed in 0.28.0.
 //!
+//! On 2026-08-30 (`story:cli-ergonomics-round-2`) every row of `list --format json` and `board
+//! --format json` gained a `relations` list, always written and empty where the artifact has no
+//! edges — the documented `jq` shape broke on the first artifact without one, because a key a
+//! machine format omits is a branch every consumer has to write. `reads/list.json` and
+//! `reads/board.json` carry the new key; the text renderings are unchanged, and so is every other
+//! recording.
+//!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
 //! than the 0.19.0 entry — `journal::read` answers the same entries for both, which is what

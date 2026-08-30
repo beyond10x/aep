@@ -11,6 +11,42 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **The Claude Code plugin says which version it is, and a gate step holds it to that.**
+  `integrations/claude-code/.claude-plugin/plugin.json` is `0.2.0`; it read `0.1.0` through nine
+  plugin commits and 968 changed lines on 2026-08-29/30, so a session could not tell the skill it
+  had loaded from the one on disk — and on 2026-08-30 a coordinator paid for it: `3d86d5b`
+  changed `skills/wave/SKILL.md` eighteen minutes into a running wave, the loaded copy lacked the
+  section the coordinator needed, `/reload-skills` said nothing had changed, and the wave halted at
+  the merge boundary after five commits. Every `SKILL.md` now opens with `**Skill version 0.2.0**`
+  and the wave skill's stage-1 proposal quotes it. `plugin-check` (`cargo xtask plugin`), the
+  twelfth of the gate's twenty-two steps, fails when anything under `integrations/claude-code/`
+  differs from the newest release tag and the manifest's `version` does not, when a skill does not
+  state that version, or when the new `integrations/claude-code/roster.json` disagrees with the
+  skills and agents on disk. The roster is a sibling of the manifest rather than keys inside it,
+  because Claude Code reads `skills` and `agents` in `plugin.json` as path overrides that replace
+  the directory scan. It is what an adopter that pins the plugin's agent list reads — harness
+  pinned it by hand and went red when two agents shipped.
+  `story:plugin-and-skills-carry-a-version`, `story:plugin-roster-is-data`.
+
+* **`task release-check` says whether the newest release was cut completely, and `task install`
+  ends the procedure.** Five lines: the workspace version and the `CHANGELOG.md` heading match the
+  tag, the tag is on `origin`, a GitHub Release exists, and the planning store holds a
+  `test_result` naming the tag's commit. Run against `0.33.0` the day it shipped it prints four
+  `ok` and one `MISSING` — no gate record names `304d198`. It reaches the network, so it is not a
+  step of `task check`. The word *release* had been undefined for long enough that a coordinator
+  conflated it with a merge to `main` and the operator had to spell it out (2026-08-30:
+  *changelog update, commit, new tag, gh release*); `AGENTS.md` § *Releases* now ends its loop with
+  `task install` and `task release-check`, because the ambient `protocol` was older than the store
+  it read on six recorded occasions and each time answered `validate` or `history` wrongly with no
+  line saying why. `story:release-is-a-checklist-with-a-check`.
+
+* **`AGENTS.md` § *Gate* carries a generated step list.** `cargo xtask status` now owns a region
+  there — the count and the ordered names, read from `Taskfile.yml`'s `check:` block exactly as the
+  website's currency line already was — and `status-check` fails when it drifts. The hand-written
+  count was wrong twice in three days: *eighteen* against *Nineteen* inside one file on 2026-08-28,
+  *Twenty* against a Taskfile with twenty-one on 2026-08-30.
+  `story:agents-md-is-generated-where-it-counts`.
+
 * **A specification can now say how a run's usage *moved*, not only what it totalled.** Two
   expectation kinds, taking `trace-spec/1` to fifty-three: `usage.trend` states which way a named
   per-request usage field went across the run's API requests
@@ -124,7 +160,159 @@ belongs in the commit message or in `docs/design/`.
   shipped in 0.25.0. All seven now have entries, under three new sections: *Workspace surface*,
   *Property surface*, and a hybrid-store pair on the planning surface.
 
+* **An edge has one spelling, whichever of the two you type.** `protocol artifact relate <id>
+  <relation>:<target>` is now accepted beside `relate <id> <relation> <target>`, split at the first
+  colon exactly as `new --relate` has always split it. Both issue the same command and leave the
+  same journal entry, so nobody reading the store three months later can tell which was typed. The
+  reason this cost anything is that the two verbs disagreed: `new --relate serves:vision:O2` created
+  the edge and `relate story:… serves:vision:O2` was refused for want of a third positional, in the
+  middle of a run where both stories were already `active` and the store went red over a spelling.
+  `story:one-spelling-for-an-edge`.
+
+* **Appending a section, rewriting one section and changing a frontmatter field are each one
+  command.** `protocol artifact body <id> --from <path|-> --append` adds to the end;
+  `--section "<heading>" --from …` replaces the prose under that `##` heading, or adds the section at
+  the end when the document has none; `protocol artifact show <id> --body-only` prints the body bytes
+  and nothing else, which is what `--from` would write straight back. `protocol artifact set <id>`
+  changes `--title`, `--summary`, `--owner`, `--tag` and `--untag` through the same door the prose
+  goes through. Every one of them is one `update` in the journal.
+
+  This is what five sessions were doing with `python`, heredocs and `cat >>` instead: three ad-hoc
+  frontmatter splitters across sub-agents in one run, four duplicate `## Scope` sections in another,
+  and an append with a shell redirect that wrote the bytes and skipped the journal entirely. `set`
+  accepts `--status`, `--revision`, `--id` and `--kind` and **refuses each by name**, because the
+  person who typed `--status` has a question and `unexpected argument` answers none of it: a status
+  is a decision `move` takes against a lifecycle, a revision is the store's own count of its writes,
+  and an id and a kind are identity, fixed at `new`. `story:body-edits-have-a-verb`.
+
+* **`protocol artifact validate --strict` fails on what `validate` reports and does not fail on.**
+  Three classes — a status reached on somebody's assertion rather than on a record, a document that
+  predates the event log, drift between a document and what the log says was written to it — are
+  legal in a store people are working in, and refusing an assertion outright would stop anybody
+  closing a story on the day a runner is down. A **gate** has every reason to refuse all three.
+  Without the flag the lines and the exit code are exactly what they were; with it the same lines are
+  printed, one more names which class decided, and the exit is 1. `plan-check` is deliberately not
+  flipped: the story that flips it is `story:completion-needs-evidence`.
+  `story:validate-strict-refuses-what-it-reports`.
+
+* **`protocol artifact move` refuses a move that would leave the store invalid**, in the finding's
+  own words. It runs the graph rules on the store the move *would* leave and compares that to what
+  the store already reports, so a finding it was already carrying does not block an unrelated move,
+  and a new one is printed with its own text and its own hint. What this stops is one command making
+  work for the next: `move --to active` succeeded and the very next `validate` answered
+  `[empty_declaration] … is active and serves no objective`, because grounding ran only in
+  `validate`. Nothing is written when it refuses. `story:validate-strict-refuses-what-it-reports`.
+
+* **`protocol artifact body --from` on an empty body is refused, naming the flag.** A pipe that
+  produced nothing used to write the empty string over the prose and bump the revision, so the store
+  held a document with nothing in it and a record saying somebody meant that. There is no undo in a
+  tool that has not committed anything. `story:validate-strict-refuses-what-it-reports`.
+
+* **`protocol artifact move --to <status> --via` walks the ladder to get there**, journalling every
+  rung it crosses. `draft -> proposed -> active` was two commands per story on every wave, and one
+  session wrote a `python` loop issuing four commands for each of eight stories. It is still N
+  entries in the history, because a walk that recorded one hop would be a record saying the story was
+  never proposed. It crosses only rungs **nothing guards**: a rung with a `requires:` or a `when:`
+  stops the walk — with that rung's own refusal when the evidence is short, and saying the walk is
+  what is refused when it is not — because arriving somewhere by not being asked is exactly what an
+  evidence gate exists against. `story:cli-ergonomics-round-2`.
+
+* **`protocol artifact explain` ends by saying what each legal next rung costs**: one line per rung,
+  `next: <status> needs <n> <kind> record(s); held: <m>`, counted against the records the store holds
+  about that artifact. The requirement used to be learnt by being refused by `move`, twice. A rung's
+  price is a line in a lifecycle document and there was no reason to be refused to see it. A kind
+  whose lineage declares no ladder gets no lines, because *anything is legal* is not an answer.
+  `story:refusals-name-what-to-do-next`.
+
 ### Changed
+
+* **The wave skill absorbs the two retros written on 2026-08-30**, one from harness wave 3
+  (`docs/reviews/2026-08-30-wave-3-retro.md`) and one from substrate's byte-plane wave — eighteen
+  changes, none of which had reached `skills/wave/SKILL.md` when the retros were filed. The wave
+  page is written whether or not the operator pre-approved, and it is a file stage 2 updates: per
+  unit the branch, head, worktree, build directory, scratch directory and stage — because a
+  session that compacted twice mid-wave had the wave's whole state in a context window and nowhere
+  else. A unit's record is a triple (worktree, build directory inside it, scratch directory the
+  coordinator assigns) and teardown removes all three; the brief is a file
+  (`references/unit-brief.md`) so 240 lines of invariants are not retyped across six dispatches
+  with nothing to catch an omission. The close step writes each unit's learned `## Scope` back
+  through `protocol artifact body`, so the next wave selects on what was measured rather than on
+  the two-of-five inferred lines that were wrong. Sub-agent reports open with a six-line header
+  the coordinator routes on. The attack budget records findings per pass and who verifies the last
+  correction; free disk is re-read as each unit returns (84 G became 62 G inside one wave); the
+  closing report records per-agent tokens, tool uses and duration (one wave spent 2,025,848
+  sub-agent tokens with nothing merged and no number to plan the next one from). A wave of one is
+  a wave. Teardown derives its branch glob from `references/branch-and-merge.md` instead of the
+  `wt/*` it had hard-coded, which had left eight merged branches standing here; that reference now
+  puts the build directory *inside* the worktree, as `AGENTS.md` does and as one gate run was
+  spent discovering; shows the `git merge -F <file>` form because `-F -` does not read stdin;
+  uses `A...B` for a unit's diff; and names `git merge-tree --write-tree --merge-base=<base> <a>
+  <b>` as the dry run before the first merge when two units had to split one file by function. A
+  429 mid-wave resumes the unit from its branch head and never re-dispatches a branch with commits;
+  N defaults to 4. `story:wave-skill-applies-the-two-retros`, `story:fan-out-survives-a-rate-limit`,
+  `story:one-session-per-checkout`.
+
+* **The adversary names whose defect it is, and attacks the contract the unit wrote first.** Its
+  findings table has an `origin` column — `introduced` / `pre-existing` / `undecided` — that two
+  adversaries in one wave had each invented in prose ("CONFIRMED (out of scope of this change)");
+  the coordinator's routing reads it. The attack surface opens with any vector, fixture, schema or
+  contract document the unit itself added, because a unit that ships `state: cancelled` in a
+  vector and code returning `exited` passes every gate step when both halves are its own. Mutation
+  to probe a dead guard is permitted on a scratch copy or inside an added test and nowhere else,
+  and the report leads with `git diff --stat` to prove the tree was restored. A red case that
+  constructs a state nobody reaches is `INFEASIBLE`, not `CONFIRMED`. The README row that still
+  said the adversary records a `review-result` now matches the charter, which has run no
+  `protocol artifact` command since `5a04cb8`. `story:adversary-names-whose-defect-it-is`.
+
+* **The implementor reports how many cases ran, and answers the class rather than the instance.**
+  Per test lane, `executed <before> → <after>, exit <code>`, from the runner's own summary line —
+  a green exit with an unchanged count where cases were added is the first line of the report,
+  because a lane that selected host cases by substring ran 8 of 58 and was green for weeks. A
+  correction names the class the finding is an instance of and shows the rest of the class is
+  clean; where the class is machine-checkable the fix is the check. The build directory stays
+  inside the worktree, a `## Scope` mechanism claim is a hypothesis to measure before building on
+  it (one was followed as written: five red of five), and a file the unit does not own comes back
+  as a patch under `needs-coordinator: yes` rather than as an edit.
+  `story:implementor-counts-what-ran`.
+
+* **The planning skill says what the CLI does, in six places it did not.** § 4 no longer calls a
+  status move a *proposal until confirmed* — a move is made when the store holds the rung's
+  evidence and the agent asks only when it is missing, naming what — after the operator rejected
+  the old behaviour four times ("is it implemented or not? if yes, why do you ask me?"). The
+  discovery table lists the read verbs `protocol artifact --help` answers with, not seven of
+  eighteen; `protocol artifact evidence` is named, with the fact that its kind list is closed and
+  that `move` finds a record without being told; every example edge is `decomposes:`, which is what
+  130 of 130 stories in this store use, not `derived_from`; *correcting a typo by hand is
+  harmless* is gone from `references/store-conventions.md`; and guardrail 6 branches on whether
+  `protocol artifact kinds` and `lifecycle <type>-blocker` answer, instead of assuming a blocker
+  kind exists. The skill's `description` triggers on adoption — a repository with no
+  `.engineering/`, migrating off the `track` plugin — so § 5 is in context before a first store is
+  hand-populated, as one was, three minutes ahead of the skill.
+  `story:planning-skill-says-what-the-cli-does`, `story:skill-loads-before-the-store-is-touched`.
+
+* **`protocol artifact kinds` lists what can be created, not what this binary shipped knowing.**
+  After the compiled vocabulary it now lists every kind the document tree declares a lifecycle for,
+  and one row for the open `<type>-blocker` family, which no list can enumerate because the type is
+  whatever would clear the blockage. `kinds | grep -i block` returned nothing at all while
+  `protocol artifact lifecycle third-party-blocker` answered, which made the verb the skill names as
+  the authority on what can be created the one verb that could not say.
+
+  **`protocol artifact blocked` says when the store has no blocker kind at all.** It used to answer
+  `nothing is blocked` in a store whose pin predates the blocker ladder — good news about a mechanism
+  that did not exist there — and now says so and points at `kinds`.
+  `story:blocker-kinds-are-discoverable`.
+
+* **`--title` and `--summary` take a value beginning with `-`**, on `new` and on `set`. A title is
+  prose and prose starts with a dash often enough; the workaround, `--summary=…`, is a thing you have
+  to already know. And **`relations` is always a list in `list --format json` and `show --format
+  json`**, `[]` where the artifact has no edges, so a documented `jq` shape does not break on the
+  first artifact without one. `story:cli-ergonomics-round-2`.
+
+* **An evidence-kind refusal ends with the two kinds people actually reach for**: an observation of a
+  running system is a `health_observation`, and a dependency on another store's artifact is an
+  `artifact`. One session wrote `measurement`, another wrote `cross_repo_dependency`; both kinds
+  exist and neither guess is findable by scanning a list of fifteen for a word you do not have.
+  `story:refusals-name-what-to-do-next`.
 
 * **The website's claims about this repository are generated from the tag, not typed.**
   `cargo xtask status` already owned `docs/status.md`'s delivered-waves table; it now owns three
@@ -142,6 +330,25 @@ belongs in the commit message or in `docs/design/`.
   over it would have made it false.
 
 ### Fixed
+
+* **A lifecycle the pinned kernel cannot hold is a refusal, not a panic.** `protocol artifact move`
+  against a ladder naming a condition operator the pinned `entity-core` did not know printed a Rust
+  backtrace — `panicked at crates/aep-backend-markdown/src/kernel.rs:226:33: … unknown condition
+  operator 'after'` (2026-08-25) — where a person needed one sentence. `definition_for` now
+  returns the kernel's refusal instead of unwrapping it, `decide` answers a fourth verdict,
+  `Undecidable`, and the move is refused as *the move to `<status>` cannot be decided: … raise the
+  `entity-runtime` pin, or change the lifecycle document to what this kernel reads*. A definition
+  the kernel reads and then refuses to register — which used to answer `NotOnTheLadder` and list
+  legal moves on a ladder the kernel had just refused — takes the same door, and `describe`
+  returns no descriptor for it rather than an invented one. `story:refusals-name-what-to-do-next`.
+
+* **An evidence-gate refusal says what to type, not where the rule looked.** *reaching implemented
+  needs at least 1 test_result record(s). Nothing was presented at `$args.evidence.test_result`*
+  leaked the kernel's own address into two adopters' terminals; it now reads *… no test_result
+  record is held for this artifact — `protocol artifact evidence <id> --kind test_result --source
+  <where it came from>` records one*, and an undated rung names `--at <iso8601>`. An address the
+  translator has not heard of is printed as it came rather than guessed at.
+  `story:refusals-name-what-to-do-next`.
 
 * **The landing page's status panel said three things that were not true.** It published
   *"106 suites and 1811 tests"* — a hand-written count, which this repository forbids on every other

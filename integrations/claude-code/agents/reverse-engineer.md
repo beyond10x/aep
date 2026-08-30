@@ -49,7 +49,7 @@ Work down, because each level is the context for the next.
 | `readme_outline` — what the repository says it is for | one `vision` |
 | a coherent programme the README describes, or a stage in a roadmap | `initiative` |
 | an area, a stage, or a subsystem with its own outcomes | `epic`, `decomposes:` its initiative |
-| one demonstrable outcome | `story`, `derived_from:` its epic |
+| one demonstrable outcome | `story`, `decomposes:` its epic |
 | one mechanical `todo_sites` entry with an obvious fix | `task` |
 | a `disabled_tests` entry that is **not** guarded | `story` — the test runs on no machine |
 | `api_surfaces` — a contract that already exists and is already published | `specification` referencing the document |
@@ -81,7 +81,7 @@ One command per artifact, then the body:
 ```console
 $ protocol artifact new story integration-suite-runs \
     --title "The integration suite runs in CI" \
-    --relate derived_from:epic:test-coverage
+    --relate decomposes:epic:test-coverage
 $ protocol artifact body story:integration-suite-runs --from -
 ```
 

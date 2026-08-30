@@ -46,7 +46,7 @@ One command per story:
 ```console
 $ protocol artifact new story credential-store \
     --title "Store and retrieve passkey credentials" \
-    --relate derived_from:epic:passkey-login
+    --relate decomposes:epic:passkey-login
 ```
 
 Then write each story's complete body through

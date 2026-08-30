@@ -32,6 +32,7 @@ tasks:
       - task: clippy
       - task: test
       - task: docs-check
+      - task: plugin-check
       - task: postgres-check
       - task: doc-check
       - task: schema-check
@@ -153,6 +154,33 @@ tasks:
       the version stamp went to 0.26.0 and the copy stayed at 0.1.0. Component gates are not enough.
     cmds:
       - cmp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs
+
+  plugin-check:
+    desc: >-
+      Fail when the Claude Code plugin changed since the newest release tag and its manifest
+      version did not, when a skill does not state that version, or when roster.json disagrees
+      with the skills and agents on disk. The manifest read 0.1.0 through nine plugin commits;
+      a skill edited eighteen minutes into a running wave halted it, and nothing could say which
+      text the coordinator had loaded.
+    cmds:
+      - cargo xtask plugin
+
+  install:
+    desc: >-
+      Install this tree's `protocol` over the ambient one. The last step of a release: six sessions
+      got a wrong `validate` or `history` answer from a binary older than the store it read, and the
+      install that would have prevented it was nowhere in the procedure.
+    cmds:
+      - cargo install --path crates/protocol-cli --locked --force
+      - protocol --version
+
+  release-check:
+    desc: >-
+      Report whether the newest release was cut completely — version, changelog heading, pushed
+      tag, GitHub Release, and a test_result in the planning store naming the tag's commit. Reaches
+      origin and GitHub, so it is not a step of `check`.
+    cmds:
+      - cargo xtask release
 
   version-check:
     desc: >-

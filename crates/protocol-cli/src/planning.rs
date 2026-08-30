@@ -888,8 +888,26 @@ pub(crate) enum ArtifactCommand {
         /// move be replayed a year later and give the same answer.
         #[arg(long = "at", value_name = "INSTANT")]
         at: Option<String>,
+        /// Walk the ladder's intermediate rungs to get there, journalling each hop.
+        ///
+        /// `draft -> proposed -> active` is two commands per story on every wave (`8cffc110#184`,
+        /// and `9da4f51c#3303`, a `python` loop issuing four commands for each of eight stories).
+        /// This is one, and it is still N moves in the journal, because a walk that recorded one
+        /// hop would be a history that says a story was never proposed.
+        ///
+        /// It crosses only rungs **nothing guards**: a rung with a `requires:` or a `when:` stops
+        /// the walk with that rung's own refusal, because arriving somewhere by not being asked is
+        /// exactly what an evidence gate is against.
+        #[arg(long)]
+        via: bool,
     },
     /// Add an edge from one plan item to another.
+    ///
+    /// Two spellings, one act. `relate <id> <relation> <target>` is the three-positional form;
+    /// `relate <id> <relation>:<target>` is the one `new --relate` already takes, split at the
+    /// **first** colon exactly as that flag is. Both issue the same command and journal the same
+    /// entry — `relate story:x serves:vision:O2` used to be refused for want of a third positional
+    /// while the same words were accepted at `new`, which is one spelling too many for one edge.
     Relate {
         /// Where the plan is and how to render.
         #[command(flatten)]
@@ -897,20 +915,84 @@ pub(crate) enum ArtifactCommand {
         /// The artifact the edge starts at.
         id: String,
         /// What the edge means, such as `decomposes`. `protocol artifact relations` lists them.
+        ///
+        /// May carry the target after a colon — `decomposes:epic:passwordless` — in which case
+        /// the third positional is left off.
         relation: String,
-        /// The artifact the edge points at.
-        target: String,
+        /// The artifact the edge points at, when the relation does not already name it.
+        target: Option<String>,
     },
-    /// Replace a plan item's markdown body while preserving CLI-owned frontmatter.
+    /// Replace, extend or re-section a plan item's markdown body, preserving CLI-owned frontmatter.
+    ///
+    /// Three ways to arrive at a body and one door to write it. Without a flag `--from` is the
+    /// **whole** body, which is the original verb; `--append` adds to what is there; `--section`
+    /// replaces the prose under one `##` heading, or adds that section at the end when the document
+    /// has no such heading. Each is one `update` in the journal.
+    ///
+    /// The reason the last two exist is what happened without them: five sessions patched the
+    /// store with `python`, heredocs and `cat >>`, because *append a section* and *replace a
+    /// section* had no verb and the whole-body rewrite was the only thing on offer — and a hand
+    /// edit skips the journal, which is the record every other write leaves.
     Body {
         /// Where the plan is and how to render.
         #[command(flatten)]
         store: StoreArgs,
         /// The artifact, such as `story:passkey-login`.
         id: String,
-        /// Read the complete replacement body from this UTF-8 file; `-` reads standard input.
+        /// Read the body — whole, appended or sectioned — from this UTF-8 file; `-` reads stdin.
         #[arg(long, value_name = "PATH")]
         from: PathBuf,
+        /// Add what `--from` holds to the end of the body instead of replacing it.
+        #[arg(long, conflicts_with = "section")]
+        append: bool,
+        /// Replace the prose under this `##` heading, or add the section at the end.
+        #[arg(long, value_name = "HEADING")]
+        section: Option<String>,
+    },
+    /// Change one frontmatter field, through the door every other write passes.
+    ///
+    /// The verb `body` had and frontmatter did not: nothing changed a title, a summary, an owner or
+    /// a tag, so every session that needed one reached for an editor or a `python` frontmatter
+    /// splitter — and `11727595#818` shows what that costs, a hand-patched `revision:` caught as
+    /// drift after `edit`, `update`, `set` and `write` had each been tried and refused as unknown
+    /// verbs.
+    ///
+    /// **What it will not change**: `status`, which is `move`'s and carries a lifecycle decision;
+    /// `revision`, which is the store's own count of writes; and `id` and `kind`, which are the
+    /// artifact's identity. Each is refused by name rather than by being an unrecognised flag.
+    Set {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+        /// The title, which is what a listing shows.
+        #[arg(long, allow_hyphen_values = true)]
+        title: Option<String>,
+        /// A one-line summary.
+        #[arg(long, allow_hyphen_values = true)]
+        summary: Option<String>,
+        /// Who owns it.
+        #[arg(long, allow_hyphen_values = true)]
+        owner: Option<String>,
+        /// A label to add. Repeat for more than one.
+        #[arg(long = "tag", allow_hyphen_values = true)]
+        tag: Vec<String>,
+        /// A label to remove. Repeat for more than one.
+        #[arg(long = "untag", allow_hyphen_values = true)]
+        untag: Vec<String>,
+        /// Not a field this verb changes; `move` does, and records why.
+        #[arg(long, hide = true, allow_hyphen_values = true)]
+        status: Option<String>,
+        /// Not a field this verb changes; the store counts its own writes.
+        #[arg(long, hide = true, allow_hyphen_values = true)]
+        revision: Option<String>,
+        /// Not a field this verb changes; an artifact's identity is fixed at `new`.
+        #[arg(long = "id", hide = true, allow_hyphen_values = true)]
+        identity: Option<String>,
+        /// Not a field this verb changes; an artifact's identity is fixed at `new`.
+        #[arg(long, hide = true, allow_hyphen_values = true)]
+        kind: Option<String>,
     },
     /// Print one artifact: its frontmatter fields, then its body.
     ///
@@ -928,6 +1010,13 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// The artifact, such as `story:passkey-login`.
         id: String,
+        /// Print the body bytes and nothing else — no labels, no trailing newline this verb added.
+        ///
+        /// What `body --from` would write back unchanged, so a body can be read out, edited and
+        /// handed back without a frontmatter splitter in between. Refused with a machine format:
+        /// *the bytes and nothing else* is a promise a JSON wrapper breaks.
+        #[arg(long = "body-only")]
+        body_only: bool,
     },
     /// List the plan, one line per artifact.
     List {
@@ -1071,10 +1160,25 @@ pub(crate) enum ArtifactCommand {
         /// Where the plan is and how to render.
         #[command(flatten)]
         store: StoreArgs,
+        /// Exit 1 on what this verb otherwise only reports.
+        ///
+        /// Three classes are reported and deliberately not failed on: a status reached on somebody's
+        /// assertion rather than on a record, a document that predates the event log, and drift
+        /// between a document and what the log says was written to it. Each is legal in a store
+        /// people are working in — refusing an assertion outright would stop anybody closing a
+        /// story on the day a runner is down — and each is a thing a *gate* has every reason to
+        /// refuse. Without this flag the output and the exit code are exactly what they were.
+        #[arg(long)]
+        strict: bool,
     },
     /// List the artifact kinds, marking the ones that are planning rather than output.
+    ///
+    /// The compiled vocabulary, plus every kind the document tree declares a lifecycle for, plus
+    /// one row for the open `<type>-blocker` family — which is what makes this the verb that
+    /// answers *what can I create* rather than *what did this binary ship knowing*.
     Kinds {
-        /// How to render. `--store` is not read: this answers from the vocabulary.
+        /// How to render, and which tree the lifecycles come from. `--store` is not read: this
+        /// answers from the vocabulary and the documents, not from the plan.
         #[command(flatten)]
         store: StoreArgs,
     },
@@ -1108,10 +1212,16 @@ pub(crate) struct NewArgs {
     /// The name, which becomes the id's name part and the file's stem.
     name: String,
     /// The title, which is what a listing shows.
-    #[arg(long)]
+    ///
+    /// Takes a value that begins with `-`. A title or a summary is prose somebody wrote, and prose
+    /// starts with a dash often enough — `--summary "--strict is now a flag"` cost `114c2340#196` a
+    /// retry, and the workaround, `--summary=…`, is a thing you have to already know.
+    #[arg(long, allow_hyphen_values = true)]
     title: String,
     /// A one-line summary.
-    #[arg(long)]
+    ///
+    /// Takes a value that begins with `-`, for the reason `--title` does.
+    #[arg(long, allow_hyphen_values = true)]
     summary: Option<String>,
     /// Who owns it.
     #[arg(long)]
@@ -1162,15 +1272,60 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             to,
             evidence,
             at,
-        } => move_status(&store, &id, &to, &evidence, at.as_deref()),
+            via,
+        } => move_status(&store, &id, &to, &evidence, at.as_deref(), via),
         ArtifactCommand::Relate {
             store,
             id,
             relation,
             target,
-        } => relate(&store, &id, &relation, &target),
-        ArtifactCommand::Body { store, id, from } => replace_body(&store, &id, &from),
-        ArtifactCommand::Show { store, id } => show(&store, &id),
+        } => relate(&store, &id, &relation, target.as_deref()),
+        ArtifactCommand::Body {
+            store,
+            id,
+            from,
+            append,
+            section,
+        } => replace_body(
+            &store,
+            &id,
+            &from,
+            &BodyEdit::of(append, section.as_deref()),
+        ),
+        ArtifactCommand::Set {
+            store,
+            id,
+            title,
+            summary,
+            owner,
+            tag,
+            untag,
+            status,
+            revision,
+            identity,
+            kind,
+        } => set(
+            &store,
+            &id,
+            &Fields {
+                title,
+                summary,
+                owner,
+                tag,
+                untag,
+            },
+            &[
+                ("status", status),
+                ("revision", revision),
+                ("id", identity),
+                ("kind", kind),
+            ],
+        ),
+        ArtifactCommand::Show {
+            store,
+            id,
+            body_only,
+        } => show(&store, &id, body_only),
         ArtifactCommand::List {
             store,
             kind,
@@ -1179,7 +1334,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
-        ArtifactCommand::Validate { store } => validate(&store),
+        ArtifactCommand::Validate { store, strict } => validate(&store, strict),
         ArtifactCommand::History { store, id } => history(&store, &id),
         ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
@@ -1651,6 +1806,30 @@ fn move_through_a_command(
     Ok(())
 }
 
+/// What the graph rules say about a store, each finding as `validate` would print it.
+///
+/// A store whose documents do not build a graph at all answers **nothing** rather than everything:
+/// a dangling edge is a defect `validate` reports and is not a reason to refuse an unrelated status
+/// move, and comparing "no graph" to "no graph" the way a caller compares two of these would
+/// otherwise turn every such store into a refusal.
+fn lifecycle_findings(
+    report: &StoreReport,
+    repository: &Path,
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+) -> Vec<String> {
+    report
+        .graph_in_workspace(declared_members(repository))
+        .map(|graph| {
+            graph
+                .validate_lifecycles(lifecycles)
+                .as_slice()
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// `protocol artifact move`
 fn move_status(
     args: &StoreArgs,
@@ -1658,6 +1837,7 @@ fn move_status(
     to: &str,
     evidence: &[String],
     at: Option<&str>,
+    via: bool,
 ) -> Result<ExitCode> {
     let asserted = parse_evidence(evidence)?;
     // The clock, read once, here. `aep-domain` has no clock and neither does the backend; this is
@@ -1671,6 +1851,11 @@ fn move_status(
     let registry = args.lifecycles()?;
 
     let mut opened = open(&args.location, true)?;
+    let repository = args.repository_root();
+    // What the whole store already reports, before this move. Taken here because the decision below
+    // mutates the document in place, and *new* is the only interesting word in the comparison: a
+    // store that was already reporting a finding must not have this move refused for it.
+    let before = lifecycle_findings(&opened.report, &repository, registry.lifecycles());
 
     // Evidence recorded *about this artifact* is found rather than typed. Both origins are kept
     // apart all the way through the decision and into the journal, so the history can say what the
@@ -1687,7 +1872,7 @@ fn move_status(
         .documents
         .get_mut(&id)
         .with_context(|| not_here)?;
-    let from = stored.document.frontmatter.status.clone();
+    let standing = stored.document.frontmatter.status.clone();
 
     // The target is read *after* the artifact, because what a status name may be is decided by the
     // ladder this kind declares and not by a list compiled into this binary. `ArtifactStatus` is an
@@ -1695,30 +1880,169 @@ fn move_status(
     let kind = stored.document.frontmatter.kind.clone();
     let to = parse_status_in(to, &kind, registry.lifecycles())?;
 
-    if let Err(refusal) =
-        stored
-            .document
-            .move_status(to.clone(), registry.lifecycles(), &evidence, Some(&now))
-    {
-        outln!("{id} is {from}; {refusal}");
+    // The rungs to walk. Without `--via` that is one — the rung the caller named — and everything
+    // below reads exactly as it did. With it, the ladder's own shortest route there.
+    let permissive = ArtifactLifecycle::permissive();
+    let ladder = registry
+        .lifecycles()
+        .for_kind(&kind)
+        .unwrap_or(&permissive)
+        .clone();
+    let hops = if via {
+        rungs_between(&ladder, &standing, &to).unwrap_or_else(|| vec![to.clone()])
+    } else {
+        vec![to.clone()]
+    };
+
+    // **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for
+    // the ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per
+    // story on every wave (`8cffc110#184`) — and not for getting past a rung that asks for
+    // something. A guarded rung is refused in the words that rung would have used.
+    for rung in hops.iter().take(hops.len().saturating_sub(1)) {
+        if ladder.requirements_for(rung).is_empty() && ladder.timing_for(rung).is_none() {
+            continue;
+        }
+        // The probe carries the caller's own evidence, so the refusal is true: a caller who
+        // presented nothing reads that rung's "not yet earned", and one who presented enough reads
+        // that the walk is what is refused, not the evidence.
+        let mut probe = stored.document.clone();
+        match probe.move_status(rung.clone(), registry.lifecycles(), &evidence, Some(&now)) {
+            Err(refusal) => outln!("{id} is {standing}; {refusal}"),
+            Ok(()) => outln!(
+                "{id} is {standing}; `--via` walks rungs nothing guards, and {rung} is guarded — \
+                 move it there on its own, with what that rung asks for"
+            ),
+        }
         return Ok(crate::exit_code(false));
     }
 
-    let relative = stored.relative_path.clone();
-    let document = stored.document.clone();
-    // Through the command the vocabulary gained for this. The engine has already decided the move
-    // above, against the kind's ladder and the evidence presented; what crosses here is the
-    // decision and the account it rested on. `MarkdownBackend` writes the file and journals it.
-    let _ = relative;
-    move_through_a_command(opened.backend()?, &id, &to, &decided_on)?;
-    let path = opened.path_of(&id);
+    let mut made: Vec<Moved> = Vec::new();
+    for rung in &hops {
+        // Recomputed per hop, because the store the next hop would leave is the store this one
+        // left. The comparison is still *new since a moment ago*, which is the only useful one.
+        let before = if made.is_empty() {
+            before.clone()
+        } else {
+            lifecycle_findings(&opened.report, &repository, registry.lifecycles())
+        };
+        let not_here = opened.missing(&id);
+        let path = opened.path_of(&id);
+        let stored = opened
+            .report
+            .documents
+            .get_mut(&id)
+            .with_context(|| not_here)?;
+        let from = stored.document.frontmatter.status.clone();
+        let relative = stored.relative_path.clone();
 
+        if let Err(refusal) =
+            stored
+                .document
+                .move_status(rung.clone(), registry.lifecycles(), &evidence, Some(&now))
+        {
+            report_moves(args, &id, &made, &decided_on)?;
+            outln!("{id} is {from}; {refusal}");
+            return Ok(crate::exit_code(false));
+        }
+        let document = stored.document.clone();
+
+        // **The rules the store would be judged by, run on the store this hop would leave.** The
+        // ladder says a move is legal; the *graph* says whether the result is a plan that
+        // validates, and until now only `validate` asked it — so `move --to active` succeeded and
+        // `validate` immediately reported `[empty_declaration] … is active and serves no
+        // objective`, which is one command creating work for the next one (`114c2340#92`,
+        // `4d4c15a4#149`). The document has been moved in memory and nothing has been written, so
+        // `opened.report` *is* the would-be store.
+        let after = lifecycle_findings(&opened.report, &repository, registry.lifecycles());
+        if let Some(finding) = after
+            .iter()
+            .find(|finding| !before.contains(*finding) && finding.contains(&id.to_string()))
+        {
+            report_moves(args, &id, &made, &decided_on)?;
+            outln!("{id} would move {from} -> {rung}, and the store would not validate:");
+            outln!("  - {finding}");
+            return Ok(crate::exit_code(false));
+        }
+
+        // Through the command the vocabulary gained for this. The engine has already decided the
+        // move above, against the kind's ladder and the evidence presented; what crosses here is
+        // the decision and the account it rested on. `MarkdownBackend` writes the file and
+        // journals it — **once per hop**, so a walk leaves the same record two commands would.
+        let _ = relative;
+        move_through_a_command(opened.backend()?, &id, rung, &decided_on)?;
+        made.push(Moved {
+            id: id.to_string(),
+            from: from.as_str().to_owned(),
+            to: rung.as_str().to_owned(),
+            revision: document.frontmatter.revision,
+            path,
+        });
+    }
+
+    report_moves(args, &id, &made, &decided_on)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The rungs from `from` to `to`, `to` last and `from` left out, or `None` when the ladder has no
+/// route.
+///
+/// Breadth-first, so the answer is the **shortest** walk, and over `BTreeSet`s, so two routes of
+/// equal length resolve the same way on every machine — a status move that depended on hash order
+/// would be a different plan on a different day.
+fn rungs_between(
+    ladder: &ArtifactLifecycle,
+    from: &ArtifactStatus,
+    to: &ArtifactStatus,
+) -> Option<Vec<ArtifactStatus>> {
+    if from == to {
+        return None;
+    }
+    let mut seen: BTreeSet<ArtifactStatus> = BTreeSet::new();
+    let mut queue: std::collections::VecDeque<Vec<ArtifactStatus>> =
+        std::collections::VecDeque::new();
+    seen.insert(from.clone());
+    queue.push_back(Vec::new());
+    while let Some(walked) = queue.pop_front() {
+        let at = walked.last().unwrap_or(from);
+        for next in ladder.transitions.get(at).into_iter().flatten() {
+            if !seen.insert(next.clone()) {
+                continue;
+            }
+            let mut extended = walked.clone();
+            extended.push(next.clone());
+            if next == to {
+                return Some(extended);
+            }
+            queue.push_back(extended);
+        }
+    }
+    None
+}
+
+/// Prints the moves that were made, in the format the caller asked for.
+///
+/// Shared by the successful walk and by the refusal that stops one part-way, because a hop that was
+/// committed is a hop the caller has to be told about — a refusal printed alone would leave a story
+/// somewhere nobody said it was.
+fn report_moves(
+    args: &StoreArgs,
+    id: &ArtifactId,
+    made: &[Moved],
+    decided_on: &aep_backend_markdown::journal::Provenance,
+) -> Result<()> {
+    if made.is_empty() {
+        return Ok(());
+    }
     match args.format {
         Format::Text => {
-            outln!(
-                "{id} moved {from} -> {to} (revision {})",
-                document.frontmatter.revision
-            );
+            for moved in made {
+                outln!(
+                    "{id} moved {} -> {} (revision {})",
+                    moved.from,
+                    moved.to,
+                    moved.revision
+                );
+            }
             if decided_on.leans_on_an_assertion() {
                 let asserted: Vec<String> = decided_on
                     .asserted
@@ -1732,18 +2056,14 @@ fn move_status(
                 outln!("  `protocol artifact evidence {id} --kind <kind> --source <where>` records it instead");
             }
         }
-        Format::Yaml | Format::Json => crate::print_serialised(
-            &Moved {
-                id: id.to_string(),
-                from: from.as_str().to_owned(),
-                to: to.as_str().to_owned(),
-                revision: document.frontmatter.revision,
-                path,
-            },
-            args.format,
-        )?,
+        // One move is one object, as it has always been; a walk is the list it actually was.
+        // Collapsing a walk into its last hop would report a plan that never happened.
+        Format::Yaml | Format::Json => match made {
+            [only] => crate::print_serialised(only, args.format)?,
+            several => crate::print_serialised(&several, args.format)?,
+        },
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(())
 }
 
 /// Issues the `CreateRelation` command that adds one edge.
@@ -1809,10 +2129,19 @@ fn relate_through_a_command(
 }
 
 /// `protocol artifact relate`
-fn relate(args: &StoreArgs, id: &str, relation: &str, target: &str) -> Result<ExitCode> {
+///
+/// `target` is absent when the caller wrote the edge as one word — `<relation>:<target>` — which is
+/// the spelling `new --relate` takes, and is split here by the very same [`parse_relation`], so the
+/// two verbs cannot drift apart in what they accept.
+fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> Result<ExitCode> {
     let id = artifact_id(id)?;
-    let relation = RelationKind::parse(relation).map_err(|error| anyhow::anyhow!("{error}"))?;
-    let target = ArtifactRef::parse(target).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let (relation, target) = match target {
+        Some(target) => (
+            RelationKind::parse(relation).map_err(|error| anyhow::anyhow!("{error}"))?,
+            ArtifactRef::parse(target).map_err(|error| anyhow::anyhow!("{error}"))?,
+        ),
+        None => parse_relation(relation)?,
+    };
 
     let mut opened = open(&args.location, true)?;
 
@@ -1948,10 +2277,129 @@ fn read_body(from: &Path) -> Result<String> {
     }
 }
 
+/// Which of the three ways `body` was asked to arrive at a new body.
+///
+/// One enum rather than two booleans on the handler, because *replace the whole thing*, *add to the
+/// end* and *replace one section* are three states and two booleans are four.
+#[derive(Debug, Clone)]
+enum BodyEdit {
+    /// `--from` is the whole body.
+    Whole,
+    /// `--from` goes on the end of what is there.
+    Append,
+    /// `--from` is the prose under one `##` heading.
+    Section(String),
+}
+
+impl BodyEdit {
+    /// What the flags asked for. `--append` and `--section` are mutually exclusive at the parser.
+    fn of(append: bool, section: Option<&str>) -> Self {
+        match (append, section) {
+            (_, Some(heading)) => Self::Section(heading.to_owned()),
+            (true, None) => Self::Append,
+            (false, None) => Self::Whole,
+        }
+    }
+
+    /// How the journal's correlation names this write.
+    fn correlation(&self) -> &'static str {
+        match self {
+            Self::Whole => "protocol-artifact-body",
+            Self::Append => "protocol-artifact-body-append",
+            Self::Section(_) => "protocol-artifact-body-section",
+        }
+    }
+
+    /// What the verb says it did.
+    fn past_tense(&self) -> String {
+        match self {
+            Self::Whole => "body replaced".to_owned(),
+            Self::Append => "body appended to".to_owned(),
+            Self::Section(heading) => format!("`## {heading}` written"),
+        }
+    }
+}
+
+/// The body `edit` makes of `existing` given the bytes the caller handed in.
+///
+/// No markdown parser, deliberately: a heading is a line that starts with `##`, which is what the
+/// documents in this store actually are, and a parser here would be a second opinion about what a
+/// planning document is. The section runs from its heading to the next heading at the same level or
+/// above, or to the end.
+fn edited_body(existing: &str, arriving: &str, edit: &BodyEdit) -> String {
+    match edit {
+        BodyEdit::Whole => arriving.to_owned(),
+        BodyEdit::Append => {
+            if existing.trim().is_empty() {
+                return arriving.to_owned();
+            }
+            format!(
+                "{}\n\n{}",
+                existing.trim_end(),
+                arriving.trim_start_matches('\n')
+            )
+        }
+        BodyEdit::Section(heading) => section_written(existing, heading, arriving),
+    }
+}
+
+/// `existing` with the prose under `## <heading>` replaced by `arriving`, or that section added.
+fn section_written(existing: &str, heading: &str, arriving: &str) -> String {
+    let wanted = format!("## {}", heading.trim());
+    let lines: Vec<&str> = existing.lines().collect();
+    let Some(at) = lines
+        .iter()
+        .position(|line| line.trim_end() == wanted.as_str())
+    else {
+        // No such heading: the section is added at the end, which is what a caller asking for a
+        // section a document does not have meant. Refusing would send them back to a heredoc.
+        let head = if existing.trim().is_empty() {
+            String::new()
+        } else {
+            format!("{}\n\n", existing.trim_end())
+        };
+        return format!("{head}{wanted}\n\n{}\n", arriving.trim());
+    };
+    // The next heading at this level or above ends the section; anything deeper is inside it.
+    let ends_at = lines
+        .iter()
+        .enumerate()
+        .skip(at + 1)
+        .find(|(_, line)| {
+            let trimmed = line.trim_start();
+            trimmed.starts_with("# ") || trimmed.starts_with("## ")
+        })
+        .map_or(lines.len(), |(index, _)| index);
+
+    let mut out = String::new();
+    for line in &lines[..=at] {
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out, "\n{}", arriving.trim());
+    if ends_at < lines.len() {
+        let _ = writeln!(out);
+        for line in &lines[ends_at..] {
+            let _ = writeln!(out, "{line}");
+        }
+    }
+    out
+}
+
 /// `protocol artifact body`
-fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
+fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Result<ExitCode> {
     let id = artifact_id(id)?;
-    let body = read_body(from)?;
+    let arriving = read_body(from)?;
+    // **An empty body is not a body.** `11727595#10819`: `body --from -` on empty standard input
+    // wrote nothing over the prose and bumped the revision, which is a document destroyed and a
+    // record saying somebody meant to. The flag is named because the flag is what went wrong — a
+    // pipe that produced nothing, a file that was not the one intended.
+    if arriving.trim().is_empty() {
+        anyhow::bail!(
+            "`--from {}` holds no body; a planning document is its prose, and writing an empty one \
+             over it is not an edit anything can undo",
+            from.display()
+        );
+    }
 
     let mut opened = open(&args.location, true)?;
     let not_here = opened.missing(&id);
@@ -1960,6 +2408,7 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
         .documents
         .get_mut(&id)
         .with_context(|| not_here)?;
+    let body = edited_body(&stored.document.body, &arriving, edit);
     if !stored.document.replace_body(body) {
         outln!("{id} already has those body bytes; nothing to do");
         return Ok(ExitCode::SUCCESS);
@@ -1978,18 +2427,176 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
             aep_backend_markdown::backend::BODY_KEY.to_owned(),
             aep_domain::node::Node::from(document.body.as_str()),
         )],
-        "protocol-artifact-body",
+        edit.correlation(),
     )?;
     let path = opened.path_of(&id);
     match args.format {
         Format::Text => outln!(
-            "{id} body replaced (revision {}) at {path}",
+            "{id} {} (revision {}) at {path}",
+            edit.past_tense(),
             document.frontmatter.revision
         ),
         Format::Yaml | Format::Json => crate::print_serialised(
             &BodyReplaced {
                 id: id.to_string(),
                 revision: document.frontmatter.revision,
+                path: relative,
+            },
+            args.format,
+        )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The frontmatter fields `set` may change.
+///
+/// Its own struct rather than five arguments on the handler, for the reason [`NewArgs`] is one.
+#[derive(Debug)]
+struct Fields {
+    /// The new title, when one was given.
+    title: Option<String>,
+    /// The new summary, when one was given.
+    summary: Option<String>,
+    /// The new owner, when one was given.
+    owner: Option<String>,
+    /// Labels to add.
+    tag: Vec<String>,
+    /// Labels to remove.
+    untag: Vec<String>,
+}
+
+impl Fields {
+    /// `true` when the caller named no field at all.
+    fn nothing_named(&self) -> bool {
+        self.title.is_none()
+            && self.summary.is_none()
+            && self.owner.is_none()
+            && self.tag.is_empty()
+            && self.untag.is_empty()
+    }
+}
+
+/// Why `set` will not change a field, in the words a reader can act on.
+///
+/// Each is a flag `set` accepts and refuses, rather than one `clap` reports as unrecognised: the
+/// person typing `--status` has a question — *how do I change a status* — and `unexpected argument`
+/// answers none of it.
+fn not_a_field_set_changes(name: &str) -> String {
+    match name {
+        "status" => "`status` is not a field `set` changes: a status is a decision taken against \
+                     the kind's lifecycle, and `protocol artifact move <id> --to <status>` is what \
+                     takes it and records what it rested on"
+            .to_owned(),
+        "revision" => {
+            "`revision` is not a field `set` changes: it is the store's own count of the \
+                       writes it made, and a document claiming one no write produced is what \
+                       `protocol artifact validate` reports as a forged revision"
+                .to_owned()
+        }
+        other => format!(
+            "`{other}` is not a field `set` changes: an artifact's id and kind are its identity, \
+             fixed at `protocol artifact new` — create the artifact the new name calls for and \
+             relate this one to it"
+        ),
+    }
+}
+
+/// `protocol artifact set`
+///
+/// Frontmatter through the same door as prose. `refused` carries the flags this verb accepts only
+/// in order to say why it will not honour them; each is `None` on every call that meant anything.
+fn set(
+    args: &StoreArgs,
+    id: &str,
+    fields: &Fields,
+    refused: &[(&str, Option<String>)],
+) -> Result<ExitCode> {
+    for (name, given) in refused {
+        if given.is_some() {
+            anyhow::bail!("{}", not_a_field_set_changes(name));
+        }
+    }
+    if fields.nothing_named() {
+        anyhow::bail!(
+            "nothing to set; name a field, such as `--title`, `--summary`, `--owner`, `--tag` or \
+             `--untag`"
+        );
+    }
+    let id = artifact_id(id)?;
+
+    let opened = open(&args.location, true)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let front = &stored.document.frontmatter;
+
+    // Only what differs travels. A command carrying a title the document already has is a write
+    // with nothing in it and a revision nobody can explain — the same reasoning `replace_body`
+    // gives for identical bytes.
+    let mut changes: Vec<(String, aep_domain::node::Node)> = Vec::new();
+    let mut named: Vec<String> = Vec::new();
+    for (key, wanted, held) in [
+        ("title", fields.title.as_deref(), front.title.as_deref()),
+        (
+            "summary",
+            fields.summary.as_deref(),
+            front.summary.as_deref(),
+        ),
+        ("owner", fields.owner.as_deref(), front.owner.as_deref()),
+    ] {
+        if let Some(wanted) = wanted {
+            if held != Some(wanted) {
+                changes.push((key.to_owned(), aep_domain::node::Node::from(wanted)));
+                named.push(key.to_owned());
+            }
+        }
+    }
+    if !fields.tag.is_empty() || !fields.untag.is_empty() {
+        let mut tags = front.tags.clone();
+        for tag in &fields.tag {
+            tags.insert(tag.clone());
+        }
+        for tag in &fields.untag {
+            tags.remove(tag);
+        }
+        if tags != front.tags {
+            changes.push((
+                "tags".to_owned(),
+                aep_domain::node::Node::Seq(
+                    tags.iter()
+                        .map(|tag| aep_domain::node::Node::from(tag.as_str()))
+                        .collect(),
+                ),
+            ));
+            named.push("tags".to_owned());
+        }
+    }
+
+    if changes.is_empty() {
+        outln!("{id} already reads that way; nothing to do");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    // The revision the write will land at. The backend counts it as `existing + 1` and nothing
+    // here writes the document, so this is what the file says a moment later — read back rather
+    // than guessed only if that stops being true.
+    let revision = front.revision.saturating_add(1);
+    let relative = stored.relative_path.clone();
+    update_through_a_command(opened.backend()?, &id, changes, "protocol-artifact-set")?;
+
+    let path = opened.path_of(&id);
+    match args.format {
+        Format::Text => outln!(
+            "{id} {} set (revision {revision}) at {path}",
+            named.join(", ")
+        ),
+        Format::Yaml | Format::Json => crate::print_serialised(
+            &FieldsSet {
+                id: id.to_string(),
+                fields: named,
+                revision,
                 path: relative,
             },
             args.format,
@@ -2012,8 +2619,15 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path) -> Result<ExitCode> {
 /// markdown document's own, kept so a round trip loses nothing, and a plan that keeps no documents
 /// has never been told about them — so printing them would make this verb answer differently
 /// depending on where the plan is kept, which is the one thing every verb here refuses to do.
-fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
+fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
     let id = artifact_id(id)?;
+    if body_only && args.format != Format::Text {
+        anyhow::bail!(
+            "`--body-only` prints the body bytes and nothing else, so it has no `--format {}` \
+             rendering; drop one of the two",
+            format!("{:?}", args.format).to_lowercase()
+        );
+    }
     let opened = open(&args.location, false)?;
     let stored = opened
         .report
@@ -2041,6 +2655,14 @@ fn show(args: &StoreArgs, id: &str) -> Result<ExitCode> {
         revision: frontmatter.revision,
         body: stored.document.body.clone(),
     };
+
+    // The bytes and nothing else — no labels, no blank line, no newline this verb added. What
+    // `body --from` would write straight back, which is what makes *read it, edit it, hand it
+    // back* a thing to type rather than a frontmatter splitter to write.
+    if body_only {
+        out!("{}", shown.body);
+        return Ok(ExitCode::SUCCESS);
+    }
 
     match args.format {
         Format::Text => {
@@ -2449,6 +3071,14 @@ fn columns_for(
 }
 
 /// `protocol artifact blocked`
+/// Whether any ladder in force governs a blocker, which is what makes `blocked` a question at all.
+///
+/// The bare `blocker` and every `<type>-blocker` count, because the family is open and a store may
+/// have declared a ladder for a type this binary has never heard of.
+fn declares_a_blocker_ladder(lifecycles: &aep_domain::artifact::LifecycleRegistry) -> bool {
+    lifecycles.iter().any(|(kind, _)| kind.is_blocker())
+}
+
 fn blocked(args: &StoreArgs, category: Option<&str>) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let ladders = ladders_or_none(args);
@@ -2501,7 +3131,19 @@ fn blocked(args: &StoreArgs, category: Option<&str>) -> Result<ExitCode> {
     match args.format {
         Format::Text => {
             if blockages.is_empty() {
-                outln!("nothing is blocked");
+                // **Two different answers, and they used to be one.** `nothing is blocked` is a
+                // report about the store; a store whose pin predates `artifacts/kinds/blocker.yaml`
+                // has no blocker ladder to resolve, so the mechanism this verb reports on does not
+                // exist there — and answering `nothing is blocked` made a missing feature look like
+                // good news (`431986de#7007`, and the operator at `#7024`: "what are you talking
+                // about blockers").
+                if declares_a_blocker_ladder(ladders.lifecycles()) {
+                    outln!("nothing is blocked");
+                } else {
+                    outln!(
+                        "this store's lifecycles declare no blocker kind; `protocol artifact kinds` lists what can be created"
+                    );
+                }
             }
             for (index, blockage) in blockages.iter().enumerate() {
                 if index > 0 {
@@ -2653,7 +3295,13 @@ fn log_findings(
 }
 
 /// `protocol artifact validate`
-fn validate(args: &StoreArgs) -> Result<ExitCode> {
+///
+/// `strict` turns each *reported* class into an exit code, and changes nothing else: the same lines
+/// are printed, in the same order, whether or not it is set. That split is deliberate and is
+/// `story:completion-needs-evidence`'s recorded position — a store somebody is working in must be
+/// able to hold a status closed on an assertion, and a gate must be able to refuse one — so the
+/// caller who wants the second says so rather than the tool deciding for both.
+fn validate(args: &StoreArgs, strict: bool) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let report = &opened.report;
     let registry = args.lifecycles()?;
@@ -2734,61 +3382,156 @@ fn validate(args: &StoreArgs) -> Result<ExitCode> {
     };
 
     match args.format {
-        Format::Text => {
-            outln!(
-                "{} file(s) in {}: {} artifact(s)",
-                summary.files_read,
-                summary.store,
-                summary.artifacts
-            );
-            // A normal condition, said out loud: a document with no events cannot be checked
-            // against its log, and a reader should know how many of those there are.
-            if summary.pre_provider > 0 {
-                outln!("{} document(s) predate the event log", summary.pre_provider);
-            }
-            // Reported, and deliberately **not** counted as a problem. Refusing an assertion
-            // outright would stop anybody closing a story on the day a runner is down, which is the
-            // day it matters most. What it must not be is invisible.
-            if !asserted.is_empty() {
-                outln!("{} closed on an assertion:", asserted.len());
-                for note in &asserted {
-                    outln!("  - {note}");
-                }
-            }
-            if problems.is_empty() {
-                outln!("valid");
-            } else {
-                outln!("{} problem(s):", problems.len());
-                for problem in &problems {
-                    outln!("  - {problem}");
-                }
-            }
-        }
+        Format::Text => print_validation(&summary, strict),
         Format::Yaml | Format::Json => crate::print_serialised(&summary, args.format)?,
     }
-    Ok(crate::exit_code(problems.is_empty()))
+    Ok(crate::exit_code(
+        summary.problems.is_empty() && (!strict || strictly_refused(&summary).is_empty()),
+    ))
+}
+
+/// What `validate` prints for a person: the counts, the classes it reports, then the verdict.
+///
+/// The lines are the same whether or not `strict` is set — it adds one, naming which reported class
+/// decided the exit code, because an exit code with no line above it is a gate nobody can debug.
+fn print_validation(summary: &Summary, strict: bool) {
+    outln!(
+        "{} file(s) in {}: {} artifact(s)",
+        summary.files_read,
+        summary.store,
+        summary.artifacts
+    );
+    // A normal condition, said out loud: a document with no events cannot be checked against its
+    // log, and a reader should know how many of those there are.
+    if summary.pre_provider > 0 {
+        outln!("{} document(s) predate the event log", summary.pre_provider);
+    }
+    // Reported, and deliberately **not** counted as a problem. Refusing an assertion outright would
+    // stop anybody closing a story on the day a runner is down, which is the day it matters most.
+    // What it must not be is invisible.
+    if !summary.closed_on_an_assertion.is_empty() {
+        outln!(
+            "{} closed on an assertion:",
+            summary.closed_on_an_assertion.len()
+        );
+        for note in &summary.closed_on_an_assertion {
+            outln!("  - {note}");
+        }
+    }
+    if summary.problems.is_empty() {
+        outln!("valid");
+    } else {
+        outln!("{} problem(s):", summary.problems.len());
+        for problem in &summary.problems {
+            outln!("  - {problem}");
+        }
+    }
+    if strict {
+        let refusing = strictly_refused(summary);
+        if !refusing.is_empty() {
+            outln!(
+                "--strict: refusing on {}",
+                render_list(&refusing.iter().map(String::as_str).collect::<Vec<&str>>())
+            );
+        }
+    }
+}
+
+/// The classes `--strict` fails on, named, in the order the report prints them.
+///
+/// Drift, a forged revision and a deletion are already problems, so they already fail; they are
+/// here anyway, because a caller reading *why* a strict run refused should not have to know which
+/// of the classes happened to be counted twice — and because a future edit that stopped counting
+/// one as a problem must not quietly stop `--strict` refusing it.
+fn strictly_refused(summary: &Summary) -> Vec<String> {
+    let mut refusing = Vec::new();
+    for (label, count) in [
+        (
+            "closed on an assertion",
+            summary.closed_on_an_assertion.len(),
+        ),
+        ("predating the event log", summary.pre_provider),
+        ("drifted", summary.drift.len()),
+        ("forged revision", summary.forged.len()),
+        ("deleted", summary.deleted.len()),
+    ] {
+        if count > 0 {
+            refusing.push(format!("{count} {label}"));
+        }
+    }
+    refusing
+}
+
+/// The row `kinds` prints for one kind.
+///
+/// A blocker reads `planning` whatever [`ArtifactKind::is_planning`] says, and that is not a
+/// disagreement with the domain: that predicate answers *intent or output* over the compiled
+/// vocabulary, and a `<type>-blocker` is an `Other` it has never been told about. A blocker is a
+/// record of why work is stopped, which is intent, and printing it as `output` would put it on the
+/// wrong side of the only column this table has.
+fn kind_row(kind: &ArtifactKind, note: Option<String>) -> KindRow {
+    let planning = kind.is_planning() || kind.is_blocker();
+    KindRow {
+        kind: kind.as_str().to_owned(),
+        layer: if planning { "planning" } else { "output" },
+        planning,
+        note,
+    }
 }
 
 /// `protocol artifact kinds`
+///
+/// **The compiled vocabulary is not the whole answer, and used to be printed as though it were.**
+/// `ArtifactKind::NAMED` is what this binary knows; a store's `artifacts/lifecycles/*.yaml` may
+/// declare kinds beside it — `protocol artifact lifecycle third-party-blocker` answered while
+/// `kinds | grep -i block` returned nothing at all (`fcf5873a#361`) — and the blocker family is
+/// **open**: any `<type>-blocker` is a kind, so no list can enumerate it and a row that says so is
+/// the only honest way to put it in a table.
+///
+/// The lifecycles are read best-effort, as `board` reads them: a tree that cannot be read is not a
+/// reason to stop answering the part of the question that comes from the vocabulary.
 fn kinds(args: &StoreArgs) -> Result<ExitCode> {
-    let listed: Vec<KindRow> = ArtifactKind::NAMED
+    let mut listed: Vec<KindRow> = ArtifactKind::NAMED
         .iter()
-        .map(|kind| KindRow {
-            kind: kind.as_str().to_owned(),
-            layer: if kind.is_planning() {
-                "planning"
-            } else {
-                "output"
-            },
-            planning: kind.is_planning(),
-        })
+        .map(|kind| kind_row(kind, None))
         .collect();
+
+    let compiled: BTreeSet<String> = listed.iter().map(|row| row.kind.clone()).collect();
+    let ladders = ladders_or_none(args);
+    let mut declared: Vec<&ArtifactKind> = ladders
+        .lifecycles()
+        .iter()
+        .map(|(kind, _)| kind)
+        .filter(|kind| !compiled.contains(kind.as_str()))
+        .collect();
+    declared.sort_by_key(|kind| kind.as_str().to_owned());
+    for kind in declared {
+        listed.push(kind_row(
+            kind,
+            Some("this store's lifecycles declare it".to_owned()),
+        ));
+    }
+
+    // The family no list can hold. `blocker_type` splits `<type>-blocker` and nothing enumerates
+    // the types, because the type is whatever would clear the blockage.
+    listed.push(KindRow {
+        kind: format!("<type>-{}", aep_domain::artifact::BLOCKER),
+        layer: "planning",
+        planning: true,
+        note: Some("open family: credential-blocker, decision-blocker, …".to_owned()),
+    });
 
     match args.format {
         Format::Text => crate::print_table(
             &listed
                 .iter()
-                .map(|entry| vec![entry.kind.clone(), entry.layer.to_owned()])
+                .map(|entry| {
+                    let mut row = vec![entry.kind.clone(), entry.layer.to_owned()];
+                    if let Some(note) = &entry.note {
+                        row.push(format!("({note})"));
+                    }
+                    row
+                })
                 .collect::<Vec<_>>(),
         ),
         Format::Yaml | Format::Json => crate::print_serialised(&listed, args.format)?,
@@ -3020,8 +3763,11 @@ fn record_evidence(
     at: Option<&str>,
 ) -> Result<ExitCode> {
     let id = artifact_id(id)?;
+    // Built rather than wrapped in a `context`, which would put the advice in front of the list it
+    // is advice about. The refusal has to **end** with the two kinds, because that is the part a
+    // reader who did not find their word in fifteen names still needs.
     let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
-        .with_context(|| format!("`{kind}` is not a kind of evidence"))?;
+        .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
     if source.trim().is_empty() {
         anyhow::bail!(
             "evidence needs a source; write where it came from, such as --source 'task check'"
@@ -3301,6 +4047,11 @@ fn explain(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let blocked_by = blockers_by_target(&opened.report, ladders.lifecycles())
         .remove(&id)
         .unwrap_or_default();
+    let next = next_rungs(
+        &stored.document.frontmatter,
+        ladders.lifecycles(),
+        &opened.evidence_on_hand(&id)?,
+    );
     let explained = Explained {
         artifact: id,
         store: opened.plan.describe(),
@@ -3309,9 +4060,47 @@ fn explain(args: &StoreArgs, id: &str) -> Result<ExitCode> {
         blocked_by,
         reached,
         recorded_since,
+        next,
         unreadable,
     };
     print_explanation(args.format, &explained)
+}
+
+/// Where this artifact may go next, and what each of those rungs costs against what it holds.
+///
+/// **The question `explain` created and did not answer.** It said what happened and, when nothing
+/// had, `no status move is recorded` — so the requirement of the *next* rung was learnt by being
+/// refused by `move`, twice (`11727595#3402`). A rung's price is a line in a lifecycle document and
+/// there is no reason a reader should have to be refused to see it.
+///
+/// A kind whose lineage declares no ladder gets no lines: the permissive lifecycle makes every
+/// status reachable from every other, and forty rows of *anything is legal* is not an answer.
+fn next_rungs(
+    frontmatter: &PlanningFrontmatter,
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+    held: &aep_backend_markdown::kernel::EvidenceOnHand,
+) -> Vec<NextRung> {
+    let Some(ladder) = lifecycles.for_kind(&frontmatter.kind) else {
+        return Vec::new();
+    };
+    ladder
+        .transitions
+        .get(&frontmatter.status)
+        .into_iter()
+        .flatten()
+        .map(|status| NextRung {
+            status: status.as_str().to_owned(),
+            needs: ladder
+                .requirements_for(status)
+                .iter()
+                .map(|requirement| Need {
+                    kind: requirement.evidence.as_str().to_owned(),
+                    at_least: requirement.at_least,
+                    held: held.get(&requirement.evidence).copied().unwrap_or_default(),
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 /// The statuses `entries` account for, each joined to the records admitted since the previous one,
@@ -3435,6 +4224,23 @@ fn print_explanation(format: Format, explained: &Explained) -> Result<ExitCode> 
                 outln!("  recorded since, and not yet the reason for a move:");
                 for record in &explained.recorded_since {
                     outln!("    {}", describe_record(record));
+                }
+            }
+            // Last, and one line per rung: the reader who got here wanted the history, and the
+            // reader who got here to find out what to do next wanted this. Both are served by it
+            // being at the end rather than by neither being served at all.
+            for rung in &explained.next {
+                if rung.needs.is_empty() {
+                    outln!("  next: {} needs no record", rung.status);
+                }
+                for need in &rung.needs {
+                    outln!(
+                        "  next: {} needs {} {} record(s); held: {}",
+                        rung.status,
+                        need.at_least,
+                        need.kind,
+                        need.held
+                    );
                 }
             }
         }
@@ -3652,6 +4458,26 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 /// A kind nobody names is a typo, not an empty count: silently reading `test_reslt=1` as *no test
 /// results* would refuse the move for a reason the author cannot see, which is the failure the
 /// three-valued refusal exists to end.
+/// What a refused evidence kind says after the list of the ones that exist.
+///
+/// **A list of fifteen names is not an answer.** The parser already prints them, and the two things
+/// sessions actually reached for and did not find are an observation of a live system
+/// (`431986de#6957` wrote `measurement`) and a dependency on another repository's work
+/// (`e70b8018 s1#694` wrote `cross_repo_dependency`). Both have a kind; neither guess is its name,
+/// and neither is findable by scanning a list for a word you do not have.
+///
+/// The two kinds are named through the enum rather than as text, so a release that removed either
+/// fails to compile here instead of shipping a refusal that recommends a kind nobody can use.
+fn nearest_evidence_kinds() -> String {
+    use aep_domain::evidence::EvidenceKind;
+    format!(
+        "for an observation of a running system use `{}`; for a relation to another store's \
+         artifact use `{}`",
+        EvidenceKind::HealthObservation.as_str(),
+        EvidenceKind::Artifact.as_str()
+    )
+}
+
 fn parse_evidence(pairs: &[String]) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
     let mut counts = aep_backend_markdown::kernel::EvidenceOnHand::new();
     for pair in pairs {
@@ -3659,7 +4485,7 @@ fn parse_evidence(pairs: &[String]) -> Result<aep_backend_markdown::kernel::Evid
             format!("`{pair}` is not evidence; write it as <kind>=<count>, such as test_result=1")
         })?;
         let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
+            .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
         let count: usize = count
             .trim()
             .parse()
@@ -3837,6 +4663,16 @@ fn select(
             status: stored.document.frontmatter.status.as_str().to_owned(),
             title: stored.document.frontmatter.title.clone(),
             path: stored.relative_path.clone(),
+            relations: stored
+                .document
+                .frontmatter
+                .relations
+                .iter()
+                .map(|relation| ShownRelation {
+                    relation: relation.kind.as_str(),
+                    target: relation.target.to_string(),
+                })
+                .collect(),
             blocked_by: blocked
                 .get(&stored.document.frontmatter.id)
                 .cloned()
@@ -3920,6 +4756,13 @@ struct Listed {
     status: String,
     title: Option<String>,
     path: String,
+    /// Its outgoing edges, `[]` for an artifact that has none.
+    ///
+    /// **Never `null` and never absent.** `3130470e#132` broke on exactly that: a documented `jq`
+    /// shape reading `.relations[]` failed on the first artifact with no edges, because a key that
+    /// disappears is a key every consumer has to write a branch for. Same reasoning as `blocked_by`
+    /// beside it, and the same shape `show` prints.
+    relations: Vec<ShownRelation>,
     /// Every blocker still in force against it, empty for an artifact nothing stops.
     ///
     /// Always written, never omitted when empty: `active` and `active but parked on a credential`
@@ -3999,7 +4842,7 @@ struct Shown {
 }
 
 /// One outgoing edge, as `show` prints it.
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct ShownRelation {
     relation: &'static str,
     target: String,
@@ -4087,7 +4930,28 @@ struct Explained {
     reached: Vec<Reached>,
     /// Records admitted after the last move: held, and not yet the reason for anything.
     recorded_since: Vec<Admitted>,
+    /// Where it may go next, and what each of those rungs asks for. Empty for a kind whose lineage
+    /// declares no ladder, where *anything is legal* is the honest answer and not a useful one.
+    next: Vec<NextRung>,
     unreadable: usize,
+}
+
+/// One rung an artifact may move to next, with what that rung costs.
+#[derive(Debug, serde::Serialize)]
+struct NextRung {
+    status: String,
+    /// What the ladder asks for to reach it — empty for a rung that asks nothing.
+    needs: Vec<Need>,
+}
+
+/// One evidence requirement of a rung, against what the artifact holds now.
+#[derive(Debug, serde::Serialize)]
+struct Need {
+    kind: String,
+    at_least: usize,
+    /// Records of that kind the store holds **about this artifact** — the number `move` reads, not
+    /// a count of everything the store knows.
+    held: usize,
 }
 
 /// What `relate` did.
@@ -4103,6 +4967,16 @@ struct Related {
 #[derive(Debug, serde::Serialize)]
 struct BodyReplaced {
     id: String,
+    revision: u64,
+    path: String,
+}
+
+/// What `set` changed, and what the document reads at afterwards.
+#[derive(Debug, serde::Serialize)]
+struct FieldsSet {
+    id: String,
+    /// The frontmatter keys this write carried, in the order the verb reads them.
+    fields: Vec<String>,
     revision: u64,
     path: String,
 }
@@ -4143,6 +5017,10 @@ struct KindRow {
     kind: String,
     layer: &'static str,
     planning: bool,
+    /// Where the row came from when it did not come from the compiled list, or what the row stands
+    /// for when it stands for a family rather than a name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
 }
 
 /// One relation in the vocabulary.

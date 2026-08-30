@@ -378,6 +378,13 @@ enum Command {
     Guards,
     /// Check that each released `### Fixed` entry names something that existed to be broken.
     Claims,
+    /// Check the Claude Code plugin: a changed plugin carries a new version, every skill states
+    /// it, and the roster file names exactly the skills and agents on disk.
+    Plugin,
+    /// Report whether the newest release was cut completely: version, changelog heading, pushed
+    /// tag, GitHub Release, and a gate record in the planning store. Reaches the network, so it
+    /// is not a gate step.
+    Release,
 }
 
 /// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
@@ -606,9 +613,12 @@ fn main() -> Result<()> {
         Command::Status { check } => {
             let root = workspace_root();
             status(&root, check)?;
+            agents_gate_steps(&root, check)?;
             website_currency_from_tags(&root, check)
         }
         Command::Version => version_check(&workspace_root()),
+        Command::Plugin => plugin_check(&workspace_root()),
+        Command::Release => release_check(&workspace_root()),
         Command::Deps => deps(&workspace_root()),
         Command::Guards => guards(&workspace_root()),
         Command::Claims => claims(&workspace_root()),
@@ -653,23 +663,36 @@ fn main() -> Result<()> {
 /// # Errors
 ///
 /// If git cannot be run, if there are no tags, or if the two numbers disagree.
-fn version_check(root: &Path) -> Result<()> {
+/// Runs `git` at `root` and returns its output, failing on a non-zero exit with git's own words.
+fn git_at(root: &Path, arguments: &[&str], doing: &str) -> Result<std::process::Output> {
     let output = std::process::Command::new("git")
-        // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
-        .args(["tag", "--list", "--merged", "HEAD", "--sort=-v:refname"])
+        .args(arguments)
         .current_dir(root)
         .output()
-        .context("running git — the version is checked against the tags")?;
+        .with_context(|| format!("running git — {doing}"))?;
     if !output.status.success() {
         bail!(
-            "git tag failed: {}",
+            "git {} failed: {}",
+            arguments.first().copied().unwrap_or_default(),
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
+    Ok(output)
+}
+
+/// The newest bare-version tag reachable from `HEAD`.
+///
+/// Bare-version tags only. The pre-0.12.0 slugged form is left behind by convention, and a slug
+/// sorted by `-v:refname` would win over a plain number that is actually newer.
+fn newest_release_tag(root: &Path) -> Result<String> {
+    let output = git_at(
+        root,
+        // Reachable from HEAD only — see `TAGS_REACHABLE_FROM_HEAD`.
+        &["tag", "--list", "--merged", "HEAD", "--sort=-v:refname"],
+        "the version is checked against the tags",
+    )?;
     let listed = String::from_utf8(output.stdout).context("reading the tag list as UTF-8")?;
-    // Bare-version tags only. The pre-0.12.0 slugged form is left behind by convention, and a slug
-    // sorted by `-v:refname` would win over a plain number that is actually newer.
-    let newest = listed
+    listed
         .lines()
         .map(str::trim)
         .find(|tag| {
@@ -678,22 +701,31 @@ fn version_check(root: &Path) -> Result<()> {
                     .split('.')
                     .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
         })
+        .map(str::to_owned)
         .with_context(|| {
             format!(
                 "no bare-version tag is visible, so there is nothing to check the workspace \
                  version against — fetch them first (`git fetch --tags`) \
                  ({TAGS_REACHABLE_FROM_HEAD})"
             )
-        })?;
+        })
+}
 
+/// The `[workspace.package] version` the manifest declares — what `protocol --version` prints.
+fn workspace_version(root: &Path) -> Result<String> {
     let manifest =
         fs::read_to_string(root.join("Cargo.toml")).context("reading the workspace manifest")?;
-    let declared = manifest
+    manifest
         .lines()
         .skip_while(|line| line.trim() != "[workspace.package]")
         .find_map(|line| line.trim().strip_prefix("version = "))
-        .map(|value| value.trim().trim_matches('"'))
-        .context("the workspace manifest declares no `[workspace.package] version`")?;
+        .map(|value| value.trim().trim_matches('"').to_owned())
+        .context("the workspace manifest declares no `[workspace.package] version`")
+}
+
+fn version_check(root: &Path) -> Result<()> {
+    let newest = newest_release_tag(root)?;
+    let declared = workspace_version(root)?;
 
     if declared != newest {
         bail!(
@@ -705,6 +737,319 @@ fn version_check(root: &Path) -> Result<()> {
         );
     }
     println!("version {declared} matches the newest release tag");
+    Ok(())
+}
+
+/// The plugin directory the gate checks.
+const PLUGIN_DIR: &str = "integrations/claude-code";
+
+/// The plugin's manifest, whose `version` is the one every skill has to state.
+const PLUGIN_MANIFEST: &str = "integrations/claude-code/.claude-plugin/plugin.json";
+
+/// The roster: which skills and agents the plugin ships, as data an adopter can read.
+///
+/// A sibling of the manifest rather than keys inside it, because Claude Code reads `skills` and
+/// `agents` in `plugin.json` as **path overrides** that replace the default directory scan — so a
+/// list there would change what loads, and this file is only meant to say what is there.
+const PLUGIN_ROSTER: &str = "integrations/claude-code/roster.json";
+
+/// The version a plugin's `.claude-plugin/plugin.json` declares.
+fn plugin_version(manifest: &str) -> Result<String> {
+    let value: serde_json::Value =
+        serde_json::from_str(manifest).context("reading the plugin manifest as JSON")?;
+    value
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .context("the plugin manifest declares no `version`")
+}
+
+/// The names under `skills/` that carry a `SKILL.md`, and the stems under `agents/`.
+fn plugin_roster_on_disk(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
+    let plugin = root.join(PLUGIN_DIR);
+    let mut skills = Vec::new();
+    for entry in fs::read_dir(plugin.join("skills")).context("reading the plugin's skills/")? {
+        let entry = entry?;
+        if entry.path().join("SKILL.md").is_file() {
+            skills.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    let mut agents = Vec::new();
+    for entry in fs::read_dir(plugin.join("agents")).context("reading the plugin's agents/")? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|extension| extension == "md") {
+            if let Some(stem) = path.file_stem() {
+                agents.push(stem.to_string_lossy().into_owned());
+            }
+        }
+    }
+    skills.sort();
+    agents.sort();
+    Ok((skills, agents))
+}
+
+/// `cargo xtask plugin`: the Claude Code plugin says which version it is, and what it ships.
+///
+/// # Why
+///
+/// The manifest read `0.1.0` through nine plugin commits and 968 changed lines (2026-08-29 →
+/// 2026-08-30), so a session could not tell the skill it had loaded from the one on disk. That
+/// cost a wave: `3d86d5b` changed `skills/wave/SKILL.md` eighteen minutes into a running one, the
+/// loaded copy lacked the section the coordinator needed, and the wave halted at the merge
+/// boundary. Three rules, each a refusal here:
+///
+/// 1. anything under `integrations/claude-code/` changed since the newest release tag ⇒ the
+///    manifest's `version` changed too;
+/// 2. every `skills/*/SKILL.md` states that version in a line the stage-1 report can quote;
+/// 3. `roster.json` names exactly the skills and agents on disk — an adopter that pins the roster
+///    (harness did, by hand, and went red when two agents shipped) reads it from here.
+fn plugin_check(root: &Path) -> Result<()> {
+    let manifest = fs::read_to_string(root.join(PLUGIN_MANIFEST))
+        .with_context(|| format!("reading {PLUGIN_MANIFEST}"))?;
+    let declared = plugin_version(&manifest)?;
+    let mut problems: Vec<String> = Vec::new();
+
+    // 1. Changed since the tag ⇒ bumped since the tag.
+    let tag = newest_release_tag(root)?;
+    let changed = std::process::Command::new("git")
+        .args(["diff", "--quiet", &tag, "--", PLUGIN_DIR])
+        .current_dir(root)
+        .status()
+        .context("running git diff over the plugin directory")?;
+    if !changed.success() {
+        let at_tag = std::process::Command::new("git")
+            .args(["show", &format!("{tag}:{PLUGIN_MANIFEST}")])
+            .current_dir(root)
+            .output()
+            .context("reading the plugin manifest at the tag")?;
+        // A tag without the manifest has nothing to compare against; the version only has to
+        // differ from what shipped, and nothing shipped.
+        if at_tag.status.success() {
+            let shipped = plugin_version(&String::from_utf8_lossy(&at_tag.stdout))?;
+            if shipped == declared {
+                problems.push(format!(
+                    "{PLUGIN_DIR} changed since `{tag}` and {PLUGIN_MANIFEST} still says \
+                     `{declared}` — the version a session quotes has to move with the text it \
+                     loads. Bump `version`, and the `**Skill version …**` line in every skill"
+                ));
+            }
+        }
+    }
+
+    // 2. Every skill states the version.
+    let (skills, agents) = plugin_roster_on_disk(root)?;
+    let expected = format!("**Skill version {declared}**");
+    for skill in &skills {
+        let path = root
+            .join(PLUGIN_DIR)
+            .join("skills")
+            .join(skill)
+            .join("SKILL.md");
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        if !text.contains(&expected) {
+            problems.push(format!(
+                "skills/{skill}/SKILL.md does not carry `{expected}` — a coordinator cannot say \
+                 which text it is running"
+            ));
+        }
+    }
+
+    // 3. The roster is the directory listing.
+    let roster_path = root.join(PLUGIN_ROSTER);
+    let roster: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&roster_path).with_context(|| format!("reading {PLUGIN_ROSTER}"))?,
+    )
+    .with_context(|| format!("reading {PLUGIN_ROSTER} as JSON"))?;
+    let listed = |key: &str| -> Vec<String> {
+        let mut names: Vec<String> = roster
+            .get(key)
+            .and_then(serde_json::Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
+    };
+    for (key, on_disk) in [("skills", &skills), ("agents", &agents)] {
+        let named = listed(key);
+        if &named != on_disk {
+            problems.push(format!(
+                "{PLUGIN_ROSTER} `{key}` says {named:?}; the directory holds {on_disk:?}"
+            ));
+        }
+    }
+    if roster.get("version").and_then(serde_json::Value::as_str) != Some(declared.as_str()) {
+        problems.push(format!(
+            "{PLUGIN_ROSTER} `version` disagrees with {PLUGIN_MANIFEST} (`{declared}`)"
+        ));
+    }
+
+    if !problems.is_empty() {
+        bail!(
+            "the Claude Code plugin is not what it says it is:\n  - {}",
+            problems.join("\n  - ")
+        );
+    }
+    println!(
+        "plugin {declared}: {} skill(s), {} agent(s); versions and roster agree",
+        skills.len(),
+        agents.len()
+    );
+    Ok(())
+}
+
+/// The version the top of `CHANGELOG.md` names below `[Unreleased]`.
+fn changelog_top_version(root: &Path) -> Result<String> {
+    let changelog =
+        fs::read_to_string(root.join("CHANGELOG.md")).context("reading CHANGELOG.md")?;
+    changelog
+        .lines()
+        .filter_map(|line| line.strip_prefix("## ["))
+        .filter_map(|rest| rest.split_once(']'))
+        .map(|(version, _)| version.trim())
+        .find(|version| !version.eq_ignore_ascii_case("Unreleased"))
+        .map(str::to_owned)
+        .context("CHANGELOG.md has no `## [<version>]` heading")
+}
+
+/// `cargo xtask release`: was the newest release cut completely?
+///
+/// A release is the procedure in `AGENTS.md` § *Releases*, and until this existed nothing said
+/// whether it had been followed: eleven tags shipped with red CI, two tags were never pushed,
+/// one GitHub Release was made by hand, and on 2026-08-30 the operator had to define the word to
+/// a coordinator that had conflated it with a merge. Five checks, one line each, every one a
+/// fact somebody would otherwise look up in three places. Two of them reach the network, which
+/// is why this is `task release-check` and not a step of `task check`.
+fn release_check(root: &Path) -> Result<()> {
+    let tag = newest_release_tag(root)?;
+    let version = workspace_version(root)?;
+    let heading = changelog_top_version(root)?;
+    let commit = String::from_utf8(
+        git_at(
+            root,
+            &["rev-list", "-n", "1", &tag],
+            "the tag's commit is what the gate record must name",
+        )?
+        .stdout,
+    )
+    .context("reading the tag's commit as UTF-8")?
+    .trim()
+    .to_owned();
+
+    let pushed = std::process::Command::new("git")
+        .args(["ls-remote", "--tags", "origin", &format!("refs/tags/{tag}")])
+        .current_dir(root)
+        .output()
+        .is_ok_and(|output| output.status.success() && !output.stdout.is_empty());
+    let released = std::process::Command::new("gh")
+        .args(["release", "view", &tag, "--json", "tagName"])
+        .current_dir(root)
+        .output()
+        .is_ok_and(|output| output.status.success());
+    let journal =
+        fs::read_to_string(root.join(".engineering/planning/journal.jsonl")).unwrap_or_default();
+    let short = &commit[..commit.len().min(7)];
+    let gated = journal.lines().any(|line| {
+        line.contains("\"test_result\"") && (line.contains(&commit) || line.contains(short))
+    });
+
+    let checks: [(&str, bool, String); 5] = [
+        (
+            "workspace version matches the tag",
+            version == tag,
+            format!("Cargo.toml `{version}`, tag `{tag}`"),
+        ),
+        (
+            "CHANGELOG.md heading matches the tag",
+            heading == tag,
+            format!("heading `{heading}`, tag `{tag}`"),
+        ),
+        (
+            "tag is pushed to origin",
+            pushed,
+            format!("refs/tags/{tag}"),
+        ),
+        (
+            "GitHub Release exists",
+            released,
+            format!("gh release view {tag}"),
+        ),
+        (
+            "planning store holds a test_result naming the tag's commit",
+            gated,
+            format!("journal.jsonl, commit {short}"),
+        ),
+    ];
+    let mut missing = 0;
+    for (what, held, detail) in &checks {
+        println!(
+            "{}  {what} ({detail})",
+            if *held { "ok     " } else { "MISSING" }
+        );
+        if !held {
+            missing += 1;
+        }
+    }
+    if missing > 0 {
+        bail!(
+            "{missing} of {} release steps are not done for `{tag}`",
+            checks.len()
+        );
+    }
+    println!("release {tag} is complete");
+    Ok(())
+}
+
+/// The generated region in `AGENTS.md` § *Gate* that names the gate's steps.
+///
+/// The count was hand-written and drifted twice: "eighteen" against "Nineteen" inside one file on
+/// 2026-08-28, and "Twenty" against a `Taskfile.yml` with twenty-one on 2026-08-30. The steps are
+/// read from the Taskfile's own `check:` block, as the website's currency line already does.
+const AGENTS_PAGE: &str = "AGENTS.md";
+
+/// The first line of that region.
+const AGENTS_GATE_BEGIN: &str =
+    "<!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->";
+
+/// The last line of that region.
+const AGENTS_GATE_END: &str = "<!-- generated:gate-steps:end -->";
+
+/// Writes or checks the gate-step list in `AGENTS.md`.
+fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
+    let steps = gate_steps(root)?;
+    let listed = steps
+        .iter()
+        .map(|step| format!("`{step}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let region = format!(
+        "`task check` runs **{} steps**, in this order: {listed}.\n",
+        steps.len()
+    );
+    if hold_region(
+        root,
+        AGENTS_PAGE,
+        AGENTS_GATE_BEGIN,
+        AGENTS_GATE_END,
+        &region,
+        check,
+    )? {
+        println!(
+            "wrote the gate-step list into {AGENTS_PAGE} ({} steps)",
+            steps.len()
+        );
+    } else {
+        println!(
+            "{AGENTS_PAGE} gate-step list is up to date ({} steps)",
+            steps.len()
+        );
+    }
     Ok(())
 }
 

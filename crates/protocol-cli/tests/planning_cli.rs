@@ -137,6 +137,8 @@ const VERBS: &[&str] = &[
     "move",
     "relate",
     "body",
+    "set",
+    "show",
     "list",
     "board",
     "blocked",
@@ -1579,12 +1581,25 @@ fn the_vocabulary_verbs_answer_without_a_store() {
     assert_eq!(code(&kinds), 0, "{}", stderr(&kinds));
     let text = stdout(&kinds);
     assert!(text.contains("story"), "{text}");
-    assert_eq!(
-        text.lines()
-            .filter(|line| line.contains("planning"))
-            .count(),
-        6,
-        "six kinds are intent decomposition: {text}"
+    // Six compiled kinds are intent decomposition. The seventh `planning` row is the open blocker
+    // family, which is not a kind and says so — and it is here rather than absent because *what can
+    // I create* is the question this verb answers, and the answer does not depend on a store.
+    let planning: Vec<&str> = text
+        .lines()
+        .filter(|line| line.contains("planning"))
+        .collect();
+    assert_eq!(planning.len(), 7, "{text}");
+    assert!(
+        planning
+            .last()
+            .expect("a row")
+            .starts_with("<type>-blocker "),
+        "{text}"
+    );
+    // No tree here, so nothing beyond the vocabulary and the family is listed.
+    assert!(
+        !text.contains("lifecycles declare it"),
+        "a directory that is not a project declares no lifecycles: {text}"
     );
 
     let relations = protocol_in(&elsewhere, &["artifact", "relations"]);
@@ -2224,4 +2239,1264 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
         "{}",
         stderr(&refused)
     );
+}
+
+/// The volatile fields of a journal line: when it was written, and the event id that carries a
+/// clock in it. Everything else is what the write *was*, and is what two spellings of one edge
+/// have to agree on.
+fn without_the_clock(line: &str) -> String {
+    let mut text = line.to_owned();
+    for key in ["\"at\":", "\"recorded_at\":", "\"event_id\":"] {
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text.as_str();
+        while let Some(start) = rest.find(key) {
+            out.push_str(&rest[..start]);
+            let after = &rest[start + key.len()..];
+            let end = after
+                .find(',')
+                .or_else(|| after.find('}'))
+                .unwrap_or(after.len());
+            rest = &after[end..];
+        }
+        out.push_str(rest);
+        text = out;
+    }
+    text
+}
+
+/// The last line of a store's journal, which is the write the verb under test just made.
+fn last_journal_line(store: &Path) -> String {
+    let text = std::fs::read_to_string(store.join("journal.jsonl")).expect("a journal");
+    text.lines()
+        .last()
+        .expect("the journal has an entry")
+        .to_owned()
+}
+
+/// **One spelling for an edge.** `relate <id> <relation>:<target>` is `relate <id> <relation>
+/// <target>`, down to the journal.
+///
+/// `cc946bc3#486`: `protocol artifact relate story:… serves:vision:O2` was refused for want of a
+/// third positional, while `new --relate serves:vision:O2` had been taking those exact words all
+/// along. Both stories were already `active`, so the store went red mid-run over a spelling.
+#[test]
+fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
+    let repository = root();
+    let tree = printable(&repository);
+    let one_word = scratch("aep-planning-relate-one-word");
+    let three_words = scratch("aep-planning-relate-three-words");
+    copy_tree(&repository.join(FIXTURE), &one_word);
+    copy_tree(&repository.join(FIXTURE), &three_words);
+
+    let joined = protocol(&[
+        "artifact",
+        "relate",
+        "task:assertion-verification",
+        "depends_on:task:webauthn-ceremony",
+        "--store",
+        printable(&one_word),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&joined), 0, "{}", stderr(&joined));
+
+    let split = protocol(&[
+        "artifact",
+        "relate",
+        "task:assertion-verification",
+        "depends_on",
+        "task:webauthn-ceremony",
+        "--store",
+        printable(&three_words),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&split), 0, "{}", stderr(&split));
+
+    // 1. The same answer, naming the edge the same way whichever spelling asked for it.
+    assert_eq!(stdout(&joined), stdout(&split));
+    assert!(
+        stdout(&joined).contains("task:assertion-verification depends_on task:webauthn-ceremony"),
+        "{}",
+        stdout(&joined)
+    );
+
+    // 2. The same document, byte for byte.
+    let document = |store: &Path| {
+        std::fs::read_to_string(store.join("task/assertion-verification.md")).expect("readable")
+    };
+    assert_eq!(document(&one_word), document(&three_words));
+    assert!(
+        document(&one_word).contains("depends_on: task:webauthn-ceremony"),
+        "the edge is not in the document: {}",
+        document(&one_word)
+    );
+
+    // 3. The same journal entry, once the two instants and the event id are taken out. This is
+    //    what "journal identically" means: a reader three months later cannot tell which spelling
+    //    was typed, because the store did not record a spelling — it recorded an edge.
+    assert_eq!(
+        without_the_clock(&last_journal_line(&one_word)),
+        without_the_clock(&last_journal_line(&three_words))
+    );
+    assert!(
+        last_journal_line(&one_word).contains(
+            r#""change":{"change":"related","relation":"depends_on","target":"task:webauthn-ceremony"}"#
+        ),
+        "{}",
+        last_journal_line(&one_word)
+    );
+
+    // 4. A relation naming no target at all is still refused, and says what to write.
+    let bare = protocol(&[
+        "artifact",
+        "relate",
+        "task:assertion-verification",
+        "depends_on",
+        "--store",
+        printable(&three_words),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&bare), 1, "{}", stdout(&bare));
+    assert!(
+        stderr(&bare).contains("<relation>:<artifact-id>"),
+        "{}",
+        stderr(&bare)
+    );
+}
+
+/// **Editing part of a body has a verb.** `--append` adds to the end, `--section` rewrites the
+/// prose under one `##` heading, and both go through the same `update` the whole-body form does.
+///
+/// The five sessions of `SYNTHESIS.md` CL-2 all did this with `python` and `cat >>` because there
+/// was nothing to type: `9da4f51c#3310` appended a section with a shell redirect, which wrote the
+/// bytes and skipped the journal entirely.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-planning-body-parts");
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let scratch_root = store.parent().expect("scratch has a parent").to_path_buf();
+
+    let addition = scratch_root.join("aep-planning-body-append.md");
+    write(
+        &addition,
+        "## Risks\n\nThe authenticator may lie about its sign count.\n",
+    );
+    let appended = protocol(&[
+        "artifact",
+        "body",
+        "task:assertion-verification",
+        "--from",
+        printable(&addition),
+        "--append",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&appended), 0, "{}", stderr(&appended));
+    assert!(
+        stdout(&appended).contains("body appended to"),
+        "{}",
+        stdout(&appended)
+    );
+
+    let document = store.join("task/assertion-verification.md");
+    let text = std::fs::read_to_string(&document).expect("readable");
+    // 1. Appended, not replaced: the sections that were there are still there.
+    assert!(
+        text.contains("## What"),
+        "the append replaced the body: {text}"
+    );
+    assert!(
+        text.contains("## Risks"),
+        "the section was not appended: {text}"
+    );
+    assert!(
+        text.trim_end()
+            .ends_with("The authenticator may lie about its sign count."),
+        "the appended prose is not at the end: {text}"
+    );
+    // 2. Journalled as an update, which is what a heredoc does not do.
+    assert!(
+        last_journal_line(&store).contains(r#""change":{"change":"body_replaced"}"#),
+        "{}",
+        last_journal_line(&store)
+    );
+
+    let replacement = scratch_root.join("aep-planning-body-section.md");
+    write(&replacement, "Verify the signature, and nothing else.\n");
+    let sectioned = protocol(&[
+        "artifact",
+        "body",
+        "task:assertion-verification",
+        "--from",
+        printable(&replacement),
+        "--section",
+        "What",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&sectioned), 0, "{}", stderr(&sectioned));
+    assert!(
+        stdout(&sectioned).contains("`## What` written"),
+        "{}",
+        stdout(&sectioned)
+    );
+
+    let text = std::fs::read_to_string(&document).expect("readable");
+    // 3. That section and only that section: the heading survives, its prose is the new prose,
+    //    and the section after it is untouched.
+    assert!(
+        text.contains("## What\n\nVerify the signature, and nothing else.\n"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("Verify the assertion signature against the stored public key"),
+        "{text}"
+    );
+    assert!(
+        text.contains("## Why"),
+        "the following section was eaten: {text}"
+    );
+    assert!(
+        text.contains("## Risks"),
+        "the appended section was eaten: {text}"
+    );
+
+    // 4. A heading the document does not have is added at the end rather than refused: a caller
+    //    asking for a section that is not there meant to write one.
+    let invented = protocol(&[
+        "artifact",
+        "body",
+        "task:assertion-verification",
+        "--from",
+        printable(&replacement),
+        "--section",
+        "Rollout",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&invented), 0, "{}", stderr(&invented));
+    let text = std::fs::read_to_string(&document).expect("readable");
+    assert!(
+        text.trim_end()
+            .ends_with("## Rollout\n\nVerify the signature, and nothing else."),
+        "{text}"
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+
+    std::fs::remove_file(addition).ok();
+    std::fs::remove_file(replacement).ok();
+}
+
+/// `show --body-only` prints what `body --from` would write straight back, and nothing else.
+#[test]
+fn show_body_only_prints_the_bytes_body_from_would_write_back() {
+    let printed = protocol(&[
+        "artifact",
+        "show",
+        "task:assertion-verification",
+        "--store",
+        FIXTURE,
+        "--body-only",
+    ]);
+    assert_eq!(code(&printed), 0, "{}", stderr(&printed));
+    let body = stdout(&printed);
+
+    // 1. The bytes the store holds, with none of the labels the plain rendering carries.
+    let document =
+        std::fs::read_to_string(root().join(FIXTURE).join("task/assertion-verification.md"))
+            .expect("readable");
+    let held = document
+        .split_once("\n---\n")
+        .map(|(_, body)| body)
+        .expect("the document has a closing fence");
+    assert_eq!(body, held);
+    for label in ["revision", "status", "relations"] {
+        assert!(
+            !body.contains(&format!("{label}  ")),
+            "a label leaked into the body: {body}"
+        );
+    }
+
+    // 2. And it is refused where the promise cannot be kept: a machine format would wrap the bytes.
+    let wrapped = protocol(&[
+        "artifact",
+        "show",
+        "task:assertion-verification",
+        "--store",
+        FIXTURE,
+        "--body-only",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&wrapped), 1, "{}", stdout(&wrapped));
+    assert!(
+        stderr(&wrapped).contains("--body-only"),
+        "{}",
+        stderr(&wrapped)
+    );
+}
+
+/// **One frontmatter field has a verb, and four of them are refused by name.**
+///
+/// `ed007513#209-#274` spent about twenty-five turns writing documents with heredocs because no
+/// verb changed a title, a summary or an owner. `11727595#818` patched `revision:` with `python`
+/// and was caught as drift — so `set` refuses that field, and says what the field is for instead of
+/// reporting an unrecognised flag.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-planning-set");
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let document = store.join("task/assertion-verification.md");
+    let before = std::fs::read_to_string(&document).expect("readable");
+    assert!(
+        before.contains("title: Verify a sign-in assertion"),
+        "{before}"
+    );
+    assert!(
+        !before.contains("tags:"),
+        "the fixture carries no tags: {before}"
+    );
+
+    let changed = protocol(&[
+        "artifact",
+        "set",
+        "task:assertion-verification",
+        "--title",
+        "Verify a sign-in assertion, replay included",
+        "--summary",
+        "Signature, origin, sign count.",
+        "--owner",
+        "identity-platform",
+        "--tag",
+        "webauthn",
+        "--tag",
+        "security",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&changed), 0, "{}", stderr(&changed));
+    assert!(
+        stdout(&changed).contains("title, summary, owner, tags set"),
+        "{}",
+        stdout(&changed)
+    );
+
+    let text = std::fs::read_to_string(&document).expect("readable");
+    assert!(
+        text.contains("title: Verify a sign-in assertion, replay included"),
+        "{text}"
+    );
+    assert!(
+        text.contains("summary: Signature, origin, sign count."),
+        "{text}"
+    );
+    assert!(text.contains("owner: identity-platform"), "{text}");
+    assert!(text.contains("- webauthn"), "{text}");
+    assert!(text.contains("- security"), "{text}");
+    // The fields it was not asked about are the fields it did not touch.
+    assert!(
+        text.contains("- decomposes: story:passkey-login"),
+        "the edge went missing: {text}"
+    );
+    assert!(text.contains("status: active"), "the status moved: {text}");
+    assert!(
+        text.contains("revision: 3"),
+        "the store counts its own writes: {text}"
+    );
+    // And the prose, which is the thing a frontmatter splitter loses.
+    assert!(
+        text.contains("## Done When"),
+        "the body was rewritten: {text}"
+    );
+
+    // `--untag` removes exactly the label it names, and leaves the one it does not.
+    let untagged = protocol(&[
+        "artifact",
+        "set",
+        "task:assertion-verification",
+        "--untag",
+        "webauthn",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&untagged), 0, "{}", stderr(&untagged));
+    let text = std::fs::read_to_string(&document).expect("readable");
+    assert!(!text.contains("- webauthn"), "{text}");
+    assert!(
+        text.contains("- security"),
+        "the label it was not asked about went too: {text}"
+    );
+
+    // A write with nothing in it is a revision nobody can explain.
+    let again = protocol(&[
+        "artifact",
+        "set",
+        "task:assertion-verification",
+        "--owner",
+        "identity-platform",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&again), 0, "{}", stderr(&again));
+    assert!(
+        stdout(&again).contains("nothing to do"),
+        "{}",
+        stdout(&again)
+    );
+
+    // The four this verb will not change, each refused by name with the thing to type instead.
+    for (flag, value, says) in [
+        ("--status", "implemented", "protocol artifact move"),
+        ("--revision", "9", "the store's own count"),
+        ("--id", "task:renamed", "identity"),
+        ("--kind", "story", "identity"),
+    ] {
+        let refused = protocol(&[
+            "artifact",
+            "set",
+            "task:assertion-verification",
+            flag,
+            value,
+            "--store",
+            at,
+            "--root",
+            tree,
+        ]);
+        assert_eq!(
+            code(&refused),
+            1,
+            "`{flag}` was not refused: {}",
+            stdout(&refused)
+        );
+        assert!(
+            stderr(&refused).contains(says),
+            "`{flag}`: {}",
+            stderr(&refused)
+        );
+    }
+    let unchanged = std::fs::read_to_string(&document).expect("readable");
+    assert!(
+        unchanged.contains("status: active"),
+        "a refused set wrote anyway: {unchanged}"
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+}
+
+/// **`move` refuses what `validate` would report a second later.**
+///
+/// `114c2340#92` and `4d4c15a4#149`: `move --to active` succeeded and the very next `validate`
+/// answered `[empty_declaration] … is active and serves no objective`, because `validate_grounding`
+/// ran only in `validate`. The rules now run on the store the move *would* leave, and the refusal is
+/// the finding itself — its own words and its own hint, so the two verbs cannot say different things
+/// about one document.
+#[test]
+fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-planning-move-grounding");
+    let at = printable(&store);
+
+    write(
+        &store.join("vision/O1.md"),
+        "---\nid: vision:O1\nkind: vision\nstatus: approved\ntitle: An objective\n---\n# O1\n",
+    );
+    write(
+        &store.join("story/grounded.md"),
+        "---\nid: story:grounded\nkind: story\nstatus: draft\ntitle: A story\n---\n# Story\n",
+    );
+    // The fixture has reached the state where the rule is load-bearing: a store that declares an
+    // objective, and a story that is not yet agreed and therefore not yet held to one.
+    let clean = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    assert_eq!(code(&clean), 0, "{}", stdout(&clean));
+
+    let refused = protocol(&[
+        "artifact",
+        "move",
+        "story:grounded",
+        "--to",
+        "proposed",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let said = stdout(&refused);
+    assert!(said.contains("would not validate"), "{said}");
+    assert!(
+        said.contains("serves no objective"),
+        "the finding's own text: {said}"
+    );
+    assert!(said.contains("hint:"), "the finding's own hint: {said}");
+
+    // Refused means nothing was written, and the store still validates.
+    let text = std::fs::read_to_string(store.join("story/grounded.md")).expect("readable");
+    assert!(
+        text.contains("status: draft"),
+        "a refused move wrote anyway: {text}"
+    );
+    let after = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    assert_eq!(code(&after), 0, "{}", stdout(&after));
+
+    // With the edge the finding asked for, the same move goes through — the refusal is about the
+    // graph the move would leave, not about the rung.
+    let related = protocol(&[
+        "artifact",
+        "relate",
+        "story:grounded",
+        "serves:vision:O1",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&related), 0, "{}", stderr(&related));
+    let moved = protocol(&[
+        "artifact",
+        "move",
+        "story:grounded",
+        "--to",
+        "proposed",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&moved), 0, "{}{}", stdout(&moved), stderr(&moved));
+}
+
+/// **`validate --strict` refuses what `validate` only reports**, and plain `validate` is untouched.
+///
+/// `ed007513#1300`: four stories reached `implemented` on an assertion — a swallowed `--reference`
+/// typo — and `validate` printed the four bullets and then `valid`, exit 0. `9da4f51c` ran it 37
+/// times, always `valid`. A gate that wants those to bite now has a flag; nobody else's exit code
+/// moved.
+#[test]
+fn strict_validate_fails_on_what_plain_validate_only_reports() {
+    let store = scratch("aep-planning-strict");
+    let at = printable(&store);
+    let make = |args: &[&str]| {
+        let output = protocol_in(&root(), args);
+        assert_eq!(code(&output), 0, "{}", stderr(&output));
+    };
+    make(&[
+        "artifact", "new", "story", "asserted", "--title", "Demo", "--store", at,
+    ]);
+    for to in ["proposed", "active"] {
+        make(&[
+            "artifact",
+            "move",
+            "story:asserted",
+            "--to",
+            to,
+            "--store",
+            at,
+        ]);
+    }
+    // The rung that asks for evidence, reached on a bare count nothing can check.
+    make(&[
+        "artifact",
+        "move",
+        "story:asserted",
+        "--to",
+        "implemented",
+        "--evidence",
+        "test_result=1",
+        "--store",
+        at,
+    ]);
+
+    // 1. Plain `validate` reports it and exits 0, which is `story:completion-needs-evidence`'s
+    //    recorded position and is not what this flag changes.
+    let plain = protocol(&["artifact", "validate", "--store", at]);
+    assert_eq!(code(&plain), 0, "{}", stdout(&plain));
+    assert!(
+        stdout(&plain).contains("closed on an assertion"),
+        "{}",
+        stdout(&plain)
+    );
+    assert!(stdout(&plain).contains("valid"), "{}", stdout(&plain));
+
+    // 2. `--strict` prints the same lines and exits 1, naming which class decided.
+    let strict = protocol(&["artifact", "validate", "--strict", "--store", at]);
+    assert_eq!(code(&strict), 1, "{}", stdout(&strict));
+    assert!(
+        stdout(&strict).contains("closed on an assertion"),
+        "{}",
+        stdout(&strict)
+    );
+    assert!(
+        stdout(&strict).contains("--strict: refusing on 1 closed on an assertion"),
+        "{}",
+        stdout(&strict)
+    );
+
+    // 3. A document that predates the event log is the second class, and the committed fixture is
+    //    a store made entirely of them — read only, and clean to plain `validate`.
+    let committed = protocol(&["artifact", "validate", "--store", FIXTURE]);
+    assert_eq!(code(&committed), 0, "{}", stdout(&committed));
+    let refused = protocol(&["artifact", "validate", "--strict", "--store", FIXTURE]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    assert!(
+        stdout(&refused).contains(&format!("{FIXTURE_ARTIFACTS} predating the event log")),
+        "{}",
+        stdout(&refused)
+    );
+}
+
+/// **An empty body is not a body**, and the refusal names the flag that produced one.
+///
+/// `11727595#10819`: `body --from -` on empty standard input wrote the empty string over the prose
+/// and bumped the revision, so the store held a document with nothing in it and a record saying
+/// somebody meant that.
+#[test]
+fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
+    let store = scratch("aep-planning-empty-body");
+    let at = printable(&store);
+    assert_eq!(
+        code(&protocol(&[
+            "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+        ])),
+        0
+    );
+    let before = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
+
+    // A pipe that produced nothing.
+    let piped = protocol_with_stdin(
+        &[
+            "artifact",
+            "body",
+            "story:demo",
+            "--from",
+            "-",
+            "--store",
+            at,
+        ],
+        "",
+    );
+    assert_eq!(code(&piped), 1, "{}", stdout(&piped));
+    assert!(stderr(&piped).contains("--from"), "{}", stderr(&piped));
+
+    // A file that turned out to hold whitespace.
+    let blank = store
+        .parent()
+        .expect("scratch has a parent")
+        .join("aep-planning-blank-body.md");
+    write(&blank, "\n  \n\t\n");
+    let from_file = protocol(&[
+        "artifact",
+        "body",
+        "story:demo",
+        "--from",
+        printable(&blank),
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&from_file), 1, "{}", stdout(&from_file));
+    assert!(
+        stderr(&from_file).contains("--from"),
+        "{}",
+        stderr(&from_file)
+    );
+
+    // Neither wrote, and neither moved the revision.
+    let after = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
+    assert_eq!(after, before, "a refused body write changed the document");
+
+    std::fs::remove_file(blank).ok();
+}
+
+/// **`kinds` lists what can be created**, which is more than the list compiled into the binary.
+///
+/// Reproduced live on 2026-08-30 (`fcf5873a#361`): `protocol artifact kinds | grep -i block`
+/// returned nothing while `protocol artifact lifecycle third-party-blocker` answered — the verb the
+/// skill names as the authority on what can be created did not name the family that had a ladder,
+/// because it iterated `ArtifactKind::NAMED` and the blocker family is open.
+#[test]
+fn kinds_lists_the_ladders_a_store_declares_and_the_open_blocker_family() {
+    let listed = protocol(&["artifact", "kinds"]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    let text = stdout(&listed);
+
+    // 1. The compiled vocabulary is still all there.
+    for compiled in [
+        "story",
+        "task",
+        "architecture-decision-record",
+        "review-result",
+    ] {
+        assert!(
+            text.lines()
+                .any(|line| line.starts_with(&format!("{compiled} "))),
+            "`{compiled}` fell out of the listing: {text}"
+        );
+    }
+
+    // 2. A kind only `artifacts/lifecycles/*.yaml` declares is listed, and said to be the store's.
+    let blocker = text
+        .lines()
+        .find(|line| line.starts_with("blocker "))
+        .unwrap_or_else(|| panic!("`blocker` has a ladder in this tree and is not listed: {text}"));
+    assert!(
+        blocker.contains("planning"),
+        "a blocker is intent, not output: {blocker}"
+    );
+    assert!(blocker.contains("lifecycles declare it"), "{blocker}");
+
+    // 3. The family no list can enumerate is one row that says so.
+    let family = text
+        .lines()
+        .find(|line| line.starts_with("<type>-blocker "))
+        .unwrap_or_else(|| panic!("the open blocker family is not listed: {text}"));
+    assert!(family.contains("planning"), "{family}");
+    assert!(family.contains("open family"), "{family}");
+
+    // 4. And it is the answer `blocked` sends a reader to, so the two verbs agree.
+    let json = protocol(&["artifact", "kinds", "--format", "json"]);
+    assert_eq!(code(&json), 0, "{}", stderr(&json));
+    assert!(
+        stdout(&json).contains("\"kind\": \"<type>-blocker\""),
+        "{}",
+        stdout(&json)
+    );
+}
+
+/// **`blocked` says when the store has no blocker kind at all**, rather than reporting good news.
+///
+/// `431986de#7007`: `blocked` answered `nothing is blocked` in a store whose pin predates
+/// `artifacts/kinds/blocker.yaml`, so the mechanism did not exist there — and the operator at
+/// `#7024` asked "what are you talking about blockers".
+#[test]
+fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
+    let repository = root();
+    let store = scratch("aep-planning-blocked-no-ladder");
+    let bare = scratch("aep-planning-blocked-bare-tree");
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+
+    // 1. A tree that declares no blocker ladder: the answer is about the store's vocabulary, and
+    //    points at the verb that lists what could be created instead.
+    let without = protocol(&[
+        "artifact",
+        "blocked",
+        "--store",
+        at,
+        "--root",
+        printable(&bare),
+    ]);
+    assert_eq!(code(&without), 0, "{}", stderr(&without));
+    assert_eq!(
+        stdout(&without).trim(),
+        "this store's lifecycles declare no blocker kind; `protocol artifact kinds` lists what can be created"
+    );
+
+    // 2. The same store read against a tree that does declare one: nothing is blocked, and that is
+    //    now a fact about the plan rather than about the vocabulary.
+    let with = protocol(&[
+        "artifact",
+        "blocked",
+        "--store",
+        at,
+        "--root",
+        printable(&repository),
+    ]);
+    assert_eq!(code(&with), 0, "{}", stderr(&with));
+    assert_eq!(stdout(&with).trim(), "nothing is blocked");
+
+    // 3. And with something actually blocked, the ladder-aware answer is the listing itself.
+    let stuck = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "token-scope",
+        "--title",
+        "No token",
+        "--relate",
+        "blocks:story:passkey-login",
+        "--store",
+        at,
+        "--root",
+        printable(&repository),
+    ]);
+    assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
+    let listed = protocol(&[
+        "artifact",
+        "blocked",
+        "--store",
+        at,
+        "--root",
+        printable(&repository),
+    ]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    assert!(
+        stdout(&listed).contains("credential-blocker:token-scope"),
+        "{}",
+        stdout(&listed)
+    );
+    assert!(
+        !stdout(&listed).contains("nothing is blocked"),
+        "{}",
+        stdout(&listed)
+    );
+}
+
+/// A title and a summary are prose, and prose begins with a dash often enough.
+///
+/// `114c2340#196`: `--summary "--strict is now a flag"` failed clap parsing, and `--summary=…` is a
+/// workaround you have to already know. One retry per session, in three sessions.
+#[test]
+fn a_title_and_a_summary_may_begin_with_a_dash() {
+    let store = scratch("aep-planning-hyphen-values");
+    let at = printable(&store);
+    let created = protocol(&[
+        "artifact",
+        "new",
+        "story",
+        "dashy",
+        "--title",
+        "--strict is now a flag",
+        "--summary",
+        "--strict changes the exit code and nothing else",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    let text = std::fs::read_to_string(store.join("story/dashy.md")).expect("readable");
+    assert!(text.contains("title: --strict is now a flag"), "{text}");
+    assert!(text.contains("--strict changes the exit code"), "{text}");
+
+    // `set` takes the same values, for the same reason.
+    let changed = protocol(&[
+        "artifact",
+        "set",
+        "story:dashy",
+        "--summary",
+        "--strict is opt-in",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&changed), 0, "{}", stderr(&changed));
+    let text = std::fs::read_to_string(store.join("story/dashy.md")).expect("readable");
+    assert!(text.contains("--strict is opt-in"), "{text}");
+}
+
+/// **`relations` is a list, empty or not** — never a key that disappears.
+///
+/// `3130470e#132`: the documented `jq` shape broke on the first artifact with no edges, because a
+/// key a machine format omits is a branch every consumer has to write.
+#[test]
+fn a_listing_says_no_relations_with_an_empty_list_rather_than_by_omission() {
+    let listed = protocol(&["artifact", "list", "--store", FIXTURE, "--format", "json"]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    let rows: serde_json::Value =
+        serde_json::from_str(&stdout(&listed)).expect("the listing is JSON");
+    let rows = rows.as_array().expect("the listing is an array");
+    assert_eq!(rows.len(), FIXTURE_ARTIFACTS);
+
+    // Every row has the key, whether or not the artifact has an edge.
+    for row in rows {
+        let relations = row
+            .get("relations")
+            .unwrap_or_else(|| panic!("a row with no `relations` key: {row}"));
+        assert!(relations.is_array(), "`relations` is not a list: {row}");
+    }
+
+    // The store holds one of each, which is what makes this a claim rather than a shape check.
+    let by_id = |id: &str| {
+        rows.iter()
+            .find(|row| row.get("id").and_then(serde_json::Value::as_str) == Some(id))
+            .unwrap_or_else(|| panic!("no `{id}` in the listing"))
+    };
+    assert_eq!(
+        by_id("initiative:passwordless-authentication")["relations"]
+            .as_array()
+            .expect("a list")
+            .len(),
+        0,
+        "the top of the tree points at nothing and says so with an empty list"
+    );
+    let story = by_id("story:passkey-login")["relations"]
+        .as_array()
+        .expect("a list");
+    assert_eq!(story.len(), 2, "{story:?}");
+    assert_eq!(story[0]["relation"], "decomposes");
+    assert_eq!(story[0]["target"], "epic:passkey-sign-in");
+
+    // `show` answers the same way about the same artifact, which is what makes the two verbs one
+    // shape a consumer can rely on.
+    let shown = protocol(&[
+        "artifact",
+        "show",
+        "initiative:passwordless-authentication",
+        "--store",
+        FIXTURE,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&shown), 0, "{}", stderr(&shown));
+    let shown: serde_json::Value = serde_json::from_str(&stdout(&shown)).expect("JSON");
+    assert_eq!(shown["relations"].as_array().expect("a list").len(), 0);
+}
+
+/// **`move --via` walks the rungs nothing guards, and stops at the first one that is.**
+///
+/// `draft -> proposed -> active` is two commands per story on every wave (`8cffc110#184`), and
+/// `9da4f51c#3303` is a `python` loop issuing four commands for each of eight stories. One command
+/// now, and still one journal entry per hop — a walk that recorded one move would be a history
+/// saying the story was never proposed.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
+    let tree = scratch("aep-planning-via-root");
+    let store = scratch("aep-planning-via-store");
+    let at = printable(&store);
+    write(
+        &tree.join("artifacts/lifecycles/charter.yaml"),
+        "kind: charter\n\
+         initial: intake\n\
+         transitions:\n  \
+           intake: [triage]\n  \
+           triage: [approved]\n  \
+           approved: []\n",
+    );
+    // The same shape with a rung that asks for something in the middle of it.
+    write(
+        &tree.join("artifacts/lifecycles/warrant.yaml"),
+        "kind: warrant\n\
+         initial: intake\n\
+         transitions:\n  \
+           intake: [signed]\n  \
+           signed: [approved]\n  \
+           approved: []\n\
+         requires:\n  \
+           signed:\n    \
+             - evidence: approval\n      \
+               at_least: 1\n",
+    );
+    let tree = printable(&tree);
+
+    for (kind, name) in [("charter", "open"), ("warrant", "gated")] {
+        let made = protocol(&[
+            "artifact", "new", kind, name, "--title", "X", "--store", at, "--root", tree,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+
+    // 1. Two unguarded rungs, one command, two lines out.
+    let walked = protocol(&[
+        "artifact",
+        "move",
+        "charter:open",
+        "--to",
+        "approved",
+        "--via",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&walked), 0, "{}{}", stdout(&walked), stderr(&walked));
+    let said = stdout(&walked);
+    assert!(
+        said.contains("charter:open moved intake -> triage (revision 2)"),
+        "{said}"
+    );
+    assert!(
+        said.contains("charter:open moved triage -> approved (revision 3)"),
+        "{said}"
+    );
+
+    // 2. Each hop is its own entry in the journal, and the document is where the walk ended.
+    let journal = std::fs::read_to_string(store.join("journal.jsonl")).expect("a journal");
+    let hops: Vec<&str> = journal
+        .lines()
+        .filter(|line| line.contains(r#""change":"moved""#) && line.contains(r#""id":"open""#))
+        .collect();
+    assert_eq!(
+        hops.len(),
+        2,
+        "a walk journals every rung it crossed: {journal}"
+    );
+    let text = std::fs::read_to_string(store.join("charter/open.md")).expect("readable");
+    assert!(text.contains("status: approved"), "{text}");
+    assert!(text.contains("revision: 3"), "{text}");
+
+    // 3. A guarded rung in the middle stops the walk in that rung's own words, and writes nothing.
+    let stopped = protocol(&[
+        "artifact",
+        "move",
+        "warrant:gated",
+        "--to",
+        "approved",
+        "--via",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&stopped), 1, "{}", stdout(&stopped));
+    let said = stdout(&stopped);
+    assert!(said.contains("warrant:gated is intake"), "{said}");
+    assert!(
+        said.contains("approval"),
+        "the guarded rung's own refusal: {said}"
+    );
+    assert!(
+        !said.contains("moved"),
+        "a refused walk moved something: {said}"
+    );
+    let text = std::fs::read_to_string(store.join("warrant/gated.md")).expect("readable");
+    assert!(
+        text.contains("status: intake"),
+        "a refused walk wrote anyway: {text}"
+    );
+    assert!(text.contains("revision: 1"), "{text}");
+
+    // 4. **And it is guarded even when the evidence is on hand**, which is where the rule is
+    //    load-bearing: `--via` crosses rungs nothing asks anything of, so one asserted count must
+    //    not carry an artifact across two gates at once. The same rung, moved to on its own with
+    //    the same evidence, goes through — so the refusal is about the walk and not about the
+    //    evidence.
+    let laundered = protocol(&[
+        "artifact",
+        "move",
+        "warrant:gated",
+        "--to",
+        "approved",
+        "--via",
+        "--evidence",
+        "approval=1",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&laundered), 1, "{}", stdout(&laundered));
+    assert!(
+        stdout(&laundered).contains("`--via` walks rungs nothing guards"),
+        "{}",
+        stdout(&laundered)
+    );
+    assert!(
+        stdout(&laundered).contains("signed is guarded"),
+        "{}",
+        stdout(&laundered)
+    );
+    let alone = protocol(&[
+        "artifact",
+        "move",
+        "warrant:gated",
+        "--to",
+        "signed",
+        "--evidence",
+        "approval=1",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&alone), 0, "{}{}", stdout(&alone), stderr(&alone));
+
+    // 5. Without `--via`, the two-rung request is the ordinary single-hop refusal it always was.
+    let direct = protocol(&[
+        "artifact",
+        "move",
+        "charter:open",
+        "--to",
+        "intake",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&direct), 1, "{}", stdout(&direct));
+    assert!(
+        stdout(&direct).contains("charter:open is approved"),
+        "{}",
+        stdout(&direct)
+    );
+}
+
+/// **`explain` ends by saying what the next rung costs**, so the requirement is read rather than
+/// learnt by being refused.
+///
+/// `11727595#3402-#3407`: `explain` said "no status move is recorded" and nothing about what the
+/// next rung wanted, so the requirement was found out by `move` refusing twice. A rung's price is a
+/// line in a lifecycle document; there is no reason to be refused to see it.
+#[test]
+fn explain_ends_with_what_each_legal_next_rung_costs() {
+    let store = scratch("aep-planning-explain-next");
+    let at = printable(&store);
+    let run = |args: &[&str]| {
+        let output = protocol(args);
+        assert_eq!(code(&output), 0, "{}", stderr(&output));
+        output
+    };
+    run(&[
+        "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+    ]);
+    run(&[
+        "artifact",
+        "move",
+        "story:demo",
+        "--to",
+        "active",
+        "--via",
+        "--store",
+        at,
+    ]);
+
+    // 1. Held nothing: the rung that asks for something says how much, and that none is held.
+    let explained = run(&["artifact", "explain", "story:demo", "--store", at]);
+    let text = stdout(&explained);
+    assert!(
+        text.contains("next: implemented needs 1 test_result record(s); held: 0"),
+        "{text}"
+    );
+    // A rung the ladder asks nothing of is still a line, because *nothing* is the answer to the
+    // same question and a missing line reads as a rung that is not legal.
+    assert!(text.contains("next: archived needs no record"), "{text}");
+    // Only the rungs this status leads to.
+    assert!(
+        !text.contains("next: proposed"),
+        "`active` does not lead to `proposed`: {text}"
+    );
+
+    // 2. The count is the store's own, about this artifact, and moves when a record is admitted.
+    run(&[
+        "artifact",
+        "evidence",
+        "story:demo",
+        "--kind",
+        "test_result",
+        "--source",
+        "task check",
+        "--store",
+        at,
+    ]);
+    let explained = run(&["artifact", "explain", "story:demo", "--store", at]);
+    assert!(
+        stdout(&explained).contains("next: implemented needs 1 test_result record(s); held: 1"),
+        "{}",
+        stdout(&explained)
+    );
+
+    // 3. And the machine format carries the same three numbers rather than the sentence.
+    let json = run(&[
+        "artifact",
+        "explain",
+        "story:demo",
+        "--store",
+        at,
+        "--format",
+        "json",
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
+    let next = value["next"].as_array().expect("a list of rungs");
+    let implemented = next
+        .iter()
+        .find(|rung| rung["status"] == "implemented")
+        .expect("the guarded rung");
+    assert_eq!(implemented["needs"][0]["kind"], "test_result");
+    assert_eq!(implemented["needs"][0]["at_least"], 1);
+    assert_eq!(implemented["needs"][0]["held"], 1);
+}
+
+/// **An evidence-kind refusal ends with the two kinds people actually reach for.**
+///
+/// `431986de#6957` wrote `measurement`; `e70b8018 s1#694` wrote `cross_repo_dependency`. Both have
+/// a kind in this vocabulary and neither name is it, and a list of fifteen is not findable by
+/// someone who does not have the word.
+#[test]
+fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
+    let store = scratch("aep-planning-evidence-kind-hint");
+    let at = printable(&store);
+    assert_eq!(
+        code(&protocol(&[
+            "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+        ])),
+        0
+    );
+    let advice = "for an observation of a running system use `health_observation`; \
+                  for a relation to another store's artifact use `artifact`";
+
+    // The `evidence` verb, with the word one session actually typed.
+    let recorded = protocol(&[
+        "artifact",
+        "evidence",
+        "story:demo",
+        "--kind",
+        "measurement",
+        "--source",
+        "grafana",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&recorded), 1, "{}", stdout(&recorded));
+    assert!(
+        stderr(&recorded).trim_end().ends_with(advice),
+        "the advice is not the last thing said: {}",
+        stderr(&recorded)
+    );
+
+    // And `move --evidence`, with the word the other one typed.
+    let moved = protocol(&[
+        "artifact",
+        "move",
+        "story:demo",
+        "--to",
+        "proposed",
+        "--evidence",
+        "cross_repo_dependency=1",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&moved), 1, "{}", stdout(&moved));
+    assert!(
+        stderr(&moved).trim_end().ends_with(advice),
+        "the advice is not the last thing said: {}",
+        stderr(&moved)
+    );
+
+    // Both kinds it names are kinds, which is what makes the advice worth taking.
+    for kind in ["health_observation", "artifact"] {
+        let output = protocol(&[
+            "artifact",
+            "evidence",
+            "story:demo",
+            "--kind",
+            kind,
+            "--source",
+            "x",
+            "--store",
+            at,
+        ]);
+        assert_eq!(code(&output), 0, "`{kind}`: {}", stderr(&output));
+    }
 }
