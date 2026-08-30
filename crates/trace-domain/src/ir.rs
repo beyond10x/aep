@@ -584,6 +584,20 @@ pub struct AssistantRequest {
     pub cache_read_input_tokens: Option<u64>,
     /// Cache creation on this request.
     pub cache_creation_input_tokens: Option<u64>,
+    /// The IR events this request produced, where the **adapter** had to say so itself.
+    ///
+    /// Left empty by an adapter whose wire already answers the question another way: on
+    /// `stream-json` one line carries a request's usage *and* the content blocks it produced, so
+    /// [`Self::source_line`] is the join and a second copy of it here would be a second thing to
+    /// keep in step. It is filled by an adapter whose wire writes the usage on a line of its own,
+    /// where neither the line nor the request id reaches every event the request produced — a
+    /// `metaharness.event/1` turn that thought, called a tool and said nothing to the operator
+    /// carries its id on no event at all.
+    ///
+    /// Indices into [`TraceIr::events`], in order. Read through
+    /// [`TraceIr::events_of_request`] rather than directly; the fallbacks it applies first are
+    /// what keep the two wires reporting the same shape of citation.
+    pub events: Vec<usize>,
 }
 
 /// One tool call's place in the run's wall clock.
@@ -884,6 +898,93 @@ impl TraceIr {
             }
         }
         identified.len() + anonymous
+    }
+
+    /// The per-request usage series: one entry per API request, in order.
+    ///
+    /// [`Self::requests`] holds one record per *assistant event*, and several streamed events
+    /// share one `request_id` — nineteen records for eight requests in the committed fixture. An
+    /// assertion about how usage *moved* is about the requests, so records sharing an id collapse
+    /// to one entry and a record with no id stands alone, which is exactly the rule
+    /// [`Self::api_request_count`] counts by: the series is as long as `api_requests` says, and a
+    /// share taken over it does not divide by a streaming artefact.
+    ///
+    /// The **last** record of a request supplies the entry, including its
+    /// [`AssistantRequest::source_line`]. A streamed request restates its usage as it goes and
+    /// the last restatement is the complete one; taking the first would report a request's cost
+    /// as whatever it had been at the moment the harness first mentioned it.
+    pub fn request_series(&self) -> Vec<AssistantRequest> {
+        let mut series: Vec<AssistantRequest> = Vec::new();
+        let mut position: BTreeMap<&str, usize> = BTreeMap::new();
+        for request in &self.requests {
+            let seen = request
+                .request_id
+                .as_deref()
+                .and_then(|id| position.get(id).copied());
+            if let Some(at) = seen {
+                series[at] = request.clone();
+                continue;
+            }
+            if let Some(id) = request.request_id.as_deref() {
+                position.insert(id, series.len());
+            }
+            series.push(request.clone());
+        }
+        series
+    }
+
+    /// The IR events one entry of the request series is cited at.
+    ///
+    /// **The record the usage was read off, first.** On the `stream-json` wire an assistant line
+    /// carries both a request's usage and the content blocks it produced, so the events on that
+    /// line *are* the request, and a citation that named anything wider would point a reader at
+    /// events another request paid for.
+    ///
+    /// **Its own events, by id, where that record produced none.** `metaharness.event/1` writes
+    /// usage as a line of its own and deliberately builds no event from it, so the line join
+    /// finds nothing there — and every series verdict on a driven run would otherwise cite
+    /// nothing at all, which is the one shape `Citation` reserves for a fact about the whole
+    /// transcript rather than one read off an event.
+    ///
+    /// **What the adapter attributed, where neither join reaches.** Both of the above are
+    /// *derived* from a line number and an id, and neither survives a turn that thought, called a
+    /// tool and narrated nothing — `metaharness.event/1` carries the request id on the assistant's
+    /// text and on nothing else, and a `usage` line is free to carry no id at all. The adapter
+    /// read the wire in order and knows which events that request produced;
+    /// [`AssistantRequest::events`] is where it says so.
+    ///
+    /// Empty only for a request that is none of the three: a transcript that recorded a cost and
+    /// nothing it was spent on.
+    pub fn events_of_request(&self, request: &AssistantRequest) -> Vec<usize> {
+        let on_line: Vec<usize> = self
+            .events
+            .iter()
+            .filter(|event| event.source_line == request.source_line)
+            .map(|event| event.index)
+            .collect();
+        if !on_line.is_empty() {
+            return on_line;
+        }
+        if let Some(id) = request.request_id.as_deref() {
+            let by_id: Vec<usize> = self
+                .events
+                .iter()
+                .filter(|event| {
+                    matches!(
+                        &event.kind,
+                        EventKind::AssistantText {
+                            request_id: Some(carried),
+                            ..
+                        } if carried == id
+                    )
+                })
+                .map(|event| event.index)
+                .collect();
+            if !by_id.is_empty() {
+                return by_id;
+            }
+        }
+        request.events.clone()
     }
 
     /// Per-call timings, derived from recorded timestamps alone.
@@ -1301,6 +1402,55 @@ mod tests {
         );
         assert_eq!(ir.assistant_event_count(), 3, "three streamed events");
         assert_eq!(ir.api_request_count(), 2, "one shared id, one unlabelled");
+    }
+
+    #[test]
+    fn the_request_series_is_one_per_api_request_and_the_last_record_carries_its_usage() {
+        let ir = TraceIr::new(
+            "digest".to_owned(),
+            adapter(),
+            Vec::new(),
+            vec![
+                AssistantRequest {
+                    source_line: 1,
+                    request_id: Some("req_1".to_owned()),
+                    cache_read_input_tokens: Some(10),
+                    output_tokens: Some(1),
+                    ..AssistantRequest::default()
+                },
+                AssistantRequest {
+                    source_line: 2,
+                    request_id: Some("req_1".to_owned()),
+                    cache_read_input_tokens: Some(10),
+                    output_tokens: Some(7),
+                    ..AssistantRequest::default()
+                },
+                AssistantRequest {
+                    source_line: 3,
+                    request_id: None,
+                    cache_read_input_tokens: Some(30),
+                    output_tokens: Some(2),
+                    ..AssistantRequest::default()
+                },
+            ],
+        );
+        let series = ir.request_series();
+        assert_eq!(
+            series.len(),
+            ir.api_request_count(),
+            "a series assertion and `api_requests` must be talking about the same requests"
+        );
+        assert_eq!(series.len(), 2, "one shared id, one unlabelled");
+        assert_eq!(
+            series[0].output_tokens,
+            Some(7),
+            "a streamed request restates its usage, and the last restatement is the complete one"
+        );
+        assert_eq!(
+            series[0].source_line, 2,
+            "the entry is cited at the record that supplied its usage"
+        );
+        assert_eq!(series[1].cache_read_input_tokens, Some(30));
     }
 
     #[test]

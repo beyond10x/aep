@@ -36,9 +36,13 @@
 
 use std::collections::BTreeMap;
 
-use trace_domain::ir::{ModelUsage, RunOutcome, RunUsage, SessionStart, Step, ToolCall, TraceIr};
+use trace_domain::ir::{
+    AssistantRequest, ModelUsage, RunOutcome, RunUsage, SessionStart, Step, ToolCall, TraceIr,
+};
 use trace_domain::matcher::{CallSelector, CountBound, FieldMatcher, RangeBound, ResultMatcher};
-use trace_domain::spec::{Aggregate, ApiErrorStatus, ExpectationKind, ToolAvailability, TraceSpec};
+use trace_domain::spec::{
+    Aggregate, ApiErrorStatus, ExpectationKind, ToolAvailability, TraceSpec, Trend, UsageField,
+};
 
 use crate::report::{
     CheckReport, Citation, ExpectationReport, Outcome, UnknownReason, REPORT_FORMAT,
@@ -223,6 +227,8 @@ fn evaluate(kind: &ExpectationKind, ir: &TraceIr) -> Outcome {
             Token::CacheCreated,
         ),
         ExpectationKind::CacheHitRatio { ratio } => cache_hit_ratio(ir, *ratio),
+        ExpectationKind::UsageTrend { field, trend } => usage_trend(ir, *field, *trend),
+        ExpectationKind::UsageShare { field, share } => usage_share(ir, *field, *share),
         ExpectationKind::DurationTotal { ms } => {
             outcome_count(ir, "duration_ms", *ms, |run| run.duration_ms)
         }
@@ -1488,6 +1494,152 @@ fn cache_hit_ratio(ir: &TraceIr, bound: RangeBound) -> Outcome {
     }
 }
 
+// --- the per-request usage series ---------------------------------------------------------
+
+/// The value a series assertion reads off one request.
+fn usage_of(request: &AssistantRequest, field: UsageField) -> Option<u64> {
+    match field {
+        UsageField::InputTokens => request.input_tokens,
+        UsageField::OutputTokens => request.output_tokens,
+        UsageField::CacheReadInputTokens => request.cache_read_input_tokens,
+        UsageField::CacheCreationInputTokens => request.cache_creation_input_tokens,
+    }
+}
+
+/// The series one `usage.*` kind reads — each request and its value — or the reason this
+/// transcript has none.
+///
+/// A request that records no such field takes the whole series to `unk`, and deliberately not
+/// just itself: a trend across the requests that happened to carry the field is a different claim
+/// wearing this one's name, and a share whose denominator silently dropped a term is a bigger
+/// fraction presented as the same quantity. That is `total_of`'s rule for a duration, arriving
+/// here.
+///
+/// The field it names when it goes `unk` is spelled `requests[].<field>`, because two
+/// expectations reporting the same sentence for two different missing things is a reader having
+/// to guess which one fired. The prefix says *the per-request record*, and it has to say it
+/// itself: the run-aggregate kinds do **not** share one spelling to be distinguished from —
+/// `cache.hit_ratio` reports `usage.cache_read_input_tokens` and `tokens.thinking` reports
+/// `usage.thinking_tokens`, but `cache.read_tokens` and `tokens.input` report the bare
+/// `cache_read_input_tokens` and `input_tokens`. A rule that leaned on their prefix would be
+/// leaning on something that is only sometimes there.
+fn series(ir: &TraceIr, field: UsageField) -> Result<Vec<(AssistantRequest, u64)>, Outcome> {
+    let requests = ir.request_series();
+    if requests.is_empty() {
+        return Err(Outcome::Undecidable(UnknownReason::NoRequests));
+    }
+    let mut values = Vec::with_capacity(requests.len());
+    for request in requests {
+        let Some(value) = usage_of(&request, field) else {
+            return Err(unknown_field(&format!("requests[].{}", field.name())));
+        };
+        values.push((request, value));
+    }
+    Ok(values)
+}
+
+/// A named usage field moves monotonically across the request series.
+///
+/// The fold is Kleene's and not a first-match scan: a pair that moved the wrong way is a `gap`
+/// even when an earlier pair stood still, because something *was* observed to be wrong.
+///
+/// The `ok`/`unk` split is taken over the **series**, at the level the verdict is published at,
+/// and deliberately not over a pair. `unk` is reserved for a run that is consistent with both
+/// directions at once — and a series is consistent with both exactly when it never moved at all,
+/// because one pair moving either way gaps the opposite direction. A still pair inside a series
+/// that moved elsewhere is therefore not undecidable: the run has already answered which way it
+/// went, and reporting `unk` would withhold an answer the same data gives. The committed driven
+/// steps are the case in point — cache creation of `18809, 0` and of `20168, 0, 0` are the same
+/// front-loading, and only a series-level rule says so about both.
+fn usage_trend(ir: &TraceIr, field: UsageField, trend: Trend) -> Outcome {
+    let values = match series(ir, field) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let name = field.name();
+    let shape = trend.label();
+    let last = &values[values.len() - 1];
+    if values.len() == 1 {
+        return Outcome::Ok(Citation::new(
+            ir.events_of_request(&last.0),
+            format!(
+                "one request, {name} = {}: a sequence of one is {shape} vacuously",
+                last.1
+            ),
+        ));
+    }
+    let mut moved = false;
+    for (index, pair) in values.windows(2).enumerate() {
+        let (previous, current) = (pair[0].1, pair[1].1);
+        if !trend.holds(previous, current) {
+            return Outcome::Gap(Citation::new(
+                ir.events_of_request(&pair[1].0),
+                format!(
+                    "{name} is not {shape} across {} requests: request {} is {current} after \
+                     {previous} at request {index}",
+                    values.len(),
+                    index + 1
+                ),
+            ));
+        }
+        moved |= trend.moves(previous, current);
+    }
+    if !moved {
+        return Outcome::Undecidable(UnknownReason::SeriesDidNotMove {
+            field: format!("requests[].{name}"),
+            requests: values.len(),
+        });
+    }
+    Outcome::Ok(Citation::new(
+        ir.events_of_request(&last.0),
+        format!(
+            "{name} moved {} across {} requests and never the other way, {} to {}",
+            trend.direction(),
+            values.len(),
+            values[0].1,
+            last.1
+        ),
+    ))
+}
+
+/// The largest single request's share of the series' own total.
+fn usage_share(ir: &TraceIr, field: UsageField, bound: RangeBound) -> Outcome {
+    let values = match series(ir, field) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let name = field.name();
+    let total = values
+        .iter()
+        .fold(0u64, |sum, (_, value)| sum.saturating_add(*value));
+    if total == 0 {
+        return Outcome::Undecidable(UnknownReason::RatioUndefined {
+            denominator: format!("requests[].{name} summed across every request"),
+        });
+    }
+    let mut peak_at = 0usize;
+    for (index, entry) in values.iter().enumerate() {
+        if entry.1 > values[peak_at].1 {
+            peak_at = index;
+        }
+    }
+    let peak = &values[peak_at];
+    #[allow(clippy::cast_precision_loss)] // Token counts are far below 2^53.
+    let share = peak.1 as f64 / total as f64;
+    let note = format!(
+        "the largest single request's {name} share is {share:.5} = {} / {total} at request \
+         {peak_at} of {}, {bound}",
+        peak.1,
+        values.len()
+    );
+    let events = ir.events_of_request(&peak.0);
+    if bound.holds(share) {
+        Outcome::Ok(Citation::new(events, note))
+    } else {
+        Outcome::Gap(Citation::new(events, note))
+    }
+}
+
 // --- derived timings --------------------------------------------------------------------
 
 /// The interval a phase reads off a step.
@@ -1685,7 +1837,7 @@ mod tests {
     // prevent: a kind that reports `ok` because it is not looking. A positive case alone would
     // pass for a checker whose every arm returned `ok`.
     //
-    // That the *document* can express all fifty-one is a separate claim, checked where it
+    // That the *document* can express all fifty-three is a separate claim, checked where it
     // belongs — in `trace_domain::raw`'s own tests, against the wire form.
 
     /// The committed transcript of eval run `7hTYjT`: 36 events, 2026-08-21.
@@ -2469,6 +2621,39 @@ mod tests {
                 },
                 Verdict::Gap,
             ),
+            // --- how the usage moved, request by request -----------------------------------
+            // The eight requests read 26 168, 36 616, 39 475, 40 299, 40 591, 40 965, 43 257
+            // and 46 142 tokens from the cache, and created 10 448, 2 859, 824, 292, 374,
+            // 2 292, 2 885 and 194 — a ramp that only goes up, and a creation total of 20 168
+            // whose largest single request is 10 448, or 51.8% of it.
+            case(
+                ExpectationKind::UsageTrend {
+                    field: UsageField::CacheReadInputTokens,
+                    trend: Trend::NonDecreasing,
+                },
+                Verdict::Ok,
+            ),
+            case(
+                ExpectationKind::UsageTrend {
+                    field: UsageField::CacheReadInputTokens,
+                    trend: Trend::NonIncreasing,
+                },
+                Verdict::Gap,
+            ),
+            case(
+                ExpectationKind::UsageShare {
+                    field: UsageField::CacheCreationInputTokens,
+                    share: RangeBound::at_most(0.6),
+                },
+                Verdict::Ok,
+            ),
+            case(
+                ExpectationKind::UsageShare {
+                    field: UsageField::CacheCreationInputTokens,
+                    share: RangeBound::at_most(0.4),
+                },
+                Verdict::Gap,
+            ),
         ]
     }
 
@@ -2505,6 +2690,153 @@ mod tests {
             covered.len(),
             ExpectationKind::NAMES.len(),
             "the table covers exactly the published vocabulary"
+        );
+    }
+
+    /// An IR whose only content is a per-request usage series.
+    fn requests(series: Vec<AssistantRequest>) -> TraceIr {
+        TraceIr::new("digest".to_owned(), adapter(), Vec::new(), series)
+    }
+
+    /// One request record: a line, an id, and one field's value.
+    fn request(line: usize, id: &str, cache_read: Option<u64>) -> AssistantRequest {
+        AssistantRequest {
+            source_line: line,
+            request_id: Some(id.to_owned()),
+            cache_read_input_tokens: cache_read,
+            ..AssistantRequest::default()
+        }
+    }
+
+    fn rising() -> ExpectationKind {
+        ExpectationKind::UsageTrend {
+            field: UsageField::CacheReadInputTokens,
+            trend: Trend::NonDecreasing,
+        }
+    }
+
+    #[test]
+    fn a_trend_over_a_run_of_one_request_holds_vacuously_rather_than_gapping() {
+        let one = requests(vec![request(1, "req_1", Some(26_168))]);
+        let outcome = evaluate(&rising(), &one);
+        assert_eq!(
+            outcome.verdict(),
+            Verdict::Ok,
+            "an assertion about a sequence of one is not a failure: {}",
+            outcome.detail()
+        );
+        assert!(
+            outcome.detail().contains("vacuously"),
+            "the pass says why it passed: {}",
+            outcome.detail()
+        );
+
+        let falling = ExpectationKind::UsageTrend {
+            field: UsageField::CacheReadInputTokens,
+            trend: Trend::NonIncreasing,
+        };
+        assert_eq!(
+            evaluate(&falling, &one).verdict(),
+            Verdict::Ok,
+            "vacuous in both directions, or the pass would be about the direction rather than              about the sequence"
+        );
+    }
+
+    #[test]
+    fn a_run_that_made_no_request_cannot_decide_a_series_assertion() {
+        let none = requests(Vec::new());
+        assert_eq!(
+            evaluate(&rising(), &none),
+            Outcome::Undecidable(UnknownReason::NoRequests),
+            "a series over nothing is not a vacuous pass — the `infra-spec` rule, again"
+        );
+        assert_eq!(
+            evaluate(
+                &ExpectationKind::UsageShare {
+                    field: UsageField::CacheReadInputTokens,
+                    share: RangeBound::at_most(0.5),
+                },
+                &none,
+            ),
+            Outcome::Undecidable(UnknownReason::NoRequests)
+        );
+    }
+
+    #[test]
+    fn a_usage_field_this_transcript_does_not_carry_is_undecidable() {
+        let silent = requests(vec![
+            request(1, "req_1", Some(10)),
+            request(2, "req_2", None),
+        ]);
+        assert_eq!(
+            evaluate(&rising(), &silent),
+            Outcome::Undecidable(UnknownReason::FieldAbsent {
+                field: "requests[].cache_read_input_tokens".to_owned(),
+            }),
+            "one request short of the series is a transcript that cannot answer, not a run that \
+             misbehaved; the field it names is the per-request one, so a reader can tell it from \
+             the aggregate the run-wide kinds report missing"
+        );
+
+        let empty_total = requests(vec![
+            request(1, "req_1", Some(0)),
+            request(2, "req_2", Some(0)),
+        ]);
+        assert_eq!(
+            evaluate(
+                &ExpectationKind::UsageShare {
+                    field: UsageField::CacheReadInputTokens,
+                    share: RangeBound::at_most(0.5),
+                },
+                &empty_total,
+            ),
+            Outcome::Undecidable(UnknownReason::RatioUndefined {
+                denominator: "requests[].cache_read_input_tokens summed across every request"
+                    .to_owned(),
+            }),
+            "a share of nothing is not a share"
+        );
+    }
+
+    #[test]
+    fn the_gap_names_the_first_request_that_broke_the_trend() {
+        let outcome = evaluate(
+            &ExpectationKind::UsageTrend {
+                field: UsageField::CacheReadInputTokens,
+                trend: Trend::NonIncreasing,
+            },
+            &real_run(),
+        );
+        assert_eq!(outcome.verdict(), Verdict::Gap);
+        assert!(
+            outcome
+                .detail()
+                .contains("request 1 is 36616 after 26168 at request 0"),
+            "a reader must be able to go and look at the pair that broke it: {}",
+            outcome.detail()
+        );
+    }
+
+    #[test]
+    fn a_share_is_over_the_series_own_total_so_a_reader_can_recompute_it() {
+        let ir = real_run();
+        assert_eq!(
+            ir.request_series().len(),
+            ir.api_request_count(),
+            "the series a share divides by is the one `api_requests` counts"
+        );
+        let outcome = evaluate(
+            &ExpectationKind::UsageShare {
+                field: UsageField::CacheCreationInputTokens,
+                share: RangeBound::at_most(0.4),
+            },
+            &ir,
+        );
+        assert_eq!(outcome.verdict(), Verdict::Gap);
+        assert!(
+            outcome.detail().contains("10448 / 20168"),
+            "the numerator and the denominator are both in the citation: {}",
+            outcome.detail()
         );
     }
 

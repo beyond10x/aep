@@ -9,7 +9,7 @@
 //! |---|---|---|---|
 //! | observation | — (the model is authored) | a cluster scan, out of process | **an agent-run transcript** |
 //! | normalized IR | `EssIr` | `infra-ir/1`, content-addressed | [`trace-ir/1`](ir), content-addressed |
-//! | authored expectations | the specification itself | `infra-spec/1`, twelve kinds | [`trace-spec/1`](spec), fifty-one kinds |
+//! | authored expectations | the specification itself | `infra-spec/1`, twelve kinds | [`trace-spec/1`](spec), fifty-three kinds |
 //! | verdicts | pass / fail / unsupported | `ok` / `gap` / `unk` | `ok` / `gap` / `unk` |
 //! | the third value means | the scenario could not be executed | the snapshot cannot decide | **the adapter did not understand the event** |
 //!
@@ -22,7 +22,7 @@
 //! | module | contents |
 //! |---|---|
 //! | [`ir`] | the harness-neutral event IR: seven recognised event families, one opaque one, and the derived census |
-//! | [`spec`] | the expectation vocabulary: fifty-one kinds, severity, and the `unk` policy |
+//! | [`spec`] | the expectation vocabulary: fifty-three kinds, severity, and the `unk` policy |
 //! | [`matcher`] | bounds, field matchers and call selectors — the whole of the language, and no more of it |
 //! | [`raw`] | the permissive half, and the `TryFrom` that is the only way into a [`spec::TraceSpec`] |
 //! | [`code`] | the `TRACE-` refusal registry and the accumulator |
