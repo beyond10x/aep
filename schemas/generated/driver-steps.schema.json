@@ -78,7 +78,7 @@
     "PinnedWorkflowRef": {
       "description": "Reference to a workflow at a major version, such as `adp/default/1`. The version is mandatory: a step map is an instruction sheet for one state graph.",
       "type": "string",
-      "pattern": "^(workflow:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*/[1-9][0-9]*$"
+      "pattern": "^(workflow:)?[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*/[1-9][0-9]*$"
     },
     "RawEvidenceMapping": {
       "description": "How a command's result becomes evidence, as written.",

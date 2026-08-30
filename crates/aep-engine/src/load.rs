@@ -267,3 +267,268 @@ fn collect_documents(directory: &Path, into: &mut Vec<PathBuf>) -> io::Result<()
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A scratch document tree that deletes itself, however the test ends.
+    ///
+    /// Rooted at the system temporary directory and not `CARGO_TARGET_TMPDIR`, which cargo defines
+    /// for integration tests and benches only — this is a unit test, beside the code it tests, as
+    /// the repository's convention asks. `crates/aep-engine/tests/project_directory_env.rs` roots
+    /// its trees the same way. The process id keeps two gates in two worktrees from writing the
+    /// same path, which is the collision `CARGO_TARGET_TMPDIR` exists to avoid.
+    ///
+    /// The cleanup is a `Drop` and not a line at the end of the test on purpose: a failing
+    /// assertion unwinds past that line, and a scratch tree named after a process id is never
+    /// reclaimed by the next run. Measured — the first mutation run of this file left one behind.
+    struct Tree(PathBuf);
+
+    /// Where `tree` writes, as a function so a case can name the path a failed `tree` never
+    /// returned.
+    fn scratch_root(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("aep-load-{name}-{}", std::process::id()))
+    }
+
+    impl Drop for Tree {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Writes a document tree holding exactly the files given.
+    ///
+    /// The guard is constructed **before** the first write, not returned after the last one. Every
+    /// line below it can fail — a parent that is a file, a full disk, a read-only temporary
+    /// directory — and a `.expect` between the first `create_dir_all` and the `Tree(root)` at the
+    /// end unwinds past the constructor, leaving behind exactly the directory the guard exists to
+    /// reclaim. Measured with a probe that makes a parent path a file: the earlier shape leaked,
+    /// this one does not.
+    fn tree(name: &str, files: &[(&str, &str)]) -> Tree {
+        let root = scratch_root(name);
+        let _ = fs::remove_dir_all(&root);
+        let guard = Tree(root);
+        for (path, contents) in files {
+            let file = guard.0.join(path);
+            fs::create_dir_all(file.parent().expect("a document has a directory"))
+                .expect("the tree is writable");
+            fs::write(&file, contents).expect("the document is writable");
+        }
+        guard
+    }
+
+    const WORKFLOW_AT_2: &str = r#"{"id":"adp/default","version":2,"title":"t",
+        "initial":"implement",
+        "states":{"implement":{"title":"Implement","terminal":true}},"transitions":[]}"#;
+
+    const MAP_PINNED_TO_1: &str = r#"{"format":"aep.driver-steps/1","id":"development/default",
+        "workflow":"adp/default/1","states":{"implement":{"steps":[]}}}"#;
+
+    /// Loading a tree is what runs the cross-document checks — not a step a caller adds afterwards.
+    ///
+    /// The story's acceptance says an orphaned pin is refused **at load**, and every other case for
+    /// it calls `Registry::validate` directly, which is the one thing a caller of `load_tree` never
+    /// does. Deleting the `registry.validate()` call from `load_tree_report` leaves all of them
+    /// green while `load_tree` starts returning a registry it has not checked.
+    #[test]
+    fn a_tree_whose_step_map_pins_a_major_the_workflows_no_longer_have_does_not_load() {
+        let root = tree(
+            "orphan-pin",
+            &[
+                ("workflows/adp-default.json", WORKFLOW_AT_2),
+                ("drivers/development-default.json", MAP_PINNED_TO_1),
+            ],
+        );
+
+        let root = &root.0;
+        let outcome = load_tree_report(root);
+
+        // The fixture has to reach the consistency check: both documents parsed and registered, so
+        // the failure below is the cross-document rule and not a file that would not read.
+        assert_eq!(outcome.files_read, 2, "both documents were read");
+        assert_eq!(
+            outcome.registry.step_maps().count(),
+            1,
+            "the map itself is well formed and did register"
+        );
+
+        assert_eq!(
+            outcome.failures.len(),
+            1,
+            "{}",
+            outcome
+                .failures
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+        let said = outcome.failures[0].to_string();
+        assert!(
+            said.contains("step map development/default"),
+            "the refusal reaches the caller of `load_tree`, naming the map: {said}"
+        );
+        assert!(
+            said.contains("adp/default/1") && said.contains("version 2"),
+            "with the pin and what the tree holds: {said}"
+        );
+        assert!(
+            !outcome.is_clean(),
+            "and the outcome is not clean, so `load_tree` refuses it"
+        );
+        assert!(
+            load_tree(root).is_err(),
+            "`load_tree` is the entry point a caller uses, and it must not hand back a registry \
+             whose step map is orphaned"
+        );
+    }
+
+    /// And the same tree with the pin the workflows do hold loads, so this is a filter.
+    #[test]
+    fn the_same_tree_pinned_to_the_major_the_workflows_hold_loads_clean() {
+        let root = tree(
+            "matching-pin",
+            &[
+                (
+                    "workflows/adp-default.json",
+                    &WORKFLOW_AT_2.replace(r#""version":2"#, r#""version":1"#),
+                ),
+                ("drivers/development-default.json", MAP_PINNED_TO_1),
+            ],
+        );
+
+        let root = &root.0;
+        let outcome = load_tree_report(root);
+        assert!(
+            outcome.is_clean(),
+            "{}",
+            outcome
+                .failures
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+        assert!(load_tree(root).is_ok());
+    }
+    // --- adversarial cases -------------------------------------------------------------------
+    //
+    // Added by the second adversarial pass over `story:driver-spec-crate`. `Tree`'s doc comment
+    // makes two claims — the cleanup survives a failing case, and two runs cannot collide — and
+    // neither had a case. A guard nobody has watched fire is the shape this repository refuses to
+    // call done, and it is the shape that left a directory behind here once already.
+
+    /// The scratch tree is reclaimed when the case that made it **fails**.
+    ///
+    /// That is the whole reason the cleanup is a `Drop` rather than a line at the end of the test,
+    /// and it is the path no case exercises: both cases above pass, so they would be just as clean
+    /// with the cleanup written as their last statement. Panicking on purpose is the only way to
+    /// ask the question. It also fails if the panic strategy is ever set to `abort`, under which a
+    /// `Drop` does not run and this guard silently stops being one.
+    ///
+    /// The panic printed by this case is deliberate.
+    #[test]
+    fn a_scratch_tree_is_reclaimed_when_the_case_that_made_it_panics() {
+        let recorded = std::sync::Arc::new(std::sync::Mutex::new(None::<PathBuf>));
+        let sink = std::sync::Arc::clone(&recorded);
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let scratch = tree(
+                "drop-guard",
+                &[("workflows/adp-default.json", WORKFLOW_AT_2)],
+            );
+            *sink.lock().expect("the sink is not poisoned") = Some(scratch.0.clone());
+            assert!(
+                scratch.0.join("workflows/adp-default.json").is_file(),
+                "the tree is on disk while the case is running"
+            );
+            panic!("deliberate: this is the unwind a failing assertion would start");
+        }));
+        assert!(outcome.is_err(), "the closure was supposed to panic");
+
+        let path = recorded
+            .lock()
+            .expect("the sink is not poisoned")
+            .clone()
+            .expect("the closure recorded where it wrote");
+        assert!(
+            !path.exists(),
+            "a case that panicked left its scratch tree behind at {}",
+            path.display()
+        );
+    }
+
+    /// Two runs of this file cannot delete each other's tree, because the path carries the pid.
+    ///
+    /// `tree` removes its root before writing it, so a name two processes could both produce would
+    /// make one run delete the other's fixture mid-test. The process id is what stops that, and
+    /// this is what says so — dropping it from the format string fails here rather than showing up
+    /// as a test that fails only when two gates happen to overlap.
+    #[test]
+    fn a_scratch_tree_is_named_after_the_process_and_the_case_that_made_it() {
+        let first = tree("naming-a", &[("workflows/adp-default.json", WORKFLOW_AT_2)]);
+        let second = tree("naming-b", &[("workflows/adp-default.json", WORKFLOW_AT_2)]);
+        assert_ne!(
+            first.0, second.0,
+            "two cases in one run must not share a root, or they delete each other's fixture"
+        );
+        for root in [&first.0, &second.0] {
+            let name = root
+                .file_name()
+                .expect("the root has a name")
+                .to_string_lossy()
+                .into_owned();
+            assert!(
+                name.ends_with(&format!("-{}", std::process::id())),
+                "the root must carry the process id, or two gates in two worktrees collide: {name}"
+            );
+            assert!(
+                root.is_dir(),
+                "and the tree was written: {}",
+                root.display()
+            );
+        }
+    }
+
+    /// The tree is reclaimed when the **helper itself** fails, not only when the case does.
+    ///
+    /// `a_scratch_tree_is_reclaimed_when_the_case_that_made_it_panics` starts its unwind after
+    /// `tree` has returned, so it is satisfied by a helper that constructs the guard as its last
+    /// statement — which is what this one did. Every line of `tree` between the first
+    /// `create_dir_all` and that constructor can fail, and a failure there unwinds past it: the
+    /// directory is on disk and nothing owns it. Measured before the fix with this exact probe,
+    /// `leaked = true`.
+    ///
+    /// The probe writes a *file* where the next entry needs a *directory*, which is the cheapest
+    /// way to make `create_dir_all` fail for a reason that is nothing to do with the environment.
+    ///
+    /// The panic printed by this case is deliberate.
+    #[test]
+    fn a_scratch_tree_is_reclaimed_when_the_helper_that_writes_it_fails_partway() {
+        let root = scratch_root("helper-failure");
+        let _ = fs::remove_dir_all(&root);
+
+        let outcome = std::panic::catch_unwind(|| {
+            tree(
+                "helper-failure",
+                &[
+                    // Written first, as a file.
+                    ("workflows", "this is a file, not a directory"),
+                    // Whose `create_dir_all` for a parent that is now a file must fail.
+                    ("workflows/adp-default.json", WORKFLOW_AT_2),
+                ],
+            )
+        });
+        assert!(
+            outcome.is_err(),
+            "the probe must make `tree` fail, or it proves nothing about the failing path"
+        );
+        assert!(
+            !root.exists(),
+            "`tree` failed partway and left its scratch tree behind at {} — the guard has to be \
+             constructed before the first write, not returned after the last one",
+            root.display()
+        );
+    }
+}
