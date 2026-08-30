@@ -1251,13 +1251,28 @@ fn run_path(runs: &Path, run: &RunId) -> PathBuf {
     runs.join(task).join(ordinal)
 }
 
-/// The next run id for a task: one more than the highest that exists.
+/// The next run id for a task: one more than the highest this runs directory has any record of.
 ///
-/// Allocated **after** the lock is taken, which is the whole of review finding F2. A run directory
-/// is never deleted and never reused, so the count only goes up.
+/// Allocated **after** the lock is taken, which is the whole of review finding F2.
+///
+/// **The floor is the listing *and* `current`, because a directory listing is not a history.** The
+/// first draft took the highest existing directory and stated *"a run directory is never deleted
+/// and never reused"* as though the second clause followed from the first. Nothing on disk stops
+/// anybody deleting one, and run directories hold transcripts — they are the largest thing a driven
+/// repository accumulates, so an operator reclaiming the newest one is the ordinary case. Deleting
+/// it handed its id straight back out, to a different run, while [`CURRENT_FILE`] still named it:
+/// two runs answering to one id, and every evidence record, cursor `took_lock_from` and report that
+/// mentioned it made ambiguous after the fact.
+///
+/// `current` is written on every `run` and names the newest ever allocated, so it survives the
+/// deletion of the directory it points at and raises the floor above it. **The limit is stated
+/// rather than hidden:** an operator who deletes `current` as well has removed the last record that
+/// this id was ever used, and the count restarts from the listing. Recovering an id from a deleted
+/// run's evidence would mean reading the whole store on every allocation, for a case that is a
+/// person deleting a pointer file rather than a directory of transcripts.
 fn allocate_run(runs: &Path, task: &TaskId) -> Result<RunId> {
     let directory = runs.join(task.as_str());
-    let mut highest = 0_u32;
+    let mut highest = highest_named_by_current(runs, task);
     if directory.is_dir() {
         for entry in
             fs::read_dir(&directory).with_context(|| format!("reading {}", directory.display()))?
@@ -1273,6 +1288,20 @@ fn allocate_run(runs: &Path, task: &TaskId) -> Result<RunId> {
         }
     }
     RunId::new(task, highest + 1).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// The ordinal [`CURRENT_FILE`] names, when it names a run of `task`.
+///
+/// `0` for every way of not knowing — no file, an unreadable one, one that does not parse, one that
+/// names another task — because this only ever raises a floor. A pointer this process cannot read
+/// is not a reason to refuse to start a run; it is a reason to fall back on the listing, which is
+/// what the allocator did before this existed.
+fn highest_named_by_current(runs: &Path, task: &TaskId) -> u32 {
+    fs::read_to_string(runs.join(CURRENT_FILE))
+        .ok()
+        .and_then(|text| text.trim().parse::<RunId>().ok())
+        .filter(|run| run.task() == task.as_str())
+        .map_or(0, |run| run.ordinal())
 }
 
 /// What `lock.json` holds.
@@ -1297,6 +1326,8 @@ struct LockFile {
 struct HeldLock {
     path: PathBuf,
     stolen: Option<StolenLock>,
+    /// Whether the file has already been removed, so [`Drop`] does not remove it twice.
+    released: bool,
 }
 
 impl HeldLock {
@@ -1322,8 +1353,43 @@ impl HeldLock {
     /// Called on every exit path the driver controls, including the approval pause and budget
     /// exhaustion: a paused run does not hold a lock, because the pause has no bound. What a paused
     /// run keeps is `current`, so resuming is one word.
-    fn release(self) {
-        let _ = fs::remove_file(&self.path);
+    ///
+    /// Kept as an explicit call, and consuming, even though [`Drop`] now does the same thing: the
+    /// ordinary end of a run releasing its lock is a decision the code should state, and a reader
+    /// who finds only a scope ending has to prove the absence of a later use to know the lock is
+    /// gone. `Drop` is the floor under the paths nobody chose.
+    fn release(mut self) {
+        self.remove();
+    }
+
+    /// Removes the lock file, once.
+    ///
+    /// Idempotent by the flag rather than by `remove_file`'s own tolerance of a missing file,
+    /// because those are different things: a second `remove_file` after a successful first one can
+    /// delete a lock **another process** took in the window between them, which is the one failure
+    /// the lock exists to prevent.
+    fn remove(&mut self) {
+        if !self.released {
+            self.released = true;
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+/// The lock is released when the value goes out of scope, however it goes out of scope.
+///
+/// [`HeldLock::release`] is called on every exit path the driver *chose*, and the leak was in the
+/// paths it did not: between `take_lock` and the release, `protocol drive run` has four fallible
+/// steps of its own — `allocate_run`, [`HeldLock::record_run`], `create_dir_all` of the run
+/// directory and the write of `current` — and `resume` has two early returns as well. Any of them
+/// left `lock.json` on disk naming a pid that had already exited, so the operator's next `drive`
+/// was refused by a run that never started, and told to `--resume` it.
+///
+/// A `Drop` rather than a repaired call at each site because the set of exit paths is not closed:
+/// the next `?` added between the two lines would reintroduce it, and would look correct.
+impl Drop for HeldLock {
+    fn drop(&mut self) {
+        self.remove();
     }
 }
 
@@ -1406,10 +1472,27 @@ fn take_lock(runs: &Path, force: bool) -> Result<HeldLock> {
     {
         Ok(mut handle) => {
             use std::io::Write as _;
-            handle
-                .write_all(body.as_bytes())
-                .with_context(|| format!("writing {}", path.display()))?;
-            return Ok(HeldLock { path, stolen: None });
+            if let Err(error) = handle.write_all(body.as_bytes()) {
+                // `create_new` has already reserved the path and the body never arrived, so what is
+                // on disk is a zero-byte `lock.json` that **no `HeldLock` exists to `Drop`** — the
+                // one leak the `Drop` impl below cannot reach, because there is nothing to drop.
+                // The residue is worse than a leaked lock: a lock file that does not parse is read
+                // by every verb, `--take-lock` included, so the documented route out is refused by
+                // the thing it is the route out of.
+                //
+                // Removed here rather than left for a later reader, on the one failure this process
+                // is still running to act on. A crash or a SIGKILL between the two syscalls still
+                // leaves the file, and making *that* residue recoverable is a different fix in
+                // `read_lock` — it belongs to whoever reads a lock, not to whoever writes one.
+                drop(handle);
+                let _ = fs::remove_file(&path);
+                return Err(error).with_context(|| format!("writing {}", path.display()));
+            }
+            return Ok(HeldLock {
+                path,
+                stolen: None,
+                released: false,
+            });
         }
         Err(error) if error.kind() != std::io::ErrorKind::AlreadyExists => {
             return Err(error).with_context(|| format!("creating {}", path.display()));
@@ -1433,6 +1516,7 @@ fn take_lock(runs: &Path, force: bool) -> Result<HeldLock> {
             pid: state.pid,
             host: state.host.clone(),
         }),
+        released: false,
     })
 }
 

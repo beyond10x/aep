@@ -14,7 +14,9 @@
 //! * an unparseable file stops the run, asserted by the fact base being **unchanged** rather than
 //!   silently shrunk, because that is precisely the case a `graph()`-only check waves through (F7);
 //! * a resume refuses on a moved pin **while `Engine::restore` accepts the same snapshot**, which
-//!   is what makes the cursor check load-bearing rather than decorative.
+//!   is what makes the cursor check load-bearing rather than decorative;
+//! * an artifact a step **created** is counted by the next evaluation — F7's other half, and the
+//!   reason the loop rebuilds the graph per iteration rather than once per run.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -119,6 +121,64 @@ protocol: aep/1
 profile: test.standard
 ";
 
+/// A workflow whose only way out is guarded on **how many** stories the store holds.
+///
+/// `count`, not `exists`, and the difference is the whole point: `exists` flips once and can be
+/// satisfied by a store that was already right when the run started, so a run driven by it would
+/// pass whether or not the graph was ever rebuilt. A threshold the store starts *below* can only be
+/// crossed by something the run itself did.
+const COUNTING_WORKFLOW: &str = r"
+id: test/counting
+version: 1
+title: Counting
+initial: implement
+states:
+  implement:
+    title: Implement
+    phases: [implementation]
+  complete:
+    title: Complete
+    terminal: true
+    phases: [completion]
+transitions:
+  - from: implement
+    to: complete
+    when: artifact.story.count >= 2
+";
+
+/// The profile for [`COUNTING_WORKFLOW`], whose completion criterion is the same count.
+const COUNTING_PROFILE: &str = r"
+id: test.counting
+title: Test counting
+protocol: aep/1
+workflow: test/counting
+capabilities:
+  allow: [repository.read, repository.write, tests.execute]
+completion:
+  - artifact.story.count >= 2
+";
+
+/// The same task id as [`TASK`] — `run_directory` names it — under the counting profile.
+const COUNTING_TASK: &str = r"
+id: T-1
+kind: feature
+objective: write a story and be counted
+protocol: aep/1
+profile: test.counting
+";
+
+/// One `command` step, whose entire effect is on the store rather than on the engine.
+const CREATING_MAP: &str = r"
+format: aep.driver-steps/1
+id: test/creating
+workflow: test/counting/1
+states:
+  implement:
+    steps:
+      - kind: command
+        run: [write-a-story]
+";
+
 /// The map the whole-run tests use: one `llm` step and one `command` step, then a suite.
 const MAP: &str = r"
 format: aep.driver-steps/1
@@ -213,6 +273,30 @@ fn task() -> Task {
     aep_schema::parse::task(TASK, None).expect("the task parses")
 }
 
+/// An engine that also resolves [`COUNTING_PROFILE`], built on top of [`registry`].
+///
+/// A second registry rather than more documents in the shared one: every other test in this file
+/// resolves `test.standard`, and a fixture that grows for one test is a fixture the next reader has
+/// to subtract.
+fn counting_engine() -> Engine<SteppingClock> {
+    let mut registry = registry();
+    registry
+        .insert_workflow(
+            aep_schema::parse::workflow(COUNTING_WORKFLOW, None).expect("the workflow parses"),
+        )
+        .expect("the workflow is unique");
+    registry
+        .insert_profile(
+            aep_schema::parse::profile(COUNTING_PROFILE, None).expect("the profile parses"),
+        )
+        .expect("the profile is unique");
+    Engine::with_clock(registry, SteppingClock::new(1_000, 10))
+}
+
+fn counting_task() -> Task {
+    aep_schema::parse::task(COUNTING_TASK, None).expect("the task parses")
+}
+
 fn map(text: &str) -> StepMap {
     aep_schema::parse::step_map(text, Some("test/driving.yaml")).expect("the fixture map validates")
 }
@@ -234,6 +318,13 @@ enum Act {
     Done,
     /// A person is owed a question.
     Pause(&'static str),
+    /// The step wrote a planning document into the store, and submitted nothing.
+    ///
+    /// The named outcome of the step is on the *world*, not on the engine: a `command` step that
+    /// runs `protocol artifact create` returns nothing to submit and leaves the store one document
+    /// bigger. Whether the run notices is what
+    /// `an_artifact_a_step_created_is_counted_by_the_next_evaluation` asks.
+    Creates(&'static str),
 }
 
 /// What the harness was asked to do, so a test can assert on what the driver told it.
@@ -254,6 +345,8 @@ struct Fake {
     asked: Vec<Asked>,
     /// What the engine said about each call this harness put to it, in order.
     decided: Vec<(String, bool)>,
+    /// The store an [`Act::Creates`] writes into.
+    store_root: Option<PathBuf>,
 }
 
 impl Fake {
@@ -262,7 +355,14 @@ impl Fake {
             script: script.iter().copied().collect(),
             asked: Vec::new(),
             decided: Vec::new(),
+            store_root: None,
         }
+    }
+
+    /// Points this harness's [`Act::Creates`] at a store.
+    fn writing_into(mut self, store_root: &Path) -> Self {
+        self.store_root = Some(store_root.to_path_buf());
+        self
     }
 
     fn act(&mut self, context: &StepContext<'_>) -> StepOutcome {
@@ -307,6 +407,13 @@ impl Fake {
             Act::Pause(reason) => StepOutcome::Paused {
                 reason: reason.to_owned(),
             },
+            Act::Creates(name) => {
+                let root = self.store_root.as_ref().expect(
+                    "a harness that creates documents was told which store to create them in",
+                );
+                write_story(root, name, &story(name));
+                StepOutcome::Nothing
+            }
         }
     }
 }
@@ -800,6 +907,96 @@ fn a_store_with_one_unparseable_file_stops_the_run_with_its_fact_base_unchanged(
         story_count(restored.fact_store()),
         Some(2.0),
         "the fact base the run was evaluating against never shrank, which is the whole of F7"
+    );
+}
+
+/// The other half of F7: the fact base must not go **stale** either.
+///
+/// `a_store_with_one_unparseable_file_stops_the_run_with_its_fact_base_unchanged` covers a store
+/// that shrank behind the run's back. This covers a store the run itself grew — the case the loop
+/// rebuilds the graph at the top of every iteration for (`Session::run`). One iteration is one step,
+/// so a `command` step that creates an artifact is followed by an evaluation that has to count it;
+/// a driver that built the graph once would evaluate every step of the run against the store as it
+/// was before the run touched anything, and the artifact the run was asked to produce would be
+/// invisible to the guard that asked for it.
+///
+/// Guarded on a **count** rather than on `exists` so that the store starts on the wrong side of the
+/// threshold and only the step can move it across.
+#[test]
+fn an_artifact_a_step_created_is_counted_by_the_next_evaluation() {
+    let root = scratch("count-after-create");
+    let planning = root.join("planning");
+    let engine = counting_engine();
+    let store = MarkdownStore::open(&planning);
+    let map = map(CREATING_MAP);
+    let run = run_directory(&root);
+
+    write_story(&planning, "one", &story("one"));
+
+    // Held across the run on purpose: this is what the loop would be evaluating against if it built
+    // the graph once, and it is read again at the bottom to show that it never learns.
+    let stale = store.load().graph().expect("a clean store builds a graph");
+    assert_eq!(
+        story_count(&stale.facts()),
+        Some(1.0),
+        "the run starts below the threshold its only transition is guarded on, which is what makes \
+         the guard load-bearing rather than already satisfied"
+    );
+
+    let mut fake = Fake::new(&[Act::Creates("two")]).writing_into(&planning);
+    let report = drive(
+        &engine,
+        &counting_task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions::default(),
+    )
+    .expect("the run reports");
+
+    assert_eq!(
+        report.steps_run, 1,
+        "one step ran, and its whole effect was on the store: {:?}",
+        report.notes
+    );
+    assert_eq!(
+        story_count(
+            &store
+                .load()
+                .graph()
+                .expect("the grown store builds a graph")
+                .facts()
+        ),
+        Some(2.0),
+        "the step really did write a second story; without that the assertions below say nothing"
+    );
+
+    let moves: Vec<(String, String)> = report
+        .transitions
+        .iter()
+        .map(|(from, to)| (from.to_string(), to.to_string()))
+        .collect();
+    assert_eq!(
+        moves,
+        vec![("implement".to_owned(), "complete".to_owned())],
+        "the guard is `artifact.story.count >= 2` and the only thing that made it true is the step \
+         this run ran, so a move at all is the next evaluation having counted the new document; \
+         reasons: {:?}",
+        report.reasons
+    );
+    assert_eq!(
+        report.status(),
+        RunStatus::Completed,
+        "and the profile's completion criterion reads the same count: {:?}",
+        report.reasons
+    );
+
+    assert_eq!(
+        story_count(&stale.facts()),
+        Some(1.0),
+        "a graph built before the write still says 1: a mutation is not observable through a graph \
+         that was already built, which is why the loop rebuilds rather than caches"
     );
 }
 

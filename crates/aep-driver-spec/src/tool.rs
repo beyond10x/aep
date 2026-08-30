@@ -10,7 +10,7 @@
 //!
 //! | tool | decision |
 //! |---|---|
-//! | a shell | offered only when `command.execute` is admitted; granting it grants a superset of the shell's reach, and narrower gating by command pattern is best-effort. **No development profile grants it**, so a development `llm` step holds no shell — `cargo test` runs as a `command` step the driver executes, not as a tool the model holds |
+//! | a shell | offered **exactly** when `command.execute` is admitted and never otherwise; granting it grants a superset of the shell's reach, and narrower gating by command pattern is best-effort. `development.fast` and `development.standard` grant no shell, so `cargo test` under them runs as a `command` step the driver executes rather than a tool the model holds; `development.driven` **does** grant it on purpose, so a driven step can reach the `protocol` CLI at all, and holds it to that surface with a hook (`profiles/development-driven.yaml:78`). An earlier draft of this row claimed no development profile grants it, which was false of the set |
 //! | a skill loader | a **named exemption**. It loads instructions and takes no action; everything it causes is a subsequent, governed tool call |
 //! | a subagent spawner | **never offered**. A subagent's tool set is derived by nothing in these decisions, so it would be a route around the per-state allowlist |
 //!

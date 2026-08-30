@@ -754,3 +754,231 @@ pub(crate) fn granted_outright(
         policy.decide(capability) == aep_domain::CapabilityDecision::Allowed
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use aep_driver_spec::map::RawStepMap;
+
+    /// The workflow `adp/default`, at the major asked for, built through its own validator.
+    fn workflow_at(major: u32) -> Workflow {
+        let raw: aep_domain::raw::RawWorkflow = serde_json::from_str(&format!(
+            r#"{{"id":"adp/default","version":{major},"title":"t","initial":"implement",
+                "states":{{"implement":{{"title":"Implement","terminal":true}}}},
+                "transitions":[]}}"#
+        ))
+        .expect("the fixture deserializes");
+        Workflow::try_from(raw).expect("the fixture validates")
+    }
+
+    /// A step map naming one state the workflow has, pinned to `workflow`.
+    fn map_pinned_to(workflow: &str) -> StepMap {
+        let raw: RawStepMap = serde_json::from_str(&format!(
+            r#"{{"format":"aep.driver-steps/1","id":"development/default",
+                "workflow":"{workflow}","states":{{"implement":{{"steps":[]}}}}}}"#
+        ))
+        .expect("the fixture deserializes");
+        StepMap::try_from(raw).expect("the fixture validates")
+    }
+
+    /// A major bump orphans the map that pins the old major, at load, and says so by name.
+    ///
+    /// The map itself is well formed and the state it names still exists, so nothing in the
+    /// document's own validation catches this: only the registry can see that the workflow moved.
+    #[test]
+    fn a_map_pinned_to_a_major_the_tree_no_longer_has_is_refused_at_load() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        registry
+            .insert_step_map(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        // The fixture has to reach the orphan case rather than the missing-document one: the
+        // workflow is in the tree, at a major the pin does not accept.
+        let id = WorkflowId::new("adp/default").expect("an id");
+        assert!(
+            registry
+                .workflow(&WorkflowRef::unpinned(id.clone()))
+                .is_some(),
+            "the tree holds the workflow"
+        );
+        assert!(
+            registry
+                .workflow(&WorkflowRef::new(id, Some(MajorVersion::V1)))
+                .is_none(),
+            "but not at the major the map pins"
+        );
+
+        let errors = registry.validate();
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::VersionMismatch);
+        // The location is what says this refusal is the registry's own and not `cross_validate`'s
+        // — which reports the same code under `driver-steps[...].workflow`, and would still fire
+        // if the registry resolved the pin by id and handed the wrong major on.
+        assert_eq!(
+            refusal.location, "step map development/default",
+            "the registry refuses the map itself: {refusal}"
+        );
+        assert!(
+            refusal.message.contains("adp/default/1"),
+            "the refusal names the pin: {refusal}"
+        );
+        assert!(
+            refusal.message.contains("`adp/default` at version 2"),
+            "and what the tree actually holds: {refusal}"
+        );
+    }
+
+    /// And a map pinned to the major the tree holds is not refused, so this is a filter.
+    #[test]
+    fn a_map_pinned_to_the_major_the_tree_holds_is_accepted() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(1))
+            .expect("the workflow registers");
+        registry
+            .insert_step_map(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+        let errors = registry.validate();
+        assert!(errors.is_empty(), "{errors}");
+    }
+    // --- adversarial cases -------------------------------------------------------------------
+    //
+    // Added by the adversarial pass over `story:driver-spec-crate`. Everything below is a mutant
+    // the two cases above do not catch, written as the case that would catch it.
+
+    /// A step map naming the states given, under the id given, pinned to `workflow`.
+    fn map_named(id: &str, workflow: &str, states: &str) -> StepMap {
+        let raw: RawStepMap = serde_json::from_str(&format!(
+            r#"{{"format":"aep.driver-steps/1","id":"{id}",
+                "workflow":"{workflow}","states":{states}}}"#
+        ))
+        .expect("the fixture deserializes");
+        StepMap::try_from(raw).expect("the fixture validates")
+    }
+
+    /// Every location the errors name, in the order they were accumulated.
+    fn locations(errors: &ValidationErrors) -> Vec<String> {
+        errors
+            .as_slice()
+            .iter()
+            .map(|error| error.location.clone())
+            .collect()
+    }
+
+    /// The registry still cross-validates every map whose pin *does* resolve.
+    ///
+    /// The two cases above exercise only the `None` arm of `validate_step_map` and the
+    /// no-errors-at-all path. Replacing the final `map.cross_validate(workflow)` with
+    /// `ValidationErrors::new()` leaves both of them green — and with it, a map naming a state the
+    /// workflow does not have loads in silence, which is the outcome the story is written against.
+    #[test]
+    fn a_map_whose_pin_resolves_is_still_checked_against_the_workflow_it_resolved_to() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(1))
+            .expect("the workflow registers");
+        registry
+            .insert_step_map(map_named(
+                "development/default",
+                "adp/default/1",
+                r#"{"implement":{"steps":[]},"polish":{"steps":[]}}"#,
+            ))
+            .expect("the map registers");
+
+        let errors = registry.validate();
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::UnknownState);
+        assert_eq!(
+            refusal.location, "driver-steps[development/default].states.polish",
+            "the refusal is `cross_validate`'s own, passed through by the registry: {refusal}"
+        );
+    }
+
+    /// Two orphaned maps report two refusals, not the first one.
+    ///
+    /// Invariant 3 for this loop. Every case above registers exactly one map, so a `validate` that
+    /// checked only the first step map in the tree passes all of them.
+    #[test]
+    fn two_maps_orphaned_by_the_same_bump_are_both_named() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        for id in ["development/default", "development/wave"] {
+            registry
+                .insert_step_map(map_named(
+                    id,
+                    "adp/default/1",
+                    r#"{"implement":{"steps":[]}}"#,
+                ))
+                .expect("the map registers");
+        }
+
+        let errors = registry.validate();
+        assert_eq!(errors.len(), 2, "one refusal per orphaned map: {errors}");
+        assert_eq!(
+            locations(&errors),
+            vec!["step map development/default", "step map development/wave"],
+            "both maps are named, not just the first: {errors}"
+        );
+    }
+
+    /// The sibling arm: a pin naming a workflow the tree does not hold at all.
+    ///
+    /// Untested above, so the message it produces is free to name the wrong document. It names the
+    /// workflow that is missing — naming the map instead would say nothing an author can act on,
+    /// since the location already says which map it is.
+    #[test]
+    fn a_map_pinned_to_a_workflow_the_tree_does_not_hold_names_the_workflow_that_is_missing() {
+        let mut registry = Registry::new();
+        registry
+            .insert_step_map(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        let errors = registry.validate();
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::UnknownWorkflow);
+        assert_eq!(refusal.location, "step map development/default");
+        assert!(
+            refusal.message.contains("adp/default"),
+            "the refusal names the workflow nothing in the tree declares: {refusal}"
+        );
+        assert!(
+            !refusal.message.contains("development/default"),
+            "and not the map, which the location already named: {refusal}"
+        );
+    }
+
+    /// The refusal carries the hint that says why a major bump is not migrated.
+    ///
+    /// `with_hint` is the half of the refusal that tells an author what to do next, and no case
+    /// above reads it: deleting the call leaves them green.
+    #[test]
+    fn the_orphan_refusal_says_what_to_do_about_it() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        registry
+            .insert_step_map(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        let errors = registry.validate();
+        let refusal = &errors.as_slice()[0];
+        let hint = refusal
+            .hint
+            .as_deref()
+            .unwrap_or_else(|| panic!("the orphan refusal carries a hint: {refusal}"));
+        assert!(
+            hint.contains("rewritten"),
+            "the hint says the map is rewritten against the new state graph: {hint}"
+        );
+    }
+}

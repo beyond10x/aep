@@ -39,7 +39,38 @@ impl PinnedWorkflowRef {
     ///
     /// [`WorkflowRef::PATTERN`] with the version group made **required**, which is the whole point
     /// of the type.
-    pub const PATTERN: &'static str = "^(workflow:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*/[1-9][0-9]*$";
+    ///
+    /// # The identifier half is [`WorkflowId::PATTERN`], character for character
+    ///
+    /// It used to be a paraphrase — `[a-z][a-z0-9-]*([./][a-z0-9-]+)*` — and a paraphrase of a
+    /// rule is a second rule. That one put `-` in the character class instead of between segments,
+    /// so it accepted a leading, trailing or repeated hyphen that [`WorkflowId::new`] refuses:
+    /// `adp-/1`, `a--b/1` and `adp/default-/1` were called valid by the schema an editor reads and
+    /// refused by the loader, which is the acceptance line *"an editor cannot tell an author a map
+    /// is fine that the loader will refuse"* inverted.
+    ///
+    /// So the body is `WorkflowId`'s own. What guards that is
+    /// `tests/published_pattern_evaluated.rs`, which **evaluates** this constant over a corpus:
+    /// `the_pin_pattern_admits_exactly_the_identifiers_the_workflow_pattern_admits` and
+    /// `the_published_pattern_requires_a_version_of_every_string_it_accepts`.
+    ///
+    /// It is deliberately not asserted here as `assert_eq!` on two strings, which is what this
+    /// crate tried first and which does not work: concatenating an anchor-stripped body is sound
+    /// only while that body has no top-level alternation. Give `WorkflowId::PATTERN` an
+    /// `^…|legacy$` and re-compose mechanically, and the two strings still agree while the
+    /// published pattern stops requiring a version of 761 references, `adp/default` among them.
+    /// Measured: every unit test in this crate stayed green under exactly that change, and the two
+    /// evaluated cases above are what caught it.
+    ///
+    /// **What is not closed:** `WorkflowId::PATTERN` is itself looser than `WorkflowId::new`,
+    /// which refuses an id whose last `.`/`/` component is a bare integer, so this pattern accepts
+    /// 183 pins the loader refuses — `adp/2/1` among them.
+    /// `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses` is **red on purpose**
+    /// and names them. The fix is one line in `aep-domain`, tracked as
+    /// `story:workflow-id-pattern-numeric-tail`; making this crate's copy stricter instead would
+    /// put back the second, drifting rule that the change above took out.
+    pub const PATTERN: &'static str =
+        "^(workflow:)?[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*/[1-9][0-9]*$";
 
     /// Builds a pin from an identifier and a major version, for a caller that has both already.
     pub fn new(id: WorkflowId, major: MajorVersion) -> Self {
@@ -173,6 +204,23 @@ mod tests {
         assert!(!PinnedWorkflowRef::PATTERN.contains("(/[1-9][0-9]*)?"));
         assert!(PinnedWorkflowRef::PATTERN.ends_with("/[1-9][0-9]*$"));
     }
+
+    // Two cases stood here and have been removed rather than repaired, because both stated a
+    // property of the published pattern as a property of its *text*:
+    //
+    // * `the_published_pattern_is_the_identifier_pattern_with_a_mandatory_version` compared the
+    //   constant to `format!("^(workflow:)?{body}/[1-9][0-9]*$")`. Measured: with a top-level
+    //   alternation planted in `WorkflowId::PATTERN` and the pin re-composed mechanically, it
+    //   passed while the pattern stopped requiring a version of 761 references. A guard whose
+    //   failure mode is silence is worse than none, because it is cited instead of read.
+    // * `the_hyphen_forms_the_published_pattern_used_to_admit_are_ones_the_loader_refuses` asserted
+    //   `!PATTERN.contains("[a-z0-9-]")`, a third spelling of a rule already spelled twice.
+    //
+    // Both are subsumed by `tests/published_pattern_evaluated.rs`, which evaluates the constant:
+    // `the_pin_pattern_admits_exactly_the_identifiers_the_workflow_pattern_admits` fails on any
+    // divergence from `WorkflowId::PATTERN`, hyphen forms included, and
+    // `the_published_pattern_requires_a_version_of_every_string_it_accepts` fails on the
+    // alternation. One executable statement of the rule, in place of three inert ones.
 
     #[test]
     fn a_pin_accepts_only_its_own_major() {
