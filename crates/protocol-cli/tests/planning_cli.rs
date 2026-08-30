@@ -3343,6 +3343,74 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
     );
 }
 
+/// **A walk that commits some hops and is refused at the last one reports the hops it made.**
+///
+/// The guarded-rung rule is a *pre*-walk over every rung but the last, so it stops a walk before
+/// anything is written. The last rung is different: it is the one the caller named, and it is
+/// checked by moving to it. So a walk can legitimately commit hop one, be refused at hop two, and
+/// leave a store that really did change — and a report that showed only the refusal would describe
+/// a store that does not exist. The moves come first, then the reason.
+#[test]
+fn a_walk_refused_at_its_last_rung_still_reports_the_hop_it_made() {
+    let tree = scratch("aep-planning-partial-root");
+    let store = scratch("aep-planning-partial-store");
+    let at = printable(&store);
+    // The gate is on the **last** rung, so the pre-walk crosses `triage` and the refusal lands
+    // after a hop has already been written.
+    write(
+        &tree.join("artifacts/lifecycles/permit.yaml"),
+        "kind: permit\n\
+         initial: intake\n\
+         transitions:\n  \
+           intake: [triage]\n  \
+           triage: [granted]\n  \
+           granted: []\n\
+         requires:\n  \
+           granted:\n    \
+             - evidence: approval\n      \
+               at_least: 1\n",
+    );
+    let tree = printable(&tree);
+
+    let made = protocol(&[
+        "artifact", "new", "permit", "site", "--title", "X", "--store", at, "--root", tree,
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+
+    let walked = protocol(&[
+        "artifact",
+        "move",
+        "permit:site",
+        "--to",
+        "granted",
+        "--via",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(
+        code(&walked),
+        1,
+        "a walk stopped at its last rung is a refusal"
+    );
+    let said = stdout(&walked);
+    assert!(
+        said.contains("permit:site moved intake -> triage (revision 2)"),
+        "the hop that was written has to be reported before the refusal: {said}"
+    );
+    assert!(
+        said.contains("permit:site is triage;"),
+        "and the refusal names where the walk actually stopped, not where it started: {said}"
+    );
+
+    let text = std::fs::read_to_string(store.join("permit/site.md")).expect("readable");
+    assert!(
+        text.contains("status: triage"),
+        "the committed hop is on disk, which is why it had to be reported: {text}"
+    );
+}
+
 /// **`explain` ends by saying what the next rung costs**, so the requirement is read rather than
 /// learnt by being refused.
 ///

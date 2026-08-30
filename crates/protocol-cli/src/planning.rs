@@ -54,7 +54,7 @@ const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
 /// `protocol artifact relations` answer from the vocabulary alone, and a command that refused to
 /// list the relation names because the working directory is not a project would be refusing for a
 /// reason that has nothing to do with the question.
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 pub(crate) struct StoreLocation {
     /// The planning store. Defaults to `<project>/.engineering/planning`.
     #[arg(long)]
@@ -89,6 +89,16 @@ impl StoreArgs {
 }
 
 impl StoreLocation {
+    /// A location built by something other than a command line.
+    ///
+    /// Only tests need this: every shipped caller gets its `StoreLocation` from clap. It exists so
+    /// a test of something that *holds* one — a served request, say — can be written without
+    /// parsing a command line to get there.
+    #[cfg(test)]
+    pub(crate) fn at(store: Option<PathBuf>, root: Option<PathBuf>) -> Self {
+        Self { store, root }
+    }
+
     /// The repository the store sits in, so a workspace beside it can be found.
     ///
     /// `<repo>/.engineering/planning` is the store, so the repository is two directories up. An
@@ -1831,6 +1841,288 @@ fn lifecycle_findings(
 }
 
 /// `protocol artifact move`
+/// What a caller is asking a move to do.
+///
+/// Bundled rather than passed as six arguments, so a caller cannot silently swap `to` for `now` —
+/// both are `&str`, and the compiler would have nothing to say about it.
+struct MoveRequest<'a> {
+    /// The artifact to move.
+    id: &'a ArtifactId,
+    /// The status it is asked to reach, as the caller spelled it.
+    to: &'a str,
+    /// Evidence the caller asserted, which is kept apart from what the store recorded.
+    asserted: aep_backend_markdown::kernel::EvidenceOnHand,
+    /// The instant the edge read, so a dated rung is judged against one moment.
+    now: &'a str,
+    /// Walk the ladder's own route rather than requiring one hop.
+    via: bool,
+}
+
+/// What a move did, and — when it stopped — why.
+///
+/// Both halves, because `--via` walks several rungs: a walk that commits two hops and is refused at
+/// the third **made two real moves**, and a return type that carried only the refusal would report a
+/// store that does not exist. The caller needs the hops before it needs the reason.
+#[derive(Debug)]
+struct MoveOutcome {
+    /// The hops that were written, in the order they were written.
+    made: Vec<Moved>,
+    /// What the decision rested on, kept so a caller can say whether it leaned on an assertion.
+    decided_on: aep_backend_markdown::journal::Provenance,
+    /// Why the walk stopped, when it did. `None` is every requested hop made.
+    refusal: Option<MoveStopped>,
+}
+
+/// Why a walk stopped.
+///
+/// Separate from [`anyhow::Error`] on the distinction the CLI already draws in its exit codes and an
+/// HTTP caller draws in its status codes: an `Err` is *this is not a question* — no such artifact, a
+/// status no ladder declares, a store that will not read — and a `MoveStopped` is *the answer is no*.
+#[derive(Debug)]
+enum MoveStopped {
+    /// The kind's ladder refused the rung, and said what it would have permitted.
+    Refused {
+        /// Where the artifact stood when it was refused.
+        from: ArtifactStatus,
+        /// The refusal, carrying every legal target.
+        refusal: Box<aep_backend_markdown::document::MoveRefusal>,
+    },
+    /// `--via` reached a guarded rung. A walk crosses rungs nothing guards.
+    GuardedRungOnAWalk {
+        /// Where the artifact stood.
+        from: ArtifactStatus,
+        /// The rung that is guarded.
+        rung: ArtifactStatus,
+        /// The rung's own refusal, when it had one to give.
+        refusal: Option<Box<aep_backend_markdown::document::MoveRefusal>>,
+    },
+    /// The ladder permits it and the store it would leave does not validate.
+    WouldNotValidate {
+        /// Where the artifact stood.
+        from: ArtifactStatus,
+        /// Where this hop would have taken it.
+        to: ArtifactStatus,
+        /// The finding the would-be store reports, which it did not report before.
+        finding: String,
+    },
+}
+
+/// Decides a move against the kind's ladder and writes the hops it permits.
+///
+/// Every rule lives here and none of it prints: the ladder, `--via`'s walk, the guarded-rung rule,
+/// the store-wide re-validation, and the command that writes. Two callers share it — the CLI verb,
+/// which renders the outcome as lines and an exit code, and anything else that needs the same
+/// decision to answer the same way. A second caller that assembled these steps itself would be a
+/// second protocol, which is the thing `Command::MoveStatus` refuses to become.
+///
+/// The clock is **not** read here. It arrives from the edge, so the instant that decided is the one
+/// the caller can print.
+fn decide_and_move(
+    opened: &mut Opened,
+    registry: &aep_engine::Registry,
+    repository: &Path,
+    asked: MoveRequest<'_>,
+) -> Result<MoveOutcome> {
+    let MoveRequest {
+        id,
+        to,
+        asserted,
+        now,
+        via,
+    } = asked;
+    // What the whole store already reports, before this move. Taken here because the decision below
+    // mutates the document in place, and *new* is the only interesting word in the comparison: a
+    // store that was already reporting a finding must not have this move refused for it.
+    let before = lifecycle_findings(&opened.report, repository, registry.lifecycles());
+
+    // Evidence recorded *about this artifact* is found rather than typed. Both origins are kept
+    // apart all the way through the decision and into the journal, so the history can say what the
+    // move rested on — see `journal::Provenance`. Built here rather than passed in, so a caller
+    // cannot hand over a provenance that disagrees with the evidence the decision used.
+    let decided_on = aep_backend_markdown::journal::Provenance {
+        recorded: opened.evidence_on_hand(id)?,
+        asserted,
+    };
+    let evidence = decided_on.total();
+
+    let not_here = opened.missing(id);
+    let stored = opened
+        .report
+        .documents
+        .get_mut(id)
+        .with_context(|| not_here)?;
+    let (standing, ladder, hops) = plan_the_walk(&stored.document, registry, to, via)?;
+
+    // **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for
+    // the ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per
+    // story on every wave (`8cffc110#184`) — and not for getting past a rung that asks for
+    // something. A guarded rung is refused in the words that rung would have used.
+    if let Some(stopped) = guarded_rung_on_the_walk(
+        &hops,
+        &ladder,
+        &stored.document,
+        registry,
+        &evidence,
+        now,
+        &standing,
+    ) {
+        return Ok(MoveOutcome {
+            made: Vec::new(),
+            decided_on,
+            refusal: Some(stopped),
+        });
+    }
+
+    let mut made: Vec<Moved> = Vec::new();
+    for rung in &hops {
+        // Recomputed per hop, because the store the next hop would leave is the store this one
+        // left. The comparison is still *new since a moment ago*, which is the only useful one.
+        let before = if made.is_empty() {
+            before.clone()
+        } else {
+            lifecycle_findings(&opened.report, repository, registry.lifecycles())
+        };
+        let not_here = opened.missing(id);
+        let path = opened.path_of(id);
+        let stored = opened
+            .report
+            .documents
+            .get_mut(id)
+            .with_context(|| not_here)?;
+        let from = stored.document.frontmatter.status.clone();
+        let relative = stored.relative_path.clone();
+
+        if let Err(refusal) =
+            stored
+                .document
+                .move_status(rung.clone(), registry.lifecycles(), &evidence, Some(now))
+        {
+            return Ok(MoveOutcome {
+                made,
+                decided_on,
+                refusal: Some(MoveStopped::Refused { from, refusal }),
+            });
+        }
+        let document = stored.document.clone();
+
+        // **The rules the store would be judged by, run on the store this hop would leave.** The
+        // ladder says a move is legal; the *graph* says whether the result is a plan that
+        // validates, and until now only `validate` asked it — so `move --to active` succeeded and
+        // `validate` immediately reported `[empty_declaration] … is active and serves no
+        // objective`, which is one command creating work for the next one (`114c2340#92`,
+        // `4d4c15a4#149`). The document has been moved in memory and nothing has been written, so
+        // `opened.report` *is* the would-be store.
+        let after = lifecycle_findings(&opened.report, repository, registry.lifecycles());
+        if let Some(finding) = after
+            .iter()
+            .find(|finding| !before.contains(*finding) && finding.contains(&id.to_string()))
+        {
+            return Ok(MoveOutcome {
+                made,
+                decided_on,
+                refusal: Some(MoveStopped::WouldNotValidate {
+                    from,
+                    to: rung.clone(),
+                    finding: finding.clone(),
+                }),
+            });
+        }
+
+        // Through the command the vocabulary gained for this. The engine has already decided the
+        // move above, against the kind's ladder and the evidence presented; what crosses here is
+        // the decision and the account it rested on. `MarkdownBackend` writes the file and
+        // journals it — **once per hop**, so a walk leaves the same record two commands would.
+        let _ = relative;
+        move_through_a_command(opened.backend()?, id, rung, &decided_on)?;
+        made.push(Moved {
+            id: id.to_string(),
+            from: from.as_str().to_owned(),
+            to: rung.as_str().to_owned(),
+            revision: document.frontmatter.revision,
+            path,
+        });
+    }
+
+    Ok(MoveOutcome {
+        made,
+        decided_on,
+        refusal: None,
+    })
+}
+
+/// Where the artifact stands, the ladder it stands on, and the rungs a move would cross.
+///
+/// The target is read *after* the artifact, because what a status name may be is decided by the
+/// ladder this kind declares and not by a list compiled into this binary. `ArtifactStatus` is an
+/// open vocabulary; the ladder is what keeps it open to authors and closed to typos.
+///
+/// Without `--via` the walk is one rung — the one the caller named. With it, the ladder's own
+/// shortest route there, and `rungs_between` is breadth-first over `BTreeSet`s so two routes of
+/// equal length resolve the same way on every machine.
+fn plan_the_walk(
+    document: &PlanningDocument,
+    registry: &aep_engine::Registry,
+    to: &str,
+    via: bool,
+) -> Result<(ArtifactStatus, ArtifactLifecycle, Vec<ArtifactStatus>)> {
+    let standing = document.frontmatter.status.clone();
+    let kind = document.frontmatter.kind.clone();
+    let to = parse_status_in(to, &kind, registry.lifecycles())?;
+
+    let permissive = ArtifactLifecycle::permissive();
+    let ladder = registry
+        .lifecycles()
+        .for_kind(&kind)
+        .unwrap_or(&permissive)
+        .clone();
+    let hops = if via {
+        rungs_between(&ladder, &standing, &to).unwrap_or_else(|| vec![to.clone()])
+    } else {
+        vec![to]
+    };
+    Ok((standing, ladder, hops))
+}
+
+/// The first guarded rung a walk would cross, when there is one.
+///
+/// **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for the
+/// ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per story on
+/// every wave (`8cffc110#184`) — and not for getting past a rung that asks for something. Only the
+/// rungs *before* the last are checked here: the last is the one the caller named, and it is
+/// answered by moving to it.
+fn guarded_rung_on_the_walk(
+    hops: &[ArtifactStatus],
+    ladder: &ArtifactLifecycle,
+    document: &PlanningDocument,
+    registry: &aep_engine::Registry,
+    evidence: &aep_backend_markdown::kernel::EvidenceOnHand,
+    now: &str,
+    standing: &ArtifactStatus,
+) -> Option<MoveStopped> {
+    for rung in hops.iter().take(hops.len().saturating_sub(1)) {
+        if ladder.requirements_for(rung).is_empty() && ladder.timing_for(rung).is_none() {
+            continue;
+        }
+        // The probe carries the caller's own evidence, so the refusal is true: a caller who
+        // presented nothing reads that rung's "not yet earned", and one who presented enough reads
+        // that the walk is what is refused, not the evidence.
+        let mut probe = document.clone();
+        let refusal = probe
+            .move_status(rung.clone(), registry.lifecycles(), evidence, Some(now))
+            .err();
+        return Some(MoveStopped::GuardedRungOnAWalk {
+            from: standing.clone(),
+            rung: rung.clone(),
+            refusal,
+        });
+    }
+    None
+}
+
+/// Moves an artifact along its kind's ladder, and says what it did.
+///
+/// The decision is [`decide_and_move`]'s; this reads the clock at the edge, opens the store, and
+/// renders the outcome as the lines and exit code the terminal expects.
 fn move_status(
     args: &StoreArgs,
     id: &str,
@@ -1852,135 +2144,47 @@ fn move_status(
 
     let mut opened = open(&args.location, true)?;
     let repository = args.repository_root();
-    // What the whole store already reports, before this move. Taken here because the decision below
-    // mutates the document in place, and *new* is the only interesting word in the comparison: a
-    // store that was already reporting a finding must not have this move refused for it.
-    let before = lifecycle_findings(&opened.report, &repository, registry.lifecycles());
 
-    // Evidence recorded *about this artifact* is found rather than typed. Both origins are kept
-    // apart all the way through the decision and into the journal, so the history can say what the
-    // move rested on — see `journal::Provenance`.
-    let decided_on = aep_backend_markdown::journal::Provenance {
-        recorded: opened.evidence_on_hand(&id)?,
-        asserted,
+    let outcome = decide_and_move(
+        &mut opened,
+        &registry,
+        &repository,
+        MoveRequest {
+            id: &id,
+            to,
+            asserted,
+            now: &now,
+            via,
+        },
+    )?;
+
+    // Reported before the refusal, because a walk that made two hops and stopped at the third made
+    // two real moves and the reader has to see them first.
+    report_moves(args, &id, &outcome.made, &outcome.decided_on)?;
+    let Some(stopped) = outcome.refusal else {
+        return Ok(ExitCode::SUCCESS);
     };
-    let evidence = decided_on.total();
-
-    let not_here = opened.missing(&id);
-    let stored = opened
-        .report
-        .documents
-        .get_mut(&id)
-        .with_context(|| not_here)?;
-    let standing = stored.document.frontmatter.status.clone();
-
-    // The target is read *after* the artifact, because what a status name may be is decided by the
-    // ladder this kind declares and not by a list compiled into this binary. `ArtifactStatus` is an
-    // open vocabulary; the ladder is what keeps it open to authors and closed to typos.
-    let kind = stored.document.frontmatter.kind.clone();
-    let to = parse_status_in(to, &kind, registry.lifecycles())?;
-
-    // The rungs to walk. Without `--via` that is one — the rung the caller named — and everything
-    // below reads exactly as it did. With it, the ladder's own shortest route there.
-    let permissive = ArtifactLifecycle::permissive();
-    let ladder = registry
-        .lifecycles()
-        .for_kind(&kind)
-        .unwrap_or(&permissive)
-        .clone();
-    let hops = if via {
-        rungs_between(&ladder, &standing, &to).unwrap_or_else(|| vec![to.clone()])
-    } else {
-        vec![to.clone()]
-    };
-
-    // **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for
-    // the ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per
-    // story on every wave (`8cffc110#184`) — and not for getting past a rung that asks for
-    // something. A guarded rung is refused in the words that rung would have used.
-    for rung in hops.iter().take(hops.len().saturating_sub(1)) {
-        if ladder.requirements_for(rung).is_empty() && ladder.timing_for(rung).is_none() {
-            continue;
-        }
-        // The probe carries the caller's own evidence, so the refusal is true: a caller who
-        // presented nothing reads that rung's "not yet earned", and one who presented enough reads
-        // that the walk is what is refused, not the evidence.
-        let mut probe = stored.document.clone();
-        match probe.move_status(rung.clone(), registry.lifecycles(), &evidence, Some(&now)) {
-            Err(refusal) => outln!("{id} is {standing}; {refusal}"),
-            Ok(()) => outln!(
-                "{id} is {standing}; `--via` walks rungs nothing guards, and {rung} is guarded — \
-                 move it there on its own, with what that rung asks for"
-            ),
-        }
-        return Ok(crate::exit_code(false));
-    }
-
-    let mut made: Vec<Moved> = Vec::new();
-    for rung in &hops {
-        // Recomputed per hop, because the store the next hop would leave is the store this one
-        // left. The comparison is still *new since a moment ago*, which is the only useful one.
-        let before = if made.is_empty() {
-            before.clone()
-        } else {
-            lifecycle_findings(&opened.report, &repository, registry.lifecycles())
-        };
-        let not_here = opened.missing(&id);
-        let path = opened.path_of(&id);
-        let stored = opened
-            .report
-            .documents
-            .get_mut(&id)
-            .with_context(|| not_here)?;
-        let from = stored.document.frontmatter.status.clone();
-        let relative = stored.relative_path.clone();
-
-        if let Err(refusal) =
-            stored
-                .document
-                .move_status(rung.clone(), registry.lifecycles(), &evidence, Some(&now))
-        {
-            report_moves(args, &id, &made, &decided_on)?;
-            outln!("{id} is {from}; {refusal}");
-            return Ok(crate::exit_code(false));
-        }
-        let document = stored.document.clone();
-
-        // **The rules the store would be judged by, run on the store this hop would leave.** The
-        // ladder says a move is legal; the *graph* says whether the result is a plan that
-        // validates, and until now only `validate` asked it — so `move --to active` succeeded and
-        // `validate` immediately reported `[empty_declaration] … is active and serves no
-        // objective`, which is one command creating work for the next one (`114c2340#92`,
-        // `4d4c15a4#149`). The document has been moved in memory and nothing has been written, so
-        // `opened.report` *is* the would-be store.
-        let after = lifecycle_findings(&opened.report, &repository, registry.lifecycles());
-        if let Some(finding) = after
-            .iter()
-            .find(|finding| !before.contains(*finding) && finding.contains(&id.to_string()))
-        {
-            report_moves(args, &id, &made, &decided_on)?;
-            outln!("{id} would move {from} -> {rung}, and the store would not validate:");
+    match stopped {
+        MoveStopped::Refused { from, refusal }
+        | MoveStopped::GuardedRungOnAWalk {
+            from,
+            refusal: Some(refusal),
+            ..
+        } => outln!("{id} is {from}; {refusal}"),
+        MoveStopped::GuardedRungOnAWalk {
+            from,
+            rung,
+            refusal: None,
+        } => outln!(
+            "{id} is {from}; `--via` walks rungs nothing guards, and {rung} is guarded — \
+             move it there on its own, with what that rung asks for"
+        ),
+        MoveStopped::WouldNotValidate { from, to, finding } => {
+            outln!("{id} would move {from} -> {to}, and the store would not validate:");
             outln!("  - {finding}");
-            return Ok(crate::exit_code(false));
         }
-
-        // Through the command the vocabulary gained for this. The engine has already decided the
-        // move above, against the kind's ladder and the evidence presented; what crosses here is
-        // the decision and the account it rested on. `MarkdownBackend` writes the file and
-        // journals it — **once per hop**, so a walk leaves the same record two commands would.
-        let _ = relative;
-        move_through_a_command(opened.backend()?, &id, rung, &decided_on)?;
-        made.push(Moved {
-            id: id.to_string(),
-            from: from.as_str().to_owned(),
-            to: rung.as_str().to_owned(),
-            revision: document.frontmatter.revision,
-            path,
-        });
     }
-
-    report_moves(args, &id, &made, &decided_on)?;
-    Ok(ExitCode::SUCCESS)
+    Ok(crate::exit_code(false))
 }
 
 /// The rungs from `from` to `to`, `to` last and `from` left out, or `None` when the ladder has no
@@ -2619,23 +2823,13 @@ fn set(
 /// markdown document's own, kept so a round trip loses nothing, and a plan that keeps no documents
 /// has never been told about them — so printing them would make this verb answer differently
 /// depending on where the plan is kept, which is the one thing every verb here refuses to do.
-fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
-    let id = artifact_id(id)?;
-    if body_only && args.format != Format::Text {
-        anyhow::bail!(
-            "`--body-only` prints the body bytes and nothing else, so it has no `--format {}` \
-             rendering; drop one of the two",
-            format!("{:?}", args.format).to_lowercase()
-        );
-    }
-    let opened = open(&args.location, false)?;
-    let stored = opened
-        .report
-        .documents
-        .get(&id)
-        .with_context(|| opened.missing(&id))?;
+/// One stored document as the shape both `show` and a served read answer with.
+///
+/// Lifted so the two cannot drift: a field added here appears in the terminal and in the browser at
+/// once, and a field added to only one of them is the defect this shape exists to prevent.
+fn shown_from(stored: &aep_backend_markdown::StoredDocument) -> Shown {
     let frontmatter = &stored.document.frontmatter;
-    let shown = Shown {
+    Shown {
         id: frontmatter.id.to_string(),
         kind: frontmatter.kind.to_string(),
         status: frontmatter.status.as_str().to_owned(),
@@ -2654,7 +2848,25 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
         withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
         revision: frontmatter.revision,
         body: stored.document.body.clone(),
-    };
+    }
+}
+
+fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    if body_only && args.format != Format::Text {
+        anyhow::bail!(
+            "`--body-only` prints the body bytes and nothing else, so it has no `--format {}` \
+             rendering; drop one of the two",
+            format!("{:?}", args.format).to_lowercase()
+        );
+    }
+    let opened = open(&args.location, false)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let shown = shown_from(stored);
 
     // The bytes and nothing else — no labels, no blank line, no newline this verb added. What
     // `body --from` would write straight back, which is what makes *read it, edit it, hand it
@@ -4420,7 +4632,7 @@ const _SUPERSEDED_ACTOR_HELPER: () = ();
 /// The only clock in the planning path, and it is in the shell by construction: `aep-domain` has a
 /// banned-token scan that would refuse one, and a decision that read the clock itself could not be
 /// replayed. Its answer is an *argument* to the move, printed with any dated refusal.
-fn now_at_the_edge() -> String {
+pub(crate) fn now_at_the_edge() -> String {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
@@ -4750,7 +4962,7 @@ fn render_list(values: &[&str]) -> String {
 
 /// One artifact in a listing.
 #[derive(Debug, Clone, serde::Serialize)]
-struct Listed {
+pub(crate) struct Listed {
     id: String,
     kind: String,
     status: String,
@@ -4773,7 +4985,7 @@ struct Listed {
 
 /// One blocker still in force against an artifact, as a listing shows it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-struct Blocking {
+pub(crate) struct Blocking {
     /// The artifact doing the blocking.
     blocker: String,
     /// What would clear it: the blocker kind's type, or [`UNTYPED`].
@@ -4825,7 +5037,7 @@ struct Stopped {
 /// to write a branch for, while a person reading a labelled block is served by the absent labels
 /// being absent.
 #[derive(Debug, serde::Serialize)]
-struct Shown {
+pub(crate) struct Shown {
     id: String,
     kind: String,
     status: String,
@@ -4843,14 +5055,14 @@ struct Shown {
 
 /// One outgoing edge, as `show` prints it.
 #[derive(Debug, Clone, serde::Serialize)]
-struct ShownRelation {
+pub(crate) struct ShownRelation {
     relation: &'static str,
     target: String,
 }
 
 /// One status column of the board.
 #[derive(Debug, serde::Serialize)]
-struct Column {
+pub(crate) struct Column {
     // Owned rather than `&'static str`: a column is named by a rung of a ladder, and a lifecycle
     // document may have invented that name, which no `'static` slice in this binary can hold.
     status: String,
@@ -4870,7 +5082,7 @@ struct Created {
 
 /// What `move` did.
 #[derive(Debug, serde::Serialize)]
-struct Moved {
+pub(crate) struct Moved {
     id: String,
     from: String,
     to: String,
@@ -4884,7 +5096,7 @@ struct Moved {
 /// deleting whatever it points at leaves this record exactly where it was. A CI log that rotates
 /// away must not take the account of what closed a story with it.
 #[derive(Debug, serde::Serialize)]
-struct Admitted {
+pub(crate) struct Admitted {
     kind: String,
     source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4898,7 +5110,7 @@ struct Admitted {
 
 /// One status an artifact reached, and what the store holds about why.
 #[derive(Debug, serde::Serialize)]
-struct Reached {
+pub(crate) struct Reached {
     from: String,
     to: String,
     at: String,
@@ -4915,7 +5127,7 @@ struct Reached {
 
 /// What `explain` answers: what made this artifact what it is.
 #[derive(Debug, serde::Serialize)]
-struct Explained {
+pub(crate) struct Explained {
     artifact: ArtifactId,
     store: String,
     status: String,
@@ -4938,7 +5150,7 @@ struct Explained {
 
 /// One rung an artifact may move to next, with what that rung costs.
 #[derive(Debug, serde::Serialize)]
-struct NextRung {
+pub(crate) struct NextRung {
     status: String,
     /// What the ladder asks for to reach it — empty for a rung that asks nothing.
     needs: Vec<Need>,
@@ -4946,7 +5158,7 @@ struct NextRung {
 
 /// One evidence requirement of a rung, against what the artifact holds now.
 #[derive(Debug, serde::Serialize)]
-struct Need {
+pub(crate) struct Need {
     kind: String,
     at_least: usize,
     /// Records of that kind the store holds **about this artifact** — the number `move` reads, not
@@ -5130,4 +5342,197 @@ mod tests {
     /// Left as a note because a check that disappears from a file reads exactly like a check nobody
     /// thought was needed.
     const _SUPERSEDED_JOURNAL_SCAN: () = ();
+}
+
+// ---------------------------------------------------------------------------------------------
+// What another surface may ask this one
+//
+// `protocol serve` answers a browser with the same facts the terminal prints, and it reaches them
+// through the functions below and through nothing else. Each is the compute half of a verb whose
+// other half is printing: `board_of` is `board` without the lines, `shown_of` is `show` without
+// them, and `moved_by` is `move` without them. Keeping the seam here rather than widening a dozen
+// private items means there is exactly one list of what a second reader may see, and it is this.
+// ---------------------------------------------------------------------------------------------
+
+/// The board, as columns, for a caller that will render them itself.
+pub(crate) fn board_of(location: &StoreLocation, kind: Option<&str>) -> Result<Vec<Column>> {
+    let args = StoreArgs {
+        location: location.clone(),
+        format: Format::Json,
+    };
+    let opened = open(location, false)?;
+    let ladders = ladders_or_none(&args);
+    let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
+    let listed = select(&opened.report, &blocked, kind, None)?;
+    Ok(columns_for(&listed, ladders.lifecycles()))
+}
+
+/// One artifact: its fields, its edges and its body.
+pub(crate) fn shown_of(location: &StoreLocation, id: &str) -> Result<Shown> {
+    let id = artifact_id(id)?;
+    let opened = open(location, false)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    Ok(shown_from(stored))
+}
+
+/// Where one artifact may go next, what each rung costs, and what it already holds.
+pub(crate) fn explained_of(location: &StoreLocation, id: &str) -> Result<Explained> {
+    let args = StoreArgs {
+        location: location.clone(),
+        format: Format::Json,
+    };
+    let id = artifact_id(id)?;
+    let opened = open(location, true)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let (entries, unreadable) = entries_from_the_contract(&opened, &id)?;
+    let (reached, recorded_since) = joined(&entries);
+    let ladders = ladders_or_none(&args);
+    let blocked_by = blockers_by_target(&opened.report, ladders.lifecycles())
+        .remove(&id)
+        .unwrap_or_default();
+    let next = next_rungs(
+        &stored.document.frontmatter,
+        ladders.lifecycles(),
+        &opened.evidence_on_hand(&id)?,
+    );
+    Ok(Explained {
+        artifact: id,
+        store: opened.plan.describe(),
+        status: stored.document.frontmatter.status.to_string(),
+        revision: stored.document.frontmatter.revision,
+        blocked_by,
+        reached,
+        recorded_since,
+        next,
+        unreadable,
+    })
+}
+
+/// Which plan is being served, so a reader can see it before they move anything in it.
+pub(crate) fn store_of(location: &StoreLocation) -> Result<Served> {
+    let opened = open(location, false)?;
+    Ok(Served {
+        store: opened.plan.describe(),
+        artifacts: opened.report.documents.len(),
+        unreadable: opened.report.failures.len(),
+    })
+}
+
+/// Moves an artifact, and answers with what it did or why it did not.
+///
+/// The decision is [`decide_and_move`]'s, which is the same one the terminal gets. A second caller
+/// that assembled the steps itself would skip the store-wide re-validation and the guarded-rung
+/// rule, and would write a provenance of its own shape — three divergences, all silent, in the
+/// write path of a governed store.
+pub(crate) fn moved_by(
+    location: &StoreLocation,
+    id: &str,
+    to: &str,
+    now: &str,
+) -> Result<ServedMove> {
+    let args = StoreArgs {
+        location: location.clone(),
+        format: Format::Json,
+    };
+    let id = artifact_id(id)?;
+    let registry = args.lifecycles()?;
+    let mut opened = open(location, true)?;
+    let repository = args.repository_root();
+    let outcome = decide_and_move(
+        &mut opened,
+        &registry,
+        &repository,
+        MoveRequest {
+            id: &id,
+            to,
+            asserted: aep_backend_markdown::kernel::EvidenceOnHand::new(),
+            now,
+            via: false,
+        },
+    )?;
+    let leans_on_an_assertion = outcome.decided_on.leans_on_an_assertion();
+    let refusal = outcome.refusal.map(|stopped| match stopped {
+        MoveStopped::Refused { from, refusal } => ServedRefusal {
+            from: from.as_str().to_owned(),
+            refused: Some(*refusal),
+            guarded_rung: None,
+            finding: None,
+        },
+        MoveStopped::GuardedRungOnAWalk {
+            from,
+            rung,
+            refusal,
+        } => ServedRefusal {
+            from: from.as_str().to_owned(),
+            refused: refusal.map(|boxed| *boxed),
+            guarded_rung: Some(rung.as_str().to_owned()),
+            finding: None,
+        },
+        MoveStopped::WouldNotValidate { from, to, finding } => ServedRefusal {
+            from: from.as_str().to_owned(),
+            refused: None,
+            guarded_rung: Some(to.as_str().to_owned()),
+            finding: Some(finding),
+        },
+    });
+    Ok(ServedMove {
+        made: outcome.made,
+        leans_on_an_assertion,
+        refusal,
+    })
+}
+
+/// Which plan a reader is looking at.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct Served {
+    /// The store, in the words `explain` uses for it.
+    store: String,
+    /// How many artifacts it holds.
+    artifacts: usize,
+    /// How many files in it would not read, which a reader should know before trusting a count.
+    unreadable: usize,
+}
+
+/// What a move did, for a caller that is not a terminal.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct ServedMove {
+    /// The hops that were written. Present even when the move was refused, because a walk that
+    /// committed a hop and then stopped changed the store.
+    made: Vec<Moved>,
+    /// Whether the decision rested partly on a count nothing checks.
+    leans_on_an_assertion: bool,
+    /// Why it stopped, when it did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refusal: Option<ServedRefusal>,
+}
+
+impl ServedMove {
+    /// Whether the move was refused, so a caller can pick a status code without reading the shape.
+    pub(crate) fn was_refused(&self) -> bool {
+        self.refusal.is_some()
+    }
+}
+
+/// Why a move stopped, flattened into one shape a reader can branch on.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct ServedRefusal {
+    /// Where the artifact stood when it stopped.
+    from: String,
+    /// The ladder's own refusal, carrying every status it would have permitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refused: Option<aep_backend_markdown::document::MoveRefusal>,
+    /// The rung a walk would not cross, or the rung that would have left the store invalid.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    guarded_rung: Option<String>,
+    /// What the would-be store would have reported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finding: Option<String>,
 }

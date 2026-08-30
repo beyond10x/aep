@@ -321,7 +321,7 @@ fn context(origin: Option<&str>) -> String {
 /// The legal set is carried rather than left for the caller to look up, because the refusal a
 /// person reads has to answer the question the refusal creates. "`active` is not a legal move" is
 /// a dead end; "a story may move to: proposed, archived" is the next thing to type.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MoveRefusal {
     /// The kind whose lifecycle refused.
     pub kind: ArtifactKind,
@@ -332,6 +332,10 @@ pub struct MoveRefusal {
     /// Every status it may move to from here. Empty when the status is terminal.
     pub legal: BTreeSet<ArtifactStatus>,
     /// Why. A rung the ladder does not declare, or a rung whose cost is not met.
+    ///
+    /// Flattened when serialised, so a reader finds one `reason` key at the top level beside
+    /// whatever that reason carries, rather than a `reason` object holding a second `reason`.
+    #[serde(flatten)]
     pub reason: RefusalReason,
 }
 
@@ -340,7 +344,8 @@ pub struct MoveRefusal {
 /// Three, not two, and the split between the last two is gap-register `:39`. *Nobody presented
 /// evidence of that kind* and *evidence was presented and there is not enough of it* send an author
 /// to different places — one to produce a record, the other to argue about the one that exists.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
 pub enum RefusalReason {
     /// The ladder declares no such move from here. What every refusal was before requirements
     /// existed, and still the only one a ladder without `requires` can produce.
@@ -745,5 +750,63 @@ mod tests {
         let text = "---\r\nid: story:x\r\nkind: story\r\nstatus: draft\r\n---\r\n# Title\r\n";
         let parsed = PlanningDocument::parse(text, None).expect("CRLF is a line ending too");
         assert_eq!(parsed.body, "# Title\r\n");
+    }
+
+    /// A refusal that crosses a wire keeps its field names and its reason spellings.
+    ///
+    /// `MoveRefusal` is `Serialize` so a caller that is not a terminal can render the refusal itself
+    /// — grey out the rungs the ladder would not take, offer the ones in `legal`. That makes the
+    /// field names and the four `reason` spellings a **published shape**: renaming one is a silent
+    /// break in every reader, and the compiler has nothing to say about it. This is what makes the
+    /// rename fail here instead.
+    #[test]
+    fn a_refusal_serialises_with_its_reason_and_every_legal_target() {
+        let refusal = MoveRefusal {
+            kind: ArtifactKind::Story,
+            from: ArtifactStatus::Proposed,
+            to: ArtifactStatus::Implemented,
+            legal: [ArtifactStatus::Draft, ArtifactStatus::Active]
+                .into_iter()
+                .collect(),
+            reason: RefusalReason::NotOnTheLadder,
+        };
+
+        let json = serde_json::to_value(&refusal).expect("a refusal serialises");
+        assert_eq!(json["kind"], "story");
+        assert_eq!(json["from"], "proposed");
+        assert_eq!(json["to"], "implemented");
+        assert_eq!(
+            json["legal"],
+            serde_json::json!(["draft", "active"]),
+            "the legal set answers the question the refusal creates, and it arrives in the order \
+             the vocabulary declares — `draft` before `active` — rather than alphabetically, so a \
+             reader can render the rungs in the order a ladder walks them"
+        );
+        assert_eq!(
+            json["reason"], "not_on_the_ladder",
+            "the reason is a flat tag a reader branches on, not a nested object"
+        );
+    }
+
+    /// Every reason a refusal can give is one a reader can branch on by name.
+    #[test]
+    fn each_refusal_reason_carries_its_own_tag_and_what_it_read() {
+        let unobservable = serde_json::to_value(RefusalReason::Unobservable {
+            unobserved: vec!["test_result".to_owned()],
+            message: "needs 1 test_result".to_owned(),
+        })
+        .expect("a reason serialises");
+        assert_eq!(unobservable["reason"], "unobservable");
+        assert_eq!(
+            unobservable["unobserved"],
+            serde_json::json!(["test_result"])
+        );
+
+        let not_earned = serde_json::to_value(RefusalReason::NotEarned {
+            message: "1 of 2 test_result".to_owned(),
+        })
+        .expect("a reason serialises");
+        assert_eq!(not_earned["reason"], "not_earned");
+        assert_eq!(not_earned["message"], "1 of 2 test_result");
     }
 }
