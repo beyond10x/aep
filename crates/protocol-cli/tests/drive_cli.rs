@@ -382,6 +382,23 @@ fn a_second_driver_is_refused_by_name_and_writes_nothing() {
         said.contains(&std::process::id().to_string()),
         "the holder's pid is not named:\n{said}"
     );
+    // The host, and not because a refusal reads better with it in: liveness is decided *per host*
+    // (`Liveness::OtherHost` — a pid on another machine says nothing to this process table), so the
+    // host is what tells an operator whether the pid above is one they can go and look at. A
+    // refusal naming a live pid without saying whose kernel it belongs to is a number to nowhere.
+    //
+    // Asserted as the **clause**, `pid <n> on <host>`, rather than as a search of the output for
+    // the machine's name: a hostname is an arbitrary word, this machine's is `next`, and the
+    // refusal's own text plus the fixture's path already carry `run`, `state`, `alive`, `lock`,
+    // `pid` and `host` — so on a machine named any of those, a bare `contains(&host())` passes
+    // with the host printed nowhere. The fact worth asserting is which machine *that pid* is on,
+    // and that is a fact about the two of them together.
+    let clause = format!("pid {} on {}", std::process::id(), host());
+    assert!(
+        said.contains(&clause),
+        "the refusal does not say which machine the pid it names is on; `{clause}` is not \
+         in:\n{said}"
+    );
     assert!(
         said.contains("--take-lock"),
         "a refusal names the routes out:\n{said}"
@@ -1293,6 +1310,27 @@ impl TwoTasks {
         (protocol(&borrowed), self.run(ordinal))
     }
 
+    /// Drives one run from the **project's own** task (`DRIVE-P`), naming no `--task`.
+    ///
+    /// The one difference from [`Self::drive`]: discovery finds `.engineering/task.yaml` instead of
+    /// `task-billing.yaml`, so the two put runs of two different tasks into one runs directory —
+    /// which is the state a per-task run-id floor has to be asserted in.
+    fn drive_the_projects_own_task(&self, map: &Path) -> Output {
+        protocol(&[
+            "drive",
+            "run",
+            "--project",
+            printable(&self.directory),
+            "--root",
+            printable(&root()),
+            "--map",
+            printable(map),
+            "--allow-evidence-gap",
+            "--max-iterations",
+            "2",
+        ])
+    }
+
     /// Resumes one run **naming nothing but the run**, which is the line the driver prints.
     fn resume(&self, run: &str, extra: &[&str]) -> Output {
         let mut args = vec![
@@ -1402,6 +1440,56 @@ fn a_resume_expands_the_task_document_the_run_was_started_from() {
         "the resumed step is about the task the run was started from, not the project's:\n{record}"
     );
 }
+/// The run-id floor is **per task**, so one task's `current` does not number another's first run.
+///
+/// `allocate_run` now seeds its floor from `current` as well as from the directory listing, because
+/// a listing is not a history and a deleted directory was handing its id back out
+/// (`adversary_a_run_directory_that_was_removed_is_not_handed_out_to_a_second_run`). But `current`
+/// is **one file for the whole runs directory** and names whichever task ran last, so reading it
+/// unconditionally would let a run of `DRIVE-B` decide what a run of `DRIVE-P` is called: the first
+/// run of the second task would be `DRIVE-P/2`, numbered by a run it has nothing to do with, and
+/// `DRIVE-P/1` would be a directory that never exists and that every reader would go looking for.
+///
+/// Asserted rather than assumed, because the scoping is a branch inside the fix rather than
+/// something the surrounding code enforces: with the task check removed, every case in this file
+/// still passed.
+#[test]
+fn a_run_of_one_task_is_not_numbered_by_the_current_pointer_of_another() {
+    let fixture = TwoTasks::new("floor-scope");
+    let map = fixture.map("floor-scope", false, false);
+
+    let (first, _) = fixture.drive(&map, "1", &[]);
+    let said = format!("{}{}", stdout(&first), stderr(&first));
+    assert!(
+        stdout(&first).contains("run        DRIVE-B/1"),
+        "the first task did not get its own first run, so the fixture is not the case this is \
+         about:\n{said}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.directory.join(".engineering/runs/current"))
+            .expect("the runs directory names a current run")
+            .trim(),
+        "DRIVE-B/1",
+        "`current` names the run that just ran, and it is the only one of these two files that is \
+         shared between tasks"
+    );
+
+    let second = fixture.drive_the_projects_own_task(&map);
+    let said = format!("{}{}", stdout(&second), stderr(&second));
+    assert!(
+        stdout(&second).contains("run        DRIVE-P/1"),
+        "the first run of the second task was numbered by the first task's `current`, so \
+         `DRIVE-P/1` is a run directory that will never exist:\n{said}"
+    );
+    assert!(
+        fixture
+            .directory
+            .join(".engineering/runs/DRIVE-P/1")
+            .is_dir(),
+        "and the directory it reported is the directory it made:\n{said}"
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // `specification:operator-resume-ux`: the refusal names the holder's state, and a stolen lock is
 // in the record.
@@ -2279,4 +2367,423 @@ fn the_hook_cannot_answer_an_unreadable_document() {
     let output = hook("this is not JSON");
     assert_eq!(code(&output), 1, "{}{}", stdout(&output), stderr(&output));
     assert!(stderr(&output).contains("not JSON"), "{}", stderr(&output));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Adversarial cases for `story:protocol-drive-verb`.
+//
+// Written against the story's `## Acceptance` list rather than against the implementation, because
+// three of its six rows were delivered green on tests that do not reach the mechanism the row
+// names. Each case below says which row it is asserting and what it caught.
+// ---------------------------------------------------------------------------------------------
+
+/// **Acceptance row 1, verbatim: "The lock lives at one fixed path per store … two invocations
+/// racing cannot both succeed."**
+///
+/// The lock is at `<project>/.engineering/runs/lock.json` (`drive.rs`, `runs_directory` is handed
+/// `inputs.project`), while the store is chosen independently by `--store`
+/// (`DriveLocation::inputs` → `DrivenPlan::for_project(self.store.as_deref(), &project)`). So the
+/// lock is per **project**, and two projects pointed at one store hold two different locks over one
+/// set of documents.
+///
+/// That is the option `LOCK_FILE`'s own doc comment says review finding F2 rejected — *"two live
+/// runs over one store, which is the option D6 explicitly rejected, reached by accident"* — reached
+/// by a different accident. This drives the second project against the first's store while the
+/// first's lock is held by a live pid, and asserts the same two things the same-project refusal
+/// asserts: exit 1, and no run directory allocated.
+#[test]
+fn adversary_a_second_drive_over_one_store_from_another_project_is_refused_and_writes_nothing() {
+    let holder = Fixture::new("adversary-shared-store-holder", false);
+    let other = Fixture::new("adversary-shared-store-other", false);
+    let shared = holder.directory.join(".engineering/planning");
+    // The second project keeps no store of its own, so anything it reads it read through
+    // `--store`: without that, two identical fixture stores would leave it arguable whether the
+    // store was really shared.
+    std::fs::remove_dir_all(other.directory.join(".engineering/planning"))
+        .expect("the second project's own store is removable");
+    assert!(
+        shared.join("story/passkeys.md").is_file(),
+        "the fixture store the two projects share is the one that holds the documents"
+    );
+
+    // A live holder over that store: this test process, exactly as
+    // `a_second_driver_is_refused_by_name_and_writes_nothing` writes it.
+    std::fs::create_dir_all(holder.runs()).expect("the runs directory is writable");
+    write_lock(
+        &holder.runs(),
+        Some("DRIVE-1/7"),
+        std::process::id(),
+        &host(),
+    );
+
+    let output = other.drive(&["run"], &["--store", printable(&shared)]);
+    let text = said(&output);
+    assert!(
+        !other.runs().join("DRIVE-1").exists(),
+        "a second run over a store another live run holds allocated a run directory anyway, so \
+         two runs are now walking one set of documents:\n{text}"
+    );
+    assert_eq!(
+        code(&output), 1,
+        "the store is locked by run `DRIVE-1/7`; this invocation drove it to completion instead:\n{text}"
+    );
+    assert!(
+        text.contains("DRIVE-1/7"),
+        "the refusal does not name the holder of the store's lock:\n{text}"
+    );
+    assert!(
+        !text.contains("moved      specify -> decompose"),
+        "and it walked the shared store's documents to do it: `specify -> decompose` needs \
+         `specification:passkeys`, which exists only in the project whose lock is held:\n{text}"
+    );
+}
+
+/// **Acceptance row 6: "Two `Engine` values in one process do not collide on a run directory."**
+///
+/// The mechanism the story's own re-scope table names for this row is the counting-up allocator at
+/// `drive.rs` (`allocate_run`: *"one more than the highest that exists"*), and nothing asserted it:
+/// with `allocate_run` mutated to `RunId::new(task, 1)` — every run of a task reusing run 1 —
+/// `cargo test -p protocol-cli -p aep-driver` stayed green in `tests/driving.rs` (14 passed,
+/// including `two_engines_in_one_process_do_not_collide_on_a_run_directory`, which hands each
+/// engine a directory it wrote by hand) and failed only in
+/// `a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from`, on *"the
+/// step wrote no record"* — a message about a step's output, from a test about a different subject.
+///
+/// This asserts the row directly: a second `run` of one task gets a second directory, and the
+/// first run's record is byte-for-byte what it was.
+#[test]
+fn adversary_a_second_run_of_one_task_allocates_a_new_directory_and_leaves_the_firsts_record_alone()
+{
+    let fixture = Fixture::new("adversary-second-run", false);
+    let first = fixture.drive(&["run"], &["--max-iterations", "2"]);
+    assert!(
+        stdout(&first).contains("run        DRIVE-1/1"),
+        "{}",
+        stdout(&first)
+    );
+    let first_cursor = fixture.cursor_text("DRIVE-1/1");
+    let first_snapshot = std::fs::read(fixture.runs().join("DRIVE-1/1/snapshot.json"))
+        .expect("the first run persisted a snapshot");
+
+    let second = fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let text = stdout(&second);
+    assert!(
+        fixture.runs().join("DRIVE-1/2").is_dir(),
+        "the second run of one task did not get a directory of its own:\n{text}"
+    );
+    assert!(
+        text.contains("run        DRIVE-1/2"),
+        "the second run reported an id that is not the one it was allocated:\n{text}"
+    );
+    assert_eq!(
+        fixture.cursor_text("DRIVE-1/1"),
+        first_cursor,
+        "the second run rewrote the first run's cursor: a run directory is never reused"
+    );
+    assert_eq!(
+        std::fs::read(fixture.runs().join("DRIVE-1/1/snapshot.json"))
+            .expect("the first snapshot is still there"),
+        first_snapshot,
+        "the second run rewrote the first run's snapshot"
+    );
+}
+
+/// **Acceptance row 5: "A run that reaches an approval under `--pause-on-approval` persists, exits
+/// 0, releases the lock, and resumes."**
+///
+/// The story's re-scope table records the lock release *on the pause path* as the one thing this
+/// row is missing — *"one assertion on an existing test"* — and no assertion was added. Every other
+/// exit path in this file asserts `!lock.exists()`; the pause path, which is the one that stops
+/// with the run still live and a person owed an answer, is the only one that does not. A lock left
+/// behind here is the worst case of the three: the run is deliberately waiting, so nothing will
+/// come along and release it.
+///
+/// The whole row in one case, including the resume the row ends with.
+#[test]
+fn adversary_a_run_paused_for_a_person_released_the_lock_and_resumes() {
+    let fixture = Fixture::new("adversary-pause-lock", true);
+    let paused = fixture.drive(&["run"], &["--pause-on-approval"]);
+    let text = stdout(&paused);
+    assert_eq!(code(&paused), 0, "{text}{}", stderr(&paused));
+    assert!(
+        text.contains("resume with: protocol drive resume DRIVE-1/1"),
+        "the fixture did not reach the operator step, so this case is about nothing:\n{text}"
+    );
+    assert!(
+        !fixture.lock().exists(),
+        "a run stopped waiting for a person kept the store lock, and nothing is running that will \
+         ever release it:\n{text}"
+    );
+
+    let resumed = fixture.drive(&["resume", "DRIVE-1/1"], &[]);
+    assert!(
+        stdout(&resumed).contains("run        DRIVE-1/1"),
+        "the paused run does not resume:\n{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+}
+
+/// The host assertion added to `a_second_driver_is_refused_by_name_and_writes_nothing`, tightened.
+///
+/// `said.contains(&host())` is a substring search for an arbitrary machine name over **all** of
+/// stdout and stderr, and what it proves depends on what that machine is called. This one is
+/// `next`; the refusal's own text already carries `run`, `state`, `alive`, `lock`, `pid` and `host`
+/// and the combined output carries every path segment of the fixture directory, so on a machine
+/// named any of those the assertion passes with the host nowhere in the refusal.
+///
+/// The fact worth asserting is the one the refusal is built from: the host is the clause that says
+/// *which machine that pid is on*, so it is asserted next to the pid rather than anywhere.
+#[test]
+fn adversary_the_refusal_names_the_host_beside_the_pid_rather_than_anywhere_in_the_output() {
+    let fixture = Fixture::new("adversary-host-clause", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/7"),
+        std::process::id(),
+        &host(),
+    );
+
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    let clause = format!("pid {} on {}", std::process::id(), host());
+    assert!(
+        text.contains(&clause),
+        "the refusal does not say which machine the pid it names is on; `{clause}` is not \
+         in:\n{text}"
+    );
+}
+
+/// `HeldLock::release` is *"called on every exit path the driver controls"* — except four of them.
+///
+/// Between `take_lock(&runs, …)?` and `lock.release()` the `run` verb has four `?` operators of its
+/// own: `allocate_run`, `lock.record_run`, `fs::create_dir_all(directory.path())` and
+/// `fs::write(runs.join(CURRENT_FILE), …)`. `HeldLock` has no `Drop` — `release(self)` is called by
+/// hand — so any of those four returns from `run` with `lock.json` still on disk, naming a pid that
+/// has already exited.
+///
+/// The trigger here is the last of the four and needs no fault injection: a directory where the
+/// `current` file goes. `ENOSPC`, a read-only `.engineering`, or a previous crash are the ways it
+/// happens for real. The cost is that the operator's next `drive` is refused by a run that does not
+/// exist, and the refusal tells them to `--resume` it.
+#[test]
+fn adversary_a_run_that_failed_after_taking_the_lock_does_not_leave_it_behind() {
+    let fixture = Fixture::new("adversary-lock-leak", false);
+    std::fs::create_dir_all(fixture.runs().join("current"))
+        .expect("the runs directory is writable");
+
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_ne!(
+        code(&output),
+        0,
+        "the run was supposed to fail here:\n{text}"
+    );
+    assert!(
+        !fixture.lock().exists(),
+        "the run failed after taking the lock and left it behind; the store is now locked by a pid \
+         that has exited, and the next invocation is refused by a run that never started. Lock \
+         file:\n{}\nRun said:\n{text}",
+        std::fs::read_to_string(fixture.lock()).unwrap_or_default()
+    );
+}
+
+/// Every file under `directory`, by path relative to it, with its bytes.
+///
+/// Directories are recorded as entries with no content, so a directory the refusal created is a
+/// difference too. Used to say *a clean tree* as an assertion rather than as a sentence.
+fn tree(directory: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+    fn walk(
+        root: &Path,
+        at: &Path,
+        into: &mut std::collections::BTreeMap<PathBuf, Option<Vec<u8>>>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(at) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let key = path
+                .strip_prefix(root)
+                .expect("a path below the root")
+                .to_path_buf();
+            if path.is_dir() {
+                into.insert(key, None);
+                walk(root, &path, into);
+            } else {
+                into.insert(key, Some(std::fs::read(&path).unwrap_or_default()));
+            }
+        }
+    }
+    let mut found = std::collections::BTreeMap::new();
+    walk(directory, directory, &mut found);
+    found
+}
+
+/// **Acceptance row 2, its last clause: "and *writes nothing* — asserted by an unchanged run
+/// directory *and a clean tree*."**
+///
+/// `a_second_driver_is_refused_by_name_and_writes_nothing` asserts one path does not exist
+/// (`runs/DRIVE-1`), which is a weaker claim than the row makes: a refusal that wrote a `current`
+/// file, a launch record, an empty run directory under a different name, or anything at all into
+/// the planning store would pass it. This compares the whole project tree byte for byte across the
+/// refused invocation.
+///
+/// It also asserts the refusal reached the branch it is about. The test's `host()` and the driver's
+/// are two independent copies of one function (`drive_cli.rs` and `drive.rs` both read
+/// `/proc/sys/kernel/hostname`, `/etc/hostname`, `$HOSTNAME`, `"unknown-host"`); if they ever
+/// disagree, every same-host lock fixture becomes an `OtherHost` fixture, which still exits 1,
+/// still names the host and still names `--take-lock` — so the whole family would go on passing
+/// while testing the branch nobody wrote it for.
+#[test]
+fn adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_it() {
+    let fixture = Fixture::new("adversary-clean-tree", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    write_lock(
+        &fixture.runs(),
+        Some("DRIVE-1/7"),
+        std::process::id(),
+        &host(),
+    );
+
+    let before = tree(&fixture.directory);
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    assert!(
+        text.contains("alive"),
+        "the refusal took a branch other than the live-holder one, so this fixture is not the case \
+         it was written to be:\n{text}"
+    );
+
+    let after = tree(&fixture.directory);
+    let added: Vec<&PathBuf> = after
+        .keys()
+        .filter(|key| !before.contains_key(*key))
+        .collect();
+    let changed: Vec<&PathBuf> = before
+        .iter()
+        .filter(|(key, was)| after.get(*key).is_some_and(|now| now != *was))
+        .map(|(key, _)| key)
+        .collect();
+    assert!(
+        added.is_empty() && changed.is_empty(),
+        "a refused run is supposed to leave a clean tree; it added {added:?} and changed \
+         {changed:?}:\n{text}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Second adversarial pass.
+// ---------------------------------------------------------------------------------------------
+
+/// A `lock.json` that will not parse wedges **every** verb, and `--take-lock` cannot get past it.
+///
+/// The same defect the *cursor* had and that `a_holder_cursor_that_will_not_parse_is_a_refusal_and
+/// _never_a_crash` fixed, on the one file every verb reads. `read_lock` `?`s on the serde error and
+/// `take_lock` calls it **before** it consults `force`, so the documented route out of a bad lock is
+/// refused by the bad lock.
+///
+/// Not a hypothetical file: `take_lock` opens the path with `create_new` and *then* writes the body
+/// (`drive.rs`, `handle.write_all(body.as_bytes())?`). A failure between those two — a full disk, a
+/// signal, a crash — leaves a zero-byte `lock.json` and **no `HeldLock` in existence**, so the new
+/// `Drop` cannot clean it up. That is the residue this case is about, and today it is recoverable
+/// only by an operator who knows to delete a file nothing has told them about.
+#[test]
+fn adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error() {
+    let fixture = Fixture::new("adversary-unparseable-lock", false);
+    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
+    // What a `create_new` that never got to its `write_all` leaves.
+    write(&fixture.lock(), "");
+
+    for (verb, extra) in [
+        (vec!["run"], vec![]),
+        (vec!["run"], vec!["--take-lock"]),
+        (vec!["status"], vec![]),
+    ] {
+        let output = fixture.drive(&verb, &extra);
+        let text = said(&output);
+        let named = format!("{verb:?} {extra:?}");
+        for diagnostic in ["EOF while parsing", "expected value", "trailing characters"] {
+            assert!(
+                !text.contains(diagnostic),
+                "[{named}] the operator is handed a parse error about a file they did not write, \
+                 for a lock nobody holds:\n{text}"
+            );
+        }
+    }
+
+    let taking = fixture.drive(&["run"], &["--take-lock"]);
+    let text = said(&taking);
+    assert!(
+        !fixture.lock().exists()
+            || std::fs::read_to_string(fixture.lock()).is_ok_and(|body| !body.is_empty()),
+        "`--take-lock` is the route out of a lock this machine cannot use, and an unreadable lock \
+         is the case where it is most needed; it left the same unreadable file behind:\n{text}"
+    );
+}
+
+/// **Acceptance row 6's actual invariant: a run directory is never reused.**
+///
+/// `allocate_run` derives the next ordinal from a directory listing — *"one more than the highest
+/// that exists"* — so the invariant holds only while nothing is ever removed, which its own doc
+/// comment states as a fact (*"A run directory is never deleted and never reused"*) rather than
+/// enforces. Remove the highest run directory and the next allocation hands its id out again, to a
+/// different run: `current` still names it, and so does every evidence record, cursor
+/// `took_lock_from` and report that mentioned it.
+///
+/// Run directories hold transcripts and are the largest thing a driven repository accumulates, so
+/// an operator removing one is the ordinary case rather than the exotic one. The fix is one line —
+/// seed `highest` from the ordinal in `current` as well as from the listing — and it is a fix
+/// rather than a doc change because nothing on disk says the directory may not be deleted.
+#[test]
+fn adversary_a_run_directory_that_was_removed_is_not_handed_out_to_a_second_run() {
+    let fixture = Fixture::new("adversary-run-reuse", false);
+    let mut seen: Vec<String> = Vec::new();
+    for _ in 0..3 {
+        let output = fixture.drive(&["run"], &["--max-iterations", "2"]);
+        let text = stdout(&output);
+        let line = text
+            .lines()
+            .find(|line| line.starts_with("run        DRIVE-1/"))
+            .unwrap_or_else(|| panic!("a run reports its id:\n{text}"))
+            .to_owned();
+        seen.push(line);
+    }
+    assert_eq!(
+        seen,
+        vec![
+            "run        DRIVE-1/1".to_owned(),
+            "run        DRIVE-1/2".to_owned(),
+            "run        DRIVE-1/3".to_owned(),
+        ],
+        "the count goes up while nothing is removed, which is the case that is already asserted"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.runs().join("current"))
+            .expect("the runs directory names a current run")
+            .trim(),
+        "DRIVE-1/3",
+        "`current` is the record that outlives the directory, and it is what makes reuse visible"
+    );
+
+    // The operator reclaims the largest thing in the tree: the transcripts of the last run.
+    std::fs::remove_dir_all(fixture.runs().join("DRIVE-1/3"))
+        .expect("a run directory is removable");
+
+    let output = fixture.drive(&["run"], &["--max-iterations", "2"]);
+    let text = stdout(&output);
+    let fourth = text
+        .lines()
+        .find(|line| line.starts_with("run        DRIVE-1/"))
+        .unwrap_or_else(|| panic!("a run reports its id:\n{text}"))
+        .to_owned();
+    assert!(
+        !seen.contains(&fourth),
+        "a run id that has already been handed out was handed out again: `{fourth}`. `current` \
+         still says `DRIVE-1/3`, so two different runs now answer to one id and every record that \
+         names it is ambiguous:\n{text}"
+    );
 }
