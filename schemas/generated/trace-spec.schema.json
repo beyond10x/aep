@@ -809,6 +809,32 @@
           "additionalProperties": false
         },
         {
+          "description": "`{usage.trend: {field: cache_read_input_tokens, trend: non_decreasing}}`",
+          "type": "object",
+          "required": [
+            "usage.trend"
+          ],
+          "properties": {
+            "usage.trend": {
+              "$ref": "#/definitions/RawUsageTrend"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{usage.share: {field: cache_creation_input_tokens, at_most: 0.6}}` — the range bound's own keys, inline, beside the field they are a share of.",
+          "type": "object",
+          "required": [
+            "usage.share"
+          ],
+          "properties": {
+            "usage.share": {
+              "$ref": "#/definitions/RawUsageShare"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
           "description": "`{duration.total: {ms: {…}}}`",
           "type": "object",
           "required": [
@@ -1826,6 +1852,121 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawTrend": {
+      "description": "Which way a series must move, as written.",
+      "oneOf": [
+        {
+          "description": "`non_decreasing` — never falls from one request to the next.",
+          "type": "string",
+          "enum": [
+            "non_decreasing"
+          ]
+        },
+        {
+          "description": "`non_increasing` — never rises.",
+          "type": "string",
+          "enum": [
+            "non_increasing"
+          ]
+        }
+      ]
+    },
+    "RawUsageField": {
+      "description": "Which per-request usage field a series assertion reads, as written.\n\nClosed rather than a free string: a field this build cannot read is refused where the document is read, not evaluated to `unk` for ever.",
+      "oneOf": [
+        {
+          "description": "`input_tokens`",
+          "type": "string",
+          "enum": [
+            "input_tokens"
+          ]
+        },
+        {
+          "description": "`output_tokens`",
+          "type": "string",
+          "enum": [
+            "output_tokens"
+          ]
+        },
+        {
+          "description": "`cache_read_input_tokens`",
+          "type": "string",
+          "enum": [
+            "cache_read_input_tokens"
+          ]
+        },
+        {
+          "description": "`cache_creation_input_tokens`",
+          "type": "string",
+          "enum": [
+            "cache_creation_input_tokens"
+          ]
+        }
+      ]
+    },
+    "RawUsageShare": {
+      "description": "The parameters of `usage.share`.\n\nThe range bound's keys are written out rather than flattened in: `deny_unknown_fields` does not survive `flatten`, and a document where `at_moist: 0.6` silently became \"unbounded\" is worse than one that is a line longer.",
+      "type": "object",
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "at_least": {
+          "description": "The lowest acceptable share.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "at_most": {
+          "description": "The highest acceptable share.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "field": {
+          "description": "Which per-request field the share is of.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawUsageField"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawUsageTrend": {
+      "description": "The parameters of `usage.trend`.",
+      "type": "object",
+      "required": [
+        "field",
+        "trend"
+      ],
+      "properties": {
+        "field": {
+          "description": "Which per-request field the series is over.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawUsageField"
+            }
+          ]
+        },
+        "trend": {
+          "description": "Which way it must move.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawTrend"
+            }
+          ]
         }
       },
       "additionalProperties": false

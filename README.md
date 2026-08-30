@@ -75,7 +75,7 @@ and nine principles, a workflow and twelve capability decisions are derived from
   section, so that boundary is every state's. `protocol workflow instruct` writes the same
   workflow out in words.
 * **`protocol trace check` reads the run back.** An agent's transcript is judged against a typed
-  specification — fifty-one expectation kinds — so *the agent followed the rules* is a verdict a program
+  specification — fifty-three expectation kinds — so *the agent followed the rules* is a verdict a program
   reached from the record, not a claim the agent made about itself. Its exit codes distinguish
   contradicted from nobody-found-out.
 

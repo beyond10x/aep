@@ -262,8 +262,9 @@ fn read_text(bytes: &[u8], text: &str) -> Result<TraceIr, ValidationErrors> {
     let seam = seam_ledger(&lines);
     let mut events: Vec<TraceEvent> = Vec::new();
     let mut requests: Vec<AssistantRequest> = Vec::new();
+    let mut unattributed: Vec<usize> = Vec::new();
     for line in &lines {
-        read_event(line, &seam, &mut events, &mut requests);
+        read_event(line, &seam, &mut events, &mut requests, &mut unattributed);
     }
 
     Ok(TraceIr::new(
@@ -298,15 +299,20 @@ fn seam_ledger(lines: &[Line]) -> Seam {
 /// *supposed* to carry content. Here the events that produce nothing are named in
 /// [`CONTROL_PLANE_EVENTS`] and in the `usage` arm, so a line that produces no event has been
 /// decided about rather than lost.
+///
+/// `unattributed` carries the model's own output since the last `usage` line, so that the request
+/// record can say which events it was spent on. See [`model_output`].
 fn read_event(
     line: &Line,
     seam: &Seam,
     events: &mut Vec<TraceEvent>,
     requests: &mut Vec<AssistantRequest>,
+    unattributed: &mut Vec<usize>,
 ) {
     let value = &line.value;
     let at = text_at(value, "at");
     let name = str_at(value, "event");
+    let first_of_this_line = events.len();
     let mut push = |kind: EventKind| events.push(TraceEvent::new(line.number, at.clone(), kind));
 
     match name {
@@ -353,6 +359,12 @@ fn read_event(
         // `AssistantRequest` has four token fields and no home for them. Nothing is lost that any
         // expectation reads: `tokens.thinking`, `iterations` and `speed` are run-wide kinds and
         // come off the terminal record, which is also the only record Claude fills them on.
+        //
+        // A `usage` line **closes** an API request on this wire, so the model output since the
+        // previous one is what this request was spent on, and the record says so: the line join
+        // finds nothing here by construction, and the id join reaches only the assistant's text —
+        // a turn that thought, called a tool and narrated nothing carries its id on no event at
+        // all, and a `usage` line is free to carry no id either.
         Some("usage") => {
             let usage = value.get("usage");
             requests.push(AssistantRequest {
@@ -365,6 +377,7 @@ fn read_event(
                     .and_then(|usage| u64_at(usage, "cache_read_input_tokens")),
                 cache_creation_input_tokens: usage
                     .and_then(|usage| u64_at(usage, "cache_creation_input_tokens")),
+                events: std::mem::take(unattributed),
             });
         }
         Some(known) if CONTROL_PLANE_EVENTS.contains(&known) => {}
@@ -372,6 +385,27 @@ fn read_event(
         // a tool call, and reading it as absent is the lie this whole design exists to prevent.
         other => push(opaque_line(other, line)),
     }
+
+    for (index, event) in events.iter().enumerate().skip(first_of_this_line) {
+        if model_output(&event.kind) {
+            unattributed.push(index);
+        }
+    }
+}
+
+/// Whether an event is something the **model** produced, rather than something done to it.
+///
+/// The three content blocks a `stream-json` assistant line carries — text, reasoning, a tool call
+/// — and nothing else. It is what makes an attributed citation on this wire the same claim as the
+/// line join on the other one: a request is cited at what it emitted, never at the session record
+/// that happened to precede it or at the harness's answer to its call.
+fn model_output(kind: &EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::AssistantText { .. }
+            | EventKind::AssistantThinking { .. }
+            | EventKind::ToolCall(_)
+    )
 }
 
 /// Reads a `session.started` event: the run's opening record.

@@ -1,6 +1,6 @@
 //! The eval's own specification, against the two runs it was written from.
 //!
-//! The per-kind vocabulary — every one of the fifty-one kinds with a negative case beside it —
+//! The per-kind vocabulary — every one of the fifty-three kinds with a negative case beside it —
 //! lives inline in `src/check.rs`, where the evaluator is. This file checks the thing the wave is
 //! actually for: that `conformance/trace/expectations.trace.yaml` is a document, that
 //! it holds against two real committed transcripts, and that the ways it can be relaxed on the
