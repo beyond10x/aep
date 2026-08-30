@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:board-columns-come-from-the-ladders
 kind: story
-status: active
+status: implemented
 title: The board's columns come from the ladders, not from a list compiled into the binary
 summary: 'A blocker at open, or any adopter-declared status, appears in no board column: board iterates ArtifactStatus::ALL (planning.rs:2142). Found landing story:blocker-relation.'
 tags:
@@ -11,7 +11,7 @@ tags:
 relations:
 - informed_by: story:blocker-relation
 - serves: vision:O2
-revision: 4
+revision: 5
 ---
 # Story: The board's columns come from the ladders, not from a list compiled into the binary
 

@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:usage-series-assertions
 kind: story
-status: active
+status: implemented
 title: Assertions over the per-request usage series
 summary: A vocabulary for sequences — the cache-read ramp is monotone, cache creation is front-loaded, no request takes more than a share of the total — over data the IR already keeps.
 owner: trace
@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:checker-vocabulary-depth
 - serves: vision:O3
-revision: 4
+revision: 5
 ---
 # Story: Assertions over the per-request usage series
 
