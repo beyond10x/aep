@@ -30,7 +30,8 @@
 //! the plan's own shape — one document per artifact, relations in frontmatter, the history in the
 //! journal — and seeds from the documents on open. The adapter is the same type over both: apply in
 //! [`MemoryBackend`], ask the projection where the result lands, diff against what the provider
-//! held, seal the event, `commit`.
+//! held, seal the event, and submit the complete command through
+//! [`AtomicBatchStore::commit_batch`].
 //!
 //! # What the [`Identity`] projection holds, and how a second process gets it back
 //!
@@ -76,13 +77,13 @@
 //! a relation, an audit record and an idempotency entry are records of something that already
 //! happened, and the event explaining them is the entity's.
 //!
-//! # The window, stated
+//! # One command, one publish
 //!
-//! A command is applied and **then** written — the entity with its event first, then the records —
-//! because what must be written is the result of applying it. If any write fails, this backend
-//! latches and every later call, reads included, refuses rather than answering from memory about a
-//! store that no longer agrees. Each `commit` is atomic; the sequence of them is not. Closing that
-//! properly needs a durable intent log, which is `P6`.
+//! A command is applied to detached memory and projection state. Every placement, audit record and
+//! idempotency record becomes one ordered provider batch whose expectations come from the local
+//! pre-command view. Only a successful batch publishes the detached state. A conflict or provider
+//! failure therefore leaves both durable and local state unchanged; there is no stale in-memory
+//! prefix to latch.
 
 pub mod kernel;
 
@@ -110,7 +111,9 @@ use aep_domain::ids::{AuditId, EventId, IdempotencyKey, RelationId};
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 use entity_core::{Decision, DomainEvent, EntityInstance};
-use entity_store::{Envelope, Expect, Recording, Store, StoreError};
+use entity_store::{
+    AtomicBatchStore, AtomicCommit, Envelope, Expect, Recording, Store, StoreError,
+};
 use serde_json::{json, Map, Value};
 
 /// The entity type every contract entity is stored under in the provider.
@@ -161,6 +164,8 @@ struct Provenance {
     /// `args` (`entity-runtime` R-110). For a `MoveStatus` that is the target, the status moved
     /// to, the revision expected and the `decided_on` account; for an update, the fields written.
     args: Map<String, Value>,
+    /// The provider coordinate and revision the command's local pre-command view held.
+    optimistic: Option<((String, String), Expect)>,
 }
 
 impl Provenance {
@@ -185,6 +190,7 @@ impl Provenance {
             executor: envelope.context.executor.clone(),
             key: envelope.context.idempotency_key.clone(),
             args,
+            optimistic: None,
         }
     }
 
@@ -693,14 +699,6 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
         }
     }
 
-    fn latch(&self, detail: impl AsRef<str>) -> CommandError {
-        let detail = detail.as_ref();
-        *self.latched.lock().expect("the latch is not poisoned") = Some(detail.to_owned());
-        CommandError::Conflict {
-            reason: format!("the contract moved in memory but not in the store: {detail}"),
-        }
-    }
-
     fn snapshot(&self, key: &IdempotencyKey) -> Snapshot {
         self.inner.with_store(|store| Snapshot {
             relations: store.relations().map(|r| r.id.clone()).collect(),
@@ -709,23 +707,24 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
         })
     }
 
-    /// Writes every placement the projection named, each with the event that explains the write.
-    fn persist(
-        &self,
+    /// Builds the one provider transaction for a command from the pre-command durable view.
+    fn commits(
+        durable: &S,
         placements: &[Placement],
+        records: &[Record],
         provenance: &Provenance,
-    ) -> Result<(), CommandError> {
+    ) -> Result<Vec<AtomicCommit>, CommandError> {
+        let mut held_by_key: BTreeMap<(String, String), Option<EntityInstance>> = BTreeMap::new();
+        let mut commits = Vec::new();
         for placement in placements {
-            // The expectation is **read**, not assumed. Deriving it from the contract's revision
-            // ("it must be at mine minus one") assumes every command bumps by exactly one and that
-            // nothing else ever writes — and the first assumption is already false for a command
-            // that touches an entity twice. Reading it keeps the optimistic check honest: what it
-            // still catches is the store moving underneath this process between the read and the
-            // write, which is what `Expect` is for.
-            let mut durable = self.durable.lock().expect("the provider is not poisoned");
-            let held = durable
-                .load(&placement.entity, &placement.id)
-                .map_err(|error| self.latch(error.to_string()))?;
+            let key = (placement.entity.clone(), placement.id.clone());
+            if !held_by_key.contains_key(&key) {
+                let loaded = durable
+                    .load(&placement.entity, &placement.id)
+                    .map_err(|error| provider_error(&error))?;
+                held_by_key.insert(key.clone(), loaded.clone());
+            }
+            let held = held_by_key.get(&key).cloned().flatten();
 
             // Nothing to write when nothing changed: a command whose result is the document as it
             // already stood must not bump a revision and journal a change that did not happen.
@@ -749,33 +748,39 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 None => (None, placement.fields.clone()),
             };
             let event = provenance.event(placement, from_state, changed);
+            let instance = EntityInstance {
+                entity: placement.entity.clone(),
+                version: 1,
+                id: placement.id.clone(),
+                lifecycle_state: placement.state.clone(),
+                revision: placement.revision,
+                fields: placement.fields.clone(),
+            };
             let decision = Decision {
-                instance: EntityInstance {
-                    entity: placement.entity.clone(),
-                    version: 1,
-                    id: placement.id.clone(),
-                    lifecycle_state: placement.state.clone(),
-                    revision: placement.revision,
-                    fields: placement.fields.clone(),
-                },
+                instance: instance.clone(),
                 events: vec![event],
             };
 
-            let expect = held.map_or(Expect::Absent, |held| Expect::Revision(held.revision));
-            durable
-                .commit(&decision, expect)
-                .map_err(|error| self.latch(error.to_string()))?;
+            let expect = provenance
+                .optimistic
+                .as_ref()
+                .filter(|(coordinate, _)| coordinate == &key)
+                .map_or_else(
+                    || held.map_or(Expect::Absent, |held| Expect::Revision(held.revision)),
+                    |(_, expect)| *expect,
+                );
+            commits.push(AtomicCommit::new(decision, expect));
+            held_by_key.insert(key, Some(instance));
         }
-        Ok(())
-    }
-
-    /// Writes the records the projection named beside the placements.
-    fn persist_records(&self, records: &[Record]) -> Result<(), CommandError> {
-        let mut durable = self.durable.lock().expect("the provider is not poisoned");
         for record in records {
-            let held = durable
-                .load(&record.entity, &record.id)
-                .map_err(|error| self.latch(error.to_string()))?;
+            let key = (record.entity.clone(), record.id.clone());
+            if !held_by_key.contains_key(&key) {
+                let loaded = durable
+                    .load(&record.entity, &record.id)
+                    .map_err(|error| provider_error(&error))?;
+                held_by_key.insert(key.clone(), loaded);
+            }
+            let held = held_by_key.get(&key).cloned().flatten();
             let (expect, revision) = match &held {
                 Some(held) => (Expect::Revision(held.revision), held.revision + 1),
                 None => (Expect::Absent, 1),
@@ -785,22 +790,29 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 fields.insert("removed".to_owned(), Value::Bool(true));
                 fields
             });
+            let instance = EntityInstance {
+                entity: record.entity.clone(),
+                version: 1,
+                id: record.id.clone(),
+                lifecycle_state: record.state.clone(),
+                revision,
+                fields,
+            };
             let decision = Decision {
-                instance: EntityInstance {
-                    entity: record.entity.clone(),
-                    version: 1,
-                    id: record.id.clone(),
-                    lifecycle_state: record.state.clone(),
-                    revision,
-                    fields,
-                },
+                instance: instance.clone(),
                 events: Vec::new(),
             };
-            durable
-                .commit(&decision, expect)
-                .map_err(|error| self.latch(error.to_string()))?;
+            commits.push(AtomicCommit::new(decision, expect));
+            held_by_key.insert(key, Some(instance));
         }
-        Ok(())
+        Ok(commits)
+    }
+}
+
+/// A provider error before candidate state has been published.
+fn provider_error(error: &StoreError) -> CommandError {
+    CommandError::Conflict {
+        reason: format!("the store refused the atomic command: {error}"),
     }
 }
 
@@ -1110,7 +1122,7 @@ fn as_fields(body: &Node) -> Map<String, Value> {
     }
 }
 
-impl<S: Store, P: Projection<S>> CommandService for EntityBackend<S, P> {
+impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBackend<S, P> {
     type Command = Command;
 
     // The `async` belongs to the contract. This body completes without awaiting: every provider
@@ -1122,38 +1134,55 @@ impl<S: Store, P: Projection<S>> CommandService for EntityBackend<S, P> {
         envelope: CommandEnvelope<Self::Command>,
     ) -> Result<CommandResult, CommandError> {
         self.check_latch()?;
-        let provenance = Provenance::of(&envelope);
-        self.projection
+        let mut provenance = Provenance::of(&envelope);
+        let candidate = self.inner.fork();
+        let mut projection = self
+            .projection
             .lock()
             .expect("the projection is not poisoned")
-            .before(&envelope)?;
-        let before = self.snapshot(&provenance.key);
-        let outcome = block_on(self.inner.execute(envelope));
-        if let Ok(result) = &outcome {
-            // A replay changed nothing, so there is nothing to write. Writing anyway would push the
-            // same revision at a store that already holds it, which its own optimistic check would
-            // rightly refuse — and this backend would latch over a command that did no harm.
-            if result.outcome != CommandOutcome::Replayed {
-                let placements = {
-                    let durable = self.durable.lock().expect("the provider is not poisoned");
-                    self.projection
-                        .lock()
-                        .expect("the projection is not poisoned")
-                        .placements(&durable, &self.inner, result)?
-                };
-                self.persist(&placements, &provenance)?;
+            .clone();
+        if let Some(target) = envelope.target.as_ref() {
+            let expected = self
+                .inner
+                .with_store(|store| store.entity(&target.id).map(|held| held.metadata.revision));
+            if let (Some(coordinate), Some(expected)) =
+                (projection.coordinates(&self.inner, &target.id), expected)
+            {
+                provenance.optimistic = Some((coordinate, Expect::Revision(expected.get())));
             }
+        }
+        projection.before(&envelope)?;
+        let before = self.snapshot(&provenance.key);
+        let outcome = block_on(candidate.execute(envelope));
+        if outcome
+            .as_ref()
+            .is_ok_and(|result| result.outcome == CommandOutcome::Replayed)
+        {
+            return outcome;
+        }
+        let mut placements = Vec::new();
+        if let Ok(result) = &outcome {
+            let durable = self.durable.lock().expect("the provider is not poisoned");
+            placements = projection.placements(&durable, &candidate, result)?;
         }
         // Whatever the contract decided, the records it wrote about deciding reach the store: a
         // refusal is recorded (invariant 15), so its record is too.
         let records = {
             let durable = self.durable.lock().expect("the provider is not poisoned");
-            self.projection
-                .lock()
-                .expect("the projection is not poisoned")
-                .records(&durable, &self.inner, &before, &provenance.key)?
+            projection.records(&durable, &candidate, &before, &provenance.key)?
         };
-        self.persist_records(&records)?;
+        {
+            let mut durable = self.durable.lock().expect("the provider is not poisoned");
+            let commits = Self::commits(&durable, &placements, &records, &provenance)?;
+            durable
+                .commit_batch(&commits)
+                .map_err(|error| provider_error(&error))?;
+        }
+        self.inner.replace_with(&candidate);
+        *self
+            .projection
+            .lock()
+            .expect("the projection is not poisoned") = projection;
         outcome
     }
 }

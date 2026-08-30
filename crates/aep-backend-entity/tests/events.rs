@@ -71,7 +71,9 @@ fn propose(target: &EntityId) -> Command {
 }
 
 /// Create, rename, propose — three accepted commands against one entity — and its identity.
-fn a_story_moved_three_times<S: Store>(backend: &EntityBackend<S>) -> EntityId {
+fn a_story_moved_three_times<S: Store + entity_store::AtomicBatchStore>(
+    backend: &EntityBackend<S>,
+) -> EntityId {
     let created = block_on(backend.execute(envelope(create("one"), 1))).expect("created");
     let id = created.affected[0].id.clone();
     block_on(backend.execute(envelope(rename(&id, "One, renamed"), 2))).expect("renamed");
