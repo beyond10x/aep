@@ -26,6 +26,17 @@ A machine-executable specification of engineering methodology: principles, workf
 evidence and verification, expressed as typed Rust and generated JSON Schema rather than as prose in
 a prompt. It is a **library and specification**, not an agent, a CI system or a deployment platform.
 
+**The specification is the product; `integrations/` demonstrates it.** A plugin surface — a skill, an
+agent charter — exists to show that a rule in `protocols/`, `principles/` or `workflows/` can be
+carried by a real harness, and sometimes to find the shape of a rule that is not written down yet.
+It is a reference projection, and it is deliberately allowed to run ahead of the YAML: a concept
+proven in a surface is the evidence for the document that formalises it, which is the order
+`crates/ess-domain/src/actor.rs:24-33` argues for when it refuses to ship a concept before the
+evidence that made it necessary. What eventually drives these workflows deterministically is a
+harness, and a harness reads the documents, not the surfaces. So the question to ask of anything
+added under `integrations/` is *which rule does this demonstrate, and what would its formalisation
+have to say* — never *is this the product*.
+
 ## Which documents are normative
 
 Exactly two, and neither is the newest file in `docs/design/`:
@@ -791,6 +802,34 @@ answer *what had shipped as of this commit*; batching tags in one push is safe a
 * Ticket references go in a `Refs:` tagline at the end of the body, never in the title.
 * Write messages through a file or a quoted heredoc (`git commit -F -` with `<<'MSG'`), never
   `-m "…"` with backticks in the text.
+
+## Branches and waves
+
+Written down 2026-08-30. Until then this convention existed only in `git log`, so every wave
+rediscovered it and no reader of the repository could find it.
+
+* **`impl/<story-slug>` for one unit of work, `wave/<name>` for the branch several land on,
+  `run/<name>` for a driver run that is not a unit of work.** The slug is the story id's name part,
+  unchanged — a branch a reader cannot join back to a story is one nobody can audit.
+* **Every `impl/*` in a wave forks from the same base**, and they merge back serially. That is what
+  makes one gate run at the end mean anything: the merged result is the only tree that has ever
+  held all of them at once, and it is the tree that gets gated.
+* **A merge subject names the branch, then what the work did** — `Merge impl/blocker-relation: a
+  blocker is typed by what would clear it, and a parked item stops looking like a moving one`. Not
+  the branch name twice.
+* **A wave is bracketed by two `chore(store):` commits.** The first carries the selection and its
+  reasoning — the pool, the properties it was chosen on, one line per story naming the objective it
+  serves. It is the only durable record of *why these and not others*. The last carries the gate
+  run that closed them, the commit the evidence was recorded against, and anything found on the way
+  that was filed rather than fixed.
+* **One gate run closes the whole wave.** Each story's `test_result` names the merge commit, which
+  contains the other units too. That is correct — it is the tree that was actually gated — and a
+  per-unit run would be evidence about a tree nobody shipped.
+* **A merge of `main` into a live wave branch, or a rebase of a unit onto a new base, is said in
+  the subject with the sha.** Either is fine; leaving it unsaid is not.
+
+The plugin's `wave` skill follows these, and
+`integrations/claude-code/skills/wave/references/branch-and-merge.md` is the long form.
 
 ## Driving a run: standing rules for whoever is at the wheel
 

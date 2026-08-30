@@ -92,6 +92,12 @@ It is not a tool for making an agent ship features faster — and deliberately n
 framework, a CI system or a deployment platform: nothing here calls a cloud API or holds a
 credential. External systems do the work; this project decides what the results permit.
 
+**So what is `integrations/`?** A demonstration, not the deliverable. The Claude Code plugin carries
+the specification's rules on one harness — it teaches the CLI and deliberately carries no vocabulary
+of its own — in the same relationship the reference driver has to the protocol it implements. A
+harness that drives these workflows deterministically is what the demonstration is evidence for, and
+it reads the documents rather than the plugin.
+
 ## Where it sits
 
 Nothing here spawns a harness, holds a credential or reaches a cluster. Those jobs belong to the

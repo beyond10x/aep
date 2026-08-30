@@ -11,6 +11,72 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **The Claude Code plugin ships a `wave` skill**, and the branch convention it follows is written
+  down for the first time. A wave — N stories implemented at once, each on its own `impl/<slug>`
+  branch off one base, merged serially onto `wave/<name>`, gated **once** on the merged result and
+  closed by one `test_result` against that merge — has been this repository's practice since
+  `5b6259b` and existed in `git log` and nowhere else. It is now `AGENTS.md` § *Branches and waves*,
+  with the long form in the skill's own reference. The skill runs in two stages with a stop between:
+  it proposes and halts, because a sub-agent cannot ask an operator anything and the approval has to
+  live where a stop is possible. It evaluates no gate — green is `task check`'s exit status — and it
+  owns every `protocol artifact` call itself, because the planning journal is append-only, committed
+  and unmergeable, so N branches each moving their own story would merge into a document whose
+  revision no event supports. Measured against this store while writing it: 36 of 40 draft stories
+  are dependency-ready, so selection is judgement rather than a query; 24 of 40 cite no crate path,
+  so the skill reports *blast radius unknown* rather than assuming disjointness; and 1 of 40 carries
+  a `serves:` edge, so the wave adds them as part of the proposal.
+  `story:wave-as-a-surface`.
+
+* **A `story-scoper` agent, and the `wave` skill's cycle.** The scoper works out where one story
+  would actually land — crate, files, symbols, documents — and returns a `## Scope` section marking
+  every line **cited** or **inferred**, because a scope that mixes what was read with what was
+  guessed is worse than none: it gets trusted exactly where it is weakest. It is **read-only**, which
+  is what makes running one per story at once safe — the planning journal is append-only and one
+  file, so N agents writing it would race; they return sections and the caller writes them. Selection
+  now scopes candidates before choosing between them, and a story whose scope cannot be established
+  is treated as **unassessed rather than safe**. The skill also states the cycle a wave is one turn
+  of — `replan → dispatch → integrate → release → replan` — and that **`release` may not be
+  automated**: it is a written procedure nothing enforces, and it has already slipped once here when
+  a gate piped into `tail` reported `tail`'s exit status and two commits were pushed claiming a gate
+  that never ran past its first step. `story:a-story-records-where-it-lands`.
+
+  **Measured while dry-running it, and it corrects a fear rather than confirming one.** A
+  package-scoped build in a fresh worktree costs **1.6 G and 30 s**, not the 28 G a full workspace
+  target costs — so five parallel worktrees cost ~8 G, and what bounds a wave is how many candidates
+  are ready, not disk. Scoping four candidates concurrently took about four minutes and changed the
+  selection: one unit was dropped as under-specified (its acceptance names a declaration site that
+  does not exist in the tree, and a new workflow key needs a Rust field because `RawState` is
+  `deny_unknown_fields`), one was found to edit `README.md` through a hard-coded count that appears
+  in six files, and one candidate turned out to have largely shipped four days earlier with the
+  artifact never moved. `docs/plan/wave-reading-what-is-recorded.md` § 2a keeps what the unscoped
+  first pass got wrong, because that is the argument for scoping before selecting.
+
+* **`AGENTS.md`, `README.md` and the plugin README now say what `integrations/` is for.** The
+  specification is the product; a plugin surface demonstrates that one of its rules can be carried
+  by a real harness, and sometimes finds the shape of a rule not yet written down so that it can be.
+  A harness that drives these workflows deterministically reads the documents, not the surfaces. The
+  question to ask of anything added under `integrations/` is *which rule does this demonstrate* —
+  never *is this the product*. Recorded because it answers, in one place, the reading that
+  `README.md`'s refusal of "an LLM orchestration framework" otherwise leaves open every time a
+  surface is added.
+
+* **The Claude Code plugin ships an `implementor` and an `adversary` agent**, taking two of the four
+  states the `no-implementor-or-verifier-agent` gap held — `establish_verifiers` and `implement` to
+  the first, `adversarial_verify` to the second. The gap's two arguments are answered rather than
+  dropped, and the narrowed row (`no-verify-surface`, over `verify` alone) carries the answers.
+  *An implementor has nothing left to learn because `protocol drive` puts the capability policy in
+  force per state* was true of driven runs only; an interactive session has no drive loop, and
+  `implementor.md` teaches there what the `test.exists` guard mechanises elsewhere — the case is
+  written and **watched fail** before the code exists. *A verifier agent would emit evidence that
+  looks independent and is not* is also true, and is why `adversary.md` is **not a verifier and
+  emits no evidence**: its cases are run by the test runner, whose record the engine already reads
+  as independent, and its judgement findings become a `review-result` from an agent, which satisfies
+  no `human: true` review requirement and gates nothing. `independent: true` is unchanged and gap
+  register **D-3** stays proposed — the verifier agent that does need a signed record stays
+  unbuilt. The adversary's bound is that it may not edit what it attacks; its file states that in a
+  session this is an instruction rather than a mechanism, and its report leads with `git diff
+  --stat` so a reader can check the bound held. `story:implementor-and-adversary-agents`.
+
 * **`task docs-check` is a step of the gate**, eleventh of twenty-one: every verb the CLI answers
   must have an entry in `website/docs/reference/cli.md`, and the step fails naming each one that
   does not. The verb list comes from `clap` rather than from parsing `--help`, so it is the tree the

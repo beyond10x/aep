@@ -10,15 +10,27 @@ no relation names. Those are read at use time from `protocol artifact kinds`, `p
 relations` and `protocol artifact lifecycle <kind>`, because a prose copy of a validated document is
 a copy that goes stale, and drift is the thing this project exists to refuse.
 
+**This plugin is a demonstration, not the product.** The product is the specification —
+`protocols/`, `principles/`, `workflows/`, `artifacts/` and the schemas generated from them. Every
+surface here exists to show that one of those rules can be carried by a real harness, and sometimes
+to find the shape of a rule that is not yet written down, so that it can be. A harness that drives
+these workflows deterministically reads the documents; it never reads this directory. When you are
+deciding whether something belongs here, the question is *which rule does it demonstrate* — not
+whether it would be useful.
+
 ## What is in it
 
 | Component | What it does |
 |---|---|
 | `skills/planning/` | the model, the planning-store guardrails, and how to discover the store's vocabulary. Auto-triggers on planning talk or a `.engineering/planning/` directory; also invocable as `/engineering-protocols:planning` |
 | `skills/schema-contracts/` | project schema-registry discovery, offline validation, deterministic TypeScript projection, and drift checks from one JSON Schema source |
+| `skills/wave/` | run a wave: pick the next set of stories that can be implemented at once, propose it and stop for approval, then dispatch one implementor per story into its own worktree, route each result through the adversary, and merge what goes green onto one integration branch closed by one gate run |
 | `agents/decomposer.md` | takes one epic id, drafts the stories that jointly cover it, each with an acceptance statement. Creates drafts only — never moves an artifact, never touches one it did not create |
 | `agents/reverse-engineer.md` | drafts the first plan for a repository that has none: reads it through `protocol reverse scan` and `protocol reverse history`, creates draft artifacts that each cite the `path:line` they rest on, and reports what it could not cite as a question rather than filing it as work |
 | `agents/plan-reviewer.md` | read-only semantic audit: stories that no longer cover their epic, finished epics still open, stale work, missing acceptance statements. Proposes moves, performs none |
+| `agents/implementor.md` | implements one decomposed unit, test first: writes the case, runs it red, makes the smallest change that satisfies it, runs the whole suite. Reports the suite's own output. Never moves an artifact, never writes into the store |
+| `agents/adversary.md` | attacks a change that already passes: boundaries, mutants the suite would miss, contract drift, properties. Writes failing cases and may not edit what it attacks; records the residue it could not make into a case as an immutable `review-result` |
+| `agents/story-scoper.md` | works out where one story would actually land — crate, files, symbols, documents — and returns the `## Scope` section that says so, every line marked `cited` or `inferred`. Read-only, so many run at once; the caller writes what they return |
 
 The hooks and the eval that used to live here **migrated to the metaharness repository**
 (`epic:metaharness-migration`, 2026-08-22). The hooks' policy is now Rust inside the driver —
@@ -98,12 +110,28 @@ arrival did not turn them into work items; it answered one of them and moved the
   questions, and the driver asks them. A skill that approximated the same loop from prose would be
   a second, weaker protocol implementation with none of the conformance suites — and the first time
   the two disagreed, the untested one would be the one holding the session.
-* **`implementor` and `verifier` agents are still absent, and now for a narrower reason.** The
-  driver already puts the capability policy in force per state, so an implementor no longer has to
-  discover what it may use. What is missing is a verifier whose output the engine can tell apart
-  from the agent's own: `independent: true` is checked structurally, and nothing signs a record.
-  Until that gap closes — `gap-register.md` D-3, proposed and unaccepted — a verifier agent would
-  produce evidence that looks independent and is not.
+* **`implementor` and `adversary` now ship, and the reason they did not has been answered rather
+  than dropped.** The argument was two sentences and only one of them survived.
+
+  *An implementor has nothing left to learn, because the driver puts the capability policy in force
+  per state.* True — **of a driven run**. An interactive session has no drive loop and no per-state
+  policy, and that is the session most of this work happens in. What `implementor.md` teaches there
+  is the ordering the driver would otherwise have enforced: the case is written, and watched fail,
+  before the code exists.
+
+  *A verifier agent would produce evidence that looks independent and is not, because
+  `independent: true` is checked structurally and nothing signs a record.* Also true, and it is why
+  **`adversary.md` is not a verifier**. It emits no evidence at all. Its cases are run by the test
+  runner, which is a producer the engine reads; its opinion is recorded as a `review-result` from an
+  agent, which satisfies no `human: true` review requirement and gates nothing. `gap-register.md`
+  D-3 is untouched and stays proposed — nothing here needs it, which is the point.
+
+* **A `verifier` agent is still absent, and that one does wait for D-3.** An agent whose own record
+  the engine would count as independent is exactly what cannot be built until a record can be
+  signed.
 
 The honest surface today is the one here, plus the driver: plan the work with the skill, and run it
-with `protocol drive`, where the enforcement is a program rather than a paragraph.
+with `protocol drive`, where the enforcement is a program rather than a paragraph. In a session,
+every agent's hard rules are the instruction layer only — `adversary.md` says so in its own file,
+and its report leads with `git diff --stat` so a reader can check the bound held rather than trust
+that it did.

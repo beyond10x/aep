@@ -90,17 +90,45 @@ workflows:
           epic, a finished epic still open, stale work, a missing acceptance statement, an orphan —
           and that a reviewer proposes moves and performs none.
 
+      - surface: integrations/claude-code/agents/implementor.md
+        harness: claude-code
+        states: [establish_verifiers, implement]
+        teaches: >-
+          That the failing case is written and *watched fail* before the implementation, which is
+          what the `test.exists` guard mechanises — and that the suite's own output is the report,
+          because "tests pass" is the claim the gate exists to disbelieve. Its charter is also a
+          bound: code and tests only, no status moved, nothing written into the store.
+
+      - surface: integrations/claude-code/agents/adversary.md
+        harness: claude-code
+        states: [adversarial_verify]
+        teaches: >-
+          That the adversary's win condition is a red suite and the author's is a green one, and
+          that a finding routed through a program outranks the same finding as a paragraph — the
+          test runner produces the record, so the case is independent because something ran it.
+          Its bound is that it may not edit what it attacks, and it states, in the file, that this
+          bound is an instruction in a session and a `scope:` only in a driven run.
+
     gaps:
-      - id: no-implementor-or-verifier-agent
-        states: [establish_verifiers, implement, verify, adversarial_verify]
+      - id: no-verify-surface
+        states: [verify]
         reason: >-
-          Neither plugin ships an implementor or a verifier, and the Claude Code README says why:
-          `protocol drive` is the loop that puts the capability policy in force per state, so an
-          implementor no longer has to discover what it may use — and a verifier agent would emit
-          evidence that looks independent and is not, because `independent: true` is checked
-          structurally and nothing signs a record (gap register D-3, proposed and unaccepted). Four
-          of the ten states of the repository's own development workflow are therefore taught by
-          nothing either plugin carries.
+          Nothing a model does moves this state. `verify` is `command` steps end to end — the unit
+          suite, the contract suites, static analysis — and every one of them produces its record
+          from a verifier rather than from a session. A plugin surface here would teach an agent to
+          narrate a program's output, which is the one thing the state is built so that nobody has
+          to do.
+
+          Two states this gap used to hold are now covered, and the argument that kept them here is
+          answered rather than dropped. It said an implementor has nothing left to learn because
+          `protocol drive` puts the capability policy in force per state — true, and true of driven
+          runs only: an interactive session has no drive loop and no per-state policy, and this map
+          joins states to the *instruction* surface. It said a verifier agent would emit evidence
+          that looks independent and is not, because `independent: true` is checked structurally
+          and nothing signs a record — also true, and the reason `adversary.md` is not a verifier.
+          It emits no evidence at all: its cases are run by the test runner, which is the producer
+          the engine reads, and the `review-result` it records is a review by an agent, which
+          satisfies no `human: true` requirement. Gap register D-3 is untouched and stays proposed.
 
       - id: no-review-or-completion-surface
         states: [review, complete, declined]

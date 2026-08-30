@@ -218,6 +218,21 @@ valid
 
 Had `validate` found something, its output would have gone to the operator unedited.
 
+## 7. Scoping what is already there
+
+A store that does not record what its stories touch cannot be sequenced. Two items on one file
+conflict whichever order they land in, so *which surfaces does this touch* is the property that
+decides what can be worked at once — and in most stores nothing holds it.
+
+The `story-scoper` agent answers it for one artifact: it reads the body, its edges, the symbols it
+names and the tree, and returns a `## Scope` section marking every line **cited** or **inferred**.
+It is read-only, so run one per story and run them at once; write what they return through
+`protocol artifact body`, one at a time, because the journal is append-only and N writers race.
+
+Read the confidence line, not just the surface. A scope that mixes what was read with what was
+guessed is worse than none — it gets trusted exactly where it is weakest — which is why the section
+separates them and why a scoper reports what it could **not** establish beside what it could.
+
 ## Reference
 
 The on-disk format — directory layout, filename and id rules, which frontmatter fields are
