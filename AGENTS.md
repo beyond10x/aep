@@ -541,26 +541,17 @@ surfaces.
 * **No document this repository ships may tell its reader to write the planning store by hand.**
   `protocol artifact` is the store's only writer and every surface under `integrations/` says so in
   prose — which is where the rule regressed once already, when the planning skill *told* agents to
-  patch bodies directly and nothing in the repository read a skill's text.
-  *Enforced by* a source scan over shipped prose,
-  `crates/protocol-cli/tests/plugin_surface_store_writes.rs`, which reads every `*.md` under
-  `integrations/` sentence by sentence and refuses a write verb within a hundred bytes of a store
-  surface — frontmatter, `status:`, a body, a path under `.engineering/planning/` — on either side
-  of the verb, so *the frontmatter is yours to edit* is read as well as *edit the frontmatter*. A
-  prohibition exempts its own clause and not the sentence, and the comma is a clause boundary:
-  *do not ask the operator, edit the frontmatter* is refused. Naming the CLI exempts a verb only
-  when the writer is that verb's **own instrument** — named beside it, with no punctuation and no
-  clause word in between, as in *written through `protocol artifact body`*. A sentence that names
-  the CLI in another clause is naming it in order to leave it and is refused; fifteen of fifteen
-  plainly-worded routing sentences are, where two of fifteen were before 2026-08-30. All seventeen
-  documents are pinned by name in both directions, so a walk that stopped finding the agent
-  charters fails instead of passing over a third of the corpus.
-  **Three limits, measured rather than assumed.** `ROUTING` is still a phrase list, and it is what
-  catches the sentence that keeps the CLI beside the verb and says go round it anyway (*edit the
-  frontmatter yourself with `protocol artifact body` in mind*) — a wording it does not know passes.
-  Paraphrase that names no listed surface passes. And not scanned at all: `plugin.json`'s
-  `longDescription` and `defaultPrompt`, and the prose in
-  `integrations/codex/eval/check-instruction-surface.sh`.
+  patch bodies directly.
+  *Enforced by* `protocol artifact validate`, which the gate runs as `plan-check`. It catches the
+  **consequence** rather than the instruction: a document edited outside a command has a revision
+  no event supports, and validate reports *"an edit made outside a command is a change nothing
+  decided"* and exits 1. Deterministic, and it cannot produce a false positive.
+  **A prose scan over the shipped skills was built for this and removed on 2026-08-30.** It was
+  2,153 lines of Rust classifying English, it went red on ordinary edits to skill text — a list of
+  CLI verb names, the phrase *the artifact you write* — and a guard that fails when the prose it
+  polices changes is a guard somebody disables. Reviewing shipped prose is a person's job.
+  Its one real gap is validate's: **76 documents predate the event log** and cannot be drift-checked.
+  Every new write carries events, so that number only falls.
 * **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
   grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
   a profile's grant is a specification change with a design page, never a convenience.

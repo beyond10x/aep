@@ -243,17 +243,19 @@ belongs in the commit message or in `docs/design/`.
   generated schema), and `ArtifactId` refuses a leading separator its constructor takes (601, all
   schema-stricter).
 
-* **A skill that tells its reader to edit a planning artifact by hand now fails the build.** The
-  planning store has one writer, and nothing refused a document that routed around it. A test now
-  walks all seventeen shipped documents under `integrations/` and names the file and the offending
-  line. Three shipped sentences were corrected because it refused them:
-  `skills/planning/references/store-conventions.md` said correcting a title by hand is harmless and
-  now says the title is set by `protocol artifact new --title` with no verb changing one
-  afterwards; both planning skills said *put that evidence in the artifact* and now name
-  `protocol artifact body`. The check reads the sentence a regression would write rather than the
-  four it was first given — 15 of 15 plainly-worded routing sentences are refused, against 2 of 15
-  when it was a phrase list — and `AGENTS.md` carries its three limits rather than a guarantee it
-  cannot keep.
+* **Three shipped skill documents no longer suggest editing a planning artifact by hand.**
+  `protocol artifact` is the store's only writer.
+  `skills/planning/references/store-conventions.md` said correcting a title by hand is harmless; it
+  now says the title is set by `protocol artifact new --title` and no verb changes one afterwards,
+  which was checked against `replace_body`. Both planning skills said *put that evidence in the
+  artifact* and now name `protocol artifact body`.
+  **A source scan that read shipped prose and failed the build on it was written for this and
+  removed before release.** The store already catches the defect where it lands rather than where
+  it is described: a document edited outside a command has a revision no event supports, and
+  `protocol artifact validate` — which the gate runs as `plan-check` — reports it and exits 1. The
+  prose scan was 2,153 lines classifying English and went red on ordinary edits to skill text, and
+  a check that fails when the prose it polices changes is one somebody switches off.
+
 * **The wave skill absorbs the two retros written on 2026-08-30**, one from harness wave 3
   (`docs/reviews/2026-08-30-wave-3-retro.md`) and one from substrate's byte-plane wave — eighteen
   changes, none of which had reached `skills/wave/SKILL.md` when the retros were filed. The wave
