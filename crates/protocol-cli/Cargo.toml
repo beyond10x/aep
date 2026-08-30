@@ -59,6 +59,7 @@ aep-driver-spec.workspace = true
 aep-render.workspace = true
 
 aep-engine.workspace = true
+aep-project.workspace = true
 aep-schema.workspace = true
 schema-contract.workspace = true
 ess-compiler.workspace = true

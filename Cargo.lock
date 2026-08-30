@@ -139,6 +139,7 @@ dependencies = [
  "aep-domain",
  "aep-driver-spec",
  "aep-engine",
+ "aep-project",
  "aep-schema",
  "serde",
  "serde_json",
@@ -166,7 +167,21 @@ version = "0.34.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
+ "aep-project",
+ "aep-schema",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+]
+
+[[package]]
+name = "aep-project"
+version = "0.34.0"
+dependencies = [
+ "aep-domain",
  "aep-driver-spec",
+ "aep-engine",
  "aep-schema",
  "serde",
  "serde_json",
@@ -1483,6 +1498,7 @@ dependencies = [
  "aep-driver",
  "aep-driver-spec",
  "aep-engine",
+ "aep-project",
  "aep-render",
  "aep-schema",
  "anyhow",

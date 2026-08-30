@@ -10,6 +10,7 @@ members = [
     "crates/aep-backend-postgres",
     "crates/aep-backend-sqlite",
     "crates/aep-engine",
+    "crates/aep-project",
     "crates/aep-schema",
     "crates/aep-conformance",
     "crates/aep-driver-spec",
@@ -72,6 +73,7 @@ aep-backend-memory = { path = "crates/aep-backend-memory", version = "0.34.0" }
 aep-backend-postgres = { path = "crates/aep-backend-postgres", version = "0.34.0" }
 aep-backend-sqlite = { path = "crates/aep-backend-sqlite", version = "0.34.0" }
 aep-engine = { path = "crates/aep-engine", version = "0.34.0" }
+aep-project = { path = "crates/aep-project", version = "0.34.0" }
 aep-conformance = { path = "crates/aep-conformance", version = "0.34.0" }
 aep-driver-spec = { path = "crates/aep-driver-spec", version = "0.34.0" }
 aep-driver = { path = "crates/aep-driver", version = "0.34.0" }

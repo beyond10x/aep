@@ -22,7 +22,8 @@ use aep_domain::plan::ExecutionPlan;
 use aep_driver::coverage::{evidence_coverage, CoverageReport};
 use aep_driver_spec::map::StepMap;
 use aep_engine::registry::Registry;
-use aep_engine::{load_tree_report, resolve};
+use aep_engine::resolve;
+use aep_project::load_tree_report;
 
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {

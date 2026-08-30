@@ -69,7 +69,7 @@ for the protocol to reason about them.
 ## Where the documents live
 
 The loader walks six directories under one root, recursively, skipping anything dot-prefixed
-(`crates/aep-engine/src/load.rs:22-34`). Vendor the upstream documents (submodule, subtree or copy —
+(`crates/aep-project/src/load.rs`). Vendor the upstream documents (submodule, subtree or copy —
 the loader cares about content, not provenance) and put yours beside them:
 
 ```text

@@ -34,7 +34,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aep_engine::load_tree_report;
+use aep_project::load_tree_report;
 
 /// The workspace root, from this crate's manifest directory.
 fn repository_root() -> PathBuf {
@@ -55,7 +55,7 @@ fn repository_root() -> PathBuf {
 /// for the same reason; the two cannot share it, because integration tests are separate binaries
 /// and the only place to put a shared helper is a file this unit may not edit.
 fn tree_directories() -> Vec<String> {
-    let source = fs::read_to_string(repository_root().join("crates/aep-engine/src/load.rs"))
+    let source = fs::read_to_string(repository_root().join("crates/aep-project/src/load.rs"))
         .expect("the loader's module is readable");
     let mut inside = false;
     let mut directories = Vec::new();
@@ -147,7 +147,7 @@ fn document_count(directory: &Path) -> usize {
 }
 
 /// Every failure of a load, one per line, for an assertion message.
-fn reported(outcome: &aep_engine::LoadOutcome) -> String {
+fn reported(outcome: &aep_project::LoadOutcome) -> String {
     outcome
         .failures
         .iter()

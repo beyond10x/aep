@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use aep_domain::artifact::ArtifactKind;
 use aep_domain::version::PrincipleRef;
-use aep_engine::project::load;
+use aep_project::project::load;
 
 /// The directories the loader walks, and therefore the ones an owned tree vendors.
 const VENDORED: &[&str] = &[

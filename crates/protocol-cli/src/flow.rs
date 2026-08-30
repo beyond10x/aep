@@ -80,7 +80,6 @@ use clap::Args;
 use aep_domain::ids::StateId;
 use aep_domain::workflow::Workflow;
 use aep_driver_spec::map::{ScopeRule, Step, StepMap, StepMapId};
-use aep_engine::Registry;
 use aep_render::Layout;
 
 /// The inputs of one projection.
@@ -146,12 +145,13 @@ struct Run<'a> {
 
 /// `protocol workflow flow`
 pub(crate) fn flow(args: &FlowArgs) -> Result<String> {
-    let registry = crate::load(&args.root)?;
+    let documents = crate::load_documents(&args.root)?;
+    let registry = documents.registry;
     let workflow = crate::render::named(&registry, &args.id, &args.root)?;
     let map = args
         .map
         .as_deref()
-        .map(|named| step_map(named, &registry, workflow))
+        .map(|named| step_map(named, &documents.drivers, workflow))
         .transpose()?;
     project(workflow, args.max_attempts, map.as_ref())
 }
@@ -160,7 +160,11 @@ pub(crate) fn flow(args: &FlowArgs) -> Result<String> {
 ///
 /// The same two forms `protocol drive run --map` takes, read the same way, so one word means one
 /// thing across the two verbs that accept it.
-fn step_map(named: &Path, registry: &Registry, workflow: &Workflow) -> Result<StepMap> {
+fn step_map(
+    named: &Path,
+    drivers: &aep_project::load::DriverRegistry,
+    workflow: &Workflow,
+) -> Result<StepMap> {
     let map = if named.is_file() {
         let text = std::fs::read_to_string(named)
             .with_context(|| format!("reading {}", named.display()))?;
@@ -173,8 +177,8 @@ fn step_map(named: &Path, registry: &Registry, workflow: &Workflow) -> Result<St
                 named.display()
             )
         })?;
-        registry
-            .step_map(&id)
+        drivers
+            .get(&id)
             .with_context(|| format!("no step map `{id}` is in the document tree"))?
             .clone()
     };

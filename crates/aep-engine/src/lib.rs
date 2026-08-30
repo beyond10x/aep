@@ -19,8 +19,6 @@
 //! | module | responsibility |
 //! |---|---|
 //! | [`registry`] | the documents in force, and the cross-document checks |
-//! | [`load`] | reading a document tree from disk |
-//! | [`project`] | finding and loading an adopting project |
 //! | [`resolve`](mod@resolve) | `Task` + registry → [`ExecutionPlan`](aep_domain::ExecutionPlan) |
 //! | [`execution`] | live state: facts, evidence, events, artifacts |
 //! | [`evaluate`] | what is owed, what is permitted |
@@ -39,9 +37,7 @@ pub mod error;
 pub mod evaluate;
 pub mod execution;
 pub mod explain;
-pub mod load;
 pub mod policy;
-pub mod project;
 pub mod registry;
 pub mod resolve;
 pub mod trail;
@@ -55,9 +51,7 @@ pub use evaluate::{
 };
 pub use execution::{Execution, Snapshot};
 pub use explain::{CompletionExplanation, DecisionExplanation};
-pub use load::{load_tree, load_tree_report, LoadErrors, LoadFailure, LoadOutcome};
 pub use policy::{Decision, DecisionReason};
-pub use project::{discover, Project};
 pub use registry::Registry;
 pub use resolve::resolve;
 pub use trail::{audit_trail, command_context, correlation_id, decision_record};

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use aep_domain::artifact::{
     Artifact, ArtifactGraph, ArtifactId, ArtifactKind, ArtifactLocation, ArtifactStatus,
 };
-use aep_engine::load_tree_report;
+use aep_project::load_tree_report;
 
 /// Builds a throwaway document tree, holding only the lifecycles each test writes into it.
 ///

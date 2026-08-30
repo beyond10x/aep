@@ -50,8 +50,8 @@ use aep_domain::task::Task;
 use aep_domain::workspace::{Member, Workspace, WORKSPACE_FILE};
 use sha2::{Digest, Sha256};
 
-use crate::load::{load_tree_report, LoadErrors, LoadFailure, LoadOutcome};
-use crate::registry::Registry;
+use crate::load::{load_tree_report, DriverRegistry, LoadErrors, LoadFailure, LoadOutcome};
+use aep_engine::registry::Registry;
 
 /// How far up the tree to look for a project before giving up.
 ///
@@ -99,6 +99,8 @@ pub struct Project {
     pub config: ProjectConfig,
     /// The documents in force: the protocol tree's, with the project's own merged over them.
     pub registry: Registry,
+    /// Driver projections acquired beside the semantic documents.
+    pub drivers: DriverRegistry,
     /// The artifact graph, when the project has a manifest.
     pub artifacts: ArtifactGraph,
     /// The task being worked on, when the project names one.
@@ -191,6 +193,7 @@ fn load_report(root: &Path) -> Result<Project, Vec<LoadFailure>> {
     // The protocol tree first, then the project's own documents over it.
     let LoadOutcome {
         mut registry,
+        drivers,
         failures: tree_failures,
         ..
     } = load_tree_report(&paths.protocols);
@@ -279,6 +282,7 @@ fn load_report(root: &Path) -> Result<Project, Vec<LoadFailure>> {
         paths,
         config,
         registry,
+        drivers,
         artifacts,
         task,
     })
@@ -357,89 +361,147 @@ fn resolve_protocol_source(source: &ProtocolSource, engineering: &Path) -> Resul
     }
 }
 
-/// Returns a cached checkout of exactly the source's declared commit.
+/// One file sealed into an immutable source snapshot.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct SnapshotEntry {
+    path: String,
+    mode: u32,
+    length: u64,
+    sha256: String,
+}
+
+/// The complete membership and bytes of one source snapshot.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct SnapshotManifest {
+    format: String,
+    revision: String,
+    files: Vec<SnapshotEntry>,
+}
+
+const SNAPSHOT_MANIFEST: &str = ".aep-source-manifest.json";
+
+/// Returns a verified read-only snapshot of exactly the source's declared commit.
 fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String> {
-    let destination = git_cache_path(source)?;
+    refuse_credentials(source.git_url())?;
+    let (bare, destination) = git_cache_paths(source)?;
     if destination.exists() {
-        verify_cached_revision(&destination, source.revision())?;
+        verify_snapshot(&destination, source.revision())?;
         return Ok(destination);
     }
 
-    let parent = destination.parent().ok_or_else(|| {
-        format!(
-            "the protocol cache path {} has no parent",
-            destination.display()
-        )
-    })?;
-    std::fs::create_dir_all(parent).map_err(|error| {
-        format!(
-            "creating protocol source cache {}: {error}",
-            parent.display()
-        )
-    })?;
+    let repository_root = bare
+        .parent()
+        .ok_or_else(|| format!("the bare cache path {} has no parent", bare.display()))?;
+    std::fs::create_dir_all(repository_root)
+        .map_err(|error| format!("creating {}: {error}", repository_root.display()))?;
+    if !bare.exists() {
+        git_bare(
+            &bare,
+            None,
+            &["init", "--quiet", "--bare"],
+            "initializing the bare source cache",
+        )?;
+    }
+    git_bare(
+        &bare,
+        None,
+        &[
+            "fetch",
+            "--quiet",
+            "--depth",
+            "1",
+            source.git_url(),
+            source.revision(),
+        ],
+        "fetching the pinned protocol revision",
+    )?;
+    let actual = git_bare(
+        &bare,
+        None,
+        &["rev-parse", "FETCH_HEAD^{commit}"],
+        "verifying the fetched commit object",
+    )?;
+    if actual != source.revision() {
+        return Err(format!(
+            "the fetched commit is `{actual}`, not declared revision `{}`",
+            source.revision()
+        ));
+    }
+
+    let parent = destination
+        .parent()
+        .ok_or_else(|| format!("the snapshot path {} has no parent", destination.display()))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| format!("creating {}: {error}", parent.display()))?;
     let temporary = create_temporary_checkout(parent, source.revision())?;
-
     let materialized = (|| {
-        git_at(
-            &temporary,
-            &["init", "--quiet"],
-            "initializing the source cache",
-        )?;
-        git_at(
-            &temporary,
-            &["remote", "add", "origin", source.git_url()],
-            "recording the protocol repository",
-        )?;
-        git_at(
-            &temporary,
+        git_bare(
+            &bare,
+            Some(&temporary),
             &[
-                "fetch",
+                "checkout",
                 "--quiet",
-                "--depth",
-                "1",
-                "origin",
+                "--force",
                 source.revision(),
+                "--",
+                ".",
             ],
-            "fetching the pinned protocol revision",
+            "archiving the pinned commit into its snapshot",
         )?;
-        git_at(
-            &temporary,
-            &["checkout", "--quiet", "--detach", "FETCH_HEAD"],
-            "checking out the pinned protocol revision",
-        )?;
-        verify_cached_revision(&temporary, source.revision())
+        let manifest = snapshot_manifest(&temporary, source.revision(), true)?;
+        let path = temporary.join(SNAPSHOT_MANIFEST);
+        let bytes = serde_json::to_vec_pretty(&manifest)
+            .map_err(|error| format!("serializing {}: {error}", path.display()))?;
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("writing {}: {error}", path.display()))?;
+        make_read_only(&path, false)?;
+        make_directories_read_only(&temporary)?;
+        Ok::<(), String>(())
     })();
-
     if let Err(error) = materialized {
         std::fs::remove_dir_all(&temporary).ok();
         return Err(error);
     }
-
     if let Err(error) = std::fs::rename(&temporary, &destination) {
-        // Another process may have completed the same immutable source while this one fetched it.
         if destination.exists() {
             std::fs::remove_dir_all(&temporary).ok();
-            verify_cached_revision(&destination, source.revision())?;
+            verify_snapshot(&destination, source.revision())?;
             return Ok(destination);
         }
         std::fs::remove_dir_all(&temporary).ok();
         return Err(format!(
-            "installing protocol source cache at {}: {error}",
+            "publishing snapshot {}: {error}",
             destination.display()
         ));
     }
-
+    verify_snapshot(&destination, source.revision())?;
     Ok(destination)
 }
 
-/// A source-and-revision-specific cache path that contains no repository credentials or URL text.
-fn git_cache_path(source: &GitProtocolSource) -> Result<PathBuf, String> {
+/// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
+fn git_cache_paths(source: &GitProtocolSource) -> Result<(PathBuf, PathBuf), String> {
     let root = cache_root()?;
     let repository = format!("{:x}", Sha256::digest(source.repository().as_bytes()));
-    Ok(root
-        .join("protocol-sources")
-        .join(repository)
-        .join(source.revision()))
+    let base = root.join("protocol-sources").join(repository);
+    Ok((
+        base.join("objects.git"),
+        base.join("snapshots").join(source.revision()),
+    ))
+}
+
+/// Refuses URL userinfo that could write a secret into process listings or Git configuration.
+fn refuse_credentials(url: &str) -> Result<(), String> {
+    let Some((_, rest)) = url.split_once("://") else {
+        return Ok(());
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let Some((userinfo, _)) = authority.rsplit_once('@') else {
+        return Ok(());
+    };
+    if userinfo == "git" && !userinfo.contains(':') {
+        return Ok(());
+    }
+    Err("Git protocol source URLs must not contain credentials or user information".to_owned())
 }
 
 /// The operator-selected cache root, then the platform cache, then the conventional user cache.
@@ -485,26 +547,21 @@ fn create_temporary_checkout(parent: &Path, revision: &str) -> Result<PathBuf, S
     ))
 }
 
-fn verify_cached_revision(directory: &Path, expected: &str) -> Result<(), String> {
-    let actual = git_at(
-        directory,
-        &["rev-parse", "HEAD"],
-        "reading the cached protocol revision",
-    )?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(format!(
-            "protocol source cache {} is at `{actual}`, not declared revision `{expected}`",
-            directory.display()
-        ))
+/// Runs Git against the bare object database and, optionally, a detached work tree.
+fn git_bare(
+    bare: &Path,
+    work_tree: Option<&Path>,
+    arguments: &[&str],
+    operation: &str,
+) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg(format!("--git-dir={}", bare.display()));
+    if let Some(work_tree) = work_tree {
+        command.arg(format!("--work-tree={}", work_tree.display()));
     }
-}
-
-fn git_at(directory: &Path, arguments: &[&str], operation: &str) -> Result<String, String> {
     let output = Command::new("git")
+        .args(command.get_args())
         .args(arguments)
-        .current_dir(directory)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
         .output()
@@ -514,6 +571,163 @@ fn git_at(directory: &Path, arguments: &[&str], operation: &str) -> Result<Strin
         return Err(format!("{operation}: {}", detail.trim()));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+/// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one.
+fn verify_snapshot(directory: &Path, revision: &str) -> Result<(), String> {
+    let path = directory.join(SNAPSHOT_MANIFEST);
+    let bytes = std::fs::read(&path)
+        .map_err(|error| format!("reading snapshot manifest {}: {error}", path.display()))?;
+    let expected: SnapshotManifest = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("reading snapshot manifest {}: {error}", path.display()))?;
+    if expected.format != "aep.source-snapshot/1" || expected.revision != revision {
+        return Err(format!(
+            "snapshot manifest {} does not identify revision `{revision}`",
+            path.display()
+        ));
+    }
+    let actual = snapshot_manifest(directory, revision, false)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "protocol source snapshot {} does not match its path, mode and byte manifest",
+            directory.display()
+        ))
+    }
+}
+
+/// Walks every snapshot file in deterministic order, optionally making it read-only first.
+fn snapshot_manifest(
+    directory: &Path,
+    revision: &str,
+    seal: bool,
+) -> Result<SnapshotManifest, String> {
+    let mut paths = Vec::new();
+    collect_snapshot_files(directory, directory, &mut paths)?;
+    paths.sort();
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        if seal {
+            make_read_only(&path, false)?;
+        }
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|error| format!("reading metadata for {}: {error}", path.display()))?;
+        let relative = path
+            .strip_prefix(directory)
+            .expect("collected paths start below the snapshot")
+            .to_str()
+            .ok_or_else(|| format!("snapshot path {} is not UTF-8", path.display()))?
+            .replace('\\', "/");
+        let bytes = std::fs::read(&path)
+            .map_err(|error| format!("reading snapshot file {}: {error}", path.display()))?;
+        files.push(SnapshotEntry {
+            path: relative,
+            mode: file_mode(&metadata),
+            length: metadata.len(),
+            sha256: format!("{:x}", Sha256::digest(&bytes)),
+        });
+    }
+    Ok(SnapshotManifest {
+        format: "aep.source-snapshot/1".to_owned(),
+        revision: revision.to_owned(),
+        files,
+    })
+}
+
+/// Collects regular files and refuses symlinks or special filesystem entries.
+fn collect_snapshot_files(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), String> {
+    let entries = std::fs::read_dir(directory).map_err(|error| {
+        format!(
+            "reading snapshot directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "reading snapshot directory {}: {error}",
+                directory.display()
+            )
+        })?;
+        let path = entry.path();
+        if path == root.join(SNAPSHOT_MANIFEST) {
+            continue;
+        }
+        let kind = entry
+            .file_type()
+            .map_err(|error| format!("reading file type for {}: {error}", path.display()))?;
+        if kind.is_symlink() {
+            return Err(format!(
+                "protocol source snapshot contains symlink {}, which could escape the pinned tree",
+                path.display()
+            ));
+        }
+        if kind.is_dir() {
+            collect_snapshot_files(root, &path, files)?;
+        } else if kind.is_file() {
+            files.push(path);
+        } else {
+            return Err(format!(
+                "protocol source snapshot contains non-file {}",
+                path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Makes one snapshot file read-only without discarding its executable bit.
+fn make_read_only(path: &Path, directory: bool) -> Result<(), String> {
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("reading metadata for {}: {error}", path.display()))?;
+    let mut permissions = metadata.permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let executable = permissions.mode() & 0o111;
+        permissions.set_mode(if directory { 0o555 } else { 0o444 | executable });
+    }
+    #[cfg(not(unix))]
+    permissions.set_readonly(true);
+    std::fs::set_permissions(path, permissions)
+        .map_err(|error| format!("making {} read-only: {error}", path.display()))
+}
+
+/// Seals directories from the leaves upwards after their files and manifest are complete.
+fn make_directories_read_only(directory: &Path) -> Result<(), String> {
+    let entries = std::fs::read_dir(directory).map_err(|error| {
+        format!(
+            "reading snapshot directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("reading {}: {error}", directory.display()))?
+            .path();
+        if path.is_dir() {
+            make_directories_read_only(&path)?;
+        }
+    }
+    make_read_only(directory, true)
+}
+
+/// Platform mode recorded in the manifest.
+#[cfg(unix)]
+fn file_mode(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt as _;
+    metadata.permissions().mode() & 0o777
+}
+
+/// Portable read-only bit where Unix modes are unavailable.
+#[cfg(not(unix))]
+fn file_mode(metadata: &std::fs::Metadata) -> u32 {
+    u32::from(metadata.permissions().readonly())
 }
 
 /// Merges a directory of project-local documents into `registry`.
@@ -779,9 +993,32 @@ mod tests {
         )
         .expect("the task parses");
 
-        let errors = crate::resolve(&task, &project.registry)
+        let errors = aep_engine::resolve(&task, &project.registry)
             .expect_err("the approval floor still applies to a project's own profile");
         assert!(errors.contains(aep_domain::error::ValidationCode::ProductionWriteWithoutApproval));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn credential_bearing_git_urls_are_refused_before_git_sees_them() {
+        assert!(refuse_credentials("https://example.invalid/repository").is_ok());
+        assert!(refuse_credentials("ssh://git@example.invalid/repository").is_ok());
+        let refusal = refuse_credentials("https://person:secret@example.invalid/repository")
+            .expect_err("credentials must not enter Git configuration or process arguments");
+        assert!(refusal.contains("credentials"), "{refusal}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_is_refused_before_a_snapshot_manifest_can_seal_it() {
+        use std::os::unix::fs::symlink;
+
+        let root = scratch("source-symlink");
+        write(&root.join("outside.yaml"), "outside\n");
+        symlink("../outside.yaml", root.join("linked.yaml")).expect("a symlink fixture");
+        let refusal = snapshot_manifest(&root, &"a".repeat(40), false)
+            .expect_err("a symlink could escape the pinned tree");
+        assert!(refusal.contains("symlink"), "{refusal}");
         std::fs::remove_dir_all(&root).ok();
     }
 }

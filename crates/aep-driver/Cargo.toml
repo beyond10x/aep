@@ -36,6 +36,7 @@ sha2 = "0.10"
 # struct nobody could have written in YAML. `aep-schema` depends on `aep-driver-spec`, never on this
 # crate, so this edge closes no cycle.
 [dev-dependencies]
+aep-project.workspace = true
 aep-schema.workspace = true
 serde_yaml.workspace = true
 
