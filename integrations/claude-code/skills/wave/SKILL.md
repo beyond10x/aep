@@ -169,8 +169,10 @@ Then **stop and report**. A plan is not a work order, and a wave nobody approved
 spends real time and money on a guess.
 
 Report: the units with the objective each serves, the overlap risk per pair, what you deliberately
-left out and why, and the pre-flight numbers from below so the operator approves a wave whose cost
-is known.
+left out and why, the pre-flight numbers from below so the operator approves a wave whose cost is
+known, and **one line naming the commits approval authorises** — N unit commits, the merges, the
+closing store commit, the merge to the base branch, and nothing else. If the operator's standing
+rule is *never commit unasked*, that line is the whole of the exception they are granting.
 
 **Fit it in whatever report budget the operator has set**, and treat that budget as a hard ceiling
 rather than a target. This is a proposal, not the plan: the plan is the page you just wrote, and one
@@ -178,6 +180,16 @@ line linking to it carries the rest. The store requirements you satisfied, the l
 and the scopers you ran are how you did the work, not what the operator decides on.
 
 ### After approval, do not stop again until the release
+
+**Approval is what makes the commits legitimate, and it is bounded.** An operator's standing rule
+may well be *never commit unasked* — this one's is. Approving a wave grants exactly the commits the
+wave needs: one per unit, the merges into the integration branch, the closing store commit, and the
+merge into the base branch once the gate is green. Nothing else. **Not** a push, **not** a tag,
+**not** a release, **not** work that was not part of the wave, **not** the next wave. When the wave
+closes the grant closes with it, and the operator's ordinary rule is back in force.
+
+State that boundary in the stage 1 proposal, so approving the wave is visibly approving those
+commits. An operator who did not know they were granting commit rights did not grant them.
 
 The next thing the operator hears from you is a deviation or the closing report. Not the first
 implementor returning, not the first merge, not each adversary's verdict. If you are composing a
