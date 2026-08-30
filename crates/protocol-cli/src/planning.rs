@@ -20,7 +20,7 @@
 //! compare: "a story cannot go straight from draft to implemented" is an answer about the input,
 //! not a failure of this program.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -2137,20 +2137,7 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
     let ladders = ladders_or_none(args);
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
     let listed = select(&opened.report, &blocked, kind, None)?;
-    // Every status, in the vocabulary's own order, and only the ones with something in them: an
-    // empty column is a column a reader has to skip on every glance.
-    let columns: Vec<Column> = ArtifactStatus::ALL
-        .iter()
-        .map(|status| Column {
-            status: status.as_str(),
-            artifacts: listed
-                .iter()
-                .filter(|entry| entry.status == status.as_str())
-                .cloned()
-                .collect(),
-        })
-        .filter(|column| !column.artifacts.is_empty())
-        .collect();
+    let columns = columns_for(&listed, ladders.lifecycles());
 
     match args.format {
         Format::Text => {
@@ -2177,6 +2164,282 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
         Format::Yaml | Format::Json => crate::print_serialised(&columns, args.format)?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Where the compiled vocabulary puts a rung, and after every rung it names, the ones it cannot.
+///
+/// The **only** thing `ArtifactStatus::ALL` decides on the board: which of two rungs neither of
+/// which leads to the other is printed first. It decides no rung's existence — that is the whole
+/// point of `story:board-columns-come-from-the-ladders` — and it drops nothing.
+fn precedence(status: &str) -> (usize, String) {
+    (
+        ArtifactStatus::ALL
+            .iter()
+            .position(|known| known.as_str() == status)
+            .unwrap_or(usize::MAX),
+        status.to_owned(),
+    )
+}
+
+/// Whether `from` reaches `target` by following one or more edges of `leads_to`.
+///
+/// `reaches(g, rung, rung)` therefore asks whether `rung` is on a cycle, which is the question both
+/// callers actually have: [`ladder_order`] cuts only rungs that are, and [`board_order`] refuses
+/// only the constraints that would put one there.
+fn reaches(leads_to: &BTreeMap<String, BTreeSet<String>>, from: &str, target: &str) -> bool {
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut pending: Vec<&str> = vec![from];
+    while let Some(rung) = pending.pop() {
+        for onwards in leads_to.get(rung).into_iter().flatten() {
+            if onwards == target {
+                return true;
+            }
+            if seen.insert(onwards.as_str()) {
+                pending.push(onwards.as_str());
+            }
+        }
+    }
+    false
+}
+
+/// One ladder's rungs, in the order that document puts them in.
+///
+/// A topological sort — Kahn's, over this ladder's `transitions` — so a rung is printed only once
+/// every rung that leads to it has been. That is what "ladder order" means and a walk outwards from
+/// `initial` is not: `archived` is one hop from `draft` in `artifacts/lifecycles/task.yaml` *and*
+/// the place a task stops, so ordering by distance from the start puts the end of the ladder third.
+///
+/// Two rungs neither of which leads to the other are separated by [`precedence`], and the result is
+/// a *total* order over this ladder's rungs — which is what makes it something [`board_order`] can
+/// merge, and what keeps `accepted` ahead of `rejected` in
+/// `artifacts/lifecycles/architecture-decision-record.yaml`, where `proposed: [accepted, rejected]`
+/// gives the pair no edge either way.
+///
+/// **Ladders have cycles.** `proposed -> draft` is in most of the documents in this repository, so
+/// a pass where nothing is ready is an ordinary ladder and not a malformed one. Two rules decide
+/// where such a pass cuts, and both exist because the obvious alternative was tried and printed
+/// something worse:
+///
+/// 1. **Only a rung on a cycle may be cut**, hence `reaches(remaining, rung, rung)`. Cutting the
+///    best of *every* stuck rung breaks an edge that no cycle forced anybody to break:
+///    `intake -> triage`, `triage -> {rework, approved}`, `rework -> triage` has one cycle,
+///    `{triage, rework}`, and `approved` is not in it — yet `approved` outranks both by
+///    [`precedence`], so it was printed second, ahead of the only rung that reaches it, for two
+///    backwards edges where one is unavoidable.
+/// 2. **The cut lands where a reader entered**: a rung an already-printed rung leads to, then the
+///    ladder's own `initial`, then [`precedence`]. Cutting at whichever rung was closest to ready
+///    instead printed this repository's own board `proposed`, `active`, `draft`, with sixty-six
+///    artifacts in the column that came third — `draft` is waited on by both `proposed` and
+///    `in_review`, so it never wins that race.
+///
+/// One rung leaves the graph on every pass, so this terminates whatever the documents say.
+fn ladder_order(ladder: &ArtifactLifecycle) -> Vec<String> {
+    let mut waiting: BTreeMap<String, BTreeSet<String>> = ladder
+        .statuses()
+        .iter()
+        .map(|rung| (rung.as_str().to_owned(), BTreeSet::new()))
+        .collect();
+    let mut leads_to: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (from, targets) in &ladder.transitions {
+        for to in targets.iter().filter(|to| *to != from) {
+            leads_to
+                .entry(from.as_str().to_owned())
+                .or_default()
+                .insert(to.as_str().to_owned());
+            waiting
+                .entry(to.as_str().to_owned())
+                .or_default()
+                .insert(from.as_str().to_owned());
+        }
+    }
+
+    let initial = ladder.initial.as_str().to_owned();
+    let mut ordered: Vec<String> = Vec::with_capacity(waiting.len());
+    while !waiting.is_empty() {
+        // The graph the cut asks its question of is the one that is left: an edge out of a rung
+        // already printed cannot hold anything up, and counting it would read a settled rung as
+        // still being on a cycle.
+        let remaining: BTreeMap<String, BTreeSet<String>> = waiting
+            .keys()
+            .map(|rung| {
+                let onwards = leads_to
+                    .get(rung)
+                    .into_iter()
+                    .flatten()
+                    .filter(|to| waiting.contains_key(*to))
+                    .cloned()
+                    .collect();
+                (rung.clone(), onwards)
+            })
+            .collect();
+        let entered = |rung: &String| {
+            ordered
+                .iter()
+                .any(|done| leads_to.get(done).is_some_and(|targets| targets.contains(rung)))
+        };
+        // Ready rungs first and in precedence order, which is Kahn's algorithm; the cut keys below
+        // are read only on a pass where nothing is ready, and only for a rung on a cycle, where no
+        // edge has an opinion left to give.
+        let key = |rung: &String| {
+            let stuck = !waiting[rung].is_empty();
+            (
+                usize::from(stuck),
+                usize::from(stuck && !reaches(&remaining, rung, rung)),
+                usize::from(stuck && !entered(rung)),
+                usize::from(stuck && *rung != initial),
+                precedence(rung),
+            )
+        };
+        let Some(next) = waiting.keys().min_by_key(|rung| key(rung)).cloned() else {
+            break;
+        };
+        waiting.remove(&next);
+        for onwards in leads_to.get(&next).into_iter().flatten() {
+            if let Some(before) = waiting.get_mut(onwards) {
+                before.remove(&next);
+            }
+        }
+        ordered.push(next);
+    }
+    ordered
+}
+
+/// The rungs on the board, in the order the ladders themselves put them in.
+///
+/// Every ladder present is compiled to its own order by [`ladder_order`] — the order
+/// `protocol artifact lifecycle <kind>` describes — and those orders are then **merged**: a ladder
+/// is honoured in full unless honouring it would contradict one merged before it. Merging rather
+/// than concatenating is what keeps a ladder's own columns where they were when something unrelated
+/// is filed; appending one order per kind instead made the answer depend on which kind sorted
+/// first.
+///
+/// **Two ladders can disagree, and then one of them loses.** `checklist` running
+/// draft -> proposed -> active and `escalation` running active -> waiting -> proposed are each
+/// perfectly ordinary, and their union has a cycle; no list of columns can honour both. The
+/// merge is taken in **kind order**, so which one loses depends on the names of the kinds present
+/// and on nothing else — not on how many artifacts are on the board, not on what was filed last,
+/// so the columns do not move when the store does. Sorting the raw union of every ladder's edges
+/// instead let one artifact of a second kind reorder the first kind's columns, because the cut fell
+/// on the other ladder's rung. `--kind` narrows to one ladder, where the question cannot arise.
+///
+/// The compiled vocabulary is merged **last**, as one more sequence, so it separates two rungs
+/// exactly when no ladder on the board has said anything about the pair: a `mystery` at `draft` and
+/// a `review-result` at `active`, where `artifacts/lifecycles/review-result.yaml` is the only
+/// document either kind has and it names neither `draft` nor `proposed`. That is the acceptance's
+/// "the compiled list is used for nothing but the default ordering of the statuses it knows", and
+/// it is why a rung no ladder named is interleaved by [`precedence`] rather than appended after
+/// everything.
+fn board_order(ladders: &[&ArtifactLifecycle], held: &BTreeSet<String>) -> Vec<String> {
+    let mut sequences: Vec<Vec<String>> = ladders.iter().copied().map(ladder_order).collect();
+    let mut rungs: BTreeSet<String> = held.clone();
+    for sequence in &sequences {
+        rungs.extend(sequence.iter().cloned());
+    }
+    sequences.push(
+        ArtifactStatus::ALL
+            .iter()
+            .map(|known| known.as_str().to_owned())
+            .filter(|known| rungs.contains(known))
+            .collect(),
+    );
+
+    // Every pair a sequence puts in an order, not only its neighbours: a pair skipped for
+    // contradicting an earlier ladder should cost that one pair, and not the order of everything
+    // after it.
+    let mut after: BTreeMap<String, BTreeSet<String>> =
+        rungs.iter().map(|rung| (rung.clone(), BTreeSet::new())).collect();
+    for sequence in &sequences {
+        for (index, earlier) in sequence.iter().enumerate() {
+            for later in sequence.iter().skip(index + 1) {
+                if earlier != later && !reaches(&after, later, earlier) {
+                    if let Some(onwards) = after.get_mut(earlier) {
+                        onwards.insert(later.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut waiting: BTreeMap<String, BTreeSet<String>> =
+        rungs.iter().map(|rung| (rung.clone(), BTreeSet::new())).collect();
+    for (earlier, laters) in &after {
+        for later in laters {
+            if let Some(before) = waiting.get_mut(later) {
+                before.insert(earlier.clone());
+            }
+        }
+    }
+    let mut ordered: Vec<String> = Vec::with_capacity(waiting.len());
+    // `after` is acyclic by construction, so a source always exists and the second key never
+    // decides anything; it is there so that this loop ends on any input rather than only on the
+    // ones the construction promises.
+    while let Some(next) = waiting
+        .keys()
+        .min_by_key(|rung| (usize::from(!waiting[*rung].is_empty()), precedence(rung)))
+        .cloned()
+    {
+        waiting.remove(&next);
+        for onwards in after.get(&next).into_iter().flatten() {
+            if let Some(before) = waiting.get_mut(onwards) {
+                before.remove(&next);
+            }
+        }
+        ordered.push(next);
+    }
+    ordered
+}
+
+/// The board's columns: the ladders of the kinds on the board, in ladder order, and every rung
+/// anything is actually on.
+///
+/// The set is **not** [`ArtifactStatus::ALL`]. That list is the vocabulary this crate was
+/// *compiled* with, and the status vocabulary is open — so a `blocker` at `open`, a rung
+/// `artifacts/lifecycles/blocker.yaml` declares and no release here names, had a card on the board
+/// and no column to put it in. The ladders decide which columns exist, exactly as they decide
+/// which moves are legal.
+///
+/// `--kind` needs no case of its own: it narrows what is on the board, and the columns are read
+/// off what is on the board.
+///
+/// **Every card lands in a column, and this function has no failure mode.** A rung the board was
+/// handed an artifact on and no ladder it read names still gets one, in the place [`precedence`]
+/// puts it. `board` is `list` regrouped, not `list` filtered, and reading the ladders is
+/// best-effort by design — see [`ladders_or_none`] — so a tree with no `artifacts/` directory, or
+/// one document in it with a typo, would otherwise take an adopter's rung off the board and its
+/// cards with it, at exit 0 and without a word, while `list` still prints them. That silent drop is
+/// the defect this verb was filed against; it must not come back through the path where no ladder
+/// is declared at all. Losing an order is a nuisance and losing a card is a lie. A kind whose name
+/// this binary cannot parse loses its ladder for the same reason and by the same rule — its cards
+/// still have rungs, and its rungs still have columns.
+///
+/// A rung a ladder declares and nothing is on still gets no column: an empty column is something a
+/// reader has to skip on every glance.
+fn columns_for(
+    listed: &[Listed],
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+) -> Vec<Column> {
+    let kinds: BTreeSet<ArtifactKind> = listed
+        .iter()
+        .filter_map(|entry| ArtifactKind::parse(&entry.kind).ok())
+        .collect();
+    let ladders: Vec<&ArtifactLifecycle> = kinds
+        .iter()
+        .filter_map(|kind| lifecycles.for_kind(kind))
+        .collect();
+    let held: BTreeSet<String> = listed.iter().map(|entry| entry.status.clone()).collect();
+
+    board_order(&ladders, &held)
+        .into_iter()
+        .map(|status| Column {
+            artifacts: listed
+                .iter()
+                .filter(|entry| entry.status == status)
+                .cloned()
+                .collect(),
+            status,
+        })
+        .filter(|column| !column.artifacts.is_empty())
+        .collect()
 }
 
 /// `protocol artifact blocked`
@@ -3739,7 +4002,9 @@ struct ShownRelation {
 /// One status column of the board.
 #[derive(Debug, serde::Serialize)]
 struct Column {
-    status: &'static str,
+    // Owned rather than `&'static str`: a column is named by a rung of a ladder, and a lifecycle
+    // document may have invented that name, which no `'static` slice in this binary can hold.
+    status: String,
     artifacts: Vec<Listed>,
 }
 

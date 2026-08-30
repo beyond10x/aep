@@ -100,6 +100,23 @@ fn scratch(name: &str) -> PathBuf {
     directory
 }
 
+/// Copies a committed fixture store into a scratch directory, so a test can add to it.
+///
+/// The passkeys fixture is asserted verbatim by fifteen sites; a test that needs it *plus*
+/// something works on a copy rather than adding a document to the tree everybody counts.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the temporary tree is writable");
+    for entry in std::fs::read_dir(from).expect("the fixture is readable") {
+        let entry = entry.expect("an entry");
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("the fixture copies");
+        }
+    }
+}
+
 /// Writes a fixture file, creating the directories above it.
 fn write(path: &Path, contents: &str) {
     if let Some(parent) = path.parent() {
@@ -585,6 +602,667 @@ fn the_board_groups_the_fixture_into_status_columns() {
     for column in ["proposed (1)", "active (4)", "implemented (2)"] {
         assert!(text.contains(column), "no `{column}` column: {text}");
     }
+}
+
+/// The passkeys fixture plus two blockers: a column exists for a rung only a lifecycle document
+/// names, in the order that document puts its rungs in.
+///
+/// `board` used to build its columns from `ArtifactStatus::ALL`, the list compiled into the
+/// binary, so a `blocker` at `open` — a rung `artifacts/lifecycles/blocker.yaml` declares and this
+/// crate does not name — appeared in no column at all. On a copy of the fixture rather than in it:
+/// fifteen sites assert that store's counts verbatim.
+#[test]
+fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
+    let store = scratch("aep-planning-board-columns");
+    let repository = root();
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let tree = printable(&repository);
+
+    // Two blockers so both rungs of the blocker ladder are held at once, which is the only way the
+    // order between them is a claim: alphabetically `cleared` comes first, and the ladder says
+    // `open` does.
+    let stuck = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "api-token-scope",
+        "--title",
+        "CI cannot mint a read-scope API token",
+        "--withholds",
+        "test_result",
+        "--relate",
+        "blocks:story:passkey-login",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
+
+    let lifted = protocol(&[
+        "artifact",
+        "new",
+        "decision-blocker",
+        "recovery-owner",
+        "--title",
+        "Nobody owned account recovery",
+        "--relate",
+        "blocks:story:passkey-recovery",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&lifted), 0, "{}", stderr(&lifted));
+    let cleared = protocol(&[
+        "artifact",
+        "move",
+        "decision-blocker:recovery-owner",
+        "--to",
+        "cleared",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&cleared), 0, "{}", stderr(&cleared));
+
+    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let text = stdout(&board);
+
+    // 1. The adopter's rung is a column, and the blocker is in it.
+    assert!(text.contains("open (1)"), "no `open` column: {text}");
+    let card = text
+        .lines()
+        .skip_while(|line| !line.starts_with("open ("))
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        card.contains("credential-blocker:api-token-scope"),
+        "the blocker is not in its own column: {text}"
+    );
+
+    // 2. The rungs the compiled vocabulary knows are still columns, with the same counts.
+    for column in ["proposed (1)", "active (4)", "implemented (2)"] {
+        assert!(text.contains(column), "no `{column}` column: {text}");
+    }
+
+    // 3. Ladder order, not the alphabet: `open` before `cleared`.
+    let open_at = text.find("open (1)").expect("an `open` column");
+    let cleared_at = text
+        .find("cleared (1)")
+        .unwrap_or_else(|| panic!("no `cleared` column: {text}"));
+    assert!(
+        open_at < cleared_at,
+        "the blocker ladder runs open -> cleared: {text}"
+    );
+
+    // 4. A rung every story ladder declares and nothing in the store holds is still no column.
+    assert!(
+        !text.contains("draft ("),
+        "an empty column is noise, not information: {text}"
+    );
+
+    // 5. `--kind` narrows the columns to that kind's ladder.
+    let narrowed = protocol(&[
+        "artifact", "board", "--kind", "blocker", "--store", at, "--root", tree,
+    ]);
+    assert_eq!(code(&narrowed), 0, "{}", stderr(&narrowed));
+    let narrowed = stdout(&narrowed);
+    assert!(narrowed.contains("open (1)"), "{narrowed}");
+    assert!(narrowed.contains("cleared (1)"), "{narrowed}");
+    for absent in ["proposed (", "active (", "implemented ("] {
+        assert!(
+            !narrowed.contains(absent),
+            "`{absent}` is on no blocker ladder: {narrowed}"
+        );
+    }
+
+    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+}
+
+/// Every artifact the board was given lands in a column, whatever the tree says.
+///
+/// `board` is `list` regrouped, not `list` filtered: a card the board cannot place is the defect
+/// `story:board-columns-come-from-the-ladders` exists against — "today it appears in no column at
+/// all". Reading the ladders is best-effort by design (`ladders_or_none`: "a document tree that
+/// cannot be read is not a reason a *listing* should stop answering"), so a root with no
+/// `artifacts/` tree is a supported way to run this verb, and it is the one where a
+/// `credential-blocker` at `open` still has nowhere to go.
+#[test]
+fn every_artifact_the_board_lists_lands_in_a_column() {
+    let store = scratch("aep-planning-board-totality");
+    let bare = scratch("aep-planning-board-bare-root");
+    let repository = root();
+    let at = printable(&store);
+    let tree = printable(&repository);
+    let bare = printable(&bare);
+
+    // Created against the repository's own ladders, so `open` is a rung a document declared and
+    // not a typo: `artifacts/lifecycles/blocker.yaml` starts a blocker there.
+    let stuck = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "api-token-scope",
+        "--title",
+        "CI cannot mint a read-scope API token",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
+    let ordinary = protocol(&[
+        "artifact", "new", "story", "alpha", "--title", "Alpha", "--store", at, "--root", tree,
+    ]);
+    assert_eq!(code(&ordinary), 0, "{}", stderr(&ordinary));
+
+    // Read back through a root that declares no ladders at all. `list` still prints both rows.
+    let listed = protocol(&["artifact", "list", "--store", at, "--root", bare]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    let listed = stdout(&listed);
+    assert!(
+        listed.contains("credential-blocker:api-token-scope"),
+        "the store still holds the blocker: {listed}"
+    );
+    assert_eq!(listed.lines().count(), 2, "{listed}");
+
+    // So the board has to account for both of them.
+    let board = protocol(&["artifact", "board", "--store", at, "--root", bare]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let board = stdout(&board);
+    assert!(
+        board.contains("open (1)"),
+        "no column for the rung the blocker is on: {board}"
+    );
+    assert!(
+        board.contains("credential-blocker:api-token-scope"),
+        "`list` prints the blocker and the board drops it without a word: {board}"
+    );
+}
+
+/// A rung with nowhere to go is printed after the rungs that lead to it.
+///
+/// `artifacts/lifecycles/task.yaml` runs draft -> proposed -> active -> implemented, and
+/// `archived` is where a task goes to stop. "In ladder order" cannot mean a board whose first
+/// column is the one nothing leaves: `archived` is one step from `draft` and reachable from every
+/// other rung, so shortest-distance-from-`initial` puts the end of the ladder third.
+#[test]
+fn the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it() {
+    let store = scratch("aep-planning-board-terminal-rung");
+    let repository = root();
+    let at = printable(&store);
+    let tree = printable(&repository);
+
+    // `task`, not `story`: a story's `implemented` rung requires a test_result, and this is a
+    // question about column order, not about evidence.
+    for (name, title) in [("alpha", "Alpha"), ("beta", "Beta"), ("gamma", "Gamma")] {
+        let made = protocol(&[
+            "artifact", "new", "task", name, "--title", title, "--store", at, "--root", tree,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+    let route: &[(&str, &[&str])] = &[
+        ("task:alpha", &["archived"]),
+        ("task:beta", &["proposed", "active"]),
+        ("task:gamma", &["proposed", "active", "implemented"]),
+    ];
+    for (id, rungs) in route {
+        for rung in *rungs {
+            let moved = protocol(&[
+                "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+            ]);
+            assert_eq!(code(&moved), 0, "{}", stderr(&moved));
+        }
+    }
+
+    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let text = stdout(&board);
+    let column = |name: &str| {
+        text.find(&format!("{name} (1)"))
+            .unwrap_or_else(|| panic!("no `{name}` column: {text}"))
+    };
+    assert!(
+        column("active") < column("archived"),
+        "a task ladder runs active -> ... -> archived: {text}"
+    );
+    assert!(
+        column("implemented") < column("archived"),
+        "a task ladder runs implemented -> archived: {text}"
+    );
+}
+
+/// One ladder's column order does not move because something else is in the store.
+///
+/// `artifacts/lifecycles/architecture-decision-record.yaml` says `proposed: [accepted, rejected]`,
+/// and adding an unrelated `story:alpha` at `draft` changes nothing about that document. A board
+/// whose ADR columns swap when a story is filed is not printing the ADR ladder's order; it is
+/// printing an artefact of the order the ladders happened to be merged in.
+#[test]
+fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store() {
+    let repository = root();
+    let tree = printable(&repository);
+    let alone = scratch("aep-planning-board-adrs-alone");
+    let shared = scratch("aep-planning-board-adrs-and-a-story");
+
+    for store in [&alone, &shared] {
+        let at = printable(store);
+        for (name, title, rung) in [
+            ("yes-decision", "Adopt passkeys", "accepted"),
+            ("no-decision", "Adopt SMS codes", "rejected"),
+        ] {
+            let made = protocol(&[
+                "artifact",
+                "new",
+                "architecture-decision-record",
+                name,
+                "--title",
+                title,
+                "--store",
+                at,
+                "--root",
+                tree,
+            ]);
+            assert_eq!(code(&made), 0, "{}", stderr(&made));
+            let moved = protocol(&[
+                "artifact",
+                "move",
+                &format!("architecture-decision-record:{name}"),
+                "--to",
+                rung,
+                "--store",
+                at,
+                "--root",
+                tree,
+            ]);
+            assert_eq!(code(&moved), 0, "{}", stderr(&moved));
+        }
+    }
+    let filed = protocol(&[
+        "artifact",
+        "new",
+        "story",
+        "alpha",
+        "--title",
+        "Alpha",
+        "--store",
+        printable(&shared),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&filed), 0, "{}", stderr(&filed));
+
+    let read = |store: &Path| {
+        let output = protocol(&[
+            "artifact",
+            "board",
+            "--store",
+            printable(store),
+            "--root",
+            tree,
+        ]);
+        assert_eq!(code(&output), 0, "{}", stderr(&output));
+        let text = stdout(&output);
+        let at = |name: &str| {
+            text.find(&format!("{name} (1)"))
+                .unwrap_or_else(|| panic!("no `{name}` column: {text}"))
+        };
+        let swapped = at("rejected") < at("accepted");
+        (swapped, text)
+    };
+    let (alone_swapped, alone_text) = read(&alone);
+    let (shared_swapped, shared_text) = read(&shared);
+    assert_eq!(
+        alone_swapped, shared_swapped,
+        "one story changed the ADR ladder's own column order:\n--- ADRs alone ---\n{alone_text}\n--- ADRs and a story ---\n{shared_text}"
+    );
+}
+
+/// One malformed ladder document does not silently empty the board of everything it governs.
+///
+/// `board` reads its ladders through `ladders_or_none`, which answers "none" for a tree it cannot
+/// parse — deliberately, so a listing keeps answering. But the columns are now read off those
+/// ladders, so *one* unrelated document with a typo in it takes every adopter-declared rung off
+/// the board and takes its cards with it: exit 0, no column, no warning, while `list` prints the
+/// same artifacts and `validate` names the broken file. Losing a card is worse than losing an
+/// order. Either outcome is defensible — refuse and name the file, or keep the card — and
+/// pretending the store is smaller than it is, is not.
+#[test]
+fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
+    let store = scratch("aep-planning-board-broken-ladder-store");
+    let tree = scratch("aep-planning-board-broken-ladder-root");
+    let repository = root();
+    let at = printable(&store);
+    copy_tree(&repository.join("artifacts"), &tree.join("artifacts"));
+    let tree = printable(&tree);
+
+    let stuck = protocol(&[
+        "artifact",
+        "new",
+        "credential-blocker",
+        "api-token-scope",
+        "--title",
+        "CI cannot mint a read-scope API token",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
+
+    // The ladders are intact, so the rung the blocker document declared has a column.
+    let before = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    assert_eq!(code(&before), 0, "{}", stderr(&before));
+    assert!(stdout(&before).contains("open (1)"), "{}", stdout(&before));
+
+    // A second document, about a kind nothing in this store is, gains a typo.
+    write(
+        &Path::new(tree).join("artifacts/lifecycles/broken.yaml"),
+        "kind: nonsense\ninitial: [not, a, status]\n",
+    );
+
+    let after = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let text = stdout(&after);
+    let named = stderr(&after);
+    assert!(
+        code(&after) != 0 || text.contains("credential-blocker:api-token-scope"),
+        "one broken ladder took the blocker off the board without saying so \
+         (exit {}):\nstdout:\n{text}\nstderr:\n{named}",
+        code(&after)
+    );
+}
+
+/// A rung on no cycle at all is not printed before the rung that leads to it.
+///
+/// `ladder_order` states two invariants in its own doc comment: "a rung is printed only once every
+/// rung that leads to it has been", and "the middle key only ever separates rungs in a cycle, where
+/// no edge has an opinion left to give". Both are false for a ladder whose cycle does not contain
+/// its `initial`.
+///
+/// `charter` runs `intake -> triage`, `triage -> {rework, approved}`, `rework -> triage`. The only
+/// cycle is `{triage, rework}` and `intake` is not in it, so the cut key falls through to
+/// precedence — over *every* stuck rung, not only over the rungs of the cycle. `approved` is stuck
+/// solely because `triage` has not been printed, is on no cycle, and is rung 3 of the compiled
+/// vocabulary while `triage` and `rework` are rungs the vocabulary does not name; so `approved`
+/// wins the cut and is printed second, ahead of the only rung that reaches it.
+///
+/// It is also strictly worse as an ordering, not merely a different one: `intake, approved, rework,
+/// triage` prints two of the ladder's four edges backwards (`triage -> approved` and
+/// `triage -> rework`) where `intake, triage, rework, approved` prints one (`rework -> triage`,
+/// which no order can avoid). A cut has to break a cycle; it does not have to break an edge outside
+/// one.
+#[test]
+fn a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it() {
+    let tree = scratch("aep-planning-board-cycle-without-initial-root");
+    let store = scratch("aep-planning-board-cycle-without-initial-store");
+    let at = printable(&store);
+    write(
+        &tree.join("artifacts/lifecycles/charter.yaml"),
+        "kind: charter\n\
+         initial: intake\n\
+         transitions:\n  \
+           intake: [triage]\n  \
+           triage: [rework, approved]\n  \
+           rework: [triage]\n  \
+           approved: []\n",
+    );
+    let tree = printable(&tree);
+
+    for name in ["one", "two", "three", "four"] {
+        let made = protocol(&[
+            "artifact", "new", "charter", name, "--title", "Charter", "--store", at, "--root", tree,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+    let route: &[(&str, &[&str])] = &[
+        ("charter:two", &["triage"]),
+        ("charter:three", &["triage", "rework"]),
+        ("charter:four", &["triage", "approved"]),
+    ];
+    for (id, rungs) in route {
+        for rung in *rungs {
+            let moved = protocol(&[
+                "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+            ]);
+            assert_eq!(code(&moved), 0, "{}", stderr(&moved));
+        }
+    }
+
+    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let text = stdout(&board);
+    let column = |name: &str| {
+        text.find(&format!("{name} (1)"))
+            .unwrap_or_else(|| panic!("no `{name}` column: {text}"))
+    };
+    assert!(
+        column("triage") < column("approved"),
+        "`approved` is on no cycle and `triage -> approved` is the only way to reach it: {text}"
+    );
+}
+
+/// A ladder's own column order does not move because a second kind was filed, when the second
+/// kind's ladder names some of the same rungs.
+///
+/// This is the property `one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store`
+/// asserts, and the one `ladder_order` claims in its own doc comment — "what keeps a ladder's own
+/// columns where they were when something unrelated is filed ... whatever else the store holds".
+/// That test pairs two ladders whose union happens to be acyclic, so it holds for an implementation
+/// that has the property and for one that does not.
+///
+/// Both ladders here are acyclic *on their own*. `checklist` runs draft -> proposed -> active ->
+/// archived; `escalation` runs active -> waiting -> proposed and stops. Their union has a cycle,
+/// `proposed -> active -> waiting -> proposed`, which is cut at `active` because `active` is
+/// `escalation`'s `initial` — and `checklist`'s `proposed` column, second when nothing else is in
+/// the store, is then printed last, behind `active`, behind `archived`, and behind a rung of a kind
+/// `checklist` has never heard of.
+///
+/// An adopter reading `protocol artifact lifecycle checklist` is told the ladder runs draft ->
+/// proposed -> active -> archived. Filing one artifact of an unrelated kind should not make the
+/// board disagree with that document.
+///
+/// **What actually holds, and it is weaker than the sentence above.** Two ladders that share rung
+/// names and disagree on their order cannot both keep theirs; one has to bend. The tie-break is
+/// **kind order**, decided by the operator on 2026-08-30 and documented on `board_order`, so the
+/// ladder whose kind sorts first keeps its order and the other yields. This case holds because
+/// `checklist` sorts before `escalation` — rename the second kind to `alert` and the same test
+/// fails for `checklist` instead, which was measured rather than reasoned about.
+///
+/// So this asserts a **deterministic** tie-break, not a universal invariant. It is still worth
+/// having: before the fix, the loser was whichever kind the union happened to visit first, and
+/// nothing said which.
+// Two ladders, two stores and one comparison: the property is that the *same* checklists print the
+// same way with and without the escalation, so both stores have to be built here.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
+    let tree = scratch("aep-planning-board-shared-rungs-root");
+    write(
+        &tree.join("artifacts/lifecycles/checklist.yaml"),
+        "kind: checklist\n\
+         initial: draft\n\
+         transitions:\n  \
+           draft: [proposed]\n  \
+           proposed: [active]\n  \
+           active: [archived]\n  \
+           archived: []\n",
+    );
+    write(
+        &tree.join("artifacts/lifecycles/escalation.yaml"),
+        "kind: escalation\n\
+         initial: active\n\
+         transitions:\n  \
+           active: [waiting]\n  \
+           waiting: [proposed]\n  \
+           proposed: []\n",
+    );
+    let tree = printable(&tree);
+
+    let alone = scratch("aep-planning-board-checklist-alone");
+    let shared = scratch("aep-planning-board-checklist-and-escalation");
+    for store in [&alone, &shared] {
+        let at = printable(store);
+        for name in ["one", "two", "three", "four"] {
+            let made = protocol(&[
+                "artifact",
+                "new",
+                "checklist",
+                name,
+                "--title",
+                "Checklist",
+                "--store",
+                at,
+                "--root",
+                tree,
+            ]);
+            assert_eq!(code(&made), 0, "{}", stderr(&made));
+        }
+        let route: &[(&str, &[&str])] = &[
+            ("checklist:two", &["proposed"]),
+            ("checklist:three", &["proposed", "active"]),
+            ("checklist:four", &["proposed", "active", "archived"]),
+        ];
+        for (id, rungs) in route {
+            for rung in *rungs {
+                let moved = protocol(&[
+                    "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+                ]);
+                assert_eq!(code(&moved), 0, "{}", stderr(&moved));
+            }
+        }
+    }
+    // One artifact of the second kind, on a rung no `checklist` can ever be on.
+    let filed = protocol(&[
+        "artifact",
+        "new",
+        "escalation",
+        "five",
+        "--title",
+        "Escalation",
+        "--store",
+        printable(&shared),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&filed), 0, "{}", stderr(&filed));
+    let raised = protocol(&[
+        "artifact",
+        "move",
+        "escalation:five",
+        "--to",
+        "waiting",
+        "--store",
+        printable(&shared),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&raised), 0, "{}", stderr(&raised));
+
+    // The column headings, in the order they were printed, keeping only the rungs the `checklist`
+    // ladder names: what the second kind adds is not the question, where it puts them is.
+    let checklist_columns = |store: &Path| {
+        let output = protocol(&[
+            "artifact",
+            "board",
+            "--store",
+            printable(store),
+            "--root",
+            tree,
+        ]);
+        assert_eq!(code(&output), 0, "{}", stderr(&output));
+        let text = stdout(&output);
+        let rungs: Vec<String> = text
+            .lines()
+            .filter(|line| !line.is_empty() && !line.starts_with(' '))
+            .filter_map(|line| line.split(" (").next().map(str::to_owned))
+            .filter(|rung| ["draft", "proposed", "active", "archived"].contains(&rung.as_str()))
+            .collect();
+        (rungs, text)
+    };
+    let (alone_rungs, alone_text) = checklist_columns(&alone);
+    let (shared_rungs, shared_text) = checklist_columns(&shared);
+    assert_eq!(
+        alone_rungs, shared_rungs,
+        "one artifact of a later-sorting kind reordered the `checklist` ladder's own columns \
+         (the tie-break is kind order: `checklist` sorts before `escalation`, so it keeps its \
+         order and `escalation` yields):\n\
+         --- checklists alone ---\n{alone_text}\n--- checklists and one escalation ---\n{shared_text}"
+    );
+}
+
+/// The compiled vocabulary still orders two rungs it knows when the kind holding them declares no
+/// ladder.
+///
+/// The acceptance defines the board's columns as the union of the ladders "the store's kinds
+/// declare (`protocol artifact lifecycle <kind>` for every kind present), in ladder order, and the
+/// compiled list is used for nothing but the default ordering of the statuses it knows". For a kind
+/// with no document that verb answers with a ladder rather than with nothing:
+///
+/// ```console
+/// $ protocol artifact lifecycle mystery
+/// mystery declares no lifecycle, so every status and every move is permitted
+///   accepted -> draft, proposed, in_review, approved, accepted, rejected, active, ...
+/// ```
+///
+/// `board` does not read it. So a `mystery` at `draft` — rung 0 of the compiled vocabulary — is
+/// appended after a `review-result` at `active`, rung 6, although the only ladder this store can
+/// read is `artifacts/lifecycles/review-result.yaml`, which says `active -> archived` and has no
+/// edge to `draft` or `proposed` at all. Nothing in the store has an opinion about the pair except
+/// the compiled list, and the compiled list is the thing the acceptance says decides it.
+#[test]
+fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_ladder() {
+    let store = scratch("aep-planning-board-undeclared-kind-order");
+    let repository = root();
+    let at = printable(&store);
+    let tree = printable(&repository);
+
+    // The one built-in ladder that starts at `active`, so it is the whole of what the board reads.
+    let recorded = protocol(&[
+        "artifact",
+        "new",
+        "review-result",
+        "one",
+        "--title",
+        "Alpha",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    for name in ["two", "three"] {
+        let made = protocol(&[
+            "artifact", "new", "mystery", name, "--title", "Beta", "--store", at, "--root", tree,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+    let moved = protocol(&[
+        "artifact", "move", "mystery:three", "--to", "proposed", "--store", at, "--root", tree,
+    ]);
+    assert_eq!(code(&moved), 0, "{}", stderr(&moved));
+
+    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    assert_eq!(code(&board), 0, "{}", stderr(&board));
+    let text = stdout(&board);
+    let column = |name: &str| {
+        text.find(&format!("{name} (1)"))
+            .unwrap_or_else(|| panic!("no `{name}` column: {text}"))
+    };
+    assert!(
+        column("draft") < column("active"),
+        "`draft` is rung 0 of the compiled vocabulary, `active` is rung 6, and no ladder this \
+         store can read relates them: {text}"
+    );
+    assert!(
+        column("proposed") < column("active"),
+        "`proposed` is rung 1 of the compiled vocabulary, `active` is rung 6, and no ladder this \
+         store can read relates them: {text}"
+    );
 }
 
 #[test]
