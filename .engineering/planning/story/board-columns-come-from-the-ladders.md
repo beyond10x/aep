@@ -10,7 +10,7 @@ tags:
 - store
 relations:
 - informed_by: story:blocker-relation
-revision: 1
+revision: 2
 ---
 # Story: The board's columns come from the ladders, not from a list compiled into the binary
 
@@ -36,3 +36,21 @@ Rendering blockers differently from other artifacts; `story:blocker-relation` al
 ## Open Questions
 
 Whether an artifact whose status is on no ladder at all (a document `validate` already refuses) should still be shown. Decides: protocol owner. Default if nobody answers: **no** — `validate` is the surface for that finding.
+
+## Scope
+
+Derived 2026-08-30 by `story-scoper`. Every line is **cited** (read from the story or the tree) or
+**inferred** (a reading that could be wrong).
+
+- **Primary surface:** `crates/protocol-cli` — the planning verbs, the `board` renderer — cited
+- **Files:** `crates/protocol-cli/src/planning.rs:2132-2177` (`fn board`, the column build at `:2142`) — cited
+- **Files:** `crates/protocol-cli/src/planning.rs:3741` (`struct Column`, whose `status: &'static str` cannot hold an adopter's rung) — inferred, the field type forces a change the story does not name
+- **Files:** `crates/protocol-cli/tests/planning_cli.rs:579-587` (`the_board_groups_the_fixture_into_status_columns`) — inferred, where the new assertion belongs
+- **Symbols:** `ArtifactStatus::ALL`, `board`, `Column`, `ladders_or_none`, `select` — cited
+- **Symbols:** `ArtifactLifecycle::statuses` (`crates/aep-domain/src/artifact.rs:1753`), `LifecycleRegistry::iter` (`:1859`), `for_kind` (`:1835`) — inferred, the union-of-ladders reads the acceptance implies
+- **Also likely:** `crates/aep-domain/src/artifact.rs` — inferred, only if ladder *order* needs a helper: `statuses()` returns a `BTreeSet` and `transitions` a `BTreeMap`, so nothing today walks a ladder from `initial`
+- **Documents:** `website/docs/reference/cli.md:63`, `website/docs/concepts/lifecycles.md:167` — inferred, both describe the columns; `docs-check` holds the first
+- **Confidence:** high — the story names the defect site and `git grep` confirms `planning.rs:2142` is the only column build in the tree. Medium only on where the ordering helper lands.
+- **Would collide with:** any unit touching `protocol-cli`'s planning surface (`src/planning.rs`, `tests/planning_cli.rs`); and, if the acceptance's "passkeys fixture plus one blocker" adds a document rather than building a scratch store, the `examples/planning-passkeys` store, whose counts are asserted verbatim by fifteen `FIXTURE` sites.
+
+**Not established.** Whether ladder *order* needs a new symbol — nothing orders statuses by walking `transitions` from `initial`. Whether the fixture gains a blocker (breaking asserted counts) or a scratch store is used, as `planning_cli.rs:1259` does. How `--kind` narrows when `select` matches by `is_a`, so `--kind design` admits `architecture-design` — one ladder, or several.
