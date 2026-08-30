@@ -90,12 +90,14 @@ tasks:
   # the annotated tags, so a wave that ships without retagging cannot leave the page claiming
   # otherwise. Early in the gate because it is sub-second and needs no compile beyond xtask itself.
   status:
-    desc: Regenerate the delivered-waves record in docs/status.md from the repository's tags.
+    desc: Regenerate every annotated-tag and gate-derived reader-facing status region.
     cmds:
       - cargo xtask status
 
   status-check:
-    desc: Fail if the delivered-waves record in docs/status.md no longer matches the tags.
+    desc: >-
+      Fail if a generated status region drifts, CI stops invoking task check, or release stops
+      reusing that CI gate.
     cmds:
       - cargo xtask status --check
 
