@@ -523,6 +523,19 @@ surfaces.
   approval: `crates/aep-driver/tests/evidence_scan.rs` refuses any construction of an
   `Evidence::Approval` or a `Producer::Human` in shipped driver code, because nothing below the
   driver would stop a harness writing its own approval and unlocking a capability with it.
+* **No document this repository ships may tell its reader to write the planning store by hand.**
+  `protocol artifact` is the store's only writer and every surface under `integrations/` says so in
+  prose — which is where the rule regressed once already, when the planning skill *told* agents to
+  patch bodies directly and nothing in the repository read a skill's text.
+  *Enforced by* a source scan over shipped prose,
+  `crates/protocol-cli/tests/plugin_surface_store_writes.rs`, which reads every `*.md` under
+  `integrations/` sentence by sentence and refuses a write verb that reaches a store surface —
+  frontmatter, `status:`, a body, a path under `.engineering/planning/`. Naming the CLI is not an
+  exemption when the sentence routes around it, a prohibition exempts its own clause and not the
+  sentence, and all seventeen documents are pinned by name in both directions, so a walk that
+  stopped finding the agent charters fails instead of passing over a third of the corpus. Not
+  scanned, and a known gap: `plugin.json`'s `longDescription` and `defaultPrompt`, and the prose in
+  `integrations/codex/eval/check-instruction-surface.sh`.
 * **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
   grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
   a profile's grant is a specification change with a design page, never a convenience.

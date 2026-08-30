@@ -97,9 +97,9 @@ here: **a decline that is written down is a result; a decline that is only said 
 nothing.**
 
 This is not licence to argue with the request. Build what was asked for unless you have evidence it
-is already there or actively wrong, put that evidence in the artifact, and leave the decision where
-§ 4 leaves every other one — with the operator, who can now read what you found instead of
-answering a question.
+is already there or actively wrong, put that evidence in the artifact with `protocol artifact
+body`, and leave the decision where § 4 leaves every other one — with the operator, who can now
+read what you found instead of answering a question.
 
 **6. Something parked is recorded, not described.** A blocker is an artifact of its own, typed by
 what would clear it — `credential-blocker`, `decision-blocker`, `third-party-blocker`, whatever the
