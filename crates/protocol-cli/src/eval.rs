@@ -305,6 +305,26 @@ enum Refusal {
         /// The word.
         written: String,
     },
+    /// A required record field was not written.
+    RecordFieldMissing {
+        /// Which field.
+        field: &'static str,
+    },
+    /// A required record field was written as `null`.
+    RecordFieldNull {
+        /// Which field.
+        field: &'static str,
+    },
+    /// A required record field was empty.
+    RecordFieldEmpty {
+        /// Which field.
+        field: &'static str,
+    },
+    /// A required record field had the wrong shape or value grammar.
+    RecordFieldMalformed {
+        /// Which field.
+        field: &'static str,
+    },
     /// A manifest with no record beside it.
     RecordMissing {
         /// Where the record was looked for.
@@ -352,6 +372,10 @@ impl Refusal {
             Self::NotARecord { .. } => "EVAL-RECORD-001",
             Self::RowWithoutId { .. } => "EVAL-RECORD-002",
             Self::VerdictUnknown { .. } => "EVAL-RECORD-003",
+            Self::RecordFieldMissing { .. } => "EVAL-RECORD-004",
+            Self::RecordFieldNull { .. } => "EVAL-RECORD-005",
+            Self::RecordFieldEmpty { .. } => "EVAL-RECORD-006",
+            Self::RecordFieldMalformed { .. } => "EVAL-RECORD-007",
             Self::RecordMissing { .. } => "EVAL-PAIR-001",
             Self::ManifestMissing { .. } => "EVAL-PAIR-002",
             Self::TranscriptMismatch { .. } => "EVAL-PAIR-003",
@@ -375,11 +399,7 @@ impl fmt::Display for Refusal {
                 f,
                 "`{written}` is not one of the arms this evaluation has: {}. Another arm is a \
                  change to the programme, not a label",
-                Arm::ALL
-                    .iter()
-                    .map(|arm| format!("`{arm}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                known_arms()
             ),
             Self::FieldMissing { field } => write!(
                 f,
@@ -424,6 +444,10 @@ impl fmt::Display for Refusal {
                  word nobody can read is not the same finding as a row nobody could decide, so it \
                  is refused rather than counted as one"
             ),
+            refusal @ (Self::RecordFieldMissing { .. }
+            | Self::RecordFieldNull { .. }
+            | Self::RecordFieldEmpty { .. }
+            | Self::RecordFieldMalformed { .. }) => fmt_record_field_refusal(f, refusal),
             Self::RecordMissing { expected } => write!(
                 f,
                 "this manifest has no record beside it: {expected} does not exist. A manifest \
@@ -463,6 +487,38 @@ impl fmt::Display for Refusal {
                  clean sheet"
             ),
         }
+    }
+}
+
+/// Lists the experiment's arms for a refusal without lengthening its formatter.
+fn known_arms() -> String {
+    Arm::ALL
+        .iter()
+        .map(|arm| format!("`{arm}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Renders the four ways a required record field can fail at the JSON boundary.
+fn fmt_record_field_refusal(f: &mut fmt::Formatter<'_>, refusal: &Refusal) -> fmt::Result {
+    match refusal {
+        Refusal::RecordFieldMissing { field } => write!(
+            f,
+            "the record states no `{field}`, so its verdict cannot be bound to the input that produced it"
+        ),
+        Refusal::RecordFieldNull { field } => write!(
+            f,
+            "the record writes `{field}: null`, but this field must identify the input that produced its verdict"
+        ),
+        Refusal::RecordFieldEmpty { field } => write!(
+            f,
+            "the record's `{field}` is empty, which binds its verdict to nothing"
+        ),
+        Refusal::RecordFieldMalformed { field } => write!(
+            f,
+            "the record's `{field}` is not in the shape this boundary requires"
+        ),
+        _ => unreachable!("only record-field refusals are passed here"),
     }
 }
 
@@ -777,13 +833,35 @@ struct RawRecord {
     /// The format claim.
     format: Option<String>,
     /// The specification's id.
-    spec_id: Option<String>,
+    #[serde(default, deserialize_with = "json_written")]
+    spec_id: WrittenJson,
     /// The specification's digest.
-    spec_digest: Option<String>,
+    #[serde(default, deserialize_with = "json_written")]
+    spec_digest: WrittenJson,
     /// The transcript it was judged over.
-    transcript_digest: Option<String>,
+    #[serde(default, deserialize_with = "json_written")]
+    transcript_digest: WrittenJson,
     /// One row per expectation.
-    expectations: Option<Vec<RawRow>>,
+    #[serde(default, deserialize_with = "json_written")]
+    expectations: WrittenJson,
+}
+
+/// Whether a producer wrote a JSON key, preserving explicit `null` and malformed values.
+#[derive(Debug, Default)]
+enum WrittenJson {
+    /// The key was not present.
+    #[default]
+    Absent,
+    /// The key was present with this JSON value, including `null`.
+    Value(serde_json::Value),
+}
+
+/// Deserializes a present JSON key without imposing its field grammar yet.
+fn json_written<'de, D>(deserializer: D) -> Result<WrittenJson, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    serde_json::Value::deserialize(deserializer).map(WrittenJson::Value)
 }
 
 /// One expectation's row.
@@ -804,10 +882,10 @@ struct RawRow {
 struct Record {
     /// The specification's id.
     specification: String,
-    /// The specification's digest, where the record states one.
-    spec_digest: Option<String>,
-    /// The transcript it was judged over, where the record states one.
-    transcript_digest: Option<String>,
+    /// The specification's digest.
+    spec_digest: String,
+    /// The transcript it was judged over.
+    transcript_digest: String,
     /// Each expectation and what it said, in the record's own order.
     rows: Vec<(String, Outcome)>,
 }
@@ -824,8 +902,18 @@ impl TryFrom<RawRecord> for Record {
             });
         }
 
+        let specification = record_string(&mut refusals, "spec_id", &raw.spec_id, false);
+        let spec_digest = record_string(&mut refusals, "spec_digest", &raw.spec_digest, true);
+        let transcript_digest = record_string(
+            &mut refusals,
+            "transcript_digest",
+            &raw.transcript_digest,
+            true,
+        );
+        let expectations = record_expectations(&mut refusals, &raw.expectations);
+
         let mut rows = Vec::new();
-        for (position, row) in raw.expectations.unwrap_or_default().into_iter().enumerate() {
+        for (position, row) in expectations.unwrap_or_default().into_iter().enumerate() {
             let Some(id) = row.id.filter(|id| !id.trim().is_empty()) else {
                 refusals.push(Refusal::RowWithoutId { position });
                 continue;
@@ -841,11 +929,91 @@ impl TryFrom<RawRecord> for Record {
         }
 
         Ok(Self {
-            specification: raw.spec_id.unwrap_or_default(),
-            spec_digest: raw.spec_digest,
-            transcript_digest: raw.transcript_digest,
+            specification: specification.expect("a specification id was read"),
+            spec_digest: spec_digest.expect("a specification digest was read"),
+            transcript_digest: transcript_digest.expect("a transcript digest was read"),
             rows,
         })
+    }
+}
+
+/// Reads a required record string and, for digest fields, checks its exact grammar.
+fn record_string(
+    refusals: &mut Vec<Refusal>,
+    field: &'static str,
+    written: &WrittenJson,
+    digest: bool,
+) -> Option<String> {
+    match written {
+        WrittenJson::Absent => {
+            refusals.push(Refusal::RecordFieldMissing { field });
+            None
+        }
+        WrittenJson::Value(serde_json::Value::Null) => {
+            refusals.push(Refusal::RecordFieldNull { field });
+            None
+        }
+        WrittenJson::Value(serde_json::Value::String(value)) if value.trim().is_empty() => {
+            refusals.push(Refusal::RecordFieldEmpty { field });
+            None
+        }
+        WrittenJson::Value(serde_json::Value::String(value)) => {
+            let well_formed = !digest
+                || (value.len() == DIGEST_WIDTH
+                    && value.chars().all(|character| {
+                        character.is_ascii_digit() || ('a'..='f').contains(&character)
+                    }));
+            if well_formed {
+                Some(value.clone())
+            } else {
+                refusals.push(Refusal::RecordFieldMalformed { field });
+                None
+            }
+        }
+        WrittenJson::Value(_) => {
+            refusals.push(Refusal::RecordFieldMalformed { field });
+            None
+        }
+    }
+}
+
+/// Reads the required, non-empty expectation rows while keeping malformed JSON inside this boundary.
+fn record_expectations(refusals: &mut Vec<Refusal>, written: &WrittenJson) -> Option<Vec<RawRow>> {
+    match written {
+        WrittenJson::Absent => {
+            refusals.push(Refusal::RecordFieldMissing {
+                field: "expectations",
+            });
+            None
+        }
+        WrittenJson::Value(serde_json::Value::Null) => {
+            refusals.push(Refusal::RecordFieldNull {
+                field: "expectations",
+            });
+            None
+        }
+        WrittenJson::Value(serde_json::Value::Array(rows)) if rows.is_empty() => {
+            refusals.push(Refusal::RecordFieldEmpty {
+                field: "expectations",
+            });
+            None
+        }
+        WrittenJson::Value(value @ serde_json::Value::Array(_)) => {
+            if let Ok(rows) = serde_json::from_value(value.clone()) {
+                Some(rows)
+            } else {
+                refusals.push(Refusal::RecordFieldMalformed {
+                    field: "expectations",
+                });
+                None
+            }
+        }
+        WrittenJson::Value(_) => {
+            refusals.push(Refusal::RecordFieldMalformed {
+                field: "expectations",
+            });
+            None
+        }
     }
 }
 
@@ -1026,13 +1194,11 @@ fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
     for (manifest, record) in &pairs {
         *seen.entry(manifest.transcript_digest.clone()).or_default() += 1;
-        if let Some(judged) = record.transcript_digest.as_deref() {
-            if judged != manifest.transcript_digest {
-                refusals.push(Refusal::TranscriptMismatch {
-                    manifest: manifest.transcript_digest.clone(),
-                    record: judged.to_owned(),
-                });
-            }
+        if record.transcript_digest != manifest.transcript_digest {
+            refusals.push(Refusal::TranscriptMismatch {
+                manifest: manifest.transcript_digest.clone(),
+                record: record.transcript_digest.clone(),
+            });
         }
     }
     for (digest, count) in seen {
@@ -1048,9 +1214,7 @@ fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
         let entry = specifications
             .entry(record.specification.clone())
             .or_default();
-        if let Some(digest) = record.spec_digest.clone() {
-            entry.0.insert(digest);
-        }
+        entry.0.insert(record.spec_digest.clone());
         entry.1 += 1;
     }
     for (specification, (digests, _)) in &specifications {
@@ -3365,6 +3529,7 @@ observed_at: 2026-08-23
         format!(
             r#"{{"format":"trace-report/1","spec_id":"eval/development-story",
                  "spec_digest":"fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
+                 "transcript_digest":"6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
                  "expectations":[{}]}}"#,
             rows.join(",")
         )
@@ -3374,6 +3539,78 @@ observed_at: 2026-08-23
     fn read_record(text: &str) -> Result<Record, Vec<Refusal>> {
         let raw: RawRecord = serde_json::from_str(text).expect("the fixture is JSON");
         Record::try_from(raw)
+    }
+
+    /// One complete record as a mutable JSON object.
+    fn record_value_json() -> serde_json::Value {
+        serde_json::from_str(&record_of(&[("held", "\"ok\"")])).expect("record fixture is JSON")
+    }
+
+    #[test]
+    fn each_required_record_key_is_refused_when_omitted() {
+        for field in [
+            "spec_id",
+            "spec_digest",
+            "transcript_digest",
+            "expectations",
+        ] {
+            let mut document = record_value_json();
+            document
+                .as_object_mut()
+                .expect("a record object")
+                .remove(field);
+            let refusals = read_record(&document.to_string()).expect_err("the key is required");
+            assert_eq!(codes(&refusals), ["EVAL-RECORD-004"], "{field}");
+            assert!(refusals[0].to_string().contains(field), "{field}");
+        }
+    }
+
+    #[test]
+    fn required_record_keys_distinguish_null_empty_and_malformed() {
+        for field in [
+            "spec_id",
+            "spec_digest",
+            "transcript_digest",
+            "expectations",
+        ] {
+            let mut document = record_value_json();
+            document[field] = serde_json::Value::Null;
+            let refusals = read_record(&document.to_string()).expect_err("null is not an identity");
+            assert_eq!(codes(&refusals), ["EVAL-RECORD-005"], "{field}");
+        }
+
+        let mut empty = record_value_json();
+        empty["spec_id"] = serde_json::json!("  ");
+        empty["spec_digest"] = serde_json::json!("");
+        empty["transcript_digest"] = serde_json::json!("");
+        empty["expectations"] = serde_json::json!([]);
+        let refusals = read_record(&empty.to_string()).expect_err("empty fields bind nothing");
+        assert_eq!(
+            codes(&refusals),
+            [
+                "EVAL-RECORD-006",
+                "EVAL-RECORD-006",
+                "EVAL-RECORD-006",
+                "EVAL-RECORD-006",
+            ]
+        );
+
+        let mut malformed = record_value_json();
+        malformed["spec_id"] = serde_json::json!(42);
+        malformed["spec_digest"] = serde_json::json!("sha256:short");
+        malformed["transcript_digest"] = serde_json::json!("ABCDEF");
+        malformed["expectations"] = serde_json::json!({"id": "not-an-array"});
+        let refusals =
+            read_record(&malformed.to_string()).expect_err("malformed fields cannot be joined");
+        assert_eq!(
+            codes(&refusals),
+            [
+                "EVAL-RECORD-007",
+                "EVAL-RECORD-007",
+                "EVAL-RECORD-007",
+                "EVAL-RECORD-007",
+            ]
+        );
     }
 
     #[test]
@@ -3402,8 +3639,10 @@ observed_at: 2026-08-23
         // documents that must be read the same way.
         for record in [
             record_of(&[("silent", "null")]),
-            r#"{"format":"trace-report/1","spec_id":"s","expectations":[{"id":"silent"}]}"#
-                .to_owned(),
+            r#"{"format":"trace-report/1","spec_id":"s",
+                 "spec_digest":"fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
+                 "transcript_digest":"6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
+                 "expectations":[{"id":"silent"}]}"#.to_owned(),
         ] {
             let read = read_record(&record).expect("a silent row is read, not refused");
             assert_eq!(
@@ -3423,8 +3662,9 @@ observed_at: 2026-08-23
 
     #[test]
     fn a_record_of_another_shape_is_refused_by_the_format_it_states() {
-        let refusals = read_record(r#"{"format":"trace-ir/1","expectations":[]}"#)
-            .expect_err("the matrix reads a check report");
+        let refusals =
+            read_record(&record_of(&[("held", "\"ok\"")]).replace("trace-report/1", "trace-ir/1"))
+                .expect_err("the matrix reads a check report");
         assert_eq!(codes(&refusals), ["EVAL-RECORD-001"]);
         assert!(
             refusals[0].to_string().contains("trace-ir/1"),
@@ -3455,8 +3695,8 @@ observed_at: 2026-08-23
     fn record_value(transcript: &str, digest: &str, outcome: Outcome) -> Record {
         Record {
             specification: "eval/development-story".to_owned(),
-            spec_digest: Some(digest.to_owned()),
-            transcript_digest: Some(transcript.to_owned()),
+            spec_digest: digest.to_owned(),
+            transcript_digest: transcript.to_owned(),
             rows: vec![("only".to_owned(), outcome)],
         }
     }

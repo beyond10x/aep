@@ -22,6 +22,12 @@ belongs in the commit message or in `docs/design/`.
   deterministic filtering and ordering, advance by the number returned, and stop emitting a cursor
   when no matches remain instead of repeating the first page.
 
+* **Eval records cannot claim outcomes without naming and sealing their inputs.** The matrix reader
+  now refuses missing, null, empty, or malformed specification ids, specification digests,
+  transcript digests, and expectation rows with stable `EVAL-RECORD-*` codes. Expectations must be
+  non-empty and both digests are checked on every record; an absent or null verdict remains
+  unobservable.
+
 ### Changed
 
 * **Validated ESS specifications and compiled IR are sealed.** `Specification` and `EssIr` expose
