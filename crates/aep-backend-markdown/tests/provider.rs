@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use aep_backend_markdown::provider::{document_of, instance_of, MarkdownProvider};
 use aep_backend_markdown::store::MarkdownStore;
 use entity_core::{Decision, DomainEvent, EntityInstance, Registry, Runtime};
-use entity_store::{conformance, EventProvider, Expect, StateProvider, Store, StoreError};
+use entity_store::{
+    conformance, AtomicBatchStore, AtomicCommit, EventProvider, Expect, StateProvider, Store,
+    StoreError,
+};
 use serde_json::json;
 
 fn scratch(name: &str) -> PathBuf {
@@ -44,6 +47,50 @@ fn the_markdown_provider_conforms() {
     let report = conformance::run(&mut provider);
     assert!(report.is_clean(), "MarkdownProvider:\n{}", report.summary());
     assert_eq!(report.outcomes.len(), 10, "the whole suite ran");
+}
+
+#[test]
+fn the_markdown_provider_commits_atomic_batches() {
+    let mut provider = MarkdownProvider::open(scratch("atomic-conformance"));
+    let report = conformance::run_atomic(&mut provider);
+    assert!(report.is_clean(), "MarkdownProvider:\n{}", report.summary());
+}
+
+#[test]
+fn a_pending_batch_is_completed_before_a_read() {
+    let root = scratch("atomic-recovery");
+    let registry = registry();
+    let first = Runtime::new(&registry)
+        .create("ticket", 1, "one", json!({ "title": "One" }))
+        .expect("first decision");
+    let second = Runtime::new(&registry)
+        .create("ticket", 1, "two", json!({ "title": "Two" }))
+        .expect("second decision");
+    let mut provider = MarkdownProvider::open(&root);
+
+    // Make the event append fail after the first document lands. The durable intent remains.
+    std::fs::create_dir(root.join("journal.jsonl")).expect("journal obstruction");
+    let error = provider
+        .commit_batch(&[
+            AtomicCommit::new(first, Expect::Absent),
+            AtomicCommit::new(second, Expect::Absent),
+        ])
+        .expect_err("the interrupted batch cannot finish yet");
+    assert!(matches!(error, StoreError::Backend(_)), "{error}");
+    assert!(root.join(".aep-batch.pending.json").is_file());
+
+    std::fs::remove_dir(root.join("journal.jsonl")).expect("remove obstruction");
+    let held = provider.ids("ticket").expect("the read recovers the batch");
+    assert_eq!(held, ["one", "two"]);
+    assert!(!root.join(".aep-batch.pending.json").exists());
+    assert_eq!(
+        provider.events("ticket", "one").expect("first log").len(),
+        1
+    );
+    assert_eq!(
+        provider.events("ticket", "two").expect("second log").len(),
+        1
+    );
 }
 
 /// A copy of the provider that ignores the revision it was given — the runtime's `Broken`, written

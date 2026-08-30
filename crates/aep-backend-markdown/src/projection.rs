@@ -56,7 +56,7 @@ use crate::provider::{document_of, instance_of, PlanStore};
 use crate::store::{StoreReport, StoredDocument};
 
 /// The plan's shape over a [`PlanStore`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MarkdownProjection {
     members: Vec<MemberName>,
     at: Timestamp,
@@ -74,7 +74,7 @@ pub struct MarkdownProjection {
 }
 
 /// What the projection noted about the command in flight.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 struct Current {
     /// Whether a ladder has already ruled on this change (a `MoveStatus`).
     decided: bool,

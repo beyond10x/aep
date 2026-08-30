@@ -37,6 +37,23 @@ impl MemoryBackend {
         Self::default()
     }
 
+    /// A detached copy suitable for staging a command before an outer durability boundary commits.
+    #[must_use]
+    pub fn fork(&self) -> Self {
+        Self {
+            store: Mutex::new(self.with_store(Clone::clone)),
+        }
+    }
+
+    /// Publishes the complete state of a detached candidate.
+    ///
+    /// The candidate is cloned before this backend is locked, so two backends cannot deadlock by
+    /// trying to publish each other in opposite directions.
+    pub fn replace_with(&self, candidate: &Self) {
+        let candidate = candidate.with_store(Clone::clone);
+        self.with_store_mut(|store| *store = candidate);
+    }
+
     /// Runs `read` against the store.
     ///
     /// # Panics

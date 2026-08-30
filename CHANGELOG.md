@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Durable contract commands now commit every entity, event, relation, audit and idempotency record
+  through one `entity-runtime` 0.14.0 atomic batch using the pre-command optimistic view. Failed or
+  stale batches publish no local prefix; markdown recovers a persisted batch intent before reads,
+  and hybrid contract access goes through its declared authority.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added
