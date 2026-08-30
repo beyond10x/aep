@@ -78,7 +78,11 @@ pub struct StepMapId(String);
 
 impl StepMapId {
     /// The pattern published in generated JSON Schema.
-    pub const PATTERN: &'static str = "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$";
+    ///
+    /// `Charset::Dotted`'s own pattern, taken from `aep-domain` rather than written here: this
+    /// constant was a fourth copy of that rule, and it had already drifted from
+    /// [`Self::new`] — it called `development/2` valid, which this constructor refuses.
+    pub const PATTERN: &'static str = aep_domain::identifier_pattern!(Dotted, "^", "$");
 
     /// Parses and validates an identifier.
     pub fn new(value: impl Into<String>) -> Result<Self, ParseError> {

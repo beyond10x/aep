@@ -1,25 +1,34 @@
-//! The published pattern, **evaluated** rather than paraphrased.
+//! Every published pattern, **evaluated** rather than paraphrased.
 //!
-//! `PinnedWorkflowRef::PATTERN` is now composed at compile time from `WorkflowId::PATTERN` by
-//! string concatenation, and `pin.rs` asserts that composition with `assert_eq!` on the two
-//! strings. That says the pin's spelling is the identifier's spelling with a version bolted on. It
-//! does not say the composed pattern *behaves* like the identifier rule plus a version, and
-//! nothing else in the tree does either: every other case about the pattern is a hand-written
-//! paraphrase of it (`tests/pin_pattern_agrees_with_the_loader.rs`) or a `contains`/`ends_with`
-//! check on its text (`pin.rs`). Three encodings of one rule, none of them executable.
+//! A published pattern is the second definition of a rule whose first definition is a constructor,
+//! and a document is valid to an editor by the first and valid to the loader by the second. So the
+//! property worth stating is that the two agree on every input — and the only way to state it is
+//! to *run* the pattern, which is what the interpreter below is for. This workspace carries no
+//! regular-expression engine, deliberately (`AGENTS.md`), so it carries this one, in a test, where
+//! its narrowness is a feature.
 //!
-//! Concatenation is not composition. `strip_prefix('^')` + `strip_suffix('$')` on a constant that
-//! later gains a top-level alternation — `^a|legacy$` — yields `^(workflow:)?a|legacy/[1-9][0-9]*$`,
-//! which matches every string beginning with `a`, and `assert_eq!` on the two strings stays green
-//! because both sides moved together. This file evaluates the constant, so the property that
-//! matters is stated about behaviour.
+//! Since `story:workflow-id-pattern-numeric-tail` the patterns are composed rather than copied:
+//! `aep_domain::identifier_pattern!` holds one body per charset and `WorkflowId`, `StepMapId`,
+//! `PinnedWorkflowRef` and the versioned references all `concat!` theirs from it. Sharing a body
+//! is not the same as being right about it, and it does not make composition sound either —
+//! stripping anchors off a constant that later gains a top-level alternation (`^a|legacy$`) yields
+//! `^(workflow:)?a|legacy/[1-9][0-9]*$`, which matches every string beginning with `a`, while an
+//! `assert_eq!` on the two texts stays green because both sides moved together. Measured: with
+//! that alternation planted, every unit test in this crate passed. The cases here are stated over
+//! behaviour, so they do not.
 //!
 //! The interpreter is deliberately narrow — anchors, literals, classes, groups, alternation, `?`,
 //! `*`, `+` — and **panics** on anything else, including a `^` or `$` anywhere but the ends. A
 //! pattern this file cannot read fails loudly instead of being silently mis-evaluated.
 
-use aep_domain::ids::WorkflowId;
-use aep_driver_spec::map::{RawStepMap, StepMap};
+use aep_domain::ids::{
+    ApprovalId, AuditId, ClaimId, CommandId, CorrelationId, EventId, EvidenceId, ExecutionId,
+    IdempotencyKey, ObligationId, PhaseId, PrincipleId, ProfileId, ProtocolId, ProviderId,
+    RelationId, RepositoryRef, RequestId, ServiceId, StateId, SubjectRef, TaskId, ToolRef,
+    WorkflowId,
+};
+use aep_domain::version::{PrincipleRef, ProfileVersionedRef, ProtocolRef, WorkflowRef};
+use aep_driver_spec::map::{RawStepMap, StepMap, StepMapId};
 use aep_driver_spec::pin::PinnedWorkflowRef;
 
 // --- a very small regular-expression interpreter ---------------------------------------------
@@ -227,10 +236,10 @@ fn repeat(
     })
 }
 
-/// `true` when `pattern` matches the whole of `value`.
+/// Reads `pattern` into a tree, once, so a case that applies it to a corpus parses it once.
 ///
 /// The pattern must be anchored at both ends, which every published one in this workspace is.
-fn matches(pattern: &str, value: &str) -> bool {
+fn compile(pattern: &str) -> Node {
     let body = pattern
         .strip_prefix('^')
         .and_then(|rest| rest.strip_suffix('$'))
@@ -242,8 +251,18 @@ fn matches(pattern: &str, value: &str) -> bool {
         parser.chars.len(),
         "the pattern was not read to the end, so this interpreter cannot judge it: {pattern}"
     );
+    node
+}
+
+/// `true` when a compiled pattern matches the whole of `value`.
+fn matches_compiled(node: &Node, value: &str) -> bool {
     let chars: Vec<char> = value.chars().collect();
-    walk(&node, &chars, 0, &mut |end| end == chars.len())
+    walk(node, &chars, 0, &mut |end| end == chars.len())
+}
+
+/// `true` when `pattern` matches the whole of `value`.
+fn matches(pattern: &str, value: &str) -> bool {
+    matches_compiled(&compile(pattern), value)
 }
 
 // --- the corpus ------------------------------------------------------------------------------
@@ -280,6 +299,157 @@ fn identifier_corpus() -> Vec<String> {
         corpus.push(extra.to_owned());
     }
     corpus
+}
+
+/// A corpus for the charset rules, wider than [`identifier_corpus`] in alphabet and shorter in
+/// length: every string of length 1..=3 over the characters *all four* charset rules turn on.
+///
+/// [`identifier_corpus`] is built for `Charset::Dotted` alone, so it carries no upper case, no
+/// `_` and no `:` — and those are exactly the characters that tell `Charset::Loose` and
+/// `Charset::DottedSnake` apart from it. Three characters is enough for every divergence class
+/// these rules have: a trailing separator is `a-`, a repeated one is `a--`, and a numeric tail is
+/// `a/1`. The named spellings below are the ones worth reading in a failure message.
+fn charset_corpus() -> Vec<String> {
+    let alphabet = ['a', 'z', 'A', '0', '9', '-', '.', '/', '_', ':'];
+    let mut corpus: Vec<String> = Vec::new();
+    let mut level: Vec<String> = vec![String::new()];
+    for _ in 0..3 {
+        let mut next = Vec::new();
+        for prefix in &level {
+            for c in alphabet {
+                let mut candidate = prefix.clone();
+                candidate.push(c);
+                corpus.push(candidate.clone());
+                next.push(candidate);
+            }
+        }
+        level = next;
+    }
+    for extra in [
+        "adp/default",
+        "development.standard",
+        "adp/2",
+        "adp.2",
+        "adp/22",
+        "adp/2-3",
+        "adp/1x",
+        "adp/default/1",
+        "a--b",
+        "a-b-c",
+        "incident-standard",
+        "adversarial_verify",
+        "before_implementation",
+        "before_implementation/2",
+        "state.adversarial_verify/1",
+        "auth-api",
+        "cargo-nextest",
+        "AUTH-142",
+        "AUTH_142",
+        "acme/payments",
+        "task:AUTH-142",
+        "task:AUTH_142",
+        "service:auth-api",
+        "suite:unit",
+        "a-b:c_d",
+    ] {
+        corpus.push(extra.to_owned());
+    }
+    corpus
+}
+
+/// One published pattern, the name it is published under, and the code that really decides.
+type Published = (&'static str, &'static str, fn(&str) -> bool);
+
+/// Every identifier these two crates publish a pattern for, with the constructor that decides it.
+///
+/// Listed one by one rather than sampled, because the defect this table is here for is *an
+/// identifier having two definitions*, and a sample of the identifiers is a sample of the defect.
+fn published_identifiers() -> Vec<Published> {
+    vec![
+        ("ProtocolId", ProtocolId::PATTERN, |v| {
+            ProtocolId::new(v).is_ok()
+        }),
+        ("PrincipleId", PrincipleId::PATTERN, |v| {
+            PrincipleId::new(v).is_ok()
+        }),
+        ("ProfileId", ProfileId::PATTERN, |v| {
+            ProfileId::new(v).is_ok()
+        }),
+        ("WorkflowId", WorkflowId::PATTERN, |v| {
+            WorkflowId::new(v).is_ok()
+        }),
+        ("StateId", StateId::PATTERN, |v| StateId::new(v).is_ok()),
+        ("PhaseId", PhaseId::PATTERN, |v| PhaseId::new(v).is_ok()),
+        ("ObligationId", ObligationId::PATTERN, |v| {
+            ObligationId::new(v).is_ok()
+        }),
+        ("ApprovalId", ApprovalId::PATTERN, |v| {
+            ApprovalId::new(v).is_ok()
+        }),
+        ("ClaimId", ClaimId::PATTERN, |v| ClaimId::new(v).is_ok()),
+        ("ToolRef", ToolRef::PATTERN, |v| ToolRef::new(v).is_ok()),
+        ("ServiceId", ServiceId::PATTERN, |v| {
+            ServiceId::new(v).is_ok()
+        }),
+        ("ProviderId", ProviderId::PATTERN, |v| {
+            ProviderId::new(v).is_ok()
+        }),
+        ("RepositoryRef", RepositoryRef::PATTERN, |v| {
+            RepositoryRef::new(v).is_ok()
+        }),
+        ("CommandId", CommandId::PATTERN, |v| {
+            CommandId::new(v).is_ok()
+        }),
+        ("RequestId", RequestId::PATTERN, |v| {
+            RequestId::new(v).is_ok()
+        }),
+        ("CorrelationId", CorrelationId::PATTERN, |v| {
+            CorrelationId::new(v).is_ok()
+        }),
+        ("IdempotencyKey", IdempotencyKey::PATTERN, |v| {
+            IdempotencyKey::new(v).is_ok()
+        }),
+        ("AuditId", AuditId::PATTERN, |v| AuditId::new(v).is_ok()),
+        ("EventId", EventId::PATTERN, |v| EventId::new(v).is_ok()),
+        ("RelationId", RelationId::PATTERN, |v| {
+            RelationId::new(v).is_ok()
+        }),
+        ("TaskId", TaskId::PATTERN, |v| TaskId::new(v).is_ok()),
+        ("EvidenceId", EvidenceId::PATTERN, |v| {
+            EvidenceId::new(v).is_ok()
+        }),
+        ("ExecutionId", ExecutionId::PATTERN, |v| {
+            ExecutionId::new(v).is_ok()
+        }),
+        ("SubjectRef", SubjectRef::PATTERN, |v| {
+            SubjectRef::new(v).is_ok()
+        }),
+        ("StepMapId", StepMapId::PATTERN, |v| {
+            StepMapId::new(v).is_ok()
+        }),
+    ]
+}
+
+/// Every versioned reference these two crates publish a pattern for, with its parser.
+fn published_references() -> Vec<Published> {
+    vec![
+        ("ProtocolRef", ProtocolRef::PATTERN, |v| {
+            v.parse::<ProtocolRef>().is_ok()
+        }),
+        ("PrincipleRef", PrincipleRef::PATTERN, |v| {
+            v.parse::<PrincipleRef>().is_ok()
+        }),
+        ("WorkflowRef", WorkflowRef::PATTERN, |v| {
+            v.parse::<WorkflowRef>().is_ok()
+        }),
+        ("ProfileVersionedRef", ProfileVersionedRef::PATTERN, |v| {
+            v.parse::<ProfileVersionedRef>().is_ok()
+        }),
+        ("PinnedWorkflowRef", PinnedWorkflowRef::PATTERN, |v| {
+            v.parse::<WorkflowRef>()
+                .is_ok_and(|reference| PinnedWorkflowRef::try_from(reference).is_ok())
+        }),
+    ]
 }
 
 /// `true` when the loader takes a step map pinned to `workflow`.
@@ -323,12 +493,20 @@ fn the_interpreter_reads_the_constructs_these_patterns_are_made_of() {
         (WorkflowId::PATTERN, "adp-", false),
         (WorkflowId::PATTERN, "a--b", false),
         (WorkflowId::PATTERN, "Adp", false),
-        (WorkflowId::PATTERN, "adp/2", true),
+        // The numeric-tail rule, by hand: a bare integer as the last `.`/`/` component is a
+        // version reference and not part of an id, and `WorkflowId::new` says the same. This row
+        // read `true` while the published pattern was looser than the constructor.
+        (WorkflowId::PATTERN, "adp/2", false),
+        (WorkflowId::PATTERN, "adp.2", false),
+        (WorkflowId::PATTERN, "adp/22", false),
+        (WorkflowId::PATTERN, "adp/2-3", true),
+        (WorkflowId::PATTERN, "adp/1x", true),
         (PinnedWorkflowRef::PATTERN, "adp/default/1", true),
         (PinnedWorkflowRef::PATTERN, "workflow:adp/default/1", true),
         (PinnedWorkflowRef::PATTERN, "adp/default", false),
         (PinnedWorkflowRef::PATTERN, "adp/default/0", false),
         (PinnedWorkflowRef::PATTERN, "adp-/1", false),
+        (PinnedWorkflowRef::PATTERN, "adp/2/1", false),
     ] {
         assert_eq!(
             matches(pattern, value),
@@ -436,41 +614,26 @@ fn every_identifier_the_loader_takes_is_one_the_published_pattern_takes() {
 // accepts `adp/2/1`, which by then it did not. That file is gone and its one unique statement is
 // here, where the constant can be read.
 
-/// The identifier half of a pin, and its last `.`/`/` component.
-fn identifier_of(pin: &str) -> Option<(String, String)> {
-    let body = pin.strip_prefix("workflow:").unwrap_or(pin);
-    let (id, _) = body.rsplit_once('/')?;
-    let last = id.rsplit(['.', '/']).next()?.to_owned();
-    Some((id.to_owned(), last))
-}
-
-/// The divergence left is **exactly** the numeric-tail class, and it is this big.
+/// No pin the published pattern calls valid is one the loader refuses. **Inverted, not deleted.**
 ///
-/// Acceptance line 3 of `story:driver-spec-crate` — *an editor cannot tell an author a map is
-/// fine that the loader will refuse* — is **not met**, and this is the case that says so without
-/// being red about it. A failing test would say the same thing and take the whole suite's exit
-/// status with it; the defect is real, open and owned by
-/// `story:workflow-id-pattern-numeric-tail`, and a story is where an unfixed defect lives.
+/// This case used to assert the opposite and count it: 183 pins that
+/// `schemas/generated/driver-steps.schema.json` accepted and `StepMap` refused, all of them the
+/// numeric-tail class — `adp/2/1`, `adp.2/1`, `adp/22/1` — because `WorkflowId::PATTERN` was
+/// looser than `WorkflowId::new`. Its own message said what to do when the gap closed, and
+/// `story:workflow-id-pattern-numeric-tail` closed it, so the count is gone and the property is
+/// stated instead: acceptance line 3 of `story:driver-spec-crate` — *an editor cannot tell an
+/// author a map is fine that the loader will refuse* — now holds for the pin.
 ///
-/// So this asserts *which* divergences and *how many*, so a new class arriving is a failure rather
-/// than a bigger number in a message nobody re-reads. It fixes the two things the hand-written
-/// paraphrase it replaces got wrong: it reads the constant, and it names 183 rather than the three
-/// spellings that happened to be in a sample.
+/// It is inverted rather than deleted because the statement it was making is the statement worth
+/// keeping; only its sign was a report of an open defect.
 ///
-/// `WorkflowId::new` refuses an id whose last `.`/`/` component is a bare integer — the form is
-/// reserved for `<id>/<major>` — and `WorkflowId::PATTERN` does not say so, so neither does the
-/// pin's. **This is not because a `pattern` cannot express it.** It can, and the body below is
-/// checked against `WorkflowId::new` over this file's corpus by
-/// `the_numeric_tail_rule_is_expressible_as_a_pattern`. The reason it is not fixed here is that
-/// the rule belongs to `aep-domain`, in one place, for `WorkflowId` and `ProfileId` together;
-/// a stricter copy in this crate would put back the second, drifting rule that this crate has
-/// already been bitten by once. Tracked as `story:workflow-id-pattern-numeric-tail`.
-///
-/// When that lands, this case fails — the count moves and the set empties — and whoever lands it
-/// regenerates `schemas/generated/driver-steps.schema.json` with it. That is the point of the
-/// count being exact.
+/// **Still open, and deliberately:** `adp/default/4294967296` matches this pattern and does not
+/// load, because a major version is a `u32` (`crates/aep-domain/src/version.rs`) and a JSON Schema
+/// `pattern` cannot express an integer ceiling. It is out of scope by name in
+/// `story:workflow-id-pattern-numeric-tail`, and the corpus below carries no version that large,
+/// so this case is silent about it on purpose rather than by accident.
 #[test]
-fn the_only_pins_the_published_pattern_calls_valid_that_the_loader_refuses_are_the_numeric_tail() {
+fn no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses() {
     let mut pins: Vec<String> = identifier_corpus()
         .iter()
         .flat_map(|id| {
@@ -481,8 +644,8 @@ fn the_only_pins_the_published_pattern_calls_valid_that_the_loader_refuses_are_t
             ]
         })
         .collect();
-    // Every spelling a pin can take, named forms included, so the count below is the whole gap
-    // and not a sample of it.
+    // Every spelling a pin can take, named forms included, so this is the whole surface and not a
+    // sample of it. The middle three are the class this story closed.
     for extra in [
         "adp/default/1",
         "adp/2/1",
@@ -492,54 +655,42 @@ fn the_only_pins_the_published_pattern_calls_valid_that_the_loader_refuses_are_t
     ] {
         pins.push(extra.to_owned());
     }
+    let pattern = compile(PinnedWorkflowRef::PATTERN);
     let divergent: Vec<String> = pins
         .into_iter()
-        .filter(|pin| matches(PinnedWorkflowRef::PATTERN, pin) && !loads(pin))
+        .filter(|pin| matches_compiled(&pattern, pin) && !loads(pin))
         .collect();
 
-    let not_numeric_tail: Vec<&String> = divergent
-        .iter()
-        .filter(|pin| {
-            identifier_of(pin).is_none_or(|(_, last)| {
-                last.is_empty() || !last.chars().all(|c| c.is_ascii_digit())
-            })
-        })
-        .collect();
     assert!(
-        not_numeric_tail.is_empty(),
-        "a divergence that is not the numeric-tail class has appeared, and it is not the one this \
-         case records: {:?}",
-        not_numeric_tail.iter().take(8).collect::<Vec<_>>()
-    );
-
-    assert_eq!(
+        divergent.is_empty(),
+        "the published schema accepts {} pin(s) the loader refuses, so an editor tells an author \
+         a step map is fine that will not load. First few: {:?}\npublished pattern: {}",
         divergent.len(),
-        183,
-        "the published schema accepts {} pin(s) the loader refuses. If this went to 0, \
-         `story:workflow-id-pattern-numeric-tail` has landed: delete this case, and acceptance \
-         line 3 of `story:driver-spec-crate` is met. If it grew, something reopened the gap. \
-         First few: {:?}",
-        divergent.len(),
-        divergent.iter().take(8).collect::<Vec<_>>()
+        divergent.iter().take(8).collect::<Vec<_>>(),
+        PinnedWorkflowRef::PATTERN
     );
 }
 
-/// The numeric-tail rule **is** expressible as a `pattern`, and this is the body that does it.
+/// The numeric-tail rule **is** expressible as a `pattern`, and this is the body that shipped.
 ///
 /// Recorded here because the argument for leaving the gap open was written down once as *"a
 /// `pattern` cannot express it readably"*, which is false and makes a chosen decision read as a
-/// forced one. The real reason is where the rule lives, not whether it can be written.
+/// forced one. The real reason was where the rule lives, not whether it can be written — and when
+/// `story:workflow-id-pattern-numeric-tail` put it where it lives, this is the body it took.
 ///
-/// Checked, not asserted: this body agrees with `WorkflowId::new` on every string in the corpus.
-/// `story:workflow-id-pattern-numeric-tail` can take it as is.
+/// Two statements, both over the corpus rather than over the text: the body agrees with
+/// `WorkflowId::new`, and what `WorkflowId` publishes agrees with the body. The second one used to
+/// say the opposite — that the published pattern accepted things this body refuses — which is what
+/// an open defect looks like when it is written as a test.
 #[test]
 fn the_numeric_tail_rule_is_expressible_as_a_pattern() {
     const PROPOSED: &str = "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$";
 
     let corpus = identifier_corpus();
+    let proposed = compile(PROPOSED);
     let mismatches: Vec<&String> = corpus
         .iter()
-        .filter(|id| matches(PROPOSED, id) != WorkflowId::new(id.as_str()).is_ok())
+        .filter(|id| matches_compiled(&proposed, id) != WorkflowId::new(id.as_str()).is_ok())
         .collect();
     assert!(
         mismatches.is_empty(),
@@ -549,16 +700,108 @@ fn the_numeric_tail_rule_is_expressible_as_a_pattern() {
         mismatches.iter().take(8).collect::<Vec<_>>()
     );
 
-    // And it is strictly tighter than what is published, which is the whole point of proposing it.
-    let current_body = WorkflowId::PATTERN;
-    let closed: Vec<&String> = corpus
+    // And it is what `WorkflowId` publishes — in behaviour, not in spelling, so the constant may
+    // be reformulated or composed without this case having an opinion about how it is written.
+    let published = compile(WorkflowId::PATTERN);
+    let divergent: Vec<&String> = corpus
         .iter()
-        .filter(|id| matches(current_body, id) && !matches(PROPOSED, id))
+        .filter(|id| matches_compiled(&published, id) != matches_compiled(&proposed, id))
         .collect();
     assert!(
-        !closed.is_empty(),
-        "the proposed body refuses nothing the published one accepts. If \
-         `story:workflow-id-pattern-numeric-tail` has landed, this body *is* the published one and \
-         this case has done its job: delete it. Otherwise something reopened the gap."
+        divergent.is_empty(),
+        "`WorkflowId::PATTERN` and the body written for \
+         `story:workflow-id-pattern-numeric-tail` disagree on {} string(s): {:?}\npublished: {}",
+        divergent.len(),
+        divergent.iter().take(8).collect::<Vec<_>>(),
+        WorkflowId::PATTERN
+    );
+}
+
+// --- one identifier, one definition --------------------------------------------------------
+//
+// The two cases below are the general form of the defect the two above are the specific form of.
+// `story:workflow-id-pattern-numeric-tail` says it in one line: *the defect is that one identifier
+// has two definitions, and fixing one of two leaves the defect*. A constructor and a published
+// pattern are those two definitions, for every identifier in these two crates and not only for the
+// one the defect was found on.
+
+/// Every published identifier pattern accepts exactly what its own constructor accepts.
+///
+/// An editor applies the pattern from `schemas/generated/`; the loader applies the constructor.
+/// Every string the two disagree about is a document one of them calls valid and the other
+/// refuses, which is invariant 1 inverted — and which is what `story:driver-spec-crate` found for
+/// `PinnedWorkflowRef`, what `story:workflow-id-pattern-numeric-tail` found upstream of it for
+/// `WorkflowId`, and what neither would have found for `ServiceId` or `ObligationId` because
+/// nobody was looking there.
+///
+/// **What this case cannot say.** `validate` refuses an identifier longer than 200 characters and
+/// no pattern here bounds length, so the corpus stays short; the divergence exists and is a
+/// tightening the loader applies on top, not a document an editor calls valid and the loader
+/// rejects on a spelling.
+#[test]
+fn every_published_identifier_pattern_accepts_exactly_what_its_constructor_accepts() {
+    let corpus = charset_corpus();
+    let mut divergent: Vec<String> = Vec::new();
+    for (name, pattern, accepts) in published_identifiers() {
+        let compiled = compile(pattern);
+        for value in &corpus {
+            let by_pattern = matches_compiled(&compiled, value);
+            let by_constructor = accepts(value);
+            if by_pattern != by_constructor {
+                divergent.push(format!(
+                    "{name}: {value:?} — the published pattern says {by_pattern}, \
+                     `{name}::new` says {by_constructor}"
+                ));
+            }
+        }
+    }
+    assert!(
+        divergent.is_empty(),
+        "{} disagreement(s) between a published pattern and the constructor it is published for, \
+         over {} strings. Each is a spelling an editor and the loader answer differently. First \
+         few: {:#?}",
+        divergent.len(),
+        corpus.len(),
+        divergent.iter().take(12).collect::<Vec<_>>()
+    );
+}
+
+/// Every reference the published pattern accepts is one the parser accepts.
+///
+/// One direction, and the direction is the point: the failure that matters is a schema calling a
+/// reference valid that will not load. The converse is not asserted here because two spellings the
+/// parser takes are ones no `pattern` should: `adp/default/01`, a non-canonical major, and
+/// `adp/default/4294967296`, which the parser refuses only when the `u32` overflows — the ceiling
+/// `story:workflow-id-pattern-numeric-tail` puts out of scope by name, because a JSON Schema
+/// `pattern` cannot express an integer bound.
+#[test]
+fn every_reference_the_published_pattern_accepts_is_one_the_parser_accepts() {
+    let corpus = charset_corpus();
+    let mut accepted = 0_usize;
+    let mut divergent: Vec<String> = Vec::new();
+    for (name, pattern, parses) in published_references() {
+        let compiled = compile(pattern);
+        for value in &corpus {
+            if !matches_compiled(&compiled, value) {
+                continue;
+            }
+            accepted += 1;
+            if !parses(value) {
+                divergent.push(format!("{name}: {value:?}"));
+            }
+        }
+    }
+    assert!(
+        accepted > 100,
+        "the published reference patterns accepted {accepted} of {} strings, which is too few for \
+         this case to be saying anything",
+        corpus.len()
+    );
+    assert!(
+        divergent.is_empty(),
+        "{} reference(s) the published pattern calls valid and the parser refuses, so an editor \
+         tells an author a document is fine that will not load. First few: {:#?}",
+        divergent.len(),
+        divergent.iter().take(12).collect::<Vec<_>>()
     );
 }

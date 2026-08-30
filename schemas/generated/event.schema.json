@@ -782,7 +782,7 @@
     "ObligationId": {
       "description": "obligation identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*(([./][a-z0-9]+([-_][a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*([-_][a-z0-9]+)*|[0-9]+([-_][a-z0-9]+)+))?$"
     },
     "PrincipleId": {
       "description": "principle identifier.",
@@ -905,17 +905,17 @@
     "ProfileId": {
       "description": "profile identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
-      "pattern": "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$"
+      "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "StateId": {
       "description": "state identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*([./][a-z0-9]+([-_][a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*([-_][a-z0-9]+)*(([./][a-z0-9]+([-_][a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*([-_][a-z0-9]+)*|[0-9]+([-_][a-z0-9]+)+))?$"
     },
     "TaskId": {
       "description": "task identifier.",
@@ -943,7 +943,7 @@
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "VerificationStatus": {
       "description": "The outcome of a verification.",
@@ -996,12 +996,12 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "WorkflowId": {
       "description": "workflow identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }
 }

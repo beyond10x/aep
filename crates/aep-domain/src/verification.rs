@@ -159,7 +159,10 @@ impl schemars::JsonSchema for Verifier {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             ..Default::default()
         };
-        schema.string().pattern = Some("^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$".to_owned());
+        // `parse` sends anything it does not recognise to `ToolRef::new`, so `ToolRef`'s rule is
+        // this schema's rule. It used to be paraphrased here, and the paraphrase called
+        // `test-runner-` and `lint/2` valid that `ToolRef::new` refuses.
+        schema.string().pattern = Some(ToolRef::PATTERN.to_owned());
         schema.metadata().description = Some(
             "A verifier class; the named classes are listed in `examples`, and any other name is \
              treated as an external tool."

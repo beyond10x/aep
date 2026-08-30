@@ -129,7 +129,13 @@ impl ProtocolRef {
     }
 
     /// The pattern published in generated JSON Schema.
-    pub const PATTERN: &'static str = "^(protocol:)?[a-z][a-z0-9-]*/[1-9][0-9]*$";
+    ///
+    /// The identifier half is [`ProtocolId`]'s own, by
+    /// [`identifier_pattern!`](crate::identifier_pattern): the paraphrase it replaces put `-`
+    /// inside the character class, so it called `aep-/1` and `a--b/1` valid and
+    /// [`ProtocolId::new`] refuses both.
+    pub const PATTERN: &'static str =
+        crate::identifier_pattern!(Kebab, "^(protocol:)?", "/[1-9][0-9]*$");
 }
 
 impl fmt::Display for ProtocolRef {
@@ -172,7 +178,7 @@ impl From<ProtocolRef> for String {
 
 /// Declares an optionally-versioned reference type for one identifier kind.
 macro_rules! versioned_ref {
-    ($(#[$meta:meta])* $name:ident, $id:ty, $kind:literal, $prefix:literal, $pattern:literal) => {
+    ($(#[$meta:meta])* $name:ident, $id:ty, $kind:literal, $prefix:literal, $pattern:expr) => {
         $(#[$meta])*
         #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
         #[serde(into = "String")]
@@ -208,6 +214,11 @@ macro_rules! versioned_ref {
             }
 
             /// The pattern published in generated JSON Schema.
+            ///
+            /// The identifier half is composed from the identifier's own charset by
+            /// [`identifier_pattern!`](crate::identifier_pattern), so a reference cannot call a
+            /// spelling valid that `FromStr` refuses — which every hand-written paraphrase of one
+            /// of these rules has eventually done.
             pub const PATTERN: &'static str = $pattern;
         }
 
@@ -268,7 +279,7 @@ macro_rules! versioned_ref {
                     instance_type: Some(schemars::schema::InstanceType::String.into()),
                     ..Default::default()
                 };
-                schema.string().pattern = Some($pattern.to_owned());
+                schema.string().pattern = Some(Self::PATTERN.to_owned());
                 schema.metadata().description = Some(concat!(
                     "Reference to a ", $kind, ", optionally pinned to a major version."
                 ).to_owned());
@@ -284,7 +295,7 @@ versioned_ref!(
     PrincipleId,
     "principle",
     "principle:",
-    "^(principle:)?[a-z][a-z0-9-]*(/[1-9][0-9]*)?$"
+    crate::identifier_pattern!(Kebab, "^(principle:)?", "(/[1-9][0-9]*)?$")
 );
 
 versioned_ref!(
@@ -293,7 +304,7 @@ versioned_ref!(
     WorkflowId,
     "workflow",
     "workflow:",
-    "^(workflow:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*(/[1-9][0-9]*)?$"
+    crate::identifier_pattern!(Dotted, "^(workflow:)?", "(/[1-9][0-9]*)?$")
 );
 
 versioned_ref!(
@@ -302,7 +313,7 @@ versioned_ref!(
     ProfileId,
     "profile",
     "profile:",
-    "^(profile:)?[a-z][a-z0-9-]*([./][a-z0-9-]+)*(/[1-9][0-9]*)?$"
+    crate::identifier_pattern!(Dotted, "^(profile:)?", "(/[1-9][0-9]*)?$")
 );
 
 impl<'de> serde::Deserialize<'de> for ProtocolRef {

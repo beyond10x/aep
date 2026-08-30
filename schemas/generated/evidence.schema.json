@@ -1445,7 +1445,7 @@
     "ServiceId": {
       "description": "service identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "Severity": {
       "description": "How serious a review finding is.",
@@ -1498,7 +1498,7 @@
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "TestSuite": {
       "description": "Which body of tests was run.",
@@ -1520,7 +1520,7 @@
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "TranscriptDigest": {
       "description": "A digest of the transcript a trace-conformance check read, as `sha256sum` writes it: 64 lower-case hexadecimal characters.",
@@ -1581,7 +1581,7 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }
 }

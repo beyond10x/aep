@@ -558,7 +558,7 @@
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*([./][a-z0-9]+(-[a-z0-9]+)*)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "Verifier": {
       "description": "A verifier class; the named classes are listed in `examples`, and any other name is treated as an external tool.",
@@ -578,7 +578,7 @@
         "trace-checker"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*([./][a-z0-9-]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }
 }
