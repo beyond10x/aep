@@ -122,8 +122,9 @@ The centre of the wave, and the only item the others exist to support.
 `claude -p` session per `llm` step (D4), the tool set at each state from
 `tool_config(effective_policy(execution))` on the launch line, the plugin's hooks configured through
 `--settings` and **never** `--bare` (D4/F15), `cargo test` and `clippy` as `command` steps **the
-driver executes** — because no development profile grants `command.execute`, so the model holds no
-shell at any point in the run (§ 4.8) — and the review as an `operator` step that persists, releases
+driver executes** — because this run's profile grants no `command.execute`, so the model holds no
+shell at any point in it (§ 4.8; `development.driven` does grant it, held to the `protocol` CLI by a
+hook) — and the review as an `operator` step that persists, releases
 the lock and exits 0 (D3).
 
 > **One input this paragraph predates, from wave 3's delivery: `development.standard` is very likely

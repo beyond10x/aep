@@ -122,8 +122,9 @@ title: A run of `adp/default` put the specification before the decomposition and
 # invoice and not the run. Both rules live in `crates/trace-spec/src/check.rs`, `run_result`.
 #
 # **`the-suite-was-run-before-there-was-code-to-pass-it` cannot decide under `driven`, by
-# construction.** No development profile grants `command.execute`, so the model in a driven run has
-# no shell: `cargo test` is a **command step the driver runs**, and the driver is not in the
+# construction.** `development.driven` grants `command.execute` but a hook holds it to the
+# `protocol` CLI, so the model in a driven run has no general shell: `cargo test` is a **command
+# step the driver runs**, and the driver is not in the
 # session's transcript. The row answers `never_occurred` — honestly, because in that session it did
 # not occur. The fact itself is not lost: the driver records it as a `test_result` from
 # `test-runner`, and the workflow's own `evidence.first_seq.test_result < evidence.first_seq.diff`

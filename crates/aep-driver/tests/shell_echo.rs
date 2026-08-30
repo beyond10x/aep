@@ -122,8 +122,9 @@ transitions:
 
 /// A development profile: three capabilities, and deliberately **not** `command.execute`.
 ///
-/// § 4.9's strong property falls out of exactly this document — no development profile grants a
-/// shell, so an `llm` step holds none — and the specification below asserts it against the
+/// § 4.9's strong property falls out of exactly this document — `development.fast` and
+/// `development.standard` grant no shell, so an `llm` step under them holds none — and the
+/// specification below asserts it against the
 /// transcript rather than against the policy, which is the only place the claim can be checked
 /// after the fact.
 const PROFILE: &str = r"

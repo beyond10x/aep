@@ -8,8 +8,10 @@
 # Two properties are worth reading before the steps:
 #
 #   * every `cargo` line here is a **command step the driver runs**, never a tool the model holds.
-#     No development profile grants `command.execute`, so an `llm` step in this map has no shell at
-#     all: `tests.execute` is exercised by the driver, and the record it produces carries
+#     This map's `llm` steps run under `development.standard`, which grants no `command.execute`,
+#     so they hold no shell at all. (`development.driven` does grant it, held to the `protocol`
+#     CLI by a hook — `profiles/development-driven.yaml:78`. This map does not use it.)
+#     `tests.execute` is exercised by the driver, and the record it produces carries
 #     `producer: verifier / test-runner` rather than a model's opinion of a test run. That is what
 #     makes `independent: true` honestly satisfiable in `adversarial_verify`.
 #   * an `llm` step has no `evidence:` key and cannot be given one. Anything a model is supposed to
