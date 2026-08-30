@@ -314,6 +314,27 @@ enum Command {
         #[arg(long)]
         action: Option<String>,
     },
+    /// Browse the plan in a browser, and move artifacts along their ladders from it.
+    ///
+    /// A board is a shape and a terminal prints lines, so triage is what the CLI is worst at. This
+    /// answers the same facts `artifact board`, `show` and `explain` print, and takes status moves
+    /// back through the same decision `artifact move` makes.
+    ///
+    /// **It binds `127.0.0.1` and there is no flag that widens it.** Reaching it from another
+    /// machine is `ssh -L`. The URL it prints carries a token for the run; a request without that
+    /// token is refused, which is what stops another page in the same browser writing to the store.
+    /// It is not authentication, and the module says so.
+    Serve {
+        /// Where the plan is, and which documents govern it.
+        #[command(flatten)]
+        location: planning::StoreLocation,
+        /// The port to listen on. `0` takes whatever the operating system offers.
+        #[arg(long, default_value_t = 8899)]
+        port: u16,
+        /// Answer reads and refuse every transition.
+        #[arg(long)]
+        read_only: bool,
+    },
     /// Plan work in the markdown planning store: epics, stories, tasks and how they relate.
     ///
     /// The store is a directory of markdown files — one artifact per file, YAML frontmatter, free
@@ -750,6 +771,7 @@ macro_rules! out {
 // split of this file, and the criterion for the next one is the same as this one's — a verb family
 // with its own store, its own vocabulary and no shared state with the rest.
 mod planning;
+mod serve;
 
 // The second module split, on the same criterion: a verb family with its own observation
 // domain, its own vocabulary and no shared state with the rest of the binary. It brings its own
@@ -843,6 +865,11 @@ fn run() -> Result<ExitCode> {
         Command::Evaluate(args) => evaluate(&args, None),
         Command::Explain { execution, action } => evaluate(&execution, action.as_deref()),
         Command::Artifact { command } => planning::run(command),
+        Command::Serve {
+            location,
+            port,
+            read_only,
+        } => serve::run(&location, port, read_only),
         Command::Trace { command } => trace::run(command),
         Command::Contract { command } => contract::run(command),
         Command::Property { command } => property::run(command),

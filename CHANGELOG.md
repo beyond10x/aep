@@ -11,6 +11,26 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **`protocol serve` puts the plan in a browser, and moves it from there.** A board is a shape and
+  a terminal prints lines, so triage was the thing the CLI was worst at. The page shows the status
+  columns `artifact board` prints, one artifact's fields and body as `artifact show` prints them, and
+  the rungs it may take next with what each costs — a rung whose price is unmet is drawn *with the
+  price on it*, so a cost is read rather than learnt by being refused. Clicking a rung moves the
+  artifact through the same decision `artifact move` makes, graph re-validation included, and a
+  refusal comes back with every status the ladder *would* have permitted, each one a button.
+
+  **It binds `127.0.0.1` and there is no flag that widens it.** Reaching it from another machine is
+  `ssh -L`, which puts authentication where authentication belongs. The URL it prints carries a token
+  for the run and a request without that token is refused, which is what stops another page in the
+  same browser writing to your store — that is not authentication, and the module doc says so.
+  `--read-only` answers reads and refuses every transition by name.
+
+  **No new dependency**: the HTTP is about five hundred lines over `std::net::TcpListener`, and the
+  refusal is recorded where the refusal happens. A framework would have meant the first async runtime
+  in a workspace that wrote a busy-polling `block_on` to avoid one, and an MSRV that moves through the
+  lockfile without a commit of ours touching a line of Rust. A backend is opened per request, exactly
+  as the CLI opens one per invocation, so the page and a terminal can be used at the same time.
+
 * **The Claude Code plugin says which version it is, and a gate step holds it to that.**
   `integrations/claude-code/.claude-plugin/plugin.json` is `0.2.0`; it read `0.1.0` through nine
   plugin commits and 968 changed lines on 2026-08-29/30, so a session could not tell the skill it

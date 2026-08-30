@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>protocol — the plan</title>
+<style>
+  :root {
+    --ink: #16181d; --dim: #6b7280; --line: #e2e5ea; --card: #ffffff;
+    --page: #f6f7f9; --accent: #2b5fd9; --warn: #b45309; --stop: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e6e8ec; --dim: #9aa1ac; --line: #2a2e37; --card: #1a1d23;
+      --page: #121419; --accent: #7aa2f7; --warn: #d99a2b; --stop: #f07178;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    padding: 12px 18px; border-bottom: 1px solid var(--line);
+    display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+    position: sticky; top: 0; background: var(--page); z-index: 5;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: .01em; }
+  .muted { color: var(--dim); font-size: 12.5px; }
+  .badge {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--dim);
+  }
+  .badge.ro { color: var(--warn); border-color: var(--warn); }
+  select, button { font: inherit; color: inherit; }
+  select {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 8px;
+  }
+  main { display: flex; height: calc(100vh - 53px); }
+  #board { flex: 1; overflow: auto; padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
+  .col { min-width: 250px; max-width: 300px; flex: 0 0 auto; }
+  .col h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); margin: 0 0 8px 2px; font-weight: 600;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 7px; cursor: pointer;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .card .id { font: 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); }
+  .card .t { margin-top: 2px; }
+  .chip {
+    display: inline-block; margin-top: 5px; font-size: 10.5px;
+    color: var(--stop); border: 1px solid var(--stop); border-radius: 999px; padding: 0 6px;
+  }
+  #panel {
+    width: 460px; flex: 0 0 auto; border-left: 1px solid var(--line);
+    overflow: auto; padding: 16px; background: var(--card);
+  }
+  #panel h2 { font-size: 15px; margin: 0 0 2px; }
+  #panel .id { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 12px 0; }
+  dt { color: var(--dim); font-size: 12.5px; }
+  dd { margin: 0; }
+  pre {
+    white-space: pre-wrap; word-wrap: break-word; background: var(--page);
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px;
+    font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 42vh; overflow: auto;
+  }
+  .rungs { display: flex; gap: 7px; flex-wrap: wrap; margin: 10px 0 4px; }
+  button.rung {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 6px 11px; cursor: pointer;
+  }
+  button.rung[disabled] {
+    background: transparent; color: var(--dim);
+    border: 1px dashed var(--line); cursor: not-allowed;
+  }
+  .note { margin-top: 10px; padding: 9px 11px; border-radius: 6px; font-size: 13px; }
+  .note.bad { border: 1px solid var(--stop); color: var(--stop); }
+  .note.good { border: 1px solid var(--accent); color: var(--accent); }
+  .empty { color: var(--dim); padding: 30px 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>protocol</h1>
+  <span class="muted" id="store">reading…</span>
+  <span class="badge" id="count"></span>
+  <span class="badge ro" id="ro" hidden>read-only</span>
+  <span style="flex:1"></span>
+  <select id="kind"><option value="">every kind</option></select>
+  <button class="rung" id="reload">reload</button>
+</header>
+<main>
+  <div id="board"><div class="empty">loading…</div></div>
+  <div id="panel"><div class="empty">Pick an artifact to see what it says and where it may go.</div></div>
+</main>
+<script>
+(() => {
+  "use strict";
+  // The token the server printed. Every request carries it; without it the server answers 403.
+  const TOKEN = new URLSearchParams(location.search).get("t") || "";
+  const $ = (id) => document.getElementById(id);
+  let picked = null;
+  let readOnly = false;
+
+  const ask = async (path, options) => {
+    const join = path.includes("?") ? "&" : "?";
+    const answer = await fetch(path + join + "t=" + encodeURIComponent(TOKEN), options);
+    const body = await answer.json().catch(() => ({ refused: "the answer was not JSON" }));
+    return { ok: answer.ok, status: answer.status, body };
+  };
+
+  // Every value reaches the page as text. Titles and bodies are operator-authored markdown, and a
+  // page that interpolated them as HTML would run them.
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  };
+
+  async function loadStore() {
+    const { ok, body } = await ask("/api/store");
+    if (!ok) { $("store").textContent = body.refused || "the store did not read"; return; }
+    $("store").textContent = body.store;
+    $("count").textContent = body.artifacts + " artifacts" +
+      (body.unreadable ? " · " + body.unreadable + " unreadable" : "");
+  }
+
+  async function loadBoard() {
+    const kind = $("kind").value;
+    const { ok, body } = await ask("/api/board" + (kind ? "?kind=" + encodeURIComponent(kind) : ""));
+    const board = $("board");
+    board.replaceChildren();
+    if (!ok) { board.append(el("div", "empty", body.refused || "the board did not read")); return; }
+
+    const kinds = new Set();
+    for (const column of body) {
+      const wrap = el("div", "col");
+      wrap.append(el("h2", null, column.status + " (" + column.artifacts.length + ")"));
+      for (const item of column.artifacts) {
+        kinds.add(String(item.id).split(":")[0]);
+        const card = el("div", "card" + (item.id === picked ? " on" : ""));
+        card.append(el("div", "id", item.id));
+        if (item.title) card.append(el("div", "t", item.title));
+        if (item.blocked_by && item.blocked_by.length) {
+          card.append(el("span", "chip", "blocked"));
+        }
+        card.addEventListener("click", () => { picked = item.id; loadBoard(); loadOne(item.id); });
+        wrap.append(card);
+      }
+      board.append(wrap);
+    }
+    if (!body.length) board.append(el("div", "empty", "nothing in this plan yet"));
+
+    const chooser = $("kind");
+    if (chooser.options.length <= 1) {
+      for (const kind of [...kinds].sort()) chooser.append(new Option(kind, kind));
+    }
+  }
+
+  async function loadOne(id) {
+    const panel = $("panel");
+    panel.replaceChildren(el("div", "empty", "reading " + id + "…"));
+    const shown = await ask("/api/artifact/" + encodeURIComponent(id));
+    if (!shown.ok) {
+      panel.replaceChildren(el("div", "note bad", shown.body.refused || "it did not read"));
+      return;
+    }
+    const it = shown.body;
+    panel.replaceChildren();
+    panel.append(el("div", "id", it.id));
+    panel.append(el("h2", null, it.title || "(untitled)"));
+
+    const fields = el("dl");
+    const pair = (label, value) => {
+      if (value === null || value === undefined || value === "") return;
+      fields.append(el("dt", null, label));
+      fields.append(el("dd", null, value));
+    };
+    pair("kind", it.kind);
+    pair("status", it.status);
+    pair("owner", it.owner);
+    pair("summary", it.summary);
+    pair("tags", (it.tags || []).join(", "));
+    pair("withholds", it.withholds);
+    pair("revision", it.revision);
+    for (const edge of it.relations || []) {
+      fields.append(el("dt", null, edge.relation));
+      fields.append(el("dd", null, edge.target));
+    }
+    panel.append(fields);
+
+    const rungs = el("div", "rungs");
+    panel.append(rungs);
+    const where = el("div");
+    panel.append(where);
+    panel.append(el("pre", null, it.body || "(no body)"));
+
+    const explained = await ask("/api/artifact/" + encodeURIComponent(id) + "/explain");
+    if (!explained.ok) {
+      where.replaceChildren(el("div", "note bad", explained.body.refused || "explain did not read"));
+      return;
+    }
+    drawRungs(rungs, where, id, explained.body.next || []);
+  }
+
+  function drawRungs(rungs, where, id, next) {
+    rungs.replaceChildren();
+    if (!next.length) {
+      rungs.append(el("span", "muted", "no rung leads anywhere from here"));
+      return;
+    }
+    for (const rung of next) {
+      // A rung short of its cost is drawn with the price on it, so the price is read rather than
+      // learnt by being refused.
+      const short = (rung.needs || []).filter((need) => (need.held || 0) < need.at_least);
+      const button = el("button", "rung", rung.status);
+      if (short.length) {
+        button.disabled = true;
+        button.textContent = rung.status + " — needs " +
+          short.map((need) => need.at_least + " " + need.kind + ", held " + (need.held || 0)).join("; ");
+      } else if (readOnly) {
+        button.disabled = true;
+        button.textContent = rung.status + " — read-only";
+      } else {
+        button.addEventListener("click", () => moveIt(id, rung.status, where));
+      }
+      rungs.append(button);
+    }
+  }
+
+  async function moveIt(id, to, where) {
+    where.replaceChildren(el("div", "note", "moving to " + to + "…"));
+    const answer = await ask("/api/artifact/" + encodeURIComponent(id) + "/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to }),
+    });
+    const body = answer.body;
+    where.replaceChildren();
+
+    for (const made of body.made || []) {
+      where.append(el("div", "note good",
+        made.id + " moved " + made.from + " → " + made.to + " (revision " + made.revision + ")"));
+    }
+    if (answer.ok && !body.refusal) {
+      loadBoard(); loadOne(id);
+      return;
+    }
+    const why = body.refusal;
+    if (!why) {
+      where.append(el("div", "note bad", body.refused || "it did not move"));
+      return;
+    }
+    const said = el("div", "note bad");
+    if (why.finding) {
+      said.textContent = id + " would move " + why.from + " → " + why.guarded_rung +
+        ", and the store would not validate: " + why.finding;
+    } else if (why.refused) {
+      said.textContent = why.refused.message ||
+        (id + " is " + why.from + "; " + why.refused.reason.replace(/_/g, " "));
+    } else {
+      said.textContent = id + " is " + why.from + "; " + (why.guarded_rung || "") + " is guarded";
+    }
+    where.append(said);
+
+    // The refusal names what it would have permitted, so the answer to the question it creates is
+    // one click away rather than a second attempt.
+    const legal = (why.refused && why.refused.legal) || [];
+    if (legal.length) {
+      const row = el("div", "rungs");
+      row.append(el("span", "muted", "it may move to:"));
+      for (const status of legal) {
+        const button = el("button", "rung", status);
+        button.addEventListener("click", () => moveIt(id, status, where));
+        row.append(button);
+      }
+      where.append(row);
+    }
+    loadBoard();
+  }
+
+  $("kind").addEventListener("change", loadBoard);
+  $("reload").addEventListener("click", () => { loadStore(); loadBoard(); if (picked) loadOne(picked); });
+
+  (async () => {
+    const probe = await ask("/api/artifact/none/move", { method: "POST", body: "{}" });
+    readOnly = probe.status === 403 && String(probe.body.refused || "").includes("read-only");
+    if (readOnly) $("ro").hidden = false;
+    await loadStore();
+    await loadBoard();
+  })();
+})();
+</script>
+</body>
+</html>
