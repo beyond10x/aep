@@ -1,12 +1,14 @@
 # Reconciliation: implementation vs Consolidated Design v0.2
 
-Status date: 2026-08-19. Authoritative spec: [`consolidated-design-v0.2.md`](consolidated-design-v0.2.md).
+Reconciled 2026-08-19. Authoritative spec: [`consolidated-design-v0.2.md`](consolidated-design-v0.2.md).
 Superseded inputs: [`design-draft-v0.1.md`](archive/design-draft-v0.1.md),
 [`artifact-model-extension-v0.1.md`](archive/artifact-model-extension-v0.1.md) — both are subsumed by v0.2 and
 kept only for provenance.
 
-This document records what the current tree implements, what v0.2 changes, and the order the
-remaining work is being done in. It is the reasoning record; the chat status is the summary.
+This document records the v0.2 reconciliation, work order and deliberate deviations. It does not
+carry the current delivery state: [`docs/status.md`](../status.md) derives that from annotated tags,
+the [planning store](../../.engineering/planning/) carries accepted work, and the
+[`gap register`](../plan/gap-register.md) carries what remains open.
 
 ---
 
@@ -100,8 +102,8 @@ types; D6 is new.
 
 ## 4. Order of work
 
-**Status:** steps 1–4 are delivered (waves 1 and 2 — see `docs/plan/`). Step 5 is wave 3, step 6
-follows it.
+Delivery against this order is recorded by annotated tags in [`docs/status.md`](../status.md), not
+by a hand-maintained sentence here.
 
 
 1. **Finish the execution core** — `aep-engine` (registry, resolution, execution, evaluation,

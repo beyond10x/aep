@@ -1,122 +1,21 @@
 ---
 title: Roadmap and proposals
 sidebar_position: 3
-description: What has been delivered in which order, what is deferred by decision, and which design proposals are accepted, rejected or still only proposed.
+description: Where delivery, accepted work, open gaps and proposal status are authoritatively recorded.
 ---
 
 # Roadmap and proposals
 
-Serves **O2**, **O3** and **O6** of `atlas/ROADMAP.md`, the collection's objectives; this page orders the work inside this repository.
+This page does not copy the live roadmap. The repository separates four questions so a prose table
+cannot quietly become a second planning system:
 
-The repository keeps design proposals in `docs/design/`, and holds a strict line: **a proposal is
-not a work order**, however long and however recent. Work is sequenced by plan pages in
-`docs/plan/`, and each wave must be falsifiable by the one before it — a generated artifact nothing
-can check is a claim, not a deliverable. (The oracle was made to fail on purpose, once per fault,
-before code generation was allowed to be judged by it.)
-
-## Delivered, in order
-
-| Wave | Delivered | Tag |
-|---|---|---|
-| AEP waves 1–4 | the protocol: engine, contract, identity and audit, backend conformance suites, document tree | `0.1.0` … `0.2.1` |
-| ESS wave 1 | the typed model | `0.3.0-ess-wave-1` |
-| ESS wave 2 | the compiler and IR | `0.3.1-ess-wave-2` |
-| ESS wave 3 | four projections, committed and drift-checked | `0.3.2-ess-wave-3` |
-| ESS wave 3.5 | reconciliation: twenty gates closed before the oracle was allowed to start | `0.3.3-ess-wave-3.5` |
-| ESS wave 4 | the specification as oracle: generated suites, runner, evidence | `0.4.0-ess-wave-4` |
-| ESS wave 5 | semantic diff and impact closure | `0.5.0-ess-wave-5` |
-| ESS wave 6 | structural synthesis: the plan and the Rust emitter, proven against the generated suite | `0.6.0-ess-wave-6` |
-| ESS wave 6.5 | hardening: three unenforced invariants gained build-failing enforcement, full SHA-256 digests, property tests | `0.6.1-ess-wave-6.5` |
-| ESS wave 7 | contract digests and artifact-level impact, ten diff families, the Go and browser emitters, and the dual-target demonstration | `0.7.0-ess-wave-7` |
-| Infra waves 1–4 | observation → IR → graph/diagnosis → desired state and simulation → gaps projected back as patches | `0.7.0` and `0.7.1-infra-waves-1-4` |
-| Harness wave 1, trace wave 1 | the markdown planning store and the `protocol artifact` verbs, the Claude Code plugin, and the transcript checker | `0.8.0-harness-wave-1-trace-wave-1` |
-| Harness waves 2–3, trace wave 2 | the reference driver — decided, then built: `protocol drive`, the driven shell, two enforcement hooks, `protocol workflow render`; and transcript conformance as an evidence kind the engine admits | `0.9.0-harness-waves-2-3` |
-| Evidence horizons, the first governed run | records carry `observed_at` and requirements carry a `horizon`; `protocol drive` walked a real story out of this repository's own backlog, and blocked | `0.10.0-horizons-dogfood-lab` |
-| Ground truth and docs | an outside adopter's corpus replaced this repository's own guesses about evidence in prose, and this site was written | `0.11.0-ground-truth-and-docs` |
-| A workflow declares where a run may write | the toolset a state grants is a property of the workflow, and a fourth eval arm proves the toolset holds it | `0.12.0` |
-| **The ladder is data** | the status ladder becomes a YAML file decided by `entity-core`, an IO-free kernel taken as a pinned dependency, and the status vocabulary is opened to authors | `0.13.0` |
-| The protocol reads a repository that already exists | `protocol reverse scan\|history\|openapi\|init` — three verbs that write nothing, and one that writes `project.yaml` | `0.14.0` |
-| A rung may cost evidence | `requires:` on a ladder; the refusal names which kind of observation is missing and how many | `0.15.0` |
-| A rung may open on a date | date and duration operators in the condition language, with the clock read at the edge and passed in | `0.16.0` |
-| `obligation`, and the open vocabulary spent | a commitment on a clock nobody here controls, as a ladder — and it never gates a transition | `0.17.0` |
-| The typed `blocker` | something stopping work, typed by what would clear it; plus an audit of which vocabularies are open, which are closed, and what each closure buys | `0.18.0` |
-| **The plan has a history** | the markdown store gains an append-only journal, and `protocol artifact history` answers what happened to one artifact | `0.19.0` |
-| Evidence names what it is about | `protocol artifact evidence` records an observation against an artifact, and a move separates evidence *recorded* from evidence *asserted* | `0.20.0` |
-| W5 — the engine's mechanisms | evidence names its subject and a mismatch is refused before the record is built; an advisory requirement tier that reports and gates nothing; `depends_on` and a circuit breaker in step maps; and the driver writes what each step was **not** allowed to do | `0.21.0` |
-| W6 — portability and drift | a second transcript shape decided by the same `trace-spec/1`, and three prose counts re-derived from the commands that print them | `0.22.0` |
-| W7 — **a claim that left the boundary** | `outbound-claim`, where sending is not undoable — added as a YAML file with no Rust change at all, which is the proof the whole `entity-core` programme was for | `0.23.0` |
-| The pin says what it links | the `entity-core` pin moved to the tag that exists, and `outbound-claim` starts at the built-in `draft` rather than an invented near-miss | `0.23.1` |
-| **The first tag this repository has verified** | `task check` gained the MSRV build and the website build — the two jobs CI ran and the local gate did not, which is how CI stayed red behind a green gate for eleven consecutive releases | `0.23.2` |
-| A tag cuts its own release | a release workflow that runs CI itself, called rather than copied, and `cargo xtask notes` | `0.24.0` |
-| Workspaces | `.engineering/workspace.yaml` names and pins member repositories; `protocol workspace list\|crossings\|show\|members`; a member nobody has checked out is a normal condition, and cycle detection holds over the combined graph | `0.25.0`, `0.26.0` |
-| The planning store is a contract implementation | `aep-backend-markdown` implements the storage contract; `aep-backend-sqlite`, the first database backend; the two commands D-P1 waited on | `0.27.0` – `0.27.3` |
-| The store over `entity-store` | `aep-backend-entity`, the contract over any `entity_store::Store`; a SQLite plan holds its own history; the pin moves to `entity-runtime` 0.10.0 | `0.28.0` |
-| The plan's documents are a provider | `MarkdownProvider`; history and audit answered from the event log (D-P3); `artifact validate` reports drift and deletion (D-P2, D-P4) | `0.29.0` |
-| `project.yaml` names the store | every verb opens the store the project names — markdown, SQLite or `hybrid`; an observation is an event on the entity it is about | `0.30.0` |
-| The epic closes | an edge no longer moves its source's revision; `epic:planning-store-as-backend` is `implemented`, fifteen stories | `0.31.0` |
-| A driven run produces every kind its plan demands | the cargo map produces each evidence kind the plan asks for; the eleven ladders `entity-runtime` re-expresses are held equal to ours by a test; `task plan-check` joins the gate | `0.32.0` |
-| The pre-flight runs first | the evidence-coverage pre-flight runs before the machine check, so a machine without `metaharness` still hears about a real coverage gap | `0.32.1` |
-| **W4.4 — a second harness on the same step map** | the b10x loop is driven as `harness: b10x` steps of `development/default`, both arms can be pointed at one gateway (`--claude-endpoint`, `--b10x-endpoint`), the planning skill reaches both as a skill rather than as a file on every turn, and the four-arm evaluation's `native` arm reads the result | on `main`, 2026-08-29, unreleased |
-
-## Deferred by decision
-
-* **W7.4 — obligations become artifacts and tasks.** An obligation would become a typed artifact a
-  task can own and evidence can close. Its precondition (a contract digest that exists in code) is
-  met; the wave stays unscheduled by decision.
-* **D-3 — attested evidence.** A proposed design exists and is deliberately unaccepted; see
-  [Limitations](./limitations.md).
-* **A durable backend.** No wave claims it; the contract and its conformance suites are the
-  intended path for whoever builds one. The markdown planning store is durable and is deliberately
-  not that backend.
-* **W4.3 — a story's completion gated on evidence.** Its acceptance criterion is a *verdict* on the
-  design — accepted, accepted in part, or refused — and not a build. Until then, a story's
-  `implemented` is a claim nothing checks.
-
-The full register of open gaps, each with what closes it, is `docs/plan/gap-register.md` in the
-repository. Twenty rows are open there today — ten from building the harness, ten from the first
-outside adopter — and each names either the story or the decision that would close it.
-
-## The extension proposals
-
-Eight designs proposed extending the project. Their status, so that reading the newest file in
-`docs/design/` is never mistaken for reading the plan:
-
-| Proposal | Status |
+| Question | Authoritative surface |
 |---|---|
-| **Closed-loop execution and conformance** — the specification as an oracle | **built** (ESS wave 4); its four open decisions taken at their stated defaults |
-| **Semantic diff, impact and evolution** | **core built** (wave 5, extended by wave 7) after being accepted as a stated amendment to the project's thesis. Two of its seventy-eight sections — the proposal-evaluation loop and architecture search — were rejected outright |
-| **Structural synthesis, obligations and realizations** | **delivered through wave 7**: plan, three emitters, dual-target demonstration. Rejected outright: behavioural synthesis (§36), the agent loop (§41), obligation-derived grants (§28). Still proposed with the design: `Realization` as a first-class object, topology synthesis, formal verification |
-| **Infrastructure discovery and multi-cloud realization** | the design as written stays **deferred whole** — it would put cloud discovery adapters inside the workspace, which the vision refuses. A Kubernetes-scoped subset was built instead as infra waves 1–4, with the scanner kept outside the boundary |
-| **A planning store, and a reference driver** | **phase 1 accepted and built** (harness wave 1: the store, the `protocol artifact` verbs, the plugin); the driver's six open holes became taken decisions in wave 2 and shipped in wave 3. Phase 2 — the store as a contract implementation — is designed and not accepted |
-| **Transcript conformance** | **built** across trace waves 1 and 2, and the design document still carries *proposed, not accepted* at its head. That is the repository's rule working as intended: the plan pages sequence work, and a design does not |
-| **Evidence horizons** | **built** and released in `0.10.0-horizons-dogfood-lab`, after an adversarial review of the design returned 19 confirmed, 15 needs-change and 3 infeasible — all applied before any code landed |
-| **Story completion, evidence-gated** | **proposed**; what W4.3 owes is a verdict, not an implementation |
+| What shipped? | [Annotated-tag status](https://github.com/beyond10x/engineering-protocols/blob/main/docs/status.md) |
+| What work is accepted, and where is it in its lifecycle? | [Planning store](https://github.com/beyond10x/engineering-protocols/tree/main/.engineering/planning) |
+| What remains open, and what closes it? | [Gap register](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/gap-register.md) |
+| Which designs are still proposals? | [Vision, “Proposed, not accepted”](https://github.com/beyond10x/engineering-protocols/blob/main/docs/VISION.md#proposed-not-accepted) |
 
-The semantic-diff acceptance is the instructive one: it was **not** implied by the original thesis
-("specified once and compiled" says nothing about a system *changing*), so absorbing it meant
-amending the thesis in writing, with the reason — conformance evidence binds to a specification
-digest, and without a delta any edit sends every requirement back to owed, which is correct and
-blunt.
-
-## The next honest milestones
-
-* **AEP:** a driven run that reaches the operator. The first one blocked four states short, for two
-  correct reasons about the step map; the second, `W4-3/1`, could not reach the CLI from its sessions
-  and submitted nothing, and every cause is fixed in code under `[Unreleased]` — so the milestone
-  is no longer *has it ever governed anything* but *can it carry one story all the way through*.
-* **ESS:** wave 7 closed the loop it named; what remains (W7.4) is deferred rather than scheduled.
-* **Infrastructure:** waves 1–4 delivered the observe → desire → project loop; no further wave is
-  currently sequenced on a plan page.
-* **The harness:** a second *vendor's*. Two harnesses now read the documents under one step map —
-  Claude Code and the b10x loop — and the loop is this family's own, so the neutrality a stranger's
-  harness would prove is still unproven.
-* **Adoption:** the first outside adopter's review is triaged into thirteen stories, twelve of them
-  still drafts and none sequenced. Sequencing them is what turns *somebody could write a tree
-  against this* into *somebody keeps one*.
-
----
-
-**Sources.** `git tag -l`; `docs/plan/ess-roadmap.md`; `docs/plan/gap-register.md` (row counts);
-`docs/plan/harness-wave-4-governed-dogfood.md` § *W4.1*; `docs/design/` (each proposal's own status
-header); `AGENTS.md` § *Which documents are normative*; `docs/VISION.md` § *Proposed, not accepted*
-and § *The thesis*; `CHANGELOG.md` §§ *0.7.0*, *0.8.0*, *0.9.0*, *0.10.0*.
+A design file is not a work order, however new or detailed it is. A plan page or planning-store
+story accepts work; an annotated tag records delivery. `cargo xtask status --check` keeps the
+reader-facing release stamps derived from those sources.

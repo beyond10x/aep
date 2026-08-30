@@ -5,10 +5,11 @@
 //! `cargo xtask suite` regenerates the committed conformance suites the example specifications
 //! oblige; `cargo xtask infra` regenerates the committed infrastructure IR compiled from the
 //! example observation bundle; `cargo xtask status` regenerates the delivered-waves record in
-//! `docs/status.md` from the annotated tags. All take `--check`, which verifies the committed files still match instead of
-//! writing them, and that is what CI runs — one job each, so a stale artifact reads as a stale
-//! artifact rather than as "the gate failed". All three directories are outputs: editing one by hand
-//! is always wrong, because the next regeneration silently reverts it.
+//! `docs/status.md` from the annotated tags. All take `--check`, which verifies the committed files
+//! still match instead of writing them, and the named `task check` steps make each stale artifact
+//! identify itself. CI invokes that one Taskfile gate rather than enumerating these commands again.
+//! All three directories are outputs: editing one by hand is always wrong, because the next
+//! regeneration silently reverts it.
 //!
 //! # One owner per tree
 //!
@@ -364,7 +365,7 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// Regenerate the delivered-waves record in `docs/status.md` from the repository's tags.
+    /// Regenerate annotated-tag and gate-derived status regions and verify CI's gate delegation.
     Status {
         /// Verify the committed record matches instead of writing it.
         #[arg(long)]
@@ -612,6 +613,8 @@ fn main() -> Result<()> {
         // being run, and the surface nobody re-runs is the one strangers read first.
         Command::Status { check } => {
             let root = workspace_root();
+            authoritative_gate_contract(&root)?;
+            generated_status_region_inventory(&root)?;
             status(&root, check)?;
             agents_gate_steps(&root, check)?;
             website_currency_from_tags(&root, check)
@@ -1019,6 +1022,46 @@ const AGENTS_GATE_BEGIN: &str =
 
 /// The last line of that region.
 const AGENTS_GATE_END: &str = "<!-- generated:gate-steps:end -->";
+
+/// The CI and release workflows whose only verification authority is [`GATE_DEFINITION`].
+const CI_WORKFLOW: &str = ".github/workflows/ci.yml";
+const RELEASE_WORKFLOW: &str = ".github/workflows/release.yml";
+
+/// Holds CI to one invocation of the repository gate and release to that same reusable workflow.
+fn authoritative_gate_contract(root: &Path) -> Result<()> {
+    let ci_path = root.join(CI_WORKFLOW);
+    let release_path = root.join(RELEASE_WORKFLOW);
+    let ci =
+        fs::read_to_string(&ci_path).with_context(|| format!("reading {}", ci_path.display()))?;
+    let release = fs::read_to_string(&release_path)
+        .with_context(|| format!("reading {}", release_path.display()))?;
+    authoritative_gate_text(&ci, &release)
+}
+
+/// The text-level contract is intentionally exact: a renamed or wrapped command is a reviewable
+/// change to the one gate, not something this check guesses is equivalent.
+fn authoritative_gate_text(ci: &str, release: &str) -> Result<()> {
+    let invocations = ci
+        .lines()
+        .filter(|line| line.trim() == "run: task check")
+        .count();
+    if invocations != 1 {
+        bail!(
+            "{CI_WORKFLOW} must invoke the authoritative `task check` gate exactly once; found \
+             {invocations} invocations"
+        );
+    }
+    if !release
+        .lines()
+        .any(|line| line.trim() == "uses: ./.github/workflows/ci.yml")
+    {
+        bail!(
+            "{RELEASE_WORKFLOW} must reuse {CI_WORKFLOW}; release verification cannot carry a \
+             second gate"
+        );
+    }
+    Ok(())
+}
 
 /// Writes or checks the gate-step list in `AGENTS.md`.
 fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
@@ -1699,6 +1742,78 @@ const SITE_CHIP_BEGIN: &str =
 
 /// The end of that region.
 const SITE_CHIP_END: &str = "/* generated:release-chip:end */";
+
+/// Every reader-facing volatile status region owned by `cargo xtask status`.
+const STATUS_REGION_FILES: &[&str] = &[
+    AGENTS_PAGE,
+    STATUS_PAGE,
+    SITE_STATUS_PAGE,
+    SITE_LANDING_PAGE,
+];
+
+/// Refuses a generated status marker the command does not know how to refresh.
+fn generated_status_region_inventory(root: &Path) -> Result<()> {
+    let mut found = BTreeSet::new();
+    collect_status_region_files(root, root, &mut found)?;
+    let expected: BTreeSet<String> = STATUS_REGION_FILES
+        .iter()
+        .map(|path| (*path).to_owned())
+        .collect();
+    if found != expected {
+        let missing = expected.difference(&found).cloned().collect::<Vec<_>>();
+        let unowned = found.difference(&expected).cloned().collect::<Vec<_>>();
+        bail!(
+            "the `cargo xtask status` region inventory drifted; missing: [{}]; unowned: [{}]",
+            missing.join(", "),
+            unowned.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Finds status-generator begin markers in reader-facing source files.
+fn collect_status_region_files(
+    root: &Path,
+    directory: &Path,
+    found: &mut BTreeSet<String>,
+) -> Result<()> {
+    for entry in fs::read_dir(directory)
+        .with_context(|| format!("reading status-region directory {}", directory.display()))?
+    {
+        let entry = entry
+            .with_context(|| format!("reading status-region entry in {}", directory.display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            let name = entry.file_name();
+            if matches!(
+                name.to_str(),
+                Some(".git" | "target" | "node_modules" | "build")
+            ) {
+                continue;
+            }
+            collect_status_region_files(root, &path, found)?;
+            continue;
+        }
+        let extension = path.extension().and_then(|value| value.to_str());
+        if !matches!(extension, Some("md" | "mdx" | "tsx")) {
+            continue;
+        }
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("reading status-region candidate {}", path.display()))?;
+        if text
+            .lines()
+            .any(|line| line.contains("generated:") && line.contains("cargo xtask status"))
+        {
+            found.insert(
+                path.strip_prefix(root)
+                    .expect("the walk stays below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+    }
+    Ok(())
+}
 
 /// The gate's own definition, which is where its step list is derived from.
 const GATE_DEFINITION: &str = "Taskfile.yml";
@@ -5164,8 +5279,52 @@ mod tests {
 #[cfg(test)]
 mod currency_tests {
     use super::{
-        currency, gate_steps, splice_generated, workspace_root, SITE_STATUS_BEGIN, SITE_STATUS_END,
+        authoritative_gate_contract, authoritative_gate_text, currency, gate_steps,
+        generated_status_region_inventory, hold_region, splice_generated, workspace_root,
+        SITE_STATUS_BEGIN, SITE_STATUS_END,
     };
+
+    #[test]
+    fn ci_and_release_delegate_to_the_one_gate() {
+        let root = workspace_root();
+        authoritative_gate_contract(&root).expect("CI invokes the gate and release reuses CI");
+        generated_status_region_inventory(&root)
+            .expect("every generated volatile status region has this command as its owner");
+    }
+
+    #[test]
+    fn removing_the_gate_or_its_release_reuse_is_drift() {
+        let ci = "steps:\n  - name: Gate\n    run: task check\n";
+        let release = "jobs:\n  gate:\n    uses: ./.github/workflows/ci.yml\n";
+        authoritative_gate_text(ci, release).expect("the authoritative shape holds");
+        let no_gate = ci.replace("task check", "cargo test --workspace");
+        assert!(
+            authoritative_gate_text(&no_gate, release).is_err(),
+            "CI cannot replace the gate with a hand-picked command"
+        );
+        let copied_release =
+            release.replace("uses: ./.github/workflows/ci.yml", "runs-on: ubuntu-latest");
+        assert!(
+            authoritative_gate_text(ci, &copied_release).is_err(),
+            "release verification cannot stop reusing CI's gate"
+        );
+    }
+
+    #[test]
+    fn check_mode_refuses_a_changed_generated_region() {
+        let root = workspace_root().join("target/xtask-tests/status-region-drift");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("creating the scratch root");
+        std::fs::write(
+            root.join("page.md"),
+            "before\n<begin>\nstale\n<end>\nafter\n",
+        )
+        .expect("writing the stale page");
+        let refusal = hold_region(&root, "page.md", "<begin>", "<end>", "derived\n", true)
+            .expect_err("check mode refuses a hand-edited generated region");
+        assert!(refusal.to_string().contains("cargo xtask status"));
+        std::fs::remove_dir_all(root).ok();
+    }
 
     /// The gate's step list is read from the Taskfile, so a step added there reaches the website
     /// without anybody remembering the website exists.

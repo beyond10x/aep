@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+* CI now provisions the declared Rust, MSRV, Go, Node, WebAssembly, PostgreSQL and go-task
+  environment and invokes `task check` once; release verification reuses that workflow. `cargo
+  xtask status --check` holds the delegation and every generated volatile status region, while
+  reader-facing current-state prose links to annotated tags, the planning store and gap register.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added

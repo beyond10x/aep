@@ -121,30 +121,18 @@ an owner rather than a horizon.
 
 ## Where this stands
 
-Stale numbers were this section's failure mode: in the repository's first 48 hours the hand-written
-gate count here drifted against three other documents' counts, every copy true when written and
-wrong within hours. So this section no longer carries counts or a tag pin. The delivered-waves
-table in [`docs/status.md`](status.md) is generated from the annotated tags and drift-checked in
-the gate; `git tag -n99` is the per-wave record; `task check` is the measurement.
+This vision does not maintain a component-status table. The surfaces that can keep the answer
+current are:
 
-| | State |
-|---|---|
-| AEP — domain model, engine, documents, CLI | implemented |
-| AEP — interaction contract, identity, audit | implemented, with an in-memory reference backend |
-| AEP — conformance suites for backends | implemented, 16 suites checked against a deliberately broken backend |
-| AEP — running on a real project | in progress: a project can be discovered and planning artifacts have a durable store, but no team's work has been governed by it yet |
-| ESS — model, compiler, four projections | implemented, waves 1–3 |
-| ESS — the specification as an oracle | implemented, wave 4: the generated suites are the verdict |
-| ESS — semantic diff, what a revision invalidates | implemented, wave 5, first slice; extended by wave 7 down to the generated artifact |
-| ESS — structural synthesis: three emitters, one plan, the dual-target demonstration | implemented, waves 6–7 |
-| Infra — observation, diagnosis, desired state, gaps projected back as patches | implemented, infrastructure waves 1–4 |
-| Harness — the planning store and the Claude Code plugin | implemented, harness wave 1; the driver is decided and not built |
+- [`docs/status.md`](status.md), generated from annotated tags, for what shipped;
+- [the planning store](../.engineering/planning/), validated by the gate, for accepted work and its
+  lifecycle state;
+- [`docs/plan/gap-register.md`](plan/gap-register.md) for what remains open and what closes it; and
+- `task check` for whether the current tree verifies.
 
-The next honest milestone for AEP is not a feature; it is a team whose work it actually governs.
-ESS closed its loop — one specification into contracts, generated suites, three structural
-skeletons and a verdict on two running applications — and what remains open there is behavioural:
-every algorithm is still a typed obligation a person implements. The open gaps, each with what
-closes it, are in [`docs/plan/gap-register.md`](plan/gap-register.md).
+The proposal register below remains here because proposal acceptance is part of the vision rather
+than a delivery claim. Its accepting surfaces are the plan pages and planning store, as
+[`AGENTS.md`](../AGENTS.md) defines.
 
 ## Proposed, not accepted
 
