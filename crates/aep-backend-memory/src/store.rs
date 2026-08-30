@@ -47,7 +47,7 @@ pub struct AppliedCommand {
 }
 
 /// Everything the backend holds.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Store {
     entities: BTreeMap<EntityId, StoredEntity>,
     locators: BTreeMap<String, EntityId>,

@@ -80,15 +80,21 @@ fn apply(
         return Err(error);
     }
 
-    match apply_valid(store, envelope) {
+    // Every valid command runs against a candidate. Several commands deliberately perform checks
+    // after their first mutation (for example, accepting an ADR may also supersede another one),
+    // so validation alone cannot make the write path atomic. Publish the candidate only once every
+    // effect and the accepted audit record have been produced successfully.
+    let mut candidate = store.clone();
+    match apply_valid(&mut candidate, envelope) {
         Ok(result) => {
-            store.remember(
+            candidate.remember(
                 key,
                 AppliedCommand {
                     command_id: envelope.command_id.clone(),
                     result: result.clone(),
                 },
             );
+            *store = candidate;
             Ok(result)
         }
         Err(error) => {
@@ -327,10 +333,7 @@ fn apply_valid(
             // states the revision on the payload, and `CommandEnvelope::new` does not copy it — so
             // without this the caller's `expected_revision` was accepted and silently dropped.
             if let Some(expected) = move_status.expected_revision {
-                if let Err(error) = require_revision(store, &move_status.target.at(expected)) {
-                    record_rejection(store, envelope, &error);
-                    return Err(error);
-                }
+                require_revision(store, &move_status.target.at(expected))?;
             }
             let reference = mutate(
                 store,

@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Memory-backed commands now publish their candidate state only after the complete command succeeds,
+  so a refused multi-effect command leaves no entity, relation, history, event, revision or
+  idempotency mutation and records exactly one rejection audit.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added
