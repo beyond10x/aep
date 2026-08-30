@@ -11,7 +11,8 @@ tags:
 - wave
 relations:
 - informed_by: story:wave-as-a-surface
-revision: 1
+- decomposes: epic:self-evaluation
+revision: 3
 ---
 # Story: Seven defects the wave skill found by being run once
 
@@ -80,11 +81,60 @@ a correct *and* an incorrect implementation, because its two ladders' union happ
 acyclic. A green test that discriminates nothing, found by the second adversary — which
 is an argument for the re-attack edge on its own.
 
+**8. Nothing takes the worktrees or their build directories down, and `git` cannot
+find the build directories for you.** The skill ends at the closing commit. `git worktree
+list` in the next wave's pre-flight is a **refusal**, not a cleanup, so a wave that leaves
+its trees standing pays nothing and the wave *after* it pays everything. Worse, a build
+directory placed outside the worktree — which the same skill requires, so two trees never
+share one — survives `git worktree remove` untouched and is invisible to every `git`
+command there is. Measured on this machine on 2026-08-30: **14 GB** still standing at
+`~/.cache/claude-tmp/claude-1000/-home-timo-projects-engineering-protocols/ba00d8e0-.../scratchpad/eval/ws_eval`,
+last written **2026-08-24**, under a repository path (`~/projects/engineering-protocols`)
+this repository no longer occupies — so no session in the current tree would ever look
+there. Root filesystem at **91 %**, 75 G free of 848 G. **Fix: a closing step that reads
+the untracked records out, removes each worktree, removes each build directory by the name
+it was written down under, and reports what `git worktree list` says afterwards — never
+`--force`, because a tree that refuses to go is holding uncommitted work and that is a
+finding for the operator.**
+
+**9. The skill puts the build directory outside the worktree; this repository's
+`AGENTS.md` says inside, and the suite enforces it.** `references/branch-and-merge.md`
+describes a build directory as *"one per worktree, usually outside it"*, and the coordinator
+of the 2026-08-30 wave followed that — four trees, four `…/<unit>-target` directories beside
+them. `AGENTS.md:499-502` says the opposite in as many words: *"`store_selection.rs` asserts
+`CARGO_TARGET_TMPDIR` lies under the repository root and fails eleven tests whenever the
+target is elsewhere. Each worktree builds into its own `target/`."* It does. Measured: `cargo
+test -p protocol-cli` in `impl/protocol-drive-verb` exited **101** with **11 failures, all of
+them `crates/protocol-cli/tests/store_selection.rs:77` — `the scratch tree is under the
+repository: StripPrefixError(())`** — and none of them touching the unit's change. Because
+cargo stops at the first failing target, the two suites the unit actually owed
+(`drive_cli`, `driving`) **never ran**, so the gate was not merely noisy, it was empty. One
+implementor spotted the collision from its own tree and reported it as a note; the
+coordinator had already made the mistake four times.
+
+**Fix: the skill defers to the repository.** The invariant it is really carrying is *no two
+worktrees share a build directory* — where the directory sits is the adopted repository's
+call, and `AGENTS.md` is where that call is written down. The skill must say so and must not
+name a default location. The wave's own pre-flight should read the repository's agent file for
+a build-directory rule before it creates the first tree; the cost of not doing so is a gate
+that reports a red nobody caused, on a suite that never ran.
+
+**And the reason both halves of this matter at once.** Defect 8 says a build directory outside
+the worktree survives `git worktree remove` and is found by the disk filling up. Defect 9 says
+outside is where this repository's tests refuse to work. Inside the worktree answers both: it
+is removed with the tree, and `CARGO_TARGET_TMPDIR` lands under the repository root. That is
+the recommendation — **inside, always, unless an adopting repository says otherwise** — and it
+reverses the skill's current wording rather than qualifying it.
+
 ## Acceptance
 
 `integrations/claude-code/skills/wave/SKILL.md` and `agents/{implementor,adversary}.md`
-carry fixes 1-6, and the routing sends an unsatisfiable case set to review rather than to
-a correction round.
+carry fixes 1-6, 8 and 9, and the routing sends an unsatisfiable case set to review rather
+than to a correction round. Fix 8 lands in three places: a *Take the worktrees down* step
+in the skill, the two rows it adds to `references/branch-and-merge.md`'s survives-the-wave
+table, and the rule in both agent charters that a worktree and a build directory are never
+theirs to remove — plus a sixth report part naming every path each agent wrote outside its
+worktree, because the coordinator can only clean up what it was told about.
 
 ## Out of Scope
 

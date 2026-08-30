@@ -11,6 +11,7 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
+- depends_on: story:workflow-id-pattern-numeric-tail
 revision: 5
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs

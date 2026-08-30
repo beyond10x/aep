@@ -11,6 +11,7 @@ tags:
 - wave
 relations:
 - informed_by: story:wave-as-a-surface
+- decomposes: epic:self-evaluation
 revision: 1
 ---
 # Story: A story records where it lands, so a wave can be sequenced

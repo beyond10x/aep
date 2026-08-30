@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:driver-router
 kind: story
-status: active
+status: implemented
 title: 'aep-driver: the three-valued router'
 summary: The pure half of the driver — the router, the LlmStepExecutor seam and tool_config over CapabilityPolicy::decide — with no clock, no network and no randomness.
 owner: driver
@@ -12,7 +12,7 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:driver-spec-crate
 - serves: vision:O3
-revision: 6
+revision: 7
 ---
 # Story: `aep-driver` — the three-valued router
 
