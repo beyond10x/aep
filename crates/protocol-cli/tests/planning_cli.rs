@@ -1242,7 +1242,15 @@ fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_la
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
     let moved = protocol(&[
-        "artifact", "move", "mystery:three", "--to", "proposed", "--store", at, "--root", tree,
+        "artifact",
+        "move",
+        "mystery:three",
+        "--to",
+        "proposed",
+        "--store",
+        at,
+        "--root",
+        tree,
     ]);
     assert_eq!(code(&moved), 0, "{}", stderr(&moved));
 

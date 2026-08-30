@@ -2273,9 +2273,11 @@ fn ladder_order(ladder: &ArtifactLifecycle) -> Vec<String> {
             })
             .collect();
         let entered = |rung: &String| {
-            ordered
-                .iter()
-                .any(|done| leads_to.get(done).is_some_and(|targets| targets.contains(rung)))
+            ordered.iter().any(|done| {
+                leads_to
+                    .get(done)
+                    .is_some_and(|targets| targets.contains(rung))
+            })
         };
         // Ready rungs first and in precedence order, which is Kahn's algorithm; the cut keys below
         // are read only on a pass where nothing is ready, and only for a rung on a cycle, where no
@@ -2346,8 +2348,10 @@ fn board_order(ladders: &[&ArtifactLifecycle], held: &BTreeSet<String>) -> Vec<S
     // Every pair a sequence puts in an order, not only its neighbours: a pair skipped for
     // contradicting an earlier ladder should cost that one pair, and not the order of everything
     // after it.
-    let mut after: BTreeMap<String, BTreeSet<String>> =
-        rungs.iter().map(|rung| (rung.clone(), BTreeSet::new())).collect();
+    let mut after: BTreeMap<String, BTreeSet<String>> = rungs
+        .iter()
+        .map(|rung| (rung.clone(), BTreeSet::new()))
+        .collect();
     for sequence in &sequences {
         for (index, earlier) in sequence.iter().enumerate() {
             for later in sequence.iter().skip(index + 1) {
@@ -2360,8 +2364,10 @@ fn board_order(ladders: &[&ArtifactLifecycle], held: &BTreeSet<String>) -> Vec<S
         }
     }
 
-    let mut waiting: BTreeMap<String, BTreeSet<String>> =
-        rungs.iter().map(|rung| (rung.clone(), BTreeSet::new())).collect();
+    let mut waiting: BTreeMap<String, BTreeSet<String>> = rungs
+        .iter()
+        .map(|rung| (rung.clone(), BTreeSet::new()))
+        .collect();
     for (earlier, laters) in &after {
         for later in laters {
             if let Some(before) = waiting.get_mut(later) {
