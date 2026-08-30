@@ -1586,7 +1586,59 @@ mod tests {
         assert!(errors.contains(ValidationCode::UnknownState));
     }
 
+    /// Phase two refuses a kind the protocol in force does not declare — and phase one cannot.
+    ///
+    /// The map is well formed and the workflow is the one it pins, so `cross_validate` has nothing
+    /// to say: which protocol is in force comes from the task, and no document loader has seen it.
+    /// The same map against a protocol that does declare the kind loads, so this is a filter and
+    /// not a wall.
+    #[test]
+    fn an_evidence_kind_the_protocol_in_force_does_not_declare_is_refused_at_run_start() {
+        let map = read(&map_json("adp/default/1", ONE_COMMAND)).expect("valid");
+        let workflow = fixture_workflow();
+        assert!(
+            map.cross_validate(&workflow).is_empty(),
+            "the fixture reaches phase two: phase one has nothing to refuse"
+        );
+
+        let errors = map.check_run(&fixture_protocol(r#"["approval"]"#), &workflow);
+        assert_eq!(errors.len(), 1, "{errors}");
+        assert!(
+            errors.contains(ValidationCode::UndeclaredEvidenceKind),
+            "{errors}"
+        );
+        let said = errors.to_string();
+        assert!(
+            said.contains("test_result"),
+            "the refusal names the kind the step declares: {said}"
+        );
+        assert!(
+            said.contains("aep/1"),
+            "and the protocol that does not declare it: {said}"
+        );
+        assert!(
+            said.contains("approval"),
+            "and what the protocol does declare: {said}"
+        );
+
+        assert!(
+            map.check_run(&fixture_protocol(r#"["test_result"]"#), &workflow)
+                .is_empty(),
+            "the same map against a protocol that declares the kind is not refused"
+        );
+    }
+
     use aep_domain::version::MajorVersion;
+
+    /// A protocol declaring exactly the evidence kinds named, for the phase-two check.
+    fn fixture_protocol(evidence_kinds: &str) -> Protocol {
+        let raw: aep_domain::raw::RawProtocol = serde_json::from_str(&format!(
+            r#"{{"id":"aep","version":1,"title":"t","evidence_kinds":{evidence_kinds},
+                "verifiers":["test-runner","human-approval"],"observables":["tests.**"]}}"#
+        ))
+        .expect("the fixture deserializes");
+        Protocol::try_from(raw).expect("the fixture validates")
+    }
 
     /// A workflow with one state, built through its own validator.
     fn fixture_workflow() -> Workflow {
