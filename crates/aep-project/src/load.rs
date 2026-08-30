@@ -8,15 +8,18 @@
 //! fixing a document set one error per run is how a validation step becomes something people avoid
 //! running.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use aep_domain::error::ValidationErrors;
+use aep_domain::error::{ValidationCode, ValidationError};
+use aep_driver_spec::map::{StepMap, StepMapId};
 use aep_schema::parse::{self, DocumentKind};
 
-use crate::registry::Registry;
+use aep_engine::registry::Registry;
 
 /// Which directory holds which kind of document.
 const TREE: &[(&str, DocumentKind)] = &[
@@ -59,10 +62,87 @@ impl fmt::Display for LoadFailure {
 pub struct LoadOutcome {
     /// The documents that loaded.
     pub registry: Registry,
+    /// Harness projections loaded beside, but never stored in, the semantic registry.
+    pub drivers: DriverRegistry,
     /// How many files were read.
     pub files_read: usize,
     /// What failed.
     pub failures: Vec<LoadFailure>,
+}
+
+/// Driver step maps acquired with a tree but kept outside the semantic engine registry.
+#[derive(Debug, Clone, Default)]
+pub struct DriverRegistry {
+    maps: BTreeMap<StepMapId, StepMap>,
+}
+
+impl DriverRegistry {
+    /// The map registered under `id`.
+    pub fn get(&self, id: &StepMapId) -> Option<&StepMap> {
+        self.maps.get(id)
+    }
+
+    /// Every registered map in declared-id order.
+    pub fn iter(&self) -> impl Iterator<Item = &StepMap> {
+        self.maps.values()
+    }
+
+    /// How many maps were acquired.
+    pub fn len(&self) -> usize {
+        self.maps.len()
+    }
+
+    /// Whether no maps were acquired.
+    pub fn is_empty(&self) -> bool {
+        self.maps.is_empty()
+    }
+
+    /// Adds one map, refusing duplicate declared identities.
+    fn insert(&mut self, map: StepMap) -> Result<(), ValidationError> {
+        if self.maps.contains_key(&map.id) {
+            return Err(ValidationError::new(
+                ValidationCode::DuplicatePrinciple,
+                format!("step map {}", map.id),
+                format!("a second step map document declares the id `{}`", map.id),
+            ));
+        }
+        self.maps.insert(map.id.clone(), map);
+        Ok(())
+    }
+
+    /// Cross-validates every map against the semantic workflows it projects.
+    fn validate(&self, registry: &Registry) -> ValidationErrors {
+        let mut errors = ValidationErrors::new();
+        for map in self.maps.values() {
+            let location = format!("step map {}", map.id);
+            let Some(workflow) = registry.workflow(map.workflow.reference()) else {
+                let present = registry
+                    .workflows()
+                    .find(|workflow| &workflow.id == map.workflow.id());
+                errors.push(match present {
+                    Some(workflow) => ValidationError::new(
+                        ValidationCode::VersionMismatch,
+                        location,
+                        format!(
+                            "the map pins `{}` and the tree holds `{}` at version {}",
+                            map.workflow, workflow.id, workflow.version
+                        ),
+                    )
+                    .with_hint(
+                        "a major version exists because the change could not be expressed additively, so the map is rewritten against the new state graph rather than migrated",
+                    ),
+                    None => ValidationError::new(
+                        ValidationCode::UnknownWorkflow,
+                        location,
+                        format!("no workflow `{}` is in the tree", map.workflow.id()),
+                    ),
+                });
+                continue;
+            };
+            errors.extend(map.cross_validate(workflow));
+        }
+        errors
+    }
 }
 
 impl LoadOutcome {
@@ -125,6 +205,7 @@ impl std::error::Error for LoadErrors {}
 /// perfectly ordinary.
 pub fn load_tree_report(root: &Path) -> LoadOutcome {
     let mut registry = Registry::new();
+    let mut drivers = DriverRegistry::default();
     let mut failures = Vec::new();
     let mut files_read = 0_usize;
 
@@ -144,7 +225,7 @@ pub fn load_tree_report(root: &Path) -> LoadOutcome {
         files.sort();
         for file in files {
             files_read += 1;
-            if let Err(failure) = load_file(&mut registry, &file, *kind) {
+            if let Err(failure) = load_file(&mut registry, &mut drivers, &file, *kind) {
                 failures.push(failure);
             }
         }
@@ -152,9 +233,11 @@ pub fn load_tree_report(root: &Path) -> LoadOutcome {
 
     let consistency = registry.validate();
     failures.extend(validation_failures(&consistency));
+    failures.extend(validation_failures(&drivers.validate(&registry)));
 
     LoadOutcome {
         registry,
+        drivers,
         files_read,
         failures,
     }
@@ -166,7 +249,12 @@ pub fn load_tree(root: &Path) -> Result<Registry, LoadErrors> {
 }
 
 /// Loads one file into `registry`.
-fn load_file(registry: &mut Registry, path: &Path, kind: DocumentKind) -> Result<(), LoadFailure> {
+fn load_file(
+    registry: &mut Registry,
+    drivers: &mut DriverRegistry,
+    path: &Path,
+    kind: DocumentKind,
+) -> Result<(), LoadFailure> {
     let text = fs::read_to_string(path).map_err(|error| LoadFailure {
         path: Some(path.to_path_buf()),
         detail: format!("cannot be read: {error}"),
@@ -211,11 +299,7 @@ fn load_file(registry: &mut Registry, path: &Path, kind: DocumentKind) -> Result
             }),
         DocumentKind::StepMap => parse::step_map(&text, Some(&origin))
             .map_err(|error| error.to_string())
-            .and_then(|document| {
-                registry
-                    .insert_step_map(document)
-                    .map_err(|error| error.to_string())
-            }),
+            .and_then(|document| drivers.insert(document).map_err(|error| error.to_string())),
         DocumentKind::Task
         | DocumentKind::ArtifactManifest
         | DocumentKind::Evidence
@@ -271,6 +355,7 @@ fn collect_documents(directory: &Path, into: &mut Vec<PathBuf>) -> io::Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aep_driver_spec::map::RawStepMap;
 
     /// A scratch document tree that deletes itself, however the test ends.
     ///
@@ -325,6 +410,185 @@ mod tests {
     const MAP_PINNED_TO_1: &str = r#"{"format":"aep.driver-steps/1","id":"development/default",
         "workflow":"adp/default/1","states":{"implement":{"steps":[]}}}"#;
 
+    fn workflow_at(major: u32) -> aep_domain::workflow::Workflow {
+        let raw: aep_domain::raw::RawWorkflow = serde_json::from_str(&format!(
+            r#"{{"id":"adp/default","version":{major},"title":"t","initial":"implement",
+                "states":{{"implement":{{"title":"Implement","terminal":true}}}},
+                "transitions":[]}}"#
+        ))
+        .expect("the fixture deserializes");
+        aep_domain::workflow::Workflow::try_from(raw).expect("the fixture validates")
+    }
+
+    fn map_named(id: &str, workflow: &str, states: &str) -> StepMap {
+        let raw: RawStepMap = serde_json::from_str(&format!(
+            r#"{{"format":"aep.driver-steps/1","id":"{id}",
+                "workflow":"{workflow}","states":{states}}}"#
+        ))
+        .expect("the fixture deserializes");
+        StepMap::try_from(raw).expect("the fixture validates")
+    }
+
+    fn map_pinned_to(workflow: &str) -> StepMap {
+        map_named(
+            "development/default",
+            workflow,
+            r#"{"implement":{"steps":[]}}"#,
+        )
+    }
+
+    fn locations(errors: &ValidationErrors) -> Vec<String> {
+        errors
+            .as_slice()
+            .iter()
+            .map(|error| error.location.clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_map_pinned_to_a_major_the_tree_no_longer_has_is_refused() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        let id = aep_domain::ids::WorkflowId::new("adp/default").expect("an id");
+        assert!(registry
+            .workflow(&aep_domain::version::WorkflowRef::unpinned(id.clone()))
+            .is_some());
+        assert!(registry
+            .workflow(&aep_domain::version::WorkflowRef::new(
+                id,
+                Some(aep_domain::version::MajorVersion::V1),
+            ))
+            .is_none());
+
+        let errors = drivers.validate(&registry);
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::VersionMismatch);
+        assert_eq!(refusal.location, "step map development/default");
+        assert!(refusal.message.contains("adp/default/1"));
+        assert!(refusal.message.contains("`adp/default` at version 2"));
+    }
+
+    #[test]
+    fn a_map_pinned_to_the_major_the_tree_holds_is_accepted() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(1))
+            .expect("the workflow registers");
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+        let errors = drivers.validate(&registry);
+        assert!(errors.is_empty(), "{errors}");
+    }
+
+    #[test]
+    fn a_map_whose_pin_resolves_is_still_checked_against_the_workflow_it_resolved_to() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(1))
+            .expect("the workflow registers");
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_named(
+                "development/default",
+                "adp/default/1",
+                r#"{"implement":{"steps":[]},"polish":{"steps":[]}}"#,
+            ))
+            .expect("the map registers");
+
+        let errors = drivers.validate(&registry);
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::UnknownState);
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.polish"
+        );
+    }
+
+    #[test]
+    fn two_maps_orphaned_by_the_same_bump_are_both_named() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        let mut drivers = DriverRegistry::default();
+        for id in ["development/default", "development/wave"] {
+            drivers
+                .insert(map_named(
+                    id,
+                    "adp/default/1",
+                    r#"{"implement":{"steps":[]}}"#,
+                ))
+                .expect("the map registers");
+        }
+
+        let errors = drivers.validate(&registry);
+        assert_eq!(errors.len(), 2, "one refusal per orphaned map: {errors}");
+        assert_eq!(
+            locations(&errors),
+            vec!["step map development/default", "step map development/wave"]
+        );
+    }
+
+    #[test]
+    fn a_map_pinned_to_a_workflow_the_tree_does_not_hold_names_the_workflow_that_is_missing() {
+        let registry = Registry::new();
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        let errors = drivers.validate(&registry);
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::UnknownWorkflow);
+        assert_eq!(refusal.location, "step map development/default");
+        assert!(refusal.message.contains("adp/default"));
+        assert!(!refusal.message.contains("development/default"));
+    }
+
+    #[test]
+    fn the_orphan_refusal_says_what_to_do_about_it() {
+        let mut registry = Registry::new();
+        registry
+            .insert_workflow(workflow_at(2))
+            .expect("the workflow registers");
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect("the map registers");
+
+        let errors = drivers.validate(&registry);
+        let refusal = &errors.as_slice()[0];
+        let hint = refusal
+            .hint
+            .as_deref()
+            .unwrap_or_else(|| panic!("the orphan refusal carries a hint: {refusal}"));
+        assert!(hint.contains("rewritten"));
+    }
+
+    #[test]
+    fn two_maps_with_one_declared_identity_are_refused_at_insertion() {
+        let mut drivers = DriverRegistry::default();
+        drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect("the first map registers");
+        let refusal = drivers
+            .insert(map_pinned_to("adp/default/1"))
+            .expect_err("the duplicate identity is refused");
+        assert_eq!(refusal.location, "step map development/default");
+    }
+
     /// Loading a tree is what runs the cross-document checks — not a step a caller adds afterwards.
     ///
     /// The story's acceptance says an orphaned pin is refused **at load**, and every other case for
@@ -348,7 +612,7 @@ mod tests {
         // the failure below is the cross-document rule and not a file that would not read.
         assert_eq!(outcome.files_read, 2, "both documents were read");
         assert_eq!(
-            outcome.registry.step_maps().count(),
+            outcome.drivers.len(),
             1,
             "the map itself is well formed and did register"
         );

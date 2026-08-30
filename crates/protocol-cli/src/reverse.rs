@@ -50,7 +50,7 @@ use serde::Serialize;
 use serde_yaml::Value as Yaml;
 
 use aep_domain::project::{ProtocolSource, PROJECT_FILE, PROJECT_VERSION};
-use aep_engine::project::project_directory;
+use aep_project::project::project_directory;
 
 use crate::Format;
 
@@ -1396,7 +1396,7 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
     // will read rather than against a copy of it. A source that does not resolve leaves no project
     // behind: a half-adopted repository whose every subsequent command fails on the same unreadable
     // tree is worse than one that was never adopted, because it looks adopted.
-    match aep_engine::project::load_paths(&root) {
+    match aep_project::project::load_paths(&root) {
         Ok(paths) => {
             outln!("{} written", file.display());
             outln!(

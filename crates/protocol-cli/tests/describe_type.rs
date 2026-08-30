@@ -27,7 +27,7 @@ fn root() -> PathBuf {
 
 /// The ladders this repository's document tree declares, loaded as `protocol` loads them.
 fn ladders() -> LifecycleRegistry {
-    let outcome = aep_engine::load_tree_report(&root());
+    let outcome = aep_project::load_tree_report(&root());
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
     outcome.registry.lifecycles().clone()
 }

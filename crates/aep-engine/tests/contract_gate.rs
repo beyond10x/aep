@@ -39,7 +39,8 @@ use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::Verifier;
 use aep_engine::engine::{EvidenceSubmission, ProtocolEngine, TransitionResult};
 use aep_engine::evaluate::TransitionEvaluation;
-use aep_engine::{load_tree, Engine, Execution, FixedClock, Registry};
+use aep_engine::{Engine, Execution, FixedClock, Registry};
+use aep_project::load_tree;
 
 /// The repository root.
 fn root() -> PathBuf {

@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+* Project discovery, schema parsing and Git acquisition now live in the `aep-project` edge crate;
+  `aep-engine` retains only the semantic registry and no longer depends on schema or driver types.
+  Pinned Git sources use a bare object cache plus read-only, hash-manifested snapshots whose full
+  membership, modes and bytes are revalidated before reuse.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added

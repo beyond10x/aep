@@ -331,11 +331,11 @@ enforcement here that you cannot point at.
     clippy-pedantic clean.
     *Enforced by* `missing_docs` and `clippy::pedantic` in `[workspace.lints]`, raised to errors by
     the `clippy` step's `-D warnings`, plus the `doc-check` step (`RUSTDOCFLAGS=-D warnings`) for
-    broken intra-doc links. All twenty-nine workspace members opt in with `[lints] workspace = true`;
+    broken intra-doc links. Every workspace member opts in with `[lints] workspace = true`;
     a new crate that omits that line is outside every lint here.
 12. **No `unsafe`** (`unsafe_code = "forbid"`).
     *Enforced by* that lint in `[workspace.lints.rust]`. `forbid` cannot be lifted by an inner
-    `allow`, so this one is closed rather than merely checked — again, for the twenty-nine members
+    `allow`, so this one is closed rather than merely checked — again, for the workspace members
     that opt in. **One crate cannot declare it and says so**: a `WebAssembly` export is a `#[no_mangle]`
     item, which rustc's own `unsafe_code` lint flags, so the emitted browser bridge under
     `generated/web/` and the host that links a realization into it (`examples/billing-web`, excluded

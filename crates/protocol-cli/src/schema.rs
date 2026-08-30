@@ -202,14 +202,14 @@ fn schema_directory(explicit: Option<&Path>) -> Result<PathBuf> {
         return Ok(path.to_path_buf());
     }
     let here = std::env::current_dir().context("reading the working directory")?;
-    let directory = aep_engine::project::project_directory();
-    let project = aep_engine::project::discover(&here).with_context(|| {
+    let directory = aep_project::project::project_directory();
+    let project = aep_project::project::discover(&here).with_context(|| {
         format!(
             "no `--schemas` was given and no `{directory}/project.yaml` was found in {} or any parent",
             here.display()
         )
     })?;
-    aep_engine::project::load_local_paths(&project)
+    aep_project::project::load_local_paths(&project)
         .map(|paths| project.join(directory).join(paths.schemas))
         .with_context(|| {
             format!(

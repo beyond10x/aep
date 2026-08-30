@@ -6,13 +6,13 @@
 //! it, and a directory that exists but yields nothing is a state neither of its two trees is in.
 //!
 //! Both gaps are demonstrated rather than argued — each case below is green on the tree as it
-//! stands and red under a one-line change to `crates/aep-engine/src/load.rs` that the rest of the
+//! stands and red under a one-line change to `crates/aep-project/src/load.rs` that the rest of the
 //! `aep-engine` suite does not notice.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aep_engine::load_tree_report;
+use aep_project::load_tree_report;
 use aep_schema::parse::DocumentKind;
 
 /// The loader's module, read as text.
@@ -24,7 +24,7 @@ use aep_schema::parse::DocumentKind;
 /// (`crates/aep-engine/tests/evidence_scan.rs:29-35`). "`drivers/` is the *last entry of the tree
 /// table*" is such a rule: a seventh row is not observable from any walk of a six-directory tree.
 fn loader_source() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/load.rs");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aep-project/src/load.rs");
     fs::read_to_string(&path).expect("the loader's module is readable")
 }
 
@@ -116,7 +116,7 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 
 /// Every failure of a load, one per line, for an assertion message.
-fn reported(outcome: &aep_engine::LoadOutcome) -> String {
+fn reported(outcome: &aep_project::LoadOutcome) -> String {
     outcome
         .failures
         .iter()
@@ -192,7 +192,7 @@ fn a_drivers_directory_that_yields_no_documents_loads_like_one_that_is_absent() 
         reported(&baseline)
     );
     assert_eq!(
-        baseline.registry.step_maps().count(),
+        baseline.drivers.len(),
         0,
         "a tree with no drivers/ carries no step maps"
     );
@@ -210,7 +210,7 @@ fn a_drivers_directory_that_yields_no_documents_loads_like_one_that_is_absent() 
         outcome.files_read, baseline.files_read,
         "an empty drivers/ adds no documents to read"
     );
-    assert_eq!(outcome.registry.step_maps().count(), 0);
+    assert_eq!(outcome.drivers.len(), 0);
 
     // Present, holding only a file the loader does not treat as a document.
     let prose = tree_without_drivers("prose-drivers");

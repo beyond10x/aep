@@ -7,7 +7,7 @@
 //!
 //! # Why this is a test binary of its own, with one test in it
 //!
-//! [`project_directory`](aep_engine::project::project_directory) reads the environment exactly
+//! [`project_directory`](aep_project::project::project_directory) reads the environment exactly
 //! once per process — which is the property that makes a run coherent, and the property that makes
 //! this untestable beside anything else. Cargo gives each integration test file its own binary, so
 //! this file is the process where the variable is set, and the crate's unit tests are the process
@@ -15,7 +15,7 @@
 
 use std::path::{Path, PathBuf};
 
-use aep_engine::project::{discover, project_directory, PROJECT_DIRECTORY_ENV};
+use aep_project::project::{discover, project_directory, PROJECT_DIRECTORY_ENV};
 
 /// Writes a project rooted at `root`, keeping its metadata in `directory`.
 fn project(root: &Path, directory: &str) {

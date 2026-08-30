@@ -29,7 +29,7 @@ fn repository_root() -> PathBuf {
 /// The workspace members this repository declares, so a cross-repository edge is a crossing and not
 /// a dangling reference — the same list `protocol artifact` reads.
 fn declared_members(root: &Path) -> Vec<MemberName> {
-    aep_engine::project::load_workspace(root).map_or_else(
+    aep_project::project::load_workspace(root).map_or_else(
         |_| Vec::new(),
         |workspace| {
             workspace.map_or_else(Vec::new, |workspace| {

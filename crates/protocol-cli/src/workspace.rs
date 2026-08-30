@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use aep_backend_markdown::assembly::Assembly;
 use aep_domain::project::ProtocolSource;
 use aep_domain::workspace::{Member, Resolution, WorkspaceRef};
-use aep_engine::project::{load_workspace, project_directory, resolve_member};
+use aep_project::project::{load_workspace, project_directory, resolve_member};
 
 use crate::Format;
 

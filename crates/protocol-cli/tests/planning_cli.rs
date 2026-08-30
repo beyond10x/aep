@@ -95,9 +95,24 @@ fn printable(path: &Path) -> &str {
 /// An empty scratch directory to build a store in.
 fn scratch(name: &str) -> PathBuf {
     let directory = std::env::temp_dir().join(name);
-    std::fs::remove_dir_all(&directory).ok();
+    if directory.exists() {
+        make_tree_writable(&directory);
+        std::fs::remove_dir_all(&directory).expect("the previous scratch tree is removable");
+    }
     std::fs::create_dir_all(&directory).expect("the temporary tree is writable");
     directory
+}
+
+/// Restores write permission recursively so a sealed cache from an earlier run can be reclaimed.
+fn make_tree_writable(path: &Path) {
+    if path.is_dir() {
+        make_writable(path);
+        for entry in std::fs::read_dir(path).expect("the scratch tree is readable") {
+            make_tree_writable(&entry.expect("a scratch entry").path());
+        }
+    } else {
+        make_writable(path);
+    }
 }
 
 /// Copies a committed fixture store into a scratch directory, so a test can add to it.
@@ -115,6 +130,37 @@ fn copy_tree(from: &Path, to: &Path) {
             std::fs::copy(entry.path(), &target).expect("the fixture copies");
         }
     }
+}
+
+/// Finds the first file named `wanted` below a fixture tree.
+fn find_named(directory: &Path, wanted: &str) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(directory).ok()? {
+        let path = entry.ok()?.path();
+        if path.file_name().and_then(|name| name.to_str()) == Some(wanted) {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_named(&path, wanted) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+/// Makes a cached fixture path writable so the test can model an adversarial local edit.
+fn make_writable(path: &Path) {
+    let mut permissions = std::fs::metadata(path)
+        .expect("cached path metadata")
+        .permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        permissions.set_mode(if path.is_dir() { 0o755 } else { 0o644 });
+    }
+    #[cfg(not(unix))]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(path, permissions).expect("the adversary changes permissions");
 }
 
 /// Writes a fixture file, creating the directories above it.
@@ -1559,6 +1605,35 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
         document.contains("# From the pinned Git source"),
         "{document}"
     );
+
+    let manifest = find_named(&cache, ".aep-source-manifest.json")
+        .expect("the cached snapshot carries its manifest");
+    let snapshot = manifest.parent().expect("the snapshot directory");
+    let tracked = snapshot.join("artifacts/lifecycles/story.yaml");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        for sealed in [&manifest, snapshot, &tracked] {
+            let mode = std::fs::metadata(sealed)
+                .expect("the sealed path has metadata")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o222, 0, "{} is read-only", sealed.display());
+        }
+    }
+    make_writable(snapshot);
+    write(&snapshot.join("injected.yaml"), "not in the commit\n");
+    let added = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    assert_eq!(code(&added), 1, "an added cache file moved the pin");
+    assert!(stderr(&added).contains("does not match its path, mode and byte manifest"));
+
+    std::fs::remove_file(snapshot.join("injected.yaml")).expect("remove the injected file");
+    make_writable(&tracked);
+    std::fs::write(&tracked, "kind: story\ninitial: forged\n")
+        .expect("the adversary changes tracked bytes");
+    let changed = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    assert_eq!(code(&changed), 1, "changed tracked bytes moved the pin");
+    assert!(stderr(&changed).contains("does not match its path, mode and byte manifest"));
 }
 
 #[test]

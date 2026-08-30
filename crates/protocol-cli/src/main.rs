@@ -29,7 +29,8 @@ use aep_domain::entity::{ActorRef, EntityId, EntityLocator, EntityRef};
 use aep_domain::task::Task;
 use aep_domain::time::Timestamp;
 use aep_engine::engine::{EvidenceSubmission, ProtocolEngine, TransitionResult};
-use aep_engine::{load_tree_report, Engine, Registry};
+use aep_engine::{Engine, Registry};
+use aep_project::load_tree_report;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use ess_compiler::diagnostic::Diagnostics;
@@ -1294,11 +1295,11 @@ fn project_file_problems() -> Vec<String> {
     let Ok(here) = std::env::current_dir() else {
         return Vec::new();
     };
-    let Some(project) = aep_engine::project::discover(&here) else {
+    let Some(project) = aep_project::project::discover(&here) else {
         return Vec::new();
     };
     let path = project
-        .join(aep_engine::project::project_directory())
+        .join(aep_project::project::project_directory())
         .join(aep_domain::project::PROJECT_FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -3791,7 +3792,7 @@ fn validate(
         workflows: outcome.registry.workflows().count(),
         profiles: outcome.registry.profiles().count(),
         lifecycles: outcome.registry.lifecycles().len(),
-        step_maps: outcome.registry.step_maps().count(),
+        step_maps: outcome.drivers.len(),
         problems: problems.clone(),
     };
 
@@ -3874,14 +3875,15 @@ fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
     }
 
     let here = std::env::current_dir().context("reading the working directory")?;
-    let directory = aep_engine::project::project_directory();
-    let root = aep_engine::project::discover(&here).with_context(|| {
+    let directory = aep_project::project::project_directory();
+    let root = aep_project::project::discover(&here).with_context(|| {
         format!(
             "no `{directory}/project.yaml` in {} or any parent, and no --task was given",
             here.display()
         )
     })?;
-    let project = aep_engine::project::load(&root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
+    let project =
+        aep_project::project::load(&root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
 
     // A flag still overrides what the project says, so a one-off run needs no edit to the project.
     let task = match &args.task {
@@ -4489,9 +4491,14 @@ fn print_table(rows: &[Vec<String>]) {
 
 /// Loads a document tree, failing if anything is wrong with it.
 fn load(root: &Path) -> Result<Registry> {
+    Ok(load_documents(root)?.registry)
+}
+
+/// Loads both semantic documents and edge-owned harness projections.
+fn load_documents(root: &Path) -> Result<aep_project::load::LoadOutcome> {
     let outcome = load_tree_report(root);
     if outcome.failures.is_empty() {
-        return Ok(outcome.registry);
+        return Ok(outcome);
     }
     let detail = outcome
         .failures

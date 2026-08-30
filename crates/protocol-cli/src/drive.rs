@@ -75,8 +75,8 @@ use aep_driver_spec::map::{
 use aep_driver_spec::tool::ToolConfig;
 use aep_engine::engine::EvidenceSubmission;
 use aep_engine::policy::Decision;
-use aep_engine::project::project_directory;
 use aep_engine::{Engine, ProtocolEngine, Registry, TransitionResult};
+use aep_project::project::project_directory;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
 // The one glob matcher in the workspace, and the one a step map's `scope:` is decided with. Taken
@@ -468,7 +468,7 @@ pub(crate) fn run(command: DriveCommand) -> Result<ExitCode> {
 fn discover_project() -> Result<PathBuf> {
     let here = std::env::current_dir().context("reading the working directory")?;
     let directory = project_directory();
-    aep_engine::project::discover(&here).with_context(|| {
+    aep_project::project::discover(&here).with_context(|| {
         format!(
             "no `--project` was given and no `{directory}/project.yaml` was found in {} or \
              any parent",
@@ -526,13 +526,13 @@ impl DriveLocation {
         // mid-run edit to `workflows/` is not picked up, because the cursor pins the workflow for
         // the life of the run precisely so a governing document cannot move under it; a mid-run
         // edit to the planning store *is*, because that is the work happening.
-        let registry = match &self.root {
-            Some(root) => crate::load(root)?,
-            None => {
-                aep_engine::project::load(&project)
-                    .map_err(|errors| anyhow::anyhow!("{errors}"))?
-                    .registry
-            }
+        let (registry, drivers) = if let Some(root) = &self.root {
+            let loaded = crate::load_documents(root)?;
+            (loaded.registry, loaded.drivers)
+        } else {
+            let loaded = aep_project::project::load(&project)
+                .map_err(|errors| anyhow::anyhow!("{errors}"))?;
+            (loaded.registry, loaded.drivers)
         };
 
         // Both halves of the answer, together: what is being driven, and which file said so. The
@@ -541,7 +541,7 @@ impl DriveLocation {
         let (task, task_document) = if let Some(path) = &self.task {
             (crate::read_task(path)?, absolute(path))
         } else {
-            let loaded = aep_engine::project::load(&project)
+            let loaded = aep_project::project::load(&project)
                 .map_err(|errors| anyhow::anyhow!("{errors}"))?;
             let document = absolute(&loaded.paths.task);
             let task = loaded
@@ -552,7 +552,7 @@ impl DriveLocation {
 
         let store = crate::planning::DrivenPlan::for_project(self.store.as_deref(), &project)?;
 
-        let (map, map_origin) = self.step_map(&registry, &task)?;
+        let (map, map_origin) = self.step_map(&registry, &drivers, &task)?;
 
         let plugin_dirs = self.plugin_dirs(&project);
 
@@ -628,7 +628,12 @@ impl DriveLocation {
     }
 
     /// The step map: the file named by `--map`, the map with that id, or the only one that fits.
-    fn step_map(&self, registry: &Registry, task: &Task) -> Result<(StepMap, String)> {
+    fn step_map(
+        &self,
+        registry: &Registry,
+        drivers: &aep_project::load::DriverRegistry,
+        task: &Task,
+    ) -> Result<(StepMap, String)> {
         if let Some(named) = &self.map {
             let path = Path::new(named);
             if path.is_file() {
@@ -642,8 +647,8 @@ impl DriveLocation {
             let id = named.parse().map_err(|error| {
                 anyhow::anyhow!("{named} is not a file and not a step map id: {error}")
             })?;
-            let map = registry
-                .step_map(&id)
+            let map = drivers
+                .get(&id)
                 .with_context(|| format!("no step map `{named}` is in the document tree"))?;
             return Ok((map.clone(), format!("step map {named}")));
         }
@@ -655,8 +660,8 @@ impl DriveLocation {
         let plan = aep_engine::resolve(task, registry)
             .map_err(|errors| anyhow::anyhow!("{errors}"))
             .context("the task cannot be resolved")?;
-        let fitting: Vec<&StepMap> = registry
-            .step_maps()
+        let fitting: Vec<&StepMap> = drivers
+            .iter()
             .filter(|map| {
                 *map.workflow.id() == plan.workflow.id
                     && map.workflow.accepts(plan.workflow.version)

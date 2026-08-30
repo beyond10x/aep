@@ -326,8 +326,8 @@ fn binding(task: Option<&Path>) -> Result<Option<Binding>> {
 /// The task the project names, when this was run inside one.
 fn discovered() -> Option<Binding> {
     let here = std::env::current_dir().ok()?;
-    let root = aep_engine::project::discover(&here)?;
-    let project = aep_engine::project::load(&root).ok()?;
+    let root = aep_project::project::discover(&here)?;
+    let project = aep_project::project::load(&root).ok()?;
     let task: Task = project.task?;
     Some(Binding {
         source: project.paths.task.display().to_string(),
