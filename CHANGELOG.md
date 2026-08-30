@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+* **Eval records cannot claim outcomes without naming and sealing their inputs.** The matrix reader
+  now refuses missing, null, empty, or malformed specification ids, specification digests,
+  transcript digests, and expectation rows with stable `EVAL-RECORD-*` codes. Expectations must be
+  non-empty and both digests are checked on every record; an absent or null verdict remains
+  unobservable.
+
 ## [0.34.0] — 2026-08-31
 
 ### Added
