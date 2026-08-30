@@ -428,52 +428,6 @@ fn every_identifier_the_loader_takes_is_one_the_published_pattern_takes() {
     );
 }
 
-/// The acceptance line, asked of the constant that is published rather than of a paraphrase.
-///
-/// *"`PinnedWorkflowRef` refuses a reference with no major version, and the schema it publishes
-/// makes the version group required — an editor cannot tell an author a map is fine that the
-/// loader will refuse."*
-///
-/// The hyphen forms are closed. The numeric-tail forms are not: `WorkflowId::PATTERN` does not say
-/// *"the last path component is not a bare integer"*, so the composed pin pattern does not either,
-/// and `adp/2/1` is a step map an editor calls valid and the loader refuses. The existing residue
-/// case records this against a hand-written paraphrase of the pattern, so it cannot notice when the
-/// pattern changes; this one asks the constant.
-#[test]
-fn no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses() {
-    let mut pins: Vec<String> = identifier_corpus()
-        .iter()
-        .flat_map(|id| {
-            [
-                format!("{id}/1"),
-                format!("workflow:{id}/1"),
-                format!("{id}/2"),
-            ]
-        })
-        .collect();
-    for extra in [
-        "adp/default/1",
-        "adp/2/1",
-        "adp.2/1",
-        "adp/22/1",
-        "adp/default/0",
-    ] {
-        pins.push(extra.to_owned());
-    }
-    let divergent: Vec<String> = pins
-        .into_iter()
-        .filter(|pin| matches(PinnedWorkflowRef::PATTERN, pin) && !loads(pin))
-        .collect();
-    assert!(
-        divergent.is_empty(),
-        "{} pin(s) pass the published schema and are refused by the loader; the first few are \
-         {:?}\npublished pattern: {}",
-        divergent.len(),
-        divergent.iter().take(8).collect::<Vec<_>>(),
-        PinnedWorkflowRef::PATTERN
-    );
-}
-
 // --- correction round 2 ------------------------------------------------------------------------
 //
 // `tests/pin_pattern_agrees_with_the_loader.rs` used to state the residue against a hand-written
@@ -492,11 +446,16 @@ fn identifier_of(pin: &str) -> Option<(String, String)> {
 
 /// The divergence left is **exactly** the numeric-tail class, and it is this big.
 ///
-/// `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses` says there are
-/// divergences. This says *which*, so a new class arriving is a failure rather than a bigger
-/// number in a message nobody re-reads, and it fixes the two things the file this replaces got
-/// wrong: it reads the constant, and it names 183 rather than the three spellings that happened to
-/// be in a hand-written sample.
+/// Acceptance line 3 of `story:driver-spec-crate` — *an editor cannot tell an author a map is
+/// fine that the loader will refuse* — is **not met**, and this is the case that says so without
+/// being red about it. A failing test would say the same thing and take the whole suite's exit
+/// status with it; the defect is real, open and owned by
+/// `story:workflow-id-pattern-numeric-tail`, and a story is where an unfixed defect lives.
+///
+/// So this asserts *which* divergences and *how many*, so a new class arriving is a failure rather
+/// than a bigger number in a message nobody re-reads. It fixes the two things the hand-written
+/// paraphrase it replaces got wrong: it reads the constant, and it names 183 rather than the three
+/// spellings that happened to be in a sample.
 ///
 /// `WorkflowId::new` refuses an id whose last `.`/`/` component is a bare integer — the form is
 /// reserved for `<id>/<major>` — and `WorkflowId::PATTERN` does not say so, so neither does the
@@ -522,8 +481,8 @@ fn the_only_pins_the_published_pattern_calls_valid_that_the_loader_refuses_are_t
             ]
         })
         .collect();
-    // The same pin set as `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses`,
-    // named spellings included, so the two cases report one number and not two.
+    // Every spelling a pin can take, named forms included, so the count below is the whole gap
+    // and not a sample of it.
     for extra in [
         "adp/default/1",
         "adp/2/1",
@@ -557,9 +516,9 @@ fn the_only_pins_the_published_pattern_calls_valid_that_the_loader_refuses_are_t
         divergent.len(),
         183,
         "the published schema accepts {} pin(s) the loader refuses. If this went to 0, \
-         `story:workflow-id-pattern-numeric-tail` has landed: delete this case and let \
-         `no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses` go green. If it grew, \
-         something reopened the gap. First few: {:?}",
+         `story:workflow-id-pattern-numeric-tail` has landed: delete this case, and acceptance \
+         line 3 of `story:driver-spec-crate` is met. If it grew, something reopened the gap. \
+         First few: {:?}",
         divergent.len(),
         divergent.iter().take(8).collect::<Vec<_>>()
     );

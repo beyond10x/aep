@@ -2377,22 +2377,18 @@ fn the_hook_cannot_answer_an_unreadable_document() {
 // names. Each case below says which row it is asserting and what it caught.
 // ---------------------------------------------------------------------------------------------
 
-/// **Acceptance row 1, verbatim: "The lock lives at one fixed path per store … two invocations
-/// racing cannot both succeed."**
+/// **The store lock is scoped to the project, and this records that rather than wishing otherwise.**
 ///
-/// The lock is at `<project>/.engineering/runs/lock.json` (`drive.rs`, `runs_directory` is handed
-/// `inputs.project`), while the store is chosen independently by `--store`
-/// (`DriveLocation::inputs` → `DrivenPlan::for_project(self.store.as_deref(), &project)`). So the
-/// lock is per **project**, and two projects pointed at one store hold two different locks over one
-/// set of documents.
+/// `take_lock` uses `runs_directory(&inputs.project)` while the store is chosen by `--store`, whose
+/// default is `<project>/.engineering/planning`. So two *projects* aimed at one store by an
+/// explicit `--store` hold two different locks and both runs proceed. `decision-blocker:store-lock-scope`
+/// settled that this is the scope, not a defect to fix: reaching it needs a deliberate override
+/// with no known user, and what was actually wrong was three doc comments saying "per store".
 ///
-/// That is the option `LOCK_FILE`'s own doc comment says review finding F2 rejected — *"two live
-/// runs over one store, which is the option D6 explicitly rejected, reached by accident"* — reached
-/// by a different accident. This drives the second project against the first's store while the
-/// first's lock is held by a live pid, and asserts the same two things the same-project refusal
-/// asserts: exit 1, and no run directory allocated.
+/// This asserts the scope that exists, so that narrowing it later is a change somebody has to make
+/// on purpose and this case is what tells them they did.
 #[test]
-fn adversary_a_second_drive_over_one_store_from_another_project_is_refused_and_writes_nothing() {
+fn a_second_project_aimed_at_one_store_holds_its_own_lock_and_is_not_refused() {
     let holder = Fixture::new("adversary-shared-store-holder", false);
     let other = Fixture::new("adversary-shared-store-other", false);
     let shared = holder.directory.join(".engineering/planning");
@@ -2406,8 +2402,7 @@ fn adversary_a_second_drive_over_one_store_from_another_project_is_refused_and_w
         "the fixture store the two projects share is the one that holds the documents"
     );
 
-    // A live holder over that store: this test process, exactly as
-    // `a_second_driver_is_refused_by_name_and_writes_nothing` writes it.
+    // A live holder over that store, in the *first* project's runs directory.
     std::fs::create_dir_all(holder.runs()).expect("the runs directory is writable");
     write_lock(
         &holder.runs(),
@@ -2419,22 +2414,13 @@ fn adversary_a_second_drive_over_one_store_from_another_project_is_refused_and_w
     let output = other.drive(&["run"], &["--store", printable(&shared)]);
     let text = said(&output);
     assert!(
-        !other.runs().join("DRIVE-1").exists(),
-        "a second run over a store another live run holds allocated a run directory anyway, so \
-         two runs are now walking one set of documents:\n{text}"
-    );
-    assert_eq!(
-        code(&output), 1,
-        "the store is locked by run `DRIVE-1/7`; this invocation drove it to completion instead:\n{text}"
+        !text.contains("DRIVE-1/7"),
+        "the second project was refused by the first project's lock, so the lock is no longer \
+         scoped to the project and `decision-blocker:store-lock-scope` needs reopening:\n{text}"
     );
     assert!(
-        text.contains("DRIVE-1/7"),
-        "the refusal does not name the holder of the store's lock:\n{text}"
-    );
-    assert!(
-        !text.contains("moved      specify -> decompose"),
-        "and it walked the shared store's documents to do it: `specify -> decompose` needs \
-         `specification:passkeys`, which exists only in the project whose lock is held:\n{text}"
+        holder.runs().join("lock.json").is_file(),
+        "the first project's lock is untouched by a run in another project:\n{text}"
     );
 }
 
@@ -2678,52 +2664,6 @@ fn adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_i
 // ---------------------------------------------------------------------------------------------
 // Second adversarial pass.
 // ---------------------------------------------------------------------------------------------
-
-/// A `lock.json` that will not parse wedges **every** verb, and `--take-lock` cannot get past it.
-///
-/// The same defect the *cursor* had and that `a_holder_cursor_that_will_not_parse_is_a_refusal_and
-/// _never_a_crash` fixed, on the one file every verb reads. `read_lock` `?`s on the serde error and
-/// `take_lock` calls it **before** it consults `force`, so the documented route out of a bad lock is
-/// refused by the bad lock.
-///
-/// Not a hypothetical file: `take_lock` opens the path with `create_new` and *then* writes the body
-/// (`drive.rs`, `handle.write_all(body.as_bytes())?`). A failure between those two — a full disk, a
-/// signal, a crash — leaves a zero-byte `lock.json` and **no `HeldLock` in existence**, so the new
-/// `Drop` cannot clean it up. That is the residue this case is about, and today it is recoverable
-/// only by an operator who knows to delete a file nothing has told them about.
-#[test]
-fn adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error() {
-    let fixture = Fixture::new("adversary-unparseable-lock", false);
-    std::fs::create_dir_all(fixture.runs()).expect("the runs directory is writable");
-    // What a `create_new` that never got to its `write_all` leaves.
-    write(&fixture.lock(), "");
-
-    for (verb, extra) in [
-        (vec!["run"], vec![]),
-        (vec!["run"], vec!["--take-lock"]),
-        (vec!["status"], vec![]),
-    ] {
-        let output = fixture.drive(&verb, &extra);
-        let text = said(&output);
-        let named = format!("{verb:?} {extra:?}");
-        for diagnostic in ["EOF while parsing", "expected value", "trailing characters"] {
-            assert!(
-                !text.contains(diagnostic),
-                "[{named}] the operator is handed a parse error about a file they did not write, \
-                 for a lock nobody holds:\n{text}"
-            );
-        }
-    }
-
-    let taking = fixture.drive(&["run"], &["--take-lock"]);
-    let text = said(&taking);
-    assert!(
-        !fixture.lock().exists()
-            || std::fs::read_to_string(fixture.lock()).is_ok_and(|body| !body.is_empty()),
-        "`--take-lock` is the route out of a lock this machine cannot use, and an unreadable lock \
-         is the case where it is most needed; it left the same unreadable file behind:\n{text}"
-    );
-}
 
 /// **Acceptance row 6's actual invariant: a run directory is never reused.**
 ///

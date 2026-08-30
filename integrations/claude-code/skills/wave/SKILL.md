@@ -247,6 +247,24 @@ new words.
 A unit that leaves the wave is a **result**, not a failure to hide. A wave that reports only its
 successes has measured nothing.
 
+**Only `green` merges, and there is no fifth row.** The one you will be tempted to invent is *red on
+purpose* — an adversary's case that is correct, for a defect this unit is not going to fix, and
+deleting it feels like hiding the defect. It is not a row. It is one of these three:
+
+| the case is | do |
+|---|---|
+| **correct, and the defect is open** | rewrite it to assert the **current** state with the number or behaviour it has today, and a message naming the story and saying what to do when it changes. Green, and it goes red the moment the gap widens |
+| **correct, and you will not assert today's state** | the unit **leaves the wave**. Its branch keeps the case, the story keeps the defect, and the base branch stays green |
+| **wrong now** — a decision changed under it | rewrite it to assert what was decided, so narrowing it later is a change somebody makes on purpose |
+
+Never `#[ignore]`: a case that pre-excuses its own red is one nobody reads again.
+
+The reason this is a rule and not a judgement call: a suite is read by its **exit status**, and one
+red case takes it for everything. `cargo test` without `--no-fail-fast` stops at the first failing
+target, so a deliberate red does not add one known failure to the report — it deletes every result
+after it. A wave that merges three of those has not documented three defects; it has blinded the
+gate and called it honesty.
+
 ### Before you promote a finding, check the scenario is one somebody reaches
 
 An adversary is rewarded for constructing a break, and a fixture can break anything. **A red case

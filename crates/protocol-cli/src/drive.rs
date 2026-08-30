@@ -89,7 +89,14 @@ use trace_domain::matcher::glob_matches;
 /// The directory inside `.engineering` that holds runs.
 const RUNS_DIRECTORY: &str = "runs";
 
-/// The one lock file per store.
+/// The one lock file per project.
+///
+/// **Per project, not per store**, and the two are not the same when `--store` is given: the path
+/// comes from `runs_directory(&inputs.project)`, so two projects aimed at one store by an explicit
+/// `--store` hold two different locks and both runs proceed. `--store` defaults to
+/// `<project>/.engineering/planning`, so reaching that needs a deliberate override; the scope is
+/// settled by `decision-blocker:store-lock-scope` and asserted by
+/// `a_second_project_aimed_at_one_store_holds_its_own_lock_and_is_not_refused`.
 ///
 /// **One fixed path, taken before any run id is allocated.** The reviewed first draft put the lock
 /// inside `.engineering/runs/<run-id>/`, which is circular: two invocations counting the existing

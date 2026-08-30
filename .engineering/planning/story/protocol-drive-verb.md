@@ -15,7 +15,7 @@ relations:
 - depends_on: story:default-step-map
 - serves: vision:O3
 - depends_on: story:unreadable-lock-refuses-its-own-escape-hatch
-revision: 6
+revision: 7
 ---
 # Story: `protocol drive` — the run that touches the world
 
@@ -35,8 +35,10 @@ evaluate against a store one write behind.
 
 ## Acceptance
 
-- The lock lives at one fixed path per store, taken with `create_new` **before** a run id is
-  allocated — two invocations racing cannot both succeed.
+- The lock lives at one fixed path per **project**, taken with `create_new` **before** a run id is
+  allocated — two invocations racing cannot both succeed. Per project and not per store: the two
+  differ only when `--store` is given, whose default is `<project>/.engineering/planning`, and the
+  scope is settled by `decision-blocker:store-lock-scope`.
 - A second `drive` against a locked store exits non-zero, prints the holder's run id, pid, host and
   the state the cursor says it is in, and **writes nothing** — asserted by an unchanged run directory
   and a clean tree.
