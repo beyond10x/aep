@@ -67,7 +67,7 @@ Everything above the `---` is structured. Ownership is what decides whether you 
 | `status` | machine | **only** `protocol artifact move` writes this — see guardrail 1 |
 | `revision` | machine | bumped by the CLI; a review is bound to the revision it saw |
 | `relations` | machine | written by `protocol artifact new --relate` and `protocol artifact relate` |
-| `title` | descriptive | set at creation; correcting a typo by hand is harmless |
+| `title` | descriptive | set at creation by `protocol artifact new --title`; no verb changes one afterwards |
 | `summary` | descriptive | one or two sentences; optional |
 | `format` | machine | optional; defaults to `aep.planning-md/1` when absent — a file may omit it |
 | `withholds` | machine | optional; set by `protocol artifact new --withholds <evidence-kind>`. The evidence kind this artifact is stopping anybody from producing, and only meaningful beside a `blocks:` relation — `validate` reports it otherwise |
