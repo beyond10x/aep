@@ -31,40 +31,58 @@
 //! # How a claim is read
 //!
 //! Substring matching over normalised text, sentence by sentence: this workspace carries no regular
-//! expression engine outside `trace-domain`, and does not need one here. A write **verb** followed
-//! within `REACH` bytes by a store **surface**, in one sentence, is an instruction to write the
-//! store directly — unless one of two exemptions holds.
+//! expression engine outside `trace-domain`, and does not need one here. A write **verb** within
+//! `REACH` bytes of a store **surface**, in one sentence, is an instruction to write the store
+//! directly — unless one of two exemptions holds. Where a sentence holds several such pairs the
+//! refusal names the verb **nearest** its surface, because that is the one a reader is looking for.
+//!
+//! **Distance, not direction.** The surface is looked for on both sides of the verb: *the
+//! frontmatter is yours to edit* is the same instruction as *edit the frontmatter*, and a scan that
+//! only looked forward read one and not the other. Behind the verb the reading is narrower, because
+//! a noun in front of a verb is usually not its object: a compound noun (*the last body edit*), a
+//! passive participle (*how a body is written*) and a surface on the far side of a comma (*preserves
+//! frontmatter, validates the store, and bumps the revision*) are all excluded, and each of the
+//! three is a shipped sentence.
 //!
 //! **A prohibition exempts its own clause, not the sentence.** `EXEMPTIONS` are matched inside the
-//! verb's clause — the span between the punctuation that brackets it (`CLAUSE_BREAKS`) — and
-//! `TRAILING_EXEMPTIONS` catch the passive, where the prohibition follows its subject (*`Edit`,
-//! `Write` and `NotebookEdit` **are denied** under `.engineering/planning/`*). A sentence-wide
-//! exemption is a sentence-wide hole: *do not ask the operator, edit the frontmatter* was excused by
-//! its own first clause for as long as the window was the whole sentence.
+//! verb's clause, and the comma is what opens one: *do not ask the operator, edit the frontmatter*
+//! forbids asking and instructs the write, which is the sentence this window exists for. Ahead of
+//! the verb the comma is **not** a break (`CLAUSE_BREAKS` against `CLAUSE_OPENERS`), because English
+//! puts a coordinated list's predicate last — *`Edit`, `Write` and `NotebookEdit` **are denied***,
+//! which `TRAILING_EXEMPTIONS` reads. For the same reason a prohibition reaches across a comma when
+//! everything past it is coordination (*denies edit, write and notebookedit*) or when a coordinator
+//! follows it (*…is executable, **and** hand-writing the frontmatter it owns is the failure these
+//! rules exist to prevent*). Both are shipped shapes; a bare comma is not.
 //!
 //! **Naming the sanctioned writer is not a licence to route around it.** A sentence naming
 //! `SANCTIONED` is describing the road through the CLI — *write the body through `protocol artifact
 //! body`* — and the shipped corpus needs that exemption in sixteen places. But the defect this story
 //! was written about *was* a skill routing around the writer, and the sentence that does that names
-//! it: *Skip `protocol artifact move` and write `status: active` into the file.* So a `ROUTING`
-//! marker anywhere in the sentence — *yourself*, *by hand*, *skip*, *unavailable*, *your editor* —
-//! voids the exemption, and the sentence is read on its verbs alone. In the same spirit an exemption
-//! whose object **is** the CLI (*instead of `protocol artifact body`, edit the file*) is not an
-//! exemption at all; and inside a sentence that has named the store, `NAMED_STORE_SURFACES` reads a
-//! bare *the file* as a store file, which it is not worth reading as anywhere else.
+//! it. So naming it exempts a verb only when the writer is that verb's **own instrument**
+//! (`writer_is_the_instrument`): named with no punctuation and no clause word between the two, as in
+//! *written **through** `protocol artifact body`*. A writer named in another clause — *when
+//! `protocol artifact body` fails, edit the frontmatter* — is named in order to be left, and the
+//! sentence is read on its verbs alone. The exemption survives where the verb's clause holds no
+//! store surface at all, which is what a console transcript and a table of subcommands look like.
+//! In the same spirit an exemption whose object **is** the CLI (*instead of **using** `protocol
+//! artifact body`, edit the file*) is not an exemption; and inside a sentence that has named the
+//! store, `NAMED_STORE_SURFACES` reads a bare *the file* as a store file, which it is not worth
+//! reading as anywhere else.
 //!
 //! Text is normalised before any of that: lowercased, backticks and emphasis removed, hard wraps
 //! joined — a phrase split across two lines by the 100-column wrap is still one phrase. A blank line
-//! ends a block, and so does a heading, a list item, a table row, a fence and a blockquote marker.
-//! Markdown table rows carry no sentence-ending punctuation, so a scan that joined them read a whole
-//! ownership table as one sentence and let the `never edited` in its first row exempt every row
-//! under it — which is where a regression to this rule would actually be written.
+//! ends a block, and so does a heading, a list item, a table row, a fence, a blockquote marker and a
+//! rule. Markdown table rows carry no sentence-ending punctuation, so a scan that joined them read a
+//! whole ownership table as one sentence and let the `never edited` in its first row exempt every
+//! row under it — which is where a regression to this rule would actually be written.
 //!
 //! One thing survives the lowercasing: a **capitalised** word opening a wrapped line, after a line
 //! that did not end in a terminator, opens a sentence (`opens_a_sentence`). It is the difference
 //! between a wrap and a new statement, and without it the tail of whatever paragraph a regression
-//! lands in reaches forward and excuses it — 141 of 2278 line positions of this corpus swallowed a
-//! planted instruction until this was here.
+//! lands in reaches forward and excuses it — 1797 of 18224 planted line positions, measured with the
+//! clause window already narrowed. It is also the one thing here that reads the shape of the file
+//! rather than its content, so it is held back where the line above it cannot have ended: on a
+//! `CONTINUATIONS` word, on a comma, or in front of an acronym.
 //!
 //! # The limits, named
 //!
@@ -82,9 +100,20 @@
 //!   editing bodies needs no confirmation beyond the request that prompted it"* — a sentence about
 //!   who decides, not about which program writes. The singular `the body` still catches *patch the
 //!   body in place*, which is the shape that matters.
-//! * **`ROUTING` is a list of phrases, and a regression that invents a new one passes.** It is the
-//!   one place in this file where the check is a blacklist rather than a shape, and it is here
-//!   because *route around the CLI* is a matter of intent that punctuation cannot see. Extend it.
+//! * **`ROUTING` is what is left of a blacklist, and it is still a blacklist.** The shape above
+//!   catches the sentence that names the writer in another clause, which is where a measured
+//!   thirteen of fifteen plainly-worded routing sentences used to escape. What it does not catch is
+//!   the sentence that keeps the writer beside the verb and says *go round it anyway* — *edit the
+//!   frontmatter yourself with `protocol artifact body` in mind* — because that is intent, and
+//!   punctuation cannot see it. Every entry of `ROUTING` is pinned by a sentence in
+//!   `REGRESSION_CORPUS` that only that entry catches; a phrasing none of them knows still passes,
+//!   so extend it.
+//! * **Where a hard wrap falls can still change a verdict.** `opens_a_sentence` is held back at the
+//!   three places a wrap demonstrably falls, and every shipped document rewrapped at six widths
+//!   gives the answer it gives as committed (`rewrapping_the_corpus_changes_no_verdict`). That is a
+//!   measurement over this corpus, not a proof over all prose: a capital at a line head, after a
+//!   line ending on a word not in `CONTINUATIONS`, still opens a sentence that the unwrapped text
+//!   would not have. Removing the rule outright costs 1797 of 18224 planted positions, so it stays.
 //! * **Paraphrase is invisible.** *Open the document and correct the top block* names no surface in
 //!   `STORE_SURFACES` and passes.
 //!
@@ -264,8 +293,6 @@ const STORE_SURFACES: &[&str] = &[
     "store files",
     "planning file",
     "planning files",
-    "planning-store file",
-    "planning-store files",
     "planning document",
     "planning documents",
     "artifact file",
@@ -353,10 +380,13 @@ const SANCTIONED: &[&str] = &["protocol artifact"];
 
 /// Phrases that mean *go around the sanctioned writer*, and so void naming it as an exemption.
 ///
-/// The regression this file exists for names the CLI: it names it in order to say *not that way*.
-/// Every entry is either an adverbial of manual action (*yourself*, *by hand*) or a reason to skip
-/// the writer (*unavailable*, *is down*, *skip*). This is the one blacklist in the file; a phrase it
-/// does not know passes, so add to it.
+/// What is left of a blacklist after `writer_is_the_instrument` took the shape out of it. That rule
+/// reads the sentence that names the CLI in *another* clause; these read the one that keeps it
+/// beside the verb and says go round it anyway — *edit the frontmatter yourself with `protocol
+/// artifact body` in mind*. Every entry is either an adverbial of manual action (*yourself*, *by
+/// hand*) or a reason to skip the writer (*unavailable*, *is down*, *skip*), and every entry is
+/// pinned by a sentence in `REGRESSION_CORPUS` that only it catches. A phrase none of them knows
+/// still passes, so add to it.
 const ROUTING: &[&str] = &[
     "yourself",
     "by hand",
@@ -367,7 +397,6 @@ const ROUTING: &[&str] = &[
     "hand-written",
     "hand-edited",
     "manually",
-    "by yourself",
     "directly",
     "in place",
     "your editor",
@@ -390,16 +419,49 @@ const ROUTING: &[&str] = &[
 /// One hundred, because one ordinary qualifying clause is longer than sixty: *Edit, when the
 /// operator has asked for it and the CLI is unavailable, the frontmatter* carries its object
 /// sixty-nine bytes behind its verb, which is what English does whenever the condition is the
-/// interesting part. Pinned at both ends by `reach_is_load_bearing_at_both_ends`, because a constant
-/// no test moves is a constant nothing is holding.
+/// interesting part. Pinned to this exact value by `reach_is_the_exact_distance_it_says_it_is` —
+/// ninety-nine bytes of filler is crossed and a hundred is not — because a constant a test only
+/// brackets is a constant four values wide.
 const REACH: usize = 100;
 
-/// Punctuation that brackets a clause.
+/// Punctuation that closes a clause **ahead** of a verb.
 ///
-/// A comma is deliberately **not** here: *`Edit`, `Write` and `NotebookEdit` are denied* is one
-/// clause with a list in it, and cutting at every comma would leave `edit` alone in a clause of its
-/// own with its prohibition on the far side of the punctuation.
+/// A comma is deliberately not here, and is in `CLAUSE_OPENERS` instead. English puts a coordinated
+/// list's predicate after the list — *`Edit`, `Write` and `NotebookEdit` are denied* — so a
+/// forward window that stopped at the first comma would leave `edit` alone with its prohibition on
+/// the far side of the punctuation. Behind the verb the same comma is what separates a spliced
+/// clause from the one before it, and there it does break.
 const CLAUSE_BREAKS: &[char] = &[';', ':', '|', '(', ')', '\u{2014}', '\u{2013}'];
+
+/// Punctuation that opens a clause **behind** a verb — `CLAUSE_BREAKS` and the comma.
+///
+/// *Do not ask the operator, edit the frontmatter* is the sentence this file's header names as the
+/// reason the clause window exists, and for as long as the comma was missing here it was excused by
+/// its own first clause — the one thing the window was built to stop.
+const CLAUSE_OPENERS: &[char] = &[',', ';', ':', '|', '(', ')', '\u{2014}', '\u{2013}'];
+
+/// Punctuation that separates the sanctioned writer from a verb it does not serve.
+///
+/// `|` is deliberately absent: a markdown table writes the change in one cell and the command that
+/// makes it in the next, and `store-conventions.md:52` is exactly that row.
+const WRITER_BREAKS: &[char] = &[',', ';', ':', '(', ')', '\u{2014}', '\u{2013}'];
+
+/// Words that hang one clause off another, so a writer named past one of them is not the writer
+/// this verb goes through: *edit the frontmatter **when** `protocol artifact body` fails*.
+const CLAUSE_WORDS: &[&str] = &[
+    "and", "or", "nor", "but", "then", "when", "if", "unless", "while", "because", "since", "so",
+    "instead", "rather", "though", "although", "whenever", "once", "until", "before", "after",
+];
+
+/// Words that join items of one list.
+const COORDINATORS: &[&str] = &["and", "or", "nor"];
+
+/// Forms of *be*. A verb behind one is a passive participle, and the noun in front of it is its
+/// subject rather than its object.
+const COPULAS: &[&str] = &["is", "are", "was", "were", "be", "been", "being"];
+
+/// How many words may link an exemption to the writer it names.
+const LINKING_WORDS: usize = 3;
 
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {
@@ -549,31 +611,52 @@ fn starts_block(raw: &str) -> bool {
     let ordered = digits > 0
         && matches!(line.as_bytes().get(digits), Some(b'.' | b')'))
         && matches!(line.as_bytes().get(digits + 1), Some(b' ' | b'\t') | None);
+    let dense: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+    let rule = dense.len() >= 3
+        && ['-', '_', '=', '*']
+            .iter()
+            .any(|mark| dense.chars().all(|c| c == *mark));
     line.starts_with('#')
         || line.starts_with('|')
         || line.starts_with("```")
         || line.starts_with('>')
         || bullet
         || ordered
+        || rule
 }
 
-/// Whether a wrapped line opens a sentence of its own: it is capitalised, and the line above it did
-/// not end in a terminator.
+/// Words a line cannot end a sentence on, so a capital after one of them is a proper noun a wrap
+/// pushed to the head of the next line and not a new statement.
 ///
-/// English capitalises mid-sentence only for proper nouns, so this is the one signal `normalize`
-/// throws away that a scan of hard-wrapped prose cannot do without. Without it the tail of whatever
-/// line a regression lands under reaches forward into it, and a `no` three words up excuses the
-/// instruction: an adversary planted one line at all 2278 positions of this corpus and the leak
-/// swallowed 141 of them. Splitting here costs thirteen proper nouns across the corpus — *the\nCLI
-/// owns*, *since\nFebruary 2024* — cut from their own sentence, and none of the thirteen changes an
-/// answer.
+/// Three entries, and every one of them costs something. Widening this list is how the verdict
+/// stops depending on where a formatter breaks the line, and it is also how a planted instruction
+/// gets excused by the paragraph it landed in: the articles, prepositions and auxiliaries a first
+/// draft of this list held let 784 of 18224 planted line positions through, against 0 for these
+/// three. `rewrapping_the_corpus_changes_no_verdict` and
+/// `a_planted_instruction_survives_every_position_in_every_shipped_document` are the two ends of
+/// that trade, and both are measured over the shipped corpus rather than argued.
+const CONTINUATIONS: &[&str] = &["use", "uses", "using"];
+
+/// Whether a wrapped line opens a sentence of its own: it is capitalised, and the line above it
+/// neither ended in a terminator nor in a word that has to carry on.
+///
+/// The head is read as a word rather than as a first character, so the emphasis, backtick or
+/// quotation mark a markdown writer opens a line with does not hide the capital behind it. An
+/// all-capital head is a proper noun — `YAML`, `CLI`, `JSON` — and not a new statement.
 fn opens_a_sentence(joined: &str, raw: &str) -> bool {
-    if joined.ends_with(['.', '?', '!']) {
+    if joined.ends_with(['.', '?', '!', ',', ';', ':']) {
         return false;
     }
-    raw.trim_start()
-        .trim_start_matches(['*', '`', '_', '"', '(', '['])
-        .starts_with(|character: char| character.is_ascii_uppercase())
+    if joined
+        .rsplit(' ')
+        .next()
+        .is_some_and(|token| CONTINUATIONS.contains(&word_of(token)))
+    {
+        return false;
+    }
+    let head = raw.split_whitespace().next().map_or("", word_of);
+    let acronym = head.len() > 1 && head.chars().all(|c| c.is_ascii_uppercase());
+    !acronym && head.starts_with(|character: char| character.is_ascii_uppercase())
 }
 
 /// The document as blocks. A blank line ends one, and so does the start of the next markdown block,
@@ -654,8 +737,59 @@ fn clause_start(sentence: &str, offset: usize) -> usize {
     sentence[..offset]
         .char_indices()
         .rev()
+        .find(|(_, character)| CLAUSE_OPENERS.contains(character))
+        .map_or(0, |(at, character)| at + character.len_utf8())
+}
+
+/// The same, ignoring the comma.
+fn wide_clause_start(sentence: &str, offset: usize) -> usize {
+    sentence[..offset]
+        .char_indices()
+        .rev()
         .find(|(_, character)| CLAUSE_BREAKS.contains(character))
         .map_or(0, |(at, character)| at + character.len_utf8())
+}
+
+/// The end of the comma-delimited clause holding the byte at `offset`.
+fn narrow_clause_end(sentence: &str, offset: usize) -> usize {
+    sentence[offset..]
+        .char_indices()
+        .find(|(_, character)| CLAUSE_OPENERS.contains(character))
+        .map_or(sentence.len(), |(at, _)| offset + at)
+}
+
+/// The word, stripped of the punctuation around it.
+fn word_of(token: &str) -> &str {
+    token.trim_matches(|character: char| !character.is_alphanumeric())
+}
+
+/// Whether every word of `span` is a coordinator or a write verb.
+fn coordination_only(span: &str) -> bool {
+    span.split_whitespace().all(|token| {
+        let word = word_of(token);
+        COORDINATORS.contains(&word) || WRITE_VERBS.contains(&word)
+    })
+}
+
+/// Whether a prohibition `span` bytes in front of a verb still forbids it, across the comma
+/// between them.
+///
+/// It does over a coordinated list — *denies `Edit`, `Write` and `NotebookEdit`* — and over a
+/// comma that a coordinator follows, which continues the sentence rather than starting a new one:
+/// *without the CLI none of the above is executable, and hand-writing the frontmatter it owns is
+/// the failure these rules exist to prevent*. It does not over a bare comma, which is the splice
+/// this window was built for: *do not ask the operator, edit the frontmatter*.
+fn exemption_reaches(span: &str) -> bool {
+    if coordination_only(span) {
+        return true;
+    }
+    span.contains(',')
+        && span.split(',').skip(1).all(|chunk| {
+            chunk
+                .split_whitespace()
+                .next()
+                .is_some_and(|token| COORDINATORS.contains(&word_of(token)))
+        })
 }
 
 /// The end of the clause holding the byte at `offset`: the punctuation that closes it, or the end.
@@ -670,20 +804,27 @@ fn clause_end(sentence: &str, offset: usize) -> usize {
 /// `protocol artifact body`* — which makes that phrase a way around the writer, not a prohibition.
 fn governs_sanctioned(sentence: &str, after: usize) -> bool {
     SANCTIONED.iter().any(|marker| {
-        find_word(sentence, marker, after)
-            .is_some_and(|found| sentence[after..found].split_whitespace().count() == 0)
+        find_word(sentence, marker, after).is_some_and(|found| {
+            let between = &sentence[after..found];
+            between.split_whitespace().count() <= LINKING_WORDS
+                && !between.contains(|c: char| CLAUSE_OPENERS.contains(&c))
+        })
     })
 }
 
 /// Whether the clause holding the verb at `start..end` forbids the write rather than instructing it.
 fn exempted(sentence: &str, start: usize, end: usize) -> bool {
     let opens = clause_start(sentence, start);
-    let clause = &sentence[opens..end];
+    let wide = wide_clause_start(sentence, start);
+    let clause = &sentence[wide..end];
     for marker in EXEMPTIONS {
         let mut at = 0;
         while let Some(found) = find_word(clause, marker, at) {
             at = found + 1;
-            if !governs_sanctioned(sentence, opens + found + marker.len()) {
+            let marker_ends = wide + found + marker.len();
+            let reaches = wide + found >= opens
+                || exemption_reaches(&sentence[marker_ends.min(start)..start]);
+            if reaches && !governs_sanctioned(sentence, marker_ends) {
                 return true;
             }
         }
@@ -734,32 +875,132 @@ fn routes_around_the_sanctioned_writer(sentence: &str) -> bool {
         })
 }
 
+/// The occurrence of `surface` nearest the verb at `start..end`, on either side, within `REACH`.
+///
+/// Direction is not evidence. *The frontmatter is yours to edit* is the same instruction as *edit
+/// the frontmatter*, and a scan that only looked forward from the verb read the second and not the
+/// first.
+fn surface_near(sentence: &str, start: usize, end: usize, surface: &str) -> Option<usize> {
+    let ahead = find_word(sentence, surface, end).filter(|found| found - end < REACH);
+
+    let mut behind = None;
+    let mut at = 0;
+    while let Some(found) = find_word(sentence, surface, at) {
+        at = found + 1;
+        let stops = found + surface.len();
+        if stops > start {
+            break;
+        }
+        let between = &sentence[stops..start];
+        let words: Vec<&str> = between.split_whitespace().map(word_of).collect();
+        let joined = !words.is_empty()
+            && !between.contains(|c: char| CLAUSE_OPENERS.contains(&c))
+            && !words.last().is_some_and(|word| COPULAS.contains(word));
+        if joined && start - stops < REACH {
+            behind = Some(found);
+        }
+    }
+
+    match (ahead, behind) {
+        (Some(ahead), Some(behind)) => Some(if ahead - end <= start - (behind + surface.len()) {
+            ahead
+        } else {
+            behind
+        }),
+        (found, None) | (None, found) => found,
+    }
+}
+
+/// Whether the sanctioned writer is this verb's own instrument: named with no punctuation and no
+/// clause word between the two, so the write the verb describes is the one that goes through it.
+fn writer_is_the_instrument(sentence: &str, start: usize, end: usize) -> bool {
+    SANCTIONED.iter().any(|marker| {
+        let mut at = 0;
+        while let Some(found) = find_word(sentence, marker, at) {
+            at = found + 1;
+            let span = if found >= end {
+                &sentence[end..found]
+            } else if found + marker.len() <= start {
+                &sentence[found + marker.len()..start]
+            } else {
+                continue;
+            };
+            let separated = span.contains(|c: char| WRITER_BREAKS.contains(&c))
+                || span.split_whitespace().any(|token| {
+                    CLAUSE_WORDS.contains(&token.trim_matches(|c: char| !c.is_alphanumeric()))
+                });
+            if !separated {
+                return true;
+            }
+        }
+        false
+    })
+}
+
+/// Whether naming the writer excuses this verb reaching the surface at `surface_at`.
+///
+/// It does when the writer is the verb's own instrument, and it does when the surface the verb
+/// reaches is not even in the verb's own clause — which is what a console transcript and a table of
+/// subcommands look like. It does not when the verb's clause holds a store surface and the writer
+/// is named somewhere else: that is a sentence naming the writer in order to leave it.
+fn sanctioned_covers(sentence: &str, start: usize, end: usize, surface_at: usize) -> bool {
+    if writer_is_the_instrument(sentence, start, end) {
+        return true;
+    }
+    let opens = clause_start(sentence, start);
+    let closes = narrow_clause_end(sentence, end);
+    if !(opens <= surface_at && surface_at < closes) {
+        return true;
+    }
+    let between = if surface_at >= end {
+        &sentence[end..surface_at]
+    } else {
+        &sentence[surface_at..start]
+    };
+    between
+        .split_whitespace()
+        .any(|token| CLAUSE_WORDS.contains(&word_of(token)))
+}
+
 /// The first direct-write instruction in one sentence, if it holds one: the verb, the store surface
 /// it reached, and the offset the verb was read from.
 fn instruction(sentence: &str) -> Option<(&'static str, &'static str, usize)> {
     let named = names_the_sanctioned_writer(sentence);
-    if named && !routes_around_the_sanctioned_writer(sentence) {
-        return None;
-    }
-    let surfaces = STORE_SURFACES.iter().chain(if named {
-        NAMED_STORE_SURFACES.iter()
-    } else {
-        [].iter()
-    });
+    let routed = named && routes_around_the_sanctioned_writer(sentence);
+    let surfaces: Vec<&'static str> = STORE_SURFACES
+        .iter()
+        .copied()
+        .chain(NAMED_STORE_SURFACES.iter().copied().take(if named {
+            NAMED_STORE_SURFACES.len()
+        } else {
+            0
+        }))
+        .collect();
 
+    let mut best: Option<(usize, &'static str, &'static str, usize)> = None;
     for (start, verb) in verb_occurrences(sentence) {
         let end = start + verb.len();
         if exempted(sentence, start, end) {
             continue;
         }
-        let reach = (end + REACH).min(sentence.len());
-        for surface in surfaces.clone() {
-            if find_word(sentence, surface, end).is_some_and(|found| found < reach) {
-                return Some((verb, surface, start));
+        for surface in &surfaces {
+            let Some(found) = surface_near(sentence, start, end, surface) else {
+                continue;
+            };
+            if named && !routed && sanctioned_covers(sentence, start, end, found) {
+                continue;
+            }
+            let gap = if found >= end {
+                found - end
+            } else {
+                start - (found + surface.len())
+            };
+            if best.is_none_or(|(shortest, ..)| gap < shortest) {
+                best = Some((gap, verb, surface, start));
             }
         }
     }
-    None
+    best.map(|(_, verb, surface, start)| (verb, surface, start))
 }
 
 /// Every direct-write instruction in one document's text. One refusal per sentence.
@@ -929,6 +1170,14 @@ fn a_prohibition_does_not_exempt_the_clause_after_it() {
         );
     }
 
+    // A semicolon is a harder boundary than a comma: nothing carries a prohibition across one,
+    // not even the coordinated list that carries it across a comma.
+    assert_eq!(
+        refusals("fixture.md", "Never edit; write the frontmatter.").len(),
+        1,
+        "a prohibition does not reach across a semicolon"
+    );
+
     // And the same clause still exempts itself, which is the whole shipped corpus's shape.
     for case in [
         "Do not edit the frontmatter.",
@@ -990,6 +1239,19 @@ fn a_hard_wrap_does_not_hide_an_instruction() {
 
     assert_eq!(found.len(), 1, "the instruction is on the second line");
     assert_eq!(found[0].line, 2, "the refusal names the verb's own line");
+
+    // And the emphasis, backtick or bracket a markdown writer opens a line with does not hide the
+    // capital behind it: without the strip, `**Edit**` at a line head reads as lower case, the
+    // line joins the one above it, and the `not` three words up excuses the write.
+    let emphasised = "The operator has asked us to\n**Edit** the frontmatter directly.\n";
+    let found = refusals("fixture.md", emphasised);
+    assert_eq!(
+        found.len(),
+        1,
+        "a capital behind markup still opens a sentence:\n{}",
+        rendered(&found)
+    );
+    assert_eq!(found[0].line, 2, "the refusal names the emphasised line");
 }
 
 #[test]
@@ -1022,6 +1284,17 @@ fn a_prohibition_does_not_exempt_the_block_after_it() {
             "Never edit a store file directly\n# edit the frontmatter directly\n",
             2,
         ),
+        // A fence. The shipped skills open a `console` block right after the rule they state, and
+        // the fence marker normalises to a word, so without this the block runs on.
+        (
+            "Never edit a store file directly\n```console\nupdate the frontmatter\n```\n",
+            3,
+        ),
+        // A blockquote.
+        (
+            "Never edit a store file directly\n> update the frontmatter\n",
+            2,
+        ),
     ];
 
     for (case, line) in cases {
@@ -1040,6 +1313,31 @@ fn a_prohibition_does_not_exempt_the_block_after_it() {
 
     // Lower-cased on purpose above: a capitalised second line would open a sentence of its own even
     // without the block boundary, and this test is about the boundary.
+}
+
+#[test]
+fn a_block_does_not_reach_forward_into_the_block_below_it() {
+    // The other half of what a block boundary is for, and the half no case reached: without it a
+    // verb in one row reaches a noun in the next and refuses a table that says nothing. Both
+    // fixtures below are two ordinary rows of a two-column table and two ordinary steps of a
+    // numbered list; read as one run of prose, `set … body` and `set … the body` are a write verb
+    // twenty-odd bytes from a store surface, and this scan would refuse them.
+    for (case, what) in [
+        (
+            "| `title` | you | set it at creation |\n| `body` | you | authored by the operator |\n",
+            "a table row",
+        ),
+        (
+            "1) set the title at creation\n2) the body is authored by the operator\n",
+            "an ordered list item",
+        ),
+    ] {
+        assert!(
+            refusals("fixture.md", case).is_empty(),
+            "{what} must not reach into the one below it:\n{}",
+            rendered(&refusals("fixture.md", case))
+        );
+    }
 }
 
 #[test]
@@ -1104,49 +1402,537 @@ fn naming_the_sanctioned_writer_does_not_licence_the_write_beside_it() {
     }
 }
 
-#[test]
-fn every_write_verb_and_every_store_surface_is_load_bearing() {
-    // What stops this file being satisfied by shortening its data. Cutting `WRITE_VERBS` from
-    // forty-six entries to four, and `STORE_SURFACES` from eighteen to four, left every test in the
-    // previous version of this file green — so the lists were decoration, and the scan's whole
-    // sensitivity was unguarded. One case per entry, generated from the entry itself.
-    let mut idle: Vec<String> = Vec::new();
+/// One sentence per entry of `WRITE_VERBS`, `STORE_SURFACES`, `NAMED_STORE_SURFACES` and
+/// `ROUTING`, written out rather than generated from the entry.
+///
+/// The version of this file an adversary measured generated one case per entry **from the entry**,
+/// so deleting an entry deleted its own case and 188 of 214 entries could each be dropped with the
+/// whole suite green. A corpus that shrinks when the thing it guards shrinks guards nothing. These
+/// are literals: drop `overwrote` from `WRITE_VERBS` and *Overwrote the frontmatter.* stops being
+/// refused, and this test says so.
+const REGRESSION_CORPUS: &[&str] = &[
+    "Edit the frontmatter.",
+    "Edits the frontmatter.",
+    "Edited the frontmatter.",
+    "Editing the frontmatter.",
+    "Patch the frontmatter.",
+    "Patches the frontmatter.",
+    "Patched the frontmatter.",
+    "Patching the frontmatter.",
+    "Modify the frontmatter.",
+    "Modifies the frontmatter.",
+    "Modified the frontmatter.",
+    "Modifying the frontmatter.",
+    "Rewrite the frontmatter.",
+    "Rewrites the frontmatter.",
+    "Rewrote the frontmatter.",
+    "Rewriting the frontmatter.",
+    "Overwrite the frontmatter.",
+    "Overwrites the frontmatter.",
+    "Overwrote the frontmatter.",
+    "Overwriting the frontmatter.",
+    "Write the frontmatter.",
+    "Writes the frontmatter.",
+    "Wrote the frontmatter.",
+    "Written the frontmatter.",
+    "Writing the frontmatter.",
+    "Append the frontmatter.",
+    "Appends the frontmatter.",
+    "Appended the frontmatter.",
+    "Appending the frontmatter.",
+    "Insert the frontmatter.",
+    "Inserts the frontmatter.",
+    "Inserted the frontmatter.",
+    "Inserting the frontmatter.",
+    "Update the frontmatter.",
+    "Updates the frontmatter.",
+    "Updated the frontmatter.",
+    "Updating the frontmatter.",
+    "Change the frontmatter.",
+    "Changes the frontmatter.",
+    "Changed the frontmatter.",
+    "Changing the frontmatter.",
+    "Set the frontmatter.",
+    "Sets the frontmatter.",
+    "Setting the frontmatter.",
+    "Replace the frontmatter.",
+    "Replaces the frontmatter.",
+    "Replaced the frontmatter.",
+    "Replacing the frontmatter.",
+    "Fix the frontmatter.",
+    "Fixes the frontmatter.",
+    "Fixed the frontmatter.",
+    "Fixing the frontmatter.",
+    "Amend the frontmatter.",
+    "Amends the frontmatter.",
+    "Amended the frontmatter.",
+    "Amending the frontmatter.",
+    "Adjust the frontmatter.",
+    "Adjusts the frontmatter.",
+    "Adjusted the frontmatter.",
+    "Adjusting the frontmatter.",
+    "Correct the frontmatter.",
+    "Corrects the frontmatter.",
+    "Corrected the frontmatter.",
+    "Correcting the frontmatter.",
+    "Tweak the frontmatter.",
+    "Tweaks the frontmatter.",
+    "Tweaked the frontmatter.",
+    "Tweaking the frontmatter.",
+    "Bump the frontmatter.",
+    "Bumps the frontmatter.",
+    "Bumped the frontmatter.",
+    "Bumping the frontmatter.",
+    "Add the frontmatter.",
+    "Adds the frontmatter.",
+    "Added the frontmatter.",
+    "Adding the frontmatter.",
+    "Delete the frontmatter.",
+    "Deletes the frontmatter.",
+    "Deleted the frontmatter.",
+    "Deleting the frontmatter.",
+    "Remove the frontmatter.",
+    "Removes the frontmatter.",
+    "Removed the frontmatter.",
+    "Removing the frontmatter.",
+    "Save the frontmatter.",
+    "Saves the frontmatter.",
+    "Saved the frontmatter.",
+    "Saving the frontmatter.",
+    "Alter the frontmatter.",
+    "Alters the frontmatter.",
+    "Altered the frontmatter.",
+    "Altering the frontmatter.",
+    "Revise the frontmatter.",
+    "Revises the frontmatter.",
+    "Revised the frontmatter.",
+    "Revising the frontmatter.",
+    "Drop the frontmatter.",
+    "Drops the frontmatter.",
+    "Dropped the frontmatter.",
+    "Dropping the frontmatter.",
+    "Paste the frontmatter.",
+    "Pastes the frontmatter.",
+    "Pasted the frontmatter.",
+    "Pasting the frontmatter.",
+    "Put the frontmatter.",
+    "Puts the frontmatter.",
+    "Putting the frontmatter.",
+    "A `sed` one-liner over the frontmatter is quicker.",
+    "A `tee` into the story file is quicker.",
+    "Edit frontmatter now.",
+    "Edit front matter now.",
+    "Edit yaml header now.",
+    "Edit yaml block now.",
+    "Edit yaml at the top now.",
+    "Edit status: now.",
+    "Edit status field now.",
+    "Edit status line now.",
+    "Edit revision: now.",
+    "Edit revision field now.",
+    "Edit relations: now.",
+    "Edit relations field now.",
+    "Edit body now.",
+    "Edit .engineering/planning now.",
+    "Edit store file now.",
+    "Edit store files now.",
+    "Edit planning file now.",
+    "Edit planning files now.",
+    "Edit planning document now.",
+    "Edit planning documents now.",
+    "Edit artifact file now.",
+    "Edit artifact files now.",
+    "Edit artifact's file now.",
+    "Edit story file now.",
+    "Edit task file now.",
+    "Edit the artifact now.",
+    "Instead of `protocol artifact body`, edit the file now.",
+    "Instead of `protocol artifact body`, edit a file now.",
+    "Instead of `protocol artifact body`, edit this file now.",
+    "Instead of `protocol artifact body`, edit that file now.",
+    "Instead of `protocol artifact body`, edit the document now.",
+    "Edit the frontmatter yourself with `protocol artifact body` in mind.",
+    "Edit the frontmatter by hand with `protocol artifact body` in mind.",
+    "Edit the frontmatter by-hand with `protocol artifact body` in mind.",
+    "Edit the frontmatter as a hand-edit with `protocol artifact body` in mind.",
+    "Edit the frontmatter as hand-edits with `protocol artifact body` in mind.",
+    "Edit the frontmatter as a hand edit with `protocol artifact body` in mind.",
+    "Edit the frontmatter as a hand-written change with `protocol artifact body` in mind.",
+    "Edit the frontmatter as a hand-edited change with `protocol artifact body` in mind.",
+    "Edit the frontmatter manually with `protocol artifact body` in mind.",
+    "Edit the frontmatter directly with `protocol artifact body` in mind.",
+    "Edit the frontmatter in place with `protocol artifact body` in mind.",
+    "Edit the frontmatter in your editor with `protocol artifact body` in mind.",
+    "Edit the frontmatter to skip `protocol artifact body` today.",
+    "Edit the frontmatter in a change that skips `protocol artifact body`.",
+    "Edit the frontmatter skipping `protocol artifact body` today.",
+    "Edit the frontmatter with `protocol artifact body` unavailable.",
+    "Edit the frontmatter with `protocol artifact body` is down.",
+    "Edit the frontmatter with `protocol artifact body` not available.",
+    "Edit the frontmatter with `protocol artifact body` too slow to bother.",
+    "Edit the frontmatter to duck the slow route of `protocol artifact body`.",
+    "Edit the frontmatter to bypass `protocol artifact body` today.",
+    "Edit the frontmatter in a change that bypasses `protocol artifact body`.",
+    "Edit the frontmatter as a shortcut past `protocol artifact body`.",
+    "It is faster to edit the frontmatter than `protocol artifact body` is.",
+];
 
-    for verb in WRITE_VERBS {
-        let case = format!("{verb} the frontmatter.");
-        if refusals("fixture.md", &case).is_empty() {
-            idle.push(format!("  - verb `{verb}` fires on nothing: {case:?}"));
+/// Sentences the shipped corpus is full of and this scan must not refuse: a prohibition in the
+/// verb's own clause, a prohibition that follows its subject, the road through the CLI, and the
+/// nouns that name a store file only once the store has been named.
+///
+/// The other half of the same job. `EXEMPTIONS`, `TRAILING_EXEMPTIONS` and `SANCTIONED` are only
+/// load-bearing if something goes red when they shrink, and nothing here is generated from them
+/// either.
+const LAWFUL_CORPUS: &[&str] = &[
+    "Do never edit the frontmatter.",
+    "Do not edit the frontmatter.",
+    "Do no edit the frontmatter.",
+    "Do nor edit the frontmatter.",
+    "Do cannot edit the frontmatter.",
+    "Do can't edit the frontmatter.",
+    "Do don't edit the frontmatter.",
+    "Do doesn't edit the frontmatter.",
+    "Do without edit the frontmatter.",
+    "Do rather than edit the frontmatter.",
+    "Do instead of edit the frontmatter.",
+    "Do refuse edit the frontmatter.",
+    "Do refuses edit the frontmatter.",
+    "Do refused edit the frontmatter.",
+    "Do deny edit the frontmatter.",
+    "Do denies edit the frontmatter.",
+    "Do denied edit the frontmatter.",
+    "Do forbid edit the frontmatter.",
+    "Do forbids edit the frontmatter.",
+    "Do forbidden edit the frontmatter.",
+    "Do banned edit the frontmatter.",
+    "Do avoid edit the frontmatter.",
+    "Do stop edit the frontmatter.",
+    "Do before editing edit the frontmatter.",
+    "Do before writing edit the frontmatter.",
+    "Do before changing edit the frontmatter.",
+    "`Edit`, `Write` and `NotebookEdit` are denied under `.engineering/planning/`.",
+    "`Edit` is denied under `.engineering/planning/`.",
+    "`Edit` and `Write` are refused under `.engineering/planning/`.",
+    "`Edit` is refused under `.engineering/planning/`.",
+    "`Edit` and `Write` are forbidden under `.engineering/planning/`.",
+    "`Edit` is forbidden under `.engineering/planning/`.",
+    "`Edit` and `Write` are banned under `.engineering/planning/`.",
+    "`Edit` is banned under `.engineering/planning/`.",
+    "`Edit` and `Write` are never how the frontmatter moves.",
+    "`Edit` is never how the frontmatter moves.",
+    "`Edit` and `Write` are not how the frontmatter moves.",
+    "`Edit` is not how the frontmatter moves.",
+    "`Edit` must not reach the frontmatter.",
+    "`Edit` may not reach the frontmatter.",
+    "Edit the file now.",
+    "Edit a file now.",
+    "Edit this file now.",
+    "Edit that file now.",
+    "Edit the document now.",
+    "Then write each story's complete body through `protocol artifact body <id> --from <path>`.",
+    "A body is changed with `protocol artifact body`, never with an editor.",
+    "| replace its complete markdown body | `protocol artifact body <id> --from <path>` |",
+];
+
+#[test]
+fn a_comma_does_not_carry_a_prohibition_into_the_clause_after_it() {
+    // The sentence this file's header quotes as the reason the clause window exists, written the
+    // way the header writes it — with a comma. `CLAUSE_BREAKS` did not hold one, so the clause
+    // holding `edit` opened at byte zero and the `not` in *do not ask* sat inside it; the case that
+    // was supposed to cover this substituted a colon, which is the one mark that made it work.
+    for case in [
+        "Do not ask the operator, edit the frontmatter.",
+        "Never open a pull request for this, edit the frontmatter directly.",
+        "The operator has not asked, patch the body in place.",
+        "You cannot reach the CLI, set `status: active` in the file yourself.",
+        "There is no need to stop, update the `status:` field yourself.",
+    ] {
+        let found = refusals("fixture.md", case);
+        assert_eq!(
+            found.len(),
+            1,
+            "a prohibition one comma away does not licence this write: {case:?}\n{}",
+            rendered(&found)
+        );
+    }
+
+    // And the comma a prohibition does reach across: the one that separates items of a list, and
+    // the one a coordinator follows. Both are shipped shapes, and both must still pass.
+    for case in [
+        "The plugin denies `Edit`, `Write` and `NotebookEdit` under `.engineering/planning/`.",
+        "Never edit, patch, or rewrite the frontmatter.",
+        "Without the CLI none of this is executable, and hand-writing the frontmatter it owns is \
+         the failure these rules exist to prevent.",
+    ] {
+        assert!(
+            refusals("fixture.md", case).is_empty(),
+            "a prohibition still reaches across a list's own comma: {case:?}\n{}",
+            rendered(&refusals("fixture.md", case))
+        );
+    }
+}
+
+#[test]
+fn an_exemption_whose_object_is_the_writer_is_no_exemption_however_it_is_phrased() {
+    // *Instead of `protocol artifact body`, edit the file* is a way around the writer, not a
+    // prohibition of the write — and the rule that said so required **zero** words between the
+    // marker and the CLI's name, so the gerund every writer of English reaches for restored the
+    // exemption. The marker was present, matched, and then discarded on a whitespace count.
+    for case in [
+        "Instead of `protocol artifact body`, edit the file.",
+        "Instead of using `protocol artifact body`, edit the file.",
+        "Instead of using `protocol artifact body`, edit the frontmatter.",
+        "Rather than calling `protocol artifact move`, set `status: active` in the frontmatter.",
+        "Instead of shelling out to `protocol artifact body`, patch the body in place.",
+        "Edit the frontmatter yourself instead of using `protocol artifact body`.",
+        // No comma to open a clause and no `ROUTING` phrase to void the exemption: the only thing
+        // that refuses this one is the marker's object being the CLI.
+        "Rather than calling `protocol artifact move` set `status: active` in the frontmatter.",
+    ] {
+        assert_eq!(
+            refusals("fixture.md", case).len(),
+            1,
+            "an exemption that names the CLI as the thing to avoid is not an exemption: {case:?}"
+        );
+    }
+
+    // The other side of that rule: a prohibition and a mention of the CLI in two clauses of one
+    // sentence is the shipped shape, and the punctuation between them is what says so. Without it
+    // the `not` here would be discarded as an exemption governing the writer, and a sentence that
+    // forbids the write would be read as instructing it.
+    assert!(
+        refusals(
+            "fixture.md",
+            "Do not patch the body; `protocol artifact` is the writer."
+        )
+        .is_empty(),
+        "a prohibition in one clause and the writer in the next is not a route around it"
+    );
+}
+
+#[test]
+fn a_surface_in_front_of_its_verb_is_still_the_verb_s_object() {
+    // English puts the object in front of the verb in the copular and cleft moods a documentation
+    // writer reaches for constantly, and a scan that only looked forward from the verb read
+    // *edit the frontmatter* and not *the frontmatter is yours to edit*. Both name `frontmatter`
+    // and `status:`, which are spelled out in `STORE_SURFACES`; neither is paraphrase.
+    for case in [
+        "The frontmatter is yours to edit.",
+        "The `status:` field is the one you set by hand.",
+        "It is the frontmatter you edit, and nothing else.",
+        "The frontmatter is what you change when a review lands.",
+    ] {
+        let found = refusals("fixture.md", case);
+        assert_eq!(
+            found.len(),
+            1,
+            "an instruction that names its object first is still an instruction: {case:?}\n{}",
+            rendered(&found)
+        );
+    }
+
+    // Looking behind the verb is not looking anywhere: a compound noun, a passive participle and a
+    // surface in another clause are all in front of a verb and none of them is its object. All
+    // three are shipped shapes — `plan-reviewer.md:56`, `plan-reviewer.md:43`, `SKILL.md:57`.
+    for case in [
+        "The evidence is the date of the last body edit.",
+        "A style disagreement about how a body is written is not a finding.",
+        "The CLI preserves frontmatter, validates the store, and bumps the revision once, so \
+         nothing here is a hand edit.",
+    ] {
+        assert!(
+            refusals("fixture.md", case).is_empty(),
+            "a noun in front of a verb is not automatically its object: {case:?}\n{}",
+            rendered(&refusals("fixture.md", case))
+        );
+    }
+
+    // And the comma is the boundary that decides it: the same words with nothing but a comma
+    // between the surface and the verb are two statements, not one instruction.
+    assert!(
+        refusals("fixture.md", "The frontmatter, however, you edit.").is_empty(),
+        "a surface on the far side of a comma is not the verb's object"
+    );
+    assert_eq!(
+        refusals("fixture.md", "The frontmatter however you edit.").len(),
+        1,
+        "and without the comma it is"
+    );
+}
+
+#[test]
+fn a_rule_ends_a_block_as_starts_block_says_it_does() {
+    // `starts_block` documented itself as recognising "a heading, a list item, a table row, a
+    // fence, a blockquote or a rule" and recognised no rule: `---`, `___` and a setext underline
+    // all fell through, so a prohibition on one side of a horizontal rule reached across it. `---`
+    // is not hypothetical here — it opens and closes the YAML frontmatter of all five shipped
+    // `SKILL.md`, and `integrations/codex/AGENTS.planning.md:17` is a thematic break.
+    for (rule, what) in [
+        ("---", "a horizontal rule"),
+        ("___", "an underscore rule"),
+        ("===", "a setext heading underline"),
+        ("***", "an asterisk rule"),
+    ] {
+        let document = format!("Never edit a store file directly\n{rule}\nedit the frontmatter\n");
+        let found = refusals("fixture.md", &document);
+        assert_eq!(
+            found.len(),
+            1,
+            "{what} ({rule:?}) must end the block:\n{}",
+            rendered(&found)
+        );
+        assert_eq!(
+            found[0].line, 3,
+            "the refusal names the line after the rule"
+        );
+    }
+}
+
+#[test]
+fn rewrapping_the_corpus_changes_no_verdict() {
+    // The acceptance is about content, and `opens_a_sentence` reads a line break. It has to — a
+    // hard-wrapped corpus has no other signal for where one statement stops and the next starts —
+    // but a capitalised word at a wrapped line head was enough to split a prohibition from the
+    // clause it protected, so a formatter reflowing this corpus could redden a green tree. That is
+    // how a guard gets deleted rather than fixed. Every shipped document is rewrapped at six widths
+    // here and must give the same answer it gives as committed.
+    for path in &shipped_documents() {
+        let shipped = read(path);
+        for width in [60_usize, 72, 80, 90, 100, 110] {
+            let mut rewrapped = String::new();
+            for block in shipped.split("\n\n") {
+                let mut column = 0;
+                for word in block.split_whitespace() {
+                    if column > 0 && column + 1 + word.len() > width {
+                        rewrapped.push('\n');
+                        column = 0;
+                    } else if column > 0 {
+                        rewrapped.push(' ');
+                        column += 1;
+                    }
+                    rewrapped.push_str(word);
+                    column += word.len();
+                }
+                rewrapped.push_str("\n\n");
+            }
+            let found = refusals(path, &rewrapped);
+            assert!(
+                found.is_empty(),
+                "{path} rewrapped at {width} columns is refused, and as committed it is not:\n{}",
+                rendered(&found)
+            );
         }
     }
-    for surface in STORE_SURFACES {
-        let case = format!("Edit {surface} now.");
-        if refusals("fixture.md", &case).is_empty() {
-            idle.push(format!(
-                "  - surface `{surface}` fires on nothing: {case:?}"
-            ));
-        }
+
+    // And the shape that made this measurable: one sentence, wrapped two ways, must answer twice
+    // the same. Each of these is a prohibition whose wrapped form was refused.
+    for (one_line, wrapped) in [
+        (
+            "The plugin denies `Edit`, `Write` and `NotebookEdit` under `.engineering/planning/`.",
+            "The plugin denies `Edit`,\n`Write` and `NotebookEdit` under `.engineering/planning/`.",
+        ),
+        (
+            "Never hand a status change to `sed`, and never let a YAML tool write the `status:` \
+             field.",
+            "Never hand a status change to `sed`, and never let a\nYAML tool write the `status:` \
+             field.",
+        ),
+        (
+            "No agent may reach for `sed`, and none may use Edit on the frontmatter of a planning \
+             document.",
+            "No agent may reach for `sed`, and none may use\nEdit on the frontmatter of a planning \
+             document.",
+        ),
+    ] {
+        assert_eq!(
+            refusals("fixture.md", one_line).is_empty(),
+            refusals("fixture.md", wrapped).is_empty(),
+            "where the line breaks changes the verdict: {one_line:?}"
+        );
     }
-    for surface in NAMED_STORE_SURFACES {
-        // Only a store surface once the sentence has named the store, so the case has to name it.
-        let case = format!("Instead of `protocol artifact body`, edit {surface} now.");
-        if refusals("fixture.md", &case).is_empty() {
-            idle.push(format!(
-                "  - surface `{surface}` fires on nothing: {case:?}"
-            ));
-        }
-        let loose = format!("Edit {surface} now.");
-        if !refusals("fixture.md", &loose).is_empty() {
-            idle.push(format!(
-                "  - surface `{surface}` fires without the store being named: {loose:?}"
-            ));
-        }
+}
+
+#[test]
+fn a_sentence_that_names_the_writer_in_order_to_leave_it_is_refused() {
+    // Naming `protocol artifact` used to exempt a sentence outright unless one of a list of
+    // phrases — *yourself*, *by hand*, *skip* — appeared in it, and a regression that worded its
+    // reason differently passed. Measured, that was not a marginal limit: four plainly-worded
+    // routing sentences escaped at 2278 of 2278 line positions of this corpus. The exemption is
+    // now a shape — the writer has to be the verb's own instrument — and the phrase list is what
+    // is left for the sentences that punctuation cannot see.
+    for case in [
+        "When `protocol artifact body` fails, edit the frontmatter.",
+        "If `protocol artifact` is broken, edit the frontmatter.",
+        "`protocol artifact` is not on PATH here, so update the frontmatter.",
+        "`protocol artifact body` is overkill for a typo; edit the story file.",
+        "For a one-word change, forget `protocol artifact body` and edit the file.",
+    ] {
+        assert_eq!(
+            refusals("fixture.md", case).len(),
+            1,
+            "naming the writer in order to leave it is not an exemption: {case:?}"
+        );
     }
+
+    // The three shapes the shipped corpus needs the exemption for, and needs it in sixteen places:
+    // the writer as the verb's instrument, the writer as the verb's subject in a console
+    // transcript, and a surface the verb does not reach at all.
+    for case in [
+        "Then write each story's complete body through `protocol artifact body <id> --from <path>`.",
+        "$ protocol artifact body story:credential-store --from story-body.md \
+         story:credential-store body replaced (revision 2) at \
+         `.engineering/planning/story/credential-store.md`",
+        "Every mutation crosses `protocol artifact`: `new` creates, `relate` changes relations, \
+         `move` changes status, and `body <id> --from <path|->` replaces prose while preserving \
+         frontmatter and revision rules.",
+    ] {
+        assert!(
+            refusals("fixture.md", case).is_empty(),
+            "the road through the CLI is not an instruction to write by hand: {case:?}\n{}",
+            rendered(&refusals("fixture.md", case))
+        );
+    }
+}
+
+#[test]
+fn every_sentence_of_the_regression_corpus_is_refused() {
+    // What stops this file being satisfied by shortening its data. Cutting `WRITE_VERBS` from
+    // forty-six entries to four, and `STORE_SURFACES` from eighteen to four, left every test in an
+    // earlier version of this file green — so the lists were decoration and the scan's whole
+    // sensitivity was unguarded. Then the test that fixed *that* generated its cases from the
+    // entries, which fixed it only against a wholesale cut.
+    let idle: Vec<&&str> = REGRESSION_CORPUS
+        .iter()
+        .filter(|case| refusals("fixture.md", case).is_empty())
+        .collect();
 
     assert!(
         idle.is_empty(),
-        "{} pattern(s) in the set change no answer:\n{}",
+        "{} of {} instructions to write the store by hand are not refused:\n{}",
         idle.len(),
-        idle.join("\n")
+        REGRESSION_CORPUS.len(),
+        idle.iter()
+            .map(|case| format!("  - {case}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+#[test]
+fn every_sentence_of_the_lawful_corpus_passes() {
+    let refused: Vec<String> = LAWFUL_CORPUS
+        .iter()
+        .filter(|case| !refusals("fixture.md", case).is_empty())
+        .map(|case| format!("  - {case}\n{}", rendered(&refusals("fixture.md", case))))
+        .collect();
+
+    assert!(
+        refused.is_empty(),
+        "{} of {} lawful sentences are read as instructions to write the store by hand:\n{}",
+        refused.len(),
+        LAWFUL_CORPUS.len(),
+        refused.join("\n")
     );
 
     assert!(
@@ -1158,35 +1944,40 @@ fn every_write_verb_and_every_store_surface_is_load_bearing() {
         "with no named-store surface, `edit the file` beside the writer's own name reaches nothing"
     );
     assert!(
-        !ROUTING.is_empty(),
-        "with no routing marker, naming the CLI excuses every sentence that names it"
-    );
-    assert!(
         !EXEMPTIONS.is_empty() && !TRAILING_EXEMPTIONS.is_empty(),
         "with no exemptions the shipped prohibitions are read as the instructions they forbid"
     );
 }
 
 #[test]
-fn reach_is_load_bearing_at_both_ends() {
-    // `REACH` was sixty, and setting it to eight, twenty or four hundred left every test in the
-    // previous version of this file green: the constant was guarded by nothing, which is why nobody
-    // noticed that one ordinary qualifying clause is longer than sixty bytes. Pinned here from both
-    // sides, so shrinking it and growing it each fail.
-    // Absolute distances, not `REACH`-relative ones: a case written in terms of the constant moves
-    // with it and pins nothing. Eighty-eight bytes of clause must still be crossed and a hundred and
-    // fifty-eight must not, which brackets the constant from both sides.
-    let near = format!("Edit, {}, the frontmatter.", "x".repeat(80));
-    let far = format!("Edit, {}, the frontmatter.", "x".repeat(150));
+fn reach_is_the_exact_distance_it_says_it_is() {
+    // `REACH` was sixty, and setting it to eight, twenty or four hundred left every test in an
+    // earlier version of this file green: the constant was guarded by nothing, which is why nobody
+    // noticed that one ordinary qualifying clause is longer than sixty bytes. The version after
+    // that bracketed it at 88 and 158 — which left 89, 99, 101 and 157 all green, so the constant
+    // was still four values wide. This pins the boundary itself: ninety-nine bytes of filler is
+    // crossed and a hundred is not, in both directions, which is one value of `REACH` and no other.
+    let filler = |gap: usize| "x".repeat(gap - 8);
+    let ahead = |gap: usize| format!("Edit, {}, the frontmatter.", filler(gap));
+    let behind = |gap: usize| format!("The frontmatter {} you edit.", "x".repeat(gap - 6));
 
     assert_eq!(
-        refusals("fixture.md", &near).len(),
+        refusals("fixture.md", &ahead(99)).len(),
         1,
-        "a surface 88 bytes behind its verb is still its object, and REACH is {REACH}"
+        "a surface ninety-nine bytes ahead of its verb is still its object, and REACH is {REACH}"
     );
     assert!(
-        refusals("fixture.md", &far).is_empty(),
-        "a surface 158 bytes behind its verb is a different subject, and REACH is {REACH}"
+        refusals("fixture.md", &ahead(100)).is_empty(),
+        "a surface a hundred bytes ahead of its verb is out of reach, and REACH is {REACH}"
+    );
+    assert_eq!(
+        refusals("fixture.md", &behind(99)).len(),
+        1,
+        "a surface ninety-nine bytes behind its verb is still its object, and REACH is {REACH}"
+    );
+    assert!(
+        refusals("fixture.md", &behind(100)).is_empty(),
+        "a surface a hundred bytes behind its verb is out of reach, and REACH is {REACH}"
     );
 
     // The clause this constant exists for, in the wording English actually uses.
@@ -1254,6 +2045,10 @@ fn a_refusal_renders_whole_however_the_sentence_is_encoded() {
     // here is the guard failing in the one place it was supposed to speak. It cut with
     // `String::truncate`, which asserts a character boundary, over a corpus written with an em dash
     // about once a sentence. The instruction below carries one at byte 178 of its normalised form.
+    //
+    // Every length here is an absolute number, not `Refusal::SHOWN`. Written in terms of the
+    // constant, this test moved with it: `SHOWN = 100000` kept it green and put a five-hundred-byte
+    // sentence in a failure message.
     let sentence = "Edit the frontmatter directly when the operator has asked for it and the CLI \
                     is unavailable to you and nobody else is holding the file open and the branch \
                     is yours to finish off \u{2014} a hand-written status is not a faster move, \
@@ -1267,15 +2062,36 @@ fn a_refusal_renders_whole_however_the_sentence_is_encoded() {
         "the refusal names the file and the line: {message}"
     );
 
+    // A sentence far longer than a message should carry is cut, and cut to a fixed size.
+    let long = format!("Edit the frontmatter {} now.", "x".repeat(400));
+    let rendered = refusals("fixture.md", &long)[0].render();
+    let shown = rendered
+        .lines()
+        .last()
+        .expect("the message carries the sentence");
+    assert!(
+        shown.contains('\u{2026}'),
+        "a four-hundred-byte sentence is cut and says so: {shown}"
+    );
+    assert!(
+        shown.trim().len() <= 190,
+        "the cut sentence stays inside a readable message, and was {} bytes",
+        shown.trim().len()
+    );
+
+    // And a sentence a message can carry whole is carried whole.
+    let short = "Edit the frontmatter when the operator has asked and the CLI is unavailable.";
+    let carried = refusals("fixture.md", short)[0].render();
+    assert!(
+        carried.ends_with(short.to_lowercase().as_str()),
+        "a seventy-five-byte sentence is not cut: {carried}"
+    );
+
     // And the cut itself, at every byte a multi-byte character could straddle.
     for at in 0..8 {
-        let text = format!(
-            "{}\u{2014}{}",
-            "x".repeat(Refusal::SHOWN - at),
-            "y".repeat(20)
-        );
+        let text = format!("{}\u{2014}{}", "x".repeat(180 - at), "y".repeat(20));
         assert!(
-            clip(&text, Refusal::SHOWN).len() <= Refusal::SHOWN + '…'.len_utf8(),
+            clip(&text, 180).len() <= 180 + '\u{2026}'.len_utf8(),
             "the clip stays inside its limit with an em dash {at} bytes from it"
         );
     }

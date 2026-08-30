@@ -529,12 +529,22 @@ surfaces.
   patch bodies directly and nothing in the repository read a skill's text.
   *Enforced by* a source scan over shipped prose,
   `crates/protocol-cli/tests/plugin_surface_store_writes.rs`, which reads every `*.md` under
-  `integrations/` sentence by sentence and refuses a write verb that reaches a store surface —
-  frontmatter, `status:`, a body, a path under `.engineering/planning/`. Naming the CLI is not an
-  exemption when the sentence routes around it, a prohibition exempts its own clause and not the
-  sentence, and all seventeen documents are pinned by name in both directions, so a walk that
-  stopped finding the agent charters fails instead of passing over a third of the corpus. Not
-  scanned, and a known gap: `plugin.json`'s `longDescription` and `defaultPrompt`, and the prose in
+  `integrations/` sentence by sentence and refuses a write verb within a hundred bytes of a store
+  surface — frontmatter, `status:`, a body, a path under `.engineering/planning/` — on either side
+  of the verb, so *the frontmatter is yours to edit* is read as well as *edit the frontmatter*. A
+  prohibition exempts its own clause and not the sentence, and the comma is a clause boundary:
+  *do not ask the operator, edit the frontmatter* is refused. Naming the CLI exempts a verb only
+  when the writer is that verb's **own instrument** — named beside it, with no punctuation and no
+  clause word in between, as in *written through `protocol artifact body`*. A sentence that names
+  the CLI in another clause is naming it in order to leave it and is refused; fifteen of fifteen
+  plainly-worded routing sentences are, where two of fifteen were before 2026-08-30. All seventeen
+  documents are pinned by name in both directions, so a walk that stopped finding the agent
+  charters fails instead of passing over a third of the corpus.
+  **Three limits, measured rather than assumed.** `ROUTING` is still a phrase list, and it is what
+  catches the sentence that keeps the CLI beside the verb and says go round it anyway (*edit the
+  frontmatter yourself with `protocol artifact body` in mind*) — a wording it does not know passes.
+  Paraphrase that names no listed surface passes. And not scanned at all: `plugin.json`'s
+  `longDescription` and `defaultPrompt`, and the prose in
   `integrations/codex/eval/check-instruction-surface.sh`.
 * **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
   grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
