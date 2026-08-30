@@ -332,17 +332,32 @@ The order is not interchangeable:
    Anything a reader would want goes into the closing commit, the wave page or a story *before* the
    tree goes. A worktree removed with its records unread takes the whole account of what happened
    with it.
-2. **`git worktree remove <path>`, one per unit.** It takes the checkout and leaves the branch,
-   which is the point: the evidence cites `impl/*` by name, so those branches stay and are not
-   deleted.
+2. **`git worktree remove <path>`, one per unit.** It takes the checkout and leaves the branch.
 3. **Remove each unit's build directory by name**, from the list you wrote when you made it. This
    is the step that gets missed, because it is the one `git` knows nothing about: a build directory
    outside the worktree survives `worktree remove` untouched. One wave here left a **16 GB** build
    directory standing on a disk already at 93%, every worktree it belonged to long since removed,
    and nothing found it until somebody went looking for free space.
-4. **`git worktree prune`, then `git worktree list` — and read the list.** Report what the list
-   says, not that you ran the removal. A removal you did not confirm is the same class of claim as
-   a process you did not watch die.
+4. **Delete every unit branch that is merged**, which after a green close is all of them:
+
+   ```console
+   $ for b in $(git branch --list 'wt/*' --format='%(refname:short)'); do
+   >   git merge-base --is-ancestor "$b" main && git branch -d "$b" || echo "NOT MERGED: $b"
+   > done
+   ```
+
+   `git branch -d` refuses a branch that is not merged, which is the safety here — do not reach for
+   `-D`. A merged branch holds no commit the base does not, so deleting it loses nothing, and the
+   evidence in the store cites **commits**, which survive the branch by being on `main`. Leaving
+   them is how a repository accumulates a `wt/*` list nobody can read: after two waves this one had
+   ten, every one merged, and no way to tell at a glance which wave any of them came from.
+
+   A branch that is **not** merged is a unit that left the wave or a tree whose work never landed.
+   Keep it, and name it in the closing report.
+
+5. **`git worktree prune`, then `git worktree list` and `git branch --list 'wt/*'` — and read both.**
+   Report what they say, not that you ran the removal. A removal you did not confirm is the same
+   class of claim as a process you did not watch die.
 
 **Never force a removal.** `git worktree remove` refuses a tree with uncommitted changes, and
 `--force` answers that by discarding them — an agent's unpushed work, or a run's only record. A

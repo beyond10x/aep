@@ -73,13 +73,22 @@ shipped.
 |---|---|---|
 | the selection and its reasoning | the opening `chore(store)` commit | yes |
 | the plan | a page under `docs/plan/` | yes |
-| the units | `impl/*` branches | yes, and they are not deleted — the evidence cites them |
+| the units | `impl/*` branches | **no** — deleted with `git branch -d` once merged; the evidence cites commits, which live on the base |
 | the gate's verdict | the closing commit, and the store's evidence record | yes |
 | **a driven run's records** | the run directory, which is **gitignored** | **no** |
-| the worktrees | one per unit | **no** — the coordinator removes them at the end, and the branches stay |
+| the worktrees | one per unit | **no** — the coordinator removes them at the end |
 | the build directories | one per worktree, usually outside it | **no, and `git` will not find them for you** — tens of GB per wave |
 
-The last two rows are the ones that get skipped: `git worktree list` in the next wave's pre-flight
+A merged unit branch holds no commit the base does not, so deleting it loses nothing that the
+evidence points at — an evidence record naming a commit resolves after the branch is gone, because
+the commit is reachable from the base. Use `git branch -d`, never `-D`: `-d` refuses an unmerged
+branch, and an unmerged branch means a unit that left the wave or work that never landed. Keep that
+one and name it in the closing report.
+
+Leaving merged branches is how a repository grows a `wt/*` list nobody can read — two waves put ten
+on one repository here, every one merged, none of them telling you which wave it came from.
+
+The worktree and build-directory rows are the ones that get skipped: `git worktree list` in the next wave's pre-flight
 refuses rather than cleans, so a wave that leaves its trees standing pays nothing and the wave after
 it pays everything. A build directory outside the worktree survives `git worktree remove` untouched
 — one wave here left a 16 GB build directory standing with every tree it belonged to long since
