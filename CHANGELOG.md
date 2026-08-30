@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-08-31
+
 ### Added
 
 * **`protocol serve` puts the plan in a browser, and moves it from there.** A board is a shape and

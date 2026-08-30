@@ -7,7 +7,7 @@ description: What is implemented, per component, with the numbers the repository
 # Where this stands
 
 {/* generated:currency:begin — do not edit; run `cargo xtask status` */}
-Current as of the tag `0.33.0` (2026-08-30).
+Current as of the tag `0.34.0` (2026-08-31).
 
 The repository's gate, `task check`, runs **22 steps** — `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `plugin-check`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`, `lab-check`, `msrv` and `website`.
 {/* generated:currency:end */}
