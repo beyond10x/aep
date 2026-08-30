@@ -41,13 +41,13 @@
 //! [`RunStatus::StoreBroken`] — never `Blocked`, which is the engine's word for *the protocol says
 //! no*, and a store with a typo in it is not that (F7).
 //!
-//! # Two documents, two owners
+//! # Two documents, two owners, one committed generation
 //!
-//! `snapshot.json` is the engine's and `cursor.json` is the driver's, written side by side after
-//! every step. A driver that stored its cursor inside the engine's snapshot would be a driver that
-//! had quietly forked the snapshot format. Each is written to a fixed temporary name and renamed
-//! over its target, so a crash mid-write leaves the previous document intact; a fixed name is safe
-//! because the store lock (D6) guarantees one writer.
+//! `snapshot.json` is the engine's and `cursor.json` is the driver's. They remain separate owned
+//! documents, but each persist writes both into an immutable, digest-sealed generation and then
+//! atomically replaces `state.json`, the only authoritative pointer. A crash before the pointer
+//! moves leaves the previous pair current. Top-level copies remain for older tooling and are never
+//! read while the pointer exists.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -64,7 +64,7 @@ use aep_domain::evidence::{ApprovalDecision, Evidence};
 use aep_domain::ids::{StateId, TaskId};
 use aep_domain::task::Task;
 use aep_driver_spec::cursor::{
-    DriverCursor, OperatorAnswer, OwedAnswer, RunId, RunStatus, StolenLock,
+    DriverCursor, InFlightAttempt, OperatorAnswer, OwedAnswer, RunId, RunStatus, StolenLock,
 };
 use aep_driver_spec::map::{Step, StepMap};
 use aep_engine::evaluate::{Evaluation, Requirement};
@@ -74,6 +74,7 @@ use aep_engine::resolve::resolve;
 use aep_engine::{
     Clock, CompletionExplanation, Engine, ProtocolEngine, ProtocolError, Snapshot, TransitionResult,
 };
+use sha2::{Digest, Sha256};
 
 use crate::attest::{self, Admission};
 use crate::executor::{StepAttempt, StepContext, StepExecutors, StepOutcome};
@@ -95,6 +96,21 @@ const SNAPSHOT_FILE: &str = "snapshot.json";
 
 /// What the driver's cursor is written to, inside the run directory.
 const CURSOR_FILE: &str = "cursor.json";
+
+/// The atomic pointer to the one snapshot/cursor generation readers may observe.
+const CURRENT_GENERATION_FILE: &str = "state.json";
+
+/// Immutable state generations live below this directory.
+const GENERATIONS_DIRECTORY: &str = "generations";
+
+/// How an operator resolves an attempt whose dispatch outlived its durable outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InFlightResolution {
+    /// Dispatch the exact persisted attempt again.
+    Retry(String),
+    /// Record that the persisted attempt has no verdict, then continue under its retry policy.
+    RecordNoVerdict,
+}
 
 /// The two ways out of a refused resume, named in the refusal.
 const ROUTES_OUT: &str = "the routes out are `--restart`, which allocates a new run id and \
@@ -153,6 +169,8 @@ pub struct DriverOptions {
     /// on an earlier call: a theft already in the cursor is never cleared by a later clean
     /// acquisition, or the record would be erasable by resuming the run once more on a free lock.
     pub stolen_lock: Option<StolenLock>,
+    /// Explicit resolution for the attempt a crashed invocation left in flight.
+    pub in_flight_resolution: Option<InFlightResolution>,
 }
 
 impl Default for DriverOptions {
@@ -164,6 +182,7 @@ impl Default for DriverOptions {
             approver: None,
             task_document: None,
             stolen_lock: None,
+            in_flight_resolution: None,
         }
     }
 }
@@ -207,7 +226,7 @@ pub enum DriveError {
     Validation(#[from] ValidationErrors),
 }
 
-/// One run's directory: a path, plus the two records that live in it.
+/// One run's directory: a path, plus the committed generations that live in it.
 ///
 /// Never allocated here — `protocol-cli` allocates it after taking the store lock, and never
 /// deletes or reuses one. `--restart` allocates a new run id, because a run directory that could be
@@ -215,6 +234,25 @@ pub enum DriveError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunDirectory {
     path: PathBuf,
+}
+
+/// One immutable pair, sealed by the digests in this manifest.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GenerationManifest {
+    format: String,
+    generation: u64,
+    snapshot_sha256: String,
+    cursor_sha256: String,
+}
+
+/// The only mutable publication point for a run's state.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GenerationPointer {
+    format: String,
+    generation: u64,
+    manifest_sha256: String,
 }
 
 impl RunDirectory {
@@ -240,20 +278,52 @@ impl RunDirectory {
 
     /// `true` when a run has already been persisted here.
     pub fn has_cursor(&self) -> bool {
-        self.cursor_path().exists()
+        self.current_generation_path().exists()
+            || self.cursor_path().exists()
+            || self.snapshot_path().exists()
     }
 
     /// Reads the driver's cursor.
     pub fn read_cursor(&self) -> Result<DriverCursor, DriveError> {
-        read_json(&self.cursor_path())
+        self.read_pair().map(|(cursor, _)| cursor)
     }
 
     /// Reads the engine's snapshot.
     pub fn read_snapshot(&self) -> Result<Snapshot, DriveError> {
-        read_json(&self.snapshot_path())
+        self.read_pair().map(|(_, snapshot)| snapshot)
     }
 
-    /// Writes both records, creating the directory if it is not there.
+    /// Where the atomic state-generation pointer lives.
+    pub fn current_generation_path(&self) -> PathBuf {
+        self.path.join(CURRENT_GENERATION_FILE)
+    }
+
+    /// Reads one authenticated snapshot/cursor pair, migrating a complete legacy pair first.
+    pub fn read_pair(&self) -> Result<(DriverCursor, Snapshot), DriveError> {
+        if self.current_generation_path().exists() {
+            return self.read_generation();
+        }
+        let cursor_exists = self.cursor_path().exists();
+        let snapshot_exists = self.snapshot_path().exists();
+        if cursor_exists != snapshot_exists {
+            return Err(DriveError::Refused(format!(
+                "run state in {} is incomplete: legacy snapshot and cursor must either both exist or both be absent",
+                self.path.display()
+            )));
+        }
+        if !cursor_exists {
+            return Err(DriveError::Refused(format!(
+                "run state in {} has no committed generation",
+                self.path.display()
+            )));
+        }
+        let cursor = read_json(&self.cursor_path())?;
+        let snapshot = read_json(&self.snapshot_path())?;
+        self.persist(&snapshot, &cursor)?;
+        Ok((cursor, snapshot))
+    }
+
+    /// Writes and seals both records, then atomically publishes their generation.
     ///
     /// Pretty-printed, because the first thing anybody does with a stopped run is read its cursor.
     pub fn persist(&self, snapshot: &Snapshot, cursor: &DriverCursor) -> Result<(), DriveError> {
@@ -261,8 +331,119 @@ impl RunDirectory {
             path: self.path.clone(),
             source,
         })?;
-        write_json(&self.snapshot_path(), snapshot)?;
-        write_json(&self.cursor_path(), cursor)
+        let snapshot_bytes = json_bytes(&self.snapshot_path(), snapshot)?;
+        let cursor_bytes = json_bytes(&self.cursor_path(), cursor)?;
+        let generation = self.next_generation()?;
+        let generations = self.path.join(GENERATIONS_DIRECTORY);
+        fs::create_dir_all(&generations).map_err(|source| DriveError::Io {
+            path: generations.clone(),
+            source,
+        })?;
+        let writing = generations.join(format!(".{generation}.writing"));
+        if writing.exists() {
+            fs::remove_dir_all(&writing).map_err(|source| DriveError::Io {
+                path: writing.clone(),
+                source,
+            })?;
+        }
+        fs::create_dir(&writing).map_err(|source| DriveError::Io {
+            path: writing.clone(),
+            source,
+        })?;
+        write_bytes(&writing.join(SNAPSHOT_FILE), &snapshot_bytes)?;
+        write_bytes(&writing.join(CURSOR_FILE), &cursor_bytes)?;
+        let manifest = GenerationManifest {
+            format: "aep.driver-state-generation/1".to_owned(),
+            generation,
+            snapshot_sha256: sha256(&snapshot_bytes),
+            cursor_sha256: sha256(&cursor_bytes),
+        };
+        let manifest_path = writing.join("manifest.json");
+        let manifest_bytes = json_bytes(&manifest_path, &manifest)?;
+        write_bytes(&manifest_path, &manifest_bytes)?;
+        let committed = generations.join(generation.to_string());
+        fs::rename(&writing, &committed).map_err(|source| DriveError::Io {
+            path: committed,
+            source,
+        })?;
+        let pointer = GenerationPointer {
+            format: "aep.driver-state-current/1".to_owned(),
+            generation,
+            manifest_sha256: sha256(&manifest_bytes),
+        };
+        write_json(&self.current_generation_path(), &pointer)?;
+
+        // Compatibility projections for older readers. They are never read when the pointer
+        // exists, so a crash between these writes cannot expose a mixed authoritative pair.
+        write_bytes(&self.snapshot_path(), &snapshot_bytes)?;
+        write_bytes(&self.cursor_path(), &cursor_bytes)
+    }
+
+    /// Reads and verifies the generation selected by the atomic pointer.
+    fn read_generation(&self) -> Result<(DriverCursor, Snapshot), DriveError> {
+        let pointer_path = self.current_generation_path();
+        let pointer: GenerationPointer = read_json(&pointer_path)?;
+        if pointer.format != "aep.driver-state-current/1" {
+            return Err(DriveError::Malformed {
+                path: pointer_path,
+                detail: format!("unknown run-state pointer format `{}`", pointer.format),
+            });
+        }
+        let directory = self
+            .path
+            .join(GENERATIONS_DIRECTORY)
+            .join(pointer.generation.to_string());
+        let manifest_path = directory.join("manifest.json");
+        let manifest_bytes = read_bytes(&manifest_path)?;
+        if sha256(&manifest_bytes) != pointer.manifest_sha256 {
+            return Err(DriveError::Refused(format!(
+                "run state generation {} has a manifest digest mismatch",
+                pointer.generation
+            )));
+        }
+        let manifest: GenerationManifest = parse_json(&manifest_path, &manifest_bytes)?;
+        if manifest.format != "aep.driver-state-generation/1"
+            || manifest.generation != pointer.generation
+        {
+            return Err(DriveError::Refused(format!(
+                "run state generation {} does not identify itself",
+                pointer.generation
+            )));
+        }
+        let snapshot_path = directory.join(SNAPSHOT_FILE);
+        let cursor_path = directory.join(CURSOR_FILE);
+        let snapshot_bytes = read_bytes(&snapshot_path)?;
+        let cursor_bytes = read_bytes(&cursor_path)?;
+        if sha256(&snapshot_bytes) != manifest.snapshot_sha256
+            || sha256(&cursor_bytes) != manifest.cursor_sha256
+        {
+            return Err(DriveError::Refused(format!(
+                "run state generation {} does not match its snapshot/cursor digests",
+                pointer.generation
+            )));
+        }
+        Ok((
+            parse_json(&cursor_path, &cursor_bytes)?,
+            parse_json(&snapshot_path, &snapshot_bytes)?,
+        ))
+    }
+
+    /// The next generation after every committed or abandoned numeric directory.
+    fn next_generation(&self) -> Result<u64, DriveError> {
+        let generations = self.path.join(GENERATIONS_DIRECTORY);
+        if !generations.exists() {
+            return Ok(1);
+        }
+        let entries = fs::read_dir(&generations).map_err(|source| DriveError::Io {
+            path: generations.clone(),
+            source,
+        })?;
+        let maximum = entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| entry.file_name().to_str()?.parse::<u64>().ok())
+            .max()
+            .unwrap_or(0);
+        Ok(maximum + 1)
     }
 
     /// Which run this directory is, read off its own path.
@@ -392,7 +573,8 @@ where
     X: StepExecutors,
 {
     let (cursor, snapshot) = if run.has_cursor() {
-        (Some(run.read_cursor()?), Some(run.read_snapshot()?))
+        let (cursor, snapshot) = run.read_pair()?;
+        (Some(cursor), Some(snapshot))
     } else {
         (None, None)
     };
@@ -429,8 +611,7 @@ where
     S: PlanSource + ?Sized,
     X: StepExecutors,
 {
-    let cursor = run.read_cursor()?;
-    let snapshot = run.read_snapshot()?;
+    let (cursor, snapshot) = run.read_pair()?;
     let plan = resolve(task, engine.registry())?;
     let workflow = format!("{}/{}", plan.workflow.id, plan.workflow.version);
     if let Some(refusal) = cursor.resume_refusal(&workflow, &map.id, &map.digest(), ENGINE_VERSION)
@@ -473,37 +654,7 @@ struct Progress {
 struct Tally {
     progress: Progress,
     streak: Streak,
-    breaker: Breaker,
-}
-
-/// How many times each outside dependency has failed in this run, and which have been given up on.
-///
-/// Gap register `:78`. The retry budget and this are the two halves of the same question asked at
-/// different scopes, and conflating them is the mistake the tier exists to avoid. Retry bounds
-/// **this step keeps crashing** and resets when the run moves on. A breaker bounds **this dependency
-/// keeps failing** and does *not* reset, across every step that names it — because the third call to
-/// an API that has been down for ten minutes is not new information, it is ten more seconds of
-/// timeout and one more indistinguishable line in the log.
-///
-/// Counted per dependency name rather than per step: two steps that call the same service share its
-/// fate, and that sharing is the entire difference between a breaker and a retry budget.
-#[derive(Debug, Default)]
-struct Breaker {
-    failures: std::collections::BTreeMap<String, u32>,
-}
-
-impl Breaker {
-    /// Records one failure of a dependency, returning the total so far in this run.
-    fn record(&mut self, dependency: &str) -> u32 {
-        let count = self.failures.entry(dependency.to_owned()).or_default();
-        *count += 1;
-        *count
-    }
-
-    /// Whether this dependency has failed enough times that the run should stop attempting it.
-    fn is_open(&self, dependency: &str, threshold: u32) -> bool {
-        self.failures.get(dependency).copied().unwrap_or(0) >= threshold
-    }
+    retry_in_flight: Option<InFlightAttempt>,
 }
 
 /// Consecutive attempts at one step that produced no verdict.
@@ -605,6 +756,9 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             let mut cursor = self.cursor_for(carried.take(), &run_id, &execution);
             self.check_agreement(&cursor, &execution)?;
             if !checked {
+                self.resolve_in_flight(&mut cursor, &execution, &mut tally)?;
+            }
+            if !checked {
                 self.check_map(&execution)?;
                 checked = true;
             }
@@ -680,6 +834,44 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             self.directory.persist(&taken, &cursor)?;
             snapshot = Some(taken);
             carried = Some(cursor);
+        }
+    }
+
+    /// Refuses a silent replay, or applies the operator's explicit resolution once per invocation.
+    fn resolve_in_flight(
+        &self,
+        cursor: &mut DriverCursor,
+        execution: &Execution,
+        tally: &mut Tally,
+    ) -> Result<(), DriveError> {
+        let Some(in_flight) = cursor.in_flight.clone() else {
+            return Ok(());
+        };
+        match &self.options.in_flight_resolution {
+            Some(InFlightResolution::Retry(named)) if named == &in_flight.id => {
+                tally.progress.notes.push(format!(
+                    "operator authorised retry of unresolved attempt `{}`",
+                    in_flight.id
+                ));
+                tally.retry_in_flight = Some(in_flight);
+                Ok(())
+            }
+            Some(InFlightResolution::Retry(named)) => Err(DriveError::Refused(format!(
+                "`--retry-in-flight` named `{named}`, but this run's unresolved attempt is `{}`",
+                in_flight.id
+            ))),
+            Some(InFlightResolution::RecordNoVerdict) => {
+                tally.progress.notes.push(format!(
+                    "unresolved attempt `{}` was explicitly recorded with no verdict",
+                    in_flight.id
+                ));
+                cursor.in_flight = None;
+                self.directory.persist(&execution.snapshot(), cursor)
+            }
+            None => Err(DriveError::Refused(format!(
+                "attempt `{}` at step {} of `{}` may have run, but no outcome was committed; retry it with `--retry-in-flight {}` or record the uncertainty with `--record-in-flight-no-verdict`",
+                in_flight.id, in_flight.step, in_flight.state, in_flight.id
+            ))),
         }
     }
 
@@ -773,7 +965,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             if let (Some(dependency), Some(threshold)) =
                 (command.depends_on.as_deref(), command.circuit_breaker)
             {
-                if tally.breaker.is_open(dependency, threshold) {
+                if cursor.circuit_is_open(dependency, threshold) {
                     tally.progress.notes.push(format!(
                         "step {index} of `{state}` ({label}) was not attempted: `{dependency}` has \
                          failed {threshold} time(s) in this run and its circuit is open. Nothing \
@@ -786,8 +978,9 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
         }
 
-        let attempt = cursor.record_attempt(&state, index);
+        let attempt = self.begin_attempt(execution, cursor, &state, index, tally)?;
         let outcome = self.execute(executors, execution, &state, index, evaluation, cursor);
+        cursor.in_flight = None;
         tally.progress.steps_run += 1;
 
         match outcome {
@@ -813,7 +1006,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 // count is what the next step naming it reads.
                 if let Step::Command(command) = &self.map.steps_for(&state)[index] {
                     if let Some(dependency) = command.depends_on.as_deref() {
-                        let failures = tally.breaker.record(dependency);
+                        let failures = cursor.record_circuit_failure(dependency);
                         if command
                             .circuit_breaker
                             .is_some_and(|threshold| failures >= threshold)
@@ -850,6 +1043,31 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
         }
         Ok(None)
+    }
+
+    /// Publishes the attempt marker before dispatch, reusing an explicitly authorised id exactly.
+    fn begin_attempt(
+        &self,
+        execution: &Execution,
+        cursor: &mut DriverCursor,
+        state: &StateId,
+        index: usize,
+        tally: &mut Tally,
+    ) -> Result<u32, DriveError> {
+        let attempt = match tally.retry_in_flight.take() {
+            Some(in_flight) if in_flight.state == *state && in_flight.step == index => {
+                in_flight.attempt
+            }
+            Some(in_flight) => {
+                return Err(DriveError::Refused(format!(
+                    "unresolved attempt `{}` points at step {} of `{}`, but the cursor routes to step {index} of `{state}`",
+                    in_flight.id, in_flight.step, in_flight.state
+                )))
+            }
+            None => cursor.begin_attempt(state, index).attempt,
+        };
+        self.directory.persist(&execution.snapshot(), cursor)?;
+        Ok(attempt)
     }
 
     /// Stops the run at an `operator` step, remembering what is owed.
@@ -1012,8 +1230,8 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
 
     /// Refuses when the cursor and the snapshot disagree about where the run is.
     ///
-    /// Two documents with two owners, so they can be edited apart. Which one is right is not
-    /// guessable, and carrying on would run one state's steps against another state's evidence.
+    /// Two documents with two owners still carry the same location. Even an internally consistent
+    /// generation is refused when their semantic positions disagree.
     /// Reads what arrived while the run was stopped at an `operator` step, and settles it.
     ///
     /// Three outcomes, and the asymmetry between the last two is the point:
@@ -1241,6 +1459,8 @@ fn fresh_cursor(
         step: 0,
         visits: BTreeMap::new(),
         attempts: BTreeMap::new(),
+        in_flight: None,
+        circuit_failures: BTreeMap::new(),
         iterations: 0,
         status: RunStatus::Running,
         reasons: Vec::new(),
@@ -1256,24 +1476,45 @@ fn fresh_cursor(
 
 /// Reads one JSON record.
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, DriveError> {
-    let text = fs::read_to_string(path).map_err(|source| DriveError::Io {
+    let bytes = read_bytes(path)?;
+    parse_json(path, &bytes)
+}
+
+/// Reads bytes while preserving the path in an IO refusal.
+fn read_bytes(path: &Path) -> Result<Vec<u8>, DriveError> {
+    fs::read(path).map_err(|source| DriveError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    serde_json::from_str(&text).map_err(|source| DriveError::Malformed {
+    })
+}
+
+/// Parses JSON bytes while preserving the path in a malformed-record refusal.
+fn parse_json<T: serde::de::DeserializeOwned>(path: &Path, bytes: &[u8]) -> Result<T, DriveError> {
+    serde_json::from_slice(bytes).map_err(|source| DriveError::Malformed {
         path: path.to_path_buf(),
         detail: source.to_string(),
     })
 }
 
-/// Writes one JSON record, through a fixed temporary name.
-fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), DriveError> {
-    let text = serde_json::to_string_pretty(value).map_err(|source| DriveError::Malformed {
+/// Serializes one pretty-printed JSON record to its canonical persisted bytes.
+fn json_bytes<T: serde::Serialize>(path: &Path, value: &T) -> Result<Vec<u8>, DriveError> {
+    let mut bytes = serde_json::to_vec_pretty(value).map_err(|source| DriveError::Malformed {
         path: path.to_path_buf(),
         detail: source.to_string(),
     })?;
-    let writing = path.with_extension("json.writing");
-    fs::write(&writing, format!("{text}\n")).map_err(|source| DriveError::Io {
+    bytes.push(b'\n');
+    Ok(bytes)
+}
+
+/// SHA-256 as lowercase hexadecimal text.
+fn sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Writes exact bytes through a fixed temporary name.
+fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), DriveError> {
+    let writing = path.with_extension("writing");
+    fs::write(&writing, bytes).map_err(|source| DriveError::Io {
         path: writing.clone(),
         source,
     })?;
@@ -1281,4 +1522,9 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), DriveEr
         path: path.to_path_buf(),
         source,
     })
+}
+
+/// Writes one JSON record, through a fixed temporary name.
+fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), DriveError> {
+    write_bytes(path, &json_bytes(path, value)?)
 }

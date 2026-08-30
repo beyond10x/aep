@@ -33,7 +33,7 @@ use aep_driver::executor::{
     CommandStepExecutor, LlmStepExecutor, OperatorStepExecutor, StepAuthorizer, StepContext,
     StepOutcome,
 };
-use aep_driver::run::{drive, resume, DriveError, DriverOptions, RunDirectory};
+use aep_driver::run::{drive, resume, DriveError, DriverOptions, InFlightResolution, RunDirectory};
 use aep_driver_spec::cursor::RunStatus;
 use aep_driver_spec::map::{CommandStep, LlmStep, OperatorStep, StepMap};
 use aep_engine::clock::SteppingClock;
@@ -560,6 +560,172 @@ fn a_command_step_that_produced_no_verdict_submits_nothing_and_changes_nothing()
         before,
         "D5's other half: a step that observed nothing leaves the evaluation exactly as it was"
     );
+}
+
+#[test]
+fn a_generation_pointer_never_exposes_a_mixed_or_tampered_pair() {
+    let root = scratch("committed-generation");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut fake = Fake::new(&[Act::Done]);
+    drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions {
+            max_iterations: 1,
+            ..DriverOptions::default()
+        },
+    )
+    .expect("one committed generation");
+
+    let (cursor, snapshot) = run.read_pair().expect("the pointer authenticates its pair");
+    std::fs::write(run.cursor_path(), "{\"state\":\"forged\"}\n")
+        .expect("the compatibility projection is writable in the adversary");
+    assert_eq!(
+        run.read_pair()
+            .expect("the pointer ignores a torn projection")
+            .0,
+        cursor,
+        "the independently written compatibility files are not authoritative"
+    );
+
+    let pointer: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(run.current_generation_path()).expect("the pointer exists"),
+    )
+    .expect("the pointer is JSON");
+    let generation = pointer["generation"].as_u64().expect("a generation number");
+    let snapshot_path = run
+        .path()
+        .join("generations")
+        .join(generation.to_string())
+        .join("snapshot.json");
+    let mut bytes = std::fs::read(&snapshot_path).expect("the committed snapshot");
+    bytes.push(b' ');
+    std::fs::write(&snapshot_path, bytes).expect("the adversary tampers the committed bytes");
+    let refusal = run.read_pair().expect_err("a digest mismatch is refused");
+    assert!(refusal.to_string().contains("digest"), "{refusal}");
+
+    // Keep the values live: both records were read through the same pointer before the mutation.
+    assert_eq!(cursor.execution, snapshot.execution);
+}
+
+#[test]
+fn a_complete_legacy_pair_migrates_and_a_partial_pair_is_refused() {
+    let source_root = scratch("legacy-source");
+    let engine = engine();
+    let store = MarkdownStore::open(source_root.join("planning"));
+    let map = map(MAP);
+    let source = run_directory(&source_root);
+    let mut fake = Fake::new(&[Act::Done]);
+    drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &source,
+        &mut fake,
+        &DriverOptions {
+            max_iterations: 1,
+            ..DriverOptions::default()
+        },
+    )
+    .expect("a source pair");
+    let (cursor, snapshot) = source.read_pair().expect("the source reads");
+
+    let migrated_root = scratch("legacy-migrated");
+    let migrated = run_directory(&migrated_root);
+    std::fs::create_dir_all(migrated.path()).expect("a legacy run directory");
+    std::fs::write(
+        migrated.cursor_path(),
+        serde_json::to_vec_pretty(&cursor).expect("cursor JSON"),
+    )
+    .expect("a legacy cursor");
+    std::fs::write(
+        migrated.snapshot_path(),
+        serde_json::to_vec_pretty(&snapshot).expect("snapshot JSON"),
+    )
+    .expect("a legacy snapshot");
+    assert_eq!(migrated.read_pair().expect("legacy migration").0, cursor);
+    assert!(
+        migrated.current_generation_path().exists(),
+        "migration publishes a generation before execution"
+    );
+
+    let partial_root = scratch("legacy-partial");
+    let partial = run_directory(&partial_root);
+    std::fs::create_dir_all(partial.path()).expect("a partial legacy directory");
+    std::fs::write(partial.cursor_path(), "{}\n").expect("only a cursor");
+    let refusal = partial
+        .read_pair()
+        .expect_err("a partial pair is unknowable");
+    assert!(refusal.to_string().contains("both exist"), "{refusal}");
+}
+
+#[test]
+fn an_unresolved_attempt_requires_its_exact_id_before_any_repeat() {
+    let root = scratch("in-flight");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut first = Fake::new(&[Act::Done]);
+    drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut first,
+        &DriverOptions {
+            max_iterations: 1,
+            ..DriverOptions::default()
+        },
+    )
+    .expect("a resumable run");
+
+    let (mut cursor, snapshot) = run.read_pair().expect("the committed state");
+    let state = cursor.state.clone();
+    let step = cursor.step;
+    let in_flight = cursor.begin_attempt(&state, step);
+    run.persist(&snapshot, &cursor)
+        .expect("the pre-dispatch marker is durable");
+
+    let mut not_called = Fake::new(&[]);
+    let refusal = resume(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut not_called,
+        &DriverOptions::default(),
+    )
+    .expect_err("silence cannot authorise a repeat");
+    assert!(refusal.to_string().contains(&in_flight.id), "{refusal}");
+    assert!(not_called.asked.is_empty(), "nothing was dispatched");
+
+    let mut retried = Fake::new(&[Act::Diff, Act::Tests { failed: 0 }]);
+    let report = resume(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut retried,
+        &DriverOptions {
+            in_flight_resolution: Some(InFlightResolution::Retry(in_flight.id.clone())),
+            ..DriverOptions::default()
+        },
+    )
+    .expect("the exact attempt is explicitly retried");
+    assert_eq!(retried.asked[0].attempt, in_flight.attempt);
+    assert!(report.cursor.in_flight.is_none());
 }
 
 #[test]
@@ -1342,6 +1508,57 @@ fn a_dependency_that_keeps_failing_stops_being_attempted() {
             .any(|note| note.contains("was not attempted")),
         "a skipped step is recorded as skipped, never as failed — a step nobody ran produced no \
          observation, and recording one would fabricate it: {:?}",
+        report.notes
+    );
+}
+
+#[test]
+fn an_open_circuit_survives_resume_and_prevents_another_dispatch() {
+    let root = scratch("breaker-resume");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(FLAKY_DEPENDENCY_MAP);
+    let run = run_directory(&root);
+    let mut first = Fake::new(&[Act::Crash("staging is down")]);
+    let stopped = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut first,
+        &DriverOptions {
+            max_iterations: 1,
+            ..DriverOptions::default()
+        },
+    )
+    .expect("the invocation stops after recording the first failure");
+    assert_eq!(
+        stopped.cursor.circuit_failures.get("staging-cluster"),
+        Some(&1)
+    );
+
+    let mut resumed = Fake::new(&[]);
+    let report = resume(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut resumed,
+        &DriverOptions::default(),
+    )
+    .expect("the persisted breaker decides the resume");
+    assert!(
+        resumed.asked.is_empty(),
+        "the open dependency is not called again"
+    );
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("was not attempted")),
+        "the resume records both skips: {:?}",
         report.notes
     );
 }

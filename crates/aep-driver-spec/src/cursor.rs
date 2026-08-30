@@ -1,10 +1,11 @@
 //! The driver's own record of a run: where it is, what it has spent, and what it is pinned to.
 //!
-//! Two documents go to `.engineering/runs/<run-id>/` after every step, because they have two
-//! owners. The **snapshot** is the engine's (`Execution::snapshot()`); the **cursor** is this —
+//! Two documents enter one committed generation after every step, because they have two owners.
+//! The **snapshot** is the engine's (`Execution::snapshot()`); the **cursor** is this —
 //! which step of which state the driver is on, its budgets, and the three things a resume must
 //! check. A driver that stored its cursor inside the engine's snapshot would be a driver that had
-//! quietly forked the snapshot format.
+//! quietly forked the snapshot format. The generation pointer belongs to `aep-driver`; this crate
+//! remains the typed vocabulary of the cursor itself.
 //!
 //! # Why the cursor pins three things a snapshot does not
 //!
@@ -239,6 +240,23 @@ pub struct OperatorAnswer {
     pub evidence: String,
 }
 
+/// An outside step that may have run but whose outcome was not durably recorded.
+///
+/// The id is deterministic and is persisted before dispatch. A resume can therefore repeat the
+/// exact attempt only when an operator names this id, or record that the attempt has no verdict.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InFlightAttempt {
+    /// Stable identity of this attempt.
+    pub id: String,
+    /// State containing the step.
+    pub state: StateId,
+    /// Index of the step in the state's map entry.
+    pub step: usize,
+    /// Attempt number already charged to the cursor.
+    pub attempt: u32,
+}
+
 /// What the driver knows about a run that the engine's snapshot does not hold.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -269,6 +287,12 @@ pub struct DriverCursor {
     /// is no evidence to erase, because a step that produced no verdict submitted nothing, but the
     /// count stays so *"green on the third try"* is in the record.
     pub attempts: BTreeMap<String, u32>,
+    /// The attempt published before its outside effect was dispatched, until its outcome commits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_flight: Option<InFlightAttempt>,
+    /// Failure counts for named dependencies, persisted so a resume cannot reset an open circuit.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub circuit_failures: BTreeMap<String, u32>,
     /// How many loop iterations the run has taken.
     pub iterations: u32,
     /// Where the run got to.
@@ -313,6 +337,34 @@ impl DriverCursor {
             .or_insert(0);
         *counter += 1;
         *counter
+    }
+
+    /// Records an attempt as unresolved and returns the identity a retry must name.
+    pub fn begin_attempt(&mut self, state: &StateId, step: usize) -> InFlightAttempt {
+        let attempt = self.record_attempt(state, step);
+        let in_flight = InFlightAttempt {
+            id: format!("{}:{state}:{step}:{attempt}", self.run),
+            state: state.clone(),
+            step,
+            attempt,
+        };
+        self.in_flight = Some(in_flight.clone());
+        in_flight
+    }
+
+    /// Records one failure of a named dependency and returns its durable total.
+    pub fn record_circuit_failure(&mut self, dependency: &str) -> u32 {
+        let count = self
+            .circuit_failures
+            .entry(dependency.to_owned())
+            .or_default();
+        *count += 1;
+        *count
+    }
+
+    /// Whether a named dependency's durable failure count has opened its circuit.
+    pub fn circuit_is_open(&self, dependency: &str, threshold: u32) -> bool {
+        self.circuit_failures.get(dependency).copied().unwrap_or(0) >= threshold
     }
 
     /// How many times `state` has been entered.
@@ -383,6 +435,8 @@ mod tests {
             step: 0,
             visits: BTreeMap::new(),
             attempts: BTreeMap::new(),
+            in_flight: None,
+            circuit_failures: BTreeMap::new(),
             iterations: 0,
             status: RunStatus::Running,
             reasons: Vec::new(),

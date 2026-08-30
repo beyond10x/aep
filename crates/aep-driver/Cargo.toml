@@ -22,11 +22,14 @@ aep-backend-markdown.workspace = true
 
 serde.workspace = true
 
-# The run directory's two records, and the errors a refusal is made of.
+# The run directory's generation records, and the errors a refusal is made of.
 thiserror.workspace = true
 
-# The snapshot and the cursor are JSON on disk: two documents, two owners, one directory.
+# Snapshot, cursor, manifest and pointer are JSON on disk: two owners, one committed generation.
 serde_json.workspace = true
+
+# A generation pointer authenticates the exact snapshot/cursor pair it publishes.
+sha2 = "0.10"
 
 # The tests build their documents the way a project does — through the schema crate's parsers — so
 # a fixture that stopped being a valid document fails here rather than passing against a hand-built
