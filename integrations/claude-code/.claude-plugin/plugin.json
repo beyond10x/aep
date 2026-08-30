@@ -2,7 +2,7 @@
   "name": "engineering-protocols",
   "displayName": "Engineering Protocols",
   "description": "Govern planning artifacts and project JSON Schema contracts through the `protocol` CLI: one writer for the planning store, one authored source for runtime schemas, and deterministic validation and projections.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Beyond10x contributor"
   },

@@ -99,6 +99,18 @@ pub enum Verdict {
         /// What the requirement said, for a person.
         message: String,
     },
+    /// The ladder could not be turned into a definition the pinned kernel accepts, so no move on
+    /// it can be decided at all.
+    ///
+    /// A lifecycle document that names a condition operator the pinned `entity-core` does not
+    /// know reached this code as a **panic** on 2026-08-25 (`unknown condition operator 'after'`,
+    /// `9da4f51c#1852`), with a backtrace where a person needed one sentence. It is a verdict
+    /// now: the document is fine and the kernel is old, or the other way round, and either way
+    /// the answer is *raise the pin or change the ladder*, not *the store is corrupt*.
+    Undecidable {
+        /// What the kernel refused, verbatim.
+        message: String,
+    },
 }
 
 /// The identity the kernel is handed. It never reads it, and a refusal changes nothing, so one
@@ -118,11 +130,16 @@ const FALLBACK_ENTITY: &str = "artifact";
 /// The kind's name is the entity name, so a refusal names the ladder that refused. A kind that
 /// declares no lifecycle is handed [`ArtifactLifecycle::permissive`] by the caller, exactly as
 /// before, and permissive translates to every status reaching every status.
-#[must_use]
+///
+/// # Errors
+///
+/// The lifecycle names something the pinned kernel does not read — a condition operator a newer
+/// `entity-core` introduced, a state name it refuses. The message is the kernel's own, so a reader
+/// sees which word was refused; [`decide`] turns it into [`Verdict::Undecidable`].
 pub fn definition_for(
     kind: Option<&ArtifactKind>,
     lifecycle: &ArtifactLifecycle,
-) -> EntityDefinition {
+) -> Result<EntityDefinition, String> {
     let states: Vec<String> = lifecycle
         .statuses()
         .iter()
@@ -222,8 +239,13 @@ pub fn definition_for(
         "operations": operations,
     });
 
-    serde_json::from_value(document)
-        .unwrap_or_else(|error| panic!("a lifecycle is a well-formed entity definition: {error}"))
+    serde_json::from_value(document).map_err(|error| {
+        format!(
+            "this lifecycle names something the kernel this build pins does not know: {error}. \
+             Raise the `entity-runtime` pin in `crates/aep-backend-entity/Cargo.toml`, or change \
+             the lifecycle document to what this kernel reads"
+        )
+    })
 }
 
 /// The ladder as a harness reads it: the states, the edges and the rungs that cost evidence,
@@ -237,12 +259,20 @@ pub fn definition_for(
 /// the edges the kernel enforces. The requirements are read from the lifecycle the definition was
 /// built from — the same object, not a second reading — because the definition encodes them as
 /// preconditions, and parsing a rule back into a count would be the drift this exists to prevent.
+///
+/// `None` when the kernel cannot read the ladder — the same case [`decide`] reports as
+/// [`Verdict::Undecidable`]. A descriptor a harness reads must come from the definition the kernel
+/// decides with, so a ladder the kernel refuses has no descriptor rather than an invented one.
 #[must_use]
 pub fn describe(
     kind: Option<&ArtifactKind>,
     lifecycle: &ArtifactLifecycle,
-) -> aep_contract::registry::LifecycleDescriptor {
-    let definition = definition_for(kind, lifecycle);
+) -> Option<aep_contract::registry::LifecycleDescriptor> {
+    let definition = definition_for(kind, lifecycle).ok()?;
+    // Read *and* registrable: the kernel checks state names when a definition is registered, not
+    // when it is read, and a descriptor of a ladder the kernel would refuse to hold is a
+    // descriptor of nothing.
+    Registry::new().register(definition.clone()).ok()?;
     let status = |name: &str| {
         ArtifactStatus::parse(name).unwrap_or_else(|_| {
             // A state the kernel accepted is a kebab-case word; the open vocabulary reads any of them.
@@ -287,7 +317,7 @@ pub fn describe(
             )
         })
         .collect();
-    aep_contract::registry::LifecycleDescriptor {
+    Some(aep_contract::registry::LifecycleDescriptor {
         initial: status(&definition.lifecycle.initial),
         statuses,
         transitions: edges
@@ -295,7 +325,7 @@ pub fn describe(
             .map(|(from, to)| (from, to.into_iter().collect()))
             .collect(),
         requires,
-    }
+    })
 }
 
 /// Whether the kernel permits the move.
@@ -335,11 +365,22 @@ pub fn decide(
     to: &ArtifactStatus,
     on_hand: &OnHand,
 ) -> Verdict {
-    let definition = definition_for(kind, lifecycle);
+    let definition = match definition_for(kind, lifecycle) {
+        Ok(definition) => definition,
+        Err(message) => return Verdict::Undecidable { message },
+    };
     let entity = definition.entity.clone();
     let mut registry = Registry::new();
-    if registry.register(definition).is_err() {
-        return Verdict::NotOnTheLadder;
+    if let Err(error) = registry.register(definition) {
+        // The kernel read the ladder and refused to hold it. Before 2026-08-30 this answered
+        // `NotOnTheLadder`, whose refusal lists the legal moves — a list about a ladder the kernel
+        // had just refused, which sent a reader to the wrong file.
+        return Verdict::Undecidable {
+            message: format!(
+                "the kernel this build pins refused to register this lifecycle: {error}. Raise the \
+                 `entity-runtime` pin, or change the lifecycle document to what this kernel reads"
+            ),
+        };
     }
 
     let instance = EntityInstance {
@@ -389,5 +430,78 @@ pub fn decide(
         },
         Err(CoreError::PreconditionFailed { message, .. }) => Verdict::NotEarned { message },
         Err(_) => Verdict::NotOnTheLadder,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    /// A ladder whose state name the kernel refuses — `ArtifactStatus::Other("")` is
+    /// constructible in code and nowhere else, which is the point: the document parser never
+    /// produces it, so this is the one way to reach the kernel's refusal without an older pin.
+    fn ladder_the_kernel_refuses() -> ArtifactLifecycle {
+        let blank = ArtifactStatus::Other(String::new());
+        let mut transitions: BTreeMap<ArtifactStatus, BTreeSet<ArtifactStatus>> = BTreeMap::new();
+        transitions.insert(ArtifactStatus::Draft, BTreeSet::from([blank.clone()]));
+        transitions.insert(blank, BTreeSet::new());
+        ArtifactLifecycle {
+            kind: Some(ArtifactKind::Story),
+            initial: ArtifactStatus::Draft,
+            transitions,
+            requires: BTreeMap::new(),
+            when: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn a_ladder_the_kernel_cannot_hold_is_a_verdict_not_a_panic() {
+        // The kernel reads a blank state name and refuses it at registration
+        // (`EmptyLifecycleState`), which is the second of the two doors `Undecidable` covers. The
+        // first — a document the kernel cannot even read, such as a condition operator a newer
+        // pin introduced — cannot be constructed against the pin this build carries, so it is
+        // covered by the type and not by a fixture.
+        let ladder = ladder_the_kernel_refuses();
+        assert!(
+            definition_for(Some(&ArtifactKind::Story), &ladder).is_ok(),
+            "the kernel reads a blank state and refuses it one step later"
+        );
+
+        let verdict = decide(
+            Some(&ArtifactKind::Story),
+            &ladder,
+            &ArtifactStatus::Draft,
+            &ArtifactStatus::Other(String::new()),
+            &OnHand::default(),
+        );
+        match verdict {
+            Verdict::Undecidable { message } => assert!(
+                message.contains("refused to register") && message.contains("Raise the"),
+                "the verdict carries the kernel's words and the next step: {message}"
+            ),
+            other => panic!("an unreadable ladder is Undecidable, not {other:?}"),
+        }
+        assert!(
+            describe(Some(&ArtifactKind::Story), &ladder).is_none(),
+            "no descriptor is invented for a ladder the kernel refused"
+        );
+    }
+
+    #[test]
+    fn a_readable_ladder_still_decides_and_describes() {
+        let ladder = ArtifactLifecycle::permissive();
+        assert!(definition_for(None, &ladder).is_ok());
+        assert_eq!(
+            decide(
+                None,
+                &ladder,
+                &ArtifactStatus::Draft,
+                &ArtifactStatus::Active,
+                &OnHand::default()
+            ),
+            Verdict::Permitted
+        );
+        assert!(describe(None, &ladder).is_some());
     }
 }

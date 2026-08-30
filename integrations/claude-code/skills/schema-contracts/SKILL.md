@@ -3,6 +3,8 @@ name: schema-contracts
 description: Manage project-owned JSON Schema contracts through engineering-protocols — configure the registry, validate JSON research or product records, generate TypeScript projections, and check schema/type drift. Use when a project has `.engineering/schemas`, a `schemas` entry in `.engineering/project.yaml`, JSON files with a `schema` selector, generated TypeScript contract types, or requests involving JSON Schema validation, schema identity, contract generation, or schema drift.
 ---
 
+**Skill version 0.2.0** — the version in `.claude-plugin/plugin.json`.
+
 # Project schema contracts
 
 ## Keep one authored source

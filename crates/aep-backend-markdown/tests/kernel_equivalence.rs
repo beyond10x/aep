@@ -243,7 +243,9 @@ fn a_custom_kind_is_governed_by_the_ladder_its_lineage_reaches() {
         .expect("feature-design reaches design's ladder through its lineage");
 
     assert_eq!(
-        kernel::definition_for(Some(&custom), lifecycle).entity,
+        kernel::definition_for(Some(&custom), lifecycle)
+            .expect("a lifecycle the document tree parsed is one the kernel reads")
+            .entity,
         "feature-design",
         "the refusal must name the kind that was moved, not the ladder that governs it"
     );

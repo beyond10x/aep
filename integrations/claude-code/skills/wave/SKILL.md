@@ -3,6 +3,8 @@ name: wave
 description: Run a wave — pick the next set of stories that can be implemented at once, propose it for approval, then dispatch one implementor per story into its own worktree, send each result to the adversary, and merge what goes green into one integration branch. Use when the operator asks to pick the next wave, to start a wave, to implement several stories in parallel, or to fan out work across sub-agents. Proposes first and stops; it never starts a wave nobody approved.
 ---
 
+**Skill version 0.2.0** — the version in `.claude-plugin/plugin.json`; the stage-1 proposal quotes it.
+
 # Running a wave
 
 A **wave** is N stories implemented at once, each on its own branch, merged into one integration
@@ -138,6 +140,12 @@ fine* is not among them.
    amount of disk or parallelism helps.
 3. **Blast radius of one package.** The first wave's point is the loop, not the difficulty.
 
+**A wave of one is a wave.** If exactly one candidate passes those three properties, propose it
+alone and run it. The loop is the same at N=1 — propose, dispatch, attack, gate once, merge, record
+— and the loop is the part that has to keep running. Holding a ready story back until a second one
+arrives stops the loop and buys nothing; padding the set with a candidate that failed a property is
+worse than that. Say in the proposal that N is one, and why the others were left out.
+
 ### Name the overlap risk honestly, per pair
 
 Read each candidate's body for the paths it cites. Then say, for every pair in the proposed set,
@@ -168,11 +176,38 @@ Write the proposal where this repository's plans live, in the shape its existing
 Then **stop and report**. A plan is not a work order, and a wave nobody approved is a wave that
 spends real time and money on a guess.
 
+**Approval removes the stop. It never removes the page.** An operator who pre-approves — *pick a
+wave and run it* — has waived the stop and nothing else. A wave that read the two as one step wrote
+no page at all, and that session compacted twice: the integration branch, both worktree paths, both
+build directory paths, which unit was at which stage and why a third story was excluded existed only
+in a context window that was summarised and discarded. Write the page before you dispatch, whether
+or not you are going to stop.
+
+**The page is a file stage 2 keeps current, not a document written once.** Per unit it carries the
+branch, its head commit, the worktree path, the build directory path, the scratch root, and the
+stage the unit has reached. It also carries the line naming the commits the wave will make. Update
+it when a unit changes stage. It is then the input the cleanup step reads and the point a
+coordinator recovers from after a compaction, instead of both of those living in a context window
+that may not last the wave.
+
 Report: the units with the objective each serves, the overlap risk per pair, what you deliberately
 left out and why, the pre-flight numbers from below so the operator approves a wave whose cost is
 known, and **one line naming the commits approval authorises** — N unit commits, the merges, the
 closing store commit, the merge to the base branch, and nothing else. If the operator's standing
 rule is *never commit unasked*, that line is the whole of the exception they are granting.
+
+Two items in that report are fixed text rather than judgement.
+
+**Print the skill version line from the top of this file.** It says which copy of these rules the
+session is running, in the transcript, where a mismatch is visible. A wave once halted at the merge
+boundary with five commits already made, because the copy loaded into the coordinator predated the
+commit-authorisation section; the reload command it ran reported "no changes" and re-injected
+nothing.
+
+**Name the `subagent_type` each dispatch will use, in full, with its plugin prefix.** A built-in
+agent used where a plugin agent exists is a deviation you report, not a substitution you make. One
+session ran 23 of 24 dispatches as `general-purpose` because the plugin's agents were missing from
+the copy it had loaded, and described that as having run the implementor.
 
 **Fit it in whatever report budget the operator has set**, and treat that budget as a hard ceiling
 rather than a target. This is a proposal, not the plan: the plan is the page you just wrote, and one
@@ -207,8 +242,9 @@ the number rather than starting one that cannot finish.
 
 | Check | Refuse when |
 |---|---|
-| working tree clean, on the base branch | anything uncommitted — you are about to branch from it |
-| `git worktree list` | a previous wave's trees are still there — that wave skipped *Take the worktrees down*, and this check refuses rather than repairs |
+| working tree clean, on the base branch | anything uncommitted, or the main checkout is not on `main` — you are about to branch from it, and a checkout sitting on somebody else's branch is a second session's workspace |
+| `git worktree list` | a previous wave's trees are still there — that wave skipped *Take the worktrees down*, and this check refuses rather than repairs. Also refuse when a branch you are about to use is already checked out in another worktree: `git` will refuse the checkout later, and by then agents are in flight |
+| the model budget the wave will spend | you have not asked the operator what is left of it. N agents run at once, so the limit arrives mid-flight and kills them; it does not queue them |
 | build directories from previous waves | one is still on disk. `git` does not know about it, so nothing else will find it. **Print its size** |
 | free disk against a floor | below the floor. **Print the number**; "insufficient disk" is not actionable |
 | build cache wired up | a compiler cache is available but unset, and you are about to pay for N cold builds |
@@ -217,6 +253,31 @@ the number rather than starting one that cannot finish.
 
 **N is bounded by what you measured, not by what you were asked for.** A wave of five that fills
 the disk at agent four has produced nothing and destroyed four agents' work.
+
+**N is also bounded by the model budget the operator states, and it defaults to 4.** Ask what is
+left of the budget and size the wave to it. Six agents on the largest model returned HTTP 429, four
+of them were killed, and the wave stalled 47 minutes while each was resumed by hand. If the operator
+gives no number, run 4.
+
+**Record every worktree path and build directory path in the wave page as you plan them**, not only
+in this session. One wave had five worktrees and five build directories deleted under it while five
+agents were working in them, and nothing could say who did it, because nothing outside the
+coordinator's context knew they existed.
+
+**The dirty-tree refusal has exactly one sanctioned override, and it is not yours to take.** The
+operator says to proceed; you paste `git status --porcelain` into the wave page first, name which
+of those paths any unit's surface touches, and leave the changes where they are. Never stash them,
+never commit them, never branch them away. They may belong to another session.
+
+**Gate your own opening commit before the first worktree exists.** The pre-flight above runs before
+you have written anything; the commit that creates the wave page and moves the stories is the first
+change on the integration branch, and nothing has checked it. One wave's opening commit put an
+absolute path from the machine's home directory into a plan page, which the repository's own check
+rejects — and it judges the index as well as the tree, so the integration branch was red from its
+first commit. Three separate implementors found it, each spent report space on it, and none could
+fix it, because it was not their file. Run the cheap gate steps — everything but the compiler and
+the test suite — on the integration branch after your opening commit and before you create a tree.
+It costs seconds.
 
 ### Arrange the branches
 
@@ -228,10 +289,33 @@ directory serves one tree's binaries to another and lets one tree's code generat
 another's committed output — a failure that reads as a mysterious test failure and costs several
 gate runs per agent before anybody suspects it.
 
-**Write down the pair — worktree path and build directory path — as you create each one, and name
-both after the unit.** That list is the only input the cleanup step has. A build directory placed
-outside the worktree is invisible to `git worktree list`, so an unrecorded one is not found again
-by anything; it is found by the disk filling up, months later.
+**A unit's record is a triple — worktree path, build directory path, scratch root — written into
+the wave page as you create each one, and all three named after the unit.** That list is the only
+input the cleanup step has. A build directory placed outside the worktree is invisible to `git
+worktree list`, so an unrecorded one is not found again by anything; it is found by the disk filling
+up, months later.
+
+**You assign the scratch root, under the wave's own directory. The agent does not choose it.**
+Scratch is the part `git` cannot see at all, and an unassigned one lands wherever the agent thought
+best: a 579 MB rollback probe found only because its agent reported the size, a 95 MB and a 17 MB
+directory beside it, a rendered bundle tree written outside the wave's directory entirely, and 15
+files written to the system temporary directory against a standing rule. Assigning it costs one line
+in the brief and turns cleanup into a loop over the triples instead of a reading exercise over
+prose.
+
+**When no disjoint pair exists, split one file by function rather than dropping the wave.** This is
+the fallback, not the shape to reach for, and it holds only with all three of these:
+
+1. Declare the split in each brief by symbol and line range, not as "do not collide".
+2. Require each agent to paste its diff hunk headers, which are checkable against the ranges it was
+   given.
+3. Run `git merge-tree --write-tree --merge-base=<base> <a> <b>` as a dry run **before the first unit
+   merges**, and read the tree it writes.
+
+Step 3 is the one that pays. A textual merge can apply cleanly and still leave one agent's caller
+pointing at a symbol the other renamed, which no conflict marker shows you. It is one command, it
+needs no worktree and no build, and running it at integration time instead is running it after both
+agents' work is already spent.
 
 Move each story out of `draft` yourself, in the main tree, after adding whatever edge the store
 requires. The implementors never touch it.
@@ -248,6 +332,44 @@ Up to N implementors in parallel, one per unit, each pointed at its own worktree
 When one returns, dispatch the adversary against that worktree. The adversary may add failing cases
 and may not edit the implementation.
 
+**Write each unit's brief to a file and pass the path; do not retype it into a prompt.**
+[references/unit-brief.md](references/unit-brief.md) gives the shape: the repository's invariants
+once, then what is specific to this unit, including the triple you assigned it. Six dispatches in
+one wave re-declared roughly forty lines of invariants each, by hand, and nothing detects an
+omission — an agent that was not told about a generated file simply does not know. A correction
+round then carries only what changed. The file also survives a compaction, so a coordinator can
+read what it told an agent.
+
+**A charter or skill you edited during this session is not what this session runs.** The loaded copy
+is the one from the last plugin load. Run `/reload-plugins` before the next dispatch and name the
+version you reloaded to, in the report. One session dispatched an agent type that had been written
+minutes earlier and got `not found`; another ran a whole wave against a copy of this file that
+predated the section it was being held to.
+
+**Require a fixed header as the first six lines of every report, before any prose.** Reports in one
+wave ran to thousands of tokens each with the verdict scattered through them, and reading them is
+the coordinator's whole job for minutes at a time — the fan-out serialises on the one agent that
+cannot be parallelised. The header is exactly this:
+
+```
+unit: <unit id>
+verdict: green | red | blocked
+cases: executed <before>→<after>, red <n>
+origin: introduced <n>, pre-existing <n>, undecided <n>
+wrote-outside-worktree: <paths> | none
+needs-coordinator: yes | no
+```
+
+`origin` is the adversary's line; an implementor writes `n/a`. `cases` is the executed count, not
+the count that exists: a suite that selects none of an agent's new cases exits 0, and a green exit
+with an unchanged count is the failure. One wave had a lane whose filter silently dropped two cases,
+and only the number would have shown it.
+
+**Route on the header. Read the prose only when the header says to** — `needs-coordinator: yes`, a
+verdict that is not green, a case count that did not move, or a path outside the worktree. A green
+header with a moved count and no outside paths takes the next step in *Route the result* and no
+reading.
+
 ### Route the result
 
 | Outcome | Do |
@@ -256,6 +378,32 @@ and may not edit the implementation.
 | **red, and no case has failed twice** | send it back to **the same implementor**, which still holds its context, with the findings |
 | **red, and a case failed again after being fixed** | a **fresh** implementor, handed the findings, the previous diff, and what has already been tried |
 | **red after two full attacks** | stop attacking. It goes to a person |
+
+**Route each finding on its `origin` column before you route the unit.** The adversary's findings
+table says whether a defect was `introduced` by this unit, is `pre-existing`, or is `undecided`.
+
+| `origin` | Do |
+|---|---|
+| `introduced` | back to the implementor, with the finding |
+| `pre-existing` | file a story. It does not block the unit |
+| `undecided` | you decide, and you record why in the artifact you write |
+
+Before that column existed, both adversaries of one wave supplied the distinction in prose anyway —
+"CONFIRMED (out of scope of this change)", "pre-existing rather than introduced" — and routing cost
+a judgement per finding, read out of paragraphs. The column makes the common case mechanical. The
+`undecided` row is the one you may not push back onto an agent.
+
+**"The same implementor" is sometimes not there any more.** A sub-agent is gone once its session has
+been compacted, and a killed one cannot be resumed. When the agent the second row names cannot be
+reached, use a fresh implementor handed the brief file, the unit's diff, the findings, and what has
+already been tried — the third row's handover, used for a different reason. Say which of the two you
+did. The rule exists because context is worth keeping, and a wave that quietly starts fresh every
+round has given that up without anybody deciding to.
+
+**Re-read free disk when each unit returns, and report the number only if it crossed the floor.**
+One wave measured 84 G at pre-flight and 62 G later in the same wave — a compiler cache growing to
+its cap, plus one 6.2 G build directory. The pre-flight cannot see this, because it runs before the
+builds that cause it. One command converts a wave-ending failure at unit N into a one-line refusal.
 
 **Count a case that fails again after being fixed — not red rounds.** These are different, and the
 difference decides whether an implementor keeps its context or loses it. An agent that fixed
@@ -271,6 +419,18 @@ a second pass is the rule, not diligence. But the second pass is not the last on
 something: on the wave of 2026-08-30 two units came back with 4 then 3 findings, and 4 then 5. A
 third would likely find more, and that is the argument for a person deciding rather than a number.
 After two attacks, hand it over — do not open a third.
+
+**The hand-over carries the trend, not just the verdict.** State findings per pass, how many were
+regressions of an earlier pass, and whether the count rose or fell. Two passes finding 5 then 1 and
+two passes finding 5 then 6 are different situations, and they currently reach a person looking
+identical. Four waves' worth of observed pairs: 4 then 9, 3 then 4, 5 then 6, 6 then 6 — none with a
+regression of the earlier pass, all diverging or flat. That is the number the decision turns on and
+nothing asks anyone to write it down.
+
+**You verify the correction that answers the second pass.** By construction it is code no adversary
+has seen, and the budget otherwise ends in an unverified state. Read the diff yourself and check two
+things: that no assertion was dropped, and that a re-pinned test was re-pinned and not relaxed. Then
+the unit merges or it goes to a person. Do not open a third attack to cover this.
 
 **Two adversarial cases can be mutually unsatisfiable, and no rule fixes that.** One wave produced a
 pair where satisfying either broke the other, differing only in a count the story's *Out of Scope*
@@ -360,15 +520,30 @@ a defect is severe from how bad it would be if it happened.
    step can fail `127 command not found` on a tree nobody has broken. Read what each step *printed*,
    not only what it returned, and say which steps were skipped rather than folding them into a
    count of green ones.
-3. Record the evidence the store requires for each story against the merge commit, then move each
+3. **Rewrite each unit's `## Scope` section from its implementor's confirmation table**, through
+   `protocol artifact body`, with the corrections visible rather than deleted. The implementor
+   checks every `inferred` line before building on it; one returned five rows and found two of them
+   wrong, and both wrong lines are still in the store today. The next wave selects on overlap by
+   reading that section, so a scope the wave learned and did not write back is a wave that taught
+   the store nothing and left it misleading. It is two commands.
+4. Record the evidence the store requires for each story against the merge commit, then move each
    one to its terminal status through `protocol artifact move`.
-4. `protocol artifact validate`, and relay its output **verbatim**.
-5. **Merge the integration branch into the base branch.** This is integration, not release, and it
+5. `protocol artifact validate`, and relay its output **verbatim**.
+6. **Merge the integration branch into the base branch.** This is integration, not release, and it
    is yours — the same step as merging a unit, one level up. Do not stop here to ask; the gate
    already decided, and stopping strands finished work on a branch nobody asked you to leave it on.
 
-**A release is not this step.** A release is a tag, a version bump and a push, and *that* is the
-stop. Do not enlarge it to cover the merge, and do not shrink it to let a loop cut its own tag.
+**Record what the wave cost, per agent: tokens, tool uses, wall duration.** The harness reports all
+three when an agent completes; copy them into the closing report and the wave page. Nothing else
+asks for them, so the pre-flight sizes the next wave from disk and one build while the thing that
+actually ran out was the model budget. One wave spent 2,025,848 sub-agent tokens across nine runs
+and merged neither unit — a number no proposal could have estimated, because no previous wave wrote
+one down. Put the executed-case counts and the per-step exit statuses beside it.
+
+**A release is not this step, and a release is not part of a wave.** A release is a tag, a version
+bump and a push. It is the checklist in the repository's own agent file — `AGENTS.md` § Releases —
+and following it is a separate piece of work that starts after the wave has closed. Do not enlarge
+this step to cover it, and do not shrink it to let a loop cut its own tag.
 
 ### Take the worktrees down
 
@@ -384,15 +559,19 @@ The order is not interchangeable:
    tree goes. A worktree removed with its records unread takes the whole account of what happened
    with it.
 2. **`git worktree remove <path>`, one per unit.** It takes the checkout and leaves the branch.
-3. **Remove each unit's build directory by name**, from the list you wrote when you made it. This
-   is the step that gets missed, because it is the one `git` knows nothing about: a build directory
-   outside the worktree survives `worktree remove` untouched. One wave here left a **16 GB** build
-   directory standing on a disk already at 93%, every worktree it belonged to long since removed,
-   and nothing found it until somebody went looking for free space.
-4. **Delete every unit branch that is merged**, which after a green close is all of them:
+3. **Remove each unit's build directory and scratch root by name**, from the triple you wrote in
+   the wave page when you made them. This is the step that gets missed, because it is the one `git`
+   knows nothing about: neither survives in `git worktree list`, and both survive `worktree remove`
+   untouched. One wave here left a **16 GB** build directory standing on a disk already at 93%,
+   every worktree it belonged to long since removed, and nothing found it until somebody went
+   looking for free space. Scratch is the same failure one size down — 579 MB, 95 MB, 17 MB in
+   another wave, in three directories nobody had a list of.
+4. **Delete every unit branch that is merged**, which after a green close is all of them. Use the
+   branch prefixes [references/branch-and-merge.md](references/branch-and-merge.md) names for this
+   repository, not a prefix from another one:
 
    ```console
-   $ for b in $(git branch --list 'wt/*' --format='%(refname:short)'); do
+   $ for b in $(git branch --list 'impl/*' --format='%(refname:short)'); do
    >   git merge-base --is-ancestor "$b" main && git branch -d "$b" || echo "NOT MERGED: $b"
    > done
    ```
@@ -400,13 +579,13 @@ The order is not interchangeable:
    `git branch -d` refuses a branch that is not merged, which is the safety here — do not reach for
    `-D`. A merged branch holds no commit the base does not, so deleting it loses nothing, and the
    evidence in the store cites **commits**, which survive the branch by being on `main`. Leaving
-   them is how a repository accumulates a `wt/*` list nobody can read: after two waves this one had
-   ten, every one merged, and no way to tell at a glance which wave any of them came from.
+   them is how a repository accumulates a list of unit branches nobody can read: after two waves
+   this one had ten, every one merged, and no way to tell at a glance which wave any came from.
 
    A branch that is **not** merged is a unit that left the wave or a tree whose work never landed.
    Keep it, and name it in the closing report.
 
-5. **`git worktree prune`, then `git worktree list` and `git branch --list 'wt/*'` — and read both.**
+5. **`git worktree prune`, then `git worktree list` and `git branch --list 'impl/*'` — read both.**
    Report what they say, not that you ran the removal. A removal you did not confirm is the same
    class of claim as a process you did not watch die.
 
@@ -435,7 +614,19 @@ notification and do not poll at all; where you must, match on something the wait
 **Kill a run the moment you know it cannot succeed** — not after the next step, not after the
 report. Diagnosing it and letting it continue is the worst of both.
 
+**A rate limit kills agents. It does not undo the commits they already made.** When HTTP 429 takes
+one or more agents mid-flight, read each unit's branch head and the stage it had reached, write both
+into the wave page, and resume that unit with a brief that says what is already on its branch.
+**Never re-dispatch a unit whose branch has commits.** One session had 9 of 32 sub-agents killed by
+a model limit and relaunched about eight identical tasks, paying twice for work that was already
+committed. Resume rather than restart, and wait for the limit to clear before you do: another wave
+stalled 47 minutes recovering four agents by hand, and one session idled three hours on a single
+killed agent that nobody noticed was gone.
+
 ## Reference
 
 The branch and merge conventions this skill follows, and what a wave leaves behind, are in
 [references/branch-and-merge.md](references/branch-and-merge.md).
+
+The shape of the brief each unit is dispatched with, and the repository invariants it states once so
+no dispatch retypes them, are in [references/unit-brief.md](references/unit-brief.md).

@@ -1,7 +1,9 @@
 ---
 name: planning
-description: Plan engineering work in a governed markdown artifact store — create, relate, move and validate epics, stories, tasks and initiatives through the `protocol` CLI. Use when the user mentions planning, a backlog, an epic, a story, a task, decomposing or breaking down work, an artifact's status ("move this to active", "what is still in draft?", "why can't this be implemented?"), or when the project contains a `.engineering/planning/` directory. Also use before editing any file under `.engineering/planning/`.
+description: Plan engineering work in a governed markdown artifact store — create, relate, move and validate epics, stories, tasks and initiatives through the `protocol` CLI. Use when the user mentions planning, a backlog, an epic, a story, a task, decomposing or breaking down work, an artifact's status ("move this to active", "what is still in draft?", "why can't this be implemented?"), or when the project contains a `.engineering/planning/` directory. Use it at adoption too — the user asks to adopt engineering protocols, to migrate from or replace the track plugin, to start a first backlog, or works in a repository with no `.engineering/` directory at all — because § 5 says how a first store is populated and it is worth nothing after one has been hand-written. Also use before editing any file under `.engineering/planning/`.
 ---
+
+**Skill version 0.2.0** — the version in `.claude-plugin/plugin.json`.
 
 # Planning in a governed artifact store
 
@@ -27,6 +29,15 @@ or relations. Ask for them at the moment you need them:
 | What does it look like as a board? | `protocol artifact board [--kind k]` |
 | What is stopped, on what type of thing, and on which item? | `protocol artifact blocked [--type t]` |
 | How is it wired together? | `protocol artifact graph` |
+| What does this one artifact say, frontmatter and body? | `protocol artifact show <id>` |
+| What has happened to it, oldest first? | `protocol artifact history <id>` |
+| Why is it at this status — what did the store admit before each move? | `protocol artifact explain <id>` |
+| What writes has one side of a hybrid plan taken that the other has not? | `protocol artifact divergences` |
+| Is the whole store still consistent? | `protocol artifact validate` |
+
+That is every `protocol artifact` verb that answers a question. The six that are missing from it
+write — `new`, `move`, `relate`, `body`, `evidence`, `catch-up` — and guardrail 2 governs those.
+Run `protocol artifact --help` when this table and the CLI disagree; the CLI is right.
 
 The reason is the reason this project exists. Lifecycle and relation documents are validated and
 versioned; a prose copy of them in a skill file is neither, and it goes stale the first time a kind
@@ -50,6 +61,22 @@ file from a legal one and wrong in exactly the cases that matter.
 $ protocol artifact move story:credential-store --to proposed
 story:credential-store moved draft -> proposed (revision 2)
 ```
+
+Some rungs cost evidence — their kind's lifecycle declares a `requires:` entry for them — and the
+way to pay is to record the observation, before the move rather than at it:
+
+```console
+$ protocol artifact evidence story:credential-store --kind test_result \
+    --source "task check" --ref https://ci.example/run/8412 --at 2026-08-30T14:02:00Z
+```
+
+`move` finds evidence recorded against the artifact without being told, so nothing is passed to it.
+The kind list is **closed**: `protocol artifact evidence --help` documents the flag, and a kind
+outside the list is refused with the whole list printed — read it from that refusal rather than
+inventing a plausible name for what you observed. `--ref` and `--at` are optional and are what make
+the record checkable later. `move --evidence <kind>=<count>` is the asserted form, kept for a
+record that lives outside the store; it names no run and no artifact, and the store marks a move
+that rests on it as resting on an assertion.
 
 **2. Every store mutation uses `protocol artifact`; never edit a store file directly.** Creation,
 relations, status, and prose use `new`, `relate`, `move`, and `body` respectively. Supply the complete
@@ -98,22 +125,33 @@ nothing.**
 
 This is not licence to argue with the request. Build what was asked for unless you have evidence it
 is already there or actively wrong, put that evidence in the artifact with `protocol artifact
-body`, and leave the decision where § 4 leaves every other one — with the operator, who can now
-read what you found instead of answering a question.
+body`, and leave the decision where § 4 leaves the ones that are the operator's — with the
+operator, who can now read what you found instead of answering a question.
 
-**6. Something parked is recorded, not described.** A blocker is an artifact of its own, typed by
-what would clear it — `credential-blocker`, `decision-blocker`, `third-party-blocker`, whatever the
-store's `artifacts/kinds/blocker.yaml` names, and the list is open — with a `blocks` edge to the
-work it is stopping. Never leave the fact in a status field or in prose: an item parked for nine
-days on a credential and an item somebody is working on today are both `active`, and only the
-blocker tells them apart. Unblocking is `protocol artifact move <blocker> --to cleared`, a move like
-any other, which is why the record survives it.
+**6. Something parked is recorded, not described.** If `protocol artifact kinds` lists no blocker
+kind, that is not the answer — ask `protocol artifact lifecycle <type>-blocker` as well. Where that
+ladder answers, file the blocker as a `decision-blocker`, or as the `<type>-blocker` whose ladder
+answered, and say in your report that `kinds` does not list it. Where neither answers, the store
+cannot hold it as an artifact: record it in the blocked artifact's body through `protocol artifact
+body`, and say plainly that it is a paragraph rather than an artifact, so nobody expects
+`protocol artifact blocked` to find it.
+
+A blocker artifact is typed by what would clear it and carries a `blocks` edge to the work it is
+stopping. Never leave the fact in a status field: an item parked for nine days on a credential and
+an item somebody is working on today are both `active`, and only the blocker tells them apart.
+Unblocking is `protocol artifact move <blocker> --to cleared`, a move like any other, which is why
+the record survives it.
 
 ```console
-$ protocol artifact new credential-blocker api-token-scope \
-    --title "CI cannot mint a read-scope API token" \
+$ protocol artifact lifecycle decision-blocker
+decision-blocker starts at open
+  cleared -> nothing
+  open -> cleared
+
+$ protocol artifact new decision-blocker api-token-scope \
+    --title "Nobody has decided which account mints the CI token" \
     --withholds test_result --relate blocks:story:ci-evidence
-created credential-blocker:api-token-scope (open) at .engineering/planning/credential-blocker/api-token-scope.md
+created decision-blocker:api-token-scope (open) at .engineering/planning/decision-blocker/api-token-scope.md
 ```
 
 `--withholds` is optional and names the evidence kind nobody can produce while this is open, so
@@ -122,20 +160,31 @@ means something beside `blocks:`, and `validate` says so.
 
 ## 4. Who decides
 
-You propose; the operator decides.
+A move is a claim about the state of the world, and for most rungs the store already holds what
+settles it. Read it there before asking anybody.
 
 * New artifacts are created in the lifecycle's initial status — `protocol artifact new` does this,
   and it is the correct starting point. Do not immediately move them.
-* Status moves and decompositions are **proposals** until confirmed. Say what you would do, to which
-  ids, and wait.
-* The exception: a move the operator already asked for by name ("move `story:credential-store` to
-  active") is confirmed. Perform it and report the result. Asking again is not caution, it is noise.
+* **Make the move when the store holds what the rung requires.** A rung whose lifecycle declares no
+  `requires:` entry costs nothing to reach: on work you were asked to do, make the move and report
+  it. A rung that costs evidence is settled by what has been recorded against the artifact — record
+  the evidence (guardrail 1), run `protocol artifact move`, relay what it printed. Do not ask
+  permission for a move the store would allow: it buys one more question and no work, and whether
+  the thing is implemented is a fact the store holds and the operator does not.
+* **Ask only when the evidence is missing, and name what is missing.** The refusal writes that
+  question for you — it names the rung, what the requirement said, and what nothing was presented
+  at. Relay it, name the record that would close it, and say who or what could produce that record.
+  A question carrying a named missing record is worth an operator's time; "shall I move this?" is
+  not.
+* **A decomposition is drafted and reported, not held for confirmation.** Draft the stories, write
+  their bodies, and report the set together with what you deliberately did not cover. Every draft
+  lands in the initial status and is reversible; an undrafted decomposition is not the safer one,
+  it is the one nobody can read.
 * Never perform a bulk move autonomously. "Archive everything still in draft" is an instruction;
   inferring it from a tidy-up request is not.
 
-Writing new artifacts and editing bodies needs no confirmation beyond the request that prompted it —
-a draft is cheap and reversible. Moving one through its lifecycle is a claim about the state of the
-world, and that is the operator's to make.
+Two things stay with the operator: a move whose evidence does not exist, and a bulk move nobody
+asked for. Everything else was already asked for when the work was.
 
 ## 5. Starting from a repository that has no store
 
@@ -192,12 +241,12 @@ created epic:passkey-login (draft) at .engineering/planning/epic/passkey-login.m
 
 $ protocol artifact new story credential-store \
     --title "Store and retrieve passkey credentials" \
-    --relate derived_from:epic:passkey-login
+    --relate decomposes:epic:passkey-login
 created story:credential-store (draft) at .engineering/planning/story/credential-store.md
 
 $ protocol artifact new story registration-ceremony \
     --title "Register a passkey during sign-up" \
-    --relate derived_from:epic:passkey-login
+    --relate decomposes:epic:passkey-login
 created story:registration-ceremony (draft) at .engineering/planning/story/registration-ceremony.md
 ```
 

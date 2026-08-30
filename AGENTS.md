@@ -381,12 +381,19 @@ enforcement here that you cannot point at.
 task check
 ```
 
-Twenty steps in `Taskfile.yml`, and CI runs every one. Twelve are listed below in order; the
-other seven are `plan-check`, `version-check`, `dep-check` (`cargo xtask deps`: every `entity-*`
-crate resolves once, from one `entity-runtime` pin), `guard-check` and `claim-check` between
-`status-check` and `clippy` — source-only and sub-second — then `postgres-check` after `test` (the
-Postgres backend's tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying
-they did not run), and `lab-check` before `msrv`.
+<!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->
+`task check` runs **22 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `plugin-check`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`, `lab-check`, `msrv`, `website`.
+<!-- generated:gate-steps:end -->
+
+The list above is derived from `Taskfile.yml`'s `check:` block by `cargo xtask status`, and
+`status-check` fails when it drifts — the count was hand-written and wrong twice in three days.
+Twelve steps are described below in order; the rest are source-only and sub-second, each with a
+`desc:` in `Taskfile.yml` that says what it refuses: `plan-check`, `audit-check`, `version-check`,
+`dep-check` (`cargo xtask deps`: every `entity-*` crate resolves once, from one `entity-runtime`
+pin), `guard-check`, `claim-check`, `docs-check`, `plugin-check` (the Claude Code plugin's version
+moves with its text, and `roster.json` names what it ships), `postgres-check` (the Postgres
+backend's tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying they did
+not run), and `lab-check`.
 
 **`plan-check` is `protocol artifact validate` over this repository's own store**, added 2026-08-28
 on `story:own-engineering-store`'s stated default. It fails on an unparseable document, a relation
@@ -472,7 +479,15 @@ stale install reported five phantom drifted stories on 2026-08-28 and nothing sa
    covers less than the gate it claims to be is worse than one that admits its scope; that is why
    this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
 
-Land nothing that does not pass all twenty.
+Land nothing that does not pass all of them.
+
+**Read the gate's own exit status, never a wrapper's.** Run it as `task check; echo GATE_EXIT=$?`
+and read that line. A background-task wrapper reported *completed (exit code 0)* for a `task check`
+that had exited 201, twice in one night (`cc946bc3#633`, `8cffc110#267`); `task check 2>&1 | tail`
+reports `tail`'s status; and `cargo test` without `--no-fail-fast` stops at the first red target,
+so a report with three failures may be a report with thirty. `protocol-cli` has no library target:
+`cargo test -p protocol-cli --lib` fails with *no library targets found* and proves nothing — run
+`cargo test -p protocol-cli`.
 
 **A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
 *toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a
@@ -810,7 +825,22 @@ git commit -m "chore(release): 0.27.3" docs/status.md
 git tag -f -a 0.27.3 -m "…"        # onto the commit that carries the record
 task check                         # the whole gate, at the tag
 private Atlas delivery tooling push origin main 0.27.3
+task install                       # the ambient `protocol` is now the released one
+task release-check                 # five lines: version, heading, pushed, Release, gate record
 ```
+
+**That block is the definition of "cut a release", and `task release-check` says whether it was
+followed.** The word was undefined for long enough that a coordinator conflated it with a merge to
+`main` and the operator had to spell it out (2026-08-30: *changelog update, commit, new tag, gh
+release*). The check reaches `origin` and GitHub, so it is not a gate step; it prints one line per
+item and exits 1 when any is missing. A release is not part of a wave — the wave skill closes on
+the gate record and stops.
+
+**`task install` is the last line because the ambient binary was stale six times.** `0.28.0`
+against a `0.31.0` store reported five phantom drifts; `0.26.0` two releases after `0.27.3`
+answered `validate` differently; a build predating the journal reported no history for a store at
+revision 4; `0.32.1` sat on `PATH` while `0.33.0` was tagged. Every one of those was a session
+reading a wrong answer with no line saying why.
 
 **Every tag lookup in the gate is scoped to tags reachable from `HEAD`.** A gate step runs at a
 commit, but `git tag` answers with the tags the *clone* holds. Two tags in one `git push` used to
@@ -850,6 +880,15 @@ rediscovered it and no reader of the repository could find it.
   per-unit run would be evidence about a tree nobody shipped.
 * **A merge of `main` into a live wave branch, or a rebase of a unit onto a new base, is said in
   the subject with the sha.** Either is fine; leaving it unsaid is not.
+
+* **One session per checkout; a wave runs in a worktree it created.** The main checkout is for
+  reading and merging. Three sessions shared one checkout with uncommitted edits to the planning
+  skill and a peer's unformatted hunks made `fmt-check` red for everyone (`11727595#17397`); a
+  peer's `git add -A` swept three unclaimed files onto public `main` (`3130470e#123`); five
+  worktrees and their build directories vanished mid-wave with five agents in flight, cause never
+  attributed (`4d4c15a4#274`). A wave records every worktree path in its wave page, and its
+  pre-flight refuses when `git worktree list` shows a branch checked out elsewhere or the main
+  checkout is not on `main`.
 
 The plugin's `wave` skill follows these, and
 `integrations/claude-code/skills/wave/references/branch-and-merge.md` is the long form.

@@ -25,7 +25,9 @@ A typed blocker is an ordinary artifact under a directory of its own —
 `credential-blocker/api-token-scope.md` — because the type of a blocker is its **kind**. Every
 `<type>-blocker` reaches the one `blocker` ladder by its last hyphen segment, so a store gets a new
 type by using the name; `artifacts/kinds/blocker.yaml` writes down the ones a tree has agreed on and
-checks nothing against them.
+checks nothing against them. `protocol artifact kinds` lists none of them, so the command that
+answers whether a store can hold one is `protocol artifact lifecycle <type>-blocker` — see
+`SKILL.md` guardrail 6.
 
 ## Names and ids
 
@@ -100,7 +102,7 @@ status: proposed
 title: Store and retrieve passkey credentials
 summary: Persist WebAuthn credential ids and public keys, and look them up at assertion time.
 relations:
-- derived_from: epic:passkey-login
+- decomposes: epic:passkey-login
 revision: 2
 ---
 

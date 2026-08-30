@@ -1290,7 +1290,7 @@ impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
                     projection
                         .lifecycles()
                         .and_then(|ladders| ladders.for_kind(kind))
-                        .map(|lifecycle| kernel::describe(Some(kind), lifecycle))
+                        .and_then(|lifecycle| kernel::describe(Some(kind), lifecycle))
                 });
             }
         }

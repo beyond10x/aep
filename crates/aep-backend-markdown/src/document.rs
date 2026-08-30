@@ -168,6 +168,9 @@ impl PlanningDocument {
             crate::kernel::Verdict::NotEarned { message } => {
                 Some(RefusalReason::NotEarned { message })
             }
+            crate::kernel::Verdict::Undecidable { message } => {
+                Some(RefusalReason::LadderUnreadable { message })
+            }
         };
 
         if let Some(reason) = reason {
@@ -355,6 +358,13 @@ pub enum RefusalReason {
         /// What the requirement said.
         message: String,
     },
+    /// The kernel this build pins cannot read the ladder, so nothing about the move is decidable.
+    /// Not a fourth answer about the move — an answer about the *instrument*, which is why it says
+    /// what to change (the pin, or the document) rather than which moves are legal.
+    LadderUnreadable {
+        /// The kernel's own words.
+        message: String,
+    },
 }
 
 impl MoveRefusal {
@@ -408,12 +418,19 @@ impl fmt::Display for MoveRefusal {
             RefusalReason::Unobservable {
                 unobserved,
                 message,
-            } => write!(
-                f,
-                "{} is on the ladder and not yet earned: {message}. Nothing was presented at {}",
-                self.to,
-                unobserved.join(", ")
-            ),
+            } => {
+                write!(
+                    f,
+                    "{} is on the ladder and not yet earned: {message}. ",
+                    self.to
+                )?;
+                // What to type, not where the rule looked. `$args.evidence.test_result` is the
+                // rule's address for the count it could not read; the person reading this has a
+                // verb, and until 2026-08-30 the address leaked into their terminal verbatim
+                // (`ed007513#1138`, `e70b8018 s1#1748`).
+                let hints: Vec<String> = unobserved.iter().map(|path| what_to_do(path)).collect();
+                f.write_str(&hints.join("; "))
+            }
             RefusalReason::NotEarned { message } => {
                 write!(
                     f,
@@ -421,7 +438,28 @@ impl fmt::Display for MoveRefusal {
                     self.to
                 )
             }
+            RefusalReason::LadderUnreadable { message } => {
+                write!(f, "the move to {} cannot be decided: {message}", self.to)
+            }
         }
+    }
+}
+
+/// The next thing to type for one address a rule could not read.
+///
+/// The addresses are the kernel's (`kernel::definition_for` writes them), so this is the one place
+/// that knows both spellings and translates. An address this function has not heard of is printed
+/// as it came, because inventing advice for it would be worse than the leak it replaces.
+fn what_to_do(unobserved: &str) -> String {
+    if let Some(kind) = unobserved.strip_prefix("$args.evidence.") {
+        format!(
+            "no {kind} record is held for this artifact — `protocol artifact evidence <id> --kind \
+             {kind} --source <where it came from>` records one"
+        )
+    } else if unobserved == "$args.now" {
+        "no instant was supplied to judge the dated rung against — pass `--at <iso8601>`".to_owned()
+    } else {
+        format!("nothing was presented at {unobserved}")
     }
 }
 
@@ -450,6 +488,61 @@ mod tests {
             .expect("the fixture lifecycle parses"),
         );
         registry
+    }
+
+    #[test]
+    fn an_unobservable_rung_names_the_verb_not_the_rules_address() {
+        let refusal = MoveRefusal {
+            kind: ArtifactKind::Story,
+            from: ArtifactStatus::Active,
+            to: ArtifactStatus::Implemented,
+            legal: BTreeSet::from([ArtifactStatus::Implemented, ArtifactStatus::Archived]),
+            reason: RefusalReason::Unobservable {
+                unobserved: vec!["$args.evidence.test_result".to_owned()],
+                message: "reaching implemented needs at least 1 test_result record(s)".to_owned(),
+            },
+        };
+        let text = refusal.to_string();
+        assert!(
+            text.contains("`protocol artifact evidence <id> --kind test_result"),
+            "the refusal says what to type: {text}"
+        );
+        assert!(
+            !text.contains("$args"),
+            "the rule's own address stays inside the kernel: {text}"
+        );
+    }
+
+    #[test]
+    fn an_undated_rung_names_the_flag() {
+        assert!(what_to_do("$args.now").contains("--at <iso8601>"));
+        // An address this translator has not heard of is printed verbatim, never guessed at.
+        assert_eq!(
+            what_to_do("$args.something.else"),
+            "nothing was presented at $args.something.else"
+        );
+    }
+
+    #[test]
+    fn an_unreadable_ladder_is_a_refusal_about_the_kernel() {
+        let refusal = MoveRefusal {
+            kind: ArtifactKind::Story,
+            from: ArtifactStatus::Draft,
+            to: ArtifactStatus::Proposed,
+            legal: BTreeSet::new(),
+            reason: RefusalReason::LadderUnreadable {
+                message: "unknown condition operator 'after'".to_owned(),
+            },
+        };
+        let text = refusal.to_string();
+        assert!(
+            text.starts_with("the move to proposed cannot be decided"),
+            "{text}"
+        );
+        assert!(
+            text.contains("unknown condition operator 'after'"),
+            "{text}"
+        );
     }
 
     #[test]
