@@ -91,9 +91,10 @@ impl StepMapId {
         if value.is_empty() {
             return reject("must not be empty".to_owned());
         }
-        if value.len() > 200 {
+        if value.len() > aep_domain::ids::MAX_LENGTH as usize {
             return reject(format!(
-                "must be at most 200 characters, got {}",
+                "must be at most {} characters, got {}",
+                aep_domain::ids::MAX_LENGTH,
                 value.len()
             ));
         }
@@ -178,6 +179,9 @@ impl schemars::JsonSchema for StepMapId {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        // The same bound `Self::new` applies, published because a `pattern` cannot express one:
+        // without it the schema calls a 201-character step-map id valid and the loader refuses it.
+        schema.string().max_length = Some(aep_domain::ids::MAX_LENGTH);
         schema.metadata().description =
             Some("Identifier of a step map, such as `development/default`.".to_owned());
         schema.into()

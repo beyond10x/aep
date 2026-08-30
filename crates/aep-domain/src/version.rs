@@ -86,6 +86,30 @@ fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
     value.strip_prefix(prefix).map_or(value, |rest| rest)
 }
 
+/// How many digits the longest major version anything here parses is written with.
+///
+/// A major version is a [`u32`], so `4294967295` is the longest one `FromStr` accepts, and the
+/// pattern's `[1-9][0-9]*` refuses a leading zero — so no reference the parser takes spells one
+/// longer than this.
+const MAJOR_DIGITS: u32 = 10;
+
+/// The longest string a reference's published rule accepts: `prefix:`, the identifier at its own
+/// bound, `/`, and a major version at [`MAJOR_DIGITS`].
+///
+/// Published as `maxLength` beside the pattern, because a JSON Schema `pattern` cannot express a
+/// length bound and the parser applies one. It is the honest bound and it is still looser than the
+/// parser in one class: the bound `FromStr` really applies is on the *identifier half*
+/// ([`crate::ids::MAX_LENGTH`]), and `maxLength` bounds the whole string, so a reference whose
+/// identifier is over the bound and whose whole string is under this one is a spelling the schema
+/// calls valid and the parser refuses. JSON Schema has no per-component length keyword, which puts
+/// that residue in the same class as the `u32` ceiling; it is pinned by name in
+/// `crates/aep-driver-spec/tests/published_pattern_evaluated.rs` rather than left to be
+/// rediscovered.
+fn published_max_length(prefix: &str) -> u32 {
+    let prefix = u32::try_from(prefix.len()).expect("a reference prefix is a short literal");
+    prefix + crate::ids::MAX_LENGTH + 1 + MAJOR_DIGITS
+}
+
 /// Splits a reference into its identifier and an optional pinned major version.
 ///
 /// The trailing `/<n>` is a version only when `<n>` is a bare integer, which is why
@@ -280,6 +304,7 @@ macro_rules! versioned_ref {
                     ..Default::default()
                 };
                 schema.string().pattern = Some(Self::PATTERN.to_owned());
+                schema.string().max_length = Some(published_max_length($prefix));
                 schema.metadata().description = Some(concat!(
                     "Reference to a ", $kind, ", optionally pinned to a major version."
                 ).to_owned());
@@ -334,6 +359,7 @@ impl schemars::JsonSchema for ProtocolRef {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        schema.string().max_length = Some(published_max_length("protocol:"));
         schema.metadata().description =
             Some("Reference to a protocol at a major version, such as `aep/1`.".to_owned());
         schema.into()

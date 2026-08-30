@@ -451,6 +451,7 @@
     "ApprovalId": {
       "description": "approval identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactKind": {
@@ -484,7 +485,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactRef": {
       "description": "Reference to an artifact, optionally pinned with `@<version>`.",
@@ -501,7 +503,8 @@
         "production"
       ],
       "type": "string",
-      "pattern": "^(\\*|[a-z][a-z0-9-]*)$"
+      "maxLength": 200,
+      "pattern": "^(\\*|[a-z][a-z0-9]*(-[a-z0-9]+)*)$"
     },
     "NetworkIntent": {
       "description": "The direction of a network request, which decides which capability it needs.",
@@ -650,11 +653,13 @@
         "smoke"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^([a-z][a-z0-9]*(-[a-z0-9]+)*|end_to_end)$"
     },
     "ToolRef": {
       "description": "tool identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     },
     "Verifier": {
@@ -675,6 +680,7 @@
         "trace-checker"
       ],
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }

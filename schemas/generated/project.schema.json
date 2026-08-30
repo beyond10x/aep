@@ -110,11 +110,13 @@
     "ProfileVersionedRef": {
       "description": "Reference to a profile, optionally pinned to a major version.",
       "type": "string",
+      "maxLength": 219,
       "pattern": "^(profile:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?(/[1-9][0-9]*)?$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
+      "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "RawHybrid": {

@@ -207,7 +207,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Capability": {
       "description": "A semantic capability, such as `repository.write`, `network.read:private` or `deployment.create:staging`.",
@@ -389,6 +390,7 @@
     "PhaseId": {
       "description": "phase identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "Predicate": {
@@ -417,11 +419,13 @@
     "ProtocolId": {
       "description": "protocol identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
+      "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "Verifier": {
@@ -442,6 +446,7 @@
         "trace-checker"
       ],
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }

@@ -163,6 +163,7 @@ impl schemars::JsonSchema for Verifier {
         // this schema's rule. It used to be paraphrased here, and the paraphrase called
         // `test-runner-` and `lint/2` valid that `ToolRef::new` refuses.
         schema.string().pattern = Some(ToolRef::PATTERN.to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
         schema.metadata().description = Some(
             "A verifier class; the named classes are listed in `examples`, and any other name is \
              treated as an external tool."

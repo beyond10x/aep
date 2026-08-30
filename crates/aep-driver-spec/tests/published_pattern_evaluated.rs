@@ -21,6 +21,10 @@
 //! `*`, `+` — and **panics** on anything else, including a `^` or `$` anywhere but the ends. A
 //! pattern this file cannot read fails loudly instead of being silently mis-evaluated.
 
+use aep_domain::artifact::ArtifactStatus;
+use aep_domain::domain_event::DomainEventType;
+use aep_domain::entity::{ActorRef, EntityLocator, EntityType};
+use aep_domain::facts::{FactPath, FactPattern};
 use aep_domain::ids::{
     ApprovalId, AuditId, ClaimId, CommandId, CorrelationId, EventId, EvidenceId, ExecutionId,
     IdempotencyKey, ObligationId, PhaseId, PrincipleId, ProfileId, ProtocolId, ProviderId,
@@ -265,6 +269,60 @@ fn matches(pattern: &str, value: &str) -> bool {
     matches_compiled(&compile(pattern), value)
 }
 
+// --- the published rule, which is not the pattern alone ---------------------------------------
+
+/// The whole of what a schema says about one string: the `pattern` an editor applies and the
+/// `maxLength` beside it.
+///
+/// Reading the pattern alone is not reading the rule, and the difference is a whole class of
+/// divergence. `validate` refuses an identifier over 200 characters
+/// (`crates/aep-domain/src/ids.rs`) and **no regular expression can say so**: bounding the length
+/// of `[a-z][a-z0-9]*(-[a-z0-9]+)*` is a constraint on the *sum* of the parts, and a regex has no
+/// way to write one — every unit of that pattern consumes one character or two, so a counted
+/// repetition bounds the number of segments and not the number of characters. JSON Schema writes
+/// it in a second keyword instead, and an editor applies both. So a case that wants to say *the
+/// schema and the constructor agree* has to read both.
+///
+/// Read from the [`schemars::JsonSchema`] implementation, which is what `cargo xtask schema`
+/// writes into `schemas/generated/` — not from a `PATTERN` constant, which is only what a type
+/// *says* it publishes.
+struct PublishedRule {
+    /// The published `pattern`.
+    pattern: String,
+    /// The published `maxLength`, where there is one.
+    max_length: Option<u32>,
+    /// The pattern, read once.
+    compiled: Node,
+}
+
+impl PublishedRule {
+    /// The rule `T` publishes.
+    fn read<T: schemars::JsonSchema>() -> Self {
+        let mut generator = schemars::gen::SchemaGenerator::default();
+        let schemars::schema::Schema::Object(object) = T::json_schema(&mut generator) else {
+            panic!("expected a string schema for {}", T::schema_name());
+        };
+        let validation = object
+            .string
+            .expect("this type publishes string validation");
+        let pattern = validation
+            .pattern
+            .expect("this type publishes a string pattern");
+        let compiled = compile(&pattern);
+        Self {
+            pattern,
+            max_length: validation.max_length,
+            compiled,
+        }
+    }
+
+    /// `true` when a document holding `value` here satisfies everything this schema says.
+    fn accepts(&self, value: &str) -> bool {
+        let length = u32::try_from(value.chars().count()).unwrap_or(u32::MAX);
+        matches_compiled(&self.compiled, value) && self.max_length.is_none_or(|cap| length <= cap)
+    }
+}
+
 // --- the corpus ------------------------------------------------------------------------------
 
 /// Every string of length 1..=4 over the characters these rules turn on, plus the spellings worth
@@ -360,97 +418,125 @@ fn charset_corpus() -> Vec<String> {
 /// One published pattern, the name it is published under, and the code that really decides.
 type Published = (&'static str, &'static str, fn(&str) -> bool);
 
-/// Every identifier these two crates publish a pattern for, with the constructor that decides it.
+/// One list of published types, read two ways.
 ///
-/// Listed one by one rather than sampled, because the defect this table is here for is *an
-/// identifier having two definitions*, and a sample of the identifiers is a sample of the defect.
-fn published_identifiers() -> Vec<Published> {
-    vec![
-        ("ProtocolId", ProtocolId::PATTERN, |v| {
-            ProtocolId::new(v).is_ok()
-        }),
-        ("PrincipleId", PrincipleId::PATTERN, |v| {
-            PrincipleId::new(v).is_ok()
-        }),
-        ("ProfileId", ProfileId::PATTERN, |v| {
-            ProfileId::new(v).is_ok()
-        }),
-        ("WorkflowId", WorkflowId::PATTERN, |v| {
-            WorkflowId::new(v).is_ok()
-        }),
-        ("StateId", StateId::PATTERN, |v| StateId::new(v).is_ok()),
-        ("PhaseId", PhaseId::PATTERN, |v| PhaseId::new(v).is_ok()),
-        ("ObligationId", ObligationId::PATTERN, |v| {
-            ObligationId::new(v).is_ok()
-        }),
-        ("ApprovalId", ApprovalId::PATTERN, |v| {
-            ApprovalId::new(v).is_ok()
-        }),
-        ("ClaimId", ClaimId::PATTERN, |v| ClaimId::new(v).is_ok()),
-        ("ToolRef", ToolRef::PATTERN, |v| ToolRef::new(v).is_ok()),
-        ("ServiceId", ServiceId::PATTERN, |v| {
-            ServiceId::new(v).is_ok()
-        }),
-        ("ProviderId", ProviderId::PATTERN, |v| {
-            ProviderId::new(v).is_ok()
-        }),
-        ("RepositoryRef", RepositoryRef::PATTERN, |v| {
-            RepositoryRef::new(v).is_ok()
-        }),
-        ("CommandId", CommandId::PATTERN, |v| {
-            CommandId::new(v).is_ok()
-        }),
-        ("RequestId", RequestId::PATTERN, |v| {
-            RequestId::new(v).is_ok()
-        }),
-        ("CorrelationId", CorrelationId::PATTERN, |v| {
-            CorrelationId::new(v).is_ok()
-        }),
-        ("IdempotencyKey", IdempotencyKey::PATTERN, |v| {
-            IdempotencyKey::new(v).is_ok()
-        }),
-        ("AuditId", AuditId::PATTERN, |v| AuditId::new(v).is_ok()),
-        ("EventId", EventId::PATTERN, |v| EventId::new(v).is_ok()),
-        ("RelationId", RelationId::PATTERN, |v| {
-            RelationId::new(v).is_ok()
-        }),
-        ("TaskId", TaskId::PATTERN, |v| TaskId::new(v).is_ok()),
-        ("EvidenceId", EvidenceId::PATTERN, |v| {
-            EvidenceId::new(v).is_ok()
-        }),
-        ("ExecutionId", ExecutionId::PATTERN, |v| {
-            ExecutionId::new(v).is_ok()
-        }),
-        ("SubjectRef", SubjectRef::PATTERN, |v| {
-            SubjectRef::new(v).is_ok()
-        }),
-        ("StepMapId", StepMapId::PATTERN, |v| {
-            StepMapId::new(v).is_ok()
-        }),
-    ]
+/// A case that only wants the `pattern` takes the first function; a case that needs the whole
+/// published rule — `pattern` and `maxLength` together — takes the second. One list, so the two
+/// views cannot drift, which is the defect this whole file is about and would be a poor joke to
+/// reintroduce in the file that tests for it.
+macro_rules! published_table {
+    ($patterns:ident, $rules:ident, [$(($name:ident, $accepts:expr)),+ $(,)?]) => {
+        /// Each type below, with the pattern constant it names and the code that decides it.
+        fn $patterns() -> Vec<Published> {
+            vec![$((stringify!($name), $name::PATTERN, $accepts as fn(&str) -> bool)),+]
+        }
+
+        /// Each type below, with the rule its schema really publishes and the code that decides
+        /// it.
+        fn $rules() -> Vec<(&'static str, PublishedRule, fn(&str) -> bool)> {
+            vec![$((
+                stringify!($name),
+                PublishedRule::read::<$name>(),
+                $accepts as fn(&str) -> bool,
+            )),+]
+        }
+    };
 }
 
-/// Every versioned reference these two crates publish a pattern for, with its parser.
-fn published_references() -> Vec<Published> {
-    vec![
-        ("ProtocolRef", ProtocolRef::PATTERN, |v| {
-            v.parse::<ProtocolRef>().is_ok()
-        }),
-        ("PrincipleRef", PrincipleRef::PATTERN, |v| {
-            v.parse::<PrincipleRef>().is_ok()
-        }),
-        ("WorkflowRef", WorkflowRef::PATTERN, |v| {
-            v.parse::<WorkflowRef>().is_ok()
-        }),
-        ("ProfileVersionedRef", ProfileVersionedRef::PATTERN, |v| {
-            v.parse::<ProfileVersionedRef>().is_ok()
-        }),
-        ("PinnedWorkflowRef", PinnedWorkflowRef::PATTERN, |v| {
-            v.parse::<WorkflowRef>()
-                .is_ok_and(|reference| PinnedWorkflowRef::try_from(reference).is_ok())
-        }),
+// The identifiers these two crates publish a pattern for that one constructor over one string
+// decides, with that constructor.
+//
+// Listed one by one rather than sampled, because the defect this table is here for is *an
+// identifier having two definitions*, and a sample of the identifiers is a sample of the defect.
+//
+// It is not, and no longer claims to be, every string these two crates publish a pattern for — its
+// docstring claimed exactly that while omitting fourteen types, which is a sample wearing a
+// census's clothes. Here is where the rest are decided, so a reader looking for a type can see
+// whether anything evaluates it:
+//
+// * `TestSuite`, `TaskKind`, `ArtifactKind`, `Environment` and `Verifier` — open vocabularies, a
+//   named list plus a constructor. Decided by `published_vocabularies` below, which reads their
+//   patterns out of `JsonSchema` because they have no `PATTERN` constant.
+// * `ProtocolRef`, `PrincipleRef`, `WorkflowRef`, `ProfileVersionedRef`, `PinnedWorkflowRef` —
+//   decided by `published_references` below.
+// * `ArtifactId` and `ArtifactRef` — **not decided anywhere, and diverging today.**
+//   `ArtifactId::new` accepts any of `-`, `_`, `.` and `/` anywhere in either half, including
+//   first; `ArtifactId::PATTERN` requires each half to *start* with `[A-Za-z0-9]`. Measured, both
+//   sides: `_a:b` and `.a:b` are taken by the constructor and refused by the pattern, and — against
+//   the report that sent this here — `design:auth_flow` and `a-:b` are taken by **both**, because
+//   `_` is inside the pattern's character class. So the divergence is a leading separator and not
+//   an underscore, and it runs schema-stricter-than-loader: an editor marks a document invalid
+//   that would load. It is the same class of defect as this file's subject and it is *not* fixed
+//   here, because the story names neither type and a second fix hiding inside this one is how a
+//   change stops being reviewable. Reported for its own unit.
+// * `EntityId`, `VersionedEntityRef`, `SpecDigest` and `TranscriptDigest` — their patterns use
+//   counted repetition (`{12,128}`, `{16,64}`, `{64}`), which the interpreter above refuses by
+//   design and *loudly*, so adding one here would panic rather than mislead.
+// * `Horizon` (`crates/aep-domain/src/time.rs`) — its pattern uses `\s`, which the interpreter
+//   would read as the letter `s` and would **not** complain about. That is the one exclusion worth
+//   being uncomfortable about: it is out because the instrument would silently mis-evaluate it,
+//   and the honest fix is to teach the interpreter `\s` and a counted repetition, in a change
+//   whose subject is the instrument rather than a pattern.
+//
+// That list was assembled by reading every `pattern = Some(` in the two crates' `src/`, and
+// nothing checks that it stays complete: a type that starts publishing a pattern tomorrow appears
+// in no table and fails no case. Making the census checkable needs the generated schemas or a
+// source scan, and either is its own unit.
+published_table![
+    published_identifiers,
+    published_identifier_rules,
+    [
+        (ProtocolId, |v| ProtocolId::new(v).is_ok()),
+        (PrincipleId, |v| PrincipleId::new(v).is_ok()),
+        (ProfileId, |v| ProfileId::new(v).is_ok()),
+        (WorkflowId, |v| WorkflowId::new(v).is_ok()),
+        (StateId, |v| StateId::new(v).is_ok()),
+        (PhaseId, |v| PhaseId::new(v).is_ok()),
+        (ObligationId, |v| ObligationId::new(v).is_ok()),
+        (ApprovalId, |v| ApprovalId::new(v).is_ok()),
+        (ClaimId, |v| ClaimId::new(v).is_ok()),
+        (ToolRef, |v| ToolRef::new(v).is_ok()),
+        (ServiceId, |v| ServiceId::new(v).is_ok()),
+        (ProviderId, |v| ProviderId::new(v).is_ok()),
+        (RepositoryRef, |v| RepositoryRef::new(v).is_ok()),
+        (CommandId, |v| CommandId::new(v).is_ok()),
+        (RequestId, |v| RequestId::new(v).is_ok()),
+        (CorrelationId, |v| CorrelationId::new(v).is_ok()),
+        (IdempotencyKey, |v| IdempotencyKey::new(v).is_ok()),
+        (AuditId, |v| AuditId::new(v).is_ok()),
+        (EventId, |v| EventId::new(v).is_ok()),
+        (RelationId, |v| RelationId::new(v).is_ok()),
+        (TaskId, |v| TaskId::new(v).is_ok()),
+        (EvidenceId, |v| EvidenceId::new(v).is_ok()),
+        (ExecutionId, |v| ExecutionId::new(v).is_ok()),
+        (SubjectRef, |v| SubjectRef::new(v).is_ok()),
+        (StepMapId, |v| StepMapId::new(v).is_ok()),
+        (ArtifactStatus, |v| ArtifactStatus::parse(v).is_ok()),
+        (EntityType, |v| EntityType::parse(v).is_ok()),
+        (EntityLocator, |v| EntityLocator::parse(v).is_ok()),
+        (ActorRef, |v| ActorRef::parse(v).is_ok()),
+        (DomainEventType, |v| DomainEventType::parse(v).is_ok()),
+        (FactPath, |v| FactPath::new(v).is_ok()),
+        (FactPattern, |v| FactPattern::new(v).is_ok()),
     ]
-}
+];
+
+// Every versioned reference these two crates publish a pattern for, with its parser.
+published_table![
+    published_references,
+    published_reference_rules,
+    [
+        (ProtocolRef, |v| v.parse::<ProtocolRef>().is_ok()),
+        (PrincipleRef, |v| v.parse::<PrincipleRef>().is_ok()),
+        (WorkflowRef, |v| v.parse::<WorkflowRef>().is_ok()),
+        (ProfileVersionedRef, |v| v
+            .parse::<ProfileVersionedRef>()
+            .is_ok()),
+        (PinnedWorkflowRef, |v| v.parse::<WorkflowRef>().is_ok_and(
+            |reference| PinnedWorkflowRef::try_from(reference).is_ok()
+        )),
+    ]
+];
 
 /// `true` when the loader takes a step map pinned to `workflow`.
 fn loads(workflow: &str) -> bool {
@@ -734,10 +820,18 @@ fn the_numeric_tail_rule_is_expressible_as_a_pattern() {
 /// `WorkflowId`, and what neither would have found for `ServiceId` or `ObligationId` because
 /// nobody was looking there.
 ///
-/// **What this case cannot say.** `validate` refuses an identifier longer than 200 characters and
-/// no pattern here bounds length, so the corpus stays short; the divergence exists and is a
-/// tightening the loader applies on top, not a document an editor calls valid and the loader
-/// rejects on a spelling.
+/// **What this case cannot say.** It reads the `pattern` and nothing else, and a pattern is not
+/// the whole published rule. `validate` refuses an identifier longer than 200 characters, no
+/// regular expression can express a length bound over a body whose units are one character or two,
+/// and the schema says it in `maxLength` instead — so this corpus stays short and this case is
+/// silent about length. The case that reads both keywords is
+/// [`every_published_identifier_pattern_agrees_with_its_constructor_at_the_length_bound`].
+///
+/// The sentence this replaces argued the gap away: *"the divergence exists and is a tightening the
+/// loader applies on top, not a document an editor calls valid and the loader rejects on a
+/// spelling."* A 201-character identifier is exactly a document an editor called valid and the
+/// loader rejected, so the argument was false, and a false argument in a doc comment is worse than
+/// no comment — it is the sentence that stops the next reader looking.
 #[test]
 fn every_published_identifier_pattern_accepts_exactly_what_its_constructor_accepts() {
     let corpus = charset_corpus();
@@ -803,5 +897,353 @@ fn every_reference_the_published_pattern_accepts_is_one_the_parser_accepts() {
          tells an author a document is fine that will not load. First few: {:#?}",
         divergent.len(),
         divergent.iter().take(12).collect::<Vec<_>>()
+    );
+}
+
+// --- adversarial round 1 ------------------------------------------------------------------------
+//
+// Added while attacking `story:workflow-id-pattern-numeric-tail`. Nothing above this line is
+// changed: these state the same property the cases above state, over two input classes the two
+// corpora cannot reach — a string longer than the bound `validate` itself draws, and the open
+// vocabularies whose published pattern is still a hand-written paraphrase of `Charset::Kebab`.
+
+use aep_domain::artifact::ArtifactKind;
+use aep_domain::capability::Environment;
+use aep_domain::evidence::TestSuite;
+use aep_domain::task::TaskKind;
+use aep_domain::verification::Verifier;
+
+/// The pattern `schemars` publishes for `T` — the string `cargo xtask schema` writes into
+/// `schemas/generated/`.
+///
+/// Read from the `JsonSchema` implementation rather than from a `PATTERN` constant, because the
+/// types below have no `PATTERN` constant: their pattern is a literal inside `json_schema`, which
+/// is the shape this change was meant to remove. One reader, [`PublishedRule::read`], so that a
+/// case reading the pattern and a case reading the whole rule cannot come to disagree about where
+/// either lives.
+fn published_pattern_of<T: schemars::JsonSchema>() -> String {
+    PublishedRule::read::<T>().pattern
+}
+
+/// One published open-vocabulary pattern, the name it is published under, and its parser.
+type PublishedVocabulary = (&'static str, String, fn(&str) -> bool);
+
+/// The open vocabularies: a named list, plus *any other identifier*, decided by a constructor.
+///
+/// Each of these publishes a pattern and parses with a constructor, which is the same two
+/// definitions of one rule that `identifier_pattern!` exists to collapse. None of them is in
+/// [`published_identifiers`], so nothing above evaluates them.
+fn published_vocabularies() -> Vec<PublishedVocabulary> {
+    vec![
+        (
+            "TestSuite",
+            published_pattern_of::<TestSuite>(),
+            (|value| TestSuite::parse(value).is_ok()) as fn(&str) -> bool,
+        ),
+        ("TaskKind", published_pattern_of::<TaskKind>(), |value| {
+            TaskKind::parse(value).is_ok()
+        }),
+        (
+            "ArtifactKind",
+            published_pattern_of::<ArtifactKind>(),
+            |value| ArtifactKind::parse(value).is_ok(),
+        ),
+        (
+            "Environment",
+            published_pattern_of::<Environment>(),
+            |value| Environment::parse(value).is_ok(),
+        ),
+        ("Verifier", published_pattern_of::<Verifier>(), |value| {
+            Verifier::parse(value).is_ok()
+        }),
+    ]
+}
+
+/// Every published open-vocabulary pattern accepts exactly what its own parser accepts.
+///
+/// The commit that introduced `identifier_pattern!` is titled *one definition per charset, so a
+/// published pattern cannot drift from its constructor*. These five publish a pattern and decide
+/// with a constructor, exactly as the twenty-five in [`published_identifiers`] do, and four of them
+/// still carry the hand-written `[a-z][a-z0-9-]*` paraphrase that `SubjectRef`'s own doc comment
+/// names as the historical defect — the one that puts `-` inside the character class instead of
+/// between segments, and so calls a trailing or repeated hyphen valid that `PrincipleId::new` and
+/// `PhaseId::new` refuse.
+#[test]
+fn every_published_open_vocabulary_pattern_accepts_exactly_what_its_parser_accepts() {
+    let mut corpus = charset_corpus();
+    // The aliases and named members each of these parsers writes down by hand. `end_to_end` is the
+    // one worth reading twice: `TestSuite::parse` names it explicitly
+    // (`crates/aep-domain/src/evidence.rs:101`) and the published pattern has no `_` in it, so the
+    // divergence runs the other way there — an editor marking a document invalid that loads.
+    for extra in [
+        "end_to_end",
+        "end-to-end",
+        "e2e",
+        "in_review",
+        "dev",
+        "prod",
+        "stage",
+        "any",
+        "*",
+        "adr",
+        "prd",
+        "ess",
+        "spec",
+        "review",
+        "fix",
+        "bug",
+        "feat",
+        "test-runner",
+        "human-review",
+    ] {
+        corpus.push(extra.to_owned());
+    }
+    let mut divergent: Vec<String> = Vec::new();
+    for (name, pattern, accepts) in published_vocabularies() {
+        let compiled = compile(&pattern);
+        for value in &corpus {
+            let by_pattern = matches_compiled(&compiled, value);
+            let by_parser = accepts(value);
+            if by_pattern != by_parser {
+                divergent.push(format!(
+                    "{name}: {value:?} — the published pattern says {by_pattern}, \
+                     `{name}::parse` says {by_parser} (pattern: {pattern})"
+                ));
+            }
+        }
+    }
+    assert!(
+        divergent.is_empty(),
+        "{} disagreement(s) between a published pattern and the parser it is published for, over \
+         {} strings. Each is a spelling an editor and the loader answer differently. First few: \
+         {:#?}",
+        divergent.len(),
+        corpus.len(),
+        divergent.iter().take(12).collect::<Vec<_>>()
+    );
+}
+
+/// The empty string and a one-character identifier, which neither corpus contains.
+///
+/// `identifier_corpus` and `charset_corpus` are both built from a `level` seeded with `""` that
+/// only ever pushes candidates of length one or more, so the empty string — the first boundary
+/// there is — is in neither. This case is the *green* half of the boundary: it is here so the red
+/// one below cannot be read as "the boundary was never checked".
+#[test]
+fn the_published_pattern_and_the_constructor_agree_on_the_empty_string() {
+    for (name, pattern, accepts) in published_identifiers() {
+        let compiled = compile(pattern);
+        for value in ["", "a", "a:a"] {
+            assert_eq!(
+                matches_compiled(&compiled, value),
+                accepts(value),
+                "{name} disagrees with its constructor on {value:?}"
+            );
+        }
+    }
+}
+
+/// Every published identifier rule agrees with its constructor at the length bound `validate`
+/// draws, which is 200 characters.
+///
+/// `validate` refuses an identifier longer than 200 characters (`crates/aep-domain/src/ids.rs`),
+/// and when this case was written no published rule said so, so the schema called a 201-character
+/// identifier valid and the loader refused it. That is the acceptance statement of
+/// `story:workflow-id-pattern-numeric-tail` — *"the published schema and `WorkflowId::new` agree
+/// on every input"* — with a counterexample.
+///
+/// **It is asked of the rule, not of the pattern.** A JSON Schema `pattern` cannot express a
+/// length bound over any of these bodies: every unit of `[a-z][a-z0-9]*(-[a-z0-9]+)*` consumes one
+/// character or two, so a counted repetition bounds segments and not characters, and the exact
+/// bound needs a constraint on their sum, which a regular expression has no way to write. The
+/// keyword for it is `maxLength`; every rule here whose constructor draws a length bound now
+/// carries one, and [`PublishedRule`] is what reads the pair. The seven whose constructors draw
+/// none — `ArtifactStatus`, `EntityType`, `EntityLocator`, `ActorRef`, `DomainEventType`,
+/// `FactPath` and `FactPattern` — publish no `maxLength` either, which is the agreement this case
+/// asks for and not an omission.
+///
+/// **The residue, and why it is a residue.** `maxLength` bounds the *whole* string, and
+/// `SubjectRef::new` bounds each *half* — a kind of at most 200 and an id of at most 200. Those
+/// two rules are not the same rule and neither implies the other: `a:` followed by 201 characters
+/// is 203 long and refused by the constructor, while a 200-character kind and a 200-character id
+/// is 401 long and accepted by it. So no single `maxLength` is right, and JSON Schema has no
+/// per-component length keyword to write the real rule with. That puts it in the same class as the
+/// `u32` major-version ceiling, which `story:workflow-id-pattern-numeric-tail` puts out of scope by
+/// name for the same reason — and it is pinned below rather than described, so that a new
+/// divergence fails here and a fixed one does too.
+#[test]
+fn every_published_identifier_pattern_agrees_with_its_constructor_at_the_length_bound() {
+    let long = "a".repeat(201);
+    let at_bound = "a".repeat(200);
+    let values = [
+        ("a 200-character identifier", at_bound.clone()),
+        ("a 201-character identifier", long.clone()),
+        ("`a:` and a 201-character second half", format!("a:{long}")),
+        ("a 201-character first half and `:a`", format!("{long}:a")),
+    ];
+    let mut divergent: Vec<String> = Vec::new();
+    for (name, rule, accepts) in published_identifier_rules() {
+        for (shape, value) in &values {
+            let by_rule = rule.accepts(value);
+            let by_constructor = accepts(value);
+            if by_rule != by_constructor {
+                divergent.push(format!(
+                    "{name}: {shape} ({} characters) — the published rule says {by_rule}, the \
+                     constructor says {by_constructor}",
+                    value.len()
+                ));
+            }
+        }
+    }
+    let (composite, single): (Vec<String>, Vec<String>) = divergent
+        .into_iter()
+        .partition(|divergence| divergence.starts_with("SubjectRef:"));
+    assert!(
+        single.is_empty(),
+        "{} disagreement(s) at the 200-character bound, so an editor calls an identifier valid \
+         that the loader refuses on length alone — or refuses one it would take. Every rule here \
+         is a pattern over one charset plus a `maxLength`, and both are expressible, so there is \
+         nothing here to record as out of scope. First few: {:#?}",
+        single.len(),
+        single.iter().take(12).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        composite,
+        vec![
+            "SubjectRef: `a:` and a 201-character second half (203 characters) — the published \
+             rule says true, the constructor says false"
+                .to_owned(),
+            "SubjectRef: a 201-character first half and `:a` (203 characters) — the published \
+             rule says true, the constructor says false"
+                .to_owned(),
+        ],
+        "the per-component length residue is not what it was. A longer list is a new divergence \
+         and is a defect; a shorter one means somebody found a way to publish a per-half bound, \
+         and this expectation should shrink with it."
+    );
+}
+
+/// Every published reference rule agrees with its parser at the length bound too.
+///
+/// The references were the half of the length gap nobody had a case for: `every_reference_the_\
+/// published_pattern_accepts_is_one_the_parser_accepts` runs over a corpus of three-character
+/// strings, so it says nothing about a 201-character identifier with `/1` after it — and
+/// `crates/aep-domain/src/version.rs` claims in a doc comment that this residue is pinned by name
+/// here. It is, from here on, rather than only claimed.
+///
+/// A reference's rule now carries a `maxLength` of `prefix:` plus the identifier's own bound plus
+/// `/` plus the ten digits a `u32` is written with. That is the honest bound for the whole string
+/// and it is not the rule the parser applies, which bounds the *identifier component*: a
+/// 201-character id is 201 characters and the whole-string bound is 220, so the schema takes it
+/// and `FromStr` does not. Same class as the `u32` ceiling, same treatment — pinned, not described.
+#[test]
+fn every_published_reference_rule_agrees_with_its_parser_at_the_length_bound() {
+    let long = "a".repeat(201);
+    let at_bound = "a".repeat(200);
+    let values = [
+        ("a 200-character identifier", at_bound.clone()),
+        ("a 201-character identifier", long.clone()),
+        (
+            "a 200-character identifier at `/1`",
+            format!("{at_bound}/1"),
+        ),
+        ("a 201-character identifier at `/1`", format!("{long}/1")),
+        (
+            "a 400-character identifier at `/1`",
+            format!("{}/1", "a".repeat(400)),
+        ),
+    ];
+    let mut divergent: Vec<String> = Vec::new();
+    for (name, rule, parses) in published_reference_rules() {
+        for (shape, value) in &values {
+            let by_rule = rule.accepts(value);
+            let by_parser = parses(value);
+            if by_rule != by_parser {
+                divergent.push(format!(
+                    "{name}: {shape} ({} characters) — the published rule says {by_rule}, the \
+                     parser says {by_parser}",
+                    value.len()
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        divergent,
+        vec![
+            "ProtocolRef: a 201-character identifier at `/1` (203 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "PrincipleRef: a 201-character identifier (201 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "PrincipleRef: a 201-character identifier at `/1` (203 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "WorkflowRef: a 201-character identifier (201 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "WorkflowRef: a 201-character identifier at `/1` (203 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "ProfileVersionedRef: a 201-character identifier (201 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "ProfileVersionedRef: a 201-character identifier at `/1` (203 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+            "PinnedWorkflowRef: a 201-character identifier at `/1` (203 characters) — the published rule says true, the parser says false"
+                .to_owned(),
+        ],
+        "the per-component length residue on the references is not what it was. Every entry here \
+         is a whole string inside the published `maxLength` whose *identifier component* is over \
+         the bound `FromStr` applies to it, which JSON Schema has no keyword for. Anything else is \
+         a new divergence and is a defect; a shorter list means the component bound became \
+         expressible and this expectation should shrink with it."
+    );
+}
+
+/// No pin the published rule calls valid is one the loader refuses — at the length bound, as far
+/// as JSON Schema can say it.
+///
+/// The same statement as
+/// [`no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses`], over the one input class
+/// its corpus cannot reach: `identifier_corpus` builds nothing longer than twelve characters, so a
+/// workflow id past the 200-character bound is outside it. When this case was written
+/// `schemas/generated/driver-steps.schema.json` called every one of these pins valid and
+/// `StepMap::try_from` refused two of them.
+///
+/// The pin's rule now carries a `maxLength` — `workflow:`, an identifier at its own bound, `/` and
+/// a major version at the ten digits a `u32` is written with — and the first assertion is that it
+/// does something: a pin past that bound is refused by the schema now and was not before.
+///
+/// **The residue.** The bound the loader applies is on the *identifier component*, and `maxLength`
+/// bounds the whole string; a 201-character id with `/1` after it is 203 characters, inside the
+/// whole-string bound and outside the component one. JSON Schema has no per-component length
+/// keyword, so this is the `u32`-ceiling class again: not a thing left undone, a thing the format
+/// cannot say. It is pinned by exact value rather than described.
+#[test]
+fn no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses_past_the_length_bound() {
+    let pins = [
+        format!("{}/1", "a".repeat(200)),
+        format!("{}/1", "a".repeat(201)),
+        format!("workflow:{}/1", "a".repeat(201)),
+        format!("{}/1", "a".repeat(400)),
+        format!("workflow:{}/4294967295", "a".repeat(300)),
+    ];
+    let rule = PublishedRule::read::<PinnedWorkflowRef>();
+    let bound = rule.max_length.expect("the pin publishes a length bound");
+    for pin in &pins {
+        let length = u32::try_from(pin.len()).expect("a short pin");
+        assert_eq!(
+            rule.accepts(pin),
+            length <= bound && matches(PinnedWorkflowRef::PATTERN, pin),
+            "the published `maxLength` of {bound} is not deciding a {length}-character pin"
+        );
+    }
+    let divergent: Vec<&String> = pins
+        .iter()
+        .filter(|pin| rule.accepts(pin) && !loads(pin))
+        .collect();
+    assert_eq!(
+        divergent.iter().map(|pin| pin.len()).collect::<Vec<_>>(),
+        vec![203, 212],
+        "the pins the published rule calls valid and the loader refuses are not the two the \
+         per-component bound accounts for. A longer list is an editor telling an author a step map \
+         is fine that will not load; a shorter one means the component bound became expressible, \
+         and this expectation should shrink with it.\npublished rule: {} with maxLength {bound}",
+        rule.pattern
     );
 }

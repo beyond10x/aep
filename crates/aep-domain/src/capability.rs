@@ -135,7 +135,13 @@ impl schemars::JsonSchema for Environment {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             ..Default::default()
         };
-        schema.string().pattern = Some("^(\\*|[a-z][a-z0-9-]*)$".to_owned());
+        // `parse` sends anything it does not name to `PhaseId::new`, so `Charset::Kebab`'s rule
+        // is this schema's rule with the `*` wildcard in front of it. The paraphrase this replaces
+        // put `-` inside the character class and so called `prod-` and `a--b` valid that
+        // `Environment::parse` refuses.
+        schema.string().pattern =
+            Some(crate::identifier_pattern!(Kebab, "^(\\*|", ")$").to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
         schema.metadata().description =
             Some("A deployment environment; `*` means every environment.".to_owned());
         schema.metadata().examples = ["*", "development", "test", "staging", "production"]

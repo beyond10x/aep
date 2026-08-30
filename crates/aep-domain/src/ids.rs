@@ -22,10 +22,27 @@
 //! or a document is valid to one and invalid to the other. [`identifier_pattern!`](crate::identifier_pattern) is the second
 //! spelling, in one place per rule, and every identifier and reference in the workspace composes
 //! its published pattern from it.
+//!
+//! The length bound is the part of `validate` a `pattern` cannot carry: bounding
+//! `[a-z][a-z0-9]*(-[a-z0-9]+)*` at [`MAX_LENGTH`] characters is a constraint on the sum of its
+//! parts, and a regular expression has no way to write one. It is published in the keyword that
+//! can, `maxLength`, beside every pattern here — without it the schema calls a 201-character
+//! identifier valid and the loader refuses it, which is the same defect one keyword along.
 
 use std::fmt;
 
 use crate::error::ParseError;
+
+/// The longest an identifier may be.
+///
+/// Published as `maxLength` beside every pattern these rules generate, because a `pattern` cannot
+/// express a length bound and `validate` does: without it the schema calls a 201-character
+/// identifier valid and the loader refuses it, which is the same one-rule-two-definitions defect
+/// [`identifier_pattern!`](crate::identifier_pattern) exists to remove, in a second keyword.
+///
+/// `validate` counts bytes and JSON Schema counts characters. Every charset here is ASCII-only, so
+/// a string the pattern accepts has one byte per character and the two counts are the same number.
+pub const MAX_LENGTH: u32 = 200;
 
 /// Charset rule applied to an identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,9 +87,9 @@ fn validate(value: &str, charset: Charset, kind: &'static str) -> Result<(), Par
     if value.is_empty() {
         return reject("must not be empty".to_owned());
     }
-    if value.len() > 200 {
+    if value.len() > MAX_LENGTH as usize {
         return reject(format!(
-            "must be at most 200 characters, got {}",
+            "must be at most {MAX_LENGTH} characters, got {}",
             value.len()
         ));
     }
@@ -279,6 +296,7 @@ macro_rules! identifier {
                     ..Default::default()
                 };
                 schema.string().pattern = Some(Self::PATTERN.to_owned());
+                schema.string().max_length = Some($crate::ids::MAX_LENGTH);
                 schema.metadata().description = Some(format!("{} identifier.", $kind));
                 schema.into()
             }
@@ -562,6 +580,13 @@ impl schemars::JsonSchema for SubjectRef {
             ..Default::default()
         };
         schema.string().pattern = Some(Self::PATTERN.to_owned());
+        // A kind, a `:` and an id, each half bounded by `validate`. The bound `Self::new` really
+        // applies is *per half*, and JSON Schema has no keyword for that: `maxLength` bounds the
+        // whole string, so `a:` followed by 201 characters stays inside 401 and is refused by the
+        // constructor. That residue is pinned by
+        // `crates/aep-driver-spec/tests/published_pattern_evaluated.rs`, which names it rather than
+        // leaving it to be rediscovered.
+        schema.string().max_length = Some(2 * MAX_LENGTH + 1);
         schema.metadata().description =
             Some("Subject of evidence, written `<kind>:<id>`.".to_owned());
         schema.into()

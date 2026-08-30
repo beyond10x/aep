@@ -165,7 +165,13 @@ impl schemars::JsonSchema for TaskKind {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             ..Default::default()
         };
-        schema.string().pattern = Some("^[a-z][a-z0-9-]*$".to_owned());
+        // `parse` sends anything it does not name to `PrincipleId::new`, so `Charset::Kebab`'s
+        // rule is this schema's rule, taken from `aep-domain`'s one definition of it rather than
+        // paraphrased here: the paraphrase this replaces called `fix-` and `a--b` valid that
+        // `TaskKind::parse` refuses. Every alias `parse` takes — `fix`, `bug`, `feat` — is
+        // kebab-case already, so none needs spelling out beside it.
+        schema.string().pattern = Some(crate::identifier_pattern!(Kebab, "^", "$").to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
         schema.metadata().description = Some("What sort of work the task is.".to_owned());
         schema.metadata().examples = TaskKind::NAMED
             .iter()

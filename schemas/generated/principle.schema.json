@@ -153,6 +153,7 @@
     "ApprovalId": {
       "description": "approval identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ApprovalRequirement": {
@@ -220,7 +221,8 @@
         "executable-system-specification"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "ArtifactRef": {
       "description": "Reference to an artifact, optionally pinned with `@<version>`.",
@@ -595,6 +597,7 @@
     "PrincipleId": {
       "description": "principle identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "RawObligation": {
@@ -1040,6 +1043,7 @@
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
+      "maxLength": 401,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "Verifier": {
@@ -1060,6 +1064,7 @@
         "trace-checker"
       ],
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?$"
     }
   }

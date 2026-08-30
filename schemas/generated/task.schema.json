@@ -325,6 +325,7 @@
     "PrincipleId": {
       "description": "principle identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "PrincipleOverrides": {
@@ -351,26 +352,31 @@
     "PrincipleRef": {
       "description": "Reference to a principle, optionally pinned to a major version.",
       "type": "string",
+      "maxLength": 221,
       "pattern": "^(principle:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(/[1-9][0-9]*)?$"
     },
     "ProfileVersionedRef": {
       "description": "Reference to a profile, optionally pinned to a major version.",
       "type": "string",
+      "maxLength": 219,
       "pattern": "^(profile:)?[a-z][a-z0-9]*(-[a-z0-9]+)*(([./][a-z0-9]+(-[a-z0-9]+)*)*[./]([a-z0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*|[0-9]+(-[a-z0-9]+)+))?(/[1-9][0-9]*)?$"
     },
     "ProtocolRef": {
       "description": "Reference to a protocol at a major version, such as `aep/1`.",
       "type": "string",
+      "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
+      "maxLength": 401,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "TaskId": {
       "description": "task identifier.",
       "type": "string",
+      "maxLength": 200,
       "pattern": "^[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "TaskKind": {
@@ -389,7 +395,8 @@
         "documentation"
       ],
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "maxLength": 200,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     }
   }
 }
