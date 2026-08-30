@@ -169,7 +169,13 @@ pub enum UnknownReason {
     /// schema renames and drops fields between versions, and an absent one means this transcript
     /// cannot answer the question.
     FieldAbsent {
-        /// The field, in dotted form: `usage.cache_read_input_tokens`.
+        /// The field, spelled as the record it was read from names it.
+        ///
+        /// Dotted where the record it came off has to be named — `usage.cache_read_input_tokens`,
+        /// `rate_limit.status`, `requests[].output_tokens` — and bare where the expectation's own
+        /// name already says which record it read, as `tokens.input` does for `input_tokens`.
+        /// There is no single form, and a reader is meant to be able to go and look at the field
+        /// this names rather than to parse it.
         field: String,
     },
     /// The selector picked no tool call at all.
@@ -251,6 +257,30 @@ pub enum UnknownReason {
         /// Which window, where the harness named one.
         window: Option<String>,
     },
+    /// A series stood still where the expectation asked which way it went.
+    ///
+    /// **`unk`, and deliberately neither of the other two.** A series that never moved is
+    /// consistent with `non_decreasing` and with `non_increasing` at once, so an `ok` would be a
+    /// verdict that holds whichever direction the author wrote — and a `gap` would be a false
+    /// accusation, because a constant series genuinely is non-decreasing. Nobody found out which
+    /// way this run was going; that is the third value's whole job.
+    ///
+    /// The condition is over the whole series and not over one pair, because "consistent with
+    /// both directions" is only true of the whole series: a single still pair inside a run that
+    /// moved somewhere leaves the opposite direction gapping, and there is nothing left for a
+    /// third value to be undecided about.
+    SeriesDidNotMove {
+        /// The field, in dotted form: `requests[].cache_read_input_tokens`.
+        field: String,
+        /// How many requests stood still — every one of them, or this reason would not be here.
+        requests: usize,
+    },
+    /// The run made no API request, so there is no series to assert anything about.
+    ///
+    /// `unk` and not a vacuous pass: an expectation must not be able to hold by selecting
+    /// nothing, which is the same rule [`Self::NothingInScope`] carries for a tool selector. It
+    /// is what every series assertion reads under a reader that records no per-request usage.
+    NoRequests,
     /// A ratio has no denominator in this transcript.
     ///
     /// A rate over zero is not zero.
@@ -268,6 +298,12 @@ impl fmt::Display for UnknownReason {
             Self::NoRateLimitEvent => f.write_str("this transcript records no rate-limit state"),
             Self::NoThinkingEstimate => f.write_str("this transcript records no thinking estimate"),
             Self::NoFinalText => f.write_str("this run produced no final assistant text"),
+            Self::NoRequests => f.write_str("this transcript records no API request"),
+            Self::SeriesDidNotMove { field, requests } => write!(
+                f,
+                "`{field}` never moved across {requests} requests, so a direction over it is \
+                 consistent with both and evidence for neither"
+            ),
             Self::FieldAbsent { field } => write!(f, "this transcript records no `{field}`"),
             Self::NothingInScope { selector } => {
                 write!(f, "no tool call matches {selector}")

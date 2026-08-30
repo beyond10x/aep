@@ -179,9 +179,110 @@ pub enum ToolAvailability {
     },
 }
 
+/// Which per-request usage field an assertion over the series reads.
+///
+/// The harness's own names, so a row names a field a reader will find on the event it cites
+/// rather than a synonym this repository invented for it. Closed, and deliberately not a free
+/// string: a field name no transcript carries would otherwise be a specification that is
+/// permanently `unk` and looks like one that is merely unlucky.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageField {
+    /// Uncached input tokens on the request.
+    InputTokens,
+    /// Output tokens on the request.
+    OutputTokens,
+    /// Cache reads on the request — the ramp that says a context strategy is working.
+    CacheReadInputTokens,
+    /// Cache creation on the request — the one that should be front-loaded.
+    CacheCreationInputTokens,
+}
+
+impl UsageField {
+    /// The field's name, as the document spells it and a report prints it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::InputTokens => "input_tokens",
+            Self::OutputTokens => "output_tokens",
+            Self::CacheReadInputTokens => "cache_read_input_tokens",
+            Self::CacheCreationInputTokens => "cache_creation_input_tokens",
+        }
+    }
+}
+
+/// Which way a series must move, request by request.
+///
+/// **Never a `gap` for a pair that stood still.** A pair of equal values is consistent with both
+/// directions at once, so a series of nothing but those would publish a verdict that is true
+/// whichever way the author wrote the row — the defect `text.matches: {glob: "*"}` is refused
+/// for, arriving in a sequence. The two predicates below are that distinction:
+/// [`holds`](Self::holds) is *this pair did not move the wrong way* and decides the `gap`,
+/// [`moves`](Self::moves) is *this pair moved the way the row says*.
+///
+/// **The `ok`/`unk` split is over the series, not the pair**, and the checker takes it there: a
+/// series is `unk` when no pair moved at all, because that is exactly when the opposite direction
+/// also holds. One still pair among pairs that moved gaps the opposite direction, so the run has
+/// said which way it went and `ok` carries information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Trend {
+    /// Never decreases from one request to the next. The cache-read ramp.
+    NonDecreasing,
+    /// Never increases. Front-loading, stated as a shape.
+    NonIncreasing,
+}
+
+impl Trend {
+    /// Whether one adjacent pair of the series is **consistent with** this trend — it did not
+    /// move the wrong way.
+    ///
+    /// True for a pair that stood still, because a constant series genuinely is non-decreasing
+    /// and reporting it a `gap` would be a false accusation. The definition of the word lives
+    /// here, beside the vocabulary that publishes it, rather than in the checker — two checkers
+    /// disagreeing about what *non-decreasing* means is the failure this placement prevents.
+    pub fn holds(self, previous: u64, current: u64) -> bool {
+        match self {
+            Self::NonDecreasing => current >= previous,
+            Self::NonIncreasing => current <= previous,
+        }
+    }
+
+    /// Whether one adjacent pair **moved** the way this trend says.
+    ///
+    /// What separates a ramp from a flat line: a run whose values never change is consistent with
+    /// `non_decreasing` and is not the shape the row was written to see, and a series in which no
+    /// pair moves is evidence for both directions and therefore for neither, which is why it
+    /// takes the series to `unk` rather than to `ok`.
+    ///
+    /// It does **not** separate a ramp from seven requests reading nothing followed by one
+    /// reading everything. That run genuinely never falls, and `non_decreasing` is the assertion
+    /// that it never falls; refusing it an `ok` would need a strictness this vocabulary does not
+    /// offer, and reporting `unk` would call a run undecided that has already gapped
+    /// `non_increasing`.
+    pub fn moves(self, previous: u64, current: u64) -> bool {
+        previous != current && self.holds(previous, current)
+    }
+
+    /// The word a report prints.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::NonDecreasing => "non-decreasing",
+            Self::NonIncreasing => "non-increasing",
+        }
+    }
+
+    /// Which way a report says the series went.
+    pub fn direction(self) -> &'static str {
+        match self {
+            Self::NonDecreasing => "up",
+            Self::NonIncreasing => "down",
+        }
+    }
+}
+
 /// The v1 expectation vocabulary.
 ///
-/// Fifty-one kinds across five families, each decidable from a transcript alone. The wire form is
+/// Fifty-three kinds across five families, each decidable from a transcript alone. The wire form is
 /// externally tagged under `expect:` and keeps the design's dotted names verbatim —
 /// `expect: {tool.called: {…}}` — so a kind this build does not implement is refused *by name*
 /// and every kind's own parameters get `deny_unknown_fields`, which a flattened form cannot have
@@ -703,6 +804,69 @@ pub enum ExpectationKind {
         ratio: RangeBound,
     },
 
+    // --- how the usage moved, request by request -------------------------------------------
+    /// A named per-request usage field moves monotonically across the run's request series.
+    ///
+    /// The kind the totals cannot express. `cache.read_tokens` says how much a run read from the
+    /// cache; it cannot say that the reads **ramped**, and a context strategy that has quietly
+    /// stopped working keeps a healthy total while the shape goes flat. Three runs with an
+    /// identical total — the observed ramp, a dead-flat line, and one that read nothing for seven
+    /// requests and everything on the eighth — are one `ok` and two `unk` here, where the totals
+    /// cannot tell them apart at all. The series is
+    /// [`TraceIr::request_series`](crate::ir::TraceIr::request_series) — one entry per API
+    /// request, not per streamed event — and a gap names the first adjacent pair that broke the
+    /// trend, so the verdict is one a reader recomputes by looking at the two cited requests.
+    ///
+    /// Three-valued, and the third value is where the work is. A pair that moved the **wrong**
+    /// way is a `gap`, naming it. A series where every pair moved the right way is `ok`. A series
+    /// with no wrong-way pair and at least one that **stood still** is `unk`: a flat stretch
+    /// satisfies `non_decreasing` and `non_increasing` at once, so passing it would publish a
+    /// verdict that holds whichever direction the author wrote — and the two shapes this kind
+    /// exists to catch, a dead-flat run and one that read nothing until the last request, are
+    /// both exactly that. A wrong-way pair beats a still one, which is the Kleene fold the module
+    /// already applies everywhere else.
+    ///
+    /// A run of **one** request satisfies this vacuously: a sequence of one has no pair, so
+    /// nothing broke it and nothing could have. That is the story's own acceptance in as many
+    /// words, and it does sit uneasily beside the flat-pair rule above — the rule says an
+    /// uninformative series is `unk`, and a series of one is as uninformative as they come. The
+    /// acceptance wins here because it was written down; a second consumer is the occasion to
+    /// revisit it, not this one.
+    ///
+    /// `unk` when the run made no API request at all — the standing rule that a scope selecting
+    /// nothing does not pass — and `unk` when any request in the series carries no such field,
+    /// because a trend over the requests that happened to record it is a different claim wearing
+    /// this one's name.
+    #[serde(rename = "usage.trend")]
+    UsageTrend {
+        /// Which per-request field the series is over.
+        field: UsageField,
+        /// Which way it must move.
+        trend: Trend,
+    },
+    /// No single request takes more than a stated share of the run's total for a usage field.
+    ///
+    /// *Cache creation is front-loaded* as a number rather than as a shape: on the observed run
+    /// the first request writes 51.8% of the cache the whole run writes, and a later run that
+    /// spread the same total evenly across eight requests would be re-creating a cache it should
+    /// have been reading.
+    ///
+    /// The denominator is **the series' own sum**, never the terminal record's aggregate. The two
+    /// are different numbers whenever the harness restates usage mid-stream, and a share whose
+    /// denominator a reader cannot add up from the cited requests is a verdict nobody can check.
+    ///
+    /// `unk` when the run made no API request, when any request carries no such field, and when
+    /// the total is zero — a share of nothing is not a share.
+    #[serde(rename = "usage.share")]
+    UsageShare {
+        /// Which per-request field the share is of.
+        field: UsageField,
+        /// The acceptable share, from 0 to 1 — refused outside it, because the share is
+        /// `peak / total` over non-negative terms and a bound no run can reach decides the
+        /// verdict before the transcript is opened.
+        share: RangeBound,
+    },
+
     // --- where the wall clock went ------------------------------------------------------
     /// The run's recorded wall-clock duration.
     ///
@@ -863,6 +1027,8 @@ impl ExpectationKind {
             Self::CacheReadTokens { .. } => "cache.read_tokens",
             Self::CacheCreatedTokens { .. } => "cache.created_tokens",
             Self::CacheHitRatio { .. } => "cache.hit_ratio",
+            Self::UsageTrend { .. } => "usage.trend",
+            Self::UsageShare { .. } => "usage.share",
             Self::DurationTotal { .. } => "duration.total",
             Self::DurationApi { .. } => "duration.api",
             Self::Ttft { .. } => "ttft",
@@ -933,6 +1099,8 @@ impl ExpectationKind {
         "tool.result_bytes",
         "ttft",
         "turns",
+        "usage.share",
+        "usage.trend",
     ];
 }
 
@@ -1085,8 +1253,8 @@ mod tests {
     fn every_kind_names_itself_and_the_published_list_holds_them_all() {
         assert_eq!(
             ExpectationKind::NAMES.len(),
-            51,
-            "the vocabulary is fifty-one kinds; a new one must be published here to be writable"
+            53,
+            "the vocabulary is fifty-three kinds; a new one must be published here to be writable"
         );
         let mut sorted = ExpectationKind::NAMES.to_vec();
         sorted.sort_unstable();
@@ -1115,6 +1283,72 @@ mod tests {
             "the serialized tag and `name()` must be the same word, or a JSON report and a text \
              report would name one expectation two ways"
         );
+    }
+
+    #[test]
+    fn the_two_series_kinds_name_themselves_and_are_published() {
+        let trend = ExpectationKind::UsageTrend {
+            field: UsageField::CacheReadInputTokens,
+            trend: Trend::NonDecreasing,
+        };
+        assert_eq!(trend.name(), "usage.trend");
+        let share = ExpectationKind::UsageShare {
+            field: UsageField::CacheCreationInputTokens,
+            share: RangeBound::at_most(0.6),
+        };
+        assert_eq!(share.name(), "usage.share");
+        for kind in [&trend, &share] {
+            assert!(
+                ExpectationKind::NAMES.contains(&kind.name()),
+                "{} is evaluable and unwritable until it is published",
+                kind.name()
+            );
+            let wire = serde_json::to_value(kind).expect("a kind serializes");
+            assert_eq!(wire["expect"].as_str(), Some(kind.name()));
+        }
+        assert_eq!(
+            serde_json::to_value(&trend).expect("a kind serializes")["trend"].as_str(),
+            Some("non_decreasing"),
+            "the direction travels on the wire as the document spells it"
+        );
+        assert_eq!(
+            serde_json::to_value(&trend).expect("a kind serializes")["field"].as_str(),
+            Some("cache_read_input_tokens"),
+            "the field is the harness's own name for it"
+        );
+    }
+
+    #[test]
+    fn a_run_that_repeated_a_value_has_not_broken_a_trend_and_has_not_shown_one_either() {
+        // Consistency: a repeated value is not a contradiction, and calling it one would accuse a
+        // constant series of not being non-decreasing.
+        assert!(Trend::NonDecreasing.holds(10, 10));
+        assert!(Trend::NonDecreasing.holds(10, 11));
+        assert!(!Trend::NonDecreasing.holds(11, 10));
+        assert!(Trend::NonIncreasing.holds(10, 10));
+        assert!(Trend::NonIncreasing.holds(11, 10));
+        assert!(!Trend::NonIncreasing.holds(10, 11));
+
+        // Evidence: a repeated value is consistent with both directions, so it is evidence for
+        // neither, and that is what separates the `ok` from the `unk`.
+        assert!(!Trend::NonDecreasing.moves(10, 10));
+        assert!(!Trend::NonIncreasing.moves(10, 10));
+        assert!(Trend::NonDecreasing.moves(10, 11));
+        assert!(!Trend::NonDecreasing.moves(11, 10));
+        assert!(Trend::NonIncreasing.moves(11, 10));
+        assert!(!Trend::NonIncreasing.moves(10, 11));
+
+        for (previous, current) in [(10u64, 10u64), (10, 11), (11, 10)] {
+            let both_ways = Trend::NonDecreasing.holds(previous, current)
+                && Trend::NonIncreasing.holds(previous, current);
+            let either_moves = Trend::NonDecreasing.moves(previous, current)
+                || Trend::NonIncreasing.moves(previous, current);
+            assert_ne!(
+                both_ways, either_moves,
+                "a pair satisfies both directions exactly when it moved in neither: \
+                 ({previous}, {current})"
+            );
+        }
     }
 
     #[test]

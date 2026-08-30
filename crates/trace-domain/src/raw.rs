@@ -89,7 +89,7 @@ use crate::matcher::{
 };
 use crate::spec::{
     Aggregate, ApiErrorStatus, Expectation, ExpectationKind, OnUnknown, Severity, ToolAvailability,
-    TraceSpec, SPEC_FORMAT,
+    TraceSpec, Trend, UsageField, SPEC_FORMAT,
 };
 
 /// Reads a specification's text — YAML or JSON — through its validation.
@@ -478,6 +478,14 @@ pub enum RawExpectationKind {
     #[serde(rename = "cache.hit_ratio")]
     CacheHitRatio(RawRangeBound),
 
+    /// `{usage.trend: {field: cache_read_input_tokens, trend: non_decreasing}}`
+    #[serde(rename = "usage.trend")]
+    UsageTrend(RawUsageTrend),
+    /// `{usage.share: {field: cache_creation_input_tokens, at_most: 0.6}}` — the range bound's
+    /// own keys, inline, beside the field they are a share of.
+    #[serde(rename = "usage.share")]
+    UsageShare(RawUsageShare),
+
     /// `{duration.total: {ms: {…}}}`
     #[serde(rename = "duration.total")]
     DurationTotal(RawMs),
@@ -509,6 +517,81 @@ pub enum RawExpectationKind {
     /// `{service_tier: {equals: standard}}`
     #[serde(rename = "service_tier")]
     ServiceTier(RawEquals),
+}
+
+/// Which per-request usage field a series assertion reads, as written.
+///
+/// Closed rather than a free string: a field this build cannot read is refused where the
+/// document is read, not evaluated to `unk` for ever.
+#[derive(Debug, Clone, Copy, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RawUsageField {
+    /// `input_tokens`
+    InputTokens,
+    /// `output_tokens`
+    OutputTokens,
+    /// `cache_read_input_tokens`
+    CacheReadInputTokens,
+    /// `cache_creation_input_tokens`
+    CacheCreationInputTokens,
+}
+
+impl From<RawUsageField> for UsageField {
+    fn from(raw: RawUsageField) -> Self {
+        match raw {
+            RawUsageField::InputTokens => Self::InputTokens,
+            RawUsageField::OutputTokens => Self::OutputTokens,
+            RawUsageField::CacheReadInputTokens => Self::CacheReadInputTokens,
+            RawUsageField::CacheCreationInputTokens => Self::CacheCreationInputTokens,
+        }
+    }
+}
+
+/// Which way a series must move, as written.
+#[derive(Debug, Clone, Copy, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RawTrend {
+    /// `non_decreasing` — never falls from one request to the next.
+    NonDecreasing,
+    /// `non_increasing` — never rises.
+    NonIncreasing,
+}
+
+impl From<RawTrend> for Trend {
+    fn from(raw: RawTrend) -> Self {
+        match raw {
+            RawTrend::NonDecreasing => Self::NonDecreasing,
+            RawTrend::NonIncreasing => Self::NonIncreasing,
+        }
+    }
+}
+
+/// The parameters of `usage.trend`.
+#[derive(Debug, Clone, Copy, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawUsageTrend {
+    /// Which per-request field the series is over.
+    pub field: RawUsageField,
+    /// Which way it must move.
+    pub trend: RawTrend,
+}
+
+/// The parameters of `usage.share`.
+///
+/// The range bound's keys are written out rather than flattened in: `deny_unknown_fields` does
+/// not survive `flatten`, and a document where `at_moist: 0.6` silently became "unbounded" is
+/// worse than one that is a line longer.
+#[derive(Debug, Clone, Copy, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawUsageShare {
+    /// Which per-request field the share is of.
+    pub field: RawUsageField,
+    /// The lowest acceptable share.
+    #[serde(default)]
+    pub at_least: Option<f64>,
+    /// The highest acceptable share.
+    #[serde(default)]
+    pub at_most: Option<f64>,
 }
 
 /// The parameters of `env.plugin_loaded`.
@@ -936,7 +1019,7 @@ fn at_kind(location: &str, kind: &str) -> String {
 /// recorded and the expectation is dropped — a validated [`ExpectationKind`] is one a checker can
 /// evaluate.
 ///
-/// One `match` over all fifty-one, deliberately: this is the seam where the wire vocabulary and
+/// One `match` over all fifty-three, deliberately: this is the seam where the wire vocabulary and
 /// [`ExpectationKind::NAMES`] meet, and splitting it into families would hide the exhaustiveness
 /// that makes a missing kind a compile error rather than a silent gap. It is long for that
 /// reason and no other.
@@ -1149,6 +1232,26 @@ fn kind_of(
         RawExpectationKind::CacheHitRatio(written) => Some(ExpectationKind::CacheHitRatio {
             ratio: range_of(written, &at_kind(location, "cache.hit_ratio"), errors)?,
         }),
+        RawExpectationKind::UsageTrend(written) => Some(ExpectationKind::UsageTrend {
+            field: written.field.into(),
+            trend: written.trend.into(),
+        }),
+        RawExpectationKind::UsageShare(written) => {
+            let at = at_kind(location, "usage.share");
+            let share = range_of(
+                RawRangeBound {
+                    at_least: written.at_least,
+                    at_most: written.at_most,
+                },
+                &at,
+                errors,
+            )?;
+            share_of_a_total(share, &at, errors)?;
+            Some(ExpectationKind::UsageShare {
+                field: written.field.into(),
+                share,
+            })
+        }
 
         RawExpectationKind::DurationTotal(written) => Some(ExpectationKind::DurationTotal {
             ms: count_of(written.ms, &at(location, "duration.total", "ms"), errors)?,
@@ -2114,6 +2217,51 @@ fn range_of(
     Some(bound)
 }
 
+/// Validates that a share bound is a bound over a share.
+///
+/// The share is `peak / total` over non-negative terms with a zero total refused first, so it
+/// never leaves `(0, 1]`. A bound the share cannot be on both sides of is therefore an
+/// expectation whose verdict is settled before the transcript is opened — the same defect
+/// [`range_of`] refuses in its other spelling, *"a bound with no side accepts every value, which
+/// is not a bound"*, and one a reader of the document cannot see because it looks like a number.
+///
+/// **The endpoints are inside that defect, not outside it.** `at_most: 1` and `at_least: 0` can
+/// never report a gap and `at_most: 0` can never report an `ok`, which is what `at_most: 1.5` and
+/// `at_least: -0.5` do one step further out; a rule that refused the far pair and accepted the
+/// near one would be refusing the arithmetic rather than the defect.
+///
+/// `at_least: 1` is the one endpoint that survives, and it is not an exception to the rule: the
+/// share **can** be 1, so the bound is the assertion *one request took the run's whole total for
+/// this field*, and a run either satisfies it or does not.
+fn share_of_a_total(
+    bound: RangeBound,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<()> {
+    // Written as a refutation rather than as `contains`, so that a NaN — which compares false
+    // against everything — is refused rather than accepted by falling through the range test.
+    let unreachable_floor = bound
+        .at_least
+        .is_some_and(|value| !(value > 0.0 && value <= 1.0));
+    let unreachable_ceiling = bound
+        .at_most
+        .is_some_and(|value| !(value > 0.0 && value < 1.0));
+    if unreachable_floor || unreachable_ceiling {
+        errors.refuse(
+            TraceCode::SpecInvalidExpectation,
+            location.to_owned(),
+            format!(
+                "a share is one request's part of a run's own total, so it is above 0 and at \
+                 most 1, and `{bound}` decides this expectation before the run is read; write a \
+                 ceiling below 1 or a floor above 0 — `at_least: 1` is the only bound at an end, \
+                 and it says one request took the whole total"
+            ),
+        );
+        return None;
+    }
+    Some(())
+}
+
 /// Validates a name an expectation is about: present, and not blank.
 fn stated(
     value: String,
@@ -2512,6 +2660,14 @@ expectations:
         ),
         ("ttft", "{ttft: {ms: {at_most: 5000}}}"),
         ("turns", "{turns: {count: {at_most: 20}}}"),
+        (
+            "usage.share",
+            "{usage.share: {field: cache_creation_input_tokens, at_most: 0.6}}",
+        ),
+        (
+            "usage.trend",
+            "{usage.trend: {field: cache_read_input_tokens, trend: non_decreasing}}",
+        ),
     ];
 
     #[test]
@@ -2830,6 +2986,44 @@ expectations:
 
         let range = refusals(&one("{cache.hit_ratio: {at_least: 0.9, at_most: 0.5}}"));
         assert_eq!(range.count(TraceCode::SpecUnsatisfiableBound), 1, "{range}");
+    }
+
+    #[test]
+    fn a_series_assertion_names_a_field_and_a_share_needs_a_side() {
+        let spec = accepted(&one(
+            "{usage.trend: {field: output_tokens, trend: non_increasing}}",
+        ));
+        assert_eq!(
+            spec.expectations[0].kind,
+            ExpectationKind::UsageTrend {
+                field: UsageField::OutputTokens,
+                trend: Trend::NonIncreasing,
+            }
+        );
+
+        let sideless = refusals(&one("{usage.share: {field: input_tokens}}"));
+        assert_eq!(
+            sideless.count(TraceCode::SpecInvalidExpectation),
+            1,
+            "a share with no side accepts every run: {sideless}"
+        );
+
+        let inverted = refusals(&one(
+            "{usage.share: {field: input_tokens, at_least: 0.9, at_most: 0.5}}",
+        ));
+        assert_eq!(
+            inverted.count(TraceCode::SpecUnsatisfiableBound),
+            1,
+            "{inverted}"
+        );
+
+        let misspelled = read_spec(&one(
+            "{usage.trend: {field: cache_tokens, trend: non_decreasing}}",
+        ));
+        assert!(
+            misspelled.is_err(),
+            "a field name no transcript carries is refused rather than read as something else"
+        );
     }
 
     #[test]

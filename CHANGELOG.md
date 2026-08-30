@@ -11,6 +11,43 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+* **A specification can now say how a run's usage *moved*, not only what it totalled.** Two
+  expectation kinds, taking `trace-spec/1` to fifty-three: `usage.trend` states which way a named
+  per-request usage field went across the run's API requests
+  (`{usage.trend: {field: cache_read_input_tokens, trend: non_decreasing}}`), and `usage.share`
+  bounds any one request's share of the run's own total for that field
+  (`{usage.share: {field: cache_creation_input_tokens, at_most: 0.6}}`). This is what catches a
+  context strategy that has quietly stopped working: `cache.read_tokens` stays healthy while the
+  ramp goes flat.
+
+  `usage.trend` is three-valued and the third value is the point. A pair of requests that moved
+  the **wrong** way is a `gap`, naming the first one. A run that moved the right way somewhere and
+  the wrong way nowhere is `ok`. A run that **never moved at all** is `unk` — a run of repeated
+  values is consistent with `non_decreasing` and `non_increasing` at once, so passing it would
+  publish a verdict that holds whichever direction you wrote. Two runs with an identical
+  cache-read total, a ramp and a dead-flat line, are an `ok` and an `unk` where the totals cannot
+  tell them apart at all. Write `on_unknown: gap` to make the flat run fail. A run of **one**
+  request satisfies a trend vacuously.
+
+  The `ok`/`unk` line is drawn over the **series** and not over a pair, because `unk` means *this
+  run is consistent with both directions* and only a run that never moved is. A single flat stretch
+  inside a run that moved elsewhere is an `ok`: `cache_creation_input_tokens` of `20168, 0, 0` is
+  front-loaded and `non_increasing` says so, even though its last pair stood still — the opposite
+  direction gaps on the same series, so there is nothing left to be undecided about.
+
+  Four fields are readable — `input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+  `cache_creation_input_tokens` — and a name outside that list is refused when the document is
+  read rather than reported `unk` for ever. So is a share bound the share cannot be on both sides
+  of: it is `peak / total` with a zero total refused first, so it is above 0 and at most 1, and
+  `at_most: 1.5`, `at_least: -0.5`, `at_most: 1`, `at_least: 0` and `at_most: 0` are all
+  expectations whose verdict does not depend on the run. `at_least: 1` is the one bound at an end
+  that survives — it says one request took the whole total, and a run can fail it. A share's denominator is the series' own sum and never the terminal
+  record's aggregate, so a reader can add the cited requests up. A run that made no API request
+  reports `unk` with the reason *this transcript records no API request*, and so does a run where
+  any request is missing the field — named `requests[].<field>`, so it reads apart from the
+  run-wide kinds' `usage.<field>`. No statistics: no means, no percentiles, no smoothing.
+  `story:usage-series-assertions`.
+
 * **The Claude Code plugin ships a `wave` skill**, and the branch convention it follows is written
   down for the first time. A wave — N stories implemented at once, each on its own `impl/<slug>`
   branch off one base, merged serially onto `wave/<name>`, gated **once** on the merged result and

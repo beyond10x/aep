@@ -313,6 +313,10 @@ fn read_assistant(
         cache_read_input_tokens: usage.and_then(|usage| u64_at(usage, "cache_read_input_tokens")),
         cache_creation_input_tokens: usage
             .and_then(|usage| u64_at(usage, "cache_creation_input_tokens")),
+        // Empty on this wire on purpose: the blocks this request produced are pushed from this
+        // same line below, so `source_line` already joins the record to them and a second copy
+        // here would be a second thing to keep in step.
+        events: Vec::new(),
     });
 
     let Some(blocks) = message
