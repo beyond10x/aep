@@ -66,6 +66,7 @@ Two rules keep this page honest, both learned the expensive way:
 | `0.32.0` | 0.32.0 — the plan tells the truth, and a release stops rewriting itself |
 | `0.32.1` | 0.32.1 — the coverage pre-flight runs before the machine check |
 | `0.33.0` | 0.33.0 — the native arm is driven and governed, and the plan says what stops it and what it serves |
+| `0.34.0` | 0.34.0 — the plan in a browser, and the transitions that move it |
 <!-- generated:delivered-waves:end -->
 
 ## The two halves, and the proposed designs
