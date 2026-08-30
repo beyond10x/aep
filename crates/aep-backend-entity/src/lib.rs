@@ -1256,9 +1256,13 @@ impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
     #[allow(clippy::unused_async_trait_impl)]
     async fn audit(&self, query: &AuditQuery) -> Result<Page<Self::AuditRecord>, QueryError> {
         self.refuse_when_latched()?;
-        let mut page = block_on(self.inner.audit(query))?;
-        let known: BTreeSet<_> = page
-            .items
+        // Aggregate the complete answer first. Paginating memory and then appending records rebuilt
+        // from provider events makes every continuation apply to only half of the result set.
+        let mut unpaged = query.clone();
+        unpaged.limit = None;
+        unpaged.after = None;
+        let mut items = block_on(self.inner.audit(&unpaged))?.items;
+        let known: BTreeSet<_> = items
             .iter()
             .filter_map(|record| record.command_id.clone())
             .collect();
@@ -1294,8 +1298,13 @@ impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
             }
         }
         extra.sort_by_key(|record| record.occurred_at);
-        page.items.extend(extra);
-        Ok(page)
+        items.extend(extra);
+        items.sort_by(|left, right| {
+            left.occurred_at
+                .cmp(&right.occurred_at)
+                .then_with(|| left.audit_id.cmp(&right.audit_id))
+        });
+        Page::paginate(items, query.limit, query.after.as_ref())
     }
 
     /// # The ladder, from the definition the kernel decides with

@@ -8,6 +8,8 @@
 //! the agent acting for them, can answer "something changed" and nothing else — which is exactly the
 //! answer that makes an access review or an incident review impossible.
 
+use std::collections::BTreeSet;
+
 use aep_contract::query::AuditQuery;
 use aep_contract::testing::block_on;
 use aep_domain::audit::AuditRecord;
@@ -122,7 +124,60 @@ pub fn run<B: Backend>(backend: &B) -> SuiteReport {
         ),
     );
 
+    check_pagination(backend, &mut report);
+
     report
+}
+
+/// Walks the whole audit trail in small pages and compares it with the unpaged answer.
+fn check_pagination<B: Backend>(backend: &B, report: &mut SuiteReport) {
+    let property = "audit cursors traverse the complete ordered trail without duplicates";
+    match block_on(backend.audit(&AuditQuery::default())) {
+        Ok(complete) => {
+            let expected: BTreeSet<_> = complete
+                .items
+                .iter()
+                .map(|record| record.audit_id.clone())
+                .collect();
+            let mut query = AuditQuery {
+                limit: Some(2),
+                ..AuditQuery::default()
+            };
+            let mut seen = BTreeSet::new();
+            let mut terminated = false;
+            for _ in 0..=expected.len() {
+                match block_on(backend.audit(&query)) {
+                    Ok(page) => {
+                        seen.extend(page.items.iter().map(|record| record.audit_id.clone()));
+                        query.after = page.next;
+                        if query.after.is_none() {
+                            terminated = true;
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        report.aborted(property, format!("audit could not be paged: {error}"));
+                        return;
+                    }
+                }
+            }
+            report.expect(
+                property,
+                terminated && seen == expected,
+                format!(
+                    "the complete trail held {} ids, paging found {} distinct ids and {}",
+                    expected.len(),
+                    seen.len(),
+                    if terminated {
+                        "terminated"
+                    } else {
+                        "did not terminate"
+                    }
+                ),
+            );
+        }
+        Err(error) => report.aborted(property, format!("audit could not be listed: {error}")),
+    }
 }
 
 /// `true` when `record` reports the change that brought `reference` to its revision.
