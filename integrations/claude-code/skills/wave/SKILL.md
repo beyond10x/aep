@@ -50,6 +50,7 @@ You sequence and dispatch. **You never decide that work is done.**
 | dispatch, route red and green, merge | let an implementor write to the planning store |
 | own **every** `protocol artifact` call | share one build directory between two worktrees |
 | record the evidence and move the stories | report a process killed without having watched it die |
+| take the worktrees and their build directories down | remove a tree whose records nobody has read, or force one that is dirty |
 
 **Why you own every store write.** The planning store's journal is append-only and committed, and
 nothing merges it. Two branches that each move their own story both append to the tail, and the
@@ -152,7 +153,8 @@ the number rather than starting one that cannot finish.
 | Check | Refuse when |
 |---|---|
 | working tree clean, on the base branch | anything uncommitted — you are about to branch from it |
-| `git worktree list` | a previous wave's trees are still there |
+| `git worktree list` | a previous wave's trees are still there — that wave skipped *Take the worktrees down*, and this check refuses rather than repairs |
+| build directories from previous waves | one is still on disk. `git` does not know about it, so nothing else will find it. **Print its size** |
 | free disk against a floor | below the floor. **Print the number**; "insufficient disk" is not actionable |
 | build cache wired up | a compiler cache is available but unset, and you are about to pay for N cold builds |
 | one measured build | you have never measured what one worktree costs. Measure it, record it, then choose N |
@@ -169,6 +171,11 @@ integration branch.
 directory serves one tree's binaries to another and lets one tree's code generation rewrite
 another's committed output — a failure that reads as a mysterious test failure and costs several
 gate runs per agent before anybody suspects it.
+
+**Write down the pair — worktree path and build directory path — as you create each one, and name
+both after the unit.** That list is the only input the cleanup step has. A build directory placed
+outside the worktree is invisible to `git worktree list`, so an unrecorded one is not found again
+by anything; it is found by the disk filling up, months later.
 
 Move each story out of `draft` yourself, in the main tree, after adding whatever edge the store
 requires. The implementors never touch it.
@@ -210,6 +217,39 @@ successes has measured nothing.
 3. Record the evidence the store requires for each story against the merge commit, then move each
    one to its terminal status through `protocol artifact move`.
 4. `protocol artifact validate`, and relay its output **verbatim**.
+
+### Take the worktrees down
+
+The wave is not over when the gate is green. It is over when the trees it made are gone — and
+nothing else does it for you. `git worktree list` in the next wave's pre-flight is a **refusal**,
+not a cleanup, so a wave that skips this step costs itself nothing and blocks the wave after it.
+
+The order is not interchangeable:
+
+1. **Read the untracked records out first.** A driven run's directory, a gate log, the red run an
+   agent quoted — all per-worktree and gitignored, so nothing merged them and nothing will.
+   Anything a reader would want goes into the closing commit, the wave page or a story *before* the
+   tree goes. A worktree removed with its records unread takes the whole account of what happened
+   with it.
+2. **`git worktree remove <path>`, one per unit.** It takes the checkout and leaves the branch,
+   which is the point: the evidence cites `impl/*` by name, so those branches stay and are not
+   deleted.
+3. **Remove each unit's build directory by name**, from the list you wrote when you made it. This
+   is the step that gets missed, because it is the one `git` knows nothing about: a build directory
+   outside the worktree survives `worktree remove` untouched. One wave here left a **16 GB** build
+   directory standing on a disk already at 93%, every worktree it belonged to long since removed,
+   and nothing found it until somebody went looking for free space.
+4. **`git worktree prune`, then `git worktree list` — and read the list.** Report what the list
+   says, not that you ran the removal. A removal you did not confirm is the same class of claim as
+   a process you did not watch die.
+
+**Never force a removal.** `git worktree remove` refuses a tree with uncommitted changes, and
+`--force` answers that by discarding them — an agent's unpushed work, or a run's only record. A
+dirty worktree at cleanup time is a **finding for the operator**: name the path and what is in it,
+leave it standing, and let the next wave's pre-flight refuse on it.
+
+**A unit that left the wave keeps its tree** until the operator says otherwise. It holds the only
+copy of what was tried, which is the reason the third failure was recorded rather than hidden.
 
 ---
 

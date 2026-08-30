@@ -76,8 +76,17 @@ shipped.
 | the units | `impl/*` branches | yes, and they are not deleted — the evidence cites them |
 | the gate's verdict | the closing commit, and the store's evidence record | yes |
 | **a driven run's records** | the run directory, which is **gitignored** | **no** |
+| the worktrees | one per unit | **no** — the coordinator removes them at the end, and the branches stay |
+| the build directories | one per worktree, usually outside it | **no, and `git` will not find them for you** — tens of GB per wave |
 
-The last row is the one that bites. Run artefacts are per-worktree and untracked, so anything a
+The last two rows are the ones that get skipped: `git worktree list` in the next wave's pre-flight
+refuses rather than cleans, so a wave that leaves its trees standing pays nothing and the wave after
+it pays everything. A build directory outside the worktree survives `git worktree remove` untouched
+— one wave here left a 16 GB build directory standing with every tree it belonged to long since
+removed. Neither goes away with `--force`: a worktree that refuses to go is holding uncommitted
+work, and that is a finding for the operator, not an obstacle to clear.
+
+The driven-run row is the one that bites. Run artefacts are per-worktree and untracked, so anything a
 wave learned from them has to be copied out — into the wave page, the closing commit, or a story —
 before the worktree goes. A worktree removed with its records unread takes the whole account of
 what happened with it.

@@ -72,6 +72,10 @@ the easy half.
    did not test trains the operator to stop reading, and this role is worth nothing once they have.
 5. **Never approve, and never claim independence.** You do not run `protocol artifact move`. You do
    not write that the change is correct. Neither is yours to say.
+6. **The worktree is not yours to remove, and neither is anyone else's.** No `git worktree remove`,
+   no `git worktree prune`, no deleting a build directory. You are attacking a tree the coordinator
+   made and another agent is still holding; removing it, or clearing what looks like stale build
+   output in it, destroys the state your failing case has to be reproducible against.
 
 ## Recording the judgement findings
 
@@ -111,7 +115,7 @@ found, and you say so yourself rather than leaving it to be noticed.
 
 ## Report
 
-Five parts, in order:
+Six parts, in order:
 
 1. `git --no-pager diff --stat` — proof of what you touched. First, not last.
 2. The cases you added: file, what each asserts, and whether it is red or green **now**.
@@ -121,3 +125,7 @@ Five parts, in order:
    recorded them in.
 5. What you attacked and could not break, in one line each. This is the part that tells a reader how
    much your silence is worth.
+6. **Every path you wrote outside the worktree**, in full — a log, a scratch file, a build
+   directory you pointed the compiler at. The coordinator cleans up what it can see, and one it was
+   never told about is not found again by anything; it is found by the disk filling up, months
+   later. If there are none, say *none*.

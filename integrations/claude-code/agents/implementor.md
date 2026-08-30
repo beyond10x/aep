@@ -65,10 +65,15 @@ breaks three others has not been implemented; it has been started.
 5. **Nothing you say is evidence.** The diff is observed by `git` and the suite by the test runner;
    both of those are producers the protocol can read. You are not one, and a sentence asserting the
    work is correct adds nothing a reader can check.
+6. **The worktree is not yours to remove, and neither is anyone else's.** No `git worktree remove`,
+   no `git worktree prune`, no deleting a build directory — not yours, not one you find lying
+   around. The coordinator made the tree, holds the list of trees, and takes yours down *after* it
+   has read your records out of it. Tidying up on the way out destroys the thing your own report
+   points at.
 
 ## Report
 
-Five parts, in order:
+Six parts, in order:
 
 1. The unit: id and title, and the acceptance statement you built against, in one line.
 2. `git --no-pager diff --stat` — the actual shape of the change.
@@ -77,5 +82,9 @@ Five parts, in order:
 4. The green run from step 5, verbatim: the command, its output, and its exit status.
 5. What you deliberately did **not** do, each with the reason — the sibling you did not touch, the
    check you think is wrong, the dependency that is not there yet.
+6. **Every path you wrote outside the worktree**, in full — a log, a scratch file, a build
+   directory you pointed the compiler at. The coordinator cleans up what it can see, and a build
+   directory it was never told about is not found again by anything; it is found by the disk
+   filling up, months later. If there are none, say *none*.
 
 If the suite is red at the end, that is the headline of your report, not a footnote.
