@@ -7,7 +7,13 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
-## [Unreleased]
+## [0.39.1] — 2026-08-31
+
+### Fixed
+
+- CI and Pages now use the Node 24 generations of GitHub's checkout, Go and Node setup actions;
+  the Go setup explicitly disables its inapplicable root-module cache, removing the missing
+  `go.sum` warning from release gates.
 
 ## [0.39.0] — 2026-08-31
 
