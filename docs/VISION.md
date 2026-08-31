@@ -136,7 +136,7 @@ than a delivery claim. Its accepting surfaces are the plan pages and planning st
 
 ## Proposed, not accepted
 
-Seven design documents in [`docs/design/`](design/) propose extending this. They are listed here with
+Design documents in [`docs/design/`](design/) propose extending this. They are listed here with
 their status so that reading the newest file in that directory cannot be mistaken for reading what
 this project has agreed to build. The tally is deliberately not stated in a sentence: a count in a
 preamble is the first thing to go stale, and the status column is the answer.
@@ -150,6 +150,7 @@ preamble is the first thing to go stale, and the status column is the answer.
 | [the planning store and the reference driver](design/harness-planning-and-driver-design-v0.1.md) | a durable store for planning artifacts, a Claude Code plugin that uses it, and the first in-repository implementation of the harness contract | **Phase 1 accepted as harness wave 1; driver decided and sketched, build unsequenced.** The narrowing it rests on is the one recorded above |
 | [transcript conformance](design/transcript-conformance-design-v0.1.md) | a typed, executable specification over an *agent-run transcript* — the `infra-spec/1` pattern pointed at a third observation domain, with the same three verdicts and a checker that contains no model | **accepted, in implementation** as trace wave 1 (`docs/plan/trace-wave-1-transcript-checker.md`). It is what makes a behavioural claim about an agent admissible as evidence, which the driver's `llm` step needs and no other mechanism supplies. Its per-request *series* assertions and its streaming checker stay proposed, by name |
 | [store integrity on the native arm](design/native-arm-store-integrity-design-v0.1.md) | nothing to the protocol — it says what the **evaluation table** may claim about the arm that has no seam: a store-integrity cell on the `native`/`b10x` column is *compliance*, not *enforcement*, until the step map declares a write scope, and the arm's refusals are readable in its record | **proposed, not accepted, 2026-08-29.** Its § 6 O1 is a reporting rule, its O2 is one key on one document in `metaharness`, and its O5 reports a route in flight — the driver's own rule spawned from the native loop's `before-call` hook, uncommitted in a peer session's tree on 2026-08-29, which adds the content tier a write scope cannot express without giving the b10x adapter a seam. None is a work order and no plan page has taken any. Its § 9 refusals — no seam for the b10x adapter, no reading absence as enforcement — bind whether or not the rest is accepted |
+| [AEP service wire and client](design/aep-service-wire-v0.1.md) | a strict authenticated network projection of the existing command/query contract, an official client and shared constructed wire vectors for the private central service | **proposed, not accepted, 2026-08-31.** `story:aep-service-wire-and-client` is the review surface; no transport crate or client is implemented from it yet |
 
 Closed-loop conformance and structural synthesis are horizons the two halves already implied — the
 thesis promises the tests and the skeleton, and wave 4 delivered the first of them. Semantic diff was

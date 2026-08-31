@@ -11,6 +11,12 @@ the per-invariant *Enforced by* lines in `AGENTS.md`, the honest-limits sections
 and 5 records, and — from 2026-08-21 — an early adopter's written review, which is held by the
 operator rather than published here.
 
+## Open, from 2026-08-31 — the central service boundary
+
+| gap | what closes it |
+|---|---|
+| **The semantic command/query contract has no authenticated network projection.** `aep-contract` deliberately models observable backend behaviour rather than HTTP, so the private `aep-service` has no versioned request bytes to implement and `protocol` has no official remote client. Inventing either in the service repository would create a second owner for AEP meaning; serializing `CommandContext` directly would also let an untrusted caller assert actor, executor, request identity and time. | A verdict on [`aep-service-wire-v0.1.md`](../design/aep-service-wire-v0.1.md), tracked by `story:aep-service-wire-and-client`. Acceptance must settle the five review questions, then one implementation slice publishes raw wire types, the injected-transport client and constructed conformance corpus here. The service consumes a released version and proves the same fixtures. Rejection also closes the row if it records where the network contract belongs and how trusted context is constructed instead. |
+
 ## Open, from 2026-08-21 — the harness family
 
 The rows on this page that are neither closed by decision nor closed by code. The two the operator

@@ -122,6 +122,12 @@ Each of these was learned by building the thing it names. They are enforced wher
   kernel that never depends on its adopter cannot be shaped by one. The verdicts are held identical
   by `tests/kernel_equivalence.rs`, which is what makes the dependency reversible: delete the module
   and the lookup it replaced still stands behind it.
+* **The central service is a consumer, not a new protocol owner.** The private `aep-service`
+  repository implements the authenticated network boundary. This repository owns the semantic
+  command/query contract, any accepted versioned wire, the official client and the constructed
+  conformance corpus. No service implementation or deployment dependency points back into this
+  workspace. The wire is currently proposed in `docs/design/aep-service-wire-v0.1.md`; do not
+  describe a remote client as shipped until its planning story and tests say so (atlas ADR 0008).
 * **The one artifact that crosses is pinned.** A step's surface travels as a sealed
   `metaharness.frame/1` document. The reader is **transcribed, not linked** —
   `crates/protocol-cli/tests/metaharness_frame_contract.rs` checks tag, then shape, then digest, **in
@@ -576,6 +582,7 @@ This is a library and a specification. It is not an agent, a CI system or a depl
 | Sandboxed execution | `substrate` |
 | The paid evaluation machinery and its recorded results | `metaharness`, under `evals/engineering-protocols/` |
 | Cross-repo decisions and the map | `atlas` |
+| The authenticated central command/query service and its deployment | `aep-service` |
 
 ## Where work is tracked
 
