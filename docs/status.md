@@ -69,6 +69,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.37.1` | engineering-protocols 0.37.1 |
 | `0.38.0` | Machine-readable AEP service contract; implementation 100%. |
 | `0.38.1` | 0.38.1 — computable definition bundle identity |
+| `0.39.0` | 0.39.0 — sealed vendor scope and b10x enforcement contract; implementation 100%. |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
