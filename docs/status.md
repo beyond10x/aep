@@ -64,6 +64,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.36.1` | engineering-protocols 0.36.1 |
 | `0.36.2` | engineering-protocols 0.36.2 |
 | `0.36.3` | engineering-protocols 0.36.3 |
+| `0.36.4` | engineering-protocols 0.36.4 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
