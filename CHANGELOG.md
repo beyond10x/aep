@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.36.4] — 2026-08-31
+
+- Kept the `protocol serve` test client's startup pipe open for the server's lifetime, preventing
+  the read-only startup notice from racing a closed pipe and resetting the first HTTP request.
+
 ## [0.36.3] — 2026-08-31
 
 - Serialized PostgreSQL test-schema cleanup so parallel backend tests no longer race incidental

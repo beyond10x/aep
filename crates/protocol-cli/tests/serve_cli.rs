@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
 
 /// A child that is killed however this test leaves.
 ///
@@ -22,6 +22,10 @@ use std::process::{Child, Command, Stdio};
 /// test runner lives.
 struct Served {
     child: Child,
+    // Keep the pipe open for the child's lifetime. The read-only server prints one more startup
+    // line after its URL; dropping the reader at the URL races that write and kills the server
+    // with `Broken pipe` before the first request can be answered.
+    _stdout: BufReader<ChildStdout>,
     port: u16,
     token: String,
 }
@@ -101,21 +105,24 @@ fn serve(store: &Path, extra: &[&str]) -> Served {
     let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        // Handler panics belong in the test output. Piping stderr without draining it hid the
+        // server-side cause behind a client-side `ECONNRESET` in the release gate.
+        .stderr(Stdio::inherit())
         .spawn()
         .expect("the protocol binary runs");
 
     let stdout = child.stdout.take().expect("stdout is piped");
-    let mut lines = BufReader::new(stdout).lines();
+    let mut stdout = BufReader::new(stdout);
     let mut url = None;
     for _ in 0..5 {
-        match lines.next() {
-            Some(Ok(line)) if line.starts_with("http://127.0.0.1:") => {
+        let mut line = String::new();
+        match stdout.read_line(&mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) if line.starts_with("http://127.0.0.1:") => {
                 url = Some(line);
                 break;
             }
-            Some(Ok(_)) => {}
-            _ => break,
+            Ok(_) => {}
         }
     }
     let url = url.unwrap_or_else(|| {
@@ -123,10 +130,11 @@ fn serve(store: &Path, extra: &[&str]) -> Served {
         panic!("the startup line is how this test learns the port and the token, and none arrived")
     });
 
-    let rest = url.trim_start_matches("http://127.0.0.1:");
+    let rest = url.trim_end().trim_start_matches("http://127.0.0.1:");
     let (port, token) = rest.split_once("/?t=").expect("the startup line's shape");
     Served {
         child,
+        _stdout: stdout,
         port: port.parse().expect("a port"),
         token: token.to_owned(),
     }
