@@ -16,12 +16,13 @@
 //!
 //! # The fixtures
 //!
-//! Both are the provider's own bytes, captured 2026-08-23 from the live build — `metaharness
-//! conformance claude --contract` and `metaharness conformance codex --contract`, exit 0, one JSON
-//! object on standard output each. They are committed at
-//! `crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex}.json` and hold nothing
-//! account-level: two provider strings, one consumer string and four counts. A metaharness-side wave
-//! pins the same bytes as goldens on its side, so the two repositories disagree loudly or not at all.
+//! The Claude and Codex records are the provider's own bytes, captured 2026-08-23 from the live
+//! build. The b10x record was captured 2026-08-31 from its deterministic provider-emulated
+//! contract. Each command exited 0 with one JSON object on standard output. They are committed at
+//! `crates/protocol-cli/fixtures/metaharness-contract-result-{claude,codex,b10x}.json` and hold
+//! nothing account-level: one provider string, one consumer string and four counts. A
+//! metaharness-side wave pins the same bytes as goldens on its side, so the two repositories
+//! disagree loudly or not at all.
 //!
 //! # What is asserted here and not in the unit tests
 //!
@@ -113,6 +114,9 @@ const CLAUDE_RECORD: &str = "crates/protocol-cli/fixtures/metaharness-contract-r
 /// `metaharness conformance codex --contract`, captured: 10 vectors, all green.
 const CODEX_RECORD: &str = "crates/protocol-cli/fixtures/metaharness-contract-result-codex.json";
 
+/// `metaharness conformance b10x --contract`, captured: 5 vectors, all green.
+const B10X_RECORD: &str = "crates/protocol-cli/fixtures/metaharness-contract-result-b10x.json";
+
 /// The captured claude record's bytes, for the mutations below.
 const CLAUDE_BYTES: &str = include_str!("../fixtures/metaharness-contract-result-claude.json");
 
@@ -165,8 +169,8 @@ fn evaluate_with(evidence: &Path) -> String {
 }
 
 #[test]
-fn both_captured_records_become_evidence_the_engine_reads() {
-    // The whole loop, through the binary, for both adapters and both renderings: the provider's
+fn every_captured_adapter_record_becomes_evidence_the_engine_reads() {
+    // The whole loop, through the binary, for every adapter and both renderings: the provider's
     // bytes on disk, this repository's verb, a document, and the engine reading it back. Anything
     // that made the document unreadable — a field the payload does not have, a producer class the
     // principle does not accept, a shape that is not a list — surfaces here and nowhere else.
@@ -175,6 +179,7 @@ fn both_captured_records_become_evidence_the_engine_reads() {
     for (name, record, format, suffix, checked) in [
         ("claude", CLAUDE_RECORD, "yaml", "yaml", "24 checked"),
         ("codex", CODEX_RECORD, "json", "json", "17 checked"),
+        ("b10x", B10X_RECORD, "yaml", "yaml", "5 checked"),
     ] {
         let out = directory.join(format!("{name}.{suffix}"));
         let minted = mint(record, &out, format);

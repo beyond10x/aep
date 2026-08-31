@@ -1872,9 +1872,10 @@ impl CliExecutors {
     fn write_frame_document(
         &self,
         context: &StepContext<'_>,
+        scope: &[ScopeRule],
         transcripts: &Path,
     ) -> Result<PathBuf, String> {
-        let frame = metaharness_frame(context, &self.workflow_id, &self.workflow_version);
+        let frame = metaharness_frame(context, scope, &self.workflow_id, &self.workflow_version);
         let path = transcripts.join(format!(
             "{}-{}-{}.frame.json",
             context.state, context.index, context.attempt
@@ -1981,7 +1982,7 @@ impl CliExecutors {
             context.attempt,
         );
 
-        let frame_file = match self.write_frame_document(context, &transcripts) {
+        let frame_file = match self.write_frame_document(context, &step.scope, &transcripts) {
             Ok(path) => path,
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
@@ -4652,6 +4653,7 @@ fn refusal_specification(
 /// summary existed.
 fn metaharness_frame(
     context: &StepContext<'_>,
+    scope: &[ScopeRule],
     workflow_id: &str,
     workflow_version: &str,
 ) -> serde_json::Value {
@@ -4676,6 +4678,9 @@ fn metaharness_frame(
             .collect::<Vec<_>>(),
         "entities": null,
     });
+    if !scope.is_empty() {
+        frame["subjects"] = metaharness_subject_scope(scope);
+    }
     let digest = {
         use sha2::{Digest as _, Sha256};
         let bytes = serde_json::to_vec(&frame).expect("a frame value serialises");
@@ -4687,6 +4692,35 @@ fn metaharness_frame(
     object.insert("digest".into(), digest.into());
     object.insert("format".into(), METAHARNESS_FRAME_FORMAT.into());
     frame
+}
+
+/// Compile the map's write vocabulary into the frame's operation vocabulary.
+///
+/// A write scope says nothing about reading, so every rule preserves `file.read`. `allowed`
+/// additionally admits both write granularities, `partial-only` admits only the targeted edit,
+/// and `denied` admits neither. Paths are scheme-prefixed so a catch-all file rule cannot capture
+/// a `proc:` subject and accidentally turn a write policy into an execution policy.
+fn metaharness_subject_scope(scope: &[ScopeRule]) -> serde_json::Value {
+    let rules = scope
+        .iter()
+        .flat_map(|rule| {
+            let operations = match rule.write {
+                WriteScope::Allowed => vec!["file.edit", "file.read", "file.write"],
+                WriteScope::PartialOnly => vec!["file.edit", "file.read"],
+                WriteScope::Denied => vec!["file.read"],
+            };
+            rule.paths.iter().map(move |path| {
+                serde_json::json!({
+                    "subjects": [format!("file:{path}")],
+                    "operations": operations
+                        .iter()
+                        .map(|operation| serde_json::json!({ "op": operation }))
+                        .collect::<Vec<_>>(),
+                })
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({ "rules": rules })
 }
 
 /// A minted frame as the bytes that go on disk.
@@ -6542,7 +6576,7 @@ mod tests {
         let reaching = vec!["to verify: the suite is green".to_owned()];
         let context = metaharness_context(&state, &tools, &requirements, &reaching);
 
-        let frame = metaharness_frame(&context, "development/default", "1");
+        let frame = metaharness_frame(&context, &[], "development/default", "1");
         assert_eq!(frame["format"], METAHARNESS_FRAME_FORMAT);
 
         let mut unsealed = frame.clone();
@@ -6569,7 +6603,7 @@ mod tests {
         let reaching = vec!["to implement: the suite is red".to_owned()];
         let context = metaharness_context(&state, &tools, &requirements, &reaching);
 
-        let frame = metaharness_frame(&context, "development/default", "1");
+        let frame = metaharness_frame(&context, &[], "development/default", "1");
         assert_eq!(frame["node"]["id"], "specify");
         assert_eq!(frame["step"]["index"], 2);
         assert_eq!(frame["step"]["attempt"], 3);
@@ -6592,6 +6626,66 @@ mod tests {
         assert_eq!(
             operations,
             ["dir.list", "file.read", "search", "skill.load"]
+        );
+    }
+
+    /// The vendor arm receives the map's write scope in the frame rather than in a second flag.
+    ///
+    /// The b10x arm compiles these same words to `--write-scope`; this is the other half of the
+    /// comparison. Ordered rules and their granularities must survive the translation exactly,
+    /// while the `file:` prefix prevents a catch-all file rule from governing `proc:` subjects.
+    #[test]
+    fn the_frame_compiles_the_steps_write_scope_into_ordered_subject_rules() {
+        let tools = config(&[Capability::RepositoryRead, Capability::RepositoryWrite]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let context = metaharness_context(&state, &tools, &[], &[]);
+        let scope = vec![
+            ScopeRule {
+                paths: vec![".engineering/planning/**".to_owned()],
+                write: WriteScope::PartialOnly,
+            },
+            ScopeRule {
+                paths: vec!["crates/**".to_owned()],
+                write: WriteScope::Allowed,
+            },
+            ScopeRule {
+                paths: vec!["**".to_owned()],
+                write: WriteScope::Denied,
+            },
+        ];
+
+        let frame = metaharness_frame(&context, &scope, "development/default", "1");
+        assert_eq!(
+            frame["subjects"],
+            serde_json::json!({
+                "rules": [
+                    {
+                        "subjects": ["file:.engineering/planning/**"],
+                        "operations": [
+                            {"op": "file.edit"},
+                            {"op": "file.read"},
+                        ],
+                    },
+                    {
+                        "subjects": ["file:crates/**"],
+                        "operations": [
+                            {"op": "file.edit"},
+                            {"op": "file.read"},
+                            {"op": "file.write"},
+                        ],
+                    },
+                    {
+                        "subjects": ["file:**"],
+                        "operations": [{"op": "file.read"}],
+                    },
+                ],
+            })
+        );
+        assert!(
+            frame["subjects"]["rules"][2]["subjects"][0]
+                .as_str()
+                .is_some_and(|pattern| !pattern.starts_with("proc:")),
+            "the write scope does not become an execution scope"
         );
     }
 
@@ -7458,7 +7552,7 @@ mod tests {
             reaching: &reaching,
             preceding_llm: None,
         };
-        metaharness_frame(&context, "development/default", "1")
+        metaharness_frame(&context, &[], "development/default", "1")
     }
 
     /// Compares `produced` against the committed golden, or writes it when there is none.

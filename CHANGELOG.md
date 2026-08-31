@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-08-31
+
+### Fixed
+
+- Driven vendor steps now compile the step map's ordered `scope:` rules into the sealed
+  `metaharness.frame/1` `subjects` field. `allowed` admits file reads, edits and whole-file writes;
+  `partial-only` admits reads and targeted edits; `denied` preserves reads while refusing both
+  write granularities. File patterns are `file:`-qualified so a write catch-all cannot govern
+  process subjects. The original unscoped canonical frame remains byte-identical, while the
+  independent contract reader now verifies that scoped frames survive projection and that scope
+  changes break the digest.
+- The pinned b10x adapter contract result now consumes the five-vector harness 0.9.1 contract,
+  including deterministic unpublished-tool and approval-denial enforcement captures.
+
 ## [0.38.1] — 2026-08-31
 
 - Expose `aep_project::load_bundle` so deployment tools can validate an immutable definition tree

@@ -50,11 +50,13 @@ const GOLDEN: &str = include_str!("../fixtures/metaharness-frame-canonical.json"
 /// `METAHARNESS_FRAME_FORMAT` constant would compare the minter with itself.
 const FRAME_FORMAT: &str = "metaharness.frame/1";
 
-/// Every field a `Frame` has, in the order `frame.rs` declares them.
+/// Every field the unscoped canonical `Frame` serializes, in declaration order.
 ///
 /// Pinned as a list because the digest is computed over the *struct's* re-serialization: a field
 /// the minter invented is dropped on the way in, and a frame whose digest was taken over it then
-/// states a digest its surviving contents do not imply.
+/// states a digest its surviving contents do not imply. `subjects` is the one optional field and
+/// is transcribed below; the canonical deliberately leaves it absent to keep the original
+/// cross-repository bytes stable.
 const FRAME_FIELDS: [&str; 11] = [
     "workflow",
     "node",
@@ -148,7 +150,7 @@ fn parse_document(text: &str) -> Result<Value, Refusal> {
 fn frame_value(object: &Map<String, Value>) -> Result<Value, Refusal> {
     let workflow = object_at(field(object, "workflow")?, "workflow")?;
     let step = object_at(field(object, "step")?, "step")?;
-    let frame = json!({
+    let mut frame = json!({
         "workflow": {
             "id": string(field(workflow, "id")?, "workflow.id")?,
             "version": string(field(workflow, "version")?, "workflow.version")?,
@@ -169,6 +171,9 @@ fn frame_value(object: &Map<String, Value>) -> Result<Value, Refusal> {
         "entities": entities(field(object, "entities")?)?,
         "digest": string(field(object, "digest")?, "digest")?,
     });
+    if let Some(value) = object.get("subjects") {
+        frame["subjects"] = subject_scope(value)?;
+    }
     Ok(frame)
 }
 
@@ -336,6 +341,32 @@ fn operations(value: &Value) -> Result<Value, Refusal> {
     Ok(Value::Array(set.into_values().collect()))
 }
 
+/// The optional ordered subject scope, transcribed from `SubjectScope` and `SubjectRule`.
+fn subject_scope(value: &Value) -> Result<Value, Refusal> {
+    let object = object_at(value, "subjects")?;
+    let mut rules = Vec::new();
+    for (index, entry) in array_at(field(object, "rules")?, "subjects.rules")?
+        .iter()
+        .enumerate()
+    {
+        let at = format!("subjects.rules[{index}]");
+        let rule = object_at(entry, &at)?;
+        let mut patterns = Vec::new();
+        for (pattern_index, pattern) in
+            array_at(field(rule, "subjects")?, &format!("{at}.subjects"))?
+                .iter()
+                .enumerate()
+        {
+            patterns.push(string(pattern, &format!("{at}.subjects[{pattern_index}]"))?);
+        }
+        rules.push(json!({
+            "subjects": patterns,
+            "operations": operations(field(rule, "operations")?)?,
+        }));
+    }
+    Ok(json!({ "rules": rules }))
+}
+
 /// The optional `EntityList`.
 fn entities(value: &Value) -> Result<Value, Refusal> {
     if value.is_null() {
@@ -425,6 +456,47 @@ fn the_minted_golden_holds_exactly_the_fields_the_frame_struct_has() {
     let mut expected: Vec<&str> = FRAME_FIELDS.into_iter().chain(["format"]).collect();
     expected.sort_unstable();
     assert_eq!(present, expected);
+}
+
+/// The consumer's additive `subjects` field is part of this independent reader even though the
+/// original canonical frame deliberately keeps its byte identity by omitting the empty default.
+#[test]
+fn a_scoped_frame_survives_projection_and_its_scope_participates_in_the_digest() {
+    let mut object = golden_object();
+    object.insert(
+        "subjects".to_owned(),
+        json!({
+            "rules": [
+                {
+                    "subjects": ["file:.engineering/planning/**"],
+                    "operations": [{"op": "file.edit"}, {"op": "file.read"}],
+                },
+                {
+                    "subjects": ["file:**"],
+                    "operations": [{"op": "file.read"}],
+                },
+            ],
+        }),
+    );
+    let mut contents = Value::Object(object.clone());
+    let contents_object = contents.as_object_mut().expect("an object");
+    contents_object.remove("format");
+    contents_object.remove("digest");
+    object.insert("digest".to_owned(), computed_digest(&contents).into());
+    let mut document = serde_json::to_string_pretty(&Value::Object(object)).expect("serialises");
+    document.push('\n');
+
+    let parsed = parse_document(&document).expect("the consumer accepts its optional scope");
+    assert_eq!(
+        parsed["subjects"]["rules"][0]["subjects"][0],
+        "file:.engineering/planning/**"
+    );
+
+    let edited = document.replace("file:.engineering/planning/**", "file:**");
+    assert!(
+        matches!(parse_document(&edited), Err(Refusal::DigestMismatch { .. })),
+        "scope is sealed into the frame rather than advisory text"
+    );
 }
 
 /// Refusal class *untagged*: the `format` field removed, and then present but naming a version this
