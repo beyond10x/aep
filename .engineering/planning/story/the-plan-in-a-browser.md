@@ -6,7 +6,7 @@ status: implemented
 title: The plan is a shape, so there is a verb that draws it
 relations:
 - serves: vision:O2
-revision: 5
+revision: 6
 ---
 # Story: The plan is a shape, so there is a verb that draws it
 
@@ -58,3 +58,7 @@ tidied away.
 it; during the first session using the page an epic was archived by accident and had to be recovered
 from git, which worked only because the click was uncommitted. The page draws a terminal rung exactly
 like any other. Open.
+
+## Release-gate socket finding — 2026-08-31
+
+The 0.35.0 release gate twice reproduced Linux `ConnectionReset` after the read-only socket test had sent a complete POST and begun reading its answer. The synthetic one-request client now half-closes its write side after flushing the declared body, making its HTTP/1.1 `Connection: close` exchange explicit and deterministic before it waits for EOF. Five consecutive focused runs pass; the full release gate remains the independent runner proof.

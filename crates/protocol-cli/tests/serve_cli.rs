@@ -12,7 +12,7 @@
 
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
@@ -154,6 +154,9 @@ fn ask(served: &Served, method: &str, path: &str, body: Option<&str>) -> (u16, S
     }
     stream.write_all(request.as_bytes()).expect("written");
     stream.flush().expect("flushed");
+    stream
+        .shutdown(Shutdown::Write)
+        .expect("the complete request is half-closed");
 
     let mut answer = String::new();
     stream
@@ -176,6 +179,9 @@ fn ask_untokened(served: &Served, path: &str) -> u16 {
         served.port
     );
     stream.write_all(request.as_bytes()).expect("written");
+    stream
+        .shutdown(Shutdown::Write)
+        .expect("the complete request is half-closed");
     let mut answer = String::new();
     stream.read_to_string(&mut answer).expect("read");
     answer
