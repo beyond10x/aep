@@ -59,6 +59,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.32.1` | 0.32.1 — the coverage pre-flight runs before the machine check |
 | `0.33.0` | 0.33.0 — the native arm is driven and governed, and the plan says what stops it and what it serves |
 | `0.34.0` | 0.34.0 — the plan in a browser, and the transitions that move it |
+| `0.35.0` | 0.35.0 — atomic authority and the central-service contract |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
