@@ -40,11 +40,13 @@ pub mod query;
 pub mod registry;
 pub mod testing;
 
-pub use command::{CommandContext, CommandEnvelope, CommandOutcome, CommandResult, CommandService};
+pub use command::{
+    CommandContext, CommandEnvelope, CommandIntent, CommandOutcome, CommandResult, CommandService,
+};
 pub use consistency::{ConsistencyToken, QueryConsistency};
 pub use error::{CommandError, QueryError};
 pub use query::{
-    AuditQuery, Cursor, EntityEnvelope, EntityQuery, Page, QueryService, RelationQuery,
-    RevisionRecord,
+    AuditQuery, Cursor, EntityEnvelope, EntityQuery, HistoryQuery, Page, QueryService,
+    RelationQuery, RevisionRecord,
 };
 pub use registry::{CommandDescriptor, LifecycleDescriptor, RelationDescriptor, TypeDescriptor};

@@ -23,7 +23,7 @@ use aep_contract::query::{Relation, RevisionRecord};
 use aep_domain::audit::AuditRecord;
 use aep_domain::domain_event::DomainEventEnvelope;
 use aep_domain::entity::{EntityId, EntityLocator, EntityMetadata};
-use aep_domain::ids::{AuditId, CommandId, EventId, IdempotencyKey, RelationId};
+use aep_domain::ids::{AuditId, EventId, IdempotencyKey, RelationId};
 use aep_domain::node::Node;
 
 /// One stored entity: its metadata and its untyped body.
@@ -40,8 +40,8 @@ pub struct StoredEntity {
 /// What a previously-applied command produced, kept so a replay can return it unchanged.
 #[derive(Debug, Clone)]
 pub struct AppliedCommand {
-    /// Which logical command it was.
-    pub command_id: CommandId,
+    /// Caller-controlled semantics proven equal before replay.
+    pub intent: aep_contract::command::CommandIntent<aep_domain::command::Command>,
     /// What it returned the first time.
     pub result: aep_contract::command::CommandResult,
 }
@@ -71,6 +71,14 @@ impl Store {
     fn tick(&mut self) -> u64 {
         self.sequence += 1;
         self.sequence
+    }
+
+    /// Raises the identity sequence to at least `floor` without minting an identity.
+    ///
+    /// A repository-backed command session uses a provider-reserved range; the ordinary memory
+    /// backend leaves the floor at zero and retains its existing deterministic identities.
+    pub fn advance_sequence_to(&mut self, floor: u64) {
+        self.sequence = self.sequence.max(floor);
     }
 
     /// The token describing the store's current point in history.

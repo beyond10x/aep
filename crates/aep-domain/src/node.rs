@@ -12,9 +12,7 @@ use std::fmt;
 use crate::facts::Number;
 
 /// A dynamic document value: null, boolean, number, string, sequence or mapping.
-#[derive(
-    Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(untagged)]
 pub enum Node {
     /// An absent value.
@@ -30,6 +28,41 @@ pub enum Node {
     Seq(Vec<Node>),
     /// A mapping with string keys, ordered for deterministic output.
     Map(BTreeMap<String, Node>),
+}
+
+impl<'de> serde::Deserialize<'de> for Node {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        Self::from_value(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Node {
+    fn from_value(value: serde_json::Value) -> Result<Self, String> {
+        match value {
+            serde_json::Value::Null => Ok(Self::Null),
+            serde_json::Value::Bool(value) => Ok(Self::Bool(value)),
+            serde_json::Value::Number(value) => value
+                .as_f64()
+                .ok_or_else(|| format!("number `{value}` does not fit the domain number"))
+                .and_then(|value| {
+                    Number::new(value)
+                        .map(Self::Number)
+                        .map_err(|e| e.to_string())
+                }),
+            serde_json::Value::String(value) => Ok(Self::Text(value)),
+            serde_json::Value::Array(values) => values
+                .into_iter()
+                .map(Self::from_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map(Self::Seq),
+            serde_json::Value::Object(values) => values
+                .into_iter()
+                .map(|(key, value)| Self::from_value(value).map(|value| (key, value)))
+                .collect::<Result<BTreeMap<_, _>, _>>()
+                .map(Self::Map),
+        }
+    }
 }
 
 impl Node {
@@ -163,5 +196,19 @@ impl From<String> for Node {
 impl From<Number> for Node {
     fn from(value: Number) -> Self {
         Self::Number(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_number_stays_a_number_when_serde_json_arbitrary_precision_is_unified() {
+        let node: Node =
+            serde_json::from_str(r#"{"amount":10.5,"count":2}"#).expect("the object deserializes");
+        let fields = node.as_map().expect("a map");
+        assert!(matches!(fields.get("amount"), Some(Node::Number(_))));
+        assert!(matches!(fields.get("count"), Some(Node::Number(_))));
     }
 }

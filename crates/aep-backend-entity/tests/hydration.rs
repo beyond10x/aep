@@ -314,8 +314,8 @@ fn a_row_this_backend_cannot_read_back_refuses_the_open_by_name() {
     fields.insert("status".to_owned(), serde_json::Value::from("draft"));
     durable
         .commit(
-            &entity_core::Decision {
-                instance: entity_core::EntityInstance {
+            &entity_core::Decision::legacy_import(
+                entity_core::EntityInstance {
                     entity: STORED_AS.to_owned(),
                     version: 1,
                     id: "planted-by-hand".to_owned(),
@@ -323,8 +323,8 @@ fn a_row_this_backend_cannot_read_back_refuses_the_open_by_name() {
                     revision: 1,
                     fields,
                 },
-                events: Vec::new(),
-            },
+                Vec::new(),
+            ),
             entity_store::Expect::Absent,
         )
         .expect("the provider accepts any instance");

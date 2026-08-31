@@ -20,6 +20,7 @@ use aep_driver_spec::map::{StepMap, StepMapId};
 use aep_schema::parse::{self, DocumentKind};
 
 use aep_engine::registry::Registry;
+use sha2::{Digest, Sha256};
 
 /// Which directory holds which kind of document.
 const TREE: &[(&str, DocumentKind)] = &[
@@ -68,6 +69,19 @@ pub struct LoadOutcome {
     pub files_read: usize,
     /// What failed.
     pub failures: Vec<LoadFailure>,
+}
+
+/// One validated immutable document tree and the digest that identifies its source bytes.
+#[derive(Debug)]
+pub struct PinnedBundle {
+    /// Validated semantic definitions.
+    pub registry: Registry,
+    /// Validated driver projections shipped beside them.
+    pub drivers: DriverRegistry,
+    /// Lowercase SHA-256 over sorted length-prefixed relative paths and bytes.
+    pub digest: String,
+    /// Number of definition documents included in the digest.
+    pub files_read: usize,
 }
 
 /// Driver step maps acquired with a tree but kept outside the semantic engine registry.
@@ -246,6 +260,76 @@ pub fn load_tree_report(root: &Path) -> LoadOutcome {
 /// Loads a document tree, or fails with every problem found.
 pub fn load_tree(root: &Path) -> Result<Registry, LoadErrors> {
     load_tree_report(root).into_result()
+}
+
+/// Loads and validates one tree and verifies the exact source-byte digest expected by deployment.
+///
+/// # Errors
+///
+/// Every document failure, unreadable bundle file, invalid expected digest or digest mismatch.
+pub fn load_pinned_bundle(root: &Path, expected: &str) -> Result<PinnedBundle, LoadErrors> {
+    let outcome = load_tree_report(root);
+    if !outcome.failures.is_empty() {
+        return Err(LoadErrors(outcome.failures));
+    }
+    let mut files = Vec::new();
+    for (directory, _) in TREE {
+        let path = root.join(directory);
+        if path.is_dir() {
+            collect_documents(&path, &mut files).map_err(|error| {
+                LoadErrors(vec![LoadFailure {
+                    path: Some(path.clone()),
+                    detail: format!("cannot be read for bundle digest: {error}"),
+                }])
+            })?;
+        }
+    }
+    files.sort();
+    let mut hasher = Sha256::new();
+    for path in &files {
+        let relative = path.strip_prefix(root).map_err(|error| {
+            LoadErrors(vec![LoadFailure {
+                path: Some(path.clone()),
+                detail: format!("is outside the bundle root: {error}"),
+            }])
+        })?;
+        let relative = relative.to_string_lossy();
+        let bytes = fs::read(path).map_err(|error| {
+            LoadErrors(vec![LoadFailure {
+                path: Some(path.clone()),
+                detail: format!("cannot be read for bundle digest: {error}"),
+            }])
+        })?;
+        hasher.update((relative.len() as u64).to_be_bytes());
+        hasher.update(relative.as_bytes());
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(&bytes);
+    }
+    let digest = format!("{:x}", hasher.finalize());
+    let expected_valid = expected.len() == 64
+        && expected
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    if !expected_valid {
+        return Err(LoadErrors(vec![LoadFailure {
+            path: None,
+            detail: "expected bundle digest must be 64 lowercase hexadecimal characters".to_owned(),
+        }]));
+    }
+    if digest != expected {
+        return Err(LoadErrors(vec![LoadFailure {
+            path: None,
+            detail: format!(
+                "definition bundle digest mismatch: expected {expected}, found {digest}"
+            ),
+        }]));
+    }
+    Ok(PinnedBundle {
+        registry: outcome.registry,
+        drivers: outcome.drivers,
+        digest,
+        files_read: files.len(),
+    })
 }
 
 /// Loads one file into `registry`.

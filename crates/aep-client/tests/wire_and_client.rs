@@ -3,12 +3,16 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use aep_client::wire::{self, CommandRequestV1, Method, Nullable, Response, MEDIA_TYPE_V1};
+use aep_client::wire::{
+    self, CommandRequestV1, Method, Nullable, PageV2, Response, MEDIA_TYPE_V1, MEDIA_TYPE_V2,
+};
 use aep_client::{
     AepClient, BearerToken, CredentialError, CredentialProvider, Transport, TransportError,
 };
 use aep_contract::command::{CommandContext, CommandEnvelope, CommandResult, CommandService};
-use aep_contract::query::{AuditQuery, EntityQuery, QueryService, RelationQuery};
+use aep_contract::query::{
+    AuditQuery, Cursor, EntityQuery, QueryService, RelationQuery, RevisionRecord,
+};
 use aep_contract::testing::block_on;
 use aep_contract::{CommandError, ConsistencyToken, QueryConsistency, QueryError};
 use aep_domain::command::{Command, MoveStatus};
@@ -133,10 +137,14 @@ fn credential() -> StaticCredential {
 }
 
 fn response(status: u16, body: Vec<u8>) -> Response {
+    response_with_media(status, body, MEDIA_TYPE_V1)
+}
+
+fn response_with_media(status: u16, body: Vec<u8>, media_type: &str) -> Response {
     Response {
         status,
         headers: BTreeMap::from([
-            ("Content-Type".to_owned(), MEDIA_TYPE_V1.to_owned()),
+            ("Content-Type".to_owned(), media_type.to_owned()),
             ("Vary".to_owned(), "Accept".to_owned()),
         ]),
         body,
@@ -367,7 +375,7 @@ fn every_semantic_query_has_one_versioned_route() {
             "/aep/v1/realms/company/workspaces/repo/entities/resolve",
             "/aep/v1/realms/company/workspaces/repo/entities/query",
             "/aep/v1/realms/company/workspaces/repo/relations/query",
-            "/aep/v1/realms/company/workspaces/repo/entities/01K2R8JD3ZJME72AJGQY67E5F8/history",
+            "/aep/v1/realms/company/workspaces/repo/history/query",
             "/aep/v1/realms/company/workspaces/repo/audit/query",
             "/aep/v1/realms/company/workspaces/repo/types/aep.story%2Fv1",
         ]
@@ -375,6 +383,7 @@ fn every_semantic_query_has_one_versioned_route() {
     assert_eq!(requests[0].headers["AEP-Consistency"], "seq:9");
     assert_eq!(requests[0].method, Method::Get);
     assert_eq!(requests[1].method, Method::Post);
+    assert_eq!(requests[4].headers["Accept"], MEDIA_TYPE_V2);
 
     let entity_query: serde_json::Value =
         serde_json::from_slice(&requests[2].body).expect("entity query JSON");
@@ -393,6 +402,88 @@ fn every_semantic_query_has_one_versioned_route() {
             "{nullable}"
         );
     }
+}
+
+fn revision(revision: u64) -> RevisionRecord {
+    RevisionRecord {
+        revision: EntityRevision::new(revision).expect("revision"),
+        at: Timestamp::from_epoch_millis(1_700_000_000_000 + revision),
+        actor: "human:alice".parse().expect("actor"),
+        executor: None,
+        command_id: None,
+        audit_id: None,
+    }
+}
+
+fn history_page_response(items: Vec<RevisionRecord>, next: Option<Cursor>) -> Response {
+    response_with_media(
+        200,
+        wire::encode(&wire::SuccessV1 {
+            request_id: "server-request-1".parse().expect("request id"),
+            result: PageV2 {
+                items,
+                next: Nullable::new(next),
+            },
+        })
+        .expect("page encodes"),
+        MEDIA_TYPE_V2,
+    )
+}
+
+#[test]
+fn complete_history_drains_version_two_pages() {
+    let transport = RecordingTransport::answering_many([
+        history_page_response(vec![revision(1)], Some(Cursor("next-1".to_owned()))),
+        history_page_response(vec![revision(2)], None),
+    ]);
+    let client =
+        AepClient::new(transport.clone(), credential(), "company", "repo").expect("client");
+
+    let history = block_on(client.history(&entity())).expect("complete history");
+    assert_eq!(history, [revision(1), revision(2)]);
+    let requests = transport.requests();
+    assert_eq!(requests.len(), 2);
+    assert!(requests.iter().all(|request| request.method == Method::Post
+        && request.path.ends_with("/history/query")
+        && request.headers["Accept"] == MEDIA_TYPE_V2
+        && request.headers["Content-Type"] == MEDIA_TYPE_V2));
+    let first: serde_json::Value = serde_json::from_slice(&requests[0].body).expect("first query");
+    let second: serde_json::Value =
+        serde_json::from_slice(&requests[1].body).expect("second query");
+    assert!(first["after"].is_null());
+    assert_eq!(second["after"], "next-1");
+}
+
+#[test]
+fn a_version_one_server_remains_a_complete_history_fallback() {
+    let unsupported = Response {
+        status: 406,
+        headers: BTreeMap::from([(wire::SUPPORTED_VERSIONS_HEADER.to_owned(), "1".to_owned())]),
+        body: Vec::new(),
+    };
+    let fallback = response(
+        200,
+        wire::encode(&wire::SuccessV1 {
+            request_id: "server-request-1".parse().expect("request id"),
+            result: vec![revision(1), revision(2)],
+        })
+        .expect("history encodes"),
+    );
+    let transport = RecordingTransport::answering_many([unsupported, fallback]);
+    let client =
+        AepClient::new(transport.clone(), credential(), "company", "repo").expect("client");
+
+    assert_eq!(
+        block_on(client.history(&entity())).expect("fallback history"),
+        [revision(1), revision(2)]
+    );
+    let requests = transport.requests();
+    assert_eq!(requests[0].headers["Accept"], MEDIA_TYPE_V2);
+    assert_eq!(requests[1].headers["Accept"], MEDIA_TYPE_V1);
+    assert_eq!(requests[1].method, Method::Get);
+    assert!(requests[1]
+        .path
+        .ends_with("/entities/01K2R8JD3ZJME72AJGQY67E5F8/history"));
 }
 
 #[test]

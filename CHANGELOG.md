@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-08-31
+
+* Central-service retries now compare canonical caller-controlled command intent, and the query contract exposes bounded paginated history alongside complete version-1 history.
+* The official client prefers strict wire-v2 history pages, drains them for complete history, and falls back to byte-compatible version 1 when v2 is not served.
+* PostgreSQL offers a fresh command-session backend that locks and hydrates only one command's idempotency record and direct dependencies, then commits accepted or refused evidence in the same outer transaction.
+* Startup definition trees can be validated and pinned by a deterministic SHA-256 digest over sorted relative paths and bytes.
+* The workspace now pins Entity Runtime 0.17.1 for recorded decisions, indexed document containment, and caller-scoped PostgreSQL sessions.
+
 ## [0.35.0] — 2026-08-31
 
 ### Added

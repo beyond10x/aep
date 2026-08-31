@@ -21,10 +21,13 @@ aep-backend-entity.workspace = true
 # every other `entity-*` crate. It brings `postgres` 0.19 without default features and no TLS
 # backend — the connection is the caller's, by URL.
 entity-postgres.workspace = true
+entity-query.workspace = true
+entity-core.workspace = true
+entity-store.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 aep-conformance.workspace = true
-entity-store.workspace = true
 
 [lints]
 workspace = true

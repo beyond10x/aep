@@ -181,9 +181,10 @@ impl Provenance {
         Self {
             command_type: envelope.command_type.clone(),
             recording: Recording {
+                record_id: envelope.command_id.to_string(),
                 recorded_at: envelope.context.issued_at.iso_8601(),
-                correlation: envelope.context.correlation_id.to_string(),
-                causation: envelope.command_id.to_string(),
+                correlation: Some(envelope.context.correlation_id.to_string()),
+                causation: Some(envelope.command_id.to_string()),
                 actor: Some(envelope.context.actor.to_string()),
             },
             at: envelope.context.issued_at,
@@ -213,12 +214,15 @@ impl Provenance {
             args: self.args.clone(),
             payload: Value::Null,
         };
-        // Sealed by the runtime's own `Recording`, so the event id is the derived
-        // `<entity>:<id>@<revision>#<index>~<args>` every other shell would derive — and then the
-        // seal is written into the event, because the seal is the only part of an envelope the
-        // providers do not keep (see the module doc).
-        let sealed = self.recording.seal(std::slice::from_ref(&event));
-        let mut payload = recorded(&sealed[0], self.at, self.executor.as_ref());
+        // Runtime 0.17 makes record identity explicit. Keep the identity this provider has already
+        // published: provider coordinates, the event's position in this one-event record, and the
+        // canonical arguments digest. Drift reports and historical consumers hold these bytes.
+        let mut recording = self.recording.clone();
+        recording.record_id = event_record_id(&event);
+        let sealed = recording
+            .seal(event.clone())
+            .expect("command provenance and provider coordinates are valid recording metadata");
+        let mut payload = recorded(&sealed, self.at, self.executor.as_ref());
         if let (Value::Object(payload), Some(note)) = (&mut payload, &placement.note) {
             payload.insert("change".to_owned(), note.clone());
         }
@@ -234,7 +238,7 @@ impl Provenance {
 /// on is not here: that is the event's own `args`.
 fn recorded(sealed: &Envelope<DomainEvent>, at: Timestamp, executor: Option<&ActorRef>) -> Value {
     json!({
-        "event_id": sealed.event_id,
+        "event_id": sealed.record_id,
         "recorded_at": sealed.recorded_at,
         "at": at.epoch_millis(),
         "correlation": sealed.correlation,
@@ -385,6 +389,7 @@ pub trait Projection<S: Store> {
 #[derive(Debug, Clone, Default)]
 pub struct Identity {
     lifecycles: Option<aep_domain::artifact::LifecycleRegistry>,
+    sequence_floor: Option<u64>,
     /// The entity the command in flight is an observation about, noted in `before` and written in
     /// `placements`: a relation's source, evidence's target.
     observing: Option<EntityId>,
@@ -396,6 +401,17 @@ impl Identity {
     pub fn with_lifecycles(lifecycles: aep_domain::artifact::LifecycleRegistry) -> Self {
         Self {
             lifecycles: Some(lifecycles),
+            sequence_floor: None,
+            observing: None,
+        }
+    }
+
+    /// Uses identities from a provider-reserved sequence range.
+    #[must_use]
+    pub const fn with_sequence_floor(sequence_floor: u64) -> Self {
+        Self {
+            lifecycles: None,
+            sequence_floor: Some(sequence_floor),
             observing: None,
         }
     }
@@ -422,7 +438,11 @@ fn observation_of(inner: &MemoryBackend, id: &EntityId) -> Result<Placement, Com
 
 impl<S: Store> Projection<S> for Identity {
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
-        hydrate(store, inner)
+        hydrate(store, inner)?;
+        if let Some(floor) = self.sequence_floor {
+            inner.with_store_mut(|memory| memory.advance_sequence_to(floor));
+        }
+        Ok(())
     }
 
     fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
@@ -526,7 +546,7 @@ impl<S: Store> Projection<S> for Identity {
                 id: key.to_string(),
                 state: RECORDED.to_owned(),
                 fields: Some(object(
-                    json!({ "command_id": applied.command_id, "result": applied.result }),
+                    json!({ "intent": applied.intent, "result": applied.result }),
                 )),
             });
         }
@@ -756,10 +776,7 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 revision: placement.revision,
                 fields: placement.fields.clone(),
             };
-            let decision = Decision {
-                instance: instance.clone(),
-                events: vec![event],
-            };
+            let decision = Decision::legacy_import(instance.clone(), vec![event]);
 
             let expect = provenance
                 .optimistic
@@ -798,10 +815,7 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 revision,
                 fields,
             };
-            let decision = Decision {
-                instance: instance.clone(),
-                events: Vec::new(),
-            };
+            let decision = Decision::legacy_import(instance.clone(), Vec::new());
             commits.push(AtomicCommit::new(decision, expect));
             held_by_key.insert(key, Some(instance));
         }
@@ -871,7 +885,7 @@ fn hydrate<S: Store>(store: &S, inner: &MemoryBackend) -> Result<(), CommandErro
             .map_err(|e| could_not_read(&e))?
             .ok_or_else(|| unreadable(APPLIED_AS, &key, "listed, and `load` answers absent"))?;
         let applied = AppliedCommand {
-            command_id: field(&instance, "command_id")
+            intent: field(&instance, "intent")
                 .map_err(|detail| unreadable(APPLIED_AS, &key, detail))?,
             result: field(&instance, "result")
                 .map_err(|detail| unreadable(APPLIED_AS, &key, detail))?,
@@ -1088,6 +1102,18 @@ fn digest(text: &str) -> u64 {
         hash = hash.wrapping_mul(0x0100_0000_01b3);
     }
     hash
+}
+
+/// The stable record identity this provider published before record ids became caller-supplied.
+fn event_record_id(event: &DomainEvent) -> String {
+    let args = serde_json::to_string(&event.args).unwrap_or_default();
+    format!(
+        "{}:{}@{}#0~{:016x}",
+        event.entity,
+        event.id,
+        event.revision,
+        digest(&args)
+    )
 }
 
 /// A JSON object, or an empty one — the value handed in is always built as an object here.

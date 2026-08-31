@@ -168,7 +168,7 @@ fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle()
         seal["event_id"]
             .as_str()
             .is_some_and(|event_id| event_id.starts_with(&format!("{STORED_AS}:{id}@3#0~"))),
-        "the id is the runtime's own derived one: {}",
+        "the published deterministic identity survives the runtime migration: {}",
         seal["event_id"]
     );
     // What the move was decided on is the event's own `args` — the command's payload — where the
@@ -268,6 +268,8 @@ fn the_stored_events_fold_back_to_the_stored_instance() {
         }
     }))
     .expect("the definition parses");
+    let definition =
+        entity_core::ValidatedDefinition::new(definition).expect("the definition validates");
 
     let backend = EntityBackend::over(entity_store::MemoryStore::new()).expect("opens");
     let id = a_story_moved_three_times(&backend);

@@ -23,6 +23,8 @@ use serde_json::Value;
 
 /// The one media type for version-1 request and response documents.
 pub const MEDIA_TYPE_V1: &str = "application/vnd.aep.service+json;version=1";
+/// The media type for bounded-history version-2 documents.
+pub const MEDIA_TYPE_V2: &str = "application/vnd.aep.service+json;version=2";
 /// Header advertising the response versions a server currently serves.
 pub const SUPPORTED_VERSIONS_HEADER: &str = "AEP-Supported-Versions";
 /// Header carrying a consistency token on a single-entity read.
@@ -225,6 +227,42 @@ pub struct ResolveRequestV1 {
     pub locator: EntityLocator,
 }
 
+/// A strict version-2 bounded history request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryQueryV2 {
+    /// Entity whose revisions are requested.
+    pub entity: EntityRef,
+    /// Maximum records, explicitly null for the server default.
+    pub limit: Nullable<usize>,
+    /// Continuation, explicitly null for the first page.
+    pub after: Nullable<Cursor>,
+    /// Required consistency demand.
+    pub consistency: QueryConsistency,
+}
+
+impl From<&aep_contract::query::HistoryQuery> for HistoryQueryV2 {
+    fn from(value: &aep_contract::query::HistoryQuery) -> Self {
+        Self {
+            entity: value.entity.clone(),
+            limit: value.limit.into(),
+            after: value.after.clone().into(),
+            consistency: value.consistency.clone(),
+        }
+    }
+}
+
+impl From<HistoryQueryV2> for aep_contract::query::HistoryQuery {
+    fn from(value: HistoryQueryV2) -> Self {
+        Self {
+            entity: value.entity,
+            limit: value.limit.into_option(),
+            after: value.after.into_option(),
+            consistency: value.consistency,
+        }
+    }
+}
+
 /// A strict version-1 entity query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -393,6 +431,34 @@ pub struct PageV1<T> {
     pub items: Vec<T>,
     /// Continuation cursor, explicitly null on the last page.
     pub next: Nullable<Cursor>,
+}
+
+/// A strict version-2 page. The shape is named separately so later versions never reinterpret v1.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageV2<T> {
+    /// Page items.
+    pub items: Vec<T>,
+    /// Continuation, explicitly null when complete.
+    pub next: Nullable<Cursor>,
+}
+
+impl<T> From<Page<T>> for PageV2<T> {
+    fn from(value: Page<T>) -> Self {
+        Self {
+            items: value.items,
+            next: value.next.into(),
+        }
+    }
+}
+
+impl<T> From<PageV2<T>> for Page<T> {
+    fn from(value: PageV2<T>) -> Self {
+        Self {
+            items: value.items,
+            next: value.next.into_option(),
+        }
+    }
 }
 
 impl<T> From<PageV1<T>> for Page<T> {

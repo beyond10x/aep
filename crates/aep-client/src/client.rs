@@ -5,8 +5,8 @@ use std::future::Future;
 use aep_contract::command::{CommandEnvelope, CommandResult, CommandService};
 use aep_contract::error::{CommandError, QueryError};
 use aep_contract::query::{
-    AuditQuery, EntityEnvelope, EntityQuery, Page, QueryService, Relation, RelationQuery,
-    RevisionRecord,
+    AuditQuery, EntityEnvelope, EntityQuery, HistoryQuery, Page, QueryService, Relation,
+    RelationQuery, RevisionRecord,
 };
 use aep_contract::registry::TypeDescriptor;
 use aep_contract::QueryConsistency;
@@ -21,9 +21,9 @@ use serde::Deserialize;
 
 use crate::wire::{
     self, AuditPageV1, AuditQueryV1, CommandRequestV1, CommandResultV1, EntityPageV1,
-    EntityQueryV1, HistoryV1, Method, ProblemDocumentV1, RelationPageV1, RelationQueryV1, Request,
-    ResolveRequestV1, Response, SuccessV1, TypeDescriptionV1, CONSISTENCY_HEADER, MEDIA_TYPE_V1,
-    SUPPORTED_VERSIONS_HEADER,
+    EntityQueryV1, HistoryQueryV2, HistoryV1, Method, PageV2, ProblemDocumentV1, RelationPageV1,
+    RelationQueryV1, Request, ResolveRequestV1, Response, SuccessV1, TypeDescriptionV1,
+    CONSISTENCY_HEADER, MEDIA_TYPE_V1, MEDIA_TYPE_V2, SUPPORTED_VERSIONS_HEADER,
 };
 
 /// A bearer credential whose diagnostics never expose its bytes.
@@ -243,7 +243,19 @@ impl<T: Transport, C: CredentialProvider> AepClient<T, C> {
     ) -> Result<R, ExchangeError> {
         let body =
             wire::encode(body).map_err(|error| ExchangeError::Protocol(error.to_string()))?;
-        self.exchange(Method::Post, suffix, body, None).await
+        self.exchange(Method::Post, suffix, body, None, MEDIA_TYPE_V1)
+            .await
+    }
+
+    async fn post_v2<B: serde::Serialize, R: DeserializeOwned>(
+        &self,
+        suffix: &str,
+        body: &B,
+    ) -> Result<R, ExchangeError> {
+        let body =
+            wire::encode(body).map_err(|error| ExchangeError::Protocol(error.to_string()))?;
+        self.exchange(Method::Post, suffix, body, None, MEDIA_TYPE_V2)
+            .await
     }
 
     async fn get<R: DeserializeOwned>(
@@ -251,7 +263,7 @@ impl<T: Transport, C: CredentialProvider> AepClient<T, C> {
         suffix: &str,
         consistency: Option<&str>,
     ) -> Result<R, ExchangeError> {
-        self.exchange(Method::Get, suffix, Vec::new(), consistency)
+        self.exchange(Method::Get, suffix, Vec::new(), consistency, MEDIA_TYPE_V1)
             .await
     }
 
@@ -261,6 +273,7 @@ impl<T: Transport, C: CredentialProvider> AepClient<T, C> {
         suffix: &str,
         body: Vec<u8>,
         consistency: Option<&str>,
+        media_type: &str,
     ) -> Result<R, ExchangeError> {
         let token = self
             .credentials
@@ -268,11 +281,11 @@ impl<T: Transport, C: CredentialProvider> AepClient<T, C> {
             .await
             .map_err(ExchangeError::Credential)?;
         let mut headers = BTreeMap::from([
-            ("Accept".to_owned(), MEDIA_TYPE_V1.to_owned()),
+            ("Accept".to_owned(), media_type.to_owned()),
             ("Authorization".to_owned(), token.authorization_value()),
         ]);
         if !body.is_empty() {
-            headers.insert("Content-Type".to_owned(), MEDIA_TYPE_V1.to_owned());
+            headers.insert("Content-Type".to_owned(), media_type.to_owned());
         }
         if let Some(token) = consistency {
             headers.insert(CONSISTENCY_HEADER.to_owned(), token.to_owned());
@@ -287,11 +300,14 @@ impl<T: Transport, C: CredentialProvider> AepClient<T, C> {
             })
             .await
             .map_err(ExchangeError::Transport)?;
-        decode_response(&response)
+        decode_response(&response, media_type)
     }
 }
 
-fn decode_response<R: DeserializeOwned>(response: &Response) -> Result<R, ExchangeError> {
+fn decode_response<R: DeserializeOwned>(
+    response: &Response,
+    media_type: &str,
+) -> Result<R, ExchangeError> {
     if response.status == 406 && response.body.is_empty() {
         return Err(ExchangeError::UnsupportedVersion(
             response
@@ -306,9 +322,9 @@ fn decode_response<R: DeserializeOwned>(response: &Response) -> Result<R, Exchan
             response.status
         )));
     }
-    if response.header("Content-Type") != Some(MEDIA_TYPE_V1) {
+    if response.header("Content-Type") != Some(media_type) {
         return Err(ExchangeError::Protocol(format!(
-            "status {} did not select media type {MEDIA_TYPE_V1}",
+            "status {} did not select media type {media_type}",
             response.status
         )));
     }
@@ -658,12 +674,39 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
     }
 
     async fn history(&self, reference: &EntityRef) -> Result<Vec<RevisionRecord>, QueryError> {
-        let suffix = format!(
-            "/entities/{}/history",
-            percent_encode_segment(reference.id.as_str())
-        );
-        let history: HistoryV1 = self.get(&suffix, None).await.map_err(query_error)?;
-        Ok(history)
+        let mut query = HistoryQuery::for_entity(reference.clone());
+        let mut history = Vec::new();
+        loop {
+            let page: PageV2<RevisionRecord> = match self
+                .post_v2("/history/query", &HistoryQueryV2::from(&query))
+                .await
+            {
+                Ok(page) => page,
+                Err(ExchangeError::UnsupportedVersion(_)) if query.after.is_none() => {
+                    let suffix = format!(
+                        "/entities/{}/history",
+                        percent_encode_segment(reference.id.as_str())
+                    );
+                    let history: HistoryV1 = self.get(&suffix, None).await.map_err(query_error)?;
+                    return Ok(history);
+                }
+                Err(error) => return Err(query_error(error)),
+            };
+            let page: Page<RevisionRecord> = page.into();
+            history.extend(page.items);
+            let Some(next) = page.next else {
+                return Ok(history);
+            };
+            query.after = Some(next);
+        }
+    }
+
+    async fn history_page(&self, query: &HistoryQuery) -> Result<Page<RevisionRecord>, QueryError> {
+        let page: PageV2<RevisionRecord> = self
+            .post_v2("/history/query", &HistoryQueryV2::from(query))
+            .await
+            .map_err(query_error)?;
+        Ok(page.into())
     }
 
     async fn audit(&self, query: &AuditQuery) -> Result<Page<Self::AuditRecord>, QueryError> {

@@ -3,7 +3,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use aep_backend_postgres::PostgresBackend;
+use aep_backend_postgres::{PostgresBackend, SessionPostgresBackend};
 use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
 use aep_contract::testing::block_on;
 use aep_domain::command::{Command, CreateEntity, UpdateEntity};
@@ -39,7 +39,7 @@ fn open(url: &str, schema: &str) -> PostgresBackend {
 }
 
 fn drop_schema(url: &str, schema: &str) {
-    let mut store = entity_postgres::PostgresStore::connect(url).expect("a connection");
+    let mut store = entity_postgres::PostgresStore::connect_no_tls(url).expect("a connection");
     store.drop_schema(schema).expect("dropped");
 }
 
@@ -191,5 +191,66 @@ fn two_processes_writing_one_artifact_resolve_to_one_accepted_and_one_refusal_na
     .expect("held");
     assert_eq!(held.metadata.revision.get(), 2, "one write landed, not two");
     drop((first, second, third));
+    drop_schema(&url, &schema);
+}
+
+#[test]
+fn each_session_command_reads_only_its_dependencies_and_replay_intent() {
+    let Some(url) = url() else { return };
+    let schema = schema("sessions");
+    let first = SessionPostgresBackend::connect_in_schema(&url, &schema).expect("first session");
+    let created = block_on(
+        first.execute(envelope(
+            Command::CreateEntity(CreateEntity {
+                entity_type: EntityType::parse("aep.story/v1").expect("a type"),
+                locator: EntityLocator::parse("ep://beyond10x/plan/story/session")
+                    .expect("a locator"),
+                data: Node::Map(
+                    [
+                        ("status".to_owned(), Node::from("draft")),
+                        ("title".to_owned(), Node::from("Before")),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            }),
+            10,
+            "session",
+        )),
+    )
+    .expect("created");
+    let id = created.affected[0].id.clone();
+
+    let second = SessionPostgresBackend::connect_in_schema(&url, &schema).expect("second session");
+    let update = envelope(retitle(&id, "After"), 11, "session");
+    let accepted = block_on(second.execute(update.clone())).expect("updated");
+    let replayed = block_on(first.execute(update)).expect("replayed from the applied record");
+    assert_eq!(
+        replayed.outcome,
+        aep_contract::command::CommandOutcome::Replayed
+    );
+    assert_eq!(replayed.command_id, accepted.command_id);
+
+    let reader = open(&url, &schema);
+    let held = block_on(aep_contract::query::QueryService::get(
+        &reader,
+        &EntityRef::new(id),
+        aep_contract::QueryConsistency::Current,
+    ))
+    .expect("freshly hydrated reader sees the command");
+    assert_eq!(held.metadata.revision.get(), 2);
+    assert_eq!(
+        held.data,
+        Node::Map(
+            [
+                ("status".to_owned(), Node::from("draft")),
+                ("title".to_owned(), Node::from("After")),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
+
+    drop((first, second, reader));
     drop_schema(&url, &schema);
 }

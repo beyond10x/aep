@@ -230,10 +230,7 @@ fn a_replica_that_moved_on_its_own_stays_outstanding_for_a_person() {
     foreign.revision = 7;
     replica
         .commit(
-            &Decision {
-                instance: foreign,
-                events: Vec::new(),
-            },
+            &Decision::legacy_import(foreign, Vec::new()),
             Expect::Absent,
         )
         .expect("the replica takes the foreign write");

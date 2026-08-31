@@ -15,7 +15,9 @@
 //! from an attempt that never happened, and "an agent tried to change production and was stopped" is
 //! precisely the thing an audit trail exists to show.
 
-use aep_contract::command::{CommandEnvelope, CommandOutcome, CommandResult, CommandService};
+use aep_contract::command::{
+    CommandEnvelope, CommandIntent, CommandOutcome, CommandResult, CommandService,
+};
 use aep_contract::error::CommandError;
 use aep_contract::query::{Relation, RevisionRecord};
 use aep_domain::audit::{AuditKind, AuditRecord, CausationRef, ChangeRecord, DecisionRecord};
@@ -60,14 +62,14 @@ fn apply(
     // 1. Idempotency. A replay of the same logical command returns what it returned before; the same
     //    key on a *different* command is a client bug, and accepting it would make the key useless.
     if let Some(applied) = store.applied(key) {
-        if applied.command_id == envelope.command_id {
+        if applied.intent == CommandIntent::from_envelope(envelope) {
             let mut result = applied.result.clone();
             result.outcome = CommandOutcome::Replayed;
             return Ok(result);
         }
         let error = CommandError::IdempotencyMismatch {
             key: key.clone(),
-            original: applied.command_id.clone(),
+            original: applied.intent.command_id.clone(),
         };
         record_rejection(store, envelope, &error);
         return Err(error);
@@ -90,7 +92,7 @@ fn apply(
             candidate.remember(
                 key,
                 AppliedCommand {
-                    command_id: envelope.command_id.clone(),
+                    intent: CommandIntent::from_envelope(envelope),
                     result: result.clone(),
                 },
             );

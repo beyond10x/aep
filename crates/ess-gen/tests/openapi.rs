@@ -110,7 +110,46 @@ fn generated(ir: &EssIr) -> BTreeMap<String, Artifact> {
 fn parsed(artifact: &Artifact) -> Value {
     let yaml: serde_yaml::Value = serde_yaml::from_str(&artifact.contents)
         .unwrap_or_else(|error| panic!("{} is YAML: {error}", artifact.path));
-    serde_json::to_value(yaml).expect("YAML converts to JSON")
+    yaml_to_json(yaml)
+}
+
+/// Converts the YAML value structurally instead of routing its number through `serde_json`'s
+/// private arbitrary-precision token, which is enabled by the Entity Runtime dependency graph.
+fn yaml_to_json(value: serde_yaml::Value) -> Value {
+    match value {
+        serde_yaml::Value::Null => Value::Null,
+        serde_yaml::Value::Bool(value) => Value::Bool(value),
+        serde_yaml::Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                Value::Number(value.into())
+            } else if let Some(value) = value.as_u64() {
+                Value::Number(value.into())
+            } else {
+                Value::Number(
+                    value
+                        .as_f64()
+                        .and_then(serde_json::Number::from_f64)
+                        .expect("a YAML number is finite"),
+                )
+            }
+        }
+        serde_yaml::Value::String(value) => Value::String(value),
+        serde_yaml::Value::Sequence(values) => {
+            Value::Array(values.into_iter().map(yaml_to_json).collect())
+        }
+        serde_yaml::Value::Mapping(values) => Value::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| {
+                    let serde_yaml::Value::String(key) = key else {
+                        panic!("an OpenAPI mapping key is not text: {key:?}")
+                    };
+                    (key, yaml_to_json(value))
+                })
+                .collect(),
+        ),
+        serde_yaml::Value::Tagged(value) => yaml_to_json(value.value),
+    }
 }
 
 /// Every document of a compiled specification, keyed by artifact path.

@@ -297,7 +297,7 @@ fn the_reference_scenario() {
     let replay = block_on(backend.execute(envelope(
         "cmd-8",
         approve,
-        context("req-8-retry", "key-8", 9_000),
+        context("req-8-retry", "key-8", 9_000).caused_by(CausationRef("cmd-6".to_owned())),
     )))
     .expect("a replay is not an error");
     assert_eq!(replay.outcome, CommandOutcome::Replayed);

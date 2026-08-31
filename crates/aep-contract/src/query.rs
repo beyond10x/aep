@@ -275,6 +275,38 @@ pub struct RevisionRecord {
     pub audit_id: Option<AuditId>,
 }
 
+/// A bounded history question suitable for a central service boundary.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryQuery {
+    /// Entity whose revisions are requested.
+    pub entity: EntityRef,
+    /// Maximum records in one page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// Continuation emitted by an earlier identical history query.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<Cursor>,
+    /// How fresh the history must be.
+    #[serde(default)]
+    pub consistency: QueryConsistency,
+}
+
+impl HistoryQuery {
+    /// Starts a current bounded-history query for `entity`.
+    #[must_use]
+    pub fn for_entity(entity: EntityRef) -> Self {
+        Self {
+            entity,
+            limit: None,
+            after: None,
+            consistency: QueryConsistency::Current,
+        }
+    }
+}
+
 /// Which audit records to return.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
@@ -379,6 +411,17 @@ pub trait QueryService {
         &self,
         reference: &EntityRef,
     ) -> impl std::future::Future<Output = Result<Vec<RevisionRecord>, QueryError>>;
+
+    /// Returns one bounded page of an entity's revision history.
+    fn history_page(
+        &self,
+        query: &HistoryQuery,
+    ) -> impl std::future::Future<Output = Result<Page<RevisionRecord>, QueryError>> {
+        async move {
+            let history = self.history(&query.entity).await?;
+            Page::paginate(history, query.limit, query.after.as_ref())
+        }
+    }
 
     /// Returns audit records.
     fn audit(

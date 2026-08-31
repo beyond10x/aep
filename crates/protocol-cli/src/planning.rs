@@ -428,7 +428,7 @@ fn hybrid_documents(
             documents_of(&Composite::new(root, store, policy))
         }
         Replica::Postgres(url) => {
-            let store = entity_postgres::PostgresStore::connect(url)
+            let store = entity_postgres::PostgresStore::connect_no_tls(url)
                 .with_context(|| format!("connecting to the replica at {}", redact(url)))?;
             documents_of(&Composite::new(root, store, policy))
         }
@@ -468,7 +468,7 @@ fn hybrid_backend_for(
             .map(PlanBackend::HybridSqlite)
         }
         Replica::Postgres(url) => {
-            let store = entity_postgres::PostgresStore::connect(url)
+            let store = entity_postgres::PostgresStore::connect_no_tls(url)
                 .with_context(|| format!("connecting to the replica at {}", redact(url)))?;
             HybridBackend::open(
                 root,
@@ -4147,7 +4147,7 @@ fn catch_up(args: &StoreArgs) -> Result<ExitCode> {
             aep_backend_hybrid::catch_up(&root, store, runtime_policy)
         }
         Replica::Postgres(url) => {
-            let store = entity_postgres::PostgresStore::connect(url)
+            let store = entity_postgres::PostgresStore::connect_no_tls(url)
                 .with_context(|| format!("connecting to the replica at {}", redact(url)))?;
             aep_backend_hybrid::catch_up(&root, store, runtime_policy)
         }

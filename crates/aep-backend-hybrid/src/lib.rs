@@ -55,7 +55,9 @@ use entity_store::{
 
 /// The runtime's record of one disagreement, its four-word policy and the words themselves,
 /// re-exported so a caller of this crate names one `entity-runtime` pin: the workspace's.
-pub use entity_remote::{Authority, Divergence, OnDivergence, Policy, ReadPath, WhenUnreachable};
+pub use entity_remote::{
+    Authority, Divergence, OnDivergence, Policy, ReadPath, StoreSide, WhenUnreachable,
+};
 
 /// The file beside the plan that holds every divergence not yet caught up, one JSON object per line.
 pub const DIVERGENCES: &str = "divergences.jsonl";
@@ -154,6 +156,15 @@ impl<R: AtomicBatchStore> AtomicBatchStore for Composite<R> {
                     entity: instance.entity.clone(),
                     id: instance.id.clone(),
                     local_revision: instance.revision,
+                    source: match self.policy.authority {
+                        Authority::Local => StoreSide::Local,
+                        Authority::Remote => StoreSide::Remote,
+                    },
+                    destination: match self.policy.authority {
+                        Authority::Local => StoreSide::Remote,
+                        Authority::Remote => StoreSide::Local,
+                    },
+                    record_id: None,
                     detail: format!(
                         "the authority committed its batch and the replica refused: {error}"
                     ),

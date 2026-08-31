@@ -36,6 +36,7 @@ const EXPECTED: &[(&str, &[&str])] = &[
             "describe_type",
             "get",
             "history",
+            "history_page",
             "query",
             "relations",
             "resolve",

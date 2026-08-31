@@ -109,11 +109,12 @@ Each of these was learned by building the thing it names. They are enforced wher
 * **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
   that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
   appears in one here.
-* **`entity-runtime` is a dependency — five crates, one tag — and the arrow only points this way.**
+* **`entity-runtime` is a dependency — six crates, one tag — and the arrow only points this way.**
   `crates/aep-backend-entity` takes `entity-core` and `entity-store` by git tag so the status ladder
   is decided as data rather than by a lookup written here (`src/kernel.rs`, re-exported by
   `aep-backend-markdown`); `crates/aep-backend-sqlite` and `crates/aep-backend-postgres` take
-  `entity-sqlite` and `entity-postgres`, and `crates/aep-backend-hybrid` takes `entity-remote` for
+  `entity-sqlite`, `entity-postgres` and the latter's optional `entity-query` capability, while
+  `crates/aep-backend-hybrid` takes `entity-remote` for
   its `Hybrid`, all at the **same** tag, and `dep-check` in the gate
   (`cargo xtask deps`) fails, naming both, when any `entity-*` crate resolves at two versions or from
   two pins — two kernels were compiled side by side for two releases before it existed. Nothing of

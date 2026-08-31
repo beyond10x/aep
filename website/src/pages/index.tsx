@@ -170,7 +170,7 @@ function HonestStatus() {
       title="What is built, and what is not"
       chip={
         /* generated:release-chip:begin — do not edit; run `cargo xtask status` */
-        <code>0.35.0</code>
+        <code>0.36.0</code>
         /* generated:release-chip:end */
       }>
       <div className={styles.ledger}>

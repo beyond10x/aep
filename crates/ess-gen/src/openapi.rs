@@ -887,8 +887,35 @@ fn embedded(node: &Node) -> Fragment {
 /// rendered as HTTP, a header, a reference — and nothing describing a *model* construct comes through
 /// here. Anything that did would be a third copy of the mapping starting.
 fn written(schema: Value) -> Fragment {
-    serde_yaml::to_value(schema)
-        .unwrap_or_else(|error| panic!("a hand-written schema converts to YAML: {error}"))
+    json_fragment(schema)
+}
+
+/// Converts one hand-written JSON fragment without crossing serde's data-model bridge.
+///
+/// `serde_json` represents a number through a private token when its `arbitrary_precision`
+/// feature is unified into a build. `serde_yaml::to_value` faithfully serialises that token as a
+/// mapping instead of as the number it denotes, so the generated schema depends on an adopter's
+/// dependency graph. Matching the two value models directly keeps the published bytes stable.
+fn json_fragment(value: Value) -> Fragment {
+    match value {
+        Value::Null => Fragment::Null,
+        Value::Bool(value) => Fragment::Bool(value),
+        Value::Number(value) => Fragment::Number(if let Some(value) = value.as_i64() {
+            serde_yaml::Number::from(value)
+        } else if let Some(value) = value.as_u64() {
+            serde_yaml::Number::from(value)
+        } else {
+            serde_yaml::Number::from(value.as_f64().expect("a JSON number is finite"))
+        }),
+        Value::String(value) => Fragment::String(value),
+        Value::Array(values) => Fragment::Sequence(values.into_iter().map(json_fragment).collect()),
+        Value::Object(values) => Fragment::Mapping(
+            values
+                .into_iter()
+                .map(|(key, value)| (Fragment::String(key), json_fragment(value)))
+                .collect(),
+        ),
+    }
 }
 
 /// One fragment from [`types`], with every pointer retargeted at a `components.schemas` key.

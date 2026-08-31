@@ -185,6 +185,53 @@ impl<C> CommandEnvelope<C> {
     }
 }
 
+/// Caller-controlled command semantics used to decide whether a retry is equivalent.
+///
+/// Request identity, server time, authority, executor and the idempotency lookup key are absent.
+/// Realm, workspace and authority scope the stored key outside this value.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct CommandIntent<C> {
+    /// Logical command identity.
+    pub command_id: CommandId,
+    /// Versioned semantic command name.
+    pub command_type: String,
+    /// Optional target.
+    pub target: Option<EntityRef>,
+    /// Optional optimistic assertion.
+    pub expected_revision: Option<EntityRevision>,
+    /// Semantic command payload.
+    pub payload: C,
+    /// Wider caller-controlled activity.
+    pub correlation_id: CorrelationId,
+    /// Immediate caller-controlled cause.
+    pub causation: Option<CausationRef>,
+    /// Governed execution, when present.
+    pub execution_id: Option<ExecutionId>,
+    /// Governed task, when present.
+    pub task: Option<TaskId>,
+}
+
+impl<C: Clone> CommandIntent<C> {
+    /// Extracts exactly the caller-controlled semantics from a trusted command envelope.
+    #[must_use]
+    pub fn from_envelope(envelope: &CommandEnvelope<C>) -> Self {
+        Self {
+            command_id: envelope.command_id.clone(),
+            command_type: envelope.command_type.clone(),
+            target: envelope.target.clone(),
+            expected_revision: envelope.expected_revision,
+            payload: envelope.payload.clone(),
+            correlation_id: envelope.context.correlation_id.clone(),
+            causation: envelope.context.causation.clone(),
+            execution_id: envelope.context.execution_id.clone(),
+            task: envelope.context.task.clone(),
+        }
+    }
+}
+
 /// How a command was applied.
 #[derive(
     Debug,

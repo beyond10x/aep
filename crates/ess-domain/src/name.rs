@@ -488,12 +488,17 @@ mod tests {
     }
 
     #[test]
-    fn a_version_too_wide_for_the_document_model_is_refused_before_it_reaches_the_parser() {
-        // A number is carried as an `f64`, so a literal wider than that is refused one layer out
-        // and the diagnostic is the document model's rather than this type's — asserted separately
-        // for exactly that reason, so a change to either message is visible here.
+    fn a_version_wider_than_the_model_is_refused_by_the_version_bound() {
+        // `serde_json` arbitrary-precision feature unification changes which deserializer layer
+        // first sees a huge scalar. The stable promise is the version bound, not an incidental
+        // "invalid type" from the intermediary document representation.
         let error = serde_yaml::from_str::<Version>("18446744073709551616").expect_err("too wide");
-        assert!(error.to_string().contains("invalid type"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("versions run from 1 to 4294967295"),
+            "{error}"
+        );
     }
 
     #[test]
