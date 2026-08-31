@@ -29,7 +29,7 @@ use std::collections::hash_map::RandomState;
 use std::fmt::Write as _;
 use std::hash::{BuildHasher, Hasher};
 use std::io::Write;
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -116,7 +116,12 @@ fn converse(serving: &api::Serving, mut stream: TcpStream) {
         Ok(request) => api::answer(serving, &request),
         Err(refused) => refused,
     };
-    let _ = answer.write_to(&mut stream);
+    if answer.write_to(&mut stream).is_ok() {
+        // Make the response boundary a FIN before this handler drops the socket. Some Linux
+        // runners otherwise turn the close into an abortive reset, which can discard a response
+        // the application already wrote successfully.
+        let _ = stream.shutdown(Shutdown::Write);
+    }
 }
 
 /// A token for this run, so a page that never saw the terminal cannot write to the store.
