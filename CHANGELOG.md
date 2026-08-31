@@ -7,6 +7,22 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Added
+
+- Public harness-integration documentation now gives the local `protocol drive` installation and
+  run sequence, the free native comparison command, and a feature/confinement matrix for Claude
+  Code, Codex, and the b10x native loop. It distinguishes an inner harness transcript, an outer
+  metaharness attestation, and substrate measurements, and states where Codex is not yet a drive
+  selector rather than turning absence into support.
+
+### Changed
+
+- Workspace dependencies were refreshed to their current compatible releases. The direct
+  cryptographic and JSON Schema dependencies move to `sha2 0.11` and `jsonschema 0.52`; digest
+  rendering now formats bytes explicitly instead of relying on the removed `LowerHex` wrapper.
+
 ## [0.39.2] — 2026-08-31
 
 ### Fixed

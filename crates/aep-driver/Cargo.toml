@@ -29,7 +29,7 @@ thiserror.workspace = true
 serde_json.workspace = true
 
 # A generation pointer authenticates the exact snapshot/cursor pair it publishes.
-sha2 = "0.10"
+sha2 = "0.11"
 
 # The tests build their documents the way a project does — through the schema crate's parsers — so
 # a fixture that stopped being a valid document fails here rather than passing against a hand-built

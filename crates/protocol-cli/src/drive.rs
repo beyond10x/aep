@@ -4681,12 +4681,19 @@ fn metaharness_frame(
     if !scope.is_empty() {
         frame["subjects"] = metaharness_subject_scope(scope);
     }
-    let digest = {
+    let digest: String = {
         use sha2::{Digest as _, Sha256};
         let bytes = serde_json::to_vec(&frame).expect("a frame value serialises");
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
-        format!("{:x}", hasher.finalize())
+        hasher
+            .finalize()
+            .iter()
+            .fold(String::new(), |mut output, byte| {
+                use std::fmt::Write as _;
+                write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+                output
+            })
     };
     let object = frame.as_object_mut().expect("a frame is an object");
     object.insert("digest".into(), digest.into());
@@ -6588,7 +6595,14 @@ mod tests {
             let bytes = serde_json::to_vec(&unsealed).expect("serialises");
             let mut hasher = Sha256::new();
             hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
+            hasher
+                .finalize()
+                .iter()
+                .fold(String::new(), |mut output, byte| {
+                    use std::fmt::Write as _;
+                    write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+                    output
+                })
         };
         assert_eq!(stated, serde_json::Value::String(recomputed));
     }

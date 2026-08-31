@@ -305,7 +305,14 @@ pub fn load_bundle(root: &Path) -> Result<PinnedBundle, LoadErrors> {
         hasher.update((bytes.len() as u64).to_be_bytes());
         hasher.update(&bytes);
     }
-    let digest = format!("{:x}", hasher.finalize());
+    let digest = hasher
+        .finalize()
+        .iter()
+        .fold(String::new(), |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        });
     Ok(PinnedBundle {
         registry: outcome.registry,
         drivers: outcome.drivers,

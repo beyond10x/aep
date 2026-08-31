@@ -41,4 +41,4 @@ thiserror.workspace = true
 workspace = true
 
 [dev-dependencies]
-jsonschema = { version = "0.49.9", default-features = false }
+jsonschema = { version = "0.52.1", default-features = false }

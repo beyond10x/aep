@@ -118,7 +118,7 @@ serde_yaml.workspace = true
 # SHA-256 over the compact key-sorted serialization, the same rule and the same crate version the
 # metaharness workspace verifies with — and it digests the contract record coming the other way, so
 # an evidence document's provenance names the exact bytes the outside runner printed.
-sha2 = "0.10"
+sha2 = "0.11"
 
 [lints]
 workspace = true

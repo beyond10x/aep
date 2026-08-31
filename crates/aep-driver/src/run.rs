@@ -1531,7 +1531,13 @@ fn json_bytes<T: serde::Serialize>(path: &Path, value: &T) -> Result<Vec<u8>, Dr
 
 /// SHA-256 as lowercase hexadecimal text.
 fn sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::new(), |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        })
 }
 
 /// Writes exact bytes through a fixed temporary name.

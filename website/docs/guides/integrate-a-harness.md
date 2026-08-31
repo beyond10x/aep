@@ -17,6 +17,33 @@ A reference driver ships in this repository. `protocol drive` makes the engine's
 executes the three kinds of step a step map declares — a program, a model, a person — and records
 what it did:
 
+Install the three local binaries from source checkouts and verify what will be resolved from
+`PATH` before crossing a model boundary:
+
+```console
+$ cargo install --locked --path crates/protocol-cli
+$ cargo install --locked --path ../metaharness/crates/metaharness-cli
+$ cargo install --locked --path ../harness/crates/harness-cli
+$ protocol --version
+$ metaharness doctor claude
+$ metaharness doctor b10x
+$ protocol drive status
+```
+
+`protocol drive status` is read-only and free. The engineering-protocols comparison runner in the
+metaharness checkout goes further: it assembles the fixture, projects the workflow, exercises the
+confinement governor and stops before any model request unless `--spend` is present:
+
+```console
+$ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
+    -p metaharness-engineering-protocols-eval -- native \
+    --ep-repo "$PWD" --harness-repo ../harness
+```
+
+Its success line is explicit: `Everything free has run. No model was started.` Paid execution is a
+different invocation and additionally requires `METAHARNESS_LIVE=1`, `--spend`, and an exact
+budget. See the [harness and confinement matrix](../reference/harnesses.md) before choosing an arm.
+
 ```console
 $ protocol drive run --project . --map development/default \
     --plugin-dir integrations/claude-code --pause-on-approval \
@@ -41,8 +68,10 @@ Two things the driver does not do, both of which land on you if you build one:
 
 * **It knows two harnesses, both through metaharness.** An `llm` step says `harness: claude-code`
   (the default) or `harness: b10x`, and the driver launches `metaharness run claude` or
-  `metaharness run b10x`; a third needs an adapter there, not here. Neither is a stranger's harness —
-  see [Limitations](../status/limitations.md).
+  `metaharness run b10x`. Metaharness also has a Codex adapter, but `protocol drive` does not yet
+  select it; documenting that distinction prevents a Codex instruction integration from being
+  mistaken for a governed drive arm. Neither supported drive arm is a stranger's harness — see
+  [Limitations](../status/limitations.md).
 * **It reads a step map, and the two shipped maps verify the two shapes of work this repository
   has.** `drivers/development/default.yaml` (`development/default`) names `cargo` in every state
   that names a verifier, so a repository whose tests are not Rust tests cannot satisfy `test-driven`

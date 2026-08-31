@@ -49,6 +49,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'reference/cli',
+        'reference/harnesses',
         'reference/documents',
         'reference/vocabulary',
         'reference/glossary',

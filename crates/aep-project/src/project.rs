@@ -481,7 +481,14 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
 /// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
 fn git_cache_paths(source: &GitProtocolSource) -> Result<(PathBuf, PathBuf), String> {
     let root = cache_root()?;
-    let repository = format!("{:x}", Sha256::digest(source.repository().as_bytes()));
+    let repository: String = Sha256::digest(source.repository().as_bytes()).iter().fold(
+        String::new(),
+        |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        },
+    );
     let base = root.join("protocol-sources").join(repository);
     Ok((
         base.join("objects.git"),
@@ -625,7 +632,13 @@ fn snapshot_manifest(
             path: relative,
             mode: file_mode(&metadata),
             length: metadata.len(),
-            sha256: format!("{:x}", Sha256::digest(&bytes)),
+            sha256: Sha256::digest(&bytes)
+                .iter()
+                .fold(String::new(), |mut output, byte| {
+                    use std::fmt::Write as _;
+                    write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+                    output
+                }),
         });
     }
     Ok(SnapshotManifest {

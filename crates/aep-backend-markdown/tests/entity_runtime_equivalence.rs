@@ -249,7 +249,13 @@ fn the_pinned_copy_is_the_bytes_this_pin_records() {
     );
 
     for (name, sum) in &recorded {
-        let actual = format!("{:x}", Sha256::digest(read(&dir.join(name)).as_bytes()));
+        let actual = Sha256::digest(read(&dir.join(name)).as_bytes())
+            .iter()
+            .fold(String::new(), |mut output, byte| {
+                use std::fmt::Write as _;
+                write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+                output
+            });
         assert_eq!(
             &actual, sum,
             "{name} is not the bytes PIN.md records; refresh the pin deliberately or restore the \

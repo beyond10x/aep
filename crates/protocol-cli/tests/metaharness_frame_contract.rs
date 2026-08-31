@@ -191,7 +191,14 @@ fn computed_digest(frame: &Value) -> String {
     let bytes = serde_json::to_vec(&value).expect("a frame value serialises");
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
-    format!("{:x}", hasher.finalize())
+    hasher
+        .finalize()
+        .iter()
+        .fold(String::new(), |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        })
 }
 
 // ---------------------------------------------------------------- the shape, field by field

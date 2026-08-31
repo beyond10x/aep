@@ -29,7 +29,7 @@ serde_json.workspace = true
 
 # The step map's digest: SHA-256, 64 hex characters. Same version and same spelling as `trace-domain`
 # and `ess-gen`, deliberately — one hash implementation across the workspace.
-sha2 = "0.10"
+sha2 = "0.11"
 
 [lints]
 workspace = true

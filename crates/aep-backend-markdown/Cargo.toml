@@ -54,4 +54,4 @@ aep-conformance.workspace = true
 # repository's documents cannot drift without the pin drifting too. `entity-runtime` holds the
 # mirror-image copy of ours and checks it the same way, in its gate's `pin-check`; this repository
 # has no such step, so the check lives in the test that depends on the copy.
-sha2 = "0.10"
+sha2 = "0.11"
