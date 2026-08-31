@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:aep-service-wire-and-client
 kind: story
-status: active
+status: implemented
 title: Versioned AEP service wire and official client
 summary: Project the semantic command/query contract across a strict authenticated network boundary.
 relations:
 - serves: vision:O2
 - serves: vision:O6
-revision: 7
+revision: 9
 ---
 ## Context
 
@@ -65,3 +65,15 @@ in `aep-service`, prove the service against the same embedded cases, and then se
 ## Acceptance
 
 An independently released EP client and `aep-service` verify the same versioned constructed corpus for accepted, replayed, refused, conflicting, malformed, unavailable and unauthorized command/query exchanges, while actor, executor, request identity and recorded time can only originate in verified server context.
+
+## Independent service consumption — 2026-08-31
+
+`aep-service` commit `8793c50` pins released EP `0.35.0` at commit `1406c06` and realizes all
+eight version-1 routes through the EP-owned runtime-neutral request/response boundary. Its
+conformance test iterates `aep_client::conformance::CASES` directly and holds status, headers and
+body bytes to the published corpus while independently proving dispatch and trusted attribution.
+
+The service gate passed after its versioned API, trusted context and shared-conformance stories
+moved to `implemented`. Concrete identity-token verification, transactional Entity Runtime storage
+and `protocol` remote configuration remain later service/client stories; they are not claimed by
+this boundary release.
