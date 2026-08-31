@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.36.1] — 2026-08-31
+
+- Fresh PostgreSQL command sessions can now retain a pinned lifecycle registry while using
+  provider-reserved identity ranges, so service startup definitions govern both writes and type
+  discovery.
+
 ## [0.36.0] — 2026-08-31
 
 * Central-service retries now compare canonical caller-controlled command intent, and the query contract exposes bounded paginated history alongside complete version-1 history.

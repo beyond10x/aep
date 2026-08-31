@@ -35,6 +35,7 @@ use aep_contract::query::{
 use aep_contract::registry::TypeDescriptor;
 use aep_contract::testing::block_on;
 use aep_contract::QueryConsistency;
+use aep_domain::artifact::LifecycleRegistry;
 use aep_domain::audit::AuditRecord;
 use aep_domain::command::Command;
 use aep_domain::entity::{EntityId, EntityLocator, EntityRef, EntityType};
@@ -118,6 +119,7 @@ impl PostgresBackend {
 /// audit record commits; provider failures roll the transaction back.
 pub struct SessionPostgresBackend {
     durable: Mutex<PostgresStore>,
+    lifecycles: Option<LifecycleRegistry>,
 }
 
 impl std::fmt::Debug for SessionPostgresBackend {
@@ -135,6 +137,7 @@ impl SessionPostgresBackend {
             PostgresStore::connect_no_tls(url).map_err(|error| provider_command_error(&error))?;
         Ok(Self {
             durable: Mutex::new(durable),
+            lifecycles: None,
         })
     }
 
@@ -144,6 +147,34 @@ impl SessionPostgresBackend {
             .map_err(|error| provider_command_error(&error))?;
         Ok(Self {
             durable: Mutex::new(durable),
+            lifecycles: None,
+        })
+    }
+
+    /// Connects without hydrating rows and evaluates with `lifecycles`.
+    pub fn connect_with_lifecycles(
+        url: &str,
+        lifecycles: LifecycleRegistry,
+    ) -> Result<Self, CommandError> {
+        let durable =
+            PostgresStore::connect_no_tls(url).map_err(|error| provider_command_error(&error))?;
+        Ok(Self {
+            durable: Mutex::new(durable),
+            lifecycles: Some(lifecycles),
+        })
+    }
+
+    /// Connects in `schema` without hydrating rows and evaluates with `lifecycles`.
+    pub fn connect_in_schema_with_lifecycles(
+        url: &str,
+        schema: &str,
+        lifecycles: LifecycleRegistry,
+    ) -> Result<Self, CommandError> {
+        let durable = PostgresStore::connect_in_schema(url, schema)
+            .map_err(|error| provider_command_error(&error))?;
+        Ok(Self {
+            durable: Mutex::new(durable),
+            lifecycles: Some(lifecycles),
         })
     }
 }
@@ -320,9 +351,14 @@ impl CommandService for SessionPostgresBackend {
                     }
                 }
 
-                let backend =
-                    EntityBackend::shaped(scoped, Identity::with_sequence_floor(sequence_floor))
-                        .map_err(|error| StoreError::Backend(error.to_string()))?;
+                let identity = self.lifecycles.clone().map_or_else(
+                    || Identity::with_sequence_floor(sequence_floor),
+                    |lifecycles| {
+                        Identity::with_lifecycles_and_sequence_floor(lifecycles, sequence_floor)
+                    },
+                );
+                let backend = EntityBackend::shaped(scoped, identity)
+                    .map_err(|error| StoreError::Backend(error.to_string()))?;
                 let outcome = block_on(backend.execute(envelope));
                 let commits = backend.with_store(|store| store.committed.clone());
                 for commit in &commits {

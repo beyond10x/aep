@@ -415,6 +415,19 @@ impl Identity {
             observing: None,
         }
     }
+
+    /// Uses a configured lifecycle registry and provider-reserved identities together.
+    #[must_use]
+    pub const fn with_lifecycles_and_sequence_floor(
+        lifecycles: aep_domain::artifact::LifecycleRegistry,
+        sequence_floor: u64,
+    ) -> Self {
+        Self {
+            lifecycles: Some(lifecycles),
+            sequence_floor: Some(sequence_floor),
+            observing: None,
+        }
+    }
 }
 
 /// One placement for `id` as the contract holds it now — an observation: same state, same revision,
@@ -1359,5 +1372,30 @@ impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {
             }
         }
         Ok(descriptor)
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use aep_backend_memory::MemoryBackend;
+    use aep_domain::artifact::LifecycleRegistry;
+    use entity_store::MemoryStore;
+
+    use super::{Identity, Projection};
+
+    #[test]
+    fn provider_reserved_identities_do_not_discard_the_configured_lifecycles() {
+        let lifecycles = LifecycleRegistry::new();
+        let mut identity =
+            Identity::with_lifecycles_and_sequence_floor(lifecycles.clone(), 1_u64 << 48);
+        let inner = MemoryBackend::new();
+
+        identity
+            .hydrate(&MemoryStore::new(), &inner)
+            .expect("the empty provider hydrates");
+
+        assert_eq!(identity.lifecycles, Some(lifecycles));
+        let minted = inner.with_store_mut(aep_backend_memory::store::Store::next_entity_id);
+        assert_eq!(minted.as_str(), "01MEM0281474976710657");
     }
 }
