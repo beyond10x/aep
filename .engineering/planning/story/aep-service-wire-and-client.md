@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:aep-service-wire-and-client
 kind: story
-status: draft
+status: active
 title: Versioned AEP service wire and official client
 summary: Project the semantic command/query contract across a strict authenticated network boundary.
 relations:
 - serves: vision:O2
 - serves: vision:O6
-revision: 2
+revision: 7
 ---
 ## Context
 
@@ -42,8 +42,25 @@ The operator decided four questions:
 4. failed media-type negotiation advertises served versions in `AEP-Supported-Versions`; there is
    no separate discovery endpoint.
 
-The fifth question remains open: whether the official client implements the semantic traits directly
-or exposes a parallel remote facade. Until that is decided, this story is not a work order.
+5. the official client implements `CommandService` and `QueryService` directly; its injected transport
+   maps a no-response failure locally to `Unavailable` without forging server response bytes, and
+   there is no parallel remote semantic facade.
+
+All five review questions are resolved. A tenant is the control-plane owner of one or more globally
+unique realms; realm remains the AEP storage and authority boundary, and tenant identity does not
+enter version-1 routes or entity coordinates. Implementation begins only after this story is
+explicitly moved to `active`.
+
+## Implementation Record — 2026-08-31
+
+`aep-client` now carries strict version-1 request and response documents, direct semantic-trait
+implementations, injected transport and credential ports, typed semantic problem mappings and an
+embedded constructed corpus. An implementation audit found that the reviewed route table omitted
+`QueryService::resolve`; version 1 now projects it as `POST /entities/resolve`.
+
+The remaining acceptance work is release and independent consumption: publish the EP crate, pin it
+in `aep-service`, prove the service against the same embedded cases, and then select the client from
+`protocol` configuration.
 
 ## Acceptance
 

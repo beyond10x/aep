@@ -180,6 +180,7 @@ macro_rules! validation_codes {
             Ord,
             Hash,
             serde::Serialize,
+            serde::Deserialize,
             schemars::JsonSchema,
         )]
         #[serde(rename_all = "snake_case")]
@@ -388,7 +389,10 @@ impl fmt::Display for ValidationCode {
 }
 
 /// One semantic validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
 pub struct ValidationError {
     /// Stable classification.
     pub code: ValidationCode,
@@ -438,7 +442,9 @@ impl fmt::Display for ValidationError {
 ///
 /// Validation accumulates: a document with four broken references reports four errors, so a
 /// caller does not have to fix and re-run four times.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 #[serde(transparent)]
 pub struct ValidationErrors(Vec<ValidationError>);
 

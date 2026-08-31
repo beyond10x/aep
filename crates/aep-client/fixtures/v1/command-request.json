@@ -1,0 +1,1 @@
+{"command_id":"command-1","idempotency_key":"retry-1","command_type":"aep.status.move/v1","target":"01K2R8JD3ZJME72AJGQY67E5F8","expected_revision":7,"correlation_id":"correlation-1","causation":null,"execution_id":null,"task":null,"payload":{"command":"move-status","decided_on":"reviewed","expected_revision":7,"target":"01K2R8JD3ZJME72AJGQY67E5F8","to":"proposed"}}

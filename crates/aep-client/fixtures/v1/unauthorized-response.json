@@ -1,0 +1,1 @@
+{"request_id":"server-request-unauthorized","error":{"code":"unauthorized","message":"workspace access is required","retryable":false,"details":{"capability":null,"reason":"workspace is not granted"}}}

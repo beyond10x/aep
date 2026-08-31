@@ -1,0 +1,19 @@
+[package]
+name = "aep-client"
+description = "Runtime-neutral official client and strict versioned service wire for AEP."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+aep-contract.workspace = true
+aep-domain.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

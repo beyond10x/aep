@@ -66,11 +66,18 @@ Every operation is scoped by path before a body is read:
 implementation scope within it. Both are opaque URL segments; clients do not infer company or
 repository identity from their spelling.
 
+A realm is not a tenant account. A tenant is a service control-plane owner and may own one or more
+realms; realm identifiers are globally unique, so tenant identity does not enter AEP routes,
+idempotency coordinates or entity references. Version 1 may deploy one realm per tenant, but its
+storage and authorization keys are realm-scoped from the first deployment. Cross-realm reads,
+relations and commands are not implied by common tenant ownership.
+
 Version 1 exposes:
 
 ```text
 POST /commands
 GET  /entities/{entity_id}
+POST /entities/resolve
 POST /entities/query
 POST /relations/query
 GET  /entities/{entity_id}/history
@@ -170,9 +177,10 @@ force the client to guess whether a resource was newly created.
 
 ## 8. Queries
 
-Wire query documents project the existing `EntityQuery`, `RelationQuery`, `AuditQuery` and
-`QueryConsistency` types. Their objects are closed and optional fields are explicitly nullable in
-version 1. Page responses always write both `items` and nullable `next`.
+Wire query documents project the existing `EntityLocator`, `EntityQuery`, `RelationQuery`,
+`AuditQuery` and `QueryConsistency` types. `POST /entities/resolve` carries one required `locator`
+and returns the canonical entity identity. Query objects are closed and optional fields are
+explicitly nullable in version 1. Page responses always write both `items` and nullable `next`.
 
 `GET` routes carry no query document. `GET /entities/{entity_id}` accepts an optional consistency
 token in `AEP-Consistency`; history and type description use the same response envelope and error
@@ -216,16 +224,22 @@ The status mapping is:
 | unsupported command type | 422 | `unsupported` |
 | no mutually supported wire version | 406 | `unsupported_version` |
 | service cannot answer now | 503 | `unavailable` |
+| requested consistency was not reached in time | 504 | `consistency_timeout` |
 
-Only `unavailable` is retryable unchanged. A network failure with no HTTP response is represented by
-the client as a transport error, never forged into a server problem document.
+Only `unavailable` is retryable unchanged. The injected transport keeps a network failure with no
+HTTP response distinct from a received problem document. At the semantic trait boundary the client
+maps that failure locally to `CommandError::Unavailable` or `QueryError::Unavailable`; it never
+forges server response bytes.
 
 ## 10. Client boundary
 
-The official client lives in this repository beside the wire types. It exposes `CommandService`
-and `QueryService` semantics to callers and hides HTTP routing, negotiation and serialization. Its
-transport is injected so the specification crate takes no async runtime and conformance can run
-without network access.
+The official client lives in this repository beside the wire types. A concrete client directly
+implements `CommandService<Command = Command>` and
+`QueryService<AuditRecord = AuditRecord>`; there is no parallel remote semantic facade. The traits'
+ordinary associated types and returned futures permit that implementation without changing the
+semantic contract. The client hides HTTP routing, negotiation and serialization, and its transport
+is injected so the specification crate takes no async runtime and conformance can run without
+network access.
 
 Authentication material enters through a credential-provider interface. The client neither parses
 delegation to grant itself authority nor constructs actor/executor fields. It refreshes credentials
@@ -267,8 +281,9 @@ registered client has moved or an explicit retirement decision says otherwise.
 - bulk export and Markdown projection;
 - streaming subscriptions;
 - Jira ingestion;
-- definition-bundle activation and instance migration; and
-- company-brain realms.
+- definition-bundle activation and instance migration;
+- company-brain realms; and
+- tenant billing, provisioning and realm administration.
 
 Those concerns depend on this boundary but do not belong in its bytes.
 
@@ -287,7 +302,10 @@ The operator decided questions 1–4 on 2026-08-31:
    currently served set in `AEP-Supported-Versions`, while successful responses identify the chosen
    version through their media type and vary on `Accept`.
 
-One question remains open, so this proposal is not yet an implementation work order:
+5. **One semantic client surface.** The official client implements `CommandService` and
+   `QueryService` directly. Its injected transport retains the distinction between a received
+   problem document and no response; the semantic trait maps the latter locally to `Unavailable`
+   without inventing server bytes. There is no parallel remote facade.
 
-5. Does the official client implement the semantic traits directly, or expose a parallel remote
-   facade where generic associated types make trait implementation awkward?
+All five review questions are resolved. The proposal remains a work order only when
+`story:aep-service-wire-and-client` reaches a lifecycle state that says implementation is active.

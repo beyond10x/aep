@@ -311,14 +311,15 @@ enforcement here that you cannot point at.
    `SystemTime::now` is allowed to live, behind the `Clock` trait.
 9. **Determinism.** Same validated state plus same evidence set ⇒ same decision. Iterate over
    `BTreeMap`/`BTreeSet`, never `HashMap`, so output ordering is stable.
-   *Enforced by* banned-token scans over thirteen crates that claim the property or feed one that
+   *Enforced by* banned-token scans over fourteen crates that claim the property or feed one that
    does — `ess-compiler` (`tests/billing.rs`), `ess-diff` (`tests/canonical.rs`), `ess-synth`
    (`tests/synthesis.rs`), `aep-domain`, `ess-gen`, `infra-domain`, `infra-compiler`,
-   `infra-analyze`, `infra-project`, `infra-spec`, `aep-driver-spec`, `aep-driver` and `aep-render`
+   `infra-analyze`, `infra-project`, `infra-spec`, `aep-driver-spec`, `aep-driver`, `aep-render` and
+   `aep-client`
    (`tests/determinism.rs` in each) — beside tests that compile, diff, generate
    or render twice and compare bytes, and a seeded property test that does the same for every
    generated adversarial specification (`crates/ess-compiler/tests/adversarial.rs`).
-   Three of the thirteen are the harness's. § 4.1 makes a purity claim for the two driver crates
+   Three of the fourteen are the harness's. § 4.1 makes a purity claim for the two driver crates
    stronger than `aep-engine`'s: the routing core is clock-free and randomness-free, and the store
    lock, the pid-liveness probe and the run directory are `protocol-cli`'s precisely because a probe
    reads ambient OS state and would slip past this scan. `aep-render`'s scan is stronger again and

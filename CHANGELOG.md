@@ -9,6 +9,17 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-08-31
+
+### Added
+
+- `aep-client` now publishes the strict `application/vnd.aep.service+json;version=1` wire, a
+  runtime-neutral official client that implements `CommandService` and `QueryService` directly,
+  injected transport and credential ports, and credential-free constructed exchanges shared with
+  `aep-service`. Request documents omit actor, executor, request identity and time; nullable members
+  are mandatory, unknown members are refused, no-response failures map locally to `Unavailable`,
+  and bearer credentials are redacted from diagnostics.
+
 ### Fixed
 
 - Memory-backed commands now publish their candidate state only after the complete command succeeds,
