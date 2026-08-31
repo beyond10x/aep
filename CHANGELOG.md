@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.36.3] — 2026-08-31
+
+- Serialized PostgreSQL test-schema cleanup so parallel backend tests no longer race incidental
+  migrations in the shared public schema.
+
 ## [0.36.2] — 2026-08-31
 
 - Pinned Entity Runtime 0.17.3 so fresh PostgreSQL command sessions can acquire absent-identity

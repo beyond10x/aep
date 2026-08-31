@@ -2,6 +2,7 @@
 //! and to the promise only a server-backed store makes: two processes writing one artifact.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use aep_backend_postgres::{PostgresBackend, SessionPostgresBackend};
 use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
@@ -12,6 +13,7 @@ use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 
 static SCHEMAS: AtomicUsize = AtomicUsize::new(0);
+static CLEANUP: Mutex<()> = Mutex::new(());
 
 /// The server, or `None` after saying why the test is not running.
 fn url() -> Option<String> {
@@ -39,6 +41,7 @@ fn open(url: &str, schema: &str) -> PostgresBackend {
 }
 
 fn drop_schema(url: &str, schema: &str) {
+    let _cleanup = CLEANUP.lock().expect("the cleanup lock is not poisoned");
     let mut store = entity_postgres::PostgresStore::connect_no_tls(url).expect("a connection");
     store.drop_schema(schema).expect("dropped");
 }
