@@ -17,6 +17,9 @@ use aep_domain::ids::{
 };
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
+use schemars::gen::SchemaGenerator;
+use schemars::schema::{InstanceType, Schema, SchemaObject, SingleOrVec, SubschemaValidation};
+use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -30,6 +33,135 @@ pub const SUPPORTED_VERSIONS_HEADER: &str = "AEP-Supported-Versions";
 /// Header carrying a consistency token on a single-entity read.
 pub const CONSISTENCY_HEADER: &str = "AEP-Consistency";
 
+/// The route prefix shared by every semantic AEP service operation.
+pub const SERVICE_PATH_PREFIX: &str = "/aep/v1/realms/{realm}/workspaces/{workspace}";
+
+/// A semantic operation projected onto the versioned HTTP wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Operation {
+    /// Execute one command.
+    Command,
+    /// Read one entity by identity.
+    GetEntity,
+    /// Resolve a logical locator.
+    ResolveEntity,
+    /// Query entities.
+    QueryEntities,
+    /// Query relations.
+    QueryRelations,
+    /// Read complete legacy history.
+    GetHistory,
+    /// Query bounded history.
+    QueryHistory,
+    /// Query audit records.
+    QueryAudit,
+    /// Describe one entity type.
+    DescribeType,
+}
+
+impl Operation {
+    /// Returns the stable `OpenAPI` operation identifier.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Command => "executeCommand",
+            Self::GetEntity => "getEntity",
+            Self::ResolveEntity => "resolveEntity",
+            Self::QueryEntities => "queryEntities",
+            Self::QueryRelations => "queryRelations",
+            Self::GetHistory => "getEntityHistory",
+            Self::QueryHistory => "queryEntityHistory",
+            Self::QueryAudit => "queryAudit",
+            Self::DescribeType => "describeEntityType",
+        }
+    }
+}
+
+/// One operation's method, path template and exact document media type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RouteSpec {
+    /// The semantic operation.
+    pub operation: Operation,
+    /// The HTTP method.
+    pub method: Method,
+    /// The suffix appended to [`SERVICE_PATH_PREFIX`].
+    pub suffix: &'static str,
+    /// The media type accepted and returned by this operation.
+    pub media_type: &'static str,
+}
+
+impl RouteSpec {
+    /// Returns the complete templated path used by contract projections.
+    pub fn path(self) -> String {
+        format!("{SERVICE_PATH_PREFIX}{}", self.suffix)
+    }
+}
+
+/// Every semantic route published by the current service wire.
+pub const ROUTES: &[RouteSpec] = &[
+    RouteSpec {
+        operation: Operation::Command,
+        method: Method::Post,
+        suffix: "/commands",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::GetEntity,
+        method: Method::Get,
+        suffix: "/entities/{entity}",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::ResolveEntity,
+        method: Method::Post,
+        suffix: "/entities/resolve",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::QueryEntities,
+        method: Method::Post,
+        suffix: "/entities/query",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::QueryRelations,
+        method: Method::Post,
+        suffix: "/relations/query",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::GetHistory,
+        method: Method::Get,
+        suffix: "/entities/{entity}/history",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::QueryHistory,
+        method: Method::Post,
+        suffix: "/history/query",
+        media_type: MEDIA_TYPE_V2,
+    },
+    RouteSpec {
+        operation: Operation::QueryAudit,
+        method: Method::Post,
+        suffix: "/audit/query",
+        media_type: MEDIA_TYPE_V1,
+    },
+    RouteSpec {
+        operation: Operation::DescribeType,
+        method: Method::Get,
+        suffix: "/types/{entity_type}",
+        media_type: MEDIA_TYPE_V1,
+    },
+];
+
+/// Finds the contract entry for one semantic operation.
+pub fn route(operation: Operation) -> &'static RouteSpec {
+    ROUTES
+        .iter()
+        .find(|route| route.operation == operation)
+        .expect("every operation has exactly one route")
+}
+
 /// An HTTP method the AEP wire uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -37,6 +169,16 @@ pub enum Method {
     Get,
     /// A command or structured query carrying a JSON document.
     Post,
+}
+
+impl Method {
+    /// Returns the uppercase HTTP token.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+        }
+    }
 }
 
 /// One transport request, independent of an HTTP implementation.
@@ -81,6 +223,31 @@ impl Response {
 #[serde(transparent)]
 pub struct Nullable<T>(pub Option<T>);
 
+impl<T: JsonSchema> JsonSchema for Nullable<T> {
+    fn schema_name() -> String {
+        format!("Nullable_{}", T::schema_name())
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        let null = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
+            ..SchemaObject::default()
+        };
+        SchemaObject {
+            subschemas: Some(Box::new(SubschemaValidation {
+                any_of: Some(vec![T::json_schema(generator), Schema::Object(null)]),
+                ..SubschemaValidation::default()
+            })),
+            ..SchemaObject::default()
+        }
+        .into()
+    }
+
+    fn is_referenceable() -> bool {
+        false
+    }
+}
+
 impl<'de, T: DeserializeOwned> Deserialize<'de> for Nullable<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = Value::deserialize(deserializer)?;
@@ -117,7 +284,7 @@ impl<T> From<Option<T>> for Nullable<T> {
 }
 
 /// A version-1 command request before the server adds trusted context.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CommandRequestV1 {
     /// The logical command identity.
@@ -127,18 +294,24 @@ pub struct CommandRequestV1 {
     /// The versioned semantic command name.
     pub command_type: String,
     /// The command target, explicitly null when absent.
+    #[schemars(required)]
     pub target: Nullable<EntityRef>,
     /// The asserted revision, explicitly null when absent.
+    #[schemars(required)]
     pub expected_revision: Nullable<EntityRevision>,
     /// The wider activity.
     pub correlation_id: CorrelationId,
     /// The direct cause, explicitly null when absent.
+    #[schemars(required)]
     pub causation: Nullable<CausationRef>,
     /// The protocol execution, explicitly null when absent.
+    #[schemars(required)]
     pub execution_id: Nullable<ExecutionId>,
     /// The governed task, explicitly null when absent.
+    #[schemars(required)]
     pub task: Nullable<TaskId>,
     /// The raw semantic command document.
+    #[schemars(with = "Command")]
     pub payload: Value,
 }
 
@@ -176,7 +349,7 @@ impl CommandRequestV1 {
 }
 
 /// A command result whose empty collections are still written on the wire.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CommandResultV1 {
     /// The logical command identity.
@@ -220,7 +393,7 @@ impl From<CommandResult> for CommandResultV1 {
 }
 
 /// A logical-address resolution request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ResolveRequestV1 {
     /// The logical entity address.
@@ -228,14 +401,16 @@ pub struct ResolveRequestV1 {
 }
 
 /// A strict version-2 bounded history request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryQueryV2 {
     /// Entity whose revisions are requested.
     pub entity: EntityRef,
     /// Maximum records, explicitly null for the server default.
+    #[schemars(required)]
     pub limit: Nullable<usize>,
     /// Continuation, explicitly null for the first page.
+    #[schemars(required)]
     pub after: Nullable<Cursor>,
     /// Required consistency demand.
     pub consistency: QueryConsistency,
@@ -264,24 +439,31 @@ impl From<HistoryQueryV2> for aep_contract::query::HistoryQuery {
 }
 
 /// A strict version-1 entity query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EntityQueryV1 {
     /// Optional type filter.
+    #[schemars(required)]
     pub entity_type: Nullable<EntityType>,
     /// Optional organisation filter.
+    #[schemars(required)]
     pub organisation: Nullable<String>,
     /// Optional space filter.
+    #[schemars(required)]
     pub space: Nullable<String>,
     /// Exact body-field filters.
     pub matching: BTreeMap<String, Node>,
     /// Optional related entity.
+    #[schemars(required)]
     pub related_to: Nullable<EntityRef>,
     /// Optional relation kind.
+    #[schemars(required)]
     pub relation: Nullable<RelationKind>,
     /// Optional page size.
+    #[schemars(required)]
     pub limit: Nullable<usize>,
     /// Optional page cursor.
+    #[schemars(required)]
     pub after: Nullable<Cursor>,
     /// Required consistency requirement.
     pub consistency: QueryConsistency,
@@ -320,18 +502,23 @@ impl From<EntityQueryV1> for EntityQuery {
 }
 
 /// A strict version-1 relation query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RelationQueryV1 {
     /// Optional source filter.
+    #[schemars(required)]
     pub source: Nullable<EntityRef>,
     /// Optional target filter.
+    #[schemars(required)]
     pub target: Nullable<EntityRef>,
     /// Optional relation-kind filter.
+    #[schemars(required)]
     pub kind: Nullable<RelationKind>,
     /// Optional page size.
+    #[schemars(required)]
     pub limit: Nullable<usize>,
     /// Optional page cursor.
+    #[schemars(required)]
     pub after: Nullable<Cursor>,
     /// Required consistency requirement.
     pub consistency: QueryConsistency,
@@ -364,28 +551,37 @@ impl From<RelationQueryV1> for RelationQuery {
 }
 
 /// A strict version-1 audit query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AuditQueryV1 {
     /// Optional subject filter.
+    #[schemars(required)]
     pub entity: Nullable<EntityRef>,
     /// Optional correlation filter.
+    #[schemars(required)]
     pub correlation_id: Nullable<CorrelationId>,
     /// Optional command filter.
+    #[schemars(required)]
     pub command_id: Nullable<CommandId>,
     /// Optional authority filter.
+    #[schemars(required)]
     pub actor: Nullable<ActorRef>,
     /// Optional audit-kind filter.
+    #[schemars(required)]
     pub kind: Nullable<String>,
     /// Optional lower time bound.
+    #[schemars(required)]
     pub since: Nullable<Timestamp>,
     /// Optional upper time bound.
+    #[schemars(required)]
     pub until: Nullable<Timestamp>,
     /// Whether only refusals are returned.
     pub rejected_only: bool,
     /// Optional page size.
+    #[schemars(required)]
     pub limit: Nullable<usize>,
     /// Optional page cursor.
+    #[schemars(required)]
     pub after: Nullable<Cursor>,
 }
 
@@ -424,22 +620,24 @@ impl From<AuditQueryV1> for AuditQuery {
 }
 
 /// A page whose nullable continuation member is always present.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PageV1<T> {
     /// Page items.
     pub items: Vec<T>,
     /// Continuation cursor, explicitly null on the last page.
+    #[schemars(required)]
     pub next: Nullable<Cursor>,
 }
 
 /// A strict version-2 page. The shape is named separately so later versions never reinterpret v1.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PageV2<T> {
     /// Page items.
     pub items: Vec<T>,
     /// Continuation, explicitly null when complete.
+    #[schemars(required)]
     pub next: Nullable<Cursor>,
 }
 
@@ -480,7 +678,7 @@ impl<T> From<Page<T>> for PageV1<T> {
 }
 
 /// A successful answered request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SuccessV1<T> {
     /// Server-derived transport attempt identity.
@@ -490,7 +688,7 @@ pub struct SuccessV1<T> {
 }
 
 /// A stable failure document.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProblemDocumentV1 {
     /// Server-derived transport attempt identity.
@@ -500,7 +698,7 @@ pub struct ProblemDocumentV1 {
 }
 
 /// A stable failure and safe structured details selected by its code.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProblemV1 {
     /// Stable machine-readable code.
@@ -514,7 +712,7 @@ pub struct ProblemV1 {
 }
 
 /// A semantic or trust-boundary problem paired with its version-1 HTTP status.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProblemMappingV1 {
     /// HTTP status to return.

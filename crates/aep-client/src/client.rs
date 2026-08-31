@@ -21,9 +21,9 @@ use serde::Deserialize;
 
 use crate::wire::{
     self, AuditPageV1, AuditQueryV1, CommandRequestV1, CommandResultV1, EntityPageV1,
-    EntityQueryV1, HistoryQueryV2, HistoryV1, Method, PageV2, ProblemDocumentV1, RelationPageV1,
-    RelationQueryV1, Request, ResolveRequestV1, Response, SuccessV1, TypeDescriptionV1,
-    CONSISTENCY_HEADER, MEDIA_TYPE_V1, MEDIA_TYPE_V2, SUPPORTED_VERSIONS_HEADER,
+    EntityQueryV1, HistoryQueryV2, HistoryV1, Method, Operation, PageV2, ProblemDocumentV1,
+    RelationPageV1, RelationQueryV1, Request, ResolveRequestV1, Response, SuccessV1,
+    TypeDescriptionV1, CONSISTENCY_HEADER, MEDIA_TYPE_V1, MEDIA_TYPE_V2, SUPPORTED_VERSIONS_HEADER,
 };
 
 /// A bearer credential whose diagnostics never expose its bytes.
@@ -619,7 +619,7 @@ impl<T: Transport, C: CredentialProvider> CommandService for AepClient<T, C> {
         let request = CommandRequestV1::from_envelope(envelope)
             .map_err(|error| protocol_command(error.to_string()))?;
         let result: CommandResultV1 = self
-            .post("/commands", &request)
+            .post(wire::route(Operation::Command).suffix, &request)
             .await
             .map_err(command_error)?;
         Ok(result.into())
@@ -634,10 +634,9 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
         reference: &EntityRef,
         consistency: QueryConsistency,
     ) -> Result<EntityEnvelope, QueryError> {
-        let suffix = format!(
-            "/entities/{}",
-            percent_encode_segment(reference.id.as_str())
-        );
+        let suffix = wire::route(Operation::GetEntity)
+            .suffix
+            .replace("{entity}", &percent_encode_segment(reference.id.as_str()));
         self.get(
             &suffix,
             consistency.token().map(ToString::to_string).as_deref(),
@@ -648,7 +647,7 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
 
     async fn resolve(&self, locator: &EntityLocator) -> Result<EntityId, QueryError> {
         self.post(
-            "/entities/resolve",
+            wire::route(Operation::ResolveEntity).suffix,
             &ResolveRequestV1 {
                 locator: locator.clone(),
             },
@@ -659,7 +658,10 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
 
     async fn query(&self, query: &EntityQuery) -> Result<Page<EntityEnvelope>, QueryError> {
         let page: EntityPageV1 = self
-            .post("/entities/query", &EntityQueryV1::from(query))
+            .post(
+                wire::route(Operation::QueryEntities).suffix,
+                &EntityQueryV1::from(query),
+            )
             .await
             .map_err(query_error)?;
         Ok(page.into())
@@ -667,7 +669,10 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
 
     async fn relations(&self, query: &RelationQuery) -> Result<Page<Relation>, QueryError> {
         let page: RelationPageV1 = self
-            .post("/relations/query", &RelationQueryV1::from(query))
+            .post(
+                wire::route(Operation::QueryRelations).suffix,
+                &RelationQueryV1::from(query),
+            )
             .await
             .map_err(query_error)?;
         Ok(page.into())
@@ -678,15 +683,17 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
         let mut history = Vec::new();
         loop {
             let page: PageV2<RevisionRecord> = match self
-                .post_v2("/history/query", &HistoryQueryV2::from(&query))
+                .post_v2(
+                    wire::route(Operation::QueryHistory).suffix,
+                    &HistoryQueryV2::from(&query),
+                )
                 .await
             {
                 Ok(page) => page,
                 Err(ExchangeError::UnsupportedVersion(_)) if query.after.is_none() => {
-                    let suffix = format!(
-                        "/entities/{}/history",
-                        percent_encode_segment(reference.id.as_str())
-                    );
+                    let suffix = wire::route(Operation::GetHistory)
+                        .suffix
+                        .replace("{entity}", &percent_encode_segment(reference.id.as_str()));
                     let history: HistoryV1 = self.get(&suffix, None).await.map_err(query_error)?;
                     return Ok(history);
                 }
@@ -703,7 +710,10 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
 
     async fn history_page(&self, query: &HistoryQuery) -> Result<Page<RevisionRecord>, QueryError> {
         let page: PageV2<RevisionRecord> = self
-            .post_v2("/history/query", &HistoryQueryV2::from(query))
+            .post_v2(
+                wire::route(Operation::QueryHistory).suffix,
+                &HistoryQueryV2::from(query),
+            )
             .await
             .map_err(query_error)?;
         Ok(page.into())
@@ -711,16 +721,19 @@ impl<T: Transport, C: CredentialProvider> QueryService for AepClient<T, C> {
 
     async fn audit(&self, query: &AuditQuery) -> Result<Page<Self::AuditRecord>, QueryError> {
         let page: AuditPageV1 = self
-            .post("/audit/query", &AuditQueryV1::from(query))
+            .post(
+                wire::route(Operation::QueryAudit).suffix,
+                &AuditQueryV1::from(query),
+            )
             .await
             .map_err(query_error)?;
         Ok(page.into())
     }
 
     async fn describe_type(&self, entity_type: &EntityType) -> Result<TypeDescriptor, QueryError> {
-        let suffix = format!(
-            "/types/{}",
-            percent_encode_segment(&entity_type.to_string())
+        let suffix = wire::route(Operation::DescribeType).suffix.replace(
+            "{entity_type}",
+            &percent_encode_segment(&entity_type.to_string()),
         );
         let description: TypeDescriptionV1 = self.get(&suffix, None).await.map_err(query_error)?;
         Ok(description)

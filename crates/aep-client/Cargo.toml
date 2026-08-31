@@ -11,9 +11,15 @@ authors.workspace = true
 [dependencies]
 aep-contract.workspace = true
 aep-domain.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# Contract tests execute derived schemas against the existing byte-level corpus. Runtime clients
+# carry no validator; this matches the workspace's already-pinned schema implementation.
+jsonschema = { version = "0.49.9", default-features = false }
 
 [lints]
 workspace = true
