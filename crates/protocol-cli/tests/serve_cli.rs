@@ -11,8 +11,8 @@
 //! to the port it printed.
 
 use std::fmt::Write as _;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
@@ -154,9 +154,6 @@ fn ask(served: &Served, method: &str, path: &str, body: Option<&str>) -> (u16, S
     }
     stream.write_all(request.as_bytes()).expect("written");
     stream.flush().expect("flushed");
-    stream
-        .shutdown(Shutdown::Write)
-        .expect("the complete request is half-closed");
 
     let answer = read_answer(&mut stream);
     let status = answer
@@ -176,9 +173,6 @@ fn ask_untokened(served: &Served, path: &str) -> u16 {
         served.port
     );
     stream.write_all(request.as_bytes()).expect("written");
-    stream
-        .shutdown(Shutdown::Write)
-        .expect("the complete request is half-closed");
     let answer = read_answer(&mut stream);
     answer
         .split_whitespace()
@@ -187,50 +181,47 @@ fn ask_untokened(served: &Served, path: &str) -> u16 {
         .unwrap_or(0)
 }
 
-/// Reads one `Connection: close` answer and distinguishes a complete response followed by a TCP
-/// reset from a truncated response.
+/// Reads exactly one HTTP answer according to its framing, without depending on how TCP reports the
+/// server's close.
 ///
-/// Linux may report `ECONNRESET` on the read after the server's complete response bytes. Treating
-/// that as EOF is sound only after `Content-Length` proves the complete body arrived; otherwise the
-/// reset remains the test failure it was before this helper existed.
+/// The response contract carries `Content-Length`, so reading until EOF adds no evidence and made
+/// the test depend on whether a runner reports the close as EOF or `ECONNRESET`. Missing or
+/// truncated framing still fails through `read_exact`.
 fn read_answer(stream: &mut TcpStream) -> String {
-    let mut bytes = Vec::new();
-    let result = stream.read_to_end(&mut bytes);
-    let answer = String::from_utf8(bytes).expect("the HTTP answer is UTF-8");
-    match result {
-        Ok(_) => answer,
-        Err(error) if error.kind() == ErrorKind::ConnectionReset && complete_response(&answer) => {
-            answer
+    let mut reader = BufReader::new(stream);
+    let mut head = String::new();
+    loop {
+        let read = reader
+            .read_line(&mut head)
+            .expect("the HTTP response headers read");
+        assert_ne!(read, 0, "the HTTP response headers are complete");
+        if head.ends_with("\r\n\r\n") {
+            break;
         }
-        Err(error) => panic!(
-            "the answer reads to a complete close: {error}; {} byte(s) arrived",
-            answer.len()
-        ),
     }
+    let length = response_length(&head).expect("the HTTP response carries Content-Length");
+    let mut body = vec![0_u8; length];
+    reader
+        .read_exact(&mut body)
+        .expect("the complete Content-Length body arrives");
+    head.push_str(&String::from_utf8(body).expect("the HTTP answer body is UTF-8"));
+    head
 }
 
-fn complete_response(answer: &str) -> bool {
-    let Some((head, body)) = answer.split_once("\r\n\r\n") else {
-        return false;
-    };
-    let Some(length) = head.lines().find_map(|line| {
+fn response_length(head: &str) -> Option<usize> {
+    head.lines().find_map(|line| {
         line.strip_prefix("Content-Length: ")
             .and_then(|raw| raw.parse::<usize>().ok())
-    }) else {
-        return false;
-    };
-    body.len() == length
+    })
 }
 
 #[test]
-fn a_reset_is_acceptable_only_after_content_length_proves_the_answer_is_complete() {
-    assert!(complete_response(
-        "HTTP/1.1 403 Forbidden\r\nContent-Length: 4\r\n\r\nnope"
-    ));
-    assert!(!complete_response(
-        "HTTP/1.1 403 Forbidden\r\nContent-Length: 5\r\n\r\nnope"
-    ));
-    assert!(!complete_response("HTTP/1.1 403 Forbidden\r\n\r\nnope"));
+fn response_framing_names_exactly_how_many_body_bytes_must_arrive() {
+    assert_eq!(
+        response_length("HTTP/1.1 403 Forbidden\r\nContent-Length: 4\r\n\r\n"),
+        Some(4)
+    );
+    assert_eq!(response_length("HTTP/1.1 403 Forbidden\r\n\r\n"), None);
 }
 
 /// **The board a browser reads is the board the terminal prints**, and the token is what stands

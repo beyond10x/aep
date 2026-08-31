@@ -6,7 +6,7 @@ status: implemented
 title: The plan is a shape, so there is a verb that draws it
 relations:
 - serves: vision:O2
-revision: 7
+revision: 8
 ---
 # Story: The plan is a shape, so there is a verb that draws it
 
@@ -61,6 +61,13 @@ like any other. Open.
 
 ## Release-gate socket finding — 2026-08-31
 
-The 0.35.0 release gate repeatedly reported Linux `ConnectionReset` after the read-only socket test had sent a complete POST and received response bytes. Half-closing the synthetic client's write side made the request boundary explicit but did not change the runner's final read result.
+The 0.35.0 release gate repeatedly reported Linux `ConnectionReset` in the read-only socket test.
+Half-closing the synthetic client's write side did not make the runner's close behavior portable;
+the strict follow-up proved the final failing run reset before any response byte arrived.
 
-The client now distinguishes a complete response followed by reset from a truncated response: it accepts `ConnectionReset` as EOF only when a parsed `Content-Length` exactly equals the received body bytes. Missing headers, short bodies and excess bodies remain failures, and every caller still parses the status and response body afterward. A focused guard proves the completeness predicate discriminates the exact, truncated and unframed cases; the full release gate remains the independent runner proof.
+The client no longer treats TCP closure as HTTP framing. It reads headers, requires
+`Content-Length`, then reads exactly that many body bytes. It therefore returns as soon as one
+complete answer arrives and still refuses missing or truncated framing. Ten repeated socket-suite
+runs pass locally. The required guard mutation increased the server's declared length by one byte
+and the focused board test failed with `UnexpectedEof`, naming the incomplete body. The release gate
+remains the independent runner proof.
