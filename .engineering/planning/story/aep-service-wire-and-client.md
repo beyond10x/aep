@@ -8,7 +8,7 @@ summary: Project the semantic command/query contract across a strict authenticat
 relations:
 - serves: vision:O2
 - serves: vision:O6
-revision: 1
+revision: 2
 ---
 ## Context
 
@@ -31,6 +31,19 @@ resolved; implementation must not start merely because the document exists.
 
 The service implementation, database schema, concrete identity-token profile and deployment remain
 outside this repository.
+
+## Review Record — 2026-08-31
+
+The operator decided four questions:
+
+1. nullable request members are mandatory and explicitly `null` when absent;
+2. idempotency is scoped by realm, workspace and authority, not executor;
+3. after workspace authorization, entity absence and entity-level denial both return `not_found`;
+4. failed media-type negotiation advertises served versions in `AEP-Supported-Versions`; there is
+   no separate discovery endpoint.
+
+The fifth question remains open: whether the official client implements the semantic traits directly
+or exposes a parallel remote facade. Until that is decided, this story is not a work order.
 
 ## Acceptance
 

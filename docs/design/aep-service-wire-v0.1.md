@@ -37,8 +37,14 @@ application/vnd.aep.service+json;version=1
 
 Every request carrying a document sends that value as `Content-Type` and sends an `Accept` value
 for a supported response version. The response uses the selected media type. A server that cannot
-serve any requested version returns `406` with a version-1 problem document when version 1 itself
-is acceptable, or an empty response otherwise.
+serve any requested version returns `406` and an `AEP-Supported-Versions` response header whose
+comma-separated values are the versions it currently serves. It includes a version-1 problem
+document when version 1 itself is acceptable, or an empty response otherwise. Negotiated responses
+send `Vary: Accept`.
+
+There is no discovery endpoint in version 1. The failed negotiation itself advertises the supported
+set, so adding or retiring a served version does not mutate a second resource document that clients
+could cache independently from the boundary it describes.
 
 Within a version, objects are closed: an unknown field is malformed rather than silently ignored.
 Adding, removing or changing a field therefore creates a new wire version. During migration a
@@ -130,9 +136,10 @@ The version-1 command document is the raw transport counterpart of `CommandEnvel
 }
 ```
 
-Nullable fields are written as `null` in version 1. This keeps fixture shape explicit and prevents
-absence from acquiring a second meaning. `payload` is the raw JSON representation of the existing
-versioned AEP command named by `command_type`; the pair is validated together before dispatch.
+Every nullable member is mandatory and written as `null` in version 1. Omitting one is malformed.
+This keeps fixture shape explicit and prevents absence from acquiring a second meaning. `payload`
+is the raw JSON representation of the existing versioned AEP command named by `command_type`; the
+pair is validated together before dispatch.
 
 Idempotency is scoped by realm, workspace and authority. A retry by another authorized executor on
 behalf of the same authority may retrieve the original result. Reusing a key for different intent
@@ -171,9 +178,12 @@ version 1. Page responses always write both `items` and nullable `next`.
 token in `AEP-Consistency`; history and type description use the same response envelope and error
 shape as body-based queries.
 
-Authorization narrows the candidate set before traversal, pagination or serialization. A page
-cursor is scoped to the verified principal, realm, workspace, query digest and selected wire
-version; using it in another scope is `invalid`.
+Authorization narrows the candidate set before traversal, pagination or serialization. Workspace
+denial is `unauthorized`. After workspace access is established, an entity the principal may not
+read is deliberately indistinguishable from an absent entity and returns `not_found`; relation,
+history and audit queries omit unauthorized candidates before paging. A page cursor is scoped to
+the verified principal, realm, workspace, query digest and selected wire version; using it in
+another scope is `invalid`.
 
 ## 9. Problem document
 
@@ -201,7 +211,7 @@ The status mapping is:
 | malformed JSON, field or cursor | 400 | `invalid` |
 | missing or invalid credential | 401 | `unauthenticated` |
 | insufficient effective grant | 403 | `unauthorized` |
-| authorized lookup found nothing | 404 | `not_found` |
+| authorized lookup found nothing, or entity-level access is denied | 404 | `not_found` |
 | revision or idempotency conflict | 409 | semantic conflict code |
 | unsupported command type | 422 | `unsupported` |
 | no mutually supported wire version | 406 | `unsupported_version` |
@@ -262,12 +272,22 @@ registered client has moved or an explicit retirement decision says otherwise.
 
 Those concerns depend on this boundary but do not belong in its bytes.
 
-## 14. Review questions
+## 14. Review record
 
-1. Should nullable request members be mandatory as proposed, or omitted when absent?
-2. Is authority-scoped idempotency correct when an agent executor changes between retries?
-3. Should entity-level denial deliberately collapse to `not_found` after workspace authorization?
-4. Which discovery mechanism advertises concurrently served versions without adding another
-   mutable endpoint contract?
+The operator decided questions 1–4 on 2026-08-31:
+
+1. **Explicit nullable shape.** Every nullable request member is mandatory and carries either its
+   value or JSON `null`; omission is malformed.
+2. **Authority-scoped idempotency.** Realm, workspace and authority scope the key. A different
+   executor acting under the same still-valid authority may retrieve the original result, and the
+   replay attempt remains separately attributable.
+3. **Entity privacy after workspace admission.** Workspace denial stays `unauthorized`; an absent or
+   entity-level-denied target is `not_found`, and collection queries filter before pagination.
+4. **Negotiation is discovery.** No discovery endpoint is added. A `406` response advertises the
+   currently served set in `AEP-Supported-Versions`, while successful responses identify the chosen
+   version through their media type and vary on `Accept`.
+
+One question remains open, so this proposal is not yet an implementation work order:
+
 5. Does the official client implement the semantic traits directly, or expose a parallel remote
    facade where generic associated types make trait implementation awkward?
