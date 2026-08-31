@@ -70,6 +70,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.38.0` | Machine-readable AEP service contract; implementation 100%. |
 | `0.38.1` | 0.38.1 — computable definition bundle identity |
 | `0.39.0` | 0.39.0 — sealed vendor scope and b10x enforcement contract; implementation 100%. |
+| `0.39.1` | 0.39.1 — Node 24 CI actions without the inapplicable Go cache warning; implementation 100%. |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
