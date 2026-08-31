@@ -196,10 +196,10 @@ with none of the conformance suites behind it.
 
 | Command | Does |
 |---|---|
-| `protocol drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3` |
+| `protocol drive run [--map <file-or-id>] [--budget-usd <usd> --assume-usd-per-run <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3`; a map with an `llm` step requires both cost flags and `METAHARNESS_LIVE=1` |
 | `protocol drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
 | `protocol drive transition [--run <id>]` | answers a native loop's `transition` hook from the engine: the loop's JSON on stdin; exit `0` proceeds, `2` refuses with `{"reason": …}`; writes nothing |
-| `protocol drive resume <run> [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock |
+| `protocol drive resume <run> [--budget-usd <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock; the optional budget may narrow, never raise, the launch cap |
 
 All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and
 take `--plugin-dir` (repeatable; `AEP_DRIVE_PLUGIN_DIR` supplies it when the flag is absent) to load
@@ -217,10 +217,22 @@ and `1` otherwise.
 What a run writes beside its cursor, in `.engineering/runs/<run>/`: `launch.json`, how the run was
 started — which is what makes the printed `resume with: protocol drive resume <run>` line a line
 that works, since `resume` fills in `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` from
-it and a flag typed on the resume still wins; `commands.jsonl`, one line per `command` step attempt
+it and a flag typed on the resume still wins; `spend.json`, the exact integer-microdollar
+reservations made before model sessions; `commands.jsonl`, one line per `command` step attempt
 naming the program the map wrote, the program that was spawned and which of the two it was; and a
 `step-context.json` per `llm` step. `--max-iterations` bounds the call, not the run's lifetime, so a
 resume gets the budget the operator typed.
+
+A map with an `llm` step is a paid run even when this machine or a later pre-flight would prevent
+the first launch. It is refused before a lock or run id unless `METAHARNESS_LIVE=1`,
+`--budget-usd <usd>` and `--assume-usd-per-run <usd>` are all explicit. Dollar text is converted
+exactly to integer millionths; exponent notation, negative values and more than six fractional
+digits are refused rather than rounded. Immediately before each metaharness spawn the assumed
+charge is durably reserved in `spend.json`; if the next reservation would cross the cap, the run
+stops with `budget-exhausted` and no process is spawned. A resume remembers both figures. It may
+lower the cap with `--budget-usd`, and may neither raise it nor change the per-launch assumption.
+An older paid run with no remembered cost terms is not resumable, because a new cap cannot bound
+sessions that already ran. A command-only map needs none of these flags and writes no spend ledger.
 
 Four refusals and fallbacks to know before the first paid run. A `command` step whose program is
 `protocol` runs the driver's own binary, whatever is first on `PATH`; where the driver cannot name

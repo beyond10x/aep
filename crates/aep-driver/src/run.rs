@@ -1036,6 +1036,9 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                         .map(Some);
                 }
             }
+            StepOutcome::BudgetExhausted { reason } => {
+                return self.stop_spend_budget(cursor, execution, tally, reason);
+            }
             StepOutcome::Paused { reason } => {
                 return self
                     .pause(&reason, index, step, execution, cursor, tally)
@@ -1043,6 +1046,26 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
         }
         Ok(None)
+    }
+
+    /// Stops immediately when the executor refused a paid effect before launch.
+    fn stop_spend_budget(
+        &self,
+        cursor: &DriverCursor,
+        execution: &Execution,
+        tally: &mut Tally,
+        reason: String,
+    ) -> Result<Option<RunReport>, DriveError> {
+        // This is not a model failure and cannot change by consuming the step's retry budget.
+        tally.progress.notes.push(reason);
+        let progress = std::mem::take(&mut tally.progress);
+        self.finish(
+            cursor.clone(),
+            execution,
+            RunStatus::BudgetExhausted,
+            progress,
+        )
+        .map(Some)
     }
 
     /// Publishes the attempt marker before dispatch, reusing an explicitly authorised id exactly.

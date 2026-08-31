@@ -760,19 +760,23 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
     // the other way round this test passed vacuously in CI, where `metaharness` is not installed:
     // the run stopped at the machine check and the gap was never looked for.
     let allocated = said.contains("run        PRE-1/1");
-    // Two machine facts, not one, since this map's `llm` steps name the native harness: the seam
-    // binary has to be on `PATH`, and the loop has to be pointed at an endpoint because it has no
-    // service of its own and metaharness refuses to default one. Both are properties of the
-    // machine rather than of the work — which is the same reason `is not on PATH` is accepted
-    // here — and both sit *after* the coverage pre-flight, so reaching either proves the thing
-    // this test is about.
-    let stopped_for_the_machine =
-        said.contains("is not on PATH") || said.contains("no `--b10x-endpoint` was given");
+    // Three launch facts, since this map's `llm` steps name the native harness: spending must be
+    // opted into under an explicit cap, the seam binary has to be on `PATH`, and the loop has to
+    // be pointed at an endpoint. All sit *after* coverage, so reaching any proves this test's fact.
+    let stopped_for_the_machine = said.contains("METAHARNESS_LIVE=1")
+        || said.contains("is not on PATH")
+        || said.contains("no `--b10x-endpoint` was given");
     assert!(
         allocated || stopped_for_the_machine,
         "the run got past coverage — either to a run id, or to the machine check that follows \
          it. Neither means the pre-flight is refusing something it should not:\n{said}"
     );
+    if said.contains("METAHARNESS_LIVE=1") {
+        assert!(
+            !directory.join(".engineering/runs/PRE-1").exists(),
+            "the paid-run refusal must precede allocation:\n{said}"
+        );
+    }
     if allocated {
         assert!(
             directory.join(".engineering/runs/PRE-1").exists(),
@@ -849,8 +853,13 @@ fn a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travel
     let machine = protocol_without_metaharness(&waived, &nowhere);
     let complaint = format!("{}{}", stdout(&machine), stderr(&machine));
     assert!(
-        complaint.contains("is not on PATH"),
-        "the machine check still runs, second:\n{complaint}"
+        complaint.contains("METAHARNESS_LIVE=1"),
+        "the paid-launch pre-flight still runs after coverage, before any machine-specific spawn \
+         check:\n{complaint}"
+    );
+    assert!(
+        !fixture.runs().join("DRIVE-1").exists(),
+        "missing spend authority is refused before run allocation"
     );
 }
 

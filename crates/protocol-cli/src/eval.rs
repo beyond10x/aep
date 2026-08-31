@@ -62,6 +62,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
+use crate::money::{dollars, micro_usd, MICRO_USD};
+
 /// The format claim a run manifest carries.
 const MANIFEST_FORMAT: &str = "eval.run-manifest/1";
 
@@ -79,14 +81,6 @@ const RECORD_SUFFIX: &str = ".report.json";
 
 /// How many hex characters a content digest has.
 const DIGEST_WIDTH: usize = 64;
-
-/// Micro-dollars in a dollar.
-///
-/// Cost is carried in millionths of a US dollar and never as a float: a matrix is a document people
-/// commit and diff, and two runs of the same assembler must produce the same bytes. `aep-render`
-/// bans floats outright for this reason; here the ban is narrower — the input field is an integer,
-/// so nothing downstream has to round.
-const MICRO_USD: u64 = 1_000_000;
 
 // --- the arms ------------------------------------------------------------------------------------
 
@@ -2720,53 +2714,6 @@ fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
         }
     }
     stated.then_some(total)
-}
-
-/// A decimal number of US dollars as millionths of one, by integer arithmetic.
-///
-/// Never `value * 1_000_000.0`: the wire carries a JSON number, and multiplying its `f64` by a
-/// million is how `0.0714` becomes `71399`. What is parsed here is the number's own **decimal
-/// text** — which is what `serde_json` prints for it — digit by digit, so the conversion is exact
-/// or it is refused.
-///
-/// # Errors
-///
-/// When the text is not a plain decimal with at most six fraction digits. Scientific notation is
-/// refused rather than approximated, because a cost this reader cannot convert exactly is a cost it
-/// should not write into a document somebody commits.
-fn micro_usd(written: &str) -> Result<u64> {
-    let text = written.trim().trim_start_matches('$');
-    let (whole, fraction) = match text.split_once('.') {
-        Some((whole, fraction)) => (whole, fraction),
-        None => (text, ""),
-    };
-    let readable = !whole.is_empty()
-        && whole.chars().all(|character| character.is_ascii_digit())
-        && fraction.chars().all(|character| character.is_ascii_digit())
-        && fraction.len() <= 6;
-    if !readable {
-        bail!(
-            "`{written}` is not an amount in US dollars, such as `10` or `0.25`. Six decimal \
-             places at most, and no exponent: a cost that cannot be converted exactly is one this \
-             runner will not write into a document"
-        );
-    }
-    let whole: u64 = whole.parse().context("the dollars part is too large")?;
-    let padded = format!("{fraction:0<6}");
-    let millionths: u64 = if padded.is_empty() {
-        0
-    } else {
-        padded.parse().context("the cents part is too large")?
-    };
-    whole
-        .checked_mul(MICRO_USD)
-        .and_then(|dollars| dollars.checked_add(millionths))
-        .context("the amount is too large to count in millionths of a dollar")
-}
-
-/// Millionths of a dollar as `$0.250000`, which is how every amount is printed here.
-fn dollars(micro: u64) -> String {
-    format!("${}.{:06}", micro / MICRO_USD, micro % MICRO_USD)
 }
 
 // --- assembling one run's three documents ---------------------------------------------------------

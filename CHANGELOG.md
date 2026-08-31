@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-08-31
+
+### Added
+
+- `protocol drive run` now refuses maps with model steps before allocating a run unless
+  `METAHARNESS_LIVE=1`, `--budget-usd` and `--assume-usd-per-run` explicitly authorize them. It
+  records exact integer-microdollar reservations before each metaharness spawn, stops with the
+  typed `budget-exhausted` run outcome before a launch would cross the cap, and makes resumes
+  inherit or narrow—but never raise—the remembered ceiling. Command-only maps remain free.
+
 ## [0.36.4] — 2026-08-31
 
 - Kept the `protocol serve` test client's startup pipe open for the server's lifetime, preventing

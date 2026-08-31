@@ -800,6 +800,7 @@ mod contract;
 // programme, and it shares nothing with the rest. It is also where the one rule that programme has
 // about its own output lives: counts of facts, never a score.
 mod eval;
+mod money;
 mod workspace;
 
 // The seventh, and the only one whose output is another component's input. It reads the same

@@ -314,6 +314,8 @@ enum Act {
     Tests { failed: usize },
     /// The step could not run at all — D5's `Unknown`.
     Crash(&'static str),
+    /// The executor refused the paid effect before launch.
+    SpendStop(&'static str),
     /// The step ran and there is nothing to submit.
     Done,
     /// A person is owed a question.
@@ -403,6 +405,9 @@ impl Fake {
             Act::Crash(reason) => StepOutcome::NoVerdict {
                 reason: reason.to_owned(),
             },
+            Act::SpendStop(reason) => StepOutcome::BudgetExhausted {
+                reason: reason.to_owned(),
+            },
             Act::Done => StepOutcome::Nothing,
             Act::Pause(reason) => StepOutcome::Paused {
                 reason: reason.to_owned(),
@@ -416,6 +421,37 @@ impl Fake {
             }
         }
     }
+}
+
+#[test]
+fn a_spend_ceiling_stops_the_run_without_consuming_a_steps_retry_budget() {
+    let root = scratch("model-spend-ceiling");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let reason = "$0.750000 reserved plus $0.500000 would exceed the $1.000000 cap";
+    let mut fake = Fake::new(&[Act::SpendStop(reason)]);
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions::default(),
+    )
+    .expect("a spend stop is a durable run outcome");
+
+    assert_eq!(report.status(), RunStatus::BudgetExhausted);
+    assert_eq!(report.steps_run, 1, "the refused launch is considered once");
+    assert_eq!(report.notes, [reason]);
+    assert_eq!(
+        report.cursor.attempts.values().copied().sum::<u32>(),
+        1,
+        "the executor's spend stop is not retried as a model failure"
+    );
 }
 
 impl LlmStepExecutor for Fake {

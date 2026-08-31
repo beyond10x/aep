@@ -174,6 +174,16 @@ pub enum StepOutcome {
         /// What went wrong, for the run report.
         reason: String,
     },
+    /// The executor refused the next paid effect because its declared spend bound was exhausted.
+    ///
+    /// This is a run outcome rather than a failed step: retrying cannot widen the budget, and
+    /// calling it `NoVerdict` would spend the step's retry allowance on a launch that never
+    /// happened. The driver persists the cursor as
+    /// [`RunStatus::BudgetExhausted`](aep_driver_spec::cursor::RunStatus::BudgetExhausted).
+    BudgetExhausted {
+        /// The cap, prior reservations and refused next charge, in the executor's own words.
+        reason: String,
+    },
     /// An `operator` step: the run pauses here.
     ///
     /// There is no waiting process and no queue. A driver holding a terminal open for a person is a

@@ -111,6 +111,12 @@ const CURRENT_FILE: &str = "current";
 /// The transcript directory inside a run.
 const TRANSCRIPTS: &str = "transcripts";
 
+/// Reservations made against a driven run's model-session ceiling.
+const SPEND_FILE: &str = "spend.json";
+
+/// The explicit opt-in shared with `protocol eval run` for any model process that can cost money.
+const METAHARNESS_LIVE_ENV: &str = "METAHARNESS_LIVE";
+
 /// Where one attempt at one `llm` step leaves its transcript.
 ///
 /// One function rather than two spellings of the same format string: the step that *writes* the
@@ -387,6 +393,18 @@ pub(crate) struct RunArgs {
     /// What a `harness: b10x` step needs from this machine.
     #[command(flatten)]
     b10x: B10xOptions,
+    /// The maximum this driven run may reserve for model sessions, in US dollars.
+    ///
+    /// Required when the selected map contains an `llm` step. The cap is checked before every
+    /// metaharness spawn; a cap applied after a session exits would be a receipt, not a bound.
+    #[arg(long, value_name = "USD")]
+    budget_usd: Option<String>,
+    /// The conservative charge reserved before each model session, in US dollars.
+    ///
+    /// Required with `--budget-usd`, rather than defaulted: when a transcript cannot state cost,
+    /// only the operator can say what one more launch is allowed to count as.
+    #[arg(long, value_name = "USD", requires = "budget_usd")]
+    assume_usd_per_run: Option<String>,
     /// Run until the first thing a person owes, then persist and exit 0.
     #[arg(long)]
     pause_on_approval: bool,
@@ -448,6 +466,12 @@ pub(crate) struct ResumeArgs {
     /// Stop after this many loop iterations, whatever the state of the run.
     #[arg(long, default_value_t = 25)]
     max_iterations: u32,
+    /// Narrow the run's remembered dollar cap.
+    ///
+    /// A resume may lower the original cap and may not raise it. The per-session assumption is
+    /// remembered unchanged from the launch.
+    #[arg(long, value_name = "USD")]
+    budget_usd: Option<String>,
     /// Take the store lock from a holder that is provably dead.
     #[arg(long)]
     take_lock: bool,
@@ -753,6 +777,15 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         outln!("note: {warning}");
     }
 
+    // A paid map gets no run id and no lock until its outer ceiling is both explicit and exact.
+    // This precedes machine pre-flights because missing authority is true on every machine; a
+    // missing binary is only today's environment.
+    let spend_terms = spend_terms(
+        &inputs.map,
+        args.budget_usd.as_deref(),
+        args.assume_usd_per_run.as_deref(),
+    )?;
+
     if let Some(refusal) = machine_preflights(&inputs.map, &inputs.project, &args.b10x) {
         outln!("{refusal}");
         return Ok(ExitCode::from(1));
@@ -774,7 +807,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         .with_context(|| format!("creating {}", directory.path().display()))?;
     // How this run was launched, so `resume` needs none of it again and the line this command
     // prints is a line that works.
-    Launch {
+    let launch = Launch {
         task: args.location.task.clone(),
         task_document: Some(inputs.task_document.clone()),
         map: args.location.map.clone(),
@@ -784,8 +817,9 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         approver: args.approver.clone(),
         plugin_dirs: inputs.plugin_dirs.clone(),
         b10x: args.b10x.clone(),
-    }
-    .write(directory.path());
+        spend: spend_terms,
+    };
+    let spend = start_spend(directory.path(), &launch)?;
     fs::write(runs.join(CURRENT_FILE), format!("{run_id}\n"))
         .with_context(|| format!("writing {}", runs.join(CURRENT_FILE).display()))?;
 
@@ -809,7 +843,8 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
         inputs.map.workflow.major().to_string(),
         args.b10x.clone(),
         args.approver.clone(),
-    );
+    )
+    .with_spend(spend);
     let report = aep_driver::run::drive(
         &engine,
         &inputs.task,
@@ -850,7 +885,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     if !directory.path().is_dir() {
         bail!("no run {run_id} in {}", runs.display());
     }
-    let launch = Launch::read(directory.path());
+    let mut launch = Launch::read(directory.path());
     let location = args.location.remembering(launch.as_ref(), &project);
     let inputs = location.inputs()?;
     let pause_on_approval =
@@ -867,6 +902,11 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     // and `--task`, and stronger: a `resume` given a different endpoint or a different model would
     // be a run whose second half was produced by something its own record does not name.
     let b10x = launch.as_ref().map(|l| l.b10x.clone()).unwrap_or_default();
+    let spend_terms = resumed_spend_terms(
+        &inputs.map,
+        launch.as_ref().and_then(|record| record.spend),
+        args.budget_usd.as_deref(),
+    )?;
 
     // What `{task}` expands to, taken from the launch record whenever the caller did not name a
     // task on this invocation. Resolving it again here would resolve it against *this* process's
@@ -904,6 +944,8 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
     // never said a resume re-acquires, which left the obvious assumption to produce two live runs.
     let lock = take_lock(&runs, args.take_lock)?;
     lock.record_run(&run_id)?;
+
+    let spend = resume_spend(directory.path(), &mut launch, spend_terms)?;
 
     if let Some(code) = refuse_approver(approver.as_ref(), &inputs.task.id, &inputs.map) {
         return Ok(code);
@@ -943,7 +985,8 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         inputs.map.workflow.major().to_string(),
         b10x,
         approver,
-    );
+    )
+    .with_spend(spend);
     let report = aep_driver::run::resume(
         &engine,
         &inputs.task,
@@ -1583,6 +1626,164 @@ fn host() -> String {
     std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown-host".to_owned())
 }
 
+/// The immutable cost terms one launch declares and every resume inherits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct SpendTerms {
+    /// Maximum total reservation.
+    cap_micro_usd: u64,
+    /// Charge reserved before each metaharness spawn.
+    assumed_micro_usd_per_run: u64,
+}
+
+/// The append-in-effect spend state persisted before a model process is spawned.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpendState {
+    format: String,
+    spent_micro_usd: u64,
+    launches: u64,
+}
+
+/// A cost ceiling held by the executor that performs the paid effect.
+#[derive(Debug)]
+struct SpendBudget {
+    terms: SpendTerms,
+    state: SpendState,
+    path: PathBuf,
+}
+
+/// Why reserving the next session did not produce authority to spawn it.
+#[derive(Debug)]
+enum ReserveError {
+    /// The declared bound would be crossed; retrying cannot change this.
+    Exhausted(String),
+    /// The reservation could not be made durable, so no paid effect is allowed.
+    Persist(String),
+}
+
+impl SpendBudget {
+    /// Starts a new empty ledger beside the run's launch record.
+    fn start(run_directory: &Path, terms: SpendTerms) -> Result<Self> {
+        let budget = Self {
+            terms,
+            state: SpendState {
+                format: "aep.drive-spend/1".to_owned(),
+                ..SpendState::default()
+            },
+            path: run_directory.join(SPEND_FILE),
+        };
+        budget.persist().map_err(anyhow::Error::msg)?;
+        Ok(budget)
+    }
+
+    /// Reopens the reservations a prior invocation made.
+    fn resume(run_directory: &Path, terms: SpendTerms) -> Result<Self> {
+        let path = run_directory.join(SPEND_FILE);
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("reading the spend ledger at {}", path.display()))?;
+        let state: SpendState = serde_json::from_str(&text)
+            .with_context(|| format!("reading the spend ledger at {}", path.display()))?;
+        if state.format != "aep.drive-spend/1" {
+            bail!(
+                "{} claims spend-ledger format `{}`, not `aep.drive-spend/1`",
+                path.display(),
+                state.format
+            );
+        }
+        let expected_spent = state
+            .launches
+            .checked_mul(terms.assumed_micro_usd_per_run)
+            .context("the spend ledger's launch count is too large to account for exactly")?;
+        if expected_spent != state.spent_micro_usd {
+            bail!(
+                "{} records {} launch(es) at {} each but says {} was reserved; the spend ledger is inconsistent",
+                path.display(),
+                state.launches,
+                crate::money::dollars(terms.assumed_micro_usd_per_run),
+                crate::money::dollars(state.spent_micro_usd),
+            );
+        }
+        Ok(Self { terms, state, path })
+    }
+
+    /// Reserves one assumed charge and persists it before the caller may spawn.
+    fn reserve(&mut self) -> std::result::Result<(), ReserveError> {
+        let next = self.terms.assumed_micro_usd_per_run;
+        let Some(after) = self.state.spent_micro_usd.checked_add(next) else {
+            return Err(ReserveError::Exhausted(self.exhausted_line(next)));
+        };
+        if after > self.terms.cap_micro_usd {
+            return Err(ReserveError::Exhausted(self.exhausted_line(next)));
+        }
+        let Some(launches) = self.state.launches.checked_add(1) else {
+            return Err(ReserveError::Persist(
+                "the spend ledger cannot count another launch exactly; no process was spawned"
+                    .to_owned(),
+            ));
+        };
+        self.state.spent_micro_usd = after;
+        self.state.launches = launches;
+        self.persist().map_err(ReserveError::Persist)
+    }
+
+    /// The durable accounting line a run report retains on a spend stop.
+    fn exhausted_line(&self, next: u64) -> String {
+        format!(
+            "the model-session cost ceiling stopped the run before launch {}: {} already \
+             reserved plus the next assumed charge {} would exceed the cap {}",
+            self.state.launches.saturating_add(1),
+            crate::money::dollars(self.state.spent_micro_usd),
+            crate::money::dollars(next),
+            crate::money::dollars(self.terms.cap_micro_usd),
+        )
+    }
+
+    /// Atomically publishes the next reservation.
+    fn persist(&self) -> std::result::Result<(), String> {
+        let next = self.path.with_extension("json.next");
+        let rendered = serde_json::to_string_pretty(&self.state)
+            .map_err(|error| format!("cannot render the spend reservation: {error}"))?;
+        fs::write(&next, rendered + "\n")
+            .map_err(|error| format!("cannot write {}: {error}", next.display()))?;
+        fs::rename(&next, &self.path).map_err(|error| {
+            format!(
+                "cannot publish the spend reservation from {} to {}: {error}",
+                next.display(),
+                self.path.display()
+            )
+        })
+    }
+}
+
+/// Records a new run's terms and opens its empty ledger before the loop can reach a paid step.
+fn start_spend(run_directory: &Path, launch: &Launch) -> Result<Option<SpendBudget>> {
+    let Some(terms) = launch.spend else {
+        launch.write(run_directory);
+        return Ok(None);
+    };
+    // Cost terms are authority a resume must inherit, not optional diagnostics.
+    launch.write_required(run_directory)?;
+    SpendBudget::start(run_directory, terms).map(Some)
+}
+
+/// Makes a narrower cap durable and reopens the exact reservations made by earlier invocations.
+fn resume_spend(
+    run_directory: &Path,
+    launch: &mut Option<Launch>,
+    terms: Option<SpendTerms>,
+) -> Result<Option<SpendBudget>> {
+    if let Some(record) = launch.as_mut() {
+        if record.spend != terms {
+            record.spend = terms;
+            // Best-effort persistence would let the following resume regain the old cap.
+            record.write_required(run_directory)?;
+        }
+    }
+    terms
+        .map(|terms| SpendBudget::resume(run_directory, terms))
+        .transpose()
+}
+
 /// The three things that touch the world.
 struct CliExecutors {
     /// Where a command step runs.
@@ -1600,6 +1801,8 @@ struct CliExecutors {
     /// The one non-human actor whose recorded approval may answer an `operator` step, so the
     /// pause can say who may answer it.
     approver: Option<ActorRef>,
+    /// The run-level reservation ledger, present exactly when this map can spawn a model.
+    spend: Option<SpendBudget>,
 }
 
 impl CliExecutors {
@@ -1621,7 +1824,14 @@ impl CliExecutors {
             workflow_version,
             b10x,
             approver,
+            spend: None,
         }
+    }
+
+    /// Attaches the run-level model-session ceiling after its ledger is durable.
+    fn with_spend(mut self, spend: Option<SpendBudget>) -> Self {
+        self.spend = spend;
+        self
     }
 
     /// The step's sealed frame document, written beside the transcript it governs.
@@ -1793,6 +2003,24 @@ impl CliExecutors {
             context,
             hooks.as_deref(),
         );
+        // The last action before the paid effect. Persist first: if this process dies after the
+        // child starts, a resume must not regain authority that was already handed to a session.
+        let Some(spend) = self.spend.as_mut() else {
+            return StepOutcome::BudgetExhausted {
+                reason: "this map reached an `llm` step without a model-session cost ceiling; no \
+                         metaharness process was spawned"
+                    .to_owned(),
+            };
+        };
+        match spend.reserve() {
+            Ok(()) => {}
+            Err(ReserveError::Exhausted(reason)) => {
+                return StepOutcome::BudgetExhausted { reason };
+            }
+            Err(ReserveError::Persist(reason)) => {
+                return StepOutcome::NoVerdict { reason };
+            }
+        }
         // No `current_dir`: the working directory travels as `--cwd` and metaharness spawns the
         // vendor there itself, with a constructed environment nothing here needs to reach into.
         //
@@ -3649,6 +3877,128 @@ fn llm_step_count(map: &StepMap) -> usize {
         .count()
 }
 
+/// Validates the paid-run opt-in and exact cost terms before a run id or lock exists.
+fn spend_terms(
+    map: &StepMap,
+    budget_usd: Option<&str>,
+    assume_usd_per_run: Option<&str>,
+) -> Result<Option<SpendTerms>> {
+    spend_terms_with_live(
+        map,
+        budget_usd,
+        assume_usd_per_run,
+        std::env::var(METAHARNESS_LIVE_ENV).as_deref() == Ok("1"),
+    )
+}
+
+/// The spend pre-flight with its ambient opt-in already read, so its rules are unit-testable.
+fn spend_terms_with_live(
+    map: &StepMap,
+    budget_usd: Option<&str>,
+    assume_usd_per_run: Option<&str>,
+    live: bool,
+) -> Result<Option<SpendTerms>> {
+    if !has_llm_steps(map) {
+        return Ok(None);
+    }
+    if !live {
+        bail!(
+            "this map has {} `llm` step(s), and `{METAHARNESS_LIVE_ENV}=1` is not in this \
+             environment. A model session can cost money; opt in explicitly before `protocol \
+             drive run` may allocate a run or spawn metaharness",
+            llm_step_count(map)
+        );
+    }
+    let budget = budget_usd.context(
+        "this map can spawn a model and no `--budget-usd <USD>` was given; a paid run with no \
+         outer cost cap is refused before allocation",
+    )?;
+    let assumed = assume_usd_per_run.context(
+        "this map can spawn a model and no `--assume-usd-per-run <USD>` was given; the driver \
+         cannot reserve the next launch against its cap without an operator-declared charge",
+    )?;
+    let cap_micro_usd = crate::money::micro_usd(budget)?;
+    let assumed_micro_usd_per_run = crate::money::micro_usd(assumed)?;
+    if cap_micro_usd == 0 {
+        bail!("`--budget-usd` must be greater than zero for a map that can spawn a model");
+    }
+    if assumed_micro_usd_per_run == 0 {
+        bail!("`--assume-usd-per-run` must be greater than zero");
+    }
+    if assumed_micro_usd_per_run > cap_micro_usd {
+        bail!(
+            "the first assumed charge {} already exceeds the run cap {}; no run was allocated",
+            crate::money::dollars(assumed_micro_usd_per_run),
+            crate::money::dollars(cap_micro_usd)
+        );
+    }
+    Ok(Some(SpendTerms {
+        cap_micro_usd,
+        assumed_micro_usd_per_run,
+    }))
+}
+
+/// The remembered terms for a resume, optionally narrowed by this invocation.
+fn resumed_spend_terms(
+    map: &StepMap,
+    remembered: Option<SpendTerms>,
+    budget_usd: Option<&str>,
+) -> Result<Option<SpendTerms>> {
+    resumed_spend_terms_with_live(
+        map,
+        remembered,
+        budget_usd,
+        std::env::var(METAHARNESS_LIVE_ENV).as_deref() == Ok("1"),
+    )
+}
+
+/// Resume cost terms with the ambient opt-in already read, for deterministic tests.
+fn resumed_spend_terms_with_live(
+    map: &StepMap,
+    remembered: Option<SpendTerms>,
+    budget_usd: Option<&str>,
+    live: bool,
+) -> Result<Option<SpendTerms>> {
+    if !has_llm_steps(map) {
+        return Ok(None);
+    }
+    if !live {
+        bail!(
+            "this run can spawn another model session, and `{METAHARNESS_LIVE_ENV}=1` is not in \
+             this environment; no lock was taken and nothing was launched"
+        );
+    }
+    let mut terms = remembered.context(
+        "this run predates the model-session cost ceiling and remembers no budget; start a new \
+         bounded run rather than resuming one that cannot account for its earlier launches",
+    )?;
+    if terms.cap_micro_usd == 0
+        || terms.assumed_micro_usd_per_run == 0
+        || terms.assumed_micro_usd_per_run > terms.cap_micro_usd
+    {
+        bail!(
+            "this run's remembered cost terms are invalid: cap {}, assumed charge {}; no model session was launched",
+            crate::money::dollars(terms.cap_micro_usd),
+            crate::money::dollars(terms.assumed_micro_usd_per_run),
+        );
+    }
+    if let Some(written) = budget_usd {
+        let narrowed = crate::money::micro_usd(written)?;
+        if narrowed == 0 {
+            bail!("a resumed `--budget-usd` must be greater than zero");
+        }
+        if narrowed > terms.cap_micro_usd {
+            bail!(
+                "a resume may narrow its remembered cap {}, not raise it to {}",
+                crate::money::dollars(terms.cap_micro_usd),
+                crate::money::dollars(narrowed)
+            );
+        }
+        terms.cap_micro_usd = narrowed;
+    }
+    Ok(Some(terms))
+}
+
 fn metaharness_preflight(map: &StepMap) -> Option<String> {
     let llm_steps = llm_step_count(map);
     if llm_steps == 0 || on_path(METAHARNESS_BINARY) {
@@ -3928,6 +4278,12 @@ struct Launch {
     /// had anyway.
     #[serde(default)]
     b10x: B10xOptions,
+    /// The cost terms this run was granted at launch.
+    ///
+    /// Absent on old and command-only runs. An old run with an `llm` step is refused at resume:
+    /// inventing a cap after earlier sessions ran cannot bound those sessions retroactively.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    spend: Option<SpendTerms>,
 }
 
 impl Launch {
@@ -3939,9 +4295,23 @@ impl Launch {
     /// Writes it, and says nothing if it cannot: a run that walks and does not record how it was
     /// launched is worse off at resume time and is not wrong now.
     fn write(&self, run_directory: &Path) {
-        if let Ok(text) = serde_json::to_string_pretty(self) {
-            let _ = fs::write(Self::path(run_directory), text + "\n");
-        }
+        let _ = self.write_required(run_directory);
+    }
+
+    /// Atomically writes a launch record when a caller cannot safely proceed without it.
+    fn write_required(&self, run_directory: &Path) -> Result<()> {
+        let path = Self::path(run_directory);
+        let next = path.with_extension("json.next");
+        let text = serde_json::to_string_pretty(self).context("rendering the launch record")?;
+        fs::write(&next, text + "\n")
+            .with_context(|| format!("writing the launch record at {}", next.display()))?;
+        fs::rename(&next, &path).with_context(|| {
+            format!(
+                "publishing the launch record from {} to {}",
+                next.display(),
+                path.display()
+            )
+        })
     }
 
     /// Reads it, or `None` for a run started before this existed.
@@ -7539,6 +7909,128 @@ profile: test.reading
                 );
             }
         }
+    }
+
+    #[test]
+    fn paid_maps_require_exact_explicit_terms_and_command_maps_do_not() {
+        let commands_only = aep_schema::parse::step_map(
+            "format: aep.driver-steps/1\nid: test/commands-budget\nworkflow: test/linear/1\n\
+             states:\n  implement:\n    steps:\n      - kind: command\n        run: [\"true\"]\n",
+            None,
+        )
+        .expect("the command map validates");
+        assert_eq!(
+            spend_terms_with_live(&commands_only, None, None, false)
+                .expect("a command-only map is free"),
+            None
+        );
+
+        let map = b10x_map();
+        let not_live = spend_terms_with_live(&map, Some("5"), Some("0.5"), false)
+            .expect_err("the live opt-in is required")
+            .to_string();
+        assert!(not_live.contains("METAHARNESS_LIVE=1"), "{not_live}");
+
+        let no_cap = spend_terms_with_live(&map, None, Some("0.5"), true)
+            .expect_err("the outer cap is required")
+            .to_string();
+        assert!(no_cap.contains("--budget-usd"), "{no_cap}");
+        let no_assumption = spend_terms_with_live(&map, Some("5"), None, true)
+            .expect_err("the launch charge is required")
+            .to_string();
+        assert!(
+            no_assumption.contains("--assume-usd-per-run"),
+            "{no_assumption}"
+        );
+
+        for (cap, assumed) in [("0", "0.5"), ("5", "0"), ("5", "0.0000001")] {
+            assert!(
+                spend_terms_with_live(&map, Some(cap), Some(assumed), true).is_err(),
+                "cap `{cap}` and assumed charge `{assumed}` cannot authorize a launch"
+            );
+        }
+    }
+
+    #[test]
+    fn the_next_assumed_charge_is_persisted_only_when_it_fits() {
+        let root = std::env::temp_dir().join(format!(
+            "protocol-drive-spend-budget-{}",
+            std::process::id()
+        ));
+        fs::remove_dir_all(&root).ok();
+        fs::create_dir_all(&root).expect("the spend fixture is writable");
+        let terms = SpendTerms {
+            cap_micro_usd: 1_000_000,
+            assumed_micro_usd_per_run: 400_000,
+        };
+        let mut budget = SpendBudget::start(&root, terms).expect("the ledger starts");
+
+        budget.reserve().expect("the first launch fits");
+        budget.reserve().expect("the second launch fits");
+        let refusal = match budget.reserve() {
+            Err(ReserveError::Exhausted(reason)) => reason,
+            Err(ReserveError::Persist(reason)) => panic!("the fixture should persist: {reason}"),
+            Ok(()) => panic!("the third launch crosses the cap"),
+        };
+        assert!(refusal.contains("$0.800000"), "{refusal}");
+        assert!(refusal.contains("$0.400000"), "{refusal}");
+        assert!(refusal.contains("$1.000000"), "{refusal}");
+
+        let persisted: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join(SPEND_FILE)).expect("the ledger remains readable"),
+        )
+        .expect("the ledger is JSON");
+        assert_eq!(persisted["spent_micro_usd"], 800_000);
+        assert_eq!(persisted["launches"], 2);
+
+        fs::write(
+            root.join(SPEND_FILE),
+            "{\"format\":\"aep.drive-spend/1\",\"spent_micro_usd\":1,\"launches\":2}\n",
+        )
+        .expect("the fixture can plant an inconsistent ledger");
+        let inconsistent = SpendBudget::resume(&root, terms)
+            .expect_err("a ledger whose two exact counts disagree")
+            .to_string();
+        assert!(inconsistent.contains("inconsistent"), "{inconsistent}");
+    }
+
+    #[test]
+    fn a_resume_inherits_or_narrows_its_cap_and_never_widens_it() {
+        let map = b10x_map();
+        let original = SpendTerms {
+            cap_micro_usd: 5_000_000,
+            assumed_micro_usd_per_run: 500_000,
+        };
+        assert_eq!(
+            resumed_spend_terms_with_live(&map, Some(original), None, true)
+                .expect("the remembered terms are sufficient"),
+            Some(original)
+        );
+        assert_eq!(
+            resumed_spend_terms_with_live(&map, Some(original), Some("3.5"), true)
+                .expect("a lower cap narrows authority"),
+            Some(SpendTerms {
+                cap_micro_usd: 3_500_000,
+                ..original
+            })
+        );
+
+        let widened = resumed_spend_terms_with_live(&map, Some(original), Some("6"), true)
+            .expect_err("a resume cannot acquire more authority")
+            .to_string();
+        assert!(widened.contains("not raise"), "{widened}");
+        let legacy = resumed_spend_terms_with_live(&map, None, Some("5"), true)
+            .expect_err("a cap cannot bound sessions that already ran")
+            .to_string();
+        assert!(legacy.contains("predates"), "{legacy}");
+        let malformed = SpendTerms {
+            cap_micro_usd: 5_000_000,
+            assumed_micro_usd_per_run: 0,
+        };
+        let malformed = resumed_spend_terms_with_live(&map, Some(malformed), None, true)
+            .expect_err("remembered zero must not authorize unlimited free launches")
+            .to_string();
+        assert!(malformed.contains("invalid"), "{malformed}");
     }
 
     #[test]
