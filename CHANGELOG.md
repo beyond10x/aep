@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.36.2] — 2026-08-31
+
+- Pinned Entity Runtime 0.17.3 so fresh PostgreSQL command sessions can acquire absent-identity
+  advisory locks and execute indexed containment queries with valid parameter types.
+
 ## [0.36.1] — 2026-08-31
 
 - Fresh PostgreSQL command sessions can now retain a pinned lifecycle registry while using

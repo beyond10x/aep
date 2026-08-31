@@ -57,7 +57,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.36.1"
+version = "0.36.2"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -113,12 +113,12 @@ anyhow = "1"
 # `git` rather than a version because these crates are not on crates.io; a tag rather than `main`
 # because a ladder's verdicts are a published surface here and must not move under us — the pin is
 # the reversible half of `atlas/architecture/adr/0002`.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.1" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.3" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
