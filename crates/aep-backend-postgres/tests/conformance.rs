@@ -122,8 +122,8 @@ fn two_processes_writing_one_artifact_resolve_to_one_accepted_and_one_refusal_na
 {
     // Two backends over one database — two processes, in effect — each hydrated at revision 1 of
     // the same artifact, each writing from it. The provider serialises them: one lands, the other
-    // is told the revision it lost to and latches rather than carrying on against a database it
-    // disagrees with. Never a silent last-writer-wins.
+    // is told the revision it lost to. Its detached candidate is never published, so both adapters
+    // remain at a state they actually held. Never a silent last-writer-wins.
     let Some(url) = url() else { return };
     let schema = schema("race");
     let first = open(&url, &schema);
@@ -177,8 +177,8 @@ fn two_processes_writing_one_artifact_resolve_to_one_accepted_and_one_refusal_na
         "the loser is told the revision it lost to: {message}"
     );
     assert!(
-        first.latched().is_some() || second.latched().is_some(),
-        "and latches rather than answering from memory about a database it disagrees with"
+        first.latched().is_none() && second.latched().is_none(),
+        "a refused batch publishes no candidate state and therefore creates no latch"
     );
 
     // A third process reads what the winner wrote.

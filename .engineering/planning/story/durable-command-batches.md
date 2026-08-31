@@ -8,7 +8,7 @@ summary: Adopt an atomic runtime batch SPI and remove stale overwrite and partia
 relations:
 - derived_from: epic:architecture-hardening
 - serves: vision:O2
-revision: 4
+revision: 5
 ---
 ## Finding
 
@@ -23,3 +23,7 @@ revision: 4
 - sibling `entity-runtime` provider crates — cited prerequisite.
 - `crates/aep-backend-entity/`, durable backend wrappers and Markdown provider — cited from the write path.
 - `crates/aep-backend-hybrid/` — inferred authority/read adjustment; confirm before editing.
+
+## Release finding — 2026-08-31
+
+The 0.35.0 release gate against PostgreSQL proved the old Postgres test still asserted the pre-batch latch behavior. The atomic contract is: a refused batch publishes neither a durable nor local candidate prefix, the caller receives the provider revision conflict, and an independently hydrated process reads the winning authority. The old story now records this supersession explicitly.

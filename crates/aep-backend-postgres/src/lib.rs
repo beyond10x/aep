@@ -11,9 +11,9 @@
 //!
 //! Two processes open one database, hydrate, and both move one artifact from the revision they
 //! read. The provider serialises them: the first lands; the second's commit is refused with the
-//! revision it lost to, the adapter **latches** — its memory and the database disagree — and the
-//! command returns a conflict naming that revision. The loser reopens and reads what the winner
-//! wrote. Never a silent last-writer-wins.
+//! revision it lost to, and the command returns a conflict naming that revision. Its detached
+//! candidate is never published, so the adapter retains the pre-command view and does not latch;
+//! reopening reads what the winner wrote. Never a silent last-writer-wins.
 //!
 //! # A gate that says when it did not run
 //!

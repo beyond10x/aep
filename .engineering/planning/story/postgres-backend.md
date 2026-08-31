@@ -14,7 +14,7 @@ relations:
 - depends_on: story:sqlite-backend
 - depends_on: story:sqlite-backend-adapter
 - depends_on: story:one-adapter-over-any-store
-revision: 8
+revision: 9
 ---
 # Story: P5 — `aep-backend-postgres`
 
@@ -87,3 +87,7 @@ Edges: `depends_on: story:sqlite-backend` points at the story `story:sqlite-back
 superseded; the store has no `unrelate`, so `depends_on: story:sqlite-backend-adapter` and
 `depends_on: story:one-adapter-over-any-store` are beside it and this line says which is live.
 Plan: `docs/plan/store-waves-f-g-h.md` § Wave H.
+
+## Atomic-batch supersession — 2026-08-31
+
+`story:durable-command-batches` supersedes the earlier latch-on-provider-refusal clause above. The adapter now executes against detached memory and projection state and publishes them only after the complete provider batch commits. A concurrent loser therefore retains its real pre-command view without latching; its typed revision conflict says why the attempted write did not land, and reopening obtains the authority that won. The live-Postgres release test exposed the stale assertion while cutting 0.35.0.
