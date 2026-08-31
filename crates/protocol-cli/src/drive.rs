@@ -4789,16 +4789,17 @@ pub(crate) fn write_scope_word(scope: WriteScope) -> &'static str {
 
 /// The `metaharness run b10x` invocation for one step.
 ///
-/// # Why there is no `--frame` here, and why that is not a shortcut
+/// # Why this says `--decisions observe` and carries no `--frame`
 ///
 /// The claude arm's surface travels twice — the sealed frame document *and* a per-call answer —
 /// because F9 says a frame whose text reaches the model while nothing enforces it tells the model
 /// *"strictly only these operations"* and makes it false. metaharness enforces that rule on its own
 /// side: `required_commands` adds `tool.decide` to any spec carrying a frame, the b10x adapter
 /// refuses `tool.decide` because nothing on that loop ever asks, and so **`metaharness run b10x
-/// --frame …` is refused before a model is reached**. `--decisions observe` is refused for the same
-/// reason, and `--decisions frame` — the default, and what this argv leaves in place — is the only
-/// one the adapter admits.
+/// --frame …` is refused before a model is reached**. The direct-provider loop instead delivers
+/// observation without a decision seam: its opening attestation and every tool-request event say
+/// that no per-call decision was required. Naming `--decisions observe` here makes that weaker but
+/// honest mode explicit rather than inheriting metaharness's vendor-oriented `frame` default.
 ///
 /// The frame is still *minted and written* beside the transcript for a b10x step. It is the record
 /// of what the step was, in the neutral vocabulary both arms are checked in, and the refusal
@@ -4848,6 +4849,8 @@ fn b10x_argv(
         "run".to_owned(),
         B10X_HARNESS.to_owned(),
         "--hermetic".to_owned(),
+        "--decisions".to_owned(),
+        "observe".to_owned(),
         "--cwd".to_owned(),
         working_directory.display().to_string(),
         "--model-endpoint".to_owned(),
@@ -6943,8 +6946,9 @@ mod tests {
     /// **Three of these assertions are about what is absent, and the absences are the design.**
     /// `metaharness run b10x --frame …` is refused before a model is reached — a frame's
     /// enforcement rides on `tool.decide`, which the b10x adapter refuses because nothing on that
-    /// loop ever asks — and `--decisions observe` is refused for the same reason, so the launch
-    /// leaves the default in place. `--substrate-embedded` is absent because substrate adopts a
+    /// loop ever asks. `--decisions observe` is present because that loop supplies observation
+    /// without a decision channel; leaving the default `frame` in place would claim a control seam
+    /// the adapter does not have. `--substrate-embedded` is absent because substrate adopts a
     /// workspace only when its directory name starts with `ws_`, and a governed tree is the
     /// operator's repository: asking would turn every driven b10x step into a launch refusal.
     ///
@@ -6995,6 +6999,7 @@ mod tests {
         assert!(has("--model-endpoint", "http://127.0.0.1:8080"));
         assert!(has("--model", "a-model"));
         assert!(has("--credentials", "none"), "{argv:?}");
+        assert!(has("--decisions", "observe"), "{argv:?}");
         assert!(has("-p", "do the thing"));
         assert!(argv.contains(&"--hermetic".to_owned()));
 
@@ -7010,12 +7015,7 @@ mod tests {
         );
         assert!(has("--context", "AGENTS.md"));
 
-        for refused in [
-            "--frame",
-            "--decisions",
-            "--substrate-embedded",
-            "--plugin-dir",
-        ] {
+        for refused in ["--frame", "--substrate-embedded", "--plugin-dir"] {
             assert!(
                 !argv.iter().any(|word| word == refused),
                 "`{refused}` is either refused by the b10x adapter or means nothing to it: {argv:?}"
@@ -8363,8 +8363,7 @@ profile: test.reading
         let executors = CliExecutors::new(
             PathBuf::from("/operator/repo"),
             PathBuf::from("/runs/T-1/1"),
-            // A plugin directory is a vendor mechanism and this arm has none. Passing one is what
-            // proves the b10x branch renders none.
+            // The same plugin reaches this arm through the loop's own plugin reader.
             vec![PathBuf::from("/plugins/claude-code")],
             "adp/default".to_owned(),
             "1".to_owned(),
@@ -8396,6 +8395,8 @@ profile: test.reading
                 "run",
                 "b10x",
                 "--hermetic",
+                "--decisions",
+                "observe",
                 "--cwd",
                 "/operator/repo",
                 "--model-endpoint",

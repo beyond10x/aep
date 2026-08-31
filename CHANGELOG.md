@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.37.1] — 2026-08-31
+
+### Fixed
+
+- Driven b10x steps now declare metaharness's delivered `observe` decision mode explicitly instead
+  of inheriting its vendor-oriented `frame` default, matching the direct-provider adapter's honest
+  no-decision-seam contract.
+
 ## [0.37.0] — 2026-08-31
 
 ### Added
