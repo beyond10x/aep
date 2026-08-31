@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:serve-response-graceful-close
 kind: story
-status: active
+status: implemented
 title: Read-only server test retains startup output
 summary: Keep the child stdout pipe alive so the final startup notice cannot terminate the server before its first request.
 relations:
 - serves: vision:O2
-revision: 6
+revision: 7
 ---
 ## Context
 
