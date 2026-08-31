@@ -8,7 +8,7 @@ pub mod load;
 pub mod project;
 
 pub use load::{
-    load_pinned_bundle, load_tree, load_tree_report, LoadErrors, LoadFailure, LoadOutcome,
-    PinnedBundle,
+    load_bundle, load_pinned_bundle, load_tree, load_tree_report, LoadErrors, LoadFailure,
+    LoadOutcome, PinnedBundle,
 };
 pub use project::{discover, Project};

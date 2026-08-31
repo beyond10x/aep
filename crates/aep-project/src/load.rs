@@ -262,12 +262,12 @@ pub fn load_tree(root: &Path) -> Result<Registry, LoadErrors> {
     load_tree_report(root).into_result()
 }
 
-/// Loads and validates one tree and verifies the exact source-byte digest expected by deployment.
+/// Loads and validates one immutable tree and computes the digest that identifies its source bytes.
 ///
 /// # Errors
 ///
-/// Every document failure, unreadable bundle file, invalid expected digest or digest mismatch.
-pub fn load_pinned_bundle(root: &Path, expected: &str) -> Result<PinnedBundle, LoadErrors> {
+/// Every document failure or unreadable bundle file.
+pub fn load_bundle(root: &Path) -> Result<PinnedBundle, LoadErrors> {
     let outcome = load_tree_report(root);
     if !outcome.failures.is_empty() {
         return Err(LoadErrors(outcome.failures));
@@ -306,6 +306,21 @@ pub fn load_pinned_bundle(root: &Path, expected: &str) -> Result<PinnedBundle, L
         hasher.update(&bytes);
     }
     let digest = format!("{:x}", hasher.finalize());
+    Ok(PinnedBundle {
+        registry: outcome.registry,
+        drivers: outcome.drivers,
+        digest,
+        files_read: files.len(),
+    })
+}
+
+/// Loads and validates one tree and verifies the exact source-byte digest expected by deployment.
+///
+/// # Errors
+///
+/// Every document failure, unreadable bundle file, invalid expected digest or digest mismatch.
+pub fn load_pinned_bundle(root: &Path, expected: &str) -> Result<PinnedBundle, LoadErrors> {
+    let bundle = load_bundle(root)?;
     let expected_valid = expected.len() == 64
         && expected
             .bytes()
@@ -316,20 +331,16 @@ pub fn load_pinned_bundle(root: &Path, expected: &str) -> Result<PinnedBundle, L
             detail: "expected bundle digest must be 64 lowercase hexadecimal characters".to_owned(),
         }]));
     }
-    if digest != expected {
+    if bundle.digest != expected {
         return Err(LoadErrors(vec![LoadFailure {
             path: None,
             detail: format!(
-                "definition bundle digest mismatch: expected {expected}, found {digest}"
+                "definition bundle digest mismatch: expected {expected}, found {}",
+                bundle.digest
             ),
         }]));
     }
-    Ok(PinnedBundle {
-        registry: outcome.registry,
-        drivers: outcome.drivers,
-        digest,
-        files_read: files.len(),
-    })
+    Ok(bundle)
 }
 
 /// Loads one file into `registry`.
@@ -759,6 +770,22 @@ mod tests {
                 .join("; ")
         );
         assert!(load_tree(root).is_ok());
+    }
+
+    #[test]
+    fn an_unpinned_bundle_reports_the_same_digest_the_pinned_loader_verifies() {
+        let root = tree(
+            "bundle-digest",
+            &[("workflows/adp-default.json", WORKFLOW_AT_2)],
+        );
+
+        let bundle = load_bundle(&root.0).expect("the valid bundle loads");
+        assert_eq!(bundle.digest.len(), 64);
+
+        let pinned = load_pinned_bundle(&root.0, &bundle.digest)
+            .expect("the reported digest pins the same source bytes");
+        assert_eq!(pinned.digest, bundle.digest);
+        assert_eq!(pinned.files_read, bundle.files_read);
     }
     // --- adversarial cases -------------------------------------------------------------------
     //

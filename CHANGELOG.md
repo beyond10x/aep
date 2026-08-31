@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.38.1] — 2026-08-31
+
+- Expose `aep_project::load_bundle` so deployment tools can validate an immutable definition tree
+  and print the exact source-byte digest that `load_pinned_bundle` subsequently verifies.
+
 ## [0.38.0] — 2026-08-31
 
 ### Added
@@ -4612,7 +4617,18 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.33.0...HEAD
+[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.38.1...HEAD
+[0.38.1]: https://github.com/beyond10x/engineering-protocols/compare/0.38.0...0.38.1
+[0.38.0]: https://github.com/beyond10x/engineering-protocols/compare/0.37.1...0.38.0
+[0.37.1]: https://github.com/beyond10x/engineering-protocols/compare/0.37.0...0.37.1
+[0.37.0]: https://github.com/beyond10x/engineering-protocols/compare/0.36.4...0.37.0
+[0.36.4]: https://github.com/beyond10x/engineering-protocols/compare/0.36.3...0.36.4
+[0.36.3]: https://github.com/beyond10x/engineering-protocols/compare/0.36.2...0.36.3
+[0.36.2]: https://github.com/beyond10x/engineering-protocols/compare/0.36.1...0.36.2
+[0.36.1]: https://github.com/beyond10x/engineering-protocols/compare/0.36.0...0.36.1
+[0.36.0]: https://github.com/beyond10x/engineering-protocols/compare/0.35.0...0.36.0
+[0.35.0]: https://github.com/beyond10x/engineering-protocols/compare/0.34.0...0.35.0
+[0.34.0]: https://github.com/beyond10x/engineering-protocols/compare/0.33.0...0.34.0
 [0.33.0]: https://github.com/beyond10x/engineering-protocols/compare/0.32.1...0.33.0
 [0.32.1]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...0.32.1
 [0.32.0]: https://github.com/beyond10x/engineering-protocols/compare/0.31.0...0.32.0
