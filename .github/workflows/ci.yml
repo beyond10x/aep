@@ -58,7 +58,9 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.21"
+          # go-task 3.52.0 declares this exact minimum. GOTOOLCHAIN is deliberately local below,
+          # so the setup version and the pinned task runner must move together.
+          go-version: "1.25.10"
           # The generated modules intentionally have no go.sum. setup-go's automatic cache looks
           # for one at the repository root and warns on every release run; Rust's cache below is
           # the cache this mixed-language gate actually relies on.

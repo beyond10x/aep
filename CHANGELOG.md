@@ -7,6 +7,13 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.39.2] — 2026-08-31
+
+### Fixed
+
+- CI now installs Go 1.25.10, the exact minimum declared by the pinned go-task 3.52.0 release,
+  instead of refusing the task runner under Go 1.21 with automatic toolchain upgrades disabled.
+
 ## [0.39.1] — 2026-08-31
 
 ### Fixed
