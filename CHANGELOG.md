@@ -9,13 +9,6 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
-## [0.37.1] — 2026-08-31
-
-### Fixed
-
-- Driven b10x steps now declare metaharness's delivered `observe` decision mode explicitly instead
-  of inheriting its vendor-oriented `frame` default, matching the direct-provider adapter's honest
-  no-decision-seam contract.
 ## [0.38.0] — 2026-08-31
 
 ### Added
@@ -23,6 +16,14 @@ belongs in the commit message or in `docs/design/`.
 - `aep-client` now publishes the service route catalog and derives JSON Schema from every HTTP
   request, success and problem document, so servers and documentation can project one
   machine-readable contract without restating paths or payload shapes.
+
+## [0.37.1] — 2026-08-31
+
+### Fixed
+
+- Driven b10x steps now declare metaharness's delivered `observe` decision mode explicitly instead
+  of inheriting its vendor-oriented `frame` default, matching the direct-provider adapter's honest
+  no-decision-seam contract.
 
 ## [0.37.0] — 2026-08-31
 
