@@ -62,6 +62,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.35.0` | 0.35.0 — atomic authority and the central-service contract |
 | `0.36.0` | engineering-protocols 0.36.0 |
 | `0.36.1` | engineering-protocols 0.36.1 |
+| `0.36.2` | engineering-protocols 0.36.2 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
