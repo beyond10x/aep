@@ -74,6 +74,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.39.2` | 0.39.2 — align CI Go with pinned go-task 3.52.0; implementation 100%. |
 | `0.40.0` | AEP 0.40.0 |
 | `0.40.1` | AEP 0.40.1 |
+| `0.40.2` | AEP 0.40.2 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification

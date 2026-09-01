@@ -13,7 +13,7 @@ the declared vocabulary (capabilities, evidence kinds, fact families) is in the
 Schemas plus cross-document checks, and indexed by the `id` declared inside the file — never by
 path.
 
-`protocol validate` loads six kinds from a tree and says how many of each it found. Each kind has
+`aep validate` loads six kinds from a tree and says how many of each it found. Each kind has
 one directory, and a document outside it is not loaded at all — so a misfiled file goes missing
 rather than half-applying:
 
@@ -263,7 +263,7 @@ nothing matched.
 
 ## Evidence records
 
-The document `protocol evaluate --evidence` submits, and `protocol evidence inspect` reads: a list
+The document `aep evaluate --evidence` submits, and `aep evidence inspect` reads: a list
 of records, each naming its `kind`, the fields that kind declares, and who produced it.
 
 ```yaml
@@ -295,7 +295,7 @@ else — never the submission time.
 
 A workflow says what states exist and what evidence a transition needs; it deliberately does not say
 how to obtain that evidence, which is what lets one workflow govern a Rust repository and a Terraform
-one. A step map (`aep.driver-steps/1`) is the missing half, and it is what `protocol drive` reads.
+one. A step map (`aep.driver-steps/1`) is the missing half, and it is what `aep drive` reads.
 
 ```yaml
 format: aep.driver-steps/1
@@ -343,7 +343,7 @@ status carries none of them.
 
 Three placeholders are expanded in a `command` step's `run` words and in its `record:` path:
 `{run_directory}`; `{task}`, the **absolute path of the task document this run was started from** —
-the one `protocol drive run --task <file>` named, or the one it discovered when no flag did, and the
+the one `aep drive run --task <file>` named, or the one it discovered when no flag did, and the
 same path again on a resume, because the run directory remembers it; and `{transcript}`, the
 transcript of the `llm` step this one follows in the same state, at the attempt that ran. The list
 is closed, so a misspelling is refused at load rather than handed to a program as literal braces,
@@ -351,7 +351,7 @@ and so is a `{transcript}` in a state with no `llm` step before it. `{}` and `{a
 and stay ordinary text, because `find -exec` and `jq` write them.
 
 `{task}` exists because a map is written once and driven many times: a verb that binds to *this
-run's* task — `protocol specification evidence --task {task}` is the one that ships — had no way to
+run's* task — `aep specification evidence --task {task}` is the one that ships — had no way to
 be told which document that was, and fell back to the task `project.yaml` names. It is absolute
 because a `command` step is spawned with the project directory as its working directory, and a
 relative `--task` is relative to wherever the operator typed it.

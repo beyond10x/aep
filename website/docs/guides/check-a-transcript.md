@@ -12,7 +12,7 @@ plugins, the tokens, the timings. Almost nobody checks that record with anything
 a **trace specification** states expectations over it, and the verdict is three-valued and
 evidence-cited.
 
-`protocol trace` has three verbs. `inspect` reports what is in a transcript, `check` judges it
+`aep trace` has three verbs. `inspect` reports what is in a transcript, `check` judges it
 against a specification, and `evidence` mints the verdict as a record the engine reads. None of
 them starts an agent, calls a model or reaches a network — they read a file and evaluate typed
 predicates over it, which is what makes a verdict reproducible on any machine on any day.
@@ -21,7 +21,7 @@ The commands below run against a real committed transcript — a Claude Code `st
 from the planning-plugin eval — so every output shown here is reproducible from a checkout.
 
 **Two transcript formats, one set of arguments.** A recorded vendor session is `stream-json`; a
-transcript written by `protocol drive` is a `metaharness.event/1` event stream. Every verb here
+transcript written by `aep drive` is a `metaharness.event/1` event stream. Every verb here
 takes either, and picks the reader from the file's own first line — there is no `--format` to get
 wrong. The report's footer names the adapter that judged the run
 (`adapter claude-code/stream-json` or `adapter metaharness/event-stream`), so a verdict that
@@ -237,7 +237,7 @@ $B trace evidence --spec conformance/trace/expectations.trace.yaml \
     producer: verifier
     verifier: trace-checker
   provenance:
-    command: protocol trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+    command: aep trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
     inputs:
     - conformance/trace/expectations.trace.yaml
     - crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
@@ -253,7 +253,7 @@ accepting a claim about a check that has not happened.
 The record is a summary, not the report: counts, ids and the digest pair cross the boundary; the
 cited transcript rows — prompts, file contents — do not. Its producer is the `trace-checker`
 verifier class, and the record is minted in the same process that ran the check, so an agent's own
-claim of conformance never satisfies the kind. `protocol evaluate --evidence evidence.yaml` reads
+claim of conformance never satisfies the kind. `aep evaluate --evidence evidence.yaml` reads
 the emitted document directly: `trace_conformance` is one of the evidence kinds the development
 protocol declares, and `trace_conformance.**` one of its observable fact families
 (`protocols/adp/1.yaml`). A behavioural claim about *how an agent worked* is now a fact the
@@ -271,7 +271,7 @@ that record is submitted, then moves.](/img/trace-evidence-gate.svg)
 
 The drawing is of the mechanism, not a screenshot of any one run — and its last panel is still
 labelled *soon*, because it was drawn before the driver shipped. **The driver ships today.**
-`protocol drive run`, `drive status` and `drive resume` walk a workflow: they make the engine's
+`aep drive run`, `drive status` and `drive resume` walk a workflow: they make the engine's
 calls in order, execute the three kinds of step that touch the world — a program, a model, a
 person — and record what they did. The driver evaluates no gate itself. A driver that could
 evaluate a gate would be a second protocol implementation with none of the conformance suites,
@@ -283,8 +283,8 @@ repository's own backlog — `W4-1/1`, 2026-08-21 — **blocked**, in `establish
 states short of the person it was meant to stop at, on two requirements the engine printed: a
 specification artifact still in `draft`, and `test.first_result == failed` reading `passed`. Four
 model sessions, 80 hook decisions of which 11 were denials, and 11 `permission_denials` entries in
-the transcripts — one for one, each naming its tool. `protocol trace check` decided those four
-transcripts, and `protocol trace evidence` minted a `trace_conformance` record from one of them.
+the transcripts — one for one, each naming its tool. `aep trace check` decided those four
+transcripts, and `aep trace evidence` minted a `trace_conformance` record from one of them.
 What the run found was about the step map, not about the enforcement. The full record, including
 what it cost and what broke, is `docs/plan/harness-wave-4-governed-dogfood.md` § *The first run*.
 
@@ -295,7 +295,7 @@ format is published as `schemas/generated/trace-spec.schema.json`; the worked sp
 `conformance/trace/expectations.trace.yaml`, whose forty-two expectations are checked
 against two committed transcripts by the ordinary test suite. Design and acceptance:
 `docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
-The driver is `crates/aep-driver` behind `protocol drive`, its enforcement arm is the plugin's
+The driver is `crates/aep-driver` behind `aep drive`, its enforcement arm is the plugin's
 hooks (`/path/to/agentplugins/plugins/aep-planning/README.md` § *The hooks, and what changed about "no hooks"*), and
 the governed-run record is `docs/plan/harness-wave-4-governed-dogfood.md`. For building a driver of
 your own against the same engine calls, see [Integrate an agent

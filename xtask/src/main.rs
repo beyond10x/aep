@@ -55,7 +55,7 @@ enum Command {
     },
     /// Check the workspace version against the newest release tag.
     Version,
-    /// Check that every `entity-*` crate resolves to one version, from one `entity-runtime` pin.
+    /// Check the Entity Runtime pin and refuse any compiled ESS modeling crate.
     Deps,
     /// Check that every uniqueness claim in a test name has a guard beside it.
     Guards,
@@ -599,6 +599,19 @@ fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
 /// If `Cargo.lock` cannot be read, or if either rule is broken.
 fn deps(root: &Path) -> Result<()> {
     let lock = fs::read_to_string(root.join("Cargo.lock")).context("reading Cargo.lock")?;
+    let ess_packages = locked_packages(&lock, ESS_MODEL_PREFIX);
+    if !ess_packages.is_empty() {
+        let names = ess_packages
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!(
+            "AEP compiles against ESS modeling crates: {names}. The optional adapter transcribes \
+             the closed standalone report wire and must not depend on an `ess-*` package."
+        );
+    }
+
     let packages = locked_packages(&lock, ENTITY_RUNTIME_PREFIX);
     if packages.is_empty() {
         bail!(
@@ -726,6 +739,7 @@ struct LockedPackage {
 
 /// What `entity-runtime` publishes its crates as.
 const ENTITY_RUNTIME_PREFIX: &str = "entity-";
+const ESS_MODEL_PREFIX: &str = "ess-";
 
 /// A test asserting the same thing as one in another crate is not evidence of a difference.
 ///
@@ -2080,6 +2094,17 @@ source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
             .expect_err("nothing to check is not a pass")
             .to_string();
         assert!(error.contains("no pin to check"), "{error}");
+    }
+
+    #[test]
+    fn an_ess_modeling_crate_is_refused_even_beside_one_entity_runtime_pin() {
+        let lock = format!("{ONE_PIN}\n[[package]]\nname = \"ess-domain\"\nversion = \"0.2.0\"\n");
+        let root = lockfile_in_a_root(&lock);
+        let error = deps(root.path())
+            .expect_err("AEP must not compile against ESS modeling crates")
+            .to_string();
+        assert!(error.contains("ess-domain"), "{error}");
+        assert!(error.contains("standalone report wire"), "{error}");
     }
 
     #[test]

@@ -13,7 +13,7 @@ itself.
 
 ## First: you may not have to build one
 
-A reference driver ships in this repository. `protocol drive` makes the engine's calls in order,
+A reference driver ships in this repository. `aep drive` makes the engine's calls in order,
 executes the three kinds of step a step map declares — a program, a model, a person — and records
 what it did:
 
@@ -24,13 +24,13 @@ Install the three local binaries from source checkouts and verify what will be r
 $ cargo install --locked --path crates/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
-$ protocol --version
+$ aep --version
 $ metaharness doctor claude
 $ metaharness doctor b10x
-$ protocol drive status
+$ aep drive status
 ```
 
-`protocol drive status` is read-only and free. The aep comparison runner in the
+`aep drive status` is read-only and free. The aep comparison runner in the
 metaharness checkout goes further: it assembles the fixture, projects the workflow, exercises the
 confinement governor and stops before any model request unless `--spend` is present:
 
@@ -45,11 +45,11 @@ different invocation and additionally requires `METAHARNESS_LIVE=1`, `--spend`, 
 budget. See the [harness and confinement matrix](../reference/harnesses.md) before choosing an arm.
 
 ```console
-$ protocol drive run --project . --map development/default \
+$ aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
-$ protocol drive status
-$ protocol drive resume AUTH-142/3      # the run id `drive run` allocated
+$ aep drive status
+$ aep drive resume AUTH-142/3      # the run id `drive run` allocated
 ```
 
 `drive run` needs a model and costs money. For a map with an `llm` step it also needs the explicit
@@ -68,7 +68,7 @@ Two things the driver does not do, both of which land on you if you build one:
 
 * **It knows two harnesses, both through metaharness.** An `llm` step says `harness: claude-code`
   (the default) or `harness: b10x`, and the driver launches `metaharness run claude` or
-  `metaharness run b10x`. Metaharness also has a Codex adapter, but `protocol drive` does not yet
+  `metaharness run b10x`. Metaharness also has a Codex adapter, but `aep drive` does not yet
   select it; documenting that distinction prevents a Codex instruction integration from being
   mistaken for a governed drive arm. Neither supported drive arm is a stranger's harness — see
   [Limitations](../status/limitations.md).
@@ -191,10 +191,10 @@ them:
   ahead of the clock is refused rather than recorded:
 
   ```console
-  $ protocol evaluate --task task.yaml --artifacts artifacts.yaml --evidence no-observed-at.yaml
+  $ aep evaluate --task task.yaml --artifacts artifacts.yaml --evidence no-observed-at.yaml
   error: evidence document (no-observed-at.yaml): .[0]: missing field `observed_at` at line 1 column 3   # exit 1
 
-  $ protocol evaluate --task task.yaml --artifacts artifacts.yaml --evidence dated-2099.yaml
+  $ aep evaluate --task task.yaml --artifacts artifacts.yaml --evidence dated-2099.yaml
   error: submitting evidence from dated-2099.yaml: the observation time 4070908800000ms is in the
   future; it is 1787352723812ms                                                                          # exit 1
   ```
@@ -303,7 +303,7 @@ how a hook — a separate process, holding no execution — learns which state i
 
 (Two absolute paths — the run directory and the store — are dropped, and the arrays are broken
 across lines to fit the page; the rest is the file's, except the `reaching` lines, which are what
-`protocol evaluate --advance` prints under `transitions` for that transition — the driver and the
+`aep evaluate --advance` prints under `transitions` for that transition — the driver and the
 CLI both read `TransitionEvaluation::unmet()`.) `reaching` is one line per requirement that does not
 hold yet on a way *out* of the state, each prefixed with where that transition goes. What must hold
 *while in* it is a different list and is passed separately, because a step given only the second can
@@ -330,7 +330,7 @@ Three limits worth knowing before you copy the shape:
   `ActionRequest` it is, and every call reaching the engine lands in the execution's own event
   stream as `action_requested` plus `action_allowed` or `action_denied`. The order is **policy
   first** — it is the only layer that sees arguments, and no `ActionRequest` tells
-  `protocol artifact list` from `protocol artifact list | tee out` — and the **engine's deny wins**
+  `aep artifact list` from `aep artifact list | tee out` — and the **engine's deny wins**
   over the policy's allow. Two offered tools reach the engine as nothing at all: a skill loader
   takes no action, and a web *search* names no URL, so inventing a request for either would record
   an act nobody performed. What the engine still cannot see is a call the driver's own policy
@@ -379,12 +379,12 @@ serialises; show text to people and JSON to programs, and do not invent a third 
 
 ## The native route: a projected workflow, walked by the loop
 
-`protocol drive` asks the engine before every step. The b10x harness can also walk a workflow by
+`aep drive` asks the engine before every step. The b10x harness can also walk a workflow by
 itself — `b10x-harness workflow run` takes a flow document and runs one model turn per step, one
-session per section — and `protocol workflow flow` writes that document from a workflow here:
+session per section — and `aep workflow flow` writes that document from a workflow here:
 
 ```console
-$ protocol workflow flow --id adp/default --map development/default --out adp.flow.yaml
+$ aep workflow flow --id adp/default --map development/default --out adp.flow.yaml
 $ b10x-harness workflow plan --flow adp.flow.yaml          # no endpoint: is the shape sound?
 $ b10x-harness workflow run  --flow adp.flow.yaml --input "AUTH-142" --hooks hooks.json …
 ```
@@ -398,7 +398,7 @@ sends the section back for another attempt, and a hook that cannot answer is rea
 holding its steps — one node when the map gave it one step or none — because the loop asks the
 hook at a group boundary and nowhere else, and a state that were a bare node would be a state the
 governor is never asked about. A retreat is therefore a section of sections. That
-hook is where the engine belongs, and **`protocol drive transition` is the verb that answers it**:
+hook is where the engine belongs, and **`aep drive transition` is the verb that answers it**:
 it reads the loop's JSON on stdin and answers `enter` from `evaluate` and `leave` from `transition`
 on a copy of the execution, in the engine's own words. Declare it in the hooks file:
 
@@ -411,12 +411,12 @@ engine is put on the state the flow path names — the section's first state on 
 `leave`. A section that came out failed is left alone. The verb decides only: it writes nothing,
 takes no lock, and a consultation leaves a run's cursor byte-identical. What it does **not** do is
 walk: the loop moves the sequencer, and a run that needs the engine to move it is still a
-`protocol drive run`.
+`aep drive run`.
 
 ## Checking the run afterwards
 
-A harness that reports its own conformance is a harness reporting on itself. `protocol trace check`
+A harness that reports its own conformance is a harness reporting on itself. `aep trace check`
 reads the transcript the harness wrote and decides it against a typed specification, so *"the agent
-consulted the CLI before touching the store"* becomes a verdict a program produced. `protocol trace
+consulted the CLI before touching the store"* becomes a verdict a program produced. `aep trace
 evidence` mints that verdict as a `trace_conformance` record the engine accepts, with
 `producer: verifier / trace-checker` — see [Check what an agent run did](./check-a-transcript.md).

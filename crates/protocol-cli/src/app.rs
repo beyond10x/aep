@@ -2613,7 +2613,7 @@ fn exit_code(ok: bool) -> ExitCode {
 ///
 /// The gate's website step is `npm run build`, and Docusaurus resolves links rather than claims: a
 /// page that *describes* a CLI which has moved underneath it builds green for ever. On 2026-08-30,
-/// at 0.33.0, seven of seventy-seven verbs had no entry — the whole `protocol workspace` family
+/// at 0.33.0, seven of seventy-seven verbs had no entry — the whole workspace family
 /// among them, eight releases after `website/docs/status/roadmap.md` told readers it had shipped.
 ///
 /// The verb list comes from `clap` rather than from parsing `--help`, so it is the same tree the
@@ -2627,7 +2627,7 @@ mod cli_reference {
 
     /// Every leaf verb, spelled as a reader would type it.
     ///
-    /// A leaf, because a parent that only groups is not something anybody runs: `protocol artifact`
+    /// A leaf, because a parent that only groups is not something anybody runs: `aep artifact`
     /// alone is an error message. `help` is clap's, not ours, and a hidden command is deliberately
     /// not part of the documented surface.
     fn leaves(command: &clap::Command, spelled: &str, out: &mut Vec<String>) {
@@ -2659,15 +2659,15 @@ mod cli_reference {
     #[test]
     fn a_verb_the_reference_does_not_spell_is_reported_by_name() {
         let verbs = vec![
-            "protocol artifact list".to_owned(),
-            "protocol workspace crossings".to_owned(),
+            "aep artifact list".to_owned(),
+            "aep workspace crossings".to_owned(),
         ];
-        let page = "| `protocol artifact list [--kind …]` | the plan, one line per artifact |";
+        let page = "| `aep artifact list [--kind …]` | the plan, one line per artifact |";
 
         let missing = absent_from(&verbs, page);
         assert_eq!(
             missing,
-            vec![&"protocol workspace crossings".to_owned()],
+            vec![&"aep workspace crossings".to_owned()],
             "the documented verb must pass and the undocumented one must be named"
         );
     }
@@ -2675,7 +2675,7 @@ mod cli_reference {
     #[test]
     fn every_verb_the_cli_answers_has_an_entry_in_the_reference() {
         let mut verbs = Vec::new();
-        leaves(&super::Cli::command(), "protocol", &mut verbs);
+        leaves(&super::Cli::command(), "aep", &mut verbs);
         assert!(
             verbs.len() > 50,
             "the walk found only {} verbs, so it is walking the wrong tree rather than passing",

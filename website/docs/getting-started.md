@@ -168,12 +168,12 @@ protocol serve — {"store":"…/.engineering/planning","artifacts":192,"unreada
 http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27
 ```
 
-Open the URL it prints. You get the status columns `protocol artifact board` prints, and clicking a
+Open the URL it prints. You get the status columns `aep artifact board` prints, and clicking a
 card shows what `show` and `explain` print — the artifact's fields, its body, and the rungs it may
 take next **with what each costs**, so a rung you have not earned says `needs 1 test_result, held 0`
 rather than waiting to refuse you.
 
-Clicking a rung moves the artifact, through the same decision `protocol artifact move` makes. If the
+Clicking a rung moves the artifact, through the same decision `aep artifact move` makes. If the
 ladder refuses, the refusal comes back with every status it *would* have permitted, each one a
 button — so the answer to the question a refusal creates is one click away.
 
@@ -203,7 +203,7 @@ the JSON to programs.
 * [Check a transcript](./guides/check-a-transcript.md) — judge what an agent run actually did
   against a typed specification of what it was supposed to do.
 
-The CLI has twenty-four top-level verbs; this page used six of them. `protocol drive` walks a
+The CLI has twenty-four top-level verbs; this page used six of them. `aep drive` walks a
 workflow by running the steps a step map declares, and is the one that puts everything above
 together — [Where this stands](./status/where-this-stands.md) records what happened the first time
 it was pointed at a real story.

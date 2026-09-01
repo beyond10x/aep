@@ -9,6 +9,17 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.40.2] — 2026-09-01
+
+### Changed
+
+- Public guides and command references now use canonical `aep` examples throughout while retaining
+  `protocol` as the exact output-and-exit compatibility alias.
+- The optional ESS adapter remains a closed transcription of `ess-conformance-report/1`; ESS owns
+  the report and AEP alone chooses how to translate it into `ess_conformance` evidence.
+- Entity Runtime is pinned once at `0.17.5`, the sanitized release carrying the completed AEP
+  rename in its engineering record.
+
 ## [0.40.1] — 2026-09-01
 
 ### Fixed

@@ -14,7 +14,7 @@ confinement.
 |---|---|---|---|
 | Loop owner | vendor binary | vendor binary | b10x native loop |
 | Metaharness adapter | `metaharness run claude` | `metaharness run codex` | `metaharness run b10x` |
-| `protocol drive` selector | `claude-code` or `metaharness` | not yet selectable | `b10x` |
+| `aep drive` selector | `claude-code` or `metaharness` | not yet selectable | `b10x` |
 | Per-call policy | metaharness asks the driver before a mediated call | metaharness asks the driver before a mediated call | observe-only; the loop publishes its admitted tools and runs its own approval gate |
 | Workspace presented to the child | metaharness scratch by default; an operator-named tree weakens hermetic claims | metaharness scratch by default; an operator-named tree weakens hermetic claims | operator-named workspace, optionally adopted by substrate |
 | Inner process confinement | vendor sandbox facts plus metaharness launch attestation; no substrate envelope in the current CLI path | vendor sandbox facts plus metaharness launch attestation; no substrate envelope in the current CLI path | substrate socket or embedded driver; no substrate means read-only local catalogue and no process tool |
@@ -39,7 +39,7 @@ From an AEP checkout with sibling `metaharness` and `harness` checkouts:
 $ cargo install --locked --path crates/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
-$ protocol drive status
+$ aep drive status
 ```
 
 The free native comparison performs all setup and confinement checks, then stops before a model:
@@ -50,7 +50,7 @@ $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
     --ep-repo "$PWD" --harness-repo ../harness
 ```
 
-For a governed live run, choose a step map and one of the two selectors `protocol drive` currently
+For a governed live run, choose a step map and one of the two selectors `aep drive` currently
 supports:
 
 ```console

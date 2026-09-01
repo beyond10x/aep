@@ -71,7 +71,7 @@ a rung costs, and the refusal names which kind of `no` it is — which is the pa
 you are the person being refused:
 
 ```console
-$ protocol artifact move outbound-claim:q3-uptime --to cleared
+$ aep artifact move outbound-claim:q3-uptime --to cleared
 outbound-claim:q3-uptime is draft; cleared is on the ladder and not yet earned: reaching cleared
 needs at least 1 approval record(s). Nothing was presented at $args.evidence.approval
 ```
@@ -80,12 +80,12 @@ needs at least 1 approval record(s). Nothing was presented at $args.evidence.app
 lead to different next actions. Record the observation and the same move goes through:
 
 ```console
-$ protocol artifact evidence outbound-claim:q3-uptime \
+$ aep artifact evidence outbound-claim:q3-uptime \
     --kind approval --source "legal review" --ref https://example.invalid/approvals/814
 outbound-claim:q3-uptime: approval recorded from legal review
   on hand: approval=1
 
-$ protocol artifact move outbound-claim:q3-uptime --to cleared
+$ aep artifact move outbound-claim:q3-uptime --to cleared
 outbound-claim:q3-uptime moved draft -> cleared (revision 2)
 ```
 
@@ -131,16 +131,16 @@ see [blocker types](../reference/vocabulary.md).
 That is also what makes unblocking a *move* rather than an edit:
 
 ```console
-$ protocol artifact blocked
+$ aep artifact blocked
 credential-blocker:api-token-scope  credential  open, withholding test_result  CI cannot mint a read-scope token
   blocks story:ci-evidence      active  Evidence job for the contract suite
   blocks story:contract-checks  active  Contract checks in CI
 
-$ protocol artifact move credential-blocker:api-token-scope --to cleared
+$ aep artifact move credential-blocker:api-token-scope --to cleared
 credential-blocker:api-token-scope moved open -> cleared (revision 2)
 ```
 
-Nothing was edited out of a file: `protocol artifact history` still says the blocker was opened, and
+Nothing was edited out of a file: `aep artifact history` still says the blocker was opened, and
 `cleared` is terminal, so being stuck again is a **new** blocker with its own date rather than this
 one reopened — otherwise *how long were we stuck* has no answer.
 
@@ -149,10 +149,10 @@ else here. Every other ladder models evidence flowing **inward**. An outbound cl
 that already left, and **sending is not undoable**:
 
 ```console
-$ protocol artifact move outbound-claim:q3-uptime --to sent
+$ aep artifact move outbound-claim:q3-uptime --to sent
 outbound-claim:q3-uptime moved cleared -> sent (revision 3)
 
-$ protocol artifact move outbound-claim:q3-uptime --to draft
+$ aep artifact move outbound-claim:q3-uptime --to draft
 outbound-claim:q3-uptime is sent; an outbound-claim may move to: correction-owed, standing
 ```
 
@@ -164,7 +164,7 @@ which is true in the world, and the ladder should not be kinder than the world.
 
 `correction-owed` is a rung rather than a flag for the same reason: it is the most expensive state
 an organisation can be in and the easiest one to leave undocumented, and a rung is a column
-`protocol artifact board` prints — and a column `protocol serve` draws in a browser, where the rungs
+`aep artifact board` prints — and a column `aep serve` draws in a browser, where the rungs
 an artifact may take next are buttons and the ones it has not earned carry their price.
 
 ## Every write is journalled
@@ -173,7 +173,7 @@ Moves, creations and evidence records all append to a per-store journal, so an a
 question you can ask rather than a `git log` you have to read:
 
 ```console
-$ protocol artifact history outbound-claim:q3-uptime
+$ aep artifact history outbound-claim:q3-uptime
 2026-08-26T00:08:16Z  operator  created as draft (revision 1)
 2026-08-26T00:08:20Z  operator  approval recorded from legal review (https://example.invalid/approvals/814) (revision 1)
 2026-08-26T00:08:20Z  operator  moved draft -> cleared (revision 2)
@@ -191,7 +191,7 @@ later.
 ## Writing your own
 
 ```console
-$ protocol artifact lifecycle outbound-claim
+$ aep artifact lifecycle outbound-claim
 outbound-claim starts at draft
   cleared -> sent
   corrected -> nothing
@@ -202,7 +202,7 @@ outbound-claim starts at draft
 ```
 
 Put a `<kind>.yaml` beside the shipped ones in your own document tree, point `--root` at it, and
-`new`, `move`, `board`, `lifecycle` and `validate` all understand it. `protocol artifact validate`
+`new`, `move`, `board`, `lifecycle` and `validate` all understand it. `aep artifact validate`
 checks the whole store against the ladders, so a status no ladder declares is caught where it lands
 rather than where it is read.
 

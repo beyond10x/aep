@@ -57,7 +57,8 @@ The dependency arrow points from AEP to `entity-runtime`. Its IO-free kernel and
 pinned as one release. No Entity Runtime manifest names an AEP crate. Changing that direction or
 changing verified bytes is a coordinated migration.
 
-`cargo xtask deps` refuses more than one Entity Runtime version or pin.
+`cargo xtask deps` refuses more than one Entity Runtime version or pin and refuses any compiled
+`ess-*` modeling crate.
 
 ### ESS
 

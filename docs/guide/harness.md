@@ -9,7 +9,7 @@ Add `aep-engine` and `aep-domain`; `aep-schema` if you read tasks and manifests 
 
 ## Before you write one: there is a reference driver
 
-`protocol drive run|status|resume` walks a workflow instead of suggesting it, and it is worth
+`aep drive run|status|resume` walks a workflow instead of suggesting it, and it is worth
 reading before you build the same loop again — either as the thing you use, or as the worked
 answer to the questions below.
 
@@ -21,7 +21,7 @@ executes the three kinds of step that touch the world, and records what happened
 | It supplies | You supply |
 |---|---|
 | the loop: initialize, ask, act, submit, transition | the model, the shell and the person |
-| `protocol drive transition` — the engine as a program a *native* flow consults at each section boundary, so a `b10x-harness workflow run` is governed without walking here | the loop that walks, and a hooks file naming the verb |
+| `aep drive transition` — the engine as a program a *native* flow consults at each section boundary, so a `b10x-harness workflow run` is governed without walking here | the loop that walks, and a hooks file naming the verb |
 | a **step map** — what a harness *does* in each state — as the fifth document kind, under `drivers/` | a step map for your repository, or the shipped `drivers/development/default.yaml` |
 | a run directory under `.engineering/runs/<run-id>/`, and a store lock with a liveness probe | nothing; `resume` re-takes it |
 | three step kinds: `llm` (a model session), `command` (a program) and `operator` (a person) | which of them each state needs |
@@ -64,10 +64,10 @@ same job in its sibling `checks.yaml`:
 
 | kind | map | the step runs | what the verb writes |
 |---|---|---|---|
-| `property_test_result` | `default` | `protocol property evidence` | the property, the case count, and the seed — or its honest absence, for an exhaustive checker |
-| `verification` | `default` | `protocol validate --evidence` | claim `document-tree-valid`, and every problem the walk found |
-| `specification` | `default` | `protocol specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
-| `trace_conformance` | `checks` | `protocol trace evidence` | what the checker measured against a trace specification |
+| `property_test_result` | `default` | `aep property evidence` | the property, the case count, and the seed — or its honest absence, for an exhaustive checker |
+| `verification` | `default` | `aep validate --evidence` | claim `document-tree-valid`, and every problem the walk found |
+| `specification` | `default` | `aep specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
+| `trace_conformance` | `checks` | `aep trace evidence` | what the checker measured against a trace specification |
 
 The last of those makes a decision the format does not: **a requirement is a list item under a
 `Requirements` or `Acceptance` heading of the specification artifact, and it is satisfied when the
@@ -76,7 +76,7 @@ reported unmet rather than assumed met, and a ticked checkbox is deliberately no
 party that writes the specification is the party being checked.
 
 **Which specification it decides is the guard's own question, answered by the guard's own rule.**
-`protocol specification evidence` selects an approved `specification` whose `specifies` edge lands
+`aep specification evidence` selects an approved `specification` whose `specifies` edge lands
 on the work the task declares — `spec-driven.before_implementation`'s
 `{kind: specification, status: approved, relation: {kind: specifies, target: task}}`, evaluated by
 `ArtifactRequirement::matches` over `Task::declared_work`, which is the same function and the same
@@ -87,7 +87,7 @@ in-force specification.
 **A driven step names the task rather than discovering one.** `drivers/development/default.yaml`
 writes `--task {task}`, which the driver expands to the absolute path of the task document *this
 run* was started from. Discovery is the fallback and it answers a different question — *which task
-does this project name?* — so a run driven with `protocol drive run --task <a path that is not the
+does this project name?* — so a run driven with `aep drive run --task <a path that is not the
 project's>` used to decide the project's story's specification while the engine's cursor said
 something else. The three placeholders a map may write — `{run_directory}`, `{task}`, `{transcript}`
 — are `CommandStep::PLACEHOLDERS` (`crates/aep-driver-spec/src/map.rs`), and a misspelling is
@@ -131,7 +131,7 @@ document a person reads. One rule stays in the driver because no scope grammar c
 edit whose text crosses a planning document's closing `---` is refused whatever the scope allows,
 which is a judgement about the edit's text and not about its path.
 
-`protocol workflow render --run <id>` draws where a run got to, what it produced and why it
+`aep workflow render --run <id>` draws where a run got to, what it produced and why it
 stopped, with the engine's own sentences on the arrows.
 
 ## The loop
@@ -385,7 +385,7 @@ this is a first attempt or a retry. Guessing would defeat the point of both.
 **A driver says who its steps are.** `StepContext::execution` is the run's identity, and
 `aep_driver::attest::session_actor` spells it as the `agent:<execution id>` a step declares in
 `AEP_ACTOR` — the same value `attest::admit` refuses an approval from, so a run cannot approve its
-own work under the name it writes to the planning store under. `protocol drive` sets it on every
+own work under the name it writes to the planning store under. `aep drive` sets it on every
 process it starts; a session your harness starts through a launcher that constructs its child's
 environment will not inherit it, and the store then records the write as whoever launched the run.
 

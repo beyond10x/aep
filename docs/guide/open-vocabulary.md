@@ -80,7 +80,7 @@ happens when a table like this one is acted on. Its two rows read:
   What the closure bought was *a status name means the same rung to every tool*. That guarantee is
   still bought, by the **ladder** instead of by the type: a status you name is accepted only if the
   lifecycle document for that kind declares it, so the vocabulary is open to authors and still
-  closed to typos. `protocol artifact move --to correction-owed` refuses with *"its lifecycle
+  closed to typos. `aep artifact move --to correction-owed` refuses with *"its lifecycle
   declares draft, proposed, rejected, active, implemented, archived"* until the rung is in the
   document, and works the moment it is.
 

@@ -97,10 +97,10 @@ A **step map** does: for each state, a list of steps, each of one of three kinds
 Two ship, one per shape of work this repository has. `drivers/development/default.yaml`
 (`development/default`) verifies with `cargo`; `drivers/development/checks.yaml`
 (`development/checks`) names no compiler and runs the checks a story carries, as one command. Both
-are written against `adp/default/1`, so a `protocol drive run` with no `--map` is refused, naming
+are written against `adp/default/1`, so a `aep drive run` with no `--map` is refused, naming
 both rather than picking one.
 
-`protocol drive run` walks the map, makes the engine's calls in order, and records what it did. It
+`aep drive run` walks the map, makes the engine's calls in order, and records what it did. It
 evaluates **no gate itself**. That restraint is the design: a driver that could decide whether a
 transition is permitted would be a second implementation of the protocol with none of the
 conformance suites behind it, and the first time the two disagreed, the one nobody tested would win.
@@ -111,7 +111,7 @@ non-zero — which is what happened the first time it was pointed at a real stor
 A driven run needs a shell to reach the planning store, which is why `development.driven` exists: it
 extends `development.standard` with exactly one capability, `command.execute`, and says in the
 document why. The narrowing back down is a `PreToolUse` hook that refuses any shell call that is not
-one simple `protocol artifact` or `protocol trace` invocation. The profile states plainly that this
+one simple `aep artifact` or `aep trace` invocation. The profile states plainly that this
 is pattern-based and best-effort rather than claiming the capability is fully enforced.
 
 ## Everything is recorded, including refusals
