@@ -26,4 +26,4 @@ surfaces:
       - {label: Release notes RSS, url: https://beyond10x.github.io/engineering-protocols/releases/rss.xml, kind: feed}
     accent: "#a5d6ff"
     mark: website/static/img/mark.svg
-    shell: {integration: docusaurus, revision: 6323bfdaf73609247e8dabcc9df410ab280a1960}
+    shell: {integration: docusaurus, revision: 0cbd1f1b6951fec95767332e3a1792f838feb62d}
