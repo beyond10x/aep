@@ -344,7 +344,7 @@ gate has no step that exercises a refusal end to end.
   an empty input set, and `documents.rs` in particular loops over the shipped profiles without asserting
   that it found any.
 
-## Decisions for Timo
+## Decisions for operator
 
 **D1 — Fix F1 and F2 now, or schedule them?**
 Options: (a) fix both in this wave; (b) fix F1 now, F2 next wave; (c) schedule both.

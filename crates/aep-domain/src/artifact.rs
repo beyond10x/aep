@@ -634,10 +634,10 @@ impl ArtifactKind {
     /// binding must not apply to them, and the place that decides which kinds it *does* apply to
     /// is here — one list, greppable, extended deliberately rather than by accident.
     ///
-    /// Today that is exactly [`ArtifactKind::ExecutableSystemSpecification`]: a compiled model
-    /// whose resolved content is hashed by `ess-compiler` and stamped into every artifact
-    /// `ess-gen` writes. When a second compiled kind arrives it is added here, and every rule that
-    /// reads this predicate picks it up.
+    /// Today that is exactly [`ArtifactKind::ExecutableSystemSpecification`]: ESS reports the
+    /// content digest of its resolved model as part of standalone conformance. When a second
+    /// compiled kind arrives it is added here, and every rule that reads this predicate picks it
+    /// up.
     pub fn carries_model_digest(&self) -> bool {
         matches!(self, Self::ExecutableSystemSpecification)
     }
@@ -1510,21 +1510,17 @@ pub struct Artifact {
     /// manifest refuses it on any other kind, because a digest nothing will ever compare against
     /// reads as a guarantee and is not one.
     ///
-    /// **Written from outside this crate.** `ess-compiler` computes it and `ess-gen` stamps it into
-    /// every generated file's provenance header as `model digest <hex>`; whoever writes the
-    /// manifest copies it across, the same copy a person makes recording a commit SHA in
-    /// [`ArtifactProvenance::revision`].
+    /// **Written from outside this crate.** The standalone system-modeling toolchain computes it
+    /// and publishes it in its own report; the AEP-side adapter copies it across, the same way a
+    /// person records a commit SHA in [`ArtifactProvenance::revision`].
     ///
     /// **Absent means unverifiable, not fine.** Conformance evidence about a specification that
     /// records no digest does not satisfy a requirement — see
     /// [`ArtifactGraph::governing_models`].
     //
-    // Why the value cannot simply be computed here: `aep-domain` does not depend on the ESS crates
-    // and must not. The protocol is the substrate the specification layer is built on, so the
-    // dependency runs ESS → AEP; reversing it would make the protocol unusable without a
-    // specification compiler, and every consumer of AEP would build one. Hence a field that is
-    // populated rather than derived, said out loud here rather than left for the next reader to
-    // discover by trying it.
+    // Why the value cannot simply be computed here: `aep-domain` does not depend on ESS modeling
+    // crates and must not. The repositories are independently usable; only the optional adapter
+    // understands both report vocabularies. Hence this field is populated rather than derived.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_digest: Option<SpecDigest>,
 }

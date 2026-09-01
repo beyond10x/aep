@@ -1,6 +1,6 @@
 # Declared scope, prompt cache, and what arm `native` actually proves — 2026-08-24
 
-> **Repositories touched:** `engineering-protocols`, `harness`, `metaharness`.
+> **Repositories touched:** `aep`, `harness`, `metaharness`.
 > **Status:** four live runs of `eval-case/development-default` on arm `native`, all against
 > `https://chatgpt.com/backend-api/codex`, model `gpt-5.6-sol`, rate card of 2026-08-24.
 > **Relationship to design:** this is the measurement § 9 of

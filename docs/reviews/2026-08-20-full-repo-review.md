@@ -5,7 +5,7 @@ one real defect in committed wave-1 code (over-eager cycle refusal), surfaced by
 wave-2 tests; the in-flight wave-2 code itself is high quality.**
 
 Reviewed: commit `95e210f` plus the uncommitted working tree, snapshotted 2026-08-20 ~04:00–04:40
-CEST. **Caveat:** another interactive session (`engineering-protocols-9d`) was actively editing the
+CEST. **Caveat:** another interactive session (`aep-9d`) was actively editing the
 wave-2 files during this review — `resolve.rs` changed mid-review (mtime 04:37:51 vs. review read
 ~04:00). Working-tree findings below are a snapshot of work in flight, not a settled state. Nothing
 in the working tree was modified by this review.
@@ -139,8 +139,8 @@ this becomes a tracked score.
 
 | # | Action | Owner | Default if unanswered |
 |---|---|---|---|
-| 1 | Restore green `main`: land wave 2 gated, or push a lone `cargo xtask schema` commit now | in-flight session / Timo | rides along with wave 2 |
-| 2 | Decide F2's rule owner (delete `check_cycles` vs. move inhabitability into `ess-domain`) | Timo | option 1 — compiler owns it, per its own §20 register |
+| 1 | Restore green `main`: land wave 2 gated, or push a lone `cargo xtask schema` commit now | in-flight session / operator | rides along with wave 2 |
+| 2 | Decide F2's rule owner (delete `check_cycles` vs. move inhabitability into `ess-domain`) | operator | option 1 — compiler owns it, per its own §20 register |
 | 3 | Fix the wave-1 union false positive and add a `### Fixed` CHANGELOG line | with F2 | done as part of F2 |
 | 4 | Before pushing: `task check` locally — twice-red `main` is the only process failure this review found | everyone | — |
 

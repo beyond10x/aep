@@ -109,7 +109,7 @@ You can point at somebody else's tree instead of owning one. A project does that
 ```yaml
 protocol: adp/1
 profile: acme.service
-protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
+protocols: git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567
 schemas: schemas
 ```
 
@@ -117,10 +117,10 @@ Write it with `protocol reverse init` rather than by hand:
 
 ```console
 $ $B reverse init \
-    --protocols git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567 \
+    --protocols git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567 \
     --profile acme.service
 .engineering/project.yaml written
-  protocol source resolves to /home/you/.cache/engineering-protocols/0123456789ab…
+  protocol source resolves to /home/you/.cache/aep/0123456789ab…
   profile acme.service
 ```
 
@@ -131,20 +131,20 @@ worse than one that was never adopted, because it looks adopted. `--no-verify` w
 without the resolution step, for an offline machine or a source that is not reachable yet.
 
 The suffix is the full commit id, not a branch or tag. On first use the engine fetches that immutable
-revision into `AEP_CACHE_DIR`, then `XDG_CACHE_HOME/engineering-protocols`, or the conventional user
+revision into `AEP_CACHE_DIR`, then `XDG_CACHE_HOME/aep`, or the conventional user
 cache. Later commands verify and read the cached checkout, so the project file contains no
 machine-local or cross-repository path and an already materialized source works offline. A local path
 is still valid when a repository owns its tree or a fixture supplies one; relative paths are resolved
 from `.engineering/`.
 
 **An absolute path is refused, and this is the one rule about the project file worth knowing before
-you write it.** `protocols: /opt/engineering-protocols` names a place on one machine. The file is
+you write it.** `protocols: /opt/aep` names a place on one machine. The file is
 committed, so every other machine that clones the repository reads a path that is not there, and CI
 reads one that has never been there:
 
 ```console
 $ $B resolve
-error: [type_mismatch] project.protocols: `/opt/engineering-protocols` is an absolute path (it is
+error: [type_mismatch] project.protocols: `/opt/aep` is an absolute path (it is
   rooted at the filesystem root) (hint: use a path relative to the .engineering directory, or a
   pinned git+ssh://, git+https://, or git+file:// locator …)
 ```

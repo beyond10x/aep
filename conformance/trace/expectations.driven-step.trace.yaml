@@ -67,7 +67,7 @@ expectations:
     # and a session that has the skill has the `hooks/hooks.json` beside it.
     expect:
       env.skill_available:
-        skill: engineering-protocols:planning
+        skill: aep-planning:planning
 
   # --- what the model did with it -----------------------------------------------------------
 
@@ -130,7 +130,7 @@ expectations:
     # is not a defect in the enforcement layer this eval is an acceptance for.
     expect:
       skill.completed:
-        skill: engineering-protocols:planning
+        skill: aep-planning:planning
         count: {at_least: 1}
 
   - id: turns-within-reason

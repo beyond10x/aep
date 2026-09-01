@@ -1,6 +1,6 @@
 # Harness — a planning store, and a reference driver — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status:** **Phase 1 accepted for implementation** by
 > [`docs/plan/harness-wave-1-planning-plugin.md`](../plan/harness-wave-1-planning-plugin.md), 2026-08-21.
 > **Phase 2 is decided and designed, and is not accepted for build** by that page or by any other:
@@ -210,7 +210,7 @@ No `created`, no `updated`, no `moved_at`. Three reasons, and the third is the o
   because it reads as an observation.
 * **Determinism.** Every committed output in this repository is byte-stable across runs, and the CLI
   already refuses to put a wall clock into anything diffable:
-  `crates/protocol-cli/src/main.rs:51` fixes `SEED_AT: Timestamp = Timestamp::EPOCH` with the reason
+  `crates/protocol-cli/src/app.rs:51` fixes `SEED_AT: Timestamp = Timestamp::EPOCH` with the reason
   written beside it — *"a wall clock here would make every `--format json` diff noise"*. A planning
   store is diffed on every pull request.
 

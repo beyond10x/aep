@@ -1,6 +1,6 @@
 # Vision review — design, concept and ambition — 2026-08-20
 
-Reviewing the **overall design, concept and vision** of `engineering-protocols` at `3647f80`
+Reviewing the **overall design, concept and vision** of `aep` at `3647f80`
 (`main`, CI green). Not the code's correctness: two other reviewers own that. The question here is
 whether this thing is worth building as designed, whether its parts cohere, and whether its own
 stated ambitions are in tension with each other.
@@ -767,7 +767,7 @@ several I would copy.
 
 ---
 
-## Decisions for Timo
+## Decisions for operator
 
 | # | Decision | Options | Cost of each | Default if nobody answers |
 |---|---|---|---|---|

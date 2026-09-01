@@ -29,9 +29,9 @@ Crossing #4 is the second row, and it is the one this repository reads:
 
 ```json
 "hermetic":{"decisions":"observe",
-            "installed_plugins":[{"name":"engineering-protocols",
-                                  "source":"engineering-protocols@integrations/claude-code",
-                                  "installed_at":"/plugins/engineering-protocols",
+            "installed_plugins":[{"name":"aep",
+                                  "source":"aep@integrations/claude-code",
+                                  "installed_at":"/plugins/aep",
                                   "loaded_by":"metaharness",
                                   "digest":"7258e0…"}]}
 ```

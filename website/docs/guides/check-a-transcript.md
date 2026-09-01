@@ -137,14 +137,14 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```text
 planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
   The planning plugin behaves as its skill says it does
-  ok        our-plugin-loaded                              engineering-protocols 0.1.0 from engineering-protocols@inline is loaded at event 0
-  ok        nothing-else-loaded                            exactly engineering-protocols loaded at event 0
+  ok        our-plugin-loaded                              aep 0.1.0 from aep@inline is loaded at event 0
+  ok        nothing-else-loaded                            exactly aep loaded at event 0
   ok        billed-to-the-session                          api_key_source = none at event 0
   ok        the-run-did-not-ask                            permission_mode = dontAsk at event 0
   ok        the-operators-output-style-did-not-leak        output_style = default at event 0
-  ok        the-skill-was-offered                          skill engineering-protocols:planning is among 17 offered at event 0
-  ok        the-decomposer-loaded                          agent engineering-protocols:decomposer is among 7 offered at event 0
-  ok        skill-completed                                engineering-protocols:planning completed 1 time(s) with success=true, at least 1 at events 5, 6
+  ok        the-skill-was-offered                          skill aep-planning:planning is among 17 offered at event 0
+  ok        the-decomposer-loaded                          agent aep-planning:decomposer is among 7 offered at event 0
+  ok        skill-completed                                aep-planning:planning completed 1 time(s) with success=true, at least 1 at events 5, 6
   ok        consulted-the-skill-before-touching-the-store  first Skill at 5, first Bash(command ~ "protocol artifact") at 10 at events 5, 10
   ok        created-through-the-cli                        Bash(command ~ "protocol artifact new") called 2 time(s), at least 1 at events 13, 15
 ```
@@ -296,7 +296,7 @@ format is published as `schemas/generated/trace-spec.schema.json`; the worked sp
 against two committed transcripts by the ordinary test suite. Design and acceptance:
 `docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
 The driver is `crates/aep-driver` behind `protocol drive`, its enforcement arm is the plugin's
-hooks (`integrations/claude-code/README.md` § *The hooks, and what changed about "no hooks"*), and
+hooks (`/path/to/agentplugins/plugins/aep-planning/README.md` § *The hooks, and what changed about "no hooks"*), and
 the governed-run record is `docs/plan/harness-wave-4-governed-dogfood.md`. For building a driver of
 your own against the same engine calls, see [Integrate an agent
 harness](./integrate-a-harness.md).

@@ -21,7 +21,7 @@ written. Four surfaces, no two on one file, merged onto one branch and closed by
 |---|---|
 | root filesystem 75 G free of 848 G, at 91 % | `df -h .` |
 | the operator's `target/` 30 G | `du -sh target` |
-| **14 G still standing from a wave that never cleaned up** | `~/.cache/claude-tmp/claude-1000/-home-timo-projects-engineering-protocols/ba00d8e0-…/scratchpad/eval/ws_eval`, last written 2026-08-24, under a repo path this tree no longer occupies. Left standing — it is the operator's to delete, and it is the evidence behind `story:wave-skill-defects-found-by-running-it` § 8 |
+| **14 G still standing from a wave that never cleaned up** | `~/.cache/claude-tmp/claude-1000/-home-operator-projects-aep/ba00d8e0-…/scratchpad/eval/ws_eval`, last written 2026-08-24, under a repo path this tree no longer occupies. Left standing — it is the operator's to delete, and it is the evidence behind `story:wave-skill-defects-found-by-running-it` § 8 |
 | `git worktree list` — one entry, the main tree | no previous wave's trees are standing |
 | `sccache` at `/usr/bin/sccache`, wired at `~/.cargo/config.toml:60` | `RUSTC_WRAPPER` unset in the shell; the cargo config carries it |
 | a package-scoped build in a fresh worktree: **30 s wall, 1.6 G target** | measured 2026-08-30 for the previous wave, same tree, `a8b139b` — `cargo test -p protocol-cli --no-run` |

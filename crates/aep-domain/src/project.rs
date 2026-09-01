@@ -8,7 +8,7 @@
 //! version: aep.project/1
 //! protocol: adp/1
 //! profile: development.standard
-//! protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
+//! protocols: git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567
 //! artifacts: artifacts.yaml
 //! task: task.yaml
 //! schemas: schemas
@@ -792,11 +792,11 @@ profile: development.standard
         // reader rather than left to fail later as a missing directory, where the message names a
         // path nobody on that machine wrote.
         for spelling in [
-            "/srv/trees/engineering-protocols",
-            "~/trees/engineering-protocols",
+            "/srv/trees/aep",
+            "~/trees/aep",
             "~",
-            r"C:\trees\engineering-protocols",
-            r"D:/trees/engineering-protocols",
+            r"C:\trees\aep",
+            r"D:/trees/aep",
             r"\\fileserver\trees",
         ] {
             let error = ProtocolSource::parse(spelling)
@@ -830,7 +830,7 @@ profile: development.standard
         // everywhere the repository is reachable. Asserted because the check runs before the `git+`
         // branch is taken, and a careless tightening would break every file-backed fixture.
         let source = ProtocolSource::parse(
-            "git+file:///srv/mirror/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567",
+            "git+file:///srv/mirror/aep.git#0123456789abcdef0123456789abcdef01234567",
         )
         .expect("a pinned file-backed source is accepted");
         assert!(matches!(source, ProtocolSource::Git(_)));
@@ -872,7 +872,7 @@ artifacts: graph.yaml
 
     /// The tree may still live outside the project — by a relative path, or by a pinned locator.
     ///
-    /// This test asserted the opposite until 2026-08-25: `protocols: /opt/engineering-protocols`
+    /// This test asserted the opposite until 2026-08-25: `protocols: /opt/aep`
     /// validated, on the reading that where a tree sits is the adopter's business. It is, and that
     /// is not what the value decides. A project file is committed and read on every machine that
     /// checks the repository out, so an absolute path makes the file mean a different thing on each
@@ -885,20 +885,20 @@ artifacts: graph.yaml
             r"
 protocol: adp/1
 profile: development.standard
-protocols: ../../engineering-protocols
+protocols: ../../aep
 ",
         )
         .expect("a relative path out of the project is allowed");
         assert_eq!(
             by_relative_path.protocols,
-            ProtocolSource::Path(PathBuf::from("../../engineering-protocols"))
+            ProtocolSource::Path(PathBuf::from("../../aep"))
         );
 
         let by_pinned_locator = config(
             r"
 protocol: adp/1
 profile: development.standard
-protocols: git+https://example.com/engineering-protocols.git#0123456789abcdef0123456789abcdef01234567
+protocols: git+https://example.com/aep.git#0123456789abcdef0123456789abcdef01234567
 ",
         )
         .expect("a pinned locator is allowed");
@@ -911,7 +911,7 @@ protocols: git+https://example.com/engineering-protocols.git#0123456789abcdef012
             r"
 protocol: adp/1
 profile: development.standard
-protocols: /opt/engineering-protocols
+protocols: /opt/aep
 ",
         )
         .expect_err("an absolute path is refused");
@@ -923,7 +923,7 @@ protocols: /opt/engineering-protocols
         let revision = "0123456789abcdef0123456789abcdef01234567";
         let parsed = config(&format!(
             "protocol: adp/1\nprofile: development.standard\n\
-             protocols: git+ssh://git@github.com/beyond10x/engineering-protocols.git#{revision}\n"
+             protocols: git+ssh://git@github.com/beyond10x/aep.git#{revision}\n"
         ))
         .expect("the pinned repository source validates");
 
@@ -932,20 +932,17 @@ protocols: /opt/engineering-protocols
         };
         assert_eq!(
             source.repository(),
-            "git+ssh://git@github.com/beyond10x/engineering-protocols.git"
+            "git+ssh://git@github.com/beyond10x/aep.git"
         );
-        assert_eq!(
-            source.git_url(),
-            "ssh://git@github.com/beyond10x/engineering-protocols.git"
-        );
+        assert_eq!(source.git_url(), "ssh://git@github.com/beyond10x/aep.git");
         assert_eq!(source.revision(), revision);
     }
 
     #[test]
     fn a_git_protocol_source_without_an_immutable_revision_is_refused() {
         for protocols in [
-            "git+ssh://git@github.com/beyond10x/engineering-protocols.git",
-            "git+ssh://git@github.com/beyond10x/engineering-protocols.git#main",
+            "git+ssh://git@github.com/beyond10x/aep.git",
+            "git+ssh://git@github.com/beyond10x/aep.git#main",
         ] {
             let errors = config(&format!(
                 "protocol: adp/1\nprofile: development.standard\nprotocols: {protocols}\n"

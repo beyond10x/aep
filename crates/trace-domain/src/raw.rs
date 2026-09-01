@@ -2400,14 +2400,14 @@ expectations:
     statement: only our plugin was loaded
     expect:
       env.plugin_loaded:
-        plugin: engineering-protocols
+        plugin: aep
         version: "0.1.0"
-        source: engineering-protocols@inline
+        source: aep@inline
 
   - id: nothing-else-loaded
     expect:
       env.exclusive:
-        plugins: [engineering-protocols]
+        plugins: [aep]
 
   - id: billed-to-the-session
     expect:
@@ -2416,7 +2416,7 @@ expectations:
   - id: skill-completed
     expect:
       skill.completed:
-        skill: "engineering-protocols:planning"
+        skill: "aep-planning:planning"
         count: {at_least: 1}
 
   - id: created-through-the-cli
@@ -2475,15 +2475,15 @@ expectations:
   "expectations": [
     { "id": "our-plugin-loaded",
       "statement": "only our plugin was loaded",
-      "expect": { "env.plugin_loaded": { "plugin": "engineering-protocols",
+      "expect": { "env.plugin_loaded": { "plugin": "aep",
                                          "version": "0.1.0",
-                                         "source": "engineering-protocols@inline" } } },
+                                         "source": "aep@inline" } } },
     { "id": "nothing-else-loaded",
-      "expect": { "env.exclusive": { "plugins": ["engineering-protocols"] } } },
+      "expect": { "env.exclusive": { "plugins": ["aep"] } } },
     { "id": "billed-to-the-session",
       "expect": { "env.api_key_source": { "equals": "none" } } },
     { "id": "skill-completed",
-      "expect": { "skill.completed": { "skill": "engineering-protocols:planning",
+      "expect": { "skill.completed": { "skill": "aep-planning:planning",
                                        "count": { "at_least": 1 } } } },
     { "id": "created-through-the-cli",
       "expect": { "tool.called": { "tool": "Bash",
@@ -2544,10 +2544,7 @@ expectations:
             "{env.agent_available: {agent: reviewer}}",
         ),
         ("env.api_key_source", "{env.api_key_source: {equals: none}}"),
-        (
-            "env.exclusive",
-            "{env.exclusive: {plugins: [engineering-protocols]}}",
-        ),
+        ("env.exclusive", "{env.exclusive: {plugins: [aep]}}"),
         (
             "env.mcp_servers",
             "{env.mcp_servers: {count: {at_most: 0}}}",
@@ -2558,10 +2555,7 @@ expectations:
             "env.permission_mode",
             "{env.permission_mode: {equals: default}}",
         ),
-        (
-            "env.plugin_loaded",
-            "{env.plugin_loaded: {plugin: engineering-protocols}}",
-        ),
+        ("env.plugin_loaded", "{env.plugin_loaded: {plugin: aep}}"),
         (
             "env.skill_available",
             "{env.skill_available: {skill: planning}}",

@@ -517,10 +517,10 @@ fn cache_root() -> Result<PathBuf, String> {
         return Ok(path);
     }
     if let Some(path) = nonempty_environment_path("XDG_CACHE_HOME") {
-        return Ok(path.join("engineering-protocols"));
+        return Ok(path.join("aep"));
     }
     if let Some(path) = nonempty_environment_path("HOME") {
-        return Ok(path.join(".cache/engineering-protocols"));
+        return Ok(path.join(".cache/aep"));
     }
     Err(format!(
         "a Git protocol source needs a cache; set `{CACHE_DIRECTORY_ENV}` or `XDG_CACHE_HOME`"

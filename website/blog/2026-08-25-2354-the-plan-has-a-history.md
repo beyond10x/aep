@@ -16,10 +16,10 @@ form you had to reconstruct. This release makes it a question you can ask.
 
 ```console
 $ protocol artifact history outbound-claim:q3-uptime
-2026-08-26T00:08:16Z  timo  created as draft (revision 1)
-2026-08-26T00:08:20Z  timo  approval recorded from legal review (https://example.invalid/approvals/814) (revision 1)
-2026-08-26T00:08:20Z  timo  moved draft -> cleared (revision 2)
-2026-08-26T00:08:20Z  timo  moved cleared -> sent (revision 3)
+2026-08-26T00:08:16Z  operator  created as draft (revision 1)
+2026-08-26T00:08:20Z  operator  approval recorded from legal review (https://example.invalid/approvals/814) (revision 1)
+2026-08-26T00:08:20Z  operator  moved draft -> cleared (revision 2)
+2026-08-26T00:08:20Z  operator  moved cleared -> sent (revision 3)
 ```
 
 {/* truncate */}

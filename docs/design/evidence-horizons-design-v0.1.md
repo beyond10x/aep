@@ -1,6 +1,6 @@
 # Evidence horizons — a green result from three weeks ago is not a fact — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status:** **proposed**, and **corrected by adversarial review** — see § 12.
 > **19 CONFIRMED · 15 NEEDS-CHANGE · 3 INFEASIBLE**, every one applied below and cited at the
 > place it changed. Not accepted for build by any plan page.

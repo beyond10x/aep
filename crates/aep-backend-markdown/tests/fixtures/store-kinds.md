@@ -8,7 +8,7 @@ have one, and a kind that quietly leaves a store must be a decision, not a silen
 
 | store | commit | kinds in use |
 |---|---|---|
-| `engineering-protocols` (this repository) | working tree, 2026-08-25 | `story` 62, `task` 25, `epic` 8, `specification` 3, `initiative` 1 |
+| `aep` (this repository) | working tree, 2026-08-25 | `story` 62, `task` 25, `epic` 8, `specification` 3, `initiative` 1 |
 | `agentic-principles` | `8c1460b`, 2026-08-25 | `story` 5, `specification` 1, `initiative` 1, `epic` 1, `architecture-decision-record` 1 |
 
 `agentic-principles` ships no `artifacts/lifecycles/` of its own: it is governed by the nine

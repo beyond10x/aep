@@ -9,7 +9,7 @@
 //! states, transitions, rules — and answers `definition + instance + operation → Decision`. Once
 //! the ladder is data, a rung is a line in a YAML file.
 //!
-//! Phase 2 of `entity-runtime/docs/design/engineering-protocols-adoption-v0.1.md`, and it
+//! Phase 2 of `entity-runtime/docs/design/aep-adoption-v0.1.md`, and it
 //! deliberately changes **no verdict**: [`permits_transition`] answers exactly what
 //! [`ArtifactLifecycle::permits_transition`] answers, for every kind in the store and every pair
 //! of statuses. `tests/kernel_equivalence.rs` is that claim, over this repository's own planning

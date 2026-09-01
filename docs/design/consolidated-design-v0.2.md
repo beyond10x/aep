@@ -1,6 +1,6 @@
 # Engineering Protocols — Consolidated Design Specification v0.2
 
-> **Repository:** `engineering-protocols`  
+> **Repository:** `aep`
 > **Status:** First consolidated design draft  
 > **Relationship to earlier drafts:** This document consolidates and supersedes the *Design Draft v0.1*, *Artifact Model Extension v0.1*, and *Entity Interaction Contract v0.1* as a single standalone design. It incorporates all of their concepts and adds complete audit/causality semantics plus a backend-independent conformance test model.  
 > **Primary implementation language:** Rust  
@@ -10,7 +10,7 @@
 
 # 1. Summary
 
-`engineering-protocols` defines a machine-executable methodology and interaction contract for agentic engineering work.
+`aep` defines a machine-executable methodology and interaction contract for agentic engineering work.
 
 The project is intended to move engineering rules such as:
 
@@ -129,7 +129,7 @@ They leave critical questions unresolved:
 - Which later commands did it trigger?
 - How can a new backend implementation prove that it obeys the same semantics as another implementation?
 
-`engineering-protocols` attempts to answer these questions in a portable way.
+`aep` attempts to answer these questions in a portable way.
 
 The intended result is not another agent framework.
 
@@ -142,7 +142,7 @@ It is a **domain model, protocol model, interaction contract, and conformance sp
 The canonical repository name is:
 
 ```text
-github.com/<org>/engineering-protocols
+github.com/<org>/aep
 ```
 
 The repository contains the semantics of engineering work, not project-specific engineering artifacts.
@@ -990,7 +990,7 @@ ep://acme/payments/story/AUTH-142
 or:
 
 ```text
-ep://acme/engineering-protocols/principle/test-driven
+ep://acme/aep/principle/test-driven
 ```
 
 The locator is not a physical storage URL.
@@ -3031,7 +3031,7 @@ Profiles should pin compatible versions.
 A consolidated initial repository layout:
 
 ```text
-engineering-protocols/
+aep/
 ├── Cargo.toml
 │
 ├── crates/
@@ -3290,7 +3290,7 @@ Design       → Git
 ADR          → Git
 Review       → GitHub
 Incident     → incident system
-Protocol     → engineering-protocols repository
+Protocol     → aep repository
 ```
 
 while presenting one logical command/query surface.
@@ -3299,7 +3299,7 @@ while presenting one logical command/query surface.
 
 # 75. Backend Conformance
 
-A major goal of `engineering-protocols` is to make backend implementations independently verifiable.
+A major goal of `aep` is to make backend implementations independently verifiable.
 
 A backend should not be considered conformant because its author says:
 
@@ -3366,7 +3366,7 @@ The exact Rust testing API can be refined later.
 
 The important principle is:
 
-> **The test semantics are owned by `engineering-protocols`, not by the backend.**
+> **The test semantics are owned by `aep`, not by the backend.**
 
 ---
 
@@ -4233,7 +4233,7 @@ This supports one AEP model across development and operations.
 
 # 102. Non-Goals
 
-`engineering-protocols` should not initially become:
+`aep` should not initially become:
 
 - an LLM orchestration framework;
 - an agent implementation;
@@ -4530,7 +4530,7 @@ QueryService
 TypeRegistry
 ```
 
-run the standard tests from `engineering-protocols`, and demonstrate:
+run the standard tests from `aep`, and demonstrate:
 
 ```text
 AEP Core Backend Conformant / v1
@@ -4551,6 +4551,6 @@ a distributed service
 or a composite of all of them
 ```
 
-That is the target architecture of `engineering-protocols`:
+That is the target architecture of `aep`:
 
 > **A strongly typed, storage-independent, fully auditable and testable contract for machine-executable engineering methodology.**

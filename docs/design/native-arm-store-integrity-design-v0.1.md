@@ -1,6 +1,6 @@
 # Store integrity on the native arm — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status:** **proposed, not accepted, 2026-08-29.** Per [`AGENTS.md`](../../AGENTS.md) § *Which
 > documents are normative*, a proposal is not a work order. No plan page or store item proposed this
 > document before it existed; its acceptance surfaces would be
@@ -190,7 +190,7 @@ What the transcript holds, `…/transcripts/specify-0-1.jsonl`:
 | 186 | `file_write` `.engineering/planning/specification.md`, whole file, `revision: 99` | 187: `is_error: false` |
 
 The map that run was assembled from is the committed
-`metaharness/evals/engineering-protocols/driven.steps.yaml` plus two `harness: b10x` lines and
+`metaharness/evals/aep/driven.steps.yaml` plus two `harness: b10x` lines and
 nothing else — `diff` against `…/driven-eval.tYkXuE/driven.steps.b10x.yaml`, 2026-08-29, two lines.
 Neither file carries a `scope:` key. So no `--write-scope` reached the argv, the loop's `Scope` was
 empty, and `Scope::refusal` returned `None` for a write into the store. **The peer's "scoped to the
@@ -228,7 +228,7 @@ nobody had scoped, and the breakage was noticed for an unrelated reason.**
 
 ## 5. How the eval reads the two arms today, and what it prints that it should not
 
-`metaharness/evals/engineering-protocols/run-driven.sh` runs both arms and asks the same questions of
+`metaharness/evals/aep/run-driven.sh` runs both arms and asks the same questions of
 each. Three of its rows do not mean on this arm what they mean on the vendor arm.
 
 1. **`[b10x] store integrity denied the hand-edited frontmatter` is a structural zero.**
@@ -265,12 +265,12 @@ never *enforced*, unless something on the arm was in a position to refuse.
 
 | what changes | where |
 |---|---|
-| the three rows in § 5 stop claiming a measurement they cannot make | `metaharness/evals/engineering-protocols/run-driven.sh:335-341`, `:359-360` |
-| the vendor-named denial rows are marked not-applicable on this arm rather than read as `unk` | `metaharness/evals/engineering-protocols/expectations.denial-step.trace.yaml` |
+| the three rows in § 5 stop claiming a measurement they cannot make | `metaharness/evals/aep/run-driven.sh:335-341`, `:359-360` |
+| the vendor-named denial rows are marked not-applicable on this arm rather than read as `unk` | `metaharness/evals/aep/expectations.denial-step.trace.yaml` |
 | the arm's own word carries the distinction where a table is printed | `crates/protocol-cli/src/eval.rs:99-114`, and `Arm::ALL` at `:138-139` |
 
 **Cost:** an afternoon in `metaharness`, nothing in `harness` or `substrate`, one doc-comment and one
-array in `engineering-protocols`. **What it does not do:** make the arm enforce anything.
+array in `aep`. **What it does not do:** make the arm enforce anything.
 
 ### O2 — enforce by construction, through the write scope (the next milestone)
 
@@ -292,7 +292,7 @@ scope:
 
 | repo | what it has to do |
 |---|---|
-| `engineering-protocols` | **nothing.** `map.rs` validates it, `drive.rs:3631-3638` renders it |
+| `aep` | **nothing.** `map.rs` validates it, `drive.rs:3631-3638` renders it |
 | `metaharness` | add the key to the eval map; it already forwards the flag (`launch.rs:517-518`) |
 | `harness` / `substrate` | **nothing.** `scope.rs:146-149` and `catalogue.rs:307-310` already do it |
 
@@ -345,7 +345,7 @@ metaharness decision and this note does not make it.
 
 > **Provenance.** Everything in this section that is not on harness `main` (85b3a2a) is
 > **uncommitted work in a peer session's working tree, read read-only on 2026-08-29**: ep
-> `~/beyond10x/engineering-protocols` `git diff crates/protocol-cli/src/drive.rs` (+147), and
+> `~/beyond10x/aep` `git diff crates/protocol-cli/src/drive.rs` (+147), and
 > metaharness `~/beyond10x/metaharness` `git diff` (`metaharness-b10x/src/launch.rs`,
 > `metaharness-protocol/src/spec.rs`, `metaharness/src/builder.rs`). It can change or be abandoned.
 > Claims about the **record** are marked *verified* against committed code or *inferred*.
@@ -444,7 +444,7 @@ is somebody else's uncommitted work in progress that this note reports rather th
    *Decided 2026-08-29: yes — the eval map declares `scope:` with `.engineering/planning/**` =
    `denied` and a `**` catch-all; the plan page carries the owed row
    (`docs/plan/eval-program-three-arms.md`); the map change is in metaharness
-   `evals/engineering-protocols/driven.steps.yaml`.*
+   `evals/aep/driven.steps.yaml`.*
 2. `denied` versus `partial-only` for arms other than the driven one. § 6 argues `denied` for this
    eval; it says nothing about `eval-case/development-default`.
 3. Anything about writer-side identity or D-3 (see O3).

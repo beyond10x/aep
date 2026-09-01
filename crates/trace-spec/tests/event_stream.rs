@@ -235,7 +235,7 @@ fn decide(ir: &TraceIr, id: &str, expect: &str) -> Verdict {
 const A9_SATISFIED: [(&str, &str); 5] = [
     (
         "the-skill-ran-to-completion",
-        "skill.completed: {skill: engineering-protocols:planning, count: {at_least: 1}}",
+        "skill.completed: {skill: aep-planning:planning, count: {at_least: 1}}",
     ),
     (
         "billed-thinking",
@@ -297,14 +297,14 @@ fn a_skill_the_vendor_recorded_as_unsuccessful_is_a_gap_and_not_a_completion() {
     // whole reason the kind is the strongest claim in the eval is that this case is distinguishable
     // from the other two.
     let failed = read_event_stream_str(&[
-        r#"{"format":"metaharness.event/1","seq":1,"run":"T-a9/1","event":"tool.requested","call_id":"c-1","name":"Skill","input":{"skill":"engineering-protocols:planning"},"decision_required":true,"seam":"control_request"}"#,
-        r#"{"format":"metaharness.event/1","seq":2,"run":"T-a9/1","event":"tool.result","call_id":"c-1","is_error":false,"content":"the skill did not load","bytes":22,"tool_use_result":{"commandName":"engineering-protocols:planning","success":false}}"#,
+        r#"{"format":"metaharness.event/1","seq":1,"run":"T-a9/1","event":"tool.requested","call_id":"c-1","name":"Skill","input":{"skill":"aep-planning:planning"},"decision_required":true,"seam":"control_request"}"#,
+        r#"{"format":"metaharness.event/1","seq":2,"run":"T-a9/1","event":"tool.result","call_id":"c-1","is_error":false,"content":"the skill did not load","bytes":22,"tool_use_result":{"commandName":"aep-planning:planning","success":false}}"#,
         r#"{"format":"metaharness.event/1","seq":3,"run":"T-a9/1","event":"session.ended","is_error":false}"#,
     ]
     .join("\n"))
     .expect("a readable event stream");
 
-    let row = "skill.completed: {skill: engineering-protocols:planning, count: {at_least: 1}}";
+    let row = "skill.completed: {skill: aep-planning:planning, count: {at_least: 1}}";
     assert_eq!(
         decide(&failed, "the-skill-ran-to-completion", row),
         Verdict::Gap,
@@ -374,7 +374,7 @@ fn an_unknown_from_a_null_names_the_field_rather_than_the_conclusion() {
     let report = check(
         &one_row(
             "the-skill-ran-to-completion",
-            "skill.completed: {skill: engineering-protocols:planning, count: {at_least: 1}}",
+            "skill.completed: {skill: aep-planning:planning, count: {at_least: 1}}",
         ),
         &ir,
         &[],

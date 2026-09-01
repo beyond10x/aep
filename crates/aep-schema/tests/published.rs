@@ -58,46 +58,6 @@ fn accepts(validator: &Validator, relative: &str) {
     );
 }
 
-/// The specification directories every file of which has to validate.
-///
-/// Both, because both are inputs a person edits with this schema loaded: `examples/billing/` is the
-/// normative example the guide points at, and `examples/oracle-fixture/` is the corner-case fixture
-/// wave 4 reads. A schema that accepts one and refuses the other is a schema for one of them.
-const SPECIFICATIONS: &[&str] = &["examples/billing", "examples/oracle-fixture"];
-
-#[test]
-fn the_specification_schema_accepts_every_file_of_every_example() {
-    // Discovered, not listed. This test used to name three files of a five-file example, so
-    // `components.yaml` — the only one carrying a component or a binding, and the only one the
-    // schema rejected — was outside the assertion for as long as it existed. A file added to
-    // either example is compiled by the CLI, and it has to be checked here for the same reason:
-    // `crates/ess-compiler/tests/billing.rs` discovers its inputs on exactly this argument.
-    let validator = validator("ess.schema.json");
-    for specification in SPECIFICATIONS {
-        for file in documents_under(specification) {
-            accepts(&validator, &file);
-        }
-    }
-}
-
-#[test]
-fn the_specification_schema_refuses_a_misspelt_key() {
-    // `deny_unknown_fields` is what makes the schema worth loading into an editor: a typo becomes a
-    // red squiggle rather than a field silently ignored.
-    let validator = validator("ess.schema.json");
-    let mut instance = document("examples/billing/domains/invoice.yaml");
-    let object = instance.as_object_mut().expect("a mapping");
-    let entities = object
-        .remove("entities")
-        .expect("the example declares entities");
-    object.insert("entitites".to_owned(), entities);
-
-    assert!(
-        validator.iter_errors(&instance).next().is_some(),
-        "a misspelt top-level key validated clean"
-    );
-}
-
 /// Every `.yaml` under a directory, recursively, relative to the repository root.
 fn documents_under(directory: &str) -> Vec<String> {
     let base = root().join(directory);
@@ -333,8 +293,6 @@ fn the_alias_scan_finds_the_attributes_it_is_supposed_to_find() {
     // attribute can hold — a struct field and an enum variant.
     let declared = declared_aliases();
     for (type_name, alias) in [
-        ("RawComponentSpec", "component"),
-        ("RawBindingSpec", "id"),
         ("RawTask", "type"),
         ("RawTask", "principles"),
         ("CapabilityPolicy", "require_approval"),
@@ -350,8 +308,8 @@ fn the_alias_scan_finds_the_attributes_it_is_supposed_to_find() {
         );
     }
     assert!(
-        declared.len() >= 20,
-        "the source scan found only {} aliases; it used to find twenty-one",
+        declared.len() >= 18,
+        "the source scan found only {} aliases; the AEP workspace has at least eighteen",
         declared.len()
     );
 }
@@ -372,8 +330,8 @@ fn no_type_carries_an_alias_no_published_schema_would_ever_be_asked_about() {
 
 #[test]
 fn every_published_schema_accepts_every_spelling_its_parser_does() {
-    // The guard. `#[serde(alias = "component")]` on `RawComponentSpec` made the parser accept a
-    // spelling the schema refused, and the only thing relating the two was that somebody
+    // The guard. `#[serde(alias = "type")]` on `RawTask` makes the parser accept a spelling the
+    // schema would otherwise refuse, and the only thing relating the two was that somebody
     // remembered. This relates them mechanically: the attribute is read out of the source, and the
     // schema that carries its type has to publish it.
     let declared = declared_aliases();
@@ -422,8 +380,8 @@ fn no_published_alias_is_a_spelling_the_parsers_refuse() {
 
 #[test]
 fn an_aliased_field_is_never_left_required_under_its_canonical_spelling() {
-    // Publishing the second spelling is not enough on its own: while `name` stays in `required`, a
-    // document writing `component:` still fails, and one writing both still passes. The `oneOf`
+    // Publishing the second spelling is not enough on its own: while `kind` stays in `required`, a
+    // document writing `type:` still fails, and one writing both still passes. The `oneOf`
     // that replaces the entry is what makes exactly one of them the rule.
     for entry in aep_schema::WIRE_ALIASES {
         for (filename, schema) in published() {
@@ -442,77 +400,4 @@ fn an_aliased_field_is_never_left_required_under_its_canonical_spelling() {
             );
         }
     }
-}
-
-/// A component, written with whichever spellings `keys` names.
-fn component(keys: &[&str]) -> Value {
-    let mut written = serde_json::Map::new();
-    for key in keys {
-        written.insert((*key).to_owned(), Value::from("invoice-service"));
-    }
-    serde_json::json!({ "components": [written] })
-}
-
-#[test]
-fn the_specification_schema_requires_exactly_one_spelling_of_a_components_name() {
-    // The state the rule is load-bearing in is the one an alias creates and an optional property
-    // does not: a document naming the component neither way. Both spellings made optional would
-    // accept it, and the parser refuses it with `missing field \`name\``.
-    let validator = validator("ess.schema.json");
-    for spelling in [&["name"][..], &["component"][..]] {
-        let instance = component(spelling);
-        let problems: Vec<String> = validator
-            .iter_errors(&instance)
-            .map(|error| error.to_string())
-            .collect();
-        assert!(
-            problems.is_empty(),
-            "the schema refuses `{}:`, which the parser reads: {}",
-            spelling[0],
-            problems.join("; ")
-        );
-    }
-    assert!(
-        !validator.is_valid(&component(&["name", "component"])),
-        "serde reads the two spellings into one field, so a document giving both is a duplicate key"
-    );
-    assert!(
-        !validator.is_valid(&component(&[])),
-        "a component that names itself neither way is refused by the parser and must be refused here"
-    );
-}
-
-/// A binding, written with whichever spelling of its name `key` names.
-fn binding(key: Option<&str>) -> Value {
-    let mut written = serde_json::json!({
-        "when": { "event": "billing.invoice.InvoiceCreated" },
-        "invoke": { "command": "billing.email.SendEmail" },
-        "delivery": "at_least_once",
-        "on_failure": "escalate",
-    });
-    if let Some(key) = key {
-        written[key] = Value::from("notify-on-invoice-created");
-    }
-    serde_json::json!({ "bindings": [written] })
-}
-
-#[test]
-fn the_specification_schema_requires_exactly_one_spelling_of_a_bindings_name() {
-    let validator = validator("ess.schema.json");
-    for spelling in ["name", "id"] {
-        let instance = binding(Some(spelling));
-        let problems: Vec<String> = validator
-            .iter_errors(&instance)
-            .map(|error| error.to_string())
-            .collect();
-        assert!(
-            problems.is_empty(),
-            "the schema refuses `{spelling}:`, which the parser reads: {}",
-            problems.join("; ")
-        );
-    }
-    assert!(
-        !validator.is_valid(&binding(None)),
-        "a binding that names itself neither way is refused by the parser and must be refused here"
-    );
 }

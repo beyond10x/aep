@@ -38,7 +38,7 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
 1. Check the pre-flight still passes, free of charge — nothing runs, no model is called:
 
    ```console
-   cd ~/beyond10x/engineering-protocols
+   cd ~/beyond10x/aep
    cargo build -p protocol-cli --bin protocol
    ./target/debug/protocol drive run \
      --task .engineering/task-w4-3.yaml \

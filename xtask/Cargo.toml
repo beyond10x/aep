@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Repository automation for engineering-protocols."
+description = "Repository automation for AEP."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

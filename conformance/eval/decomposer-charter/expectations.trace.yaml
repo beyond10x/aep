@@ -19,7 +19,7 @@ expectations:
     statement: the plugin loaded and offered the decomposer, so a miss is not "it was not there"
     expect:
       env.agent_available:
-        agent: engineering-protocols:decomposer
+        agent: aep-planning:decomposer
 
   - id: a-subagent-actually-ran
     statement: the work went through a subagent rather than being done inline by the parent session

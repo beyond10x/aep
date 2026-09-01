@@ -10,7 +10,11 @@ authors.workspace = true
 
 [[bin]]
 name = "protocol"
-path = "src/main.rs"
+path = "src/protocol.rs"
+
+[[bin]]
+name = "aep"
+path = "src/aep.rs"
 
 [dependencies]
 
@@ -61,46 +65,6 @@ aep-render.workspace = true
 aep-engine.workspace = true
 aep-project.workspace = true
 aep-schema.workspace = true
-schema-contract.workspace = true
-ess-compiler.workspace = true
-
-# `protocol ess conform`. The suite a specification obliges, the runner that executes one, and the
-# two reference implementations a person can watch the loop close against — the CLI holds none of
-# that itself, which is the point: the command line is a shell over the library, so a harness calling
-# `Runner::for_suite(&suite).run(&suite, &target)` gets the same verdict.
-ess-conformance.workspace = true
-
-# `protocol ess diff`. The comparison, the delta document and the text rendering all live in the
-# library, so the command line is a shell over it: a harness calling `ess_diff::diff(&before,
-# &after)` gets the same delta, and `ess_diff::render::text` writes the same sentences.
-ess-diff.workspace = true
-ess-domain.workspace = true
-ess-gen.workspace = true
-
-# `protocol infra`. The observation model and the IR compiler live in the libraries, so the
-# command line is a shell over them: a harness calling `infra_compiler::compile(&observation)`
-# gets the same IR and the same digest. Nothing in any of the three reaches a cluster — the
-# scanner that does is a separate repository, and the boundary is deliberate.
-infra-analyze.workspace = true
-infra-compiler.workspace = true
-infra-domain.workspace = true
-
-# `protocol infra simulate` and `protocol infra diff`. The desired-state model, the three-valued
-# evaluator and the snapshot comparison all live in the library, so a harness calling
-# `infra_spec::simulate(&spec, &ir)` gets the same verdicts and the same bytes the command line
-# prints — which is what lets `cargo xtask infra` drift-check the CLI's own output.
-infra-spec.workspace = true
-
-# `protocol infra project`. The projection, its patches and the tree it writes all live in the
-# library, so the command line is a shell over it: a harness calling `infra_project::project(&spec,
-# &ir)` gets the same patches, and `Projection::artifacts` is the one producer of the bytes this
-# verb writes and `cargo xtask infra` drift-checks.
-infra-project.workspace = true
-
-# `protocol ess synthesize`. The plan and the emitters live in the library, so the command line is
-# a shell over it: `ess_synth::synthesize(&ir)` from a harness produces the same plan and the same
-# bytes, and `cargo xtask synth` compares the committed tree against what this verb prints.
-ess-synth.workspace = true
 
 # `protocol trace`. The event IR, the expectation vocabulary, the adapter and the checker all live
 # in the two libraries, so the command line is a shell over them: a harness calling

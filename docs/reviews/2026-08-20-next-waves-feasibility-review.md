@@ -91,7 +91,7 @@ input→`FactSource` projection it presupposes exists nowhere. A seeded generato
 | L2 | low (improvement) | `ScenarioStatus::Unsupported` is better than `SuiteReport::aborted`; record the divergence | W4 §28 | `report.rs:96` |
 | L3 | low (correct) | W5 §16 reuses `EntityLocator` correctly | W5 §16 | `aep-domain/src/locate.rs` |
 | L4 | low | `ArtifactKind::ImplementationObligation` is cheap but touches the schema gate; `Other` works today | W5 §22, §41 | `artifact.rs:385`, `:387` |
-| L5 | low (no collision) | the CLI verbs W4 §34 suggests match what shipped | W4 §34 | `protocol-cli/src/main.rs:514` |
+| L5 | low (no collision) | the CLI verbs W4 §34 suggests match what shipped | W4 §34 | `protocol-cli/src/app.rs:514` |
 | P1 | **high** | §11 is written two-valued against a three-valued evaluator, and the input→`FactSource` projection it needs does not exist | W4 §11 | `predicate.rs:345`, `facts.rs:119`, `facts.rs:669` |
 
 ---
@@ -698,7 +698,7 @@ W5 §41's W6.1 is being probed rather than committed to.
 
 ## L5 — The CLI verbs W4 §34 suggests match what shipped (low, no collision)
 
-`EssCommand` (`crates/protocol-cli/src/main.rs:514`) already has `Validate`, `Compile`, `Inspect`,
+`EssCommand` (`crates/protocol-cli/src/app.rs:514`) already has `Validate`, `Compile`, `Inspect`,
 `Generate`, `Graph`. W4 §34's `protocol ess generate <spec> --kind docs|schema|openapi|asyncapi` is
 what exists; `protocol ess test generate` and `protocol ess conformance run` are new and consistent
 with the shape. W4 §34's own hedge ("Do not treat these names as normative if the unpushed `ess-gen`
@@ -944,7 +944,7 @@ Worth stating plainly, because the findings above are all objections:
 
 ---
 
-## Decisions for Timo
+## Decisions for operator
 
 | decision | options | cost | default if nobody answers |
 |---|---|---|---|

@@ -8,7 +8,7 @@ Source: `~/.cache/ep-session-audit/SYNTHESIS.md` (per-source findings under `fin
 
 | source | count |
 |---|---|
-| session transcripts under `~/.claude/projects/-home-timo-beyond10x*` | 32 files, 15 with plugin or `protocol` use |
+| session transcripts under `~/.claude/projects/-home-operator-beyond10x*` | 32 files, 15 with plugin or `protocol` use |
 | sub-agent transcripts inside those sessions | 300+ |
 | `docs/reviews/*.md` | 14, plus the substrate wave retro in `~/.cache/substrate-wave/` |
 | planning store, for what was already tracked | 167 artifacts, 64 relevant, 41 open |

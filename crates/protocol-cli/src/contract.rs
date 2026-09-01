@@ -9,7 +9,7 @@
 //! metaharness — private, and no dependency of this workspace — contract-tests each
 //! `metaharness ⇄ vendor` adapter and prints the outcome as **one JSON object in the
 //! `contract_result` shape this repository defines** (`metaharness conformance <kind> --contract`;
-//! its `docs/design/adapter-contract-v0.1.md` § *Reuse of engineering-protocols' tooling*, read
+//! its `docs/design/adapter-contract-v0.1.md` § *Reuse of aep' tooling*, read
 //! 2026-08-23). The intent stated there is that *"an EP-driven eval, or any consumer, reads an
 //! adapter's conformance as a `contract_result` without knowing anything about metaharness's
 //! internals"*.

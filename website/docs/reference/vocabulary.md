@@ -51,12 +51,12 @@ specification
 review:
 
 ```text
-ess_conformance     an implementation against a specification — protocol ess conform evidence
+ess_conformance     an implementation against an ESS model — imported from a standalone report
 trace_conformance   an agent run against a trace-spec/1 document — protocol trace evidence
 ```
 
-See [Verify an implementation](../guides/verify-conformance.md) and
-[Check a transcript](../guides/check-a-transcript.md).
+ESS owns the standalone conformance workflow. See
+[Check a transcript](../guides/check-a-transcript.md) for the AEP-side trace workflow.
 
 ## Verifiers
 

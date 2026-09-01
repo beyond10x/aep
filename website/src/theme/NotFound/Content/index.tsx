@@ -38,8 +38,8 @@ export default function NotFoundContent({className}: {className?: string}): Reac
             <span>the CLI, on a real document tree</span>
           </li>
           <li>
-            <Link to="/docs/examples/specification-to-contracts">See it work</Link>
-            <span>a specification and its contracts</span>
+            <Link to="/docs/examples/governed-task">See it work</Link>
+            <span>a governed task, end to end</span>
           </li>
           <li>
             <Link to="/docs/status/where-this-stands">Status</Link>

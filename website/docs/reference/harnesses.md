@@ -46,7 +46,7 @@ The free native comparison performs all setup and confinement checks, then stops
 
 ```console
 $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
-    -p metaharness-engineering-protocols-eval -- native \
+    -p metaharness-aep-eval -- native \
     --ep-repo "$PWD" --harness-repo ../harness
 ```
 
@@ -55,7 +55,7 @@ supports:
 
 ```console
 $ METAHARNESS_LIVE=1 protocol drive run --project . --map development/default \
-    --plugin-dir integrations/claude-code --pause-on-approval \
+    --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
 ```
 

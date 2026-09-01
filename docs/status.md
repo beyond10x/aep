@@ -60,18 +60,19 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.33.0` | 0.33.0 — the native arm is driven and governed, and the plan says what stops it and what it serves |
 | `0.34.0` | 0.34.0 — the plan in a browser, and the transitions that move it |
 | `0.35.0` | 0.35.0 — atomic authority and the central-service contract |
-| `0.36.0` | engineering-protocols 0.36.0 |
-| `0.36.1` | engineering-protocols 0.36.1 |
-| `0.36.2` | engineering-protocols 0.36.2 |
-| `0.36.3` | engineering-protocols 0.36.3 |
-| `0.36.4` | engineering-protocols 0.36.4 |
-| `0.37.0` | engineering-protocols 0.37.0 |
-| `0.37.1` | engineering-protocols 0.37.1 |
+| `0.36.0` | AEP 0.36.0 |
+| `0.36.1` | AEP 0.36.1 |
+| `0.36.2` | AEP 0.36.2 |
+| `0.36.3` | AEP 0.36.3 |
+| `0.36.4` | AEP 0.36.4 |
+| `0.37.0` | AEP 0.37.0 |
+| `0.37.1` | AEP 0.37.1 |
 | `0.38.0` | Machine-readable AEP service contract; implementation 100%. |
 | `0.38.1` | 0.38.1 — computable definition bundle identity |
 | `0.39.0` | 0.39.0 — sealed vendor scope and b10x enforcement contract; implementation 100%. |
 | `0.39.1` | 0.39.1 — Node 24 CI actions without the inapplicable Go cache warning; implementation 100%. |
 | `0.39.2` | 0.39.2 — align CI Go with pinned go-task 3.52.0; implementation 100%. |
+| `0.40.0` | AEP 0.40.0 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification

@@ -1,6 +1,6 @@
 # Workflow-declared context and write scope — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status:** **accepted 2026-08-24, milestones 1–3 in build.** Milestones 4–6 are not started and
 > are deliberately unsequenced.
 > **Audience:** whoever reviews this for acceptance, and whoever would build it afterwards.

@@ -11,10 +11,10 @@ cannot quietly become a second planning system:
 
 | Question | Authoritative surface |
 |---|---|
-| What shipped? | [Annotated-tag status](https://github.com/beyond10x/engineering-protocols/blob/main/docs/status.md) |
-| What work is accepted, and where is it in its lifecycle? | [Planning store](https://github.com/beyond10x/engineering-protocols/tree/main/.engineering/planning) |
-| What remains open, and what closes it? | [Gap register](https://github.com/beyond10x/engineering-protocols/blob/main/docs/plan/gap-register.md) |
-| Which designs are still proposals? | [Vision, “Proposed, not accepted”](https://github.com/beyond10x/engineering-protocols/blob/main/docs/VISION.md#proposed-not-accepted) |
+| What shipped? | [Annotated-tag status](https://github.com/beyond10x/aep/blob/main/docs/status.md) |
+| What work is accepted, and where is it in its lifecycle? | [Planning store](https://github.com/beyond10x/aep/tree/main/.engineering/planning) |
+| What remains open, and what closes it? | [Gap register](https://github.com/beyond10x/aep/blob/main/docs/plan/gap-register.md) |
+| Which designs are still proposals? | [Vision, “Proposed, not accepted”](https://github.com/beyond10x/aep/blob/main/docs/VISION.md#proposed-not-accepted) |
 
 A design file is not a work order, however new or detailed it is. A plan page or planning-store
 story accepts work; an annotated tag records delivery. `cargo xtask status --check` keeps the

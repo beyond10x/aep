@@ -26,7 +26,7 @@ guide pages show commands a reader can run against a checkout instead.
 
 ```bash
 npm install
-npm start          # http://localhost:3000/engineering-protocols/
+npm start          # http://localhost:3000/aep/
 npm run build      # static build into website/build/
 npm run serve      # serve the build, also on port 3000
 ```

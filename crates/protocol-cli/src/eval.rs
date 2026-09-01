@@ -1487,7 +1487,7 @@ pub(crate) enum EvalCommand {
     /// binary is looked for on `PATH`, a machine without it is told so by name and exits `2`, and
     /// no crate crosses in either direction. Nothing spawns without `METAHARNESS_LIVE=1` and a
     /// `--budget-usd` cap; `--stream` ingests a run somebody already recorded and spends nothing.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
 }
 
 /// The arguments of `protocol eval matrix`.
@@ -1771,8 +1771,8 @@ const ASSUMED_USD_PER_RUN: &str = "0.25";
 ///
 /// Closed here and open in the manifest, and the asymmetry is the difference between reading a run
 /// and launching one. The matrix takes `harness` as free text because a third harness is a run and
-/// not a redesign; the **runner** has to know which plugin directory arm `plugin` injects and which
-/// vendor word `metaharness run` takes, and a harness it cannot name is one it cannot treat.
+/// not a redesign; the runner has to know which vendor word `metaharness run` takes, while the
+/// plugin directory is an explicit machine-local input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum Harness {
     /// Claude Code.
@@ -1793,19 +1793,6 @@ impl Harness {
         }
     }
 
-    /// The plugin directory arm `plugin` injects for this harness.
-    fn plugin_dir(self) -> &'static str {
-        match self {
-            Self::Claude => "integrations/claude-code",
-            Self::Codex => "integrations/codex",
-            // There is no plugin, and there is no arm that would inject one. `b10x` holds its own
-            // loop, so `plugin` - *the shipped plugin is installed and nothing decides the agent's
-            // calls* - has no meaning for it: there is no vendor surface to install into. The path
-            // is named so the type stays total; a run that reached for it is refused by the arm
-            // check before it gets here.
-            Self::B10x => "integrations/b10x",
-        }
-    }
 }
 
 impl fmt::Display for Harness {
@@ -1828,6 +1815,8 @@ enum RunRefusal {
     NotLive,
     /// A live spawn was asked for with no cap on what it may spend.
     NoBudget,
+    /// The plugin arm was asked for without naming the external plugin directory.
+    NoPluginDirectory,
     /// Arm `driven` is not launched from here.
     DrivenIsNotLaunchedHere,
     /// Arm `native` is not launched from here either, and for a different reason.
@@ -1879,6 +1868,7 @@ impl RunRefusal {
             Self::ToolMissing { .. } => "EVAL-RUN-001",
             Self::NotLive => "EVAL-RUN-002",
             Self::NoBudget => "EVAL-RUN-003",
+            Self::NoPluginDirectory => "EVAL-RUN-012",
             Self::DrivenIsNotLaunchedHere => "EVAL-RUN-004",
             Self::NoWorkingTree => "EVAL-RUN-005",
             Self::BudgetWouldBeExceeded { .. } => "EVAL-RUN-006",
@@ -1924,6 +1914,11 @@ impl fmt::Display for RunRefusal {
                  programme wrote a cap into its plan to avoid — the runner reads each run's cost \
                  out of its own stream and stops launching when the next one would exceed what you \
                  named"
+            ),
+            Self::NoPluginDirectory => write!(
+                f,
+                "arm `plugin` needs `--plugin-dir DIR`. AEP does not bundle agent plugins; name \
+                 the installed plugin from the `beyond10x` marketplace explicitly"
             ),
             Self::NativeIsNotLaunchedHere => write!(
                 f,
@@ -2924,7 +2919,13 @@ fn prompt_for(plan: &Plan, instructions: &Path) -> Result<String> {
 /// every run is spawned by the same instrument into the same hermetic scratch home with the same
 /// recording, and only the treatment varies. The mode allows everything and records everything —
 /// nothing here decides a tool call, which is arm c's whole difference and `protocol drive`'s job.
-fn spawn_argv(plan: &Plan, binary: &str, working_directory: &Path, prompt: &str) -> Vec<String> {
+fn spawn_argv(
+    plan: &Plan,
+    binary: &str,
+    working_directory: &Path,
+    prompt: &str,
+    plugin_directory: Option<&Path>,
+) -> Vec<String> {
     let mut argv = vec![
         binary.to_owned(),
         "run".to_owned(),
@@ -2939,7 +2940,12 @@ fn spawn_argv(plan: &Plan, binary: &str, working_directory: &Path, prompt: &str)
     ];
     if plan.arm == Arm::Plugin {
         argv.push("--plugin-dir".to_owned());
-        argv.push(plan.harness.plugin_dir().to_owned());
+        argv.push(
+            plugin_directory
+                .expect("the plugin arm is validated before argv construction")
+                .display()
+                .to_string(),
+        );
     }
     argv
 }
@@ -3032,6 +3038,12 @@ pub(crate) struct RunArgs {
     /// The tree the session works in. Required for a spawn.
     #[arg(long, value_name = "DIR")]
     cwd: Option<PathBuf>,
+    /// The external agent plugin to install for arm `plugin`.
+    ///
+    /// AEP deliberately ships no marketplace sources. Name the installed or checked-out plugin
+    /// explicitly so the launch record identifies the treatment the run received.
+    #[arg(long, value_name = "DIR")]
+    plugin_dir: Option<PathBuf>,
     /// The cap on what this invocation may spend, in US dollars. Required for a spawn.
     #[arg(long, value_name = "USD")]
     budget_usd: Option<String>,
@@ -3072,6 +3084,17 @@ fn ingest_recorded(args: &RunArgs, cases: Vec<Case>, stream: &Path) -> Result<Ex
     let products = ingest(&plan, &events, &args.observed_at, args.redact)?;
     write_products(&args.out, &plan, None, &products)?;
     Ok(ExitCode::SUCCESS)
+}
+
+/// Refuses a plugin arm whose curated plugin directory was not selected explicitly.
+fn require_plugin_directory(args: &RunArgs) -> Result<()> {
+    if args.arm == Arm::Plugin && args.plugin_dir.is_none() {
+        return Err(refused_run(
+            &args.out,
+            &[RunRefusal::NoPluginDirectory],
+        ));
+    }
+    Ok(())
 }
 
 /// `protocol eval run`
@@ -3117,6 +3140,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             &[RunRefusal::NativeIsNotLaunchedHere],
         ));
     }
+    require_plugin_directory(args)?;
     let Some(budget) = &args.budget_usd else {
         return Err(refused_run(&args.out, &[RunRefusal::NoBudget]));
     };
@@ -3153,7 +3177,13 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             harness: args.harness,
         };
         let prompt = prompt_for(&plan, &args.instructions)?;
-        let invocation = spawn_argv(&plan, &binary, working_directory, &prompt);
+        let invocation = spawn_argv(
+            &plan,
+            &binary,
+            working_directory,
+            &prompt,
+            args.plugin_dir.as_deref(),
+        );
         let stream_path = args.out.join(format!("{}{EVENTS_SUFFIX}", plan.name()));
 
         let events = spawn(&plan, &invocation, &stream_path)?;
@@ -3937,12 +3967,14 @@ observed_at: 2026-08-23
             "metaharness",
             &tree,
             "do it",
+            None,
         );
         let plugin = spawn_argv(
             &plan_of(Arm::Plugin, Harness::Claude),
             "metaharness",
             &tree,
             "do it",
+            Some(Path::new("/plugins/aep-planning")),
         );
 
         assert_eq!(
@@ -3969,7 +4001,7 @@ observed_at: 2026-08-23
             &plugin[raw.len()..],
             &[
                 "--plugin-dir".to_owned(),
-                "integrations/claude-code".to_owned()
+                "/plugins/aep-planning".to_owned()
             ]
         );
         assert_eq!(
@@ -3977,12 +4009,13 @@ observed_at: 2026-08-23
                 &plan_of(Arm::Plugin, Harness::Codex),
                 "metaharness",
                 &tree,
-                "do it"
+                "do it",
+                Some(Path::new("/plugins/aep-planning")),
             )
             .last()
             .expect("a plugin directory"),
-            "integrations/codex",
-            "and each harness gets its own plugin"
+            "/plugins/aep-planning",
+            "the caller-selected plugin is independent of the harness"
         );
     }
 

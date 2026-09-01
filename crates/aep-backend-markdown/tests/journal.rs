@@ -106,7 +106,7 @@ fn provenance_totals_without_losing_where_each_part_came_from() {
 fn a_move_written_before_provenance_existed_claims_nothing() {
     let root = scratch("older");
     // The exact shape 0.19.0 wrote, `decided_on` and all its absence.
-    let older = r#"{"at":"2026-08-01T09:00:00Z","actor":"timo","artifact":"story:legacy","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed"}}"#;
+    let older = r#"{"at":"2026-08-01T09:00:00Z","actor":"operator","artifact":"story:legacy","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"proposed"}}"#;
     std::fs::write(root.join(journal::JOURNAL), format!("{older}\n")).expect("writable");
 
     let (entries, unreadable) = journal::read(&root);
@@ -207,7 +207,7 @@ fn a_status_the_journal_does_not_account_for_is_drift() {
         &directory,
         &Entry {
             at: "2026-08-26T00:00:00Z".to_owned(),
-            actor: "timo".to_owned(),
+            actor: "operator".to_owned(),
             artifact: artifact.clone(),
             kind: ArtifactKind::parse("epic").expect("a kind"),
             revision: 1,
@@ -240,7 +240,7 @@ fn an_entry_naming_an_artifact_this_store_does_not_hold_is_drift() {
         &directory,
         &Entry {
             at: "2026-08-26T01:37:16Z".to_owned(),
-            actor: "timo".to_owned(),
+            actor: "operator".to_owned(),
             artifact: ArtifactId::new("story:workspace-manifest").expect("an id"),
             kind: ArtifactKind::parse("story").expect("a kind"),
             revision: 1,
@@ -283,7 +283,7 @@ fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
         &directory,
         &Entry {
             at: "2026-08-26T00:00:00Z".to_owned(),
-            actor: "timo".to_owned(),
+            actor: "operator".to_owned(),
             artifact: artifact.clone(),
             kind: kind.clone(),
             revision: 1,
@@ -297,7 +297,7 @@ fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
         &directory,
         &Entry {
             at: "2026-08-26T00:00:01Z".to_owned(),
-            actor: "timo".to_owned(),
+            actor: "operator".to_owned(),
             artifact: artifact.clone(),
             kind,
             revision: 1,

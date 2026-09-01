@@ -62,24 +62,43 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+/// A relative path from one existing directory to another existing path.
+fn relative_path(from: &Path, to: &Path) -> PathBuf {
+    let from = from.canonicalize().expect("the source directory exists");
+    let to = to.canonicalize().expect("the target path exists");
+    let from: Vec<_> = from.components().collect();
+    let to: Vec<_> = to.components().collect();
+    let common = from
+        .iter()
+        .zip(&to)
+        .take_while(|(left, right)| left == right)
+        .count();
+
+    let mut relative = PathBuf::new();
+    for _ in common..from.len() {
+        relative.push("..");
+    }
+    for component in &to[common..] {
+        relative.push(component.as_os_str());
+    }
+    relative
+}
+
 /// A scratch copy of the example, its `protocols:` re-pointed at this repository (the example's
-/// `../../..` is relative to where the example sits, not to where a copy under `target/` does; a
-/// project file refuses an absolute path, so the copy's own relative one is computed).
+/// `../../..` is relative to where the example sits, not to where the target directory does; a
+/// project file refuses an absolute path, so the copy's own relative one is computed even when
+/// `CARGO_TARGET_DIR` places it outside the repository.
 fn scratch_project(name: &str, variant: &str) -> PathBuf {
     let project = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("store-selection-{name}"));
     let _ = std::fs::remove_dir_all(&project);
     copy_tree(&example(), &project);
     let engineering = project.join(".engineering");
-    let depth = engineering
-        .canonicalize()
-        .expect("the copy exists")
-        .strip_prefix(root())
-        .expect("the scratch tree is under the repository")
-        .components()
-        .count();
-    let up = vec![".."; depth].join("/");
+    let protocols = relative_path(&engineering, &root());
     let config = std::fs::read_to_string(engineering.join(variant)).expect("the variant exists");
-    let config = config.replace("protocols: ../../..", &format!("protocols: {up}"));
+    let config = config.replace(
+        "protocols: ../../..",
+        &format!("protocols: {}", protocols.display()),
+    );
     std::fs::write(engineering.join("project.yaml"), config).expect("project.yaml written");
     let _ = std::fs::remove_file(engineering.join("project.sqlite.yaml"));
     project

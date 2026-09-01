@@ -188,9 +188,6 @@ impl DocumentError {
 /// the line and column on every shape error, and pointing at one line is what a `Syntax` error is
 /// for. Parsing twice costs nothing at document sizes.
 ///
-/// The same guard is written once more, in `ess_domain::spec::RawSpecFile::parse`. The two cannot
-/// share one implementation today: `aep-schema` depends on `ess-domain`, not the other way round,
-/// and `aep-domain` — the crate both depend on — deliberately holds no serialization format.
 fn read_yaml<T: DeserializeOwned>(text: &str) -> Result<T, serde_yaml::Error> {
     let _: serde_yaml::Value = serde_yaml::from_str(text)?;
     serde_yaml::from_str(text)

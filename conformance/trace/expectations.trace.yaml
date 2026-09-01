@@ -28,9 +28,9 @@ expectations:
     statement: the plugin under test is the one that loaded, at the version and from the path the eval copied
     expect:
       env.plugin_loaded:
-        plugin: engineering-protocols
+        plugin: aep
         version: "0.1.0"
-        source: engineering-protocols@inline
+        source: aep@inline
 
   - id: nothing-else-loaded
     statement: nothing leaked in from the operator's own configuration
@@ -45,7 +45,7 @@ expectations:
     # this file is the row that reports them.
     expect:
       env.exclusive:
-        plugins: [engineering-protocols]
+        plugins: [aep]
 
   - id: billed-to-the-session
     statement: the run billed the logged-in session, not a stray exported API key
@@ -73,13 +73,13 @@ expectations:
     statement: the harness offered the plugin's skill — available is not invoked
     expect:
       env.skill_available:
-        skill: engineering-protocols:planning
+        skill: aep-planning:planning
 
   - id: the-decomposer-loaded
     statement: the plugin's agents loaded under the names W1.3's acceptance refers to
     expect:
       env.agent_available:
-        agent: engineering-protocols:decomposer
+        agent: aep-planning:decomposer
 
   # --- what the agent did ---------------------------------------------------------------
 
@@ -88,7 +88,7 @@ expectations:
     # run.sh assertion 3.5, and the strongest claim in the eval.
     expect:
       skill.completed:
-        skill: engineering-protocols:planning
+        skill: aep-planning:planning
         count: {at_least: 1}
 
   - id: consulted-the-skill-before-touching-the-store

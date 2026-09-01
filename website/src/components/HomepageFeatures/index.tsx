@@ -11,48 +11,43 @@ type FeatureItem = {
   href: string;
 };
 
-// Two halves, and the join. Every claim here is stated at greater length — with its source — on the
-// page it links to.
 const FeatureList: FeatureItem[] = [
   {
     title: 'AEP',
-    governs: 'how engineering work is performed',
-    question: 'Was this built properly?',
+    governs: 'the shared substrate',
+    question: 'What do the recorded facts permit?',
     description: (
       <>
-        Principles with timed obligations, workflows guarded by evidence, capabilities that default
-        to denied, approvals bound to the revision they approved, and an audit trail that records
-        refusals as carefully as changes. A harness asks what is owed and what is permitted; the
-        answer is deterministic, and it can always say why.
+        Typed artifacts, lifecycles, evidence, permissions, approvals, audit and completion. A
+        harness asks what is owed and what is permitted; the deterministic answer can always say
+        why.
       </>
     ),
     href: '/docs/concepts/aep',
   },
   {
-    title: 'ESS',
-    governs: 'what software must exist',
-    question: 'Is this the thing we meant to build?',
+    title: 'ADP',
+    governs: 'development work',
+    question: 'Was this software change built properly?',
     description: (
       <>
-        Domains, entities, commands with outcomes, events, views with declared consistency, state
-        machines, components, bindings, topology. From one model come the documentation, the JSON
-        Schema, the OpenAPI and the AsyncAPI — derived, not maintained beside it.
+        Specification, decomposition, design, tests, implementation and review expressed as a
+        profile over the generic protocol rather than a second planning system.
       </>
     ),
-    href: '/docs/examples/specification-to-contracts',
+    href: '/docs/examples/governed-task',
   },
   {
-    title: 'The join',
-    governs: 'evidence',
-    question: 'Who says it is done?',
+    title: 'AOP',
+    governs: 'operational work',
+    question: 'May this controlled change proceed?',
     description: (
       <>
-        A task can be blocked until something <em>other than the agent</em> proves the implementation
-        conforms to its specification. The specification judges the diff, so nobody has to read it
-        and guess — and the protocol refuses to call the task done until it has.
+        Operational planning, approvals, verification, rollback and incidents use the same evidence
+        and audit substrate with operations-specific vocabulary.
       </>
     ),
-    href: '/docs/concepts/evidence',
+    href: '/docs/concepts/lifecycles',
   },
 ];
 
@@ -66,7 +61,6 @@ function Feature({title, governs, question, description, href}: FeatureItem) {
         </span>
       </div>
       <Heading as="h3" className={styles.cardTitle}>
-        {/* The link covers the whole panel — see `.cardLink::after` — so the card is one target. */}
         <Link to={href} className={styles.cardLink}>
           {title}
         </Link>
@@ -88,11 +82,11 @@ export default function HomepageFeatures(): ReactNode {
           </div>
         </div>
         <Heading as="h2" className={styles.title}>
-          Two halves, and the join
+          One substrate, two profiles
         </Heading>
         <div className={styles.grid}>
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
+          {FeatureList.map((props) => (
+            <Feature key={props.title} {...props} />
           ))}
         </div>
       </div>

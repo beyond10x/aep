@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "adp-domain"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -15,7 +15,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-entity"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-memory",
  "aep-conformance",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-hybrid"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-markdown",
@@ -46,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-markdown"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-memory",
@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-memory"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-postgres"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-entity",
  "aep-conformance",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-sqlite"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-entity",
  "aep-conformance",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "aep-client"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "aep-conformance"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-memory",
  "aep-contract",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "aep-contract"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "aep-domain"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "proptest",
  "schemars",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-domain",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver-spec"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "aep-engine"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -192,8 +192,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aep-ess-evidence"
+version = "0.40.0"
+dependencies = [
+ "aep-domain",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aep-project"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-domain",
  "aep-driver-spec",
@@ -208,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "aep-render"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-domain",
  "serde_yaml",
@@ -216,12 +225,11 @@ dependencies = [
 
 [[package]]
 name = "aep-schema"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-domain",
  "aep-driver-spec",
- "ess-domain",
  "jsonschema",
  "schemars",
  "serde",
@@ -318,7 +326,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aop-domain"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -349,33 +357,6 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
-
-[[package]]
-name = "billing-realization"
-version = "0.39.2"
-dependencies = [
- "aep-contract",
- "aep-domain",
- "billing-system",
- "billing-types",
- "email-service",
- "ess-conformance",
- "invoice-service",
- "serde_json",
-]
-
-[[package]]
-name = "billing-system"
-version = "3.0.0"
-dependencies = [
- "billing-types",
- "email-service",
- "invoice-service",
-]
-
-[[package]]
-name = "billing-types"
-version = "3.0.0"
 
 [[package]]
 name = "bit-set"
@@ -574,13 +555,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
-name = "email-service"
-version = "3.0.0"
-dependencies = [
- "billing-types",
-]
-
-[[package]]
 name = "email_address"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,81 +634,6 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
-
-[[package]]
-name = "ess-compiler"
-version = "0.39.2"
-dependencies = [
- "aep-domain",
- "ess-domain",
- "proptest",
- "serde",
- "serde_json",
- "serde_yaml",
-]
-
-[[package]]
-name = "ess-conformance"
-version = "0.39.2"
-dependencies = [
- "aep-contract",
- "aep-domain",
- "ess-compiler",
- "ess-domain",
- "ess-gen",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ess-diff"
-version = "0.39.2"
-dependencies = [
- "aep-domain",
- "ess-compiler",
- "ess-conformance",
- "ess-domain",
- "ess-gen",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ess-domain"
-version = "0.39.2"
-dependencies = [
- "aep-domain",
- "schemars",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
-]
-
-[[package]]
-name = "ess-gen"
-version = "0.39.2"
-dependencies = [
- "aep-domain",
- "ess-compiler",
- "ess-domain",
- "jsonschema",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
-]
-
-[[package]]
-name = "ess-synth"
-version = "0.39.2"
-dependencies = [
- "ess-compiler",
- "ess-domain",
- "ess-gen",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "fallible-iterator"
@@ -840,38 +739,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gatepass-realization"
-version = "0.39.2"
-dependencies = [
- "gatepass-server",
- "gatepass-system",
- "gatepass-types",
- "pass-service",
- "serde_json",
-]
-
-[[package]]
-name = "gatepass-server"
-version = "1.0.0"
-dependencies = [
- "gatepass-system",
- "gatepass-types",
- "pass-service",
-]
-
-[[package]]
-name = "gatepass-system"
-version = "1.0.0"
-dependencies = [
- "gatepass-types",
- "pass-service",
-]
-
-[[package]]
-name = "gatepass-types"
-version = "1.0.0"
-
-[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,67 +825,6 @@ checksum = "07aa2048142242915a31d35844fb311e0e53fcca590c3a0a40dcf1b841fa09eb"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
-]
-
-[[package]]
-name = "infra-analyze"
-version = "0.39.2"
-dependencies = [
- "infra-compiler",
- "infra-domain",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "infra-compiler"
-version = "0.39.2"
-dependencies = [
- "infra-domain",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "infra-domain"
-version = "0.39.2"
-dependencies = [
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "infra-project"
-version = "0.39.2"
-dependencies = [
- "infra-analyze",
- "infra-compiler",
- "infra-domain",
- "infra-spec",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "infra-spec"
-version = "0.39.2"
-dependencies = [
- "aep-domain",
- "infra-analyze",
- "infra-compiler",
- "infra-domain",
- "serde",
- "serde_json",
- "serde_yaml",
-]
-
-[[package]]
-name = "invoice-service"
-version = "3.0.0"
-dependencies = [
- "billing-types",
 ]
 
 [[package]]
@@ -1308,13 +1114,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pass-service"
-version = "1.0.0"
-dependencies = [
- "gatepass-types",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1429,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "protocol-cli"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-hybrid",
@@ -1452,18 +1251,6 @@ dependencies = [
  "entity-postgres",
  "entity-sqlite",
  "entity-store",
- "ess-compiler",
- "ess-conformance",
- "ess-diff",
- "ess-domain",
- "ess-gen",
- "ess-synth",
- "infra-analyze",
- "infra-compiler",
- "infra-domain",
- "infra-project",
- "infra-spec",
- "schema-contract",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1648,15 +1435,6 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
-
-[[package]]
-name = "schema-contract"
-version = "0.39.2"
-dependencies = [
- "jsonschema",
- "serde_json",
- "thiserror",
-]
 
 [[package]]
 name = "schemars"
@@ -1951,7 +1729,7 @@ dependencies = [
 
 [[package]]
 name = "trace-domain"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "regex",
  "schemars",
@@ -1963,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "trace-spec"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-domain",
  "serde",
@@ -2180,7 +1958,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.39.2"
+version = "0.40.0"
 dependencies = [
  "aep-schema",
  "anyhow",

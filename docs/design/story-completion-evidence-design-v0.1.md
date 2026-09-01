@@ -1,6 +1,6 @@
 # Story completion, evidence-gated — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status: accepted in part, 2026-08-28.** The verdict
 > [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md) § W4.3 asked for
 > is **§ 10** of this document, and is repeated on that page and on

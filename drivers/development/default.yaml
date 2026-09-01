@@ -58,12 +58,10 @@ states:
         harness: b10x
         description: Read the task and record what is being asked for, unedited.
         skills: [planning]
-        # **No `context:` any more, because the planning skill arrives as a skill.** Every `llm`
-        # step here used to be handed `integrations/claude-code/skills/planning/SKILL.md` eagerly,
-        # which was the only route there was: neither harness could read a plugin's skills, so a
-        # step told to work through the planning store was given the instructions or went without.
-        # Both read it now — `plugin_dirs` finds `integrations/claude-code` with no flag at all —
-        # so the description is in the standing instruction and the body is one `skill` call away.
+        # **No `context:` any more, because the planning skill arrives as a skill.** The plugin is
+        # supplied at the driver boundary through `--plugin-dir` or `AEP_DRIVE_PLUGIN_DIR`; AEP
+        # owns the workflow and the driver while the external agentplugins repository owns the
+        # harness-specific instruction surface.
         #
         # Eager delivery is not free, and a stateless loop makes that plain: the conversation is
         # replayed whole every turn, so this document was billed on turn one and on turn forty of

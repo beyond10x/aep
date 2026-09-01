@@ -88,7 +88,7 @@ its trees standing pays nothing and the wave *after* it pays everything. Worse, 
 directory placed outside the worktree — which the same skill requires, so two trees never
 share one — survives `git worktree remove` untouched and is invisible to every `git`
 command there is. Measured on this machine on 2026-08-30: **14 GB** still standing at
-`~/.cache/claude-tmp/claude-1000/-home-timo-projects-engineering-protocols/ba00d8e0-.../scratchpad/eval/ws_eval`,
+`~/.cache/claude-tmp/claude-1000/-home-operator-projects-engineering-protocols/ba00d8e0-.../scratchpad/eval/ws_eval`,
 last written **2026-08-24**, keyed to `~/projects/engineering-protocols` — a path that still
 exists and holds `.git/` and `.claude/` and no working tree, so nothing in the checkout
 being worked on names it. Root filesystem at **91 %**, 75 G free of 848 G. **Fix: a closing step that reads

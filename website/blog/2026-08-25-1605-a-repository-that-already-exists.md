@@ -28,7 +28,7 @@ $ protocol reverse scan .
 aep.reverse-scan/1
 
 readme headings: 119
-  README.md:1  engineering-protocols
+  README.md:1  aep
   README.md:19    Two halves, one seam
   README.md:34    What that looks like
   README.md:76    Is this for you
@@ -61,7 +61,7 @@ stated expiry: 1
 churn: 5
   CHANGELOG.md  109 commit(s), 1 author(s), last 2026-08-26
   AGENTS.md  39 commit(s), 1 author(s), last 2026-08-25
-  crates/protocol-cli/src/main.rs  36 commit(s), 1 author(s), last 2026-08-25
+  crates/protocol-cli/src/app.rs  36 commit(s), 1 author(s), last 2026-08-25
 dormant: 0
 ```
 
@@ -87,7 +87,7 @@ is a verb nobody tries twice.
 
 ```console
 $ protocol reverse init \
-    --protocols git+https://github.com/beyond10x/engineering-protocols#<40-hex> \
+    --protocols git+https://github.com/beyond10x/aep#<40-hex> \
     --profile development.standard
 ```
 
@@ -101,5 +101,5 @@ repository.
 ## Where to go next
 
 The walkthrough is
-[Adopting a repository that already exists](https://github.com/beyond10x/engineering-protocols/blob/main/docs/guide/adopting.md),
+[Adopting a repository that already exists](https://github.com/beyond10x/aep/blob/main/docs/guide/adopting.md),
 and the verb-by-verb tables are in the [CLI reference](/docs/reference/cli).

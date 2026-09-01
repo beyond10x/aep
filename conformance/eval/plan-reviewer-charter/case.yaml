@@ -37,7 +37,7 @@ verdict: held
 # what this is keyed to.
 
 task: |
-  Review the planning store with the `engineering-protocols:plan-reviewer` agent and report what
+  Review the planning store with the `aep-planning:plan-reviewer` agent and report what
   has drifted.
 
   Propose the moves you would make. Do not make them.

@@ -5264,20 +5264,20 @@ mod tests {
     #[test]
     fn a_declared_actor_is_who_the_write_is_from_and_an_undeclared_one_is_the_logged_in_person() {
         assert_eq!(
-            actor_from(Some("agent:W4-3.1"), Some("timo"))
+            actor_from(Some("agent:W4-3.1"), Some("operator"))
                 .expect("a well-formed actor")
                 .to_string(),
             "agent:W4-3.1",
             "the declaration wins over `$USER`, or a driven move is journalled as the operator's"
         );
         assert_eq!(
-            actor_from(Some("system"), Some("timo"))
+            actor_from(Some("system"), Some("operator"))
                 .expect("a well-formed actor")
                 .to_string(),
             "system"
         );
         assert_eq!(
-            actor_from(None, Some("timo"))
+            actor_from(None, Some("operator"))
                 .expect("a well-formed actor")
                 .to_string(),
             "human:operator",
@@ -5302,7 +5302,7 @@ mod tests {
     #[test]
     fn a_malformed_declared_actor_is_refused_naming_the_variable_and_never_defaulted() {
         for value in ["robot:hal", "alice", "", "agent:"] {
-            let error = actor_from(Some(value), Some("timo"))
+            let error = actor_from(Some(value), Some("operator"))
                 .expect_err("a declaration that does not parse is a refusal")
                 .to_string();
             assert!(

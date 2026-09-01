@@ -18,13 +18,13 @@
 # the declaration — a planning artifact has no field for a command today, so the convention is
 # where a story says *these are my checks*, and a story whose checks live elsewhere makes that file
 # run them. The model to write one against is
-# the migrated agent-eval runner (`evals/engineering-protocols/checks/run-checks.sh` in the
+# the migrated agent-eval runner (`evals/aep/checks/run-checks.sh` in the
 # metaharness repository):
 # nine checks, one row each, an honest exit code, and a table a person can read when it is red.
 #
 # Three programs have to be on `PATH` for a run under this map: `bash`, `git` and `protocol` — the
 # last one because two of the three `verify` steps are this repository's own verbs.
-# the migrated driven eval (metaharness `evals/engineering-protocols/run-driven.sh`) is how a
+# the migrated driven eval (metaharness `evals/aep/run-driven.sh`) is how a
 # driven run gets it: build
 # `protocol-cli`, then put `target/debug` on `PATH`. A missing program is D5's `Unknown` and submits
 # nothing, so the run stops rather than recording a suite that never ran.
@@ -158,7 +158,7 @@ states:
           They are red now, and red is the product: a check that passes before the thing it checks
           exists is a check of nothing. The model to write against is
           the migrated agent-eval runner in the metaharness repository
-          (`evals/engineering-protocols/checks/run-checks.sh`).
+          (`evals/aep/checks/run-checks.sh`).
       # Expected red, and the guard on the way out reads exactly this: `test.first_result == failed`
       # is the first result ever recorded and never changes, so this is the run's one chance to
       # record a red suite. It runs before the operator step below so the person is asked once, with

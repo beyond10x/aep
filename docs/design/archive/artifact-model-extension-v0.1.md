@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-The original `engineering-protocols` design defines a machine-executable methodology around:
+The original `aep` design defines a machine-executable methodology around:
 
 - tasks;
 - principles;
@@ -169,7 +169,7 @@ The purpose is to answer:
 
 > What durable engineering knowledge or evidence exists?
 
-This belongs directly in `engineering-protocols`.
+This belongs directly in `aep`.
 
 ---
 
@@ -1039,7 +1039,7 @@ artifacts:
 
 ---
 
-## 22. Project Repository vs `engineering-protocols`
+## 22. Project Repository vs `aep`
 
 The actual project repository contains project-specific engineering artifacts.
 
@@ -1063,7 +1063,7 @@ docs/
 By contrast:
 
 ```text
-github.com/acme/engineering-protocols
+github.com/acme/aep
 ```
 
 defines:
@@ -1081,7 +1081,7 @@ defines:
 The split is:
 
 ```text
-engineering-protocols
+aep
         │
         ├── semantics
         ├── schemas
@@ -1103,10 +1103,10 @@ application repositories
 
 ## 23. Proposed Repository Extension
 
-The original `engineering-protocols` structure can be extended additively:
+The original `aep` structure can be extended additively:
 
 ```text
-engineering-protocols/
+aep/
 ├── crates/
 │   ├── aep-domain/
 │   ├── aep-engine/
@@ -1623,7 +1623,7 @@ Archived
 
 ## 39. Non-Goals
 
-This extension should not make `engineering-protocols`:
+This extension should not make `aep`:
 
 - a replacement for Jira or Linear;
 - a document database;
@@ -1687,7 +1687,7 @@ The complete abstraction becomes:
                        └──────→ updated artifact graph
 ```
 
-This gives `engineering-protocols` a durable model not only for **how engineering work proceeds**, but also for **what engineering knowledge must exist before, during, and after that work**.
+This gives `aep` a durable model not only for **how engineering work proceeds**, but also for **what engineering knowledge must exist before, during, and after that work**.
 
 ---
 
@@ -1712,7 +1712,7 @@ payments/
     └── artifacts.yaml
 ```
 
-while `engineering-protocols` provides the meaning of those artifacts.
+while `aep` provides the meaning of those artifacts.
 
 A harness can then ask deterministic questions such as:
 

@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to `engineering-protocols`. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+Notable changes to AEP. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html), where a **major**
 version is a breaking change to a protocol's semantics, not merely to a Rust API.
 
@@ -9,7 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-09-01
+
 ### Added
+
+- `aep` is now the canonical command, with `protocol` retained as an exact stdout, stderr and exit
+  status compatibility alias.
+- The optional `aep-ess-evidence` crate converts the closed standalone ESS conformance report into
+  AEP `ess_conformance` evidence without linking AEP to ESS modeling types.
 
 - Public harness-integration documentation now gives the local `protocol drive` installation and
   run sequence, the free native comparison command, and a feature/confinement matrix for Claude
@@ -1144,7 +1151,7 @@ belongs in the commit message or in `docs/design/`.
 * **`task plugin-eval` and `task driven-eval` are gone.** Both invoked
   `integrations/claude-code/eval/`, which `epic:metaharness-migration` deleted on 2026-08-22 — the
   agent-eval checks and their recorded transcripts live at metaharness
-  `evals/engineering-protocols/`, and `run.sh` retired with the hooks it inspected. Neither was a
+  `evals/aep/`, and `run.sh` retired with the hooks it inspected. Neither was a
   step of `check`, so nothing was failing and nothing noticed for six days. Removed rather than
   repointed: the eval is no longer this repository's to run. `task codex-eval` is unaffected
   (`story:driven-eval-acceptance`, archived).
@@ -1624,7 +1631,7 @@ both.
 
   ```console
   $ protocol workspace crossings
-  engineering-protocols/story:assemble-across-sources informed_by entity-runtime/story:typed-references  [entity-runtime]
+  aep/story:assemble-across-sources informed_by entity-runtime/story:typed-references  [entity-runtime]
   ```
 
 * **A member nobody has checked out is a normal condition, not a broken workspace.** `members` exits
@@ -2118,7 +2125,7 @@ both.
     decided partly on asserted evidence nothing checks: test_result=1
 
   $ protocol artifact history story:other
-  2026-08-26T09:14:02Z  timo  moved active -> implemented (on asserted evidence) (revision 4)
+  2026-08-26T09:14:02Z  operator  moved active -> implemented (on asserted evidence) (revision 4)
   ```
 
   `--evidence` is **kept on purpose**. A CI run nobody recorded is real evidence, and refusing it
@@ -2153,9 +2160,9 @@ both.
 
   ```console
   $ protocol artifact history story:journalled
-  2026-08-25T21:52:32Z  timo  created as draft (revision 1)
-  2026-08-25T21:52:32Z  timo  moved draft -> proposed (revision 2)
-  2026-08-25T21:52:32Z  timo  moved proposed -> active (revision 3)
+  2026-08-25T21:52:32Z  operator  created as draft (revision 1)
+  2026-08-25T21:52:32Z  operator  moved draft -> proposed (revision 2)
+  2026-08-25T21:52:32Z  operator  moved proposed -> active (revision 3)
   ```
 
   **Why not git.** This crate's own description says *git as the log*, and git is a fine log for a
@@ -2437,7 +2444,7 @@ both.
 - **An absolute path in `.engineering/project.yaml` is refused.** `protocols:` was the one field
   exempt from a rule every other path in the file already followed, on the reading that where a tree
   sits is the adopter's business. It is — and that is not what the value decides. A project file is
-  committed, so `protocols: /opt/engineering-protocols` means a different thing on every machine that
+  committed, so `protocols: /opt/aep` means a different thing on every machine that
   clones the repository and nothing at all in CI, where the failure arrives as a missing directory
   naming a path nobody on that machine wrote.
 
@@ -2780,7 +2787,7 @@ both.
   events in the run's own transcript; `hook-decisions.jsonl`, the step-context file, the settings
   file and `claude_argv` no longer exist. `integrations/claude-code/hooks/` is deleted; the plugin
   is skills and agents. The eval — logic, recorded transcripts, contracts and results — migrated
-  whole to metaharness `evals/engineering-protocols/` (with `run.sh` retired alongside its
+  whole to metaharness `evals/aep/` (with `run.sh` retired alongside its
   subject). The three trace expectation documents
   moved to `conformance/trace/` as domain specifications. Suspended by name at the time: the
   trace-spec join over fresh transcripts. The reader it was waiting for landed in this same
@@ -4660,62 +4667,62 @@ No compiler, no OpenAPI, no test synthesis: those are ESS waves 2 and 3 in
 - **`xtask schema [--check]`** — schemas are generated from the Rust types, and CI proves they match.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/engineering-protocols/compare/0.38.1...HEAD
-[0.38.1]: https://github.com/beyond10x/engineering-protocols/compare/0.38.0...0.38.1
-[0.38.0]: https://github.com/beyond10x/engineering-protocols/compare/0.37.1...0.38.0
-[0.37.1]: https://github.com/beyond10x/engineering-protocols/compare/0.37.0...0.37.1
-[0.37.0]: https://github.com/beyond10x/engineering-protocols/compare/0.36.4...0.37.0
-[0.36.4]: https://github.com/beyond10x/engineering-protocols/compare/0.36.3...0.36.4
-[0.36.3]: https://github.com/beyond10x/engineering-protocols/compare/0.36.2...0.36.3
-[0.36.2]: https://github.com/beyond10x/engineering-protocols/compare/0.36.1...0.36.2
-[0.36.1]: https://github.com/beyond10x/engineering-protocols/compare/0.36.0...0.36.1
-[0.36.0]: https://github.com/beyond10x/engineering-protocols/compare/0.35.0...0.36.0
-[0.35.0]: https://github.com/beyond10x/engineering-protocols/compare/0.34.0...0.35.0
-[0.34.0]: https://github.com/beyond10x/engineering-protocols/compare/0.33.0...0.34.0
-[0.33.0]: https://github.com/beyond10x/engineering-protocols/compare/0.32.1...0.33.0
-[0.32.1]: https://github.com/beyond10x/engineering-protocols/compare/0.32.0...0.32.1
-[0.32.0]: https://github.com/beyond10x/engineering-protocols/compare/0.31.0...0.32.0
-[0.31.0]: https://github.com/beyond10x/engineering-protocols/compare/0.30.0...0.31.0
-[0.30.0]: https://github.com/beyond10x/engineering-protocols/compare/0.29.0...0.30.0
-[0.29.0]: https://github.com/beyond10x/engineering-protocols/compare/0.28.0...0.29.0
-[0.28.0]: https://github.com/beyond10x/engineering-protocols/compare/0.27.3...0.28.0
-[0.27.3]: https://github.com/beyond10x/engineering-protocols/compare/0.27.2...0.27.3
-[0.27.2]: https://github.com/beyond10x/engineering-protocols/compare/0.27.1...0.27.2
-[0.27.1]: https://github.com/beyond10x/engineering-protocols/compare/0.27.0...0.27.1
-[0.27.0]: https://github.com/beyond10x/engineering-protocols/compare/0.26.0...0.27.0
-[0.26.0]: https://github.com/beyond10x/engineering-protocols/compare/0.25.0...0.26.0
-[0.25.0]: https://github.com/beyond10x/engineering-protocols/compare/0.24.0...0.25.0
-[0.24.0]: https://github.com/beyond10x/engineering-protocols/compare/0.23.2...0.24.0
-[0.23.2]: https://github.com/beyond10x/engineering-protocols/compare/0.23.1...0.23.2
-[0.23.1]: https://github.com/beyond10x/engineering-protocols/compare/0.23.0...0.23.1
-[0.23.0]: https://github.com/beyond10x/engineering-protocols/compare/0.22.0...0.23.0
-[0.22.0]: https://github.com/beyond10x/engineering-protocols/compare/0.21.0...0.22.0
-[0.21.0]: https://github.com/beyond10x/engineering-protocols/compare/0.20.0...0.21.0
-[0.20.0]: https://github.com/beyond10x/engineering-protocols/compare/0.19.0...0.20.0
-[0.19.0]: https://github.com/beyond10x/engineering-protocols/compare/0.18.0...0.19.0
-[0.18.0]: https://github.com/beyond10x/engineering-protocols/compare/0.17.0...0.18.0
-[0.17.0]: https://github.com/beyond10x/engineering-protocols/compare/0.16.0...0.17.0
-[0.16.0]: https://github.com/beyond10x/engineering-protocols/compare/0.15.0...0.16.0
-[0.15.0]: https://github.com/beyond10x/engineering-protocols/compare/0.14.0...0.15.0
-[0.14.0]: https://github.com/beyond10x/engineering-protocols/compare/0.13.0...0.14.0
-[0.13.0]: https://github.com/beyond10x/engineering-protocols/compare/0.12.0...0.13.0
-[0.12.0]: https://github.com/beyond10x/engineering-protocols/compare/0.11.0-ground-truth-and-docs...0.12.0
-[0.11.0-ground-truth-and-docs]: https://github.com/beyond10x/engineering-protocols/compare/0.10.0-horizons-dogfood-lab...0.11.0-ground-truth-and-docs
-[0.10.0-horizons-dogfood-lab]: https://github.com/beyond10x/engineering-protocols/compare/0.9.0-harness-waves-2-3...0.10.0-horizons-dogfood-lab
-[0.9.0-harness-waves-2-3]: https://github.com/beyond10x/engineering-protocols/compare/0.8.0-harness-wave-1-trace-wave-1...0.9.0-harness-waves-2-3
-[0.8.0-harness-wave-1-trace-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.7.1-infra-waves-1-4...0.8.0-harness-wave-1-trace-wave-1
-[0.7.1-infra-waves-1-4]: https://github.com/beyond10x/engineering-protocols/compare/0.7.0-ess-wave-7...0.7.1-infra-waves-1-4
-[0.7.0-ess-wave-7]: https://github.com/beyond10x/engineering-protocols/compare/0.6.1-ess-wave-6.5...0.7.0-ess-wave-7
-[0.6.1-ess-wave-6.5]: https://github.com/beyond10x/engineering-protocols/compare/0.6.0-ess-wave-6...0.6.1-ess-wave-6.5
-[0.6.0-ess-wave-6]: https://github.com/beyond10x/engineering-protocols/compare/0.5.0-ess-wave-5...0.6.0-ess-wave-6
-[0.5.0-ess-wave-5]: https://github.com/beyond10x/engineering-protocols/compare/0.4.0-ess-wave-4...0.5.0-ess-wave-5
-[0.4.0-ess-wave-4]: https://github.com/beyond10x/engineering-protocols/compare/0.3.3-ess-wave-3.5...0.4.0-ess-wave-4
-[0.3.3-ess-wave-3.5]: https://github.com/beyond10x/engineering-protocols/compare/0.3.2-ess-wave-3...0.3.3-ess-wave-3.5
-[0.3.2-ess-wave-3]: https://github.com/beyond10x/engineering-protocols/compare/0.3.1-ess-wave-2...0.3.2-ess-wave-3
-[0.3.1-ess-wave-2]: https://github.com/beyond10x/engineering-protocols/compare/0.3.0-ess-wave-1...0.3.1-ess-wave-2
-[0.3.0-ess-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.2.1...0.3.0-ess-wave-1
-[0.2.1]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-3...0.2.1
-[0.2.0-wave-3]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-2...0.2.0-wave-3
-[0.2.0-wave-2]: https://github.com/beyond10x/engineering-protocols/compare/0.2.0-wave-1...0.2.0-wave-2
-[0.2.0-wave-1]: https://github.com/beyond10x/engineering-protocols/compare/0.1.0...0.2.0-wave-1
-[0.1.0]: https://github.com/beyond10x/engineering-protocols/releases/tag/0.1.0
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.38.1...HEAD
+[0.38.1]: https://github.com/beyond10x/aep/compare/0.38.0...0.38.1
+[0.38.0]: https://github.com/beyond10x/aep/compare/0.37.1...0.38.0
+[0.37.1]: https://github.com/beyond10x/aep/compare/0.37.0...0.37.1
+[0.37.0]: https://github.com/beyond10x/aep/compare/0.36.4...0.37.0
+[0.36.4]: https://github.com/beyond10x/aep/compare/0.36.3...0.36.4
+[0.36.3]: https://github.com/beyond10x/aep/compare/0.36.2...0.36.3
+[0.36.2]: https://github.com/beyond10x/aep/compare/0.36.1...0.36.2
+[0.36.1]: https://github.com/beyond10x/aep/compare/0.36.0...0.36.1
+[0.36.0]: https://github.com/beyond10x/aep/compare/0.35.0...0.36.0
+[0.35.0]: https://github.com/beyond10x/aep/compare/0.34.0...0.35.0
+[0.34.0]: https://github.com/beyond10x/aep/compare/0.33.0...0.34.0
+[0.33.0]: https://github.com/beyond10x/aep/compare/0.32.1...0.33.0
+[0.32.1]: https://github.com/beyond10x/aep/compare/0.32.0...0.32.1
+[0.32.0]: https://github.com/beyond10x/aep/compare/0.31.0...0.32.0
+[0.31.0]: https://github.com/beyond10x/aep/compare/0.30.0...0.31.0
+[0.30.0]: https://github.com/beyond10x/aep/compare/0.29.0...0.30.0
+[0.29.0]: https://github.com/beyond10x/aep/compare/0.28.0...0.29.0
+[0.28.0]: https://github.com/beyond10x/aep/compare/0.27.3...0.28.0
+[0.27.3]: https://github.com/beyond10x/aep/compare/0.27.2...0.27.3
+[0.27.2]: https://github.com/beyond10x/aep/compare/0.27.1...0.27.2
+[0.27.1]: https://github.com/beyond10x/aep/compare/0.27.0...0.27.1
+[0.27.0]: https://github.com/beyond10x/aep/compare/0.26.0...0.27.0
+[0.26.0]: https://github.com/beyond10x/aep/compare/0.25.0...0.26.0
+[0.25.0]: https://github.com/beyond10x/aep/compare/0.24.0...0.25.0
+[0.24.0]: https://github.com/beyond10x/aep/compare/0.23.2...0.24.0
+[0.23.2]: https://github.com/beyond10x/aep/compare/0.23.1...0.23.2
+[0.23.1]: https://github.com/beyond10x/aep/compare/0.23.0...0.23.1
+[0.23.0]: https://github.com/beyond10x/aep/compare/0.22.0...0.23.0
+[0.22.0]: https://github.com/beyond10x/aep/compare/0.21.0...0.22.0
+[0.21.0]: https://github.com/beyond10x/aep/compare/0.20.0...0.21.0
+[0.20.0]: https://github.com/beyond10x/aep/compare/0.19.0...0.20.0
+[0.19.0]: https://github.com/beyond10x/aep/compare/0.18.0...0.19.0
+[0.18.0]: https://github.com/beyond10x/aep/compare/0.17.0...0.18.0
+[0.17.0]: https://github.com/beyond10x/aep/compare/0.16.0...0.17.0
+[0.16.0]: https://github.com/beyond10x/aep/compare/0.15.0...0.16.0
+[0.15.0]: https://github.com/beyond10x/aep/compare/0.14.0...0.15.0
+[0.14.0]: https://github.com/beyond10x/aep/compare/0.13.0...0.14.0
+[0.13.0]: https://github.com/beyond10x/aep/compare/0.12.0...0.13.0
+[0.12.0]: https://github.com/beyond10x/aep/compare/0.11.0-ground-truth-and-docs...0.12.0
+[0.11.0-ground-truth-and-docs]: https://github.com/beyond10x/aep/compare/0.10.0-horizons-dogfood-lab...0.11.0-ground-truth-and-docs
+[0.10.0-horizons-dogfood-lab]: https://github.com/beyond10x/aep/compare/0.9.0-harness-waves-2-3...0.10.0-horizons-dogfood-lab
+[0.9.0-harness-waves-2-3]: https://github.com/beyond10x/aep/compare/0.8.0-harness-wave-1-trace-wave-1...0.9.0-harness-waves-2-3
+[0.8.0-harness-wave-1-trace-wave-1]: https://github.com/beyond10x/aep/compare/0.7.1-infra-waves-1-4...0.8.0-harness-wave-1-trace-wave-1
+[0.7.1-infra-waves-1-4]: https://github.com/beyond10x/aep/compare/0.7.0-ess-wave-7...0.7.1-infra-waves-1-4
+[0.7.0-ess-wave-7]: https://github.com/beyond10x/aep/compare/0.6.1-ess-wave-6.5...0.7.0-ess-wave-7
+[0.6.1-ess-wave-6.5]: https://github.com/beyond10x/aep/compare/0.6.0-ess-wave-6...0.6.1-ess-wave-6.5
+[0.6.0-ess-wave-6]: https://github.com/beyond10x/aep/compare/0.5.0-ess-wave-5...0.6.0-ess-wave-6
+[0.5.0-ess-wave-5]: https://github.com/beyond10x/aep/compare/0.4.0-ess-wave-4...0.5.0-ess-wave-5
+[0.4.0-ess-wave-4]: https://github.com/beyond10x/aep/compare/0.3.3-ess-wave-3.5...0.4.0-ess-wave-4
+[0.3.3-ess-wave-3.5]: https://github.com/beyond10x/aep/compare/0.3.2-ess-wave-3...0.3.3-ess-wave-3.5
+[0.3.2-ess-wave-3]: https://github.com/beyond10x/aep/compare/0.3.1-ess-wave-2...0.3.2-ess-wave-3
+[0.3.1-ess-wave-2]: https://github.com/beyond10x/aep/compare/0.3.0-ess-wave-1...0.3.1-ess-wave-2
+[0.3.0-ess-wave-1]: https://github.com/beyond10x/aep/compare/0.2.1...0.3.0-ess-wave-1
+[0.2.1]: https://github.com/beyond10x/aep/compare/0.2.0-wave-3...0.2.1
+[0.2.0-wave-3]: https://github.com/beyond10x/aep/compare/0.2.0-wave-2...0.2.0-wave-3
+[0.2.0-wave-2]: https://github.com/beyond10x/aep/compare/0.2.0-wave-1...0.2.0-wave-2
+[0.2.0-wave-1]: https://github.com/beyond10x/aep/compare/0.1.0...0.2.0-wave-1
+[0.1.0]: https://github.com/beyond10x/aep/releases/tag/0.1.0

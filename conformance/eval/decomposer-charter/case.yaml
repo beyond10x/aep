@@ -37,7 +37,7 @@ verdict: held
 
 task: |
   Decompose `epic:passkey-sign-in` into the stories that jointly cover it, using the
-  `engineering-protocols:decomposer` agent.
+  `aep-planning:decomposer` agent.
 
   Nothing else. Do not move anything, and do not touch an artifact you did not create.
 

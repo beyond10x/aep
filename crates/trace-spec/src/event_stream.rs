@@ -755,8 +755,8 @@ mod tests {
                 "harness_version":"2.1.239","session_id":"s-1","model":"claude-opus-4",
                 "permission_mode":"dontAsk","credential_source":"none","output_style":"default",
                 "cwd":"/work","offered_tools":["Bash","Write"],"slash_commands":["/help"],
-                "skills":["engineering-protocols:planning"],"agents":["a"],
-                "plugins":[{"name":"engineering-protocols","version":"0.1.0","source":"inline"}],
+                "skills":["aep-planning:planning"],"agents":["a"],
+                "plugins":[{"name":"aep","version":"0.1.0","source":"inline"}],
                 "mcp_servers":[],"inputs_digest":"d","transcript":{"path":"/t","digest":"e","bytes":9},
                 "hermetic":{"mode":"strict"}}"#,
         );
@@ -778,10 +778,10 @@ mod tests {
         );
         assert_eq!(
             start.skills.as_deref(),
-            Some(&["engineering-protocols:planning".to_owned()][..])
+            Some(&["aep-planning:planning".to_owned()][..])
         );
         let plugins = start.plugins.as_deref().expect("the plugins were listed");
-        assert_eq!(plugins[0].name, "engineering-protocols");
+        assert_eq!(plugins[0].name, "aep");
         assert_eq!(plugins[0].version.as_deref(), Some("0.1.0"));
         assert_eq!(
             plugins[0].path, None,
@@ -998,12 +998,12 @@ mod tests {
         // reads.
         let ir = read(
             r#"{"event":"tool.result","call_id":"c-1","is_error":false,"content":"loaded","bytes":6,
-                "tool_use_result":{"commandName":"engineering-protocols:planning","success":true}}"#,
+                "tool_use_result":{"commandName":"aep-planning:planning","success":true}}"#,
         );
         let result = ir.events[0].tool_result().expect("a result");
         assert_eq!(
             result.field("commandName"),
-            Some(&Value::from("engineering-protocols:planning"))
+            Some(&Value::from("aep-planning:planning"))
         );
         assert_eq!(result.field("success"), Some(&Value::Bool(true)));
         assert_eq!(
@@ -1038,13 +1038,13 @@ mod tests {
         let ir = read(
             r#"{"event":"tool.result","call_id":"c-1","is_error":false,
                 "content":{"commandName":"planning","success":false},"bytes":41,
-                "tool_use_result":{"commandName":"engineering-protocols:planning","success":true}}"#,
+                "tool_use_result":{"commandName":"aep-planning:planning","success":true}}"#,
         );
         let result = ir.events[0].tool_result().expect("a result");
         assert_eq!(result.field("success"), Some(&Value::Bool(true)));
         assert_eq!(
             result.field("commandName"),
-            Some(&Value::from("engineering-protocols:planning"))
+            Some(&Value::from("aep-planning:planning"))
         );
     }
 

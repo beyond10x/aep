@@ -14,7 +14,6 @@ use aep_domain::raw::{
     RawArtifactManifest, RawPrinciple, RawProfile, RawProtocol, RawTask, RawWorkflow,
 };
 use aep_driver_spec::map::RawStepMap;
-use ess_domain::spec::RawSpecFile;
 use schemars::schema::RootSchema;
 use schemars::{schema_for, JsonSchema};
 use trace_domain::raw::RawTraceSpec;
@@ -65,9 +64,7 @@ fn entry<T: JsonSchema>(
 /// Every schema this build publishes.
 ///
 /// The document schemas are what a project's files are validated against; the interchange schemas
-/// are what a harness exchanges with the engine at run time. The specification schema is the one an
-/// editor loads: an author writing an ESS gets the field names checked as they type, rather than
-/// after a build that runs somewhere else.
+/// are what a harness exchanges with the engine at run time.
 pub fn generated_schemas() -> Vec<GeneratedSchema> {
     vec![
         entry::<RawProtocol>("RawProtocol", "protocol", "a protocol declaration"),
@@ -102,11 +99,6 @@ pub fn generated_schemas() -> Vec<GeneratedSchema> {
             "an action put to the engine",
         ),
         entry::<EventEnvelope>("EventEnvelope", "event", "one audit event"),
-        entry::<RawSpecFile>(
-            "RawSpecFile",
-            "ess",
-            "one file of an executable system specification",
-        ),
         entry::<RawPlanningFrontmatter>(
             "RawPlanningFrontmatter",
             "planning-document",
@@ -151,7 +143,6 @@ mod tests {
             "evidence.schema.json",
             "action-request.schema.json",
             "event.schema.json",
-            "ess.schema.json",
             "planning-document.schema.json",
             "trace-spec.schema.json",
             "driver-steps.schema.json",

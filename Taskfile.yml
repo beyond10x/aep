@@ -1,4 +1,4 @@
-# Task runner for engineering-protocols. Requires go-task (https://taskfile.dev).
+# Task runner for AEP. Requires go-task (https://taskfile.dev).
 version: "3"
 
 tasks:
@@ -8,12 +8,9 @@ tasks:
 
   check:
     desc: >-
-      Format check, status check, version check, lint, test, doc check, schema check, projection
-      check, suite check, observation check, synthesis check, MSRV build and website build —
-      everything CI runs.
-      The observation check now also covers the committed manifest projection. The last ones need
-      the Go toolchain, the wasm32-unknown-unknown Rust target, Node and a Rust 1.85 toolchain
-      beside Rust's own.
+      Format, status, planning, governance, dependency, lint, test, documentation, schema,
+      PostgreSQL, MSRV and website checks — everything CI runs. The final two require Node and a
+      Rust 1.85 toolchain beside Rust's own.
 
       `msrv` and `website` are here because they were **not**, and this description said
       "everything CI runs" while they were missing. CI was red for eleven consecutive releases —
@@ -32,15 +29,9 @@ tasks:
       - task: clippy
       - task: test
       - task: docs-check
-      - task: plugin-check
       - task: postgres-check
       - task: doc-check
       - task: schema-check
-      - task: generate-check
-      - task: suite-check
-      - task: infra-check
-      - task: synth-check
-      - task: lab-check
       - task: msrv
       - task: website
 
@@ -72,17 +63,14 @@ tasks:
       - npm ci
       - npm run build
 
-  # `cargo xtask fmt`, not `cargo fmt --all`: `--all` also formats every member's local path
-  # dependencies, and `examples/billing-realization` depends by path on the synthesised crates
-  # under `generated/rust/` — a tree whose bytes are the emitter's, held byte-identical by
-  # `synth-check`. One owner per tree; rustfmt is not the generated workspaces' owner.
+  # The xtask reads the exact member list from Cargo metadata.
   fmt:
     desc: Format the source workspace's members.
     cmds:
       - cargo xtask fmt
 
   fmt-check:
-    desc: Fail if any workspace member is unformatted. Generated workspaces are exempt by design.
+    desc: Fail if any workspace member is unformatted.
     cmds:
       - cargo xtask fmt --check
 
@@ -149,31 +137,15 @@ tasks:
     cmds:
       - cargo xtask claims
 
-  lab-check:
-    desc: >-
-      Fail when the lab's copy of the emitted glue differs from what the emitter produces. Only the
-      Website workflow checked this, so `task check` was green while CI was red for two releases —
-      the version stamp went to 0.26.0 and the copy stayed at 0.1.0. Component gates are not enough.
-    cmds:
-      - cmp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs
-
-  plugin-check:
-    desc: >-
-      Fail when the Claude Code plugin changed since the newest release tag and its manifest
-      version did not, when a skill does not state that version, or when roster.json disagrees
-      with the skills and agents on disk. The manifest read 0.1.0 through nine plugin commits;
-      a skill edited eighteen minutes into a running wave halted it, and nothing could say which
-      text the coordinator had loaded.
-    cmds:
-      - cargo xtask plugin
-
   install:
     desc: >-
-      Install this tree's `protocol` over the ambient one. The last step of a release: six sessions
+      Install this tree's canonical `aep` command and its `protocol` compatibility alias over the
+      ambient ones. The last step of a release: six sessions
       got a wrong `validate` or `history` answer from a binary older than the store it read, and the
       install that would have prevented it was nowhere in the procedure.
     cmds:
       - cargo install --path crates/protocol-cli --locked --force
+      - aep --version
       - protocol --version
 
   release-check:
@@ -224,103 +196,6 @@ tasks:
     cmds:
       - cargo test --workspace
 
-  generate:
-    desc: Regenerate generated/ — the projections of examples/billing/.
-    cmds:
-      - cargo xtask generate
-
-  generate-check:
-    desc: Fail if the committed projections differ from what the specification produces.
-    cmds:
-      - cargo xtask generate --check
-
-  # Beside `generate` rather than part of it: `generated/` has one owner and a recursive orphan scan,
-  # so a second task writing into it would delete the first task's output. `xtask/src/main.rs` argues
-  # it at length. The suites also cover two specifications where `generated/` covers one.
-  suite:
-    desc: Regenerate suites/generated/ — the conformance suites examples/ oblige.
-    cmds:
-      - cargo xtask suite
-
-  suite-check:
-    desc: Fail if the committed conformance suites differ from what the specifications oblige.
-    cmds:
-      - cargo xtask suite --check
-
-  # Beside `generate` for the reason `suite` is: `generated/` has one owner per subtree, and the
-  # synthesised trees under `generated/rust/`, `generated/go/` and `generated/web/` are the synth
-  # task's — the projection task's orphan scan carves all three roots out, and `xtask`'s ownership
-  # test holds the carve-outs to the list of owners. This one also builds what it wrote: a tree
-  # that matches its specification byte for byte and no longer compiles is a claim nothing else
-  # checks.
-  synth:
-    desc: >-
-      Regenerate generated/rust/, generated/go/ and generated/web/ — the three trees the
-      specifications determine, from one language-neutral plan — then run the dual-target
-      demonstration against the two applications the committed trees and their realizations build.
-    cmds:
-      - cargo xtask synth
-
-  synth-check:
-    desc: >-
-      Fail if any synthesised tree differs from what the specifications determine, no longer builds
-      (cargo check; gofmt -l, go build, go vet; cargo build --target wasm32-unknown-unknown), if the
-      emitted page calls an export its module does not have, if the committed suite or the browser
-      boundary no longer holds, or if the two applications synthesised from examples/gatepass stop
-      behaving as one system — both are started on ephemeral ports and their startup records,
-      statuses, bodies and published documents are compared. Needs the Go toolchain, the
-      wasm32-unknown-unknown target and Node, and says which is missing rather than skipping.
-    cmds:
-      - cargo xtask synth --check
-
-  # Three named files and one tree: the task owns exactly `cluster.ir.json`, `simulation.json`,
-  # `drift.json` and everything under `projection/`, and every input beside them —
-  # `observation.json`, `observation.drifted.json`, `expected.yaml` — is a reviewed, hand-written
-  # fixture. The fourth output gets an orphan scan the other three do not need, because a patch
-  # file for an object nothing patches any more would sit in the repository looking like a
-  # proposal somebody still stands behind. `xtask/src/main.rs` documents the pairing.
-  infra:
-    desc: >-
-      Regenerate the example cluster's four committed outputs: the compiled IR, the three-valued
-      simulation of expected.yaml against it, the drift between the two observations, and the
-      projection tree — the patches, manifests and obligations that would close the simulation's
-      gaps.
-    cmds:
-      - cargo xtask infra
-
-  infra-check:
-    desc: >-
-      Fail if the committed observation IR, simulation, drift or projection tree differs from what
-      its inputs produce — including a projection file nothing generates any more.
-    cmds:
-      - cargo xtask infra --check
-
-  # The website's lab runs the real thing rather than a recording of it: `website/src/pages/lab/`
-  # fetches a WebAssembly module beside the page, sends five commands over its boundary and reads
-  # its three panels off the answers. This builds that module — the generated bridge under
-  # `generated/web/billing/` linked with the hand-written realization, which is exactly what
-  # `examples/billing-web` already is — and puts it where the site serves static files from.
-  #
-  # The `.wasm` is not committed, for the reason `generated/web/README.md` gives: it is a build
-  # artifact, and a binary nobody can diff is not evidence. `.gitignore` keeps it out, and the Pages
-  # workflow runs these same commands before `npm run build`.
-  #
-  # The `cmp` comes first. `website/src/pages/lab/_bridge.mjs` is a byte-identical copy of the
-  # emitted glue, so that the page and the boundary smoke test drive the module through the same
-  # code; a copy that had drifted would be a page proving something else, so this refuses rather
-  # than builds. The node step at the end is the run's own test: same module, same glue, and the
-  # same engine the page calls.
-  lab:
-    desc: >-
-      Build the browser module the website's lab runs, place it in website/static/lab/, and hold
-      the run it produces to its test. Needs the wasm32-unknown-unknown target and Node 22.18+.
-    cmds:
-      - cmp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs
-      - cargo build --release --target wasm32-unknown-unknown --manifest-path examples/billing-web/Cargo.toml
-      - mkdir -p website/static/lab
-      - cp examples/billing-web/target/wasm32-unknown-unknown/release/billing_web_realized.wasm website/static/lab/billing_web_realized.wasm
-      - node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON website/src/pages/lab/_run.test.mjs
-
   schema:
     desc: Regenerate schemas/generated/ from the Rust types.
     cmds:
@@ -343,7 +218,6 @@ tasks:
     desc: Build the API documentation.
     cmds:
       - cargo doc --workspace --no-deps
-
   # Doc comments carry the design reasoning here, so a broken intra-doc link loses an argument, not
   # just a hyperlink. Same defect class as a clippy warning, so it is a step in `check` rather than a
   # job of its own, and it reuses the dependency build `test` has already paid for.
@@ -353,16 +227,3 @@ tasks:
       RUSTDOCFLAGS: -D warnings
     cmds:
       - cargo doc --workspace --no-deps
-
-  # `plugin-eval` and `driven-eval` were removed 2026-08-28. Both invoked
-  # `integrations/claude-code/eval/`, which `epic:metaharness-migration` deleted on 2026-08-22: the
-  # agent-eval checks and their recorded transcripts live at metaharness
-  # `evals/engineering-protocols/`, and `run.sh` retired with the hooks it inspected. Neither task
-  # was a step of `check`, so nothing was failing — a task runner that offers a verb pointing at a
-  # deleted script is the drift invariant 1 exists to prevent, and it is removed rather than
-  # repointed because the eval is no longer this repository's to run.
-
-  codex-eval:
-    desc: Check the Codex instruction surface (free, no API call, no model).
-    cmds:
-      - integrations/codex/eval/check-instruction-surface.sh

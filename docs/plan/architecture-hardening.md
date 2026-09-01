@@ -27,10 +27,10 @@ examples/billing-conformance/evidence/06-conformance-faulty.yaml
 examples/billing-conformance/evidence/06-conformance.yaml
 ```
 
-The integration checkout is `../engineering-protocols-wt-architecture-hardening`, branch
+The integration checkout is `../aep-wt-architecture-hardening`, branch
 `wave/architecture-hardening`. The upstream checkout is `../entity-runtime-wt-atomic-batch`, branch
 `impl/atomic-batch-store`. Unit worktrees are created one at a time under
-`../engineering-protocols-wt-<story-slug>` because this session implements serially; each still
+`../aep-wt-<story-slug>` because this session implements serially; each still
 forks from the same wave-base commit and uses its own in-tree `target/`. Scratch lives below each
 unit worktree's `.wave-scratch/<story-slug>/` and is removed with that worktree.
 
@@ -48,7 +48,7 @@ unit worktree's `.wave-scratch/<story-slug>/` and is removed with that worktree.
 The opening `chore(store):` commit carries this selection and activates the stories. Each unit has
 one implementation commit and merges serially with `--no-ff`. One complete gate run against the
 merged integration commit supplies the evidence for every story; a closing `chore(store):` commit
-records it, after which the wave merges to `main`. No tag, push or engineering-protocols release is
+records it, after which the wave merges to `main`. No tag, push or aep release is
 authorised by this wave.
 
 ## Contract decisions
@@ -77,6 +77,6 @@ authorised by this wave.
 
 Each unit adds a load-bearing regression plus a one-line mutation proof. The merged wave runs focused
 crate tests throughout, the runtime's complete gate before its release, dependency pin validation
-after adoption, and finally every engineering-protocols gate step with its own captured exit status
+after adoption, and finally every aep gate step with its own captured exit status
 and output. The closing record distinguishes executed and explicitly skipped steps and cites the
 exact merge commit judged.

@@ -24,8 +24,6 @@ aep-backend-markdown.workspace = true
 # cannot form.
 aep-driver-spec.workspace = true
 
-ess-domain.workspace = true
-
 # The `trace-spec/1` document is published from here for the reason every other authored document
 # is: one generator, one drift check, one index. A transcript-conformance specification is a file
 # somebody writes, reviews and commits, so an editor should check its field names as they type

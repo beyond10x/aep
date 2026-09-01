@@ -1,387 +1,135 @@
-# AGENTS.md — engineering-protocols
+# AGENTS.md — AEP
 
-The contract for changing **this** repository. Read it before changing anything.
+The contract for changing this repository. Read it before changing anything.
 
-Org-wide rules — the naming convention, the language rule (anything that runs is Rust, not Python), the former-brand rule (atlas ADR 0001) and its four
-exemption categories, and the rule that renaming anything another repo verifies is a coordinated
-migration with an ADR — live in `atlas/AGENTS.md` and are not restated here.
-
-`README.md` and `website/` orient a reader. This file says what must not break.
+Organization-wide repository, language, history, provenance, and coordinated-migration rules live
+in `atlas/AGENTS.md`. A change to bytes another repository verifies is a coordinated migration with
+an Atlas ADR.
 
 ## Serves
 
-The objectives of the collection this repository moves, by id from `atlas/ROADMAP.md` — the only
-cross-repository roadmap, and the page that says what each id means and which evidence closes it:
+This repository advances these objectives from `atlas/ROADMAP.md`:
 
-- **O2 — decisions as data, with evidence.** Engineering method and system intent as typed, executable rules over evidence, with the artifact model running on the entity kernel (atlas ADR 0002).
-- **O3 — any harness, observed and compared.** The governor both arms are measured under (atlas ADR 0004), and the four-arm eval that measures them.
-- **O6 — self-improvement, built into all of it.** A driven run scores itself, and the planning store keeps the record the next run reads.
+- **O2 — decisions as data, with evidence.** Artifact state, lifecycle, legal moves, rules,
+  evidence, and completion are data a deterministic engine decides.
+- **O3 — any harness, observed and compared.** AEP supplies the governor, trace vocabulary,
+  reference driver, and evaluation substrate; harness-specific readers and paid runs stay outside
+  this repository.
 
-A change here that moves none of these is a question for the operator, not a task.
-`atlas/scripts/check-map.sh` fails a repository whose `AGENTS.md` names no objective.
+A change that advances neither objective is a question for the operator, not an inferred task.
 
 ## What this repository is
 
-A machine-executable specification of engineering methodology: principles, workflows, capabilities,
-evidence and verification, expressed as typed Rust and generated JSON Schema rather than as prose in
-a prompt. It is a **library and specification**, not an agent, a CI system or a deployment platform.
+A Rust library collection, a typed document tree, and one command with two names:
 
-**The specification is the product; `integrations/` demonstrates it.** A plugin surface — a skill, an
-agent charter — exists to show that a rule in `protocols/`, `principles/` or `workflows/` can be
-carried by a real harness, and sometimes to find the shape of a rule that is not written down yet.
-It is a reference projection, and it is deliberately allowed to run ahead of the YAML: a concept
-proven in a surface is the evidence for the document that formalises it, which is the order
-`crates/ess-domain/src/actor.rs:24-33` argues for when it refuses to ship a concept before the
-evidence that made it necessary. What eventually drives these workflows deterministically is a
-harness, and a harness reads the documents, not the surfaces. So the question to ask of anything
-added under `integrations/` is *which rule does this demonstrate, and what would its formalisation
-have to say* — never *is this the product*.
+- `aep-domain`, `aep-engine`, `aep-contract`, `aep-conformance`, and the `aep-backend-*` crates own
+  the generic protocol and planning substrate.
+- `adp-domain` and `aop-domain` add development and operations vocabulary over that substrate.
+- `aep-driver-spec` and `aep-driver` own reference step maps and deterministic driving.
+- `trace-domain` and `trace-spec` normalize and check recorded harness activity.
+- `aep-schema` publishes the document schemas.
+- `aep-ess-evidence` is an optional report adapter at the AEP boundary.
+- `protocol-cli` publishes canonical `aep` and the exact `protocol` compatibility alias.
 
-## Which documents are normative
+It is not an LLM orchestration framework, hosted database, CI system, deployment platform,
+marketplace, system-modeling toolchain, or credential holder. The engine decides from caller-supplied
+documents and evidence; named edge crates own IO.
 
-Exactly two, and neither is the newest file in `docs/design/`:
+## Normative documents
 
-* [`docs/design/consolidated-design-v0.2.md`](docs/design/consolidated-design-v0.2.md) — the
-  specification for the protocol.
-* [`docs/design/reconciliation-v0.2.md`](docs/design/reconciliation-v0.2.md) — what is implemented,
-  and §5, the register of deliberate deviations.
-
-When code and the consolidated design disagree, the document wins unless the disagreement is recorded
-in the reconciliation register §5. Add to that list rather than diverging silently.
-
-**Everything else in `docs/design/` is proposed until a plan page in `docs/plan/` — or a story in
-`.engineering/planning/` — accepts it.** A proposal is not a work order, however long and however
-recent it is. **There are two acceptance surfaces and you must check both**: a plan page, and the
-store — `story:evidence-horizons` took up `evidence-horizons-design-v0.1.md` and shipped it without a
-plan page ever existing, which is what the store is for. A design accepted either way is accepted.
-
-**Do not implement from an unreviewed design, and do not treat one as evidence of what this
-repository is.** [`docs/VISION.md`](docs/VISION.md) § *Proposed, not accepted* says what each would
-add, and [`docs/plan/gap-register.md`](docs/plan/gap-register.md) holds every open gap with what
-closes it. A design's own header can be stale — the accepting surface is what decides, not the
-header.
-
-### Refusals and partial acceptances that are still binding
-
-A design accepted *in part* leaves named refusals behind. These are prohibitions, not backlog:
-
-| design | what is refused, and by what |
+| Subject | Authority |
 |---|---|
-| `ess-semantic-diff-impact-evolution-design-v0.1.md` | the proposal-evaluation loop and architecture search are **rejected outright**; everything past § 31 stays proposed |
-| `ess-structural-synthesis-obligations-realizations-design-v0.1.md` | § 28 is **refused by invariant 6**; the obligation/`Realization` programme stays proposed (W7.4 takes a slice) |
-| `transcript-conformance-design-v0.1.md` | the `regex` matcher of § 3.4 is **refused by name** — the workspace carries no regular-expression engine. Still proposed: assertions over the per-request usage series (§ 2.7), an expectation kind for the skill's own text entering context (§ 2.8), and a streaming checker (D5) |
-| `fact-scoped-applicability-design-v0.1.md` | its first draft's claim that this finishes the governed run is **refused** — measured, `evidence.missing` goes 4 → 2, not 0. Its § 8 lists the five remaining blockers, § 9 the six follow-ups |
-| `semantic-infrastructure-discovery-…-multicloud-design-v0.1.md` | reviewed and **deferred whole**; two ideas harvested |
-| `story-completion-evidence-design-v0.1.md` | **accepted in part, 2026-08-28** — its own § 10, recorded also on `harness-wave-4-governed-dogfood.md` § W4.3 and on `story:completion-needs-evidence`. **Refused by name:** the engine judging a producer's *independence* from what it reports on as part of this rule — kept under `story:evidence-producers-for-the-driven-map`, with **D-S4** as the standing limit. **Accepted but not a work order yet:** § 2's principle and § 6.3's option B, which come into force only once a driven run has closed a story; until then the principle file is not written |
-| `harness-wave-4-governed-dogfood.md` | the plan page itself stays **proposed**. Its W4.1 has been run once and **blocked in `establish_verifiers`**; the run is the finding and stays on that page rather than being repaired into a pass |
+| protocol semantics | `docs/design/consolidated-design-v0.2.md` and accepted reconciliation |
+| artifact completion evidence | accepted portions of `docs/design/story-completion-evidence-design-v0.1.md` |
+| transcript checking | `docs/design/transcript-conformance-design-v0.1.md` |
+| driver and harness boundary | `docs/design/harness-planning-and-driver-design-v0.1.md` |
+| open work and acceptance | `.engineering/planning/` plus accepted pages under `docs/plan/` |
+| delivered releases | `docs/status.md`, generated from reachable annotated tags |
 
-## Current state
+A design is proposed until a plan or planning artifact accepts it. Historical prose does not
+override a later accepted decision.
 
-**Do not write the current state here.** It drifted in this file's own first paragraphs and is
-carried by surfaces that cannot:
+## Repository boundaries
 
-| question | the surface that answers it |
-|---|---|
-| what is delivered, wave by wave | [`docs/status.md`](docs/status.md) — generated by `cargo xtask status` from the annotated tags and drift-checked in the gate |
-| what each wave actually delivered | `git tag -n99` |
-| whether it works | `task check` |
-| what the document tree holds | `protocol validate` |
-| what is open and what closes it | [`docs/plan/gap-register.md`](docs/plan/gap-register.md) |
-| what is proposed and unaccepted | [`docs/VISION.md`](docs/VISION.md) § *Proposed, not accepted* |
-| the work order | `docs/design/reconciliation-v0.2.md` § 4 (AEP), `docs/plan/ess-roadmap.md` (ESS), the gap register (everything outside a wave) |
+### Entity Runtime
 
-Two counting rules follow from that, and both are prohibitions:
+The dependency arrow points from AEP to `entity-runtime`. Its IO-free kernel and providers are
+pinned as one release. No Entity Runtime manifest names an AEP crate. Changing that direction or
+changing verified bytes is a coordinated migration.
 
-* **Prose states no count of the gate's own suites or tests.** Four hand-written ones drifted apart
-  in this repository's first 48 hours. That number lives in exactly one place: the gate's output.
-* **A count of something a command prints on demand is written down with the command that produces
-  it** — documents in the tree, artifacts in the store, records in a corpus — so a reader can re-run
-  it rather than believe it.
+`cargo xtask deps` refuses more than one Entity Runtime version or pin.
 
-Keep `docs/status.md` accurate when you land work; `cargo xtask status` regenerates it.
+### ESS
 
-## Rules the components carry
+ESS is a standalone sibling repository. It owns executable system descriptions, compilation,
+generation, synthesis, infrastructure import and projection, and its own conformance report. ESS
+has no AEP dependency.
 
-Each of these was learned by building the thing it names. They are enforced where they are stated.
+Core AEP must not compile against ESS modeling types. The optional `aep-ess-evidence` crate may read
+the closed standalone report format and convert it into AEP `ess_conformance` evidence. That adapter
+must refuse unknown fields and contradictory totals.
 
-### Boundaries between this repository and its neighbours
+### Agent plugins
 
-* **Vocabulary crosses to `metaharness`; a dependency never does.** This repository is public and
-  that one is not. `engineering-protocols` appears in no `Cargo.toml` there and no crate of theirs
-  appears in one here.
-* **`entity-runtime` is a dependency — six crates, one tag — and the arrow only points this way.**
-  `crates/aep-backend-entity` takes `entity-core` and `entity-store` by git tag so the status ladder
-  is decided as data rather than by a lookup written here (`src/kernel.rs`, re-exported by
-  `aep-backend-markdown`); `crates/aep-backend-sqlite` and `crates/aep-backend-postgres` take
-  `entity-sqlite`, `entity-postgres` and the latter's optional `entity-query` capability, while
-  `crates/aep-backend-hybrid` takes `entity-remote` for
-  its `Hybrid`, all at the **same** tag, and `dep-check` in the gate
-  (`cargo xtask deps`) fails, naming both, when any `entity-*` crate resolves at two versions or from
-  two pins — two kernels were compiled side by side for two releases before it existed. Nothing of
-  ours appears in a manifest of `entity-runtime`'s, at any
-  version, ever — that is `atlas/architecture/adr/0002`, and it is the reason the arrow is safe: a
-  kernel that never depends on its adopter cannot be shaped by one. The verdicts are held identical
-  by `tests/kernel_equivalence.rs`, which is what makes the dependency reversible: delete the module
-  and the lookup it replaced still stands behind it.
-* **The central service is a consumer, not a new protocol owner.** The private `aep-service`
-  repository implements the authenticated network boundary. This repository owns the semantic
-  command/query contract, any accepted versioned wire, the official client and the constructed
-  conformance corpus. No service implementation or deployment dependency points back into this
-  workspace. The wire is currently proposed in `docs/design/aep-service-wire-v0.1.md`; do not
-  describe a remote client as shipped until its planning story and tests say so (atlas ADR 0008).
-* **The one artifact that crosses is pinned.** A step's surface travels as a sealed
-  `metaharness.frame/1` document. The reader is **transcribed, not linked** —
-  `crates/protocol-cli/tests/metaharness_frame_contract.rs` checks tag, then shape, then digest, **in
-  that order**, and produces the named refusal for a mutation of each class. The golden bytes are
-  `crates/protocol-cli/fixtures/metaharness-frame-canonical.json`, minted by the driver's own code
-  path; the other side pins the same bytes. Changing the format is a coordinated migration under the
-  atlas rule, not an edit.
-* **Harness-specific readers are `metaharness`'s; the trace *vocabulary* is ours.** The division is
-  that `metaharness` normalises each vendor's format and this repository decides against the
-  result: `crates/trace-spec/src/event_stream.rs` reads `metaharness.event/1`, and that is the
-  production path. Two direct vendor readers predate it and stay for stated reasons —
-  `src/adapter.rs` (Claude Code `stream-json`), and `src/codex.rs`, which exists to answer gap
-  `:38`, *harness neutrality has never met a second harness*, by proving one specification decides
-  two shapes. **Neither is the verified reader for its harness.**
-  `metaharness/crates/metaharness-codex/src/rollout.rs` is, and it says so: verified against the
-  binary and **2,437 real rollout files**, where ours is checked against **two committed synthetic
-  fixtures** that `crates/trace-spec/tests/codex_rollout.rs:18` labels as synthetic. A neutrality
-  probe on constructed bytes is a real answer to a real gap and is not a claim to read anybody's
-  transcripts in production. **Do not add a third vendor reader here** — normalise it in
-  `metaharness` and read `metaharness.event/1`.
-* **The evaluation machinery and its corpus are here; the paid runs and their results are not.**
-  The split is finer than *evals moved to metaharness*, so it is written out rather than
-  remembered:
+Harness-specific skills, agents, and marketplace manifests live in the sibling `agentplugins`
+repository. This repository carries no plugin source and no marketplace manifest.
 
-  | here | there |
-  |---|---|
-  | the runner, `protocol eval` (`crates/protocol-cli/src/eval.rs`) | the workflows, prompts and trace expectations a run is judged against (`metaharness/evals/engineering-protocols/`) |
-  | the eval-case corpus (`conformance/eval/`), five cases with the verdict each declares | every recorded stream and matrix from a **paid** run |
-  | synthetic proof streams (`crates/protocol-cli/fixtures/eval-run/`), labelled synthetic where they are used | anything that spawned a vendor binary or spent money |
+`aep eval run --arm plugin` requires an explicit `--plugin-dir`. `aep drive run` accepts repeatable
+`--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR` fallback. Neither command guesses a path under
+this checkout.
 
-  There is **no `evals/` directory here** and no observed transcript is committed here; what is
-  committed is constructed, and every place it is used says so. The rules are public; the runs are
-  not.
-* **The scanner is a separate repository because it holds the credentials.** `infra-scout` reaches a
-  cluster; **nothing here reaches a network** (see the gate's network rule). Secrets appear in
-  `infra-domain` only ever as digests (IW1).
-* **Nothing adopter-internal is written into a file here.** The first adopter's review is held by the
-  operator and is not in this tree; only the triage of it is (`epic:adopter-feedback-round-1`, and
-  the gap register's *first adopter's report* section).
+### Metaharness
 
-### Evidence and labelling
+`metaharness` is an external tool, never a crate dependency. Paid or vendor-backed evaluation runs
+live there. This repository retains language-neutral trace fixtures, evaluation case definitions,
+and the runner that ingests or orchestrates explicitly authorized runs.
 
-* **`provider_emulated` is never promoted, and neither is a constructed stream.** Committed eval
-  streams are structurally faithful and **not observed**; say so wherever they are used.
-* **A verdict of `null` or absent counts *unobservable*, never *held*.** `protocol eval matrix`
-  exits `0` whatever the table says: a matrix is a report, and an exit code that moved with the
-  counts would be the scalar this programme refuses to compute.
-* **A field somebody forgot must not be able to claim a fact.** `plugin_digest` and `model` must be
-  *written* — a digest, or an explicit `null`. A missing key is refused by name
-  (`EVAL-MANIFEST-*`, `EVAL-RECORD-*`, `EVAL-PAIR-*`, `EVAL-RUN-*`, `EVAL-CASE-*`, `EVAL-STREAM-*`),
-  not defaulted.
-* **The plugin digest comes from the instrument's own record**
-  (`session.started.hermetic.installed_plugins`), never from the vendor's top-level `plugins` echo.
-* **Three contract records are refused where they enter**, not left to the engine: `checked: 0`,
-  which would discharge `contract-testing`'s evidence obligation on a run that checked nothing;
-  `breaking_changes > failed`, which describes no run; and a record stating no count at all, because
-  each defaults to zero and zero on `breaking_changes` is the claim a gate reads as a pass. A record
-  reporting failures **is still written down** — the verdict belongs in the record.
-* **`failed` and `breaking_changes` are different questions.** `failed` is *the contract run is red*,
-  which is what a review is for; `breaking_changes` is *a consumer was told something that is no
-  longer true*, which no reviewer can decide. A run that never heard from a contract runner leaves
-  the count `Unknown` and does not pass.
-* **A dogfood wave that reports only its successes measures nothing.** A blocked run stays recorded
-  as blocked. **Built is not adopted**: one story driven once says the mechanism holds on real work;
-  it does not say driven runs are how work happens here.
-* **`trace_conformance` still gates nothing.** Do not describe it as if it does.
-* **A claim the suites do not support is not made.** As of 2026-08-26 the contract has **three**
-  implementors: `aep-backend-memory`, `aep-backend-markdown` and `aep-backend-sqlite`. The sixteen
-  suites run against all three, each beside a deliberately faulty version of itself — a suite that
-  has never failed is not evidence that it can. `aep-backend-sqlite` is
-  `aep-backend-entity::EntityBackend<SqliteStore>` — the one adapter over any `entity_store::Store`,
-  whose suites run in that crate over `SqliteStore` **and** `MemoryStore` — and wave G makes the
-  markdown backend the same type over a provider of its own (`docs/plan/store-waves-f-g-h.md`).
-  Neither durable backend reimplements the contract: each hands every command to
-  `aep-backend-memory` and adds durability, so idempotency, revision conflicts and the audit a
-  refusal still leaves are decided in one place.
-  **D-P1 is closed** — `docs/plan/gap-register.md` carries what that took.
+Nothing spawns without `METAHARNESS_LIVE=1` and `--budget-usd`. An absent tool exits with the
+documented tool-missing status. `--stream` ingestion spends nothing.
 
-### The driver and the engine
+### Public-source provenance
 
-* **Gates are evaluated only by the engine.** The driver asks and does what it is told.
-* **The engine's deny wins over the policy's allow.** Every admitted call is rendered as an
-  `ActionRequest` and put to `Engine::authorize`, so the execution's own event record holds what was
-  refused and what was done.
-* **There is one policy and one enforcer.** Every `llm` step spawns through `metaharness run claude`
-  in ask mode; `decide_tool` in `crates/protocol-cli/src/drive.rs` answers each call and the decision
-  is recorded as a `tool.decided` event in the run's own stream. Do not add a second enforcement
-  path.
-* **Nothing in the trace crates calls a model or reads a clock.** Every duration and every cost comes
-  out of the transcript, which is what lets a report be committed and diffed.
-* **A key present and `null` reads `unk` and never a pass**, and what a wire cannot answer is named
-  where it is read.
-
-### Paid runs
-
-* **Nothing spawns without `METAHARNESS_LIVE=1` *and* `--budget-usd`**, and the cap is checked
-  **before each launch** against `--assume-usd-per-run` — a cap enforced afterwards is a receipt. A
-  run the wire prices `null` counts at the assumed rate *and* states no cost in its manifest.
-* **`metaharness` is used as a tool, the way `git` is** — found on `PATH` or via `METAHARNESS_BIN`.
-  Absent, `protocol eval run` refuses by name with **exit 2**, its own code, so a machine without it
-  skips rather than reddening.
-* **Arm `raw` gets the committed instruction document in front of the task; arm `plugin` gets the
-  task alone** — the plugin *is* arm b's treatment. **Arm `driven` is a named refusal** pointing at
-  `protocol drive run`. Three refusals guard the experiment itself: the treated arm without its
-  treatment, the control arm with one, and a plugin attested without the digest saying which bytes it
-  was.
+Public repositories carry product source and public technical history only. Credential minting,
+delivery credentials, private provenance policy, and history-audit machinery belong in private
+Atlas infrastructure. Do not add token scripts, private paths, private identities, or a public list
+of forbidden identities here.
 
 ## Invariants
 
-These hold across the workspace. Breaking one is a design change, not a refactor.
+Each invariant names what enforces it. A rule without a check is not an invariant.
 
-Each carries what actually enforces it — a lint, a type, a test or a scan — because a rule nothing
-checks is a rule that has already drifted somewhere. Three said **nothing** until the wave 6.5
-hardening batch; none does now, and the register is only useful while it is honest. Do not write an
-enforcement here that you cannot point at.
-
-1. **Rust is the source of truth.** Schemas are generated. Never hand-edit `schemas/generated/`; run
-   `cargo xtask schema`.
-   *Enforced by* `schema-check` in the gate (`cargo xtask schema --check`), which fails if the
-   committed schemas differ from the types.
-2. **Parse, then validate.** Documents deserialize into a `Raw*` type and become a domain type
-   through `TryFrom`. Validated types do **not** implement `Deserialize`, so the only way to obtain
-   one is to validate. Do not add `Deserialize` to a validated type to save a conversion.
-   *Enforced by* a source scan, `crates/aep-domain/tests/invariants.rs`, over ten
-   `Raw*`→validated pairs. It asserts the inverse too — the same extractor must *find* `Deserialize`
-   on each `Raw*` — so a scan that has silently stopped working fails instead of passing.
-3. **Validation accumulates.** A document with four broken references reports four errors. Push into
-   `ValidationErrors`; do not return on the first failure.
-   *Enforced by* per-type tests that assert an exact count rather than "is an error" — for example
-   `crates/ess-domain/src/component.rs` expects four from one pass and
-   `crates/aep-domain/src/domain_event.rs` expects three. There is no workspace-wide check: a new
-   validator that returns early passes the gate.
-4. **Every validation failure carries a stable `ValidationCode`.** Tests match on codes, never on
-   message text.
-   *Enforced by* the type — `ValidationError.code` is not optional — and by the `validation_codes!`
-   macro in `crates/aep-domain/src/error.rs`, which generates `ValidationCode::ALL` from the same line
-   as the variant, after five codes had fallen out of a hand-maintained list.
-5. **`Unknown` is not `False`.** Predicate evaluation is three-valued; only `True` permits a
-   transition. Never collapse unobserved to false. **A lapsed fact takes the same road**: past its
-   requirement's horizon an observation stops counting and the requirement reads `Unknown`, never
-   `False`, and the lapsed record's facts are withheld so a guard reading them refuses too. Nobody
-   has looked lately is not the same finding as it is broken, and only one of them is fixed by
-   changing code.
-   *Enforced by* the `Truth` type: three variants, Kleene `and`/`or`, no `From<bool>` and no
-   `as_bool`, so there is no boolean to collapse into. The Kleene tables have tests, the algebra's
-   laws are property-checked over generated expressions
-   (`crates/aep-domain/tests/truth_laws.rs`), and the decay is covered by
-   `crates/aep-engine/tests/evidence_horizons.rs`. One deliberate exception is recorded rather than
-   hidden: `evidence.missing` is a count, so `evidence.missing == 0` reads `False` on a lapse —
-   pre-existing polarity of a count, and the reason `evidence.lapsed` exists beside it (gap
-   register D-7).
-6. **Capabilities default to deny**, and `deny` beats `require_approval` beats `allow`. A principle
-   may restrict; only a profile or protocol may grant.
-   *Enforced by* `CapabilityPolicy::decide` plus tests that first construct the state where each link
-   decides anything: `a_denied_capability_is_not_downgraded_to_requiring_an_approval`
-   (`crates/aep-domain/src/capability.rs`) asserts its fixture holds one capability in all three sets
-   before asserting the outcome, and `crates/aep-domain/tests/safety_envelope.rs` covers the approval
-   floor. Verified by mutation, not by reading.
-7. **The engine never manufactures evidence, and it does not decide when the observation happened.**
-   It evaluates what verifiers and humans produced. `observed_at` is the caller's and is required —
-   there is no default, because a caller who has to write down when they looked cannot back-date by
-   omission — and a submission claiming a future observation is refused rather than accepted as a
-   fresh record. What the engine still stamps is the record's own envelope: the id, the clock time
-   it was submitted at, and the producer.
-   *Enforced by* a source scan, `crates/aep-engine/tests/evidence_scan.rs`, which reads the payload
-   types off `Evidence` itself and refuses any construction of one in shipped engine code — struct
-   literal, constructor path, variant expression or variant-as-function. Destructuring and the
-   envelope stamp in `submit_evidence` stay allowed: reading evidence and stamping the id, clock
-   time and producer onto a caller's payload are the engine's job. The scan's extractor is checked
-   against the engine's own test modules, which construct evidence constantly, so a scan that has
-   stopped seeing constructions fails on them instead of passing on everything. The rule reaches the
-   driver too, one layer up and with a narrower ban:
-   `crates/aep-driver/tests/evidence_scan.rs` refuses any construction of an `Evidence::Approval` or
-   a `Producer::Human` in shipped driver code, because nothing below the driver would stop a harness
-   from writing its own approval and unlocking a capability with it.
-8. **The domain crate is clock-free and randomness-free.** No `SystemTime::now`, no RNG. The engine
-   takes a `Clock` so an execution is replayable.
-   *Enforced by* a banned-token scan, `crates/aep-domain/tests/determinism.rs` — boundary-aware,
-   because `Operand::` contains `rand::`, and comment-skipping, because prose about the rule is not
-   a breach of it. `aep-engine` is deliberately unscanned: `src/clock.rs` is the one place
-   `SystemTime::now` is allowed to live, behind the `Clock` trait.
-9. **Determinism.** Same validated state plus same evidence set ⇒ same decision. Iterate over
-   `BTreeMap`/`BTreeSet`, never `HashMap`, so output ordering is stable.
-   *Enforced by* banned-token scans over fourteen crates that claim the property or feed one that
-   does — `ess-compiler` (`tests/billing.rs`), `ess-diff` (`tests/canonical.rs`), `ess-synth`
-   (`tests/synthesis.rs`), `aep-domain`, `ess-gen`, `infra-domain`, `infra-compiler`,
-   `infra-analyze`, `infra-project`, `infra-spec`, `aep-driver-spec`, `aep-driver`, `aep-render` and
-   `aep-client`
-   (`tests/determinism.rs` in each) — beside tests that compile, diff, generate
-   or render twice and compare bytes, and a seeded property test that does the same for every
-   generated adversarial specification (`crates/ess-compiler/tests/adversarial.rs`).
-   Three of the fourteen are the harness's. § 4.1 makes a purity claim for the two driver crates
-   stronger than `aep-engine`'s: the routing core is clock-free and randomness-free, and the store
-   lock, the pid-liveness probe and the run directory are `protocol-cli`'s precisely because a probe
-   reads ambient OS state and would slip past this scan. `aep-render`'s scan is stronger again and
-   bans **floats** as well, because its criterion is not *the same decision twice* but *the same
-   bytes twice* — a committed figure that regenerates differently is a diff nobody chose — and the
-   `--watch` loop, its poll interval and the terminal live in `protocol-cli` for the same reason the
-   lock does.
-   Deliberately unscanned, because each owns a clock or a terminal: `aep-engine` (invariant 8),
-   `ess-conformance` (the runner takes a clock, wave 3.5 decision 3), the backends, the CLI and
-   `xtask`. `ess-domain` states no determinism claim of its own.
-10. **Document identity comes from document content**, not from filenames. A workflow's `id` is
-    declared inside the file; loaders index by declared id.
-    *Enforced by* the registry's signatures: `Registry::insert_*` takes a validated document and no
-    path (`crates/aep-engine/src/registry.rs`), so there is no filename available to index by.
-11. **Every public item is documented** (`missing_docs = "warn"`) and the workspace is
-    clippy-pedantic clean.
-    *Enforced by* `missing_docs` and `clippy::pedantic` in `[workspace.lints]`, raised to errors by
-    the `clippy` step's `-D warnings`, plus the `doc-check` step (`RUSTDOCFLAGS=-D warnings`) for
-    broken intra-doc links. Every workspace member opts in with `[lints] workspace = true`;
-    a new crate that omits that line is outside every lint here.
-12. **No `unsafe`** (`unsafe_code = "forbid"`).
-    *Enforced by* that lint in `[workspace.lints.rust]`. `forbid` cannot be lifted by an inner
-    `allow`, so this one is closed rather than merely checked — again, for the workspace members
-    that opt in. **One crate cannot declare it and says so**: a `WebAssembly` export is a `#[no_mangle]`
-    item, which rustc's own `unsafe_code` lint flags, so the emitted browser bridge under
-    `generated/web/` and the host that links a realization into it (`examples/billing-web`, excluded
-    from the workspace for exactly this reason) declare `#![deny(missing_docs)]` alone. Neither
-    contains an `unsafe` block, an `unsafe fn` or a raw-pointer dereference; the property holds and
-    the compiler is no longer the thing closing it, which is a named weakening in the bridge's own
-    `TARGET.md` and a test in `crates/ess-synth/tests/web.rs`.
-13. **Identity is opaque.** An `EntityId` is never parsed for meaning. A human-readable key belongs in
-    the `EntityLocator`; the moment code reads structure out of an id, identity has become a key again.
-    *Enforced by* the type: `EntityId(String)` has a private field and no structural accessor, and
-    `EntityId::new` refuses anything under twelve characters, which is what catches `AUTH-142` going
-    in as identity. Nothing stops code parsing the `Display` output back out.
-14. **Every mutation is a command.** There is no second write path, because a second path is a second
-    place to forget validation, authorisation, idempotency, provenance and audit.
-    *Enforced by* `crates/aep-contract/tests/write_surface.rs`, which enumerates every method of
-    every public trait in the contract and pins the list: `CommandService::execute` is the one
-    write path. A new trait or method — required or default-bodied — fails the test with
-    instructions to model the mutation as a command payload, or to change this invariant first.
-15. **A refused command changes nothing and is still recorded.** `AuditRecord::validate` rejects a
-    rejection that carries a change record.
-    *Enforced by* `AuditRecord::validate` (`crates/aep-domain/src/audit.rs`) and its tests.
-16. **Nothing is physically deleted.** `ArchiveEntity` and `SupersedeEntity` are the vocabulary.
-    *Enforced by* the command vocabulary — there is no delete variant to call — and by a test that
-    `CommandKind::parse("aep.entity.delete/v1")` fails, naming the kind it refused
-    (`crates/aep-domain/src/command.rs`).
-17. **A horizon lives on the requirement, and nothing mutates one.** How long an observation is
-    worth something is a property of the question being asked, not of the observation — two
-    requirements may legitimately read one record on different clocks. The refresh that is allowed
-    is *observe again and write a new date*; there is deliberately no `extend`, because if
-    extending were as easy to call as re-checking it is the one that gets called, every time, by
-    whoever is trying to get a gate green.
-    *Enforced by* three mechanisms in decreasing order of strength: an evidence record has **no
-    horizon field**, so there is nothing on a record to mutate; a requirement's horizon comes from
-    a parsed document and is re-read on every resolve, so an in-memory change does not survive; and
-    a source scan over the five crates a horizon can be reached from,
-    `crates/aep-domain/tests/horizon_immutability.rs`, refuses a mutator a later edit would
-    otherwise add without argument. `Horizon::days` also refuses zero and anything over ten years,
-    so a typo cannot become a horizon nothing will outlive.
+1. **Rust types are the source of truth.** Generated schemas under `schemas/generated/` are written
+   only by `cargo xtask schema`; `schema-check` detects changed and orphaned files.
+2. **Parse, then validate.** Raw document types may deserialize; validated domain types are created
+   only through validation. Unknown fields on closed formats are refused.
+3. **Validation accumulates.** Independent defects are reported together with stable codes and
+   paths. Tests assert variants or codes, never only `is_err()`.
+4. **Decisions are deterministic.** Domain and engine code use ordered collections and caller-
+   supplied time. No ambient clock, random source, filesystem, environment, or network belongs in
+   deterministic cores.
+5. **Unknown differs from false.** A missing observation cannot satisfy a predicate and is not
+   rewritten as a contradiction.
+6. **Capability decisions default to deny.** A denial cannot be granted back by a later layer.
+   Resolution and explain tests cover conflicts and provenance.
+7. **Refusals change nothing.** Failed commands and transitions do not partially mutate stores;
+   backend conformance suites cover rollback and idempotency.
+8. **Audit is append-only.** Actor, executor, correlation, causation, and idempotency metadata cross
+   the command boundary. Archive and supersede are the lifecycle vocabulary; deletion is not.
+9. **Planning status is decided as data.** `entity-core` evaluates validated lifecycle definitions;
+   no generic status setter exists in AEP.
+10. **Command aliases are exact.** For retained operations, `aep` and `protocol` have identical
+    output bytes and exit status. `command_equivalence.rs` holds accepted and refused paths.
+11. **The ESS adapter is optional and narrow.** No AEP core manifest depends on an ESS crate;
+    dependency scans and adapter tests hold this boundary.
+12. **Plugin authority is explicit.** No repository-local fallback chooses a plugin. Launch records
+    preserve the operator-supplied directories.
+13. **Public APIs are documented and unsafe is forbidden.** Workspace lints are raised to errors by
+    Clippy and rustdoc gate steps; every member opts into workspace lints.
+14. **The gate is offline except by an opted-in name.** No check calls a model or spends money.
+    `postgres-check` reaches only `ENTITY_POSTGRES_URL` when it is set and prints that it skipped
+    otherwise. Cargo and the website package manager may populate their caches on a cold machine.
+15. **A guard is mutation-tested before it is trusted.** Break the guarded condition, observe the
+    named failure, restore it, and run the passing test.
 
 ## Gate
 
@@ -389,571 +137,81 @@ enforcement here that you cannot point at.
 task check
 ```
 
+Read the command's own exit status. Do not pipe the authoritative run through a command whose exit
+status replaces it.
+
 <!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->
-`task check` runs **22 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `plugin-check`, `postgres-check`, `doc-check`, `schema-check`, `generate-check`, `suite-check`, `infra-check`, `synth-check`, `lab-check`, `msrv`, `website`.
+`task check` runs **16 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `msrv`, `website`.
 <!-- generated:gate-steps:end -->
 
-The list above is derived from `Taskfile.yml`'s `check:` block by `cargo xtask status`, and
-`status-check` fails when it drifts — the count was hand-written and wrong twice in three days.
-Twelve steps are described below in order; the rest are source-only and sub-second, each with a
-`desc:` in `Taskfile.yml` that says what it refuses: `plan-check`, `audit-check`, `version-check`,
-`dep-check` (`cargo xtask deps`: every `entity-*` crate resolves once, from one `entity-runtime`
-pin), `guard-check`, `claim-check`, `docs-check`, `plugin-check` (the Claude Code plugin's version
-moves with its text, and `roster.json` names what it ships), `postgres-check` (the Postgres
-backend's tests against the server `ENTITY_POSTGRES_URL` names, or one printed line saying they did
-not run), and `lab-check`.
+The list above is generated from `Taskfile.yml`; do not edit it by hand. Prose states no count of
+test suites or test cases. The gate output is the only place that count belongs.
 
-**`plan-check` is `protocol artifact validate` over this repository's own store**, added 2026-08-28
-on `story:own-engineering-store`'s stated default. It fails on an unparseable document, a relation
-into a repository the workspace manifest does not declare, or a status no lifecycle permits — and
-**reports without failing** on a status reached on an assertion rather than a record, which is
-`story:completion-needs-evidence`'s deliberate position. It runs from the repository root and from
-any directory inside it; that it did not, until the same day, was the defect `story:own-engineering-store`
-recorded against itself.
+`task check` is authoritative. A change under `website/` must also be exercised through the same
+website task the gate calls. CI delegates to the Taskfile rather than restating its steps.
 
-**`audit-check` is the drift detector of `docs/guide/open-vocabulary.md`**, added 2026-08-28: seven
-of the thirteen units of `.engineering/checks/`, four seconds, re-resolving every `file:line` the
-audit cites. It exists because a citation rotted silently — `20923a8` added eight doc-comment lines
-above `pub enum EvidenceKind`, so a *closed* verdict came to point at a serde attribute, and the
-suite that catches exactly this was not in the gate, so the story resting on it stayed
-`implemented` on a record that had stopped being true. Six units are not in the gate, for two reasons. Four run the suite
-itself (nine tree copies for the mutation proof) and cost 65 of its 70 seconds; run them with `bash
-.engineering/checks/run.sh` when the suite changes. The fifth, `audit-corpus`, is out because its C9
-row reads `git status` and asserts *this unit's writes stayed inside its two declared files* — a
-claim about the **run** that produced the audit, not about the tree, so in a gate it reddens on any
-unrelated uncommitted file. A check that cannot pass on a dirty tree is a run verifier, not a gate
-step. **The suite reads the store with this tree's own
-build**, never the ambient `protocol`: the version is checked and a mismatch is a refusal, because a
-stale install reported five phantom drifted stories on 2026-08-28 and nothing said why.
+## Planning artifacts
 
-1. `fmt-check` — `cargo xtask fmt --check`, which formats exactly the workspace members. Not
-   `cargo fmt --all`: that flag also reaches every member's local path dependencies, which since
-   `examples/billing-realization` would hand the synthesised workspaces under `generated/rust/`
-   to rustfmt — and their bytes are the emitter's, held byte-identical by `synth-check`.
-2. `status-check` — `cargo xtask status --check`, which fails if the delivered-waves table in
-   `docs/status.md` no longer matches what the annotated tags record. The one status surface that
-   kept going stale by hand is derived instead; the fix is `cargo xtask status`.
-3. `clippy` — `--workspace --all-targets -D warnings`, which is also what turns `missing_docs` and
-   `clippy::pedantic` from warnings into failures.
-4. `test` — `cargo test --workspace`.
-5. `doc-check` — `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-D warnings`. Doc comments carry
-   the design reasoning here, so a broken intra-doc link loses an argument, not a hyperlink.
-6. `schema-check` — `cargo xtask schema --check`.
-7. `generate-check` — `cargo xtask generate --check`, which fails if the committed projections under
-   `generated/` differ from what the specification produces.
-8. `suite-check` — `cargo xtask suite --check`, which fails if the committed conformance suites under
-   `suites/generated/` differ from what the specifications produce. A suite is a contract an
-   implementation is checked against, so a stale one certifies the wrong thing.
-9. `infra-check` — `cargo xtask infra --check`, which fails if the committed observation IR,
-   simulation, drift or projection tree under `examples/k3d-dev-cluster/` differs from what its
-   inputs produce — including a projection file nothing generates any more. (This step was in the
-   Taskfile and CI before it was in this list; the list was itself a stale copy.)
-10. `synth-check` — `cargo xtask synth --check`, which fails if any committed synthesised tree —
-   `generated/rust/`, `generated/go/` and `generated/web/`, three emitters behind one
-   language-neutral plan, for two specifications — differs from what the specifications determine; if a matching tree no
-   longer builds (`cargo check` for the Rust workspace; `gofmt -l` empty, `go build ./...` and
-   `go vet ./...` for the Go module; `cargo build --release --target wasm32-unknown-unknown` for
-   the browser bridge and for the host that links a realization into it); if the emitted page calls
-   an export its module does not have, or the module exports one no page names — HTML's version of
-   a dangling reference, checked against the compiled module's own export table because nothing in
-   a browser would refuse it; if the committed billing suite no longer holds against the workspace
-   linked with `examples/billing-realization`, where the honest linkage must pass all 29 scenarios
-   and the deliberately corrupted one must fail exactly the scenario that exists to catch it; or if
-   the browser boundary no longer holds — the realized module is loaded outside a browser through
-   the page's own `bridge.js` and driven through one round trip, and seventeen claims about it must
-   stand; or if the **dual-target demonstration** stops holding — the two applications synthesised
-   from `examples/gatepass/` are built from the committed trees plus their hand-written
-   realizations, started on ephemeral ports, and compared on their startup records outside
-   `runtime`, on the status and the body of seven exchanges, and on the two documents they publish
-   about themselves byte for byte. A tree that matches its specification and still fails here is a
-   defect in `ess-synth` or in the realization, not in any specification.
+The planning store is `.engineering/planning/`. Its local skill at
+`.agents/skills/planning/SKILL.md` is the complete model and must be read before any store write.
 
-   **It needs the Go toolchain, the `wasm32-unknown-unknown` target and Node**, and says which is
-   missing rather than skipping — a check that quietly passes without its toolchain reads exactly
-   like a check that passed. `cargo test` needs all three too, because `xtask`'s own tests write
-   all three trees and build them.
-
-11. `msrv` — `cargo +1.85 build --workspace --locked`. `--locked` is the point: the failure this
-   catches arrives **through the lockfile**, with no commit of ours touching a line of Rust. A
-   transitive dependency raising *its own* `rust-version` breaks the declared MSRV, and
-   `idna_adapter@1.2.2` pulling `icu_*@2.3.0` (rustc 1.88) did exactly that.
-12. `website` — `npm run build` in `website/`. Docusaurus resolves every markdown link at build
-   time, so a link from a page under `website/docs/` into the repository tree fails the build
-   rather than 404ing for a reader. Repository files are linked by absolute GitHub URL; only site
-   pages are linked relatively.
-
-   **Steps 11 and 12 were in CI and not in `task check` for eleven consecutive releases** — every
-   tag from 0.13.0 to 0.23.1 — and CI was red the whole time behind a green local gate. A gate that
-   covers less than the gate it claims to be is worse than one that admits its scope; that is why
-   this list and `Taskfile.yml` are checked against each other by hand whenever either changes.
-
-Land nothing that does not pass all of them.
-
-**Read the gate's own exit status, never a wrapper's.** Run it as `task check; echo GATE_EXIT=$?`
-and read that line. A background-task wrapper reported *completed (exit code 0)* for a `task check`
-that had exited 201, twice in one night (`cc946bc3#633`, `8cffc110#267`); `task check 2>&1 | tail`
-reports `tail`'s status; and `cargo test` without `--no-fail-fast` stops at the first red target,
-so a report with three failures may be a report with thirty. `protocol-cli` has no library target:
-`cargo test -p protocol-cli --lib` fails with *no library targets found* and proves nothing — run
-`cargo test -p protocol-cli`.
-
-**A green local gate does not guarantee a green CI.** The steps mirror each other exactly, but the
-*toolchain* does not: CI installs whatever `stable` is on the day, and a newer clippy can introduce a
-lint that fails a commit which passed locally on an older one. That is how `clippy::unused_async`
-turned `main` red on a commit whose gate was green. Run `rustup update` before pushing anything you
-will not get a second chance at — and when CI fails on a lint that did not exist locally, that is the
-cause, not a flaky gate.
-
-**A release is the procedure in § *Releases*, and nothing mechanical enforces it.** A wave ships,
-`CHANGELOG.md` is cut under its heading, `cargo xtask status` regenerates the delivered-waves record
-and the annotated tag is written at the commit that delivered the work. The full gate comes first —
-component gates are not enough — and no hook, task or CI job checks that it did, which makes it a
-discipline rather than a guarantee. It has already slipped once, and the mechanism is worth
-knowing: `task check 2>&1 | tail` reports **`tail`'s** exit status, not the gate's, so two runs that
-aborted at the first step read as green and two commits were pushed claiming a gate that had never
-run past `fmt-check`. Read the gate's own status, not a pipeline's.
-
-**Two worktrees must not share a `CARGO_TARGET_DIR`.** Learned 2026-08-29, at the cost of about
-three gate runs per agent in a four-agent wave. `cargo xtask` resolves the repository root from
-`env!("CARGO_MANIFEST_DIR")`, baked in at build time — so a shared target handed one worktree the
-other's `xtask`, and `cargo xtask schema` run in tree A rewrote `schemas/generated/` in tree B.
-Test binaries were served across trees the same way: a `task check` in one tree ran a test that
-did not exist in it, and an `aep-engine` without a new method linked against an `aep-domain` that
-had it. `crates/protocol-cli/tests/store_selection.rs` asserts `CARGO_TARGET_TMPDIR` lies under
-the repository root and fails eleven tests whenever the target is elsewhere. Each worktree builds
-into its own `target/`; when disk is short, remove a finished worktree's target rather than
-sharing a live one, and treat `touch`ing sources as a symptom, not a fix.
-
-**Test fixtures on disk carry the process id in their path.** The same day, the markdown
-backend's `scratch(name)` opened `$TMPDIR/aep-markdown-store/<name>` and began with
-`remove_dir_all`; `TMPDIR` is one directory for every session and worktree on this machine, so two
-gates running at once deleted each other's fixtures mid-test — one read 1 failed, the other 0, both
-true. Proved without load: two concurrent runs, 52 passed against 50 passed / 2 failed; with the
-pid in the path, 52 and 52 (8c57794). A fixture path a second process can compute is a fixture a
-second process will delete.
-
-## Safety envelope
-
-This repository publishes a **public** specification and drives real agent runs. Both are exposed
-surfaces.
-
-* **The published API is the document tree and the generated schemas.** A changed fact spelling, a
-  new document kind, or a rule that now refuses what it used to allow is visible to every adopter —
-  including the one outside this org. It gets a `CHANGELOG.md` line in the same commit (see
-  *Changelog*), and a wire-visible identifier change is a coordinated migration with an ADR in
-  `atlas`, not an edit.
-* **The engine never manufactures evidence** (invariant 7), and the driver may not manufacture an
-  approval: `crates/aep-driver/tests/evidence_scan.rs` refuses any construction of an
-  `Evidence::Approval` or a `Producer::Human` in shipped driver code, because nothing below the
-  driver would stop a harness writing its own approval and unlocking a capability with it.
-* **No document this repository ships may tell its reader to write the planning store by hand.**
-  `protocol artifact` is the store's only writer and every surface under `integrations/` says so in
-  prose — which is where the rule regressed once already, when the planning skill *told* agents to
-  patch bodies directly.
-  *Enforced by* `protocol artifact validate`, which the gate runs as `plan-check`. It catches the
-  **consequence** rather than the instruction: a document edited outside a command has a revision
-  no event supports, and validate reports *"an edit made outside a command is a change nothing
-  decided"* and exits 1. Deterministic, and it cannot produce a false positive.
-  **A prose scan over the shipped skills was built for this and removed on 2026-08-30.** It was
-  2,153 lines of Rust classifying English, it went red on ordinary edits to skill text — a list of
-  CLI verb names, the phrase *the artifact you write* — and a guard that fails when the prose it
-  polices changes is a guard somebody disables. Reviewing shipped prose is a person's job.
-  Its one real gap is validate's: **76 documents predate the event log** and cannot be drift-checked.
-  Every new write carries events, so that number only falls.
-* **Capabilities default to deny** (invariant 6). `development.driven` is the only profile that
-  grants a shell, and it is held to the `protocol` CLI by the driver's own per-call policy. Widening
-  a profile's grant is a specification change with a design page, never a convenience.
-* **A horizon cannot be extended, only re-observed** (invariant 17). There is deliberately no
-  `extend`: if extending were as easy to call as re-checking, it is the one that gets called by
-  whoever is trying to get a gate green.
-* **Nothing in `task check` reaches the network** except `postgres-check`, opted into by
-  `ENTITY_POSTGRES_URL` and silent-by-name without it, and no gate step spends money. Paid runs are
-  governed by the rules in *Rules the components carry* § *Paid runs* and are not part of any gate.
-* **Never commit a credential, a token, a real transcript that carries one, or anything
-  adopter-internal.**
-
-## Out of scope
-
-This is a library and a specification. It is not an agent, a CI system or a deployment platform.
-
-| Belongs elsewhere | Where |
-|---|---|
-| Driving a vendor harness — hermetic runs, per-call tool decisions, the event wire | `metaharness` (used here as a tool, never as a dependency) |
-| Scanning a cluster; anything holding a kubeconfig | `infra-scout` |
-| The b10x agent loop | `harness` |
-| Sandboxed execution | `substrate` |
-| The paid evaluation machinery and its recorded results | `metaharness`, under `evals/engineering-protocols/` |
-| Cross-repo decisions and the map | `atlas` |
-| The authenticated central command/query service and its deployment | `aep-service` |
-
-## Where work is tracked
-
-| What | Where |
-|---|---|
-| The store this repository runs on — initiatives, epics, stories, tasks, specifications | `.engineering/planning/`, validated by `protocol artifact validate` |
-| Plan pages, which are the first acceptance surface | `docs/plan/` |
-| Every open gap and what closes it | `docs/plan/gap-register.md` |
-| Designs, normative and proposed | `docs/design/` — see *Which documents are normative* |
-| Step maps, the fifth document kind | `drivers/` |
-| Delivered waves | `docs/status.md` (generated), and `git tag -n99` |
-| What a user of the protocol sees change | `CHANGELOG.md` |
-
-## Conventions
-
-* **Tests live beside the code** they test, in a `#[cfg(test)] mod tests`. Name a test after the
-  behaviour it protects, not the function it calls: `an_approval_of_version_three_does_not_cover_version_seven`.
-* **Every test asserts a reason.** Prefer `expect_err` plus a check on the `ValidationCode` over
-  `assert!(result.is_err())`.
-* **A test must reach the state where the rule is load-bearing.** A precedence rule needs a fixture
-  that populates both sides; a refusal rule needs a refusal in the fixture. A test that would pass
-  whether or not the rule holds is not a test of the rule, whatever its name says. Where reaching that
-  state takes work, assert that the fixture reached it before asserting the outcome — see
-  `a_denied_capability_is_not_downgraded_to_requiring_an_approval` in
-  `crates/aep-domain/src/capability.rs`.
-* **Verify a guard by breaking it.** Before trusting a new test, apply the one-line mutation it is
-  meant to catch, watch it fail with a message that names the defect, and revert. A test that still
-  passes under the mutation was never guarding anything; a test that fails with an unreadable message
-  costs the next reader an hour.
-* **Rust CLIs use `clap`'s derive API.** Hand-rolled argument parsing is not accepted.
-* **Task runner is `Taskfile.yml`** (go-task). Do not add a Makefile.
-* **Comments explain why**, and only where the reason is not evident from the code. Doc comments on
-  public items explain what the type is *for*, and where a design decision is embedded in it, why.
-* **Claim ids are singular and shared.** A verification claim is a fact path segment
-  (`verification.<claim>.passed`), so `invariant` and `invariants` are different claims and evidence
-  for one does not satisfy a requirement for the other. Existing claims: `precondition`,
-  `postcondition`, `invariant`, `hypothesis`, `recovery`, `blast-radius`, `clean-room`,
-  `differential`, `mutation`, `migration`, `dry-run`. Reuse one before inventing another.
-* **`<claim>_verified` is projected but not observable.** The engine emits it, but no protocol
-  declares the bare namespace, so a predicate cannot read it — except `recovery_verified`, which
-  `aop/1` declares explicitly for the incident profile. Write `verification.<claim>.passed` instead.
-* **Wire-format aliases are deliberate.** `unit_tests.failed` alongside `tests.unit.failed`,
-  `test_execution` alongside `test_result`: both spellings appear in the design documents. Canonical
-  forms are what the engine emits; aliases are only accepted on input, and each is documented on the
-  type that projects it.
-
-## Dependencies
-
-Written down because it is already practised, and an unwritten standard is one the next agent meets
-only by violating it.
-
-* **The workspace has sixteen direct third-party crates.** Twelve are declared once in
-  `[workspace.dependencies]`: seven from crates.io — `serde`, `serde_json`, `serde_yaml`,
-  `schemars`, `thiserror`, `clap`, `anyhow` — and `entity-runtime`'s **five** by **git tag** —
-  `entity-core`, `entity-store`, `entity-sqlite`, `entity-postgres`, `entity-remote`
-  (`Cargo.toml:112-116`, all at tag `0.13.0`) — the only
-  dependencies not taken by version: they are not on crates.io, a ladder's verdicts are a published surface that must
-  not move under us, and **one tag, declared once,** is what `dep-check` enforces after two kernels
-  were compiled side by side for two releases (`aep-backend-markdown` takes `entity-core`;
-  `aep-backend-entity` takes `entity-core` and `entity-store`; `aep-backend-sqlite` takes
-  `entity-sqlite`; `aep-backend-postgres` takes `entity-postgres`, which brings `postgres` 0.19
-  without default features and no TLS backend — the connection is the caller's, by URL;
-  `aep-backend-hybrid` takes `entity-remote` for `Hybrid`, which brings nothing further). Four are
-  crate-local: `sha2` wherever a document is content-addressed (`aep-engine`, `aep-driver-spec`,
-  `ess-gen`, `infra-compiler`, `infra-domain`, `protocol-cli`, `trace-domain`, and as a
-  dev-dependency of `aep-backend-markdown`, which hashes no shipped document and holds a pinned copy
-  of `entity-runtime`'s), `jsonschema` in `schema-contract` and as a dev-dependency of
-  `ess-gen` and `aep-schema`, `regex` in `trace-domain` (below), and `proptest` in `aep-domain` and
-  as a dev-dependency of
-  `ess-compiler` (`default-features = false`, and every property runs under a fixed seed so the gate
-  cannot be flaky — the seed and the way to widen locally are documented where each is used).
-  `entity-sqlite` brings **`rusqlite` with the `bundled` feature — SQLite compiled from
-  vendored C** — the one C build in the workspace. Considered and refused: linking the host's
-  SQLite (two machines could then disagree about one store), a pure-Rust database (none is the
-  transactional store next door that is already tested against a torn write), and a second
-  hand-written transactional store here (`crates/aep-backend-sqlite/src/lib.rs` § *Why
-  `entity-sqlite`*). Reach for the workspace list before adding to it.
-* **A non-workspace dependency carries its justification in the manifest**, beside the line that adds
-  it: what it buys, which features are dropped and why that is safe here, and why the version matches
-  the other crate that uses it. `crates/ess-gen/Cargo.toml` is the model.
-* **`regex`, in `trace-domain`, is what makes `regex:` matchers work** — the sixteenth crate, taken
-  on 2026-08-29 by `story:regex-matchers` after `TRACE-SPEC-008` had refused the matcher by name
-  since the checker shipped. Two facts decided it and both are measurable:
-  * **It was already here.** `cargo tree -i regex` reaches `protocol-cli` through `jsonschema`,
-    which `schema-contract` takes at **run time** (`crates/schema-contract/Cargo.toml:18`), so the
-    shipped binary has linked `regex` all along. Adopting it added **one line to `Cargo.lock`** —
-    an edge, not a package — and no compile unit, no version and no audit surface.
-  * **The refusal had stopped being free.** Its price was alternation, and a committed
-    specification wants it: `conformance/trace/expectations.denial-step.trace.yaml:135` gates on
-    *no shell call chained a second command onto a permitted one* and can only spell that
-    `contains: "&& sed"`, which `; sed` and `&& rm` walk straight past.
-  Considered and refused: **`fancy-regex`**, which backtracks — `glob_matches` was hand-written to
-  be linear precisely because a checker reads whatever a transcript happens to contain, and an
-  engine that can blow up on its input gives that away; a **hand-rolled engine**, which is a
-  dependency written by us with none of the auditing and all of the surface; and **keeping the
-  refusal**, which the row above prices. Default features stay on, and cutting them would be a
-  claim the build does not honour: cargo unions features across a graph and `jsonschema` already
-  builds this `regex` with its defaults. The decision is in the gap register as **D-8**.
-* **Prefer no dependency, and record the refusal.** `crates/aep-domain/tests/invariants.rs` opens by
-  weighing three mechanisms and taking the one that needs no new crate, saying what `trybuild` would
-  have cost; `crates/ess-compiler/tests/billing.rs` scans its own sources on the same reasoning. Where
-  a crate is taken, its surface is cut to what is used — `jsonschema` runs with
-  `default-features = false`, which drops `resolve-http`, `resolve-file` and the TLS backend.
-* **Nothing in `task check` reaches the network**, with one exception opted into by name:
-  `postgres-check` talks to the server `ENTITY_POSTGRES_URL` names and to nothing when it is
-  unset, and prints which. No other step downloads a schema, resolves a remote `$ref` or calls an
-  API — `jsonschema` is built with `default-features = false` for exactly that reason. The Go steps hold the same line by construction: the generated module has no
-  dependencies, and every `go` invocation runs with `GOPROXY=off` and `GOTOOLCHAIN=local`, so
-  neither a dependency nor a `go` directive can make the toolchain fetch anything. The browser
-  target holds it the same way, and it is the reason that target has **no `wasm-bindgen`**: that
-  crate needs a cargo-installed CLI pinned to its own version, and the emitted tree would then
-  resolve third-party crates inside a gate step. It emits its own JSON reader, writer and base64
-  codec instead — about seven hundred fixed lines, the same bytes for every specification — and its
-  manifest carries nothing but path dependencies into the Rust target's tree, which a test asserts.
-  Keep it that way: a gate that needs the network is a gate that goes red for reasons that have
-  nothing to do with the change.
-
-## Changelog
-
-`CHANGELOG.md` is maintained with the work, not reconstructed before a release. Every change that
-alters what a *user of the protocol* sees — a new document type, a changed fact spelling, a rule that
-now refuses something it used to allow — gets a line under `## [Unreleased]` in the same commit that
-makes the change. Internal refactors that change nothing observable do not.
-
-Write the entry for the person hitting the behaviour, not for the person who wrote it: "an approval
-of version 3 no longer satisfies a review requirement for version 7", not "added freshness check".
-
-## Watching and scoring a driven run
-
-Two tools, both in `scripts/`, both written while driving `W4-3` and both fixed by being wrong in
-front of the operator.
+Before the first planning-store write in a session, run:
 
 ```console
-scripts/drive-watch                 # follow the live run, whichever worktree it is in
-scripts/drive-score <run> [<run>]   # what it spent, and how much of it was refused
+protocol artifact list
 ```
 
-**`drive-watch` searches every worktree of this repository**, because a driven run happens in
-whichever checkout the driver was pointed at and there are usually several. Run from the wrong one
-it used to follow a run finished a week earlier and print nothing, which reads exactly like a live
-run that has stopped; it now says so, with the age, and names what to type instead. It follows
-whichever transcript is being written and switches state by itself.
+Rules:
 
-**`drive-score` prints cost and turns beside waste, always.** *Waste* is the share of tool calls
-somebody refused — the policy, the harness, or the CLI — and it is the number a change to the driver
-moves. Reporting it alone is how an instrument comes to agree with whoever built it: admitting
-`grep` to a reading state took waste from 17.2% to 3.0% and multiplied one state's cost by 3.6, and
-a scorer that showed only the first half would have called that an unqualified win. A command that
-ran and reported a failure is **not** waste — a red suite is the point of running it. The line is
-whether the program refused the invocation or answered it.
+1. Never edit a planning artifact or journal directly.
+2. Create with `protocol artifact new`, relate with `relate`, write prose with `body`, and change
+   status only with `move`.
+3. A status move is a claim about project state. Propose it unless the operator requested that
+   exact move.
+4. A refusal is an answer. Relay the legal moves the command prints; do not route around it.
+5. After a batch, run `protocol artifact validate` and relay its output verbatim.
+6. An already-satisfied or invalid request still gets an artifact recording the finding when the
+   operator asked for planning work.
 
-## Being the subject of a live harness evaluation
+Do not improvise machine-owned frontmatter if the command is absent.
 
-metaharness' `evals/engineering-protocols/run-driven.sh` drives this repository under either
-harness and scores the transcripts; **that script is where the procedure and its traps are written
-down**, and it is the file to read first. What follows is only what this repository has to get
-right to be a fair subject.
+## Change conventions
 
-**A confined run cannot see this filesystem.** The sandbox binds `/usr`, `/bin`, `/lib`, `/lib64`
-and the workspace, and nothing else. Two consequences that each cost a paid run:
+- Use `rg` and `rg --files` for discovery.
+- Preserve unrelated work in dirty worktrees.
+- Use `apply_patch` for source edits. Bulk mechanical rewrites and formatter output may use their
+  dedicated tools.
+- Anything executable added or replaced here is Rust unless Atlas records an accepted exception.
+  Existing shell and Python checkers are legacy; touching their behavior triggers replacement,
+  not extension.
+- Rust CLIs use `clap` derive.
+- Tests are named for behavior and assert the reason for failure.
+- Comments explain why; public docs explain what a type is for.
+- Prefer no new dependency. Explain every necessary dependency beside its manifest entry.
+- `CHANGELOG.md` gains an Unreleased entry for every user-visible change.
 
-- `driven_programs` must **not** declare the CLI. An allow-list decides what a `run` may *name*;
-  only a mount decides what the sandbox *contains*. The bare name failed on `PATH`, the absolute
-  host path was then admitted and still found nothing, and both times the session gave up on the
-  CLI and hand-wrote the planning store. The driver travels as `--driver` instead, which stages the
-  binary read-only and allow-lists its mounted path; steps quote `DRIVEN_DRIVER`
-  (`/toolchain/driver/protocol`) and are told the bare name does not resolve.
-- Read-only is not incidental: this is the binary that records the run's evidence, and a run able
-  to rewrite it has no evidence.
+The direct dependency policy is recorded in the workspace manifests and enforced by the lockfile,
+Clippy, tests, and dependency guard. The AEP domain must not acquire IO dependencies.
 
-**The store rule reaches the native arm as a program, not as a seam.** `protocol drive` adjudicates
-every call itself for a vendor harness; the native loop has no such seam and consults hook programs
-instead, so the driver writes a `hooks.json` per step pointing at `protocol drive hook`. Without it
-that arm runs with the content tier off while its column reads as though it were on.
+## Worktrees and concurrency
 
-**The planning skill is not handed over as `context:` any more.** Both harnesses read the plugin at
-`integrations/claude-code`, so a description is in the standing instruction and the body is one
-`skill` call away. A `context:` key reappearing under an `llm` step is the map regressing to eager
-delivery — billed on every turn of a stateless loop — and `flow.rs` asserts its absence.
+Use a dedicated worktree for coordinated work. Before editing, inspect `git status`, active
+worktrees, and overlapping changes. A shared Cargo target directory is acceptable for builds but
+never for generated source. Run generators only from the worktree whose files they own.
 
-**Do not run `cargo fmt --all` in this repository.** It reformats `generated/` and `synth-check`
-then fails the gate on fourteen workspaces. Use `cargo fmt -p <crate>`. If it has already happened,
-`cargo xtask synth` regenerates from the specifications and restores them — do not `git checkout`
-them, and do not hand-edit.
+When another agent is integrating the same repository, stop at a clean handoff boundary. Do not
+merge, rebase, publish, or rewrite shared state without explicit authority.
 
-**Read the gate's own count, and distrust a remembered one.** `task check` at `2b5be62` gives
-`191 suites, 2830 passed, exit 0`. A figure quoted from memory was wrong twice in one day; if a
-number matters, measure the tree with and without the change rather than comparing against
-something recalled.
+## Releases and commits
 
-## Releases
+Bare semantic-version tags are the organization convention. The full gate passes before the
+changelog is cut and the annotated tag is created. Tag, workspace version, and dated changelog
+heading must agree.
 
-The bare-version tag is an org-wide convention (atlas § *Naming*); what follows is this
-repository's procedure around it.
+This public repository contains no delivery credential machinery. Commit and publication are
+performed through the organization delivery boundary maintained by Atlas. Do not copy that
+machinery here for convenience.
 
-Each delivered wave gets an annotated tag whose name is the version and **nothing else** —
-`0.12.0`, not `0.12.0-scope-and-the-fourth-arm`. A slug in a tag name is a second copy of what the
-tag message and the changelog heading already say, and it is the copy that has to be retyped
-correctly in every `git checkout`, comparison URL and release note. Tags before `0.12.0` carry the
-older slugged form and are left as they are; nothing new gets one.
-
-The tag points at the commit that delivered the work, not at the changelog housekeeping that
-follows it. Its `CHANGELOG.md` heading matches the version. The tag message states what the wave delivered and the
-implementation percentage after it, so `git tag -n99` reads as a project history without opening a
-browser.
-
-**The workspace version moves with the tag, and `version-check` fails when it does not.**
-`protocol --version` prints `CARGO_PKG_VERSION`; while that number lags the tags, every build of the
-tool reports the same string for ever and a stale install cannot be told from the current one — which
-is exactly how a binary predating the store journal wrote no journal entries for a day while printing
-the same version the current build printed.
-
-**Bumping it no longer regenerates the tree.** A generated artifact records what it was made
-*from* — its two digests — and never which build made it (`story:generator-version-stamp`), so a
-version bump changes no projection, no suite, no synthesised tree and no cluster IR.
-`a_version_bump_rewrites_no_generated_file` in `xtask` holds that: it regenerates the whole corpus
-and fails if any file spells the build version.
-
-**Two files still move, and for a reason that is content.** The conformance evidence documents name
-the implementation they checked — `billing-reference 0.32.1` — which is what the record is *about*,
-not a stamp of the thing that wrote it. Rewrite both before cutting the tag:
-
-```console
-protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
-  > examples/billing-conformance/evidence/06-conformance.yaml
-protocol ess conform evidence --path examples/billing --target billing --observed-at 2023-11-14 \
-  --inject accept-invalid-amount > examples/billing-conformance/evidence/06-conformance-faulty.yaml
-task check
-```
-
-**The tag has to exist before the delivered-waves row can be written, so cutting one is a loop:**
-
-```console
-git commit …                       # the work
-git tag -a 0.27.3 -m "…"           # so `cargo xtask status` can see the row it must write
-cargo xtask status                 # writes the row into docs/status.md
-git commit -m "chore(release): 0.27.3" docs/status.md
-git tag -f -a 0.27.3 -m "…"        # onto the commit that carries the record
-task check                         # the whole gate, at the tag
-private Atlas delivery tooling push origin main 0.27.3
-task install                       # the ambient `protocol` is now the released one
-task release-check                 # five lines: version, heading, pushed, Release, gate record
-```
-
-**That block is the definition of "cut a release", and `task release-check` says whether it was
-followed.** The word was undefined for long enough that a coordinator conflated it with a merge to
-`main` and the operator had to spell it out (2026-08-30: *changelog update, commit, new tag, gh
-release*). The check reaches `origin` and GitHub, so it is not a gate step; it prints one line per
-item and exits 1 when any is missing. A release is not part of a wave — the wave skill closes on
-the gate record and stops.
-
-**`task install` is the last line because the ambient binary was stale six times.** `0.28.0`
-against a `0.31.0` store reported five phantom drifts; `0.26.0` two releases after `0.27.3`
-answered `validate` differently; a build predating the journal reported no history for a store at
-revision 4; `0.32.1` sat on `PATH` while `0.33.0` was tagged. Every one of those was a session
-reading a wrong answer with no line saying why.
-
-**Every tag lookup in the gate is scoped to tags reachable from `HEAD`.** A gate step runs at a
-commit, but `git tag` answers with the tags the *clone* holds. Two tags in one `git push` used to
-mean the older tag's Release run saw the newer one and failed a release that had been correct when
-it was cut — which is how `0.27.1` shipped with no GitHub Release. Reachability makes each gate
-answer *what had shipped as of this commit*; batching tags in one push is safe again.
-
-## Commits
-
-* Conventional prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-* Title, blank line, then a body explaining what changed and why. No title-only commits.
-* Ticket references go in a `Refs:` tagline at the end of the body, never in the title.
-* Write messages through a file or a quoted heredoc (`git commit -F -` with `<<'MSG'`), never
-  `-m "…"` with backticks in the text.
-
-## Branches and waves
-
-Written down 2026-08-30. Until then this convention existed only in `git log`, so every wave
-rediscovered it and no reader of the repository could find it.
-
-* **`impl/<story-slug>` for one unit of work, `wave/<name>` for the branch several land on,
-  `run/<name>` for a driver run that is not a unit of work.** The slug is the story id's name part,
-  unchanged — a branch a reader cannot join back to a story is one nobody can audit.
-* **Every `impl/*` in a wave forks from the same base**, and they merge back serially. That is what
-  makes one gate run at the end mean anything: the merged result is the only tree that has ever
-  held all of them at once, and it is the tree that gets gated.
-* **A merge subject names the branch, then what the work did** — `Merge impl/blocker-relation: a
-  blocker is typed by what would clear it, and a parked item stops looking like a moving one`. Not
-  the branch name twice.
-* **A wave is bracketed by two `chore(store):` commits.** The first carries the selection and its
-  reasoning — the pool, the properties it was chosen on, one line per story naming the objective it
-  serves. It is the only durable record of *why these and not others*. The last carries the gate
-  run that closed them, the commit the evidence was recorded against, and anything found on the way
-  that was filed rather than fixed.
-* **One gate run closes the whole wave.** Each story's `test_result` names the merge commit, which
-  contains the other units too. That is correct — it is the tree that was actually gated — and a
-  per-unit run would be evidence about a tree nobody shipped.
-* **A merge of `main` into a live wave branch, or a rebase of a unit onto a new base, is said in
-  the subject with the sha.** Either is fine; leaving it unsaid is not.
-
-* **One session per checkout; a wave runs in a worktree it created.** The main checkout is for
-  reading and merging. Three sessions shared one checkout with uncommitted edits to the planning
-  skill and a peer's unformatted hunks made `fmt-check` red for everyone (`11727595#17397`); a
-  peer's `git add -A` swept three unclaimed files onto public `main` (`3130470e#123`); five
-  worktrees and their build directories vanished mid-wave with five agents in flight, cause never
-  attributed (`4d4c15a4#274`). A wave records every worktree path in its wave page, and its
-  pre-flight refuses when `git worktree list` shows a branch checked out elsewhere or the main
-  checkout is not on `main`.
-
-The plugin's `wave` skill follows these, and
-`integrations/claude-code/skills/wave/references/branch-and-merge.md` is the long form.
-
-## Driving a run: standing rules for whoever is at the wheel
-
-Written 2026-08-29, after a night of driving this repository with itself. Each line is a mistake
-that was made, not a principle that sounded good.
-
-**Every process you start is yours until you have watched it die.** `kill $VAR` where `VAR` came
-from `jobs -p` in a non-interactive shell kills nothing: there are no jobs, `kill` gets no argument,
-and when that shell exits its children are reparented to init and run forever. Twelve busy-loop
-spinners started that way held four cores at 99% for thirty-four minutes on 2026-08-29 and were
-found by the operator, not by the agent that started them — which had already printed "hogs killed"
-on the strength of an `echo`. Start long-lived things under `systemd-run --user --scope --slice=…`
-so `systemctl --user stop` takes the whole tree, or wrap them in `timeout`; then **verify with
-`kill -0` or `ps` that they are gone** and report the check, not the intent.
-
-**A wait condition must not match the waiter.** `until ! pgrep -f "protocol drive run"; do sleep
-20; done` never exits: the waiting shell's own command line contains that string, so `pgrep` finds
-itself and the loop spins until something kills it. Four such monitors were left running on
-2026-08-29, in a session that had already written the rule above, and the work each was waiting for
-had finished before the first one was started. Match on something the waiter cannot contain — a pid
-from `$!`, a marker file the job touches on exit — or use the harness's own completion notification
-and do not poll at all. Then check the exit is real: `ps` for the job, not `echo` for yourself.
-
-**Load is not a proof, and it is the expensive way to be wrong.** The failing-under-load hypothesis
-about a flaky test was "attacked" by spawning CPU hogs and re-running twenty times, which
-demonstrated nothing either way and cost half an hour of the machine. The property was
-timing-dependent, so the proof was to *change the timing*: slow the fixture's writer 25x and the
-same failure becomes deterministic in 50 ms on an idle machine, with a mutation that turns it red
-every run. When something is intermittent, find the parameter it depends on and move it. Reach for
-brute force only when there is no such parameter, and say so.
-
-**Kill a run the moment you know it cannot succeed.** Not after the next state, not after the report
-— the moment. A run whose session is hunting for a tool that will never be published, or whose task
-document is the wrong one, is spending real money to produce a record nobody wants. Diagnosing it
-and letting it continue is the worst of both.
-
-**Test the constraint you already suspect, first.** On 2026-08-29 the native arm was written off
-after two hours of plumbing — endpoint paths, cgroup delegation, program allowlists, sandbox `PATH`
-— by a `400 Bad Request: maximum context length is 32768 tokens`. That the model's window might not
-hold the task had been written down *before the first fix*, and never measured. One request sizing
-the smallest state's prompt against the window would have ended it in a minute. A suspicion you do
-not test is a suspicion you will confirm expensively.
-
-**Prove the environment before the model.** Every launch-time fact is decidable for free: the
-binaries on the constructed `PATH`, the endpoint, the workspace, the allowlist. Run the pre-flight
-with `--max-iterations 0` first, every time. Four of the eight defects found tonight were launch
-environment, and each was found *after* a paid session rather than before a free one.
-
-**There are always two `PATH`s.** The driver's own, and the constructed one metaharness gives the
-child (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`). A binary on one is not on the other, and
-`cargo install` defaults to `$CARGO_HOME/bin`, which is on neither. Say which one a refusal means.
-
-**A refusal that names an install command must name one that works.** Twice tonight a message told
-an operator to install where the thing doing the resolving would not look.
-
-**Measure what you set out to move, and the thing that pays for it.** Waste fell from 17.2% to 2.7%
-and one state's cost tripled; a scorer that reported only the first would have called that a win.
-And a metric that counts refusals cannot see 30 successful calls that achieved nothing.
-
-**Write the finding into the store, not into the chat.** A defect explained in a message is gone
-when the session ends. `protocol artifact new story …` costs a minute.
-
-**When an instrument disagrees with a run, suspect the instrument.** The tool audit was wrong about
-a harness twice before it was right about one, and both times it was loud. An audit that fires on a
-session holding exactly what it needs teaches the reader to skip the next true one.
+Conventional commit prefixes are `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
+Commit messages have a title, a blank line, and a body explaining what changed and why. Ticket
+references belong in a trailing `Refs:` line, never the title.

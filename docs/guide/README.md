@@ -1,6 +1,6 @@
 # Adopter's guide
 
-`engineering-protocols` turns the rules an engineering team already works by — write the spec first,
+`aep` turns the rules an engineering team already works by — write the spec first,
 watch the test fail before you implement, get a human to approve a production change — into typed
 documents a program can execute. A task resolves against those documents into a plan: which rules are
 in force, what the agent may do, what evidence is owed and what counts as finished. The agent still

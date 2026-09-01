@@ -736,10 +736,10 @@ fn parse_hex_digest(
 
 /// A digest of the resolved specification a conformance suite was generated from.
 ///
-/// Lower-case hexadecimal. `ess-gen` writes the full 64-character SHA-256 of the resolved model
-/// into every generated artifact's provenance header, so 64 is the length this workspace produces.
-/// It wrote a 16-character truncation before the widening (gap register D-4: once suite acceptance
-/// and completion decisions rest on the digest, 64 bits is weak against construction), and records
+/// Lower-case hexadecimal. Current ESS conformance reports carry the full 64-character SHA-256 of
+/// the resolved model. Historical reports used a 16-character truncation before the widening (once
+/// suite acceptance and completion decisions rest on the digest, 64 bits is weak against
+/// construction), and records
 /// from before are still *parsed* — a digest from 16 to 64 characters is accepted — so a stale
 /// record fails at the digest comparison that names both digests, not at parse where the refusal
 /// could name only one. A truncated digest can never equal a full one, so nothing accepted here
@@ -754,10 +754,10 @@ fn parse_hex_digest(
 pub struct SpecDigest(String);
 
 impl SpecDigest {
-    /// The shortest accepted digest: what `ess-gen` wrote before the D-4 widening.
+    /// The shortest accepted digest used by historical reports.
     pub const MIN_LENGTH: usize = 16;
 
-    /// The longest accepted digest: a full SHA-256 in hex, which is what `ess-gen` writes.
+    /// The longest accepted digest: a full SHA-256 in hex.
     pub const MAX_LENGTH: usize = 64;
 
     /// Builds a digest, refusing anything that is not one.
@@ -832,8 +832,8 @@ impl schemars::JsonSchema for SpecDigest {
 /// a record claiming a transcript's digest identified the specification, which is *false* and
 /// which nothing downstream could detect. Two types make the transposition a compile error
 /// instead. They also disagree about width on purpose: a `SpecDigest` may be a 16-character
-/// truncation because `ess-gen` wrote those before the D-4 widening, and a transcript digest never
-/// was one, so it demands all 64.
+/// truncation because historical ESS reports used those, and a transcript digest never was one, so
+/// it demands all 64.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct TranscriptDigest(String);

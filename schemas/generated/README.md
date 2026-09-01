@@ -20,7 +20,6 @@ validate them without linking the Rust crates.
 | [`evidence.schema.json`](evidence.schema.json) | `Evidence` | one piece of submitted evidence |
 | [`action-request.schema.json`](action-request.schema.json) | `ActionRequest` | an action put to the engine |
 | [`event.schema.json`](event.schema.json) | `EventEnvelope` | one audit event |
-| [`ess.schema.json`](ess.schema.json) | `RawSpecFile` | one file of an executable system specification |
 | [`planning-document.schema.json`](planning-document.schema.json) | `RawPlanningFrontmatter` | the frontmatter of one markdown planning document |
 | [`trace-spec.schema.json`](trace-spec.schema.json) | `RawTraceSpec` | what an agent run must have looked like |
 | [`driver-steps.schema.json`](driver-steps.schema.json) | `RawStepMap` | what a harness does in each state of a workflow |

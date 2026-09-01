@@ -72,7 +72,7 @@ const lightCodeTheme: PrismTheme = {
 };
 
 const config: Config = {
-  title: 'Engineering Protocols',
+  title: 'AEP',
   tagline:
     'Constrain agent-written engineering work with rules a program executes, and decide completion from evidence rather than assertion.',
   favicon: 'img/favicon.ico',
@@ -82,13 +82,13 @@ const config: Config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // Published at https://beyond10x.github.io/engineering-protocols/
+  // Published at https://beyond10x.github.io/aep/
   url: 'https://beyond10x.github.io',
-  baseUrl: '/engineering-protocols/',
+  baseUrl: '/aep/',
 
   // GitHub Pages deployment: `npm run build` here, publish `website/build/` to `gh-pages`.
   organizationName: 'beyond10x',
-  projectName: 'engineering-protocols',
+  projectName: 'aep',
   deploymentBranch: 'gh-pages',
   trailingSlash: false,
 
@@ -120,7 +120,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: 'docs',
           editUrl:
-            'https://github.com/beyond10x/engineering-protocols/tree/main/website/',
+            'https://github.com/beyond10x/aep/tree/main/website/',
         },
         // The blog is the release record for a reader: one post per release, each a worked
         // tutorial on what the release adds, with real command output rather than claims about it.
@@ -136,7 +136,7 @@ const config: Config = {
           // Same policy as links: a post that leaks its full body onto the index page is a defect.
           onUntruncatedBlogPosts: 'throw',
           editUrl:
-            'https://github.com/beyond10x/engineering-protocols/tree/main/website/',
+            'https://github.com/beyond10x/aep/tree/main/website/',
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -154,12 +154,12 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Engineering Protocols',
+      title: 'AEP',
       // The mark is the evidence panel from the social card, reduced to one glyph. It carries its
       // own dark fill, so one file reads on both themes and no `srcDark` variant is needed.
       // `static/img/favicon.ico` is rasterized from it — see the note in `static/img/mark.svg`.
       logo: {
-        alt: 'engineering-protocols',
+        alt: 'AEP',
         src: 'img/mark.svg',
         width: 26,
         height: 26,
@@ -172,7 +172,7 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          to: '/docs/examples/specification-to-contracts',
+          to: '/docs/examples/governed-task',
           label: 'See it work',
           position: 'left',
         },
@@ -187,7 +187,7 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://github.com/beyond10x/engineering-protocols',
+          href: 'https://github.com/beyond10x/aep',
           label: 'GitHub',
           position: 'right',
           // Icon and word: `custom.css` masks the GitHub mark in front of the label with
@@ -214,10 +214,9 @@ const config: Config = {
           title: 'Examples',
           items: [
             {
-              label: 'A specification and its contracts',
-              to: '/docs/examples/specification-to-contracts',
+              label: 'A governed task, end to end',
+              to: '/docs/examples/governed-task',
             },
-            {label: 'A governed task, end to end', to: '/docs/examples/governed-task'},
           ],
         },
         {
@@ -229,7 +228,7 @@ const config: Config = {
             {label: 'Releases, in practice', to: '/releases'},
             {
               label: 'Source',
-              href: 'https://github.com/beyond10x/engineering-protocols',
+              href: 'https://github.com/beyond10x/aep',
             },
           ],
         },
@@ -237,7 +236,7 @@ const config: Config = {
       // The mark signs the page, and the claim under it is the site's tagline verbatim — the same
       // sentence the hero opens with, closing the page where it started.
       logo: {
-        alt: 'engineering-protocols',
+        alt: 'AEP',
         src: 'img/mark.svg',
         href: '/',
         width: 22,
@@ -246,7 +245,7 @@ const config: Config = {
       copyright:
         '<span class="footer__claim">Constrain agent-written engineering work with rules a program ' +
         'executes, and decide completion from evidence rather than assertion.</span>' +
-        'engineering-protocols · Apache-2.0 · built with Docusaurus.',
+        'AEP · Apache-2.0 · built with Docusaurus.',
     },
     prism: {
       theme: lightCodeTheme,

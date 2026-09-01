@@ -182,9 +182,9 @@ evidence.first_seq.test_result < evidence.first_seq.diff
 A test result was recorded before any code change existed. This only works if the harness submits
 evidence as it observes it — batching everything at the end destroys the ordering facts.
 
-## The join: how ESS evidence completes AEP tasks
+## The adapter: how standalone ESS evidence completes AEP tasks
 
-AEP and ESS meet at one declared point. A task can carry an artifact of kind
+AEP and ESS are independent repositories that meet at one declared report boundary. A task can carry an artifact of kind
 `executable-system-specification`; the `ess-conformance` principle then requires, before completion,
 evidence of kind `ess_conformance` that is `independent: true` and produced by a
 `conformance-runner`:
@@ -215,15 +215,14 @@ Three consequences:
   records. If the artifact records no digest, no run can be shown current and the requirement can
   never be satisfied — evidence that cannot demonstrate its revision is not assumed fresh.
 
-`protocol ess conform evidence` mints the evidence record in the same process that ran the suite,
-so no caller authors its own verdict. The repository's `examples/billing-conformance/` walks both
-directions: a passing run completes the task; a failing run leaves it blocked, naming the principle
-that refused. Both verbs take `--observed-at`, because the process that ran the suite is the one
-that knows when it ran.
+ESS publishes a standalone closed conformance report. The optional `aep-ess-evidence` crate reads
+that report and converts it into AEP evidence without core AEP depending on ESS modeling types. It
+refuses unknown fields, inconsistent counts, and a passing verdict that reports failures. The
+report's completion time becomes the evidence observation time.
 
 ## A second thing that can produce a record: the transcript checker
 
-`ess conform` judges the software. `protocol trace check` judges the *run* — it reads an agent
+ESS conformance judges the software. `protocol trace check` judges the *run* — it reads an agent
 transcript and holds it against a typed specification of what that run was supposed to do, and
 `protocol trace evidence` turns the verdict into a record of kind `trace_conformance`, produced by
 the verifier `trace-checker`.

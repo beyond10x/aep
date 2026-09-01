@@ -344,8 +344,8 @@ fn the_digest_is_read_from_the_instruments_row_and_not_from_the_vendors_echo() {
     let stream = out.join("no-vendor-echo.jsonl");
     let attested = std::fs::read_to_string(root().join(ATTESTED_STREAM)).expect("readable");
     let mutated = attested.replacen(
-        "\"plugins\":[{\"name\":\"engineering-protocols\"",
-        "\"plugins\":null,\"ignored\":[{\"name\":\"engineering-protocols\"",
+        "\"plugins\":[{\"name\":\"aep\"",
+        "\"plugins\":null,\"ignored\":[{\"name\":\"aep\"",
         1,
     );
     assert_ne!(mutated, attested, "the mutation reached the vendor echo");
@@ -515,6 +515,8 @@ fn spawn_args<'a>(out: &'a Path, cwd: &'a Path, extra: &[&'a str]) -> Vec<&'a st
         "2026-08-23",
         "--cwd",
         printable(cwd),
+        "--plugin-dir",
+        "/plugins/aep-planning",
         "--out",
         printable(out),
         "--redact",
@@ -769,8 +771,8 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
     assert!(
         words
             .windows(2)
-            .any(|pair| pair == ["--plugin-dir", "integrations/claude-code"]),
-        "arm b's treatment is the shipped plugin: {words:?}"
+            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+        "arm b's treatment is the explicitly named plugin: {words:?}"
     );
     let prompt = words.last().expect("the prompt is the last argument");
     assert!(
@@ -981,6 +983,8 @@ fn the_cap_stops_the_sweep_before_the_run_that_would_pass_it() {
             "2026-08-23",
             "--cwd",
             printable(&cwd),
+            "--plugin-dir",
+            "/plugins/aep-planning",
             "--out",
             printable(&out),
             "--budget-usd",

@@ -1844,10 +1844,10 @@ mod tests {
     const SEVEN_H: &[u8] = include_bytes!("../tests/fixtures/plugin-eval-7hTYjT.jsonl");
 
     /// The skill the eval is about.
-    const SKILL: &str = "engineering-protocols:planning";
+    const SKILL: &str = "aep-planning:planning";
 
     /// The plugin the eval is about.
-    const PLUGIN: &str = "engineering-protocols";
+    const PLUGIN: &str = "aep";
 
     /// Every tool run `7hTYjT` was offered, in the order the opening record lists them.
     ///
@@ -1931,7 +1931,7 @@ mod tests {
                 ExpectationKind::EnvPluginLoaded {
                     plugin: PLUGIN.to_owned(),
                     version: Some("0.1.0".to_owned()),
-                    source: Some("engineering-protocols@inline".to_owned()),
+                    source: Some("aep@inline".to_owned()),
                 },
                 Verdict::Ok,
             ),
@@ -1975,19 +1975,19 @@ mod tests {
             ),
             case(
                 ExpectationKind::EnvSkillAvailable {
-                    skill: "engineering-protocols:nonesuch".to_owned(),
+                    skill: "aep-planning:nonesuch".to_owned(),
                 },
                 Verdict::Gap,
             ),
             case(
                 ExpectationKind::EnvAgentAvailable {
-                    agent: "engineering-protocols:decomposer".to_owned(),
+                    agent: "aep-planning:decomposer".to_owned(),
                 },
                 Verdict::Ok,
             ),
             case(
                 ExpectationKind::EnvAgentAvailable {
-                    agent: "engineering-protocols:nonesuch".to_owned(),
+                    agent: "aep-planning:nonesuch".to_owned(),
                 },
                 Verdict::Gap,
             ),
@@ -2116,7 +2116,7 @@ mod tests {
             ),
             case(
                 ExpectationKind::SkillCompleted {
-                    skill: "engineering-protocols:nonesuch".to_owned(),
+                    skill: "aep-planning:nonesuch".to_owned(),
                     count: CountBound::at_least(1),
                 },
                 Verdict::Gap,
@@ -3540,10 +3540,10 @@ mod tests {
                 equals: "none".to_owned(),
             },
             ExpectationKind::EnvExclusive {
-                plugins: BTreeSet::from(["engineering-protocols".to_owned()]),
+                plugins: BTreeSet::from(["aep".to_owned()]),
             },
             ExpectationKind::EnvPluginLoaded {
-                plugin: "engineering-protocols".to_owned(),
+                plugin: "aep".to_owned(),
                 version: None,
                 source: None,
             },

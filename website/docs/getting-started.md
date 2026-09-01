@@ -15,17 +15,17 @@ task against evidence, and asking how old that evidence is.
 
 | Tool | Needed for |
 |---|---|
-| Rust (recent stable) | everything |
+| Rust 1.85 or newer | everything |
 | [go-task](https://taskfile.dev) | the repository's gate (`task check`) — optional for this page |
-| Go toolchain, `wasm32-unknown-unknown` target, Node | only the synthesis parts of the gate — not needed for this page |
+| Node | the documentation-site step of the gate — not needed for this page |
 
 ## Build
 
 ```console
-$ git clone https://github.com/beyond10x/engineering-protocols
-$ cd engineering-protocols
+$ git clone https://github.com/beyond10x/aep
+$ cd aep
 $ cargo build -p protocol-cli
-$ B=target/debug/protocol
+$ B=target/debug/aep
 ```
 
 The rest of this page uses `$B` for the binary.
@@ -198,8 +198,6 @@ the JSON to programs.
 
 * [Govern a task](./guides/govern-a-task.md) — put a task of your own under a profile.
 * [Write a principle](./guides/write-a-principle.md) — encode a rule of your team's.
-* [Write a specification](./guides/write-a-specification.md) — the ESS half: derive contracts and
-  tests from one document.
 * [Integrate an agent harness](./guides/integrate-a-harness.md) — make these answers govern a real
   agent, via the engine API rather than the CLI.
 * [Check a transcript](./guides/check-a-transcript.md) — judge what an agent run actually did

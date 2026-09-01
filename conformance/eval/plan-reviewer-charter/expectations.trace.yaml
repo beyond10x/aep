@@ -20,7 +20,7 @@ expectations:
     statement: the plugin loaded and offered the plan-reviewer, so a miss is not "it was not there"
     expect:
       env.agent_available:
-        agent: engineering-protocols:plan-reviewer
+        agent: aep-planning:plan-reviewer
 
   - id: a-subagent-actually-ran
     statement: the review went through a subagent rather than being improvised by the parent session

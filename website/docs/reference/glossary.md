@@ -1,57 +1,36 @@
 ---
 title: Glossary
 sidebar_position: 4
-description: The project's terms, defined once.
+description: AEP terms, defined once.
 ---
 
 # Glossary
 
 | Term | Definition |
 |---|---|
-| **AEP** | Agentic Engineering Protocol — the half that governs *how* engineering work is performed. |
-| **ESS** | Executable System Specification — the half that specifies *what* software must exist. |
-| **ADP / AOP** | The development-specific (`adp/1`) and operations-specific (`aop/1`) protocols extending `aep/1` with their own phases, fact families and vocabularies. |
-| **Protocol (document)** | The vocabulary declaration: which capabilities, evidence kinds, verifiers, phases and observable fact families exist. |
+| **AEP** | Agentic Engineering Protocol: the generic substrate governing how engineering work is performed and proven complete. |
+| **ADP / AOP** | Development and operations profiles over AEP, with profile-specific workflows and vocabulary. |
+| **Protocol document** | The vocabulary declaration: capabilities, evidence kinds, verifiers, phases, and observable fact families. |
 | **Principle** | One enforceable rule: when it applies, what it requires, by when, and who may attest it. |
-| **Profile** | A bundle of protocol, workflow, principles, capability policy and completion condition that a task names to be governed. |
+| **Profile** | A bundle of protocol, workflow, principles, capability policy, and completion condition. |
 | **Workflow** | A validated state machine whose transitions are guarded by predicates over evidence. |
-| **Phase** | A label on workflow states (`implementation`, `verification`, …) that principles time obligations against, so one principle works across workflows. |
-| **Task** | The unit of governed work: objective, kind, profile, declared context facts, artifact manifest. |
-| **Artifact** | A referenced engineering document — a spec, design, ADR, review — with a kind, a status from its kind's lifecycle, and relations to other artifacts. The manifest holds references, not copies. |
-| **Capability** | A named permission (`repository.write`, `production.write`, …) every governable action maps onto. Default deny; `deny` beats `require_approval` beats `allow`. |
-| **Approval floor** | Capabilities the protocol refuses to let any profile grant outright — `production.write`, `deployment.create:production` and `network.read:private` under `aep/1`. A grant broad enough to cover one counts, and only an explicit `deny` of the floored entry lets it stand. |
-| **Evidence** | A typed record of an observation — test result, approval, diff, conformance run — with a kind, a producer and provenance. Facts are projected from evidence; predicates read facts. |
-| **`observed_at`** | When somebody looked, on an evidence record. Required, with no default, and distinct from the submission time: a suite run three weeks ago and submitted this morning is three weeks old. Written as a calendar date or as epoch milliseconds, and which one survives to the comparison: a value in the future is refused rather than stored, a date only once that day has begun in no timezone (UTC+14), an instant exactly. |
-| **Horizon** | The age past which an observation stops counting — `horizon: 7d`, declared on a requirement and never on the record, because a record carrying its own expiry lets whoever wrote it choose how long it counted for. |
-| **Decay to Unknown** | What a requirement does when its most recent record is older than the horizon. Not `False`: nobody has established that the thing is broken, only that nobody has looked lately. It blocks the same way and wants a different response — run something, rather than fix something. A lapsed record's facts are withheld too, and `evidence.lapsed` counts them apart from `evidence.missing`. |
-| **Producer** | Who made an observation: `Agent` or `Verifier`. Requirements marked `independent: true` are satisfied only by verifier-produced records. |
-| **Verifier** | A class of independent fact-producer: test-runner, static-analyzer, human-review, conformance-runner, … |
-| **Truth** | The three-valued result of predicate evaluation: `True`, `False`, `Unknown`. Only `True` permits a transition; the CLI renders `False` as `✗` and `Unknown` as `?`. |
-| **Harness** | The system that runs an agent and asks the engine what is owed, permitted and done. The engine never observes anything itself. |
-| **Execution** | One task's run through a workflow: state, evidence in submission order, event stream, audit trail. Snapshots persist it; the plan is always re-resolved, never stored. |
-| **Step map** | The document (`aep.driver-steps/1`) saying what a harness *does* in each state a workflow declares, as `command`, `llm` and `operator` steps. The workflow says what evidence a transition needs; the step map says how to obtain it, which is what lets one workflow govern repositories that share nothing. |
-| **Driven run** | One walk of a workflow by `protocol drive`: a run id such as `AUTH-142/3`, a store lock, and a record of every step executed. The driver evaluates no gate — it asks the engine and does only what the engine permits, because a driver that could evaluate a gate would be a second protocol implementation with none of the conformance suites behind it. |
-| **Planning store** | A directory of markdown files — one artifact per file, YAML frontmatter, free body — that `protocol artifact` reads and writes, at `.engineering/planning/` by default. Durable in the way a plan needs to be: a status move is a one-line diff, and `git log` already knows who made it. |
-| **Backend** | An implementation of the AEP storage contract (`CommandService` + `QueryService`). The reference implementation is in-memory. |
-| **Contract conformance** | Whether a *backend* implements the AEP contract — checked by `protocol conformance`. |
-| **Semantic conformance** | Whether an *implementation* satisfies a specification — checked by `protocol ess conform`. |
-| **Specification (ESS)** | The typed model of a system: domains, types, entities, commands, events, errors, views, actors, components, bindings, topology. |
-| **IR** | The compiled, normalized form of a specification, in which an unresolved reference is unrepresentable. Everything downstream consumes the IR. |
-| **Projection** | A derived artifact: documentation, JSON Schema, OpenAPI, AsyncAPI. Deterministic, provenance-stamped, drift-checked. |
-| **Outcome** | One declared result branch of a command — including refusal branches, which the model gives no way to omit. |
-| **Binding** | A declared event→command reaction across contexts, with required `delivery:` and `on_failure:` policies. |
-| **Conversion** | An explicit, directional, justified permission to treat one newtype as another at a context crossing. |
-| **Oracle** | The specification acting as judge: the generated conformance suite plus the runner that executes it. |
-| **Scenario** | One generated conformance check, named after the obligation it verifies (`billing.invoice.CreateInvoice/outcome/rejected`). |
-| **Model digest / spec digest** | The SHA-256 content identity of a resolved model. Conformance evidence binds to it; the check fails closed. |
-| **Contract digest** | The digest of the model *slice* a generated artifact derives from — what lets impact analysis narrow "regenerate everything" to the artifacts actually reached. |
-| **Semantic delta** | The typed difference between two compiled revisions (`ess diff`): widenings, narrowings and changes over ten construct families. |
-| **Impact closure** | What stood on what moved (`ess impact`): scenarios owed again and artifacts owed regeneration, each with its dependency path. It narrows; it never says "still valid". |
-| **Synthesis plan** | The language-neutral output of `ess synthesize`: every capability of a specification dispositioned as generated, obligation or refused, with reasons. Byte-identical across emitters. |
-| **Obligation (synthesis)** | A named piece of work the specification cannot determine — every algorithm is one — implemented by a human in a realization crate against a declared seam. |
-| **Realization** | The hand-written crate implementing a plan's obligations, linked into the generated tree. |
-| **`TARGET.md`** | The per-emitter declaration of what that target holds more weakly or cannot represent — a named weakening, never a silent downgrade. |
-| **Observation bundle / infra IR** | A scanner-produced snapshot of a cluster (`infra-observation/1`) and its compiled, content-addressed form (`infra-ir/1`). |
-| **Expectation** | One clause of a declared infrastructure desired state (`infra-spec/1`), evaluated three-valued: `ok`, `gap`, `unk`. |
-| **Trace specification** | A `trace-spec/1` document of typed expectations over an agent transcript a harness already wrote. `protocol trace check` judges the finished run against it three-valued, citing event indices; nothing in the family starts an agent, calls a model or reaches a network, which is what makes the verdict reproducible and usable as evidence. |
-| **Gate** | The repository's one check entry point, `task check`; CI provisions its environment and invokes it directly. Its ordered step list is generated into `AGENTS.md`, not copied here. |
+| **Phase** | A label on workflow states that principles use to time obligations across different workflows. |
+| **Task** | Governed work: objective, kind, profile, context facts, and artifact manifest. |
+| **Artifact** | A referenced engineering document with a kind, lifecycle status, provenance, and relations. |
+| **Capability** | A named permission. It defaults to deny; deny outranks approval-required, which outranks allow. |
+| **Approval floor** | A capability that no profile may grant outright; a matching operation always requires approval or remains denied. |
+| **Evidence** | A typed observation with kind, producer, subject, provenance, and observation time. Predicates read facts projected from it. |
+| **`observed_at`** | When somebody looked, distinct from when a record was submitted. |
+| **Horizon** | The age after which an observation stops satisfying a requirement and becomes Unknown again. |
+| **Producer** | The agent or verifier that made an observation. Independent requirements accept verifier-produced records only. |
+| **Truth** | `True`, `False`, or `Unknown`. Only True permits a guarded transition. |
+| **Harness** | The external system that runs an agent and asks AEP what is owed, permitted, and done. |
+| **Execution** | One task's run through a workflow: state, evidence order, events, and audit trail. |
+| **Step map** | An `aep.driver-steps/1` document saying what a harness does in each workflow state. |
+| **Driven run** | A workflow walk by `aep drive`; the driver asks the engine and performs only the steps it permits. |
+| **Planning store** | Markdown artifacts and an append-only journal, written only through `aep artifact`. |
+| **Backend** | An implementation of the AEP storage command and query contracts. |
+| **Contract conformance** | Whether a backend implements the AEP storage contract, checked by `aep conformance`. |
+| **ESS conformance report** | A standalone report emitted by ESS and optionally converted into AEP evidence by `aep-ess-evidence`. |
+| **Trace specification** | Typed expectations over an agent transcript; `aep trace check` judges the finished run three-valued. |
+| **Gate** | The repository's authoritative `task check` entry point. |

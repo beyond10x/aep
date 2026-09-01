@@ -1,7 +1,7 @@
 # Store waves F, G, H — the storage layer is `entity-runtime`'s
 
 > **Status: accepted 2026-08-28 by the operator, with every § 4 default taken.** Written the same
-> day against `engineering-protocols` 0.27.3 (`82a80e5`) and `entity-runtime` 0.9.1 (`dc5b25a`).
+> day against `aep` 0.27.3 (`82a80e5`) and `entity-runtime` 0.9.1 (`dc5b25a`).
 > Every fact in § 1 was re-read from those two trees on that date; nothing below it is a fact until
 > a story ships. Wave F is in progress; the stories carry the record.
 >

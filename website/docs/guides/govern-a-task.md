@@ -118,7 +118,7 @@ With `.engineering/project.yaml` and `.engineering/task.yaml` in place, the flag
 
 ```console
 $ $B resolve
-inputs      project …/engineering-protocols
+inputs      project …/aep
 task        W4-1 (feature)
 objective   agent-eval-cases
 protocol    adp/1
@@ -285,7 +285,7 @@ itself, which is the point: a driver that could evaluate a gate would be a secon
 implementation with none of the conformance suites behind it.
 
 ```console
-$ $B drive run --project . --plugin-dir integrations/claude-code --map development/default \
+$ $B drive run --project . --plugin-dir /path/to/agentplugins/plugins/aep-planning --map development/default \
     --pause-on-approval
 $ $B drive status
 $ $B drive resume W4-1/1

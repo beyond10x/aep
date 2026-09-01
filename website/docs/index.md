@@ -3,108 +3,59 @@ slug: /
 title: Introduction
 sidebar_label: Introduction
 sidebar_position: 1
-description: Typed, executable rules for agent-performed engineering work, and executable specifications for the software it produces.
+description: Typed, executable rules for agent-performed engineering work.
 ---
 
-# Engineering Protocols
+# Agentic Engineering Protocol
 
-`engineering-protocols` is a Rust library, a CLI and a set of typed document formats for running
-engineering work — especially agent-performed engineering work — under rules a program can execute,
-instead of prose a model may or may not follow.
+AEP is a Rust library, a CLI, and a set of typed document formats for running engineering work
+under rules a program can execute.
 
-It has two halves:
+You write principles such as “tests must pass,” “verification must be independent,” or “production
+changes require approval” as validated data. A deterministic engine resolves those rules against a
+task and its evidence. The result says what is permitted, what is owed, and why progress is blocked.
 
-| Half | Governs | The question it answers |
-|---|---|---|
-| **AEP** — Agentic Engineering Protocol | how engineering work is performed | *Was this built properly?* |
-| **ESS** — Executable System Specification | what software must exist | *Is this the thing we meant to build?* |
+## One substrate, two profiles
 
-With **AEP**, you write your team's rules — "write the test first", "production changes need
-approval", "an agent cannot verify its own work" — as typed YAML documents. A deterministic engine
-resolves a task against them and answers: which rules are in force, what the agent may do, what
-evidence is owed, and whether the work is done. The agent reasons; the protocol decides what the
-recorded facts permit.
-
-With **ESS**, you write a system's design — commands, entities, events, state machines, components —
-as a typed specification. A compiler derives the documentation, the JSON Schema, OpenAPI and
-AsyncAPI contracts, a conformance test suite, and the structural part of the implementation from
-that one document. When the specification changes, a semantic diff derives what the change
-invalidates.
-
-The repository also ships a **reference driver** — `protocol drive` walks a workflow, running the
-program, model and person steps a step map declares — so that the harness contract has a caller
-somebody has actually run. On 2026-08-21 it drove a real story out of this repository's own backlog
-and **blocked four states short of the operator**, for two reasons the engine printed. That is
-recorded rather than smoothed over: see [Where this stands](./status/where-this-stands.md).
-
-## Why prose rules fail with agents
-
-A person who ignores the wiki page can be asked why. An agent given the same page in a prompt
-produces output that *reads* as though it followed it, at whatever scale you run it. Prose
-instructions fail silently and plausibly: "the tests pass" and "I ran the tests" are assertions, and
-reading them tells you nothing a competent text generator could not produce without running
-anything.
-
-Reviewing everything does not scale either — the cost of producing a change fell, the cost of
-reading one did not. So the operative question becomes: **which facts, produced by whom, permit
-calling the work done without reading all of it?** That is the question this project turns into
-types:
-
-| Prose rule | What it becomes here |
+| Profile | Governs |
 |---|---|
-| "An agent cannot verify itself" | an evidence requirement marked `independent: true`, which an agent's own report never satisfies — the producer is part of every evidence record |
-| "Get approval before touching production" | a capability held in an approval floor; a profile that grants `production.write` outright fails to resolve |
-| "Write the test first" | an ordering fact: `evidence.first_seq.test_result < evidence.first_seq.diff`, checked against recorded submission order |
-| "Ada approved the design" | an approval bound to the revision it approved; version 7 is not covered by a review of version 3 |
-| "Build what we specified" | a conformance suite generated from the same specification the contracts came from, run by something other than the author |
-| "That check is from last month" | a `horizon` on the requirement: past it the requirement reads `Unknown` again, because a lapsed check has not failed — nobody has run it |
+| AEP | artifacts, planning, workflows, evidence, permissions, approvals, audit, and completion |
+| ADP | specification, decomposition, design, tests, implementation, and review |
+| AOP | operational plans, controlled change, verification, rollback, and incidents |
 
-None of this makes a model reliable. It makes a model's output **checkable**, which is a different
-and more achievable property.
+ADP and AOP use AEP's planning and evidence substrate; they do not implement separate engines.
 
-## How the two halves connect
+## The command
 
-AEP does not know what an invoice is; ESS does not know what a code review is. They meet at exactly
-one place — evidence:
+`aep` is canonical. `protocol` is an exact compatibility alias for existing automation.
 
-```text
-ESS specification      defines the target system
-        │
-        ▼
-AEP profile            governs the work toward it
-        │
-        ▼
-Implementation         written by an agent or a person
-        │
-        ▼
-ESS conformance run    checks the result against the specification
-        │
-        ▼
-Evidence record        a fact, produced by something other than the author
-        │
-        ▼
-AEP completion         the protocol decides whether that is enough
+```console
+aep validate
+aep artifact board
+aep explain --action production.write
+aep trace check --spec expectations.trace.yaml --transcript run.jsonl
 ```
 
-The loop closes because the specification that *generated* the contracts is the same one that
-*tests* the implementation. The agent cannot weaken the test, because it did not write the test —
-and it cannot declare the work finished, because completion is a predicate over facts it does not
-control.
+The CLI also includes a reference driver. It proves the harness contract has a real caller but does
+not choose a model, credential, endpoint, or plugin. Harness-specific skills and agents come from
+the separate `beyond10x` agentplugins marketplace and are supplied explicitly.
 
-## Where to go
+## What lives elsewhere
 
-| You want to | Read |
+Executable System Specification tooling is a standalone project. ESS publishes its own conformance
+report and has no AEP dependency. The optional AEP-side adapter converts that report into
+`ess_conformance` evidence without core AEP compiling against ESS modeling types.
+
+## Continue
+
+| Goal | Read |
 |---|---|
-| run it in ten minutes | [Getting started](./getting-started.md) |
-| understand the model before adopting it | [Architecture overview](./concepts/overview.md), then [AEP](./concepts/aep.md) and [ESS](./concepts/ess.md) |
-| put your team's rules under the protocol | [Govern a task](./guides/govern-a-task.md) and [Write a principle](./guides/write-a-principle.md) |
-| make the protocol govern your agent | [Integrate an agent harness](./guides/integrate-a-harness.md) |
-| judge what an agent run actually did | [Check a transcript](./guides/check-a-transcript.md) |
-| derive contracts and tests from a specification | [Write a specification](./guides/write-a-specification.md) |
-| see real input and output before reading anything else | [A specification and its contracts](./examples/specification-to-contracts.md) |
-| know what is built, what is not, and what you have to trust | [Status](./status/where-this-stands.md) and [Limitations](./status/limitations.md) |
+| run the CLI | [Getting started](./getting-started.md) |
+| understand the architecture | [Architecture overview](./concepts/overview.md) |
+| govern a task | [Govern a task](./guides/govern-a-task.md) |
+| integrate a harness | [Integrate an agent harness](./guides/integrate-a-harness.md) |
+| inspect a complete example | [A governed task, end to end](./examples/governed-task.md) |
+| understand evidence | [Evidence](./concepts/evidence.md) |
+| see current delivery state | [Where this stands](./status/where-this-stands.md) |
 
-The project is Apache-2.0 and lives at
-[github.com/beyond10x/engineering-protocols](https://github.com/beyond10x/engineering-protocols).
-Every claim on this site is traceable to the repository: concept, example and status pages name
-their source files, and every command a guide shows is runnable from a checkout.
+Source: [github.com/beyond10x/aep](https://github.com/beyond10x/aep).

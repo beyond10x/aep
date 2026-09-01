@@ -514,7 +514,7 @@ fn an_absolute_protocol_source_is_refused_and_the_repository_is_left_as_it_was()
             "reverse",
             "init",
             "--protocols",
-            "/opt/engineering-protocols",
+            "/opt/aep",
             "--profile",
             "development.standard",
         ],

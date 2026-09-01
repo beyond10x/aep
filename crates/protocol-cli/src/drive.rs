@@ -179,11 +179,6 @@ fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
     Ok(expanded)
 }
 
-/// Where the plugin lives, when no `--plugin-dir` said.
-/// Where a project keeps its own Claude Code plugin, tried last when no flag and no
-/// environment variable named one.
-const PROJECT_PLUGIN_DIR: &str = "integrations/claude-code";
-
 const PLUGIN_DIR_ENV: &str = "AEP_DRIVE_PLUGIN_DIR";
 
 /// What can be done with a driven run.
@@ -631,32 +626,20 @@ impl DriveLocation {
         merged
     }
 
-    /// The plugin directories a session loads: the flags, then the environment, then the project's own.
+    /// The plugin directories a session loads: explicit flags, then the environment.
     ///
     /// The environment is a fallback and never an addition — a caller that named directories meant
     /// those directories, and silently appending one from the ambient environment is how a run
     /// ends up enforcing something its own command line does not mention.
     ///
-    /// **The project's own plugin is the last fallback, and run `W4-3/1` is why.** Started without
-    /// the flag, its sessions loaded *no* plugin and answered `Unknown skill: planning` to the very
-    /// first thing the step map asks for — while offering the operator's personal skills and tools,
-    /// because a session with no plugin is not a session with no inventory. A driven run of *this*
-    /// repository that has to be told where *this* repository's plugin lives is a flag nobody will
-    /// remember, and forgetting it does not fail: it produces a run that walks, spends and records
-    /// the wrong thing.
-    ///
-    /// It is a fallback rather than an addition for the same reason the environment is: a caller
-    /// who named directories meant those, and the run report says which were loaded either way.
-    fn plugin_dirs(&self, project: &Path) -> Vec<PathBuf> {
+    /// AEP bundles no plugin sources, so there is no repository-relative fallback. The external
+    /// agentplugins checkout or installation is authority the operator must name.
+    fn plugin_dirs(&self, _project: &Path) -> Vec<PathBuf> {
         if !self.plugin_dir.is_empty() {
             return self.plugin_dir.clone();
         }
         if let Some(value) = std::env::var_os(PLUGIN_DIR_ENV) {
             return vec![PathBuf::from(value)];
-        }
-        let own = project.join(PROJECT_PLUGIN_DIR);
-        if own.is_dir() {
-            return vec![own];
         }
         Vec::new()
     }
@@ -6887,7 +6870,7 @@ mod tests {
         // An ordinary checkout: asking would be a launch refusal, so nothing is asked.
         let ordinary = b10x_argv(
             &with_subtree,
-            Path::new("/home/op/engineering-protocols"),
+            Path::new("/home/op/aep"),
             &[],
             &[],
             "do the thing",
@@ -6904,7 +6887,7 @@ mod tests {
         assert!(
             b10x_read_only_note(
                 &b10x_map(),
-                Path::new("/home/op/engineering-protocols"),
+                Path::new("/home/op/aep"),
                 &with_subtree
             )
             .is_some_and(|note| note.contains("does not")),
@@ -8452,15 +8435,6 @@ profile: test.reading
             "the committed map gives `receive` no context file: the planning skill it used to hand \
              over eagerly now arrives through the plugin, one `skill` call away instead of billed \
              on every turn of a stateless loop"
-        );
-        // The document itself still has to be there — the dependency moved, it did not go away.
-        // A run reaches it through the plugin now, so this is what would silently stop offering
-        // the planning skill if the file were renamed.
-        assert!(
-            repository
-                .join("integrations/claude-code/skills/planning/SKILL.md")
-                .is_file(),
-            "the plugin still ships the planning skill this map's steps are written around"
         );
         assert_eq!(
             step.scope.len(),

@@ -1,6 +1,6 @@
 # Transcript conformance — a typed specification over an agent run — Design v0.1
 
-> **Repository:** `beyond10x/engineering-protocols`
+> **Repository:** `beyond10x/aep`
 > **Status:** **proposed, not accepted.** Nothing here is a work order. No plan page has taken it up,
 > and per [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative* a proposal is not a work
 > order however recent it is. The milestones in § 9 are unsequenced on purpose.
@@ -31,7 +31,7 @@ R=1; grep -q 'protocol artifact new' "$WORK/result.jsonl" && R=0; check "transcr
 into the event stream properly, with `jq`:
 
 ```bash
-jq -e 'select(.tool_use_result.commandName=="engineering-protocols:planning")
+jq -e 'select(.tool_use_result.commandName=="aep-planning:planning")
        | select(.tool_use_result.success==true)' "$WORK/result.jsonl"
 ```
 
@@ -138,7 +138,7 @@ both are typed below.
 **A skill invocation is a tool call.** There is no distinct event kind for it; the observed form is
 
 ```json
-{"type":"tool_use","name":"Skill","input":{"skill":"engineering-protocols:planning","args":"…"}}
+{"type":"tool_use","name":"Skill","input":{"skill":"aep-planning:planning","args":"…"}}
 ```
 
 at event 5, followed by twelve `Bash`/`Read`/`Edit` calls — which is exactly the claim the grep was
@@ -161,9 +161,9 @@ class of eval defects is visible *before the first turn is spent*. Observed keys
 | `output_style` | `"Operator Report"` | **leaked from the user's own configuration** — see below |
 | `tools` | 33 | a tool surface wider than `--allowedTools` implies |
 | `slash_commands` | 66 | as above |
-| `skills` | 27, including `engineering-protocols:planning` | the plugin's skill is **available**, which is a different fact from it being invoked |
-| `agents` | 11, including `engineering-protocols:decomposer` and `:plan-reviewer` | the plugin's agents loaded under the names the plan page's W1.3 acceptance refers to |
-| `plugins` | 6 objects, each `{name, version, path, source}`; ours is `engineering-protocols@inline` v0.1.0 from the scratch directory | which plugin was actually loaded, at which version, from where |
+| `skills` | 27, including `aep-planning:planning` | the plugin's skill is **available**, which is a different fact from it being invoked |
+| `agents` | 11, including `aep-planning:decomposer` and `:plan-reviewer` | the plugin's agents loaded under the names the plan page's W1.3 acceptance refers to |
+| `plugins` | 6 objects, each `{name, version, path, source}`; ours is `aep@inline` v0.1.0 from the scratch directory | which plugin was actually loaded, at which version, from where |
 
 Six expectation kinds follow directly, and they are cheap because the facts are all in one event:
 `env.model`, `env.permission_mode`, `env.api_key_source`, `env.plugin_loaded` (by name, optionally
@@ -174,7 +174,7 @@ own paragraph.
 **not** hermetic, and it is the motivating case:
 
 ```text
-plugins loaded:  engineering-protocols@inline 0.1.0   ← the one under test
+plugins loaded:  aep@inline 0.1.0   ← the one under test
                  rust-analyzer-lsp@claude-plugins-official 1.0.0
                  gopls-lsp@claude-plugins-official 1.0.0
                  typescript-lsp@claude-plugins-official 1.0.0
@@ -221,7 +221,7 @@ matters:
    working is indistinguishable from isolation that works: the run goes green either way, and the
    contamination shows up months later as an unreproducible result. `env.exclusive` is what turns a
    broken seal into a `gap` on the next run. `run.sh:144-153` now asserts precisely this — the init
-   event's plugin list must be exactly `["engineering-protocols"]` — and `run.sh:155-166` asserts
+   event's plugin list must be exactly `["aep"]` — and `run.sh:155-166` asserts
    `apiKeySource == "none"` unless `EVAL_USE_API_KEY=1` opts into key billing.
 
 That pair — prevent it in the runner, assert it in the specification — is the same arrangement this
@@ -378,13 +378,13 @@ expectations:
   # --- the environment the run actually got -------------------------------
   - id: our-plugin-loaded
     expect: env.plugin_loaded
-    plugin: engineering-protocols
+    plugin: aep
     version: "0.1.0"
-    source: engineering-protocols@inline
+    source: aep@inline
 
   - id: nothing-else-loaded
     expect: env.exclusive
-    plugins: [engineering-protocols]        # observed run: gap, 5 foreign plugins
+    plugins: [aep]        # observed run: gap, 5 foreign plugins
 
   - id: billed-to-the-session
     expect: env.api_key_source
@@ -393,7 +393,7 @@ expectations:
   # --- what the agent did -------------------------------------------------
   - id: skill-completed
     expect: skill.completed
-    skill: engineering-protocols:planning
+    skill: aep-planning:planning
     count: {at_least: 1}
 
   - id: created-through-the-cli
@@ -462,7 +462,7 @@ facts, and collapsing them loses the one that matters most:
 | `skill.completed` | the correlated `tool_use_result` has `commandName` matching **and `success: true`** | it ran to completion |
 
 `skill.completed` is **structural, not textual**. The observed result object is
-`{"commandName":"engineering-protocols:planning","success":true}` — a boolean the harness set, not a
+`{"commandName":"aep-planning:planning","success":true}` — a boolean the harness set, not a
 sentence the model wrote. `run.sh:123-131` already asserts exactly this with `jq`, which is the
 strongest existing assertion in the eval and the clearest demonstration that the script has outgrown
 its medium.
@@ -672,11 +672,11 @@ the same mistake as a driver that evaluates its own gates.
 $ protocol trace check --spec integrations/claude-code/eval/expectations.trace.yaml \
     --transcript "$WORK/result.jsonl"
 planning-plugin/eval against transcript sha256:9f3c… — 7 ok, 2 gap, 1 unk
-  ok   our-plugin-loaded            engineering-protocols@inline 0.1.0 at event 0
+  ok   our-plugin-loaded            aep@inline 0.1.0 at event 0
   gap  nothing-else-loaded          5 unexpected plugins at event 0: rust-analyzer-lsp,
                                     gopls-lsp, typescript-lsp, track, flux-agent
   ok   billed-to-the-session        apiKeySource = none at event 0
-  ok   skill-completed              Skill(engineering-protocols:planning) at event 5,
+  ok   skill-completed              Skill(aep-planning:planning) at event 5,
                                     result success=true at event 6
   ok   created-through-the-cli      Bash(command ~ "protocol artifact new") at events 21, 23
   gap  no-hand-edited-frontmatter   Edit(file_path ~ …/planning/.*\.md$) at events 35, 37, 39
@@ -705,7 +705,7 @@ Both are `gap`, because both are observed contradictions of a stated expectation
 on is a judgement, and the checker does not make it.
 
 **Exit codes mirror `ess conform`, which is the existing precedent and is documented at
-`crates/protocol-cli/src/main.rs:2342` as *"`0` conformant, `1` contradicted, `3` nobody found
+`crates/protocol-cli/src/app.rs:2342` as *"`0` conformant, `1` contradicted, `3` nobody found
 out"*:**
 
 | code | meaning |
@@ -745,7 +745,7 @@ $ protocol trace evidence --spec …/expectations.trace.yaml --transcript "$WORK
 ```
 
 mints an evidence record **in the same process that ran the check**, exactly as
-`protocol ess conform evidence` does — the design note there (`crates/protocol-cli/src/main.rs:2183`)
+`protocol ess conform evidence` does — the design note there (`crates/protocol-cli/src/app.rs:2183`)
 is that the record is produced on the producing side so no caller can author its own verdict, and
 that argument transfers unchanged.
 
@@ -802,7 +802,7 @@ cannot assert on at all:
 | 3.4 | the transcript shows `protocol artifact new` | **`grep` over the JSONL** (`run.sh:120-121`) |
 | 3.5 | the planning skill completed, `success == true` | **`jq`, with a `grep` fallback** (`:123-131`) |
 | 3.6 | terminal record clean: no error, no permission denials | **`jq`, with a `grep` fallback** (`:133-142`) |
-| 3.7 | hermetic: the plugin list is exactly `["engineering-protocols"]` | **`jq`, no fallback** (`:144-153`) |
+| 3.7 | hermetic: the plugin list is exactly `["aep"]` | **`jq`, no fallback** (`:144-153`) |
 | 3.8 | auth is the login: `apiKeySource == "none"` | **`jq`, conditional on `EVAL_USE_API_KEY`** (`:155-166`) |
 | — | metrics: environment, plugins, **all four run quantities**, tokens, cache hit ratio, latency, rate limit, **tool traffic** and **per-step timing** — per-tool calls, errors, input and result bytes, tokens injected into context, identical-call groups, and each step's `gen`/`exec` split | `jq`, **informational, asserted on nothing** (`:168-232`) |
 

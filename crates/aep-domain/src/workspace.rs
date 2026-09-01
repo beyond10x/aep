@@ -7,7 +7,7 @@
 //! ```yaml
 //! version: aep.workspace/1
 //! members:
-//!   - name: engineering-protocols
+//!   - name: aep
 //!     source: ..
 //!   - name: entity-runtime
 //!     source: ../../entity-runtime
@@ -463,7 +463,7 @@ mod tests {
         let parsed = workspace(
             r"
 members:
-  - name: engineering-protocols
+  - name: aep
     source: ..
   - name: entity-runtime
     source: ../../entity-runtime
@@ -472,7 +472,7 @@ members:
         .expect("validates");
 
         assert_eq!(parsed.members.len(), 2);
-        assert_eq!(parsed.members[0].name.as_str(), "engineering-protocols");
+        assert_eq!(parsed.members[0].name.as_str(), "aep");
         assert_eq!(parsed.members[1].name.as_str(), "entity-runtime");
         assert_eq!(
             parsed.members[0].store,
@@ -572,9 +572,9 @@ members:
         .expect("validates");
 
         assert_eq!(
-            parsed.members[0].store_under(Path::new("/w/engineering-protocols/.engineering")),
+            parsed.members[0].store_under(Path::new("/w/aep/.engineering")),
             Some(PathBuf::from(
-                "/w/engineering-protocols/.engineering/../../entity-runtime/.engineering/planning"
+                "/w/aep/.engineering/../../entity-runtime/.engineering/planning"
             ))
         );
     }
@@ -683,11 +683,11 @@ members:
 
     #[test]
     fn an_unqualified_reference_takes_the_member_it_was_written_in() {
-        let here = MemberName::parse("engineering-protocols").expect("a name");
+        let here = MemberName::parse("aep").expect("a name");
         let local = WorkspaceRef::parse("story:x")
             .expect("parses")
             .within(&here);
-        assert_eq!(local.to_string(), "engineering-protocols/story:x");
+        assert_eq!(local.to_string(), "aep/story:x");
 
         // A reference that already named a member is not re-pointed by where it happens to be read.
         let elsewhere = WorkspaceRef::parse("entity-runtime/story:x")

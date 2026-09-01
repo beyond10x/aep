@@ -5,8 +5,7 @@
 //! with `#[serde(alias = "…")]` — and **`schemars` cannot see that attribute**, so the derived
 //! schema publishes the canonical spelling and nothing else.
 //!
-//! That gap is not cosmetic. `docs/guide/specification.md` tells an author to point their editor at
-//! `schemas/generated/ess.schema.json`; every one of these types also carries
+//! That gap is not cosmetic. Editors consume these published schemas; every one of these types also carries
 //! `#[serde(deny_unknown_fields)]`, so the missing spelling is not a lenient omission but a
 //! refusal. The editor marked this repository's own normative example invalid, in the exact place
 //! the guide's examples put it, and offered no repair — because the spelling it objected to was the
@@ -15,7 +14,7 @@
 //! # An alias is not simply a second optional property
 //!
 //! Where the canonical field is **required**, exactly one of the two spellings must be present. A
-//! schema that made both optional would accept a component that names itself neither way, which the
+//! schema that made both optional would accept a task that names its kind neither way, which the
 //! parser refuses. So the required entry is replaced by a `oneOf` over the two one-element
 //! `required` lists: false for a document giving both, false for one giving neither, true for one
 //! giving either.
@@ -73,8 +72,6 @@ const fn alias(type_name: &'static str, canonical: &'static str, alias: &'static
 pub const WIRE_ALIASES: &[WireAlias] = &[
     alias("Evidence", "diff", "source_diff"),
     alias("Evidence", "test_result", "test_execution"),
-    alias("RawBindingSpec", "name", "id"),
-    alias("RawComponentSpec", "name", "component"),
     alias(
         "RawExpectationKind",
         "env.skill_available",

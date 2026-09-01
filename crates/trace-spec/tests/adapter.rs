@@ -98,7 +98,7 @@ fn the_edit_runs_tool_traffic_is_eleven_calls_and_not_one_failure() {
             ("Bash".to_owned(), 4, 0, 4, 1_116, 2_755),
             ("Edit".to_owned(), 3, 0, 3, 6_875, 649),
             ("Read".to_owned(), 3, 0, 3, 373, 4_656),
-            ("Skill".to_owned(), 1, 0, 1, 423, 47),
+            ("Skill".to_owned(), 1, 0, 1, 414, 38),
         ],
         "calls, errors, results, input bytes, result bytes"
     );
@@ -189,14 +189,11 @@ fn the_opening_record_says_which_model_which_permissions_and_which_plugin() {
     let plugins = start.plugins.as_deref().expect("plugins were recorded");
     assert_eq!(
         plugins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
-        vec!["engineering-protocols"],
+        vec!["aep"],
         "exactly one plugin, which is what hermeticity looks like in the first event"
     );
     assert_eq!(plugins[0].version.as_deref(), Some("0.1.0"));
-    assert_eq!(
-        plugins[0].source.as_deref(),
-        Some("engineering-protocols@inline")
-    );
+    assert_eq!(plugins[0].source.as_deref(), Some("aep@inline"));
     assert!(plugins[0].path.is_some());
 
     assert_eq!(start.tools.as_ref().map(Vec::len), Some(32));
@@ -206,13 +203,13 @@ fn the_opening_record_says_which_model_which_permissions_and_which_plugin() {
         .as_ref()
         .expect("skills were recorded")
         .iter()
-        .any(|skill| skill == "engineering-protocols:planning"));
+        .any(|skill| skill == "aep-planning:planning"));
     assert!(start
         .agents
         .as_ref()
         .expect("agents were recorded")
         .iter()
-        .any(|agent| agent == "engineering-protocols:decomposer"));
+        .any(|agent| agent == "aep-planning:decomposer"));
 }
 
 #[test]
@@ -228,7 +225,7 @@ fn the_skill_call_and_the_result_it_was_answered_with_are_one_pair() {
     // and this is the claim the eval's grep was reaching for and could not state.
     assert_eq!(
         call.argument("skill").and_then(Value::as_str),
-        Some("engineering-protocols:planning")
+        Some("aep-planning:planning")
     );
 
     let (_, result) = ir
@@ -236,7 +233,7 @@ fn the_skill_call_and_the_result_it_was_answered_with_are_one_pair() {
         .expect("the call was correlated to its result by TraceIr::new, not by the adapter");
     assert_eq!(
         result.field("commandName").and_then(Value::as_str),
-        Some("engineering-protocols:planning")
+        Some("aep-planning:planning")
     );
     assert_eq!(
         result.field("success").and_then(Value::as_bool),
@@ -398,9 +395,9 @@ fn the_write_run_has_the_same_shape_with_a_different_tool_surface() {
     assert_eq!(
         traffic(&ir),
         vec![
-            ("Bash".to_owned(), 4, 0, 4, 1_186, 1_726),
+            ("Bash".to_owned(), 4, 0, 4, 1_186, 1_708),
             ("Read".to_owned(), 3, 0, 3, 387, 4_682),
-            ("Skill".to_owned(), 1, 0, 1, 300, 47),
+            ("Skill".to_owned(), 1, 0, 1, 291, 38),
             ("Write".to_owned(), 3, 0, 3, 4_256, 663),
         ]
     );
@@ -418,7 +415,7 @@ fn the_write_run_has_the_same_shape_with_a_different_tool_surface() {
             .iter()
             .map(|p| p.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["engineering-protocols"]
+        vec!["aep"]
     );
     assert_eq!(start.api_key_source.as_deref(), Some("none"));
 

@@ -30,13 +30,13 @@ $ metaharness doctor b10x
 $ protocol drive status
 ```
 
-`protocol drive status` is read-only and free. The engineering-protocols comparison runner in the
+`protocol drive status` is read-only and free. The aep comparison runner in the
 metaharness checkout goes further: it assembles the fixture, projects the workflow, exercises the
 confinement governor and stops before any model request unless `--spend` is present:
 
 ```console
 $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
-    -p metaharness-engineering-protocols-eval -- native \
+    -p metaharness-aep-eval -- native \
     --ep-repo "$PWD" --harness-repo ../harness
 ```
 
@@ -46,7 +46,7 @@ budget. See the [harness and confinement matrix](../reference/harnesses.md) befo
 
 ```console
 $ protocol drive run --project . --map development/default \
-    --plugin-dir integrations/claude-code --pause-on-approval \
+    --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
 $ protocol drive status
 $ protocol drive resume AUTH-142/3      # the run id `drive run` allocated

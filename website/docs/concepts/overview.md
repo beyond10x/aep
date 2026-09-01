@@ -1,145 +1,63 @@
 ---
 title: Architecture overview
 sidebar_position: 1
-description: What the pieces are, what runs where, and where the project's responsibility deliberately ends.
+description: AEP's deterministic core, provider edges, profiles, driver, trace checker, and external boundaries.
 ---
 
 # Architecture overview
 
-`engineering-protocols` is a **library and a specification, not a service**. The engine holds no
-credential and reaches no network: it consumes typed documents and recorded evidence, and produces
-deterministic answers, generated artifacts and refusals. Everything that acts — the agent, the CI
-system, the deployment pipeline — lives outside and asks it questions.
-
-One thing does act, on purpose. The CLI ships a **reference driver** that walks a workflow by running
-the steps a step map declares, and one of the three step kinds asks a model. It exists because a
-contract nobody has implemented is a contract nobody has tested. It **evaluates no gate itself** —
-a driver that could evaluate a gate would be a second protocol implementation with none of the
-conformance suites, and the first time the two disagreed the untested one would win.
-
-## The pieces
+AEP is a library and a specification, not a service. The engine holds no credential and observes
+nothing by itself. Inputs enter as validated documents and evidence; decisions leave as values.
 
 ```text
-            AEP (how work is performed)          ESS (what must exist)
-            ───────────────────────────          ─────────────────────
-documents   protocols/ principles/ workflows/    a specification
-            profiles/ artifacts/lifecycles/      (one file or a directory)
-                 │                                    │
-                 ▼                                    ▼
-engine      aep-engine: resolve, authorize,      ess-compiler: validate, resolve
-            evaluate, transition                 into a normalized IR
-                 │                                    │
-                 ▼                                    ▼
-outputs     plans, decisions, refusals,          docs, JSON Schema, OpenAPI, AsyncAPI,
-            audit trail                          conformance suites, semantic diffs,
-                                                 synthesized structural code
-                 │                                    │
-                 └──────────── evidence ──────────────┘
-                    a conformance run becomes an AEP
-                    evidence record; completion is a
-                    predicate over such records
+protocols + profiles + task + evidence
+                    │
+                    ▼
+             deterministic engine
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+    decision    obligations   explanation
+        │
+        ▼
+ named IO edges: backend, CLI, driver, harness
 ```
 
-### AEP: the protocol side
+## Layers
 
-| Component | Role |
-|---|---|
-| `aep-domain` | the typed model: tasks, principles, workflows, capabilities, evidence, predicates, audit |
-| `aep-engine` | resolution, evaluation and transitions — deterministic, clock-injected, no I/O of its own |
-| `aep-contract` | the storage-independent command/query contract for engineering entities |
-| `aep-backend-memory` | the in-memory reference implementation of that contract |
-| `aep-conformance` | black-box suites a backend runs to prove it implements the contract |
-| `aep-backend-markdown` | the durable planning store: epics, stories and tasks as markdown under `.engineering/planning/`, with an append-only journal beside it. Its status ladders are decided by [`entity-core`](./lifecycles.md), an IO-free kernel taken as a pinned dependency — the only dependency this repository has on another of its own |
-| `aep-driver`, `aep-driver-spec` | the reference driver, and the step map it walks |
-| `aep-render` | a workflow, and a run over it, drawn as SVG, HTML, PNG or a terminal frame |
-| `adp-domain`, `aop-domain` | development-specific and operations-specific vocabularies |
-| `protocol-cli` | the reference CLI over all of it — twenty top-level verbs |
+| Layer | Crates | Responsibility |
+|---|---|---|
+| vocabulary | `aep-domain`, `adp-domain`, `aop-domain` | typed rules, tasks, evidence, predicates, and profile vocabulary |
+| decision | `aep-engine` | resolution, evaluation, authorization, and transitions |
+| storage contract | `aep-contract`, `aep-conformance` | provider-independent commands, queries, and black-box suites |
+| providers | `aep-backend-*` | memory, markdown, SQLite, PostgreSQL, Entity Runtime, and hybrid edges |
+| driving | `aep-driver-spec`, `aep-driver` | step maps and the reference workflow caller |
+| observation | `trace-domain`, `trace-spec` | normalized transcript IR and typed expectations |
+| shell | `protocol-cli` | canonical `aep` command and exact `protocol` alias |
 
-The document tree (`protocols/`, `principles/`, `workflows/`, `profiles/`, `artifacts/lifecycles/`
-and `drivers/` — 49 files in this repository) is data, not code. Teams vendor it and add their own
-documents beside it; see [Govern a task](../guides/govern-a-task.md). A status ladder under
-`artifacts/lifecycles/` is data in the strong sense: a kind nobody here anticipated is a YAML file
-you write, with no change to any crate — see [Lifecycles, decided as data](./lifecycles.md).
+The document tree is data. A new lifecycle, principle, profile, or workflow normally changes YAML,
+not engine code.
 
-### ESS: the specification side
+## External boundaries
 
-| Component | Role |
-|---|---|
-| `ess-domain` | the typed model of a specification: domains, types, entities, commands, events, views, actors, components, bindings, topology |
-| `ess-compiler` | resolution into a normalized IR — an unresolved reference is unrepresentable in the output |
-| `ess-gen` | deterministic projections: Markdown docs, JSON Schema, OpenAPI 3.1, AsyncAPI 3.0 |
-| `ess-conformance` | scenario synthesis from the IR, a runner, and evidence minting |
-| `ess-diff` | the semantic delta between two revisions, and the impact closure over it |
-| `ess-synth` | a language-neutral synthesis plan and three emitters: Rust, Go, and a WebAssembly browser bridge |
+- Entity Runtime supplies the IO-free entity kernel and providers. AEP depends on one pinned Entity
+  Runtime release; the reverse dependency does not exist.
+- ESS is standalone and shares no modeling crate with AEP. Only `aep-ess-evidence` understands the
+  standalone ESS report at the optional evidence boundary.
+- Agent plugins live in the curated `beyond10x` marketplace. The driver and evaluation runner accept
+  plugin directories from the operator and guess none.
+- Metaharness owns vendor-specific transcript readers and paid execution. AEP owns the neutral trace
+  vocabulary and deterministic checker.
 
-### Infrastructure: a second instance of the same pattern
+## Properties
 
-`infra-domain`, `infra-compiler`, `infra-analyze`, `infra-spec` and `infra-project` apply the ESS
-shape to observed Kubernetes infrastructure: an external scanner writes an observation bundle, this
-workspace validates and compiles it, diagnoses it, evaluates it against a declared desired state,
-and projects gaps back as a reviewable patch tree. Nothing in the workspace reaches a cluster; the
-scanner is a separate repository holding the credentials. See
-[Check infrastructure against a desired state](../guides/check-infrastructure.md).
+- Same validated state, evidence, and injected time produce the same decision and bytes.
+- Raw documents deserialize; validated domain values are constructed only after semantic checks.
+- Independent validation defects accumulate with stable codes and paths.
+- Unknown evidence differs from false evidence.
+- Capabilities default to deny.
+- Refusals leave stores unchanged and remain auditable.
+- Generated AEP schemas are committed and checked for changed or orphaned files.
 
-### Transcript conformance: a third instance of it
-
-`trace-domain` and `trace-spec` point the same pipeline at an agent run. A transcript is the
-observation, an authored `trace-spec/1` document is the desired state, a content-addressed
-`trace-ir/1` is the normal form, and the verdicts are `ok`/`gap`/`unk` — the third value meaning the
-adapter did not understand the event, which is a different thing from the expectation failing. A
-passing check mints an AEP evidence record, so *what the agent did* becomes a fact the protocol can
-read. See [Check a transcript](../guides/check-a-transcript.md).
-
-## Design properties that hold everywhere
-
-These are the cross-cutting rules; [Design principles](./design-principles.md) covers each with its
-enforcement mechanism.
-
-* **Deterministic.** Same validated state plus same evidence produces the same decision; generated
-  output is byte-identical across runs. The engine takes an injected clock so executions replay.
-* **Parse, then validate.** Documents deserialize into raw types and become domain types only
-  through validation; validated types cannot be deserialized directly.
-* **Errors accumulate.** A document with four broken references reports four errors with four
-  stable codes, not the first one.
-* **Nothing here observes anything.** Every answer is a function of the documents plus submitted
-  evidence. The engine never manufactures a fact.
-* **Generated output is committed and drift-checked.** Schemas, projections, suites and synthesized
-  trees are all regenerated in CI and compared byte-for-byte against what is committed.
-
-## Boundaries: what this is deliberately not
-
-Stated so it can be held.
-
-* **Not an LLM orchestration framework.** The engine calls no model and holds no prompt; a harness
-  does that and asks the protocol what it may do next. The shipped driver is a *reference*
-  implementation of that harness role, kept in the repository so the contract has a proven caller —
-  not a product, and not a place to put routing, retries or a model catalogue.
-* **Not a CI system, an incident-management product, a workflow engine or a message broker.**
-  External systems do the work; this project decides what the results permit.
-* **Not a policy language meant to replace OPA.** The subject is engineering work and the software
-  it produces, not general authorisation.
-* **Not a mandate for microservices, CQRS or event sourcing.** A component is a unit of ownership;
-  whether it ships as a process or a module is a separate decision, and transports are projections
-  of the model, not part of it.
-* **Not a deployment platform.** Compiling a specification into a file that *describes*
-  infrastructure, and judging whether an observed state conforms, is in scope. Operating a system —
-  calling a cloud API, holding a credential, applying a plan, watching a rollout — is not.
-* **Not a general entity runtime, and not a store for one.** The kernel that decides a status move
-  is [`entity-core`](https://github.com/beyond10x/entity-runtime), a separate repository this one
-  depends on. That kernel performs no IO at all — no clock, no filesystem, no network — so it stores
-  nothing, and everything this repository persists is written by `aep-backend-markdown` here. The
-  arrow points one way only: nothing from this repository appears in a manifest of
-  `entity-runtime`'s, at any version, so a kernel that could be shaped by its adopter never becomes
-  one.
-
-The responsibility, in one sentence per half: define the semantics by which engineering work can be
-constrained, evidenced, verified and progressed — and the semantics by which a software system can
-be specified once and compiled into its contracts, its tests and as much of itself as the
-specification safely determines.
-
----
-
-**Sources.** `README.md` § *Repository layout*; `AGENTS.md` § *What this repository is*, § *Current
-state*, § *Invariants*; `docs/VISION.md` § *What this is deliberately not* (and the narrowing that
-puts one reference driver inside the boundary); `target/debug/protocol validate` and `--help` at
-`0.10.0-horizons-dogfood-lab`; `crates/` (the component table).
+See [Design principles](./design-principles.md) for the behavioral consequences and [CLI
+reference](../reference/cli.md) for the executable surface.

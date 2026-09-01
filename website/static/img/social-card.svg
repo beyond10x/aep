@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"
      font-family="JetBrains Mono, Fira Code, DejaVu Sans Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
      role="img"
-     aria-label="engineering-protocols — typed, executable rules for agent-performed engineering work. A transcript is checked against a typed spec, and a passing check mints an evidence record.">
+     aria-label="aep — typed, executable rules for agent-performed engineering work. A transcript is checked against a typed spec, and a passing check mints an evidence record.">
   <!-- Source of `static/img/social-card.png` (the site's Open Graph / social preview image).
        Edit here, then re-rasterize at exactly 1200x630:
          rsvg-convert -w 1200 -h 630 static/img/social-card.svg -o static/img/social-card.png
@@ -30,7 +30,7 @@
   <rect width="1200" height="630" fill="#0f1418"/>
   <rect width="1200" height="6" fill="url(#accent)"/>
 
-  <text class="name"  x="72" y="128">engineering-protocols</text>
+  <text class="name"  x="72" y="128">aep</text>
   <text class="claim" x="72" y="186">Typed, executable rules for agent-performed engineering work</text>
 
   <!-- 1 - the transcript -->
@@ -70,5 +70,5 @@
   <!-- two elements, not one: SVG collapses runs of whitespace, so a gap must be a coordinate. -->
   <text class="foot" x="72" y="546">AEP · how the work is performed</text>
   <text class="foot" x="402" y="546">ESS · what the software must be</text>
-  <text class="url" x="1128" y="546" text-anchor="end">beyond10x.github.io/engineering-protocols</text>
+  <text class="url" x="1128" y="546" text-anchor="end">beyond10x.github.io/aep</text>
 </svg>

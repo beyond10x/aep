@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-`engineering-protocols` defines a machine-executable methodology for agentic engineering work.
+`aep` defines a machine-executable methodology for agentic engineering work.
 
 The core idea is to move engineering principles such as spec-driven development, test-driven development, least privilege, reversible changes, incident response, release verification, and evidence collection **out of natural-language prompts and into strongly typed protocol definitions**.
 
@@ -40,7 +40,7 @@ They leave several questions unresolved:
 - What happens when verification fails?
 - How does one harness interpret the methodology consistently with another?
 
-`engineering-protocols` makes these concepts explicit and executable.
+`aep` makes these concepts explicit and executable.
 
 The desired model is:
 
@@ -250,7 +250,7 @@ principles:
 Initial layout:
 
 ```text
-engineering-protocols/
+aep/
 ├── Cargo.toml
 ├── crates/
 │   ├── aep-domain/
@@ -1106,7 +1106,7 @@ The project should initially avoid becoming:
 - a policy language intended to replace general-purpose systems such as OPA;
 - a universal ontology for all software engineering.
 
-The responsibility of `engineering-protocols` is narrower:
+The responsibility of `aep` is narrower:
 
 > Define the semantics by which engineering work can be constrained, evidenced, verified, and progressed.
 
@@ -1197,6 +1197,6 @@ and derive, without relying on prompt interpretation:
 - which transitions are valid;
 - exactly what constitutes completion.
 
-This is the central goal of `engineering-protocols`:
+This is the central goal of `aep`:
 
 > **A strongly typed, portable and machine-executable specification for how autonomous engineering work is performed and proven correct.**

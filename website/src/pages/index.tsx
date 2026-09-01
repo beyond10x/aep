@@ -4,41 +4,10 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import CodeBlock from '@theme/CodeBlock';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import Heading from '@theme/Heading';
-
+import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import styles from './index.module.css';
 
-// Copied from examples/billing/domains/invoice.yaml. Not paraphrased: the point of the pairing
-// below is that the right-hand side is what this exact text produced.
-const SPECIFICATION = `outcomes:
-  - name: accepted
-    when: amount.amount > 0
-    creates: billing.invoice.Invoice
-    emits:
-      - billing.invoice.InvoiceCreated
-
-  - name: rejected
-    error: billing.invoice.InvalidAmount`;
-
-// Copied from generated/openapi/invoice-service.yaml, which cargo xtask generate --check keeps in
-// step with the specification above.
-const GENERATED = `responses:
-  '202':
-    description: 'Outcome \`accepted\`: the branch the
-      specification declares for this input.'
-    ...
-  '422':
-    description: 'Outcome \`rejected\`: the request was
-      understood and refused on domain grounds.'
-    ...`;
-
-/**
- * Every section below is one panel, drawn the way the diagrams draw a panel: a header strip
- * carrying an ordinal, a label and (where there is one) a chip, then the body. The ordinals are
- * the page's argument in order — the problem, the shape of the answer, the claim, the status —
- * and they are the only thing on the page that is not either existing copy or a file name.
- */
 type PanelProps = {
   ordinal: string;
   label: string;
@@ -83,9 +52,7 @@ function HomepageHeader() {
           <Link className="button button--primary button--lg" to="/docs">
             What this is
           </Link>
-          <Link
-            className="button button--secondary button--lg"
-            to="/docs/examples/specification-to-contracts">
+          <Link className="button button--secondary button--lg" to="/docs/examples/governed-task">
             See it work
           </Link>
         </div>
@@ -96,27 +63,22 @@ function HomepageHeader() {
 
 function TheProblem() {
   return (
-    <PanelSection ordinal="01" label="The problem" title="Two documents nobody can check">
+    <PanelSection ordinal="01" label="The problem" title="Prose can be followed plausibly and still be wrong">
       <p>
-        Every engineering organisation runs on two pieces of prose: the one that says how we work,
-        and the one that says what we are building. Both are read by people who then go and do
-        something else.
+        An instruction such as “write the test first, preserve compatibility, and obtain approval
+        before production changes” reads well and enforces nothing. An agent can produce an answer
+        that sounds compliant without leaving the facts the rule depends on.
       </p>
       <CodeBlock language="text">
-        {`"Follow TDD, don't break the API, get approval before touching production."
-        → a wiki page nobody consults during the work
+        {`"The tests pass."       → an assertion
+test_result.failed == 0 → a recorded fact
 
-"The billing service issues invoices; a paid invoice cannot be cancelled."
-        → a ticket, an out-of-date API doc, and an argument six months later`}
+"The design was approved." → an assertion
+approval.revision == design.revision → a checkable binding`}
       </CodeBlock>
       <p>
-        A person who ignores the wiki page can be asked why. An agent given the same page in a
-        prompt produces something that <em>reads</em> as though it followed it, at whatever scale
-        you run it. Prose instructions do not fail loudly; they fail silently and plausibly — and
-        reviewing the output does not scale to the volume agents produce.
-      </p>
-      <p className={styles.panelMore}>
-        <Link to="/docs">Why this changes once agents write the code →</Link>
+        AEP turns the operative parts into validated data and leaves reasoning to the model. The
+        protocol decides from the evidence it was actually given.
       </p>
     </PanelSection>
   );
@@ -124,39 +86,23 @@ function TheProblem() {
 
 function TheClaim() {
   return (
-    <PanelSection
-      ordinal="03"
-      label="The claim"
-      title="The specification is not a document beside the contract"
-      alt>
+    <PanelSection ordinal="03" label="The claim" title="Completion is a decision over evidence" alt>
       <p>
-        On the left, part of one command in a specification. On the right, part of the OpenAPI
-        document generated from it — the two outcomes became two status codes, and CI fails if the
-        committed output stops matching the source.
+        Principles declare obligations and predicates. Workflows declare legal progress. Evidence
+        records say who observed what, when, and against which revision. The engine combines those
+        inputs deterministically and returns either a legal transition or a refusal that names what
+        is missing.
       </p>
-      <div className={styles.compare}>
-        <div className={styles.compareSide}>
-          <CodeBlock language="yaml" title="examples/billing/domains/invoice.yaml">
-            {SPECIFICATION}
-          </CodeBlock>
-        </div>
-        <div className={styles.compareArrow} aria-hidden="true">
-          <span>→</span>
-        </div>
-        <div className={styles.compareSide}>
-          <CodeBlock language="yaml" title="generated/openapi/invoice-service.yaml">
-            {GENERATED}
-          </CodeBlock>
-        </div>
-      </div>
-      <p>
-        A command that can be refused has to say so. A specification recording only the happy branch
-        generates a suite that never checks the branch where the money does not move.
-      </p>
+      <CodeBlock language="yaml">
+        {`requirements:
+  - evidence: test_result
+    predicate: tests.failed == 0
+    independent: true
+  - evidence: approval
+    predicate: approval.revision == artifact.revision`}
+      </CodeBlock>
       <p className={styles.panelMore}>
-        <Link to="/docs/examples/specification-to-contracts">
-          The whole example, including the JSON Schema and the AsyncAPI →
-        </Link>
+        <Link to="/docs/concepts/evidence">How evidence, provenance and freshness work →</Link>
       </p>
     </PanelSection>
   );
@@ -167,29 +113,22 @@ function HonestStatus() {
     <PanelSection
       ordinal="04"
       label="Status"
-      title="What is built, and what is not"
+      title="The protocol is separate from models and plugins"
       chip={
         /* generated:release-chip:begin — do not edit; run `cargo xtask status` */
-        <code>0.39.2</code>
+        <code>0.40.0</code>
         /* generated:release-chip:end */
       }>
       <div className={styles.ledger}>
         <p className={styles.ledgerBuilt}>
-          The protocol is implemented and gated: the whole suite green, 0 clippy warnings and 0
-          rustdoc warnings, at the tag in the chip above. This page publishes no suite or test
-          count — four hand-written counts drifted apart in this repository&apos;s first 48 hours,
-          so the number lives in exactly one place, which is <code>task check</code>&apos;s own
-          output. A specification compiles into documentation, JSON Schema, OpenAPI 3.1 and AsyncAPI 3.0;
-          generates its own conformance suite; and synthesises the structural part of its own
-          implementation in three targets — the same specification runs as a Rust and a Go
-          application, both started and held to one behaviour in every CI run. All of it is
-          drift-checked.
+          AEP ships the protocol domains, backends, planning store, reference driver, trace checker,
+          schemas, and canonical <code>aep</code> command. The <code>protocol</code> name remains an
+          exact compatibility alias.
         </p>
         <p className={styles.ledgerNot}>
-          It does <strong>not</strong> generate behaviour — every algorithm is a typed obligation
-          someone still has to implement. No team outside this repository has been governed by it
-          yet. And one thing you still have to trust: nothing binds a verifier&apos;s identity
-          to the evidence it submits.
+          Executable system modeling lives in ESS. Harness-specific skills and agents live in the
+          curated agentplugins marketplace. AEP selects neither and accepts them only at explicit
+          adapter boundaries.
         </p>
       </div>
       <p className={styles.panelMore}>
@@ -204,9 +143,7 @@ function HonestStatus() {
 export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
-    <Layout
-      title="Agentic engineering under machine-checkable constraints"
-      description={siteConfig.tagline as string}>
+    <Layout title="Agentic engineering under machine-checkable constraints" description={siteConfig.tagline as string}>
       <HomepageHeader />
       <main>
         <TheProblem />

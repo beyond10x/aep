@@ -15,7 +15,7 @@
 > The Goal below still reads as a promise. One clause of it — *one real story is driven end to end*
 > — is the one thing outstanding, and `story:governed-dogfood-run` is still `draft`.
 >
-> Originally **proposed 2026-08-28**, written against `engineering-protocols` 0.31.0 (`1419f1c`) and
+> Originally **proposed 2026-08-28**, written against `aep` 0.31.0 (`1419f1c`) and
 > `entity-runtime` 0.13.0 (`ddee747`), the day waves F–H closed (`store-waves-f-g-h.md`). Every fact
 > in § 1 was read from the two trees on that date; nothing below it is a fact until a story ships.
 > Ten steps rather than a wave, because they cross four epics and two repositories and the point

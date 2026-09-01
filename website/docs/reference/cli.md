@@ -1,27 +1,24 @@
 ---
 title: CLI reference
 sidebar_position: 1
-description: Every subcommand of the reference CLI, grouped by surface — protocol, planning, adoption, driver, evidence, entity, ESS, infrastructure, trace, contract and evaluation — with exit codes.
+description: Every subcommand of the AEP reference CLI, grouped by protocol, planning, adoption, driver, evidence, entity, trace, contract and evaluation surfaces.
 ---
 
 # CLI reference
 
-The reference CLI is `protocol`, built with `cargo build --release -p protocol-cli` and left at
-`target/release/protocol`. `--help` on any subcommand carries the full flag list — this page is the
-map.
+The canonical CLI is `aep`; `protocol` is an exact compatibility alias. Building
+`protocol-cli` leaves both under `target/release/`. The examples keep the compatibility spelling
+while adopters migrate; both names produce identical standard output, standard error and exit
+status. `--help` on any subcommand carries the full flag list — this page is the map.
 
 Most verbs take `--format text|yaml|json`, with `text` the default: refusals, decisions and
-evaluations all serialise. The exceptions are named in their own sections, and they are exceptions
-because the thing being rendered is not a report — a graph has `dot` and `mermaid`, a drawing has
-`svg` and `png`, and the three verbs that mint evidence default to `yaml` because that is what
+evaluations all serialise. The exceptions are named in their own sections. Workflow drawings have
+`svg` and `png`, and the verbs that mint evidence default to `yaml` because that is what
 `protocol evaluate --evidence` reads back.
 
 General conventions: exit `0` is success, exit `1` is a refusal or invalid input, and errors
-accumulate — a run reports every problem it found, not the first. Two exceptions are deliberate and
-stated where they apply. A verb that *reports* rather than gates exits `0` whatever it found: that
-covers `protocol evaluate` on a blocked execution and the four `infra` report verbs. And the two
-verbs that judge an implementation or a run use a third code for *unverified* — `ess conform run`
-and `trace check`.
+accumulate — a run reports every problem it found, not the first. Reporting verbs exit `0` whenever
+they produced their report. `trace check` uses a third code for unverified input.
 
 ## Protocol surface
 
@@ -32,9 +29,7 @@ and `trace check`.
 | `protocol inspect [reference]` | shows what a protocol, principle, workflow or profile declares — `aep/1`, `test-driven`, `development.standard` |
 | `protocol evaluate --task … [--artifacts …] [--evidence e.yaml]… [--advance]` | evaluates an execution: what is owed, what is permitted, what is missing; `--advance` also attempts transitions |
 | `protocol explain --task … --action production.write` | explains one decision — allowed or denied, by which rule, and what would unlock it |
-| `protocol schema [name]` | prints engineering-protocols' generated JSON Schemas, or one by file stem |
-| `protocol schema validate <paths>… [--schemas dir] [--format text\|yaml\|json]` | discovers the project registry from `project.yaml`, selects each JSON instance's contract by `schema` → `$id`, and validates offline; `--schemas` is the fixture/non-project override |
-| `protocol schema typescript <schema-id> --root Name [--out file] [--check] [--schemas dir]` | deterministically projects structural TypeScript from one registry schema selected by `$id`; `--check` detects drift without writing |
+| `protocol schema [name]` | prints AEP's generated JSON Schemas, or one by file stem |
 | `protocol conformance [--level core\|audited\|full] [--suite name] [--inject fault]` | checks a storage backend against the AEP contract suites (16 suites at `full`, 14 at `audited`, 7 at `core`); `--inject` breaks one property on purpose to show the responsible suite fails |
 
 Inside a project — a directory holding `.engineering/` — `resolve`, `evaluate` and `explain` take
@@ -75,7 +70,7 @@ when the artifact has none — so a `jq` shape needs no branch for an artifact w
 | `protocol artifact lifecycle <kind>` | where a kind starts, and what may follow what |
 | `protocol serve [--store …] [--root …] [--port 8899] [--read-only]` | the plan in a browser: status columns, one artifact's fields and body, and the rungs it may take next with what each costs. A rung whose price is unmet is drawn with the price on it rather than left to be refused. Answers the same facts `board`, `show` and `explain` print, and takes a status move back through the same decision `move` makes — including the graph rules on the store the move *would* leave. **Binds `127.0.0.1` and there is no flag that widens it**; reaching it from another machine is `ssh -L`. The URL it prints carries a token for the run, and a request without that token is refused — which is what stops another page in the same browser writing to the store. That is not authentication, and the module says so. `--read-only` answers reads and refuses every transition by name |
 
-`new`, `move`, `relate` and `body` write without an `--out`, unlike `ess generate` and `ess synthesize`.
+`new`, `move`, `relate` and `body` write without an `--out`; they are explicit planning-store mutations.
 The difference is that they write exactly one file, at a path the id determines, inside a directory
 somebody opted into — and an item you did not want is removed with `rm`.
 
@@ -184,7 +179,7 @@ and the worst case is a report you disagree with.
 `--protocols` takes a path or a pinned `git+…#<40-hex>` locator: a governing document tree that
 could move under you is a gate whose meaning changes without a commit in your repository.
 
-See [Adopting a repository that already exists](https://github.com/beyond10x/engineering-protocols/blob/main/docs/guide/adopting.md)
+See [Adopting a repository that already exists](https://github.com/beyond10x/aep/blob/main/docs/guide/adopting.md)
 for the walkthrough.
 
 ## Driver surface
@@ -240,8 +235,8 @@ its own binary and the `protocol` on `PATH` is another version, `run` and `resum
 allocating a run id, naming both versions. A run whose `llm` sessions could not reach the `protocol`
 CLI is refused before anything is spent — the child environment is constructed, and its `PATH` is
 `$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`. With no `--plugin-dir` and no
-`AEP_DRIVE_PLUGIN_DIR`, `<project>/integrations/claude-code` is loaded when it exists. And every
-`llm` step is told which task the run drives, before the map's own words.
+`AEP_DRIVE_PLUGIN_DIR`, no plugin is loaded; AEP never guesses a repository-local marketplace
+path. Every `llm` step is told which task the run drives before the map's own words.
 
 An `llm` step names its harness. `harness: claude-code` — the default when a step is silent — is
 launched through `metaharness run claude`; `harness: b10x` is launched through `metaharness run
@@ -349,65 +344,6 @@ markdown planning store) and then answer; one of the two is required. Nothing is
 `--organisation` (default `local`) and `--space` (default `manifest`) set the namespace the seeded
 locators live under.
 
-## ESS surface
-
-All take `--path <file-or-dir>` (default `.`) unless noted.
-
-| Command | Does |
-|---|---|
-| `protocol ess validate` | parses and checks a specification, naming every problem in one run |
-| `protocol ess compile` | resolves every reference into the normalized IR |
-| `protocol ess inspect <name> [--kind domain\|type\|command\|event\|error\|binding\|component]` | one declaration, resolved |
-| `protocol ess graph [--format dot\|mermaid\|json\|yaml]` | the actor/command/event graph |
-| `protocol ess generate --kind docs\|schema\|openapi\|asyncapi [--out dir]` | the projections; without `--out`, a listing only |
-| `protocol ess synthesize [--target rust\|go\|web] [--out dir]` | the synthesis plan and one emitted tree |
-| `protocol ess conform synthesize [--out dir]` | the conformance suite the specification obliges; `--format json` carries the suite document itself |
-| `protocol ess conform run --target <name> [--suite suite.json] [--inject fault] [--untraced]` | runs the suite against a compiled-in reference implementation |
-| `protocol ess conform evidence --target <name> [--observed-at date] [--out f]` | runs the suite and mints the AEP evidence record in the same process |
-| `protocol ess diff --from <path> --to <path> [--format text\|json]` | the semantic delta between two revisions of one specification |
-| `protocol ess impact --from <path> --to <path> [--suite suite.json] [--generated dir]` | what the delta invalidates: scenarios owed again, artifacts owed regeneration, each with its dependency path |
-
-`--target` names a reference implementation this binary was compiled with — `billing` or
-`oracle-fixture`. It cannot reach yours: a conformance target is a Rust trait, and nothing here
-speaks to an implementation over a socket. To hold your own system to a specification, depend on
-`ess-conformance`, implement the trait, and run the committed `suites/generated/<system>/suite.json`
-against it — the same document this verb writes.
-
-`ess conform run` exit codes differ from the general convention, because "wrong" and "unverified"
-are different findings:
-
-| Exit | Meaning |
-|---|---|
-| `0` | every scenario passed |
-| `1` | the implementation contradicted the specification, or a scenario the specification requires is one the target cannot expose |
-| `3` | nothing contradicted it, and at least one scenario could not be executed |
-
-`ess conform evidence` exits `0` whenever a record was produced, **including for a failing run** —
-the verdict is in the record, and the engine is what decides on it. Its `--observed-at` exists so a
-committed record can be regenerated byte for byte; it defaults to now, which is the truth.
-
-## Infrastructure surface
-
-Inputs are files written by an external scanner; no verb reaches a cluster.
-
-| Command | Does |
-|---|---|
-| `protocol infra validate --path <bundle>` | checks an `infra-observation/1` bundle |
-| `protocol infra compile --path <bundle> [--out f]` | compiles it to the content-addressed `infra-ir/1` document |
-| `protocol infra inspect --path <ir> [--properties]` | per-object and per-workload facts |
-| `protocol infra graph --path <ir> [--namespace n] [--format mermaid\|json\|html]` | the typed dependency graph, with the evidence on every edge |
-| `protocol infra diagnose --path <ir> [--min-severity info\|warning\|error] [--candidates] [--directions]` | twenty coded findings (`INFRA-DIAG-001`…`020`), invariant candidates, ranked directions — a report, never a gate |
-| `protocol infra view --path <ir> [--namespace n] [--out f]` | writes the self-contained HTML component page and opens it in a browser; the one verb here that spawns another program |
-| `protocol infra simulate --spec expected.yaml --path <bundle\|ir>` | evaluates a desired state against a snapshot: `ok` / `gap` / `unk` per expectation |
-| `protocol infra diff --from <ir> --to <ir>` | what moved between two scans of one cluster, over declared state |
-| `protocol infra project --spec expected.yaml --path <bundle\|ir> --out <dir>` | writes the patch tree that would close the gaps, plus `OBLIGATIONS.md` and `SUMMARY.md`; applies nothing |
-
-`diagnose`, `simulate`, `project` and `diff` exit `0` whatever they found, and take
-`--format text|json` only. A cluster with sixteen decisions owed has been successfully diagnosed,
-simulated and projected; drift is a report too. Exit `1` here means an input that could not be read
-— or, for `diff`, the one refusal: two snapshots of different clusters. `view` takes no `--format`
-at all: it has one output, and its purpose is to open it.
-
 ## Trace surface
 
 Inputs are transcripts a harness already wrote; no verb runs an agent, calls a model or reaches a
@@ -466,15 +402,15 @@ A record reporting failures is written down and exits `0`. The verdict belongs i
 
 ## Evaluation surface
 
-How well a harness follows these workflows, under four treatments — `raw` instructions, the shipped
-`plugin`, a `driven` run whose every tool call is answered at a seam, and a `native` run whose
+How well a harness follows these workflows, under four treatments — `raw` instructions, an
+operator-selected `plugin`, a `driven` run whose every tool call is answered at a seam, and a `native` run whose
 published toolset *is* the policy. `metaharness` is a tool here, the way `git` is: found on `PATH`,
 and a machine without it is told so by name and exits `2` rather than reddening a gate.
 
 | Command | Does |
 |---|---|
 | `protocol eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
-| `protocol eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; `--stream` ingests a run somebody already recorded and spends nothing |
+| `protocol eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires an external plugin directory; `--stream` ingests a recorded run and spends nothing |
 
 `eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
 an exit code that moved with the counts would be the single number it refuses to compute — there is
@@ -496,7 +432,7 @@ row — no `store_broken`, `census.denied = 0` — does not mean the same thing 
 
 `denied: 0` is *nobody asked me*, not *nothing was refused*; the driver already prints those as two
 different sentences, and only one of them is about the run. Why this is a reading rule and not a
-column: [the native arm and store integrity](https://github.com/beyond10x/engineering-protocols/blob/main/docs/design/native-arm-store-integrity-design-v0.1.md).
+column: [the native arm and store integrity](https://github.com/beyond10x/aep/blob/main/docs/design/native-arm-store-integrity-design-v0.1.md).
 
 ## Repository automation (`cargo xtask`)
 
@@ -505,11 +441,6 @@ For contributors to the repository itself; each `--check` variant fails on any b
 | Command | Regenerates |
 |---|---|
 | `cargo xtask schema [--check]` | `schemas/generated/` from the Rust types |
-| `cargo xtask generate [--check]` | `generated/` — the projections of the example specifications |
-| `cargo xtask suite [--check]` | `suites/generated/` — the conformance suites |
-| `cargo xtask synth [--check]` | `generated/rust\|go\|web/` — the synthesized trees, then builds them and runs the dual-target demonstration |
-| `cargo xtask infra [--check]` | the example cluster's committed IR, simulation, drift and projection |
 | `cargo xtask status [--check]` | `docs/status.md` — the delivered-waves record, from the repository's tags; the gate-step list in `AGENTS.md` § Gate and the website's currency line, both from `Taskfile.yml`'s `check:` block |
 | `cargo xtask fmt [--check]` | formatting, scoped to workspace members |
-| `cargo xtask plugin` | nothing — checks the Claude Code plugin: anything under `integrations/claude-code/` changed since the newest release tag means `plugin.json`'s `version` changed too; every `skills/*/SKILL.md` states that version; `roster.json` names exactly the skills and agents on disk. Gate step `plugin-check` |
 | `cargo xtask release` | nothing — reports, one line each, whether the newest release was cut completely: workspace version, `CHANGELOG.md` heading, tag pushed to `origin`, GitHub Release present, and a `test_result` in the planning store naming the tag's commit. Reaches the network, so `task release-check` rather than a gate step |

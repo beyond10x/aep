@@ -280,7 +280,7 @@ the gate's `schema-check`.
 ### W3.3 — `protocol drive`
 
 `protocol drive run | status | resume` (`crates/protocol-cli/src/drive.rs`, wired at
-`crates/protocol-cli/src/main.rs:327` and `:565`), with the three executors that touch the world,
+`crates/protocol-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
 the run directory under `.engineering/runs/<task>/<ordinal>/`, the store lock at the one fixed path
 `.engineering/runs/lock.json`, and the pid-liveness probe — all in `protocol-cli`, per F19.
 
