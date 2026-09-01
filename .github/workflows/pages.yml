@@ -1,11 +1,11 @@
-# Builds the adopter-facing Docusaurus site and deploys only its generated output to GitHub Pages.
-name: Website
+# Atlas-classified former Pages workflow: repository-owned validation only; deployment authority is forbidden.
+# Builds the adopter-facing Docusaurus source; the unified Website owns public delivery.
+name: Documentation validation
 
 on:
   push:
     branches: [main]
   pull_request:
-    paths: [website/**, b10x.docs.yaml, Taskfile.yml]
   workflow_dispatch:
 
 concurrency:
@@ -17,11 +17,13 @@ permissions:
 
 jobs:
   build:
-    name: Build the site
+    name: Build Docusaurus
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
@@ -29,22 +31,3 @@ jobs:
           cache-dependency-path: website/package-lock.json
       - name: Build the public documentation
         run: npm --prefix website ci && npm --prefix website run build
-      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
-        with:
-          path: website/build
-
-  deploy:
-    name: Deploy to Pages
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

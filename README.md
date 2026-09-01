@@ -118,3 +118,9 @@ task install
 ## License
 
 Apache-2.0. See [`LICENSE`](LICENSE).
+
+<!-- b10x-docs:start -->
+## Documentation
+
+[AEP documentation](https://beyond10x.github.io/docs/aep/) · [Start](https://beyond10x.github.io/) · [Ecosystem](https://beyond10x.github.io/ecosystem/) · [Impact](https://beyond10x.github.io/changes/) · [Releases](https://beyond10x.github.io/releases/)
+<!-- b10x-docs:end -->
