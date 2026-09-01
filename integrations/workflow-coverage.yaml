@@ -2,7 +2,7 @@
 #
 # ## Why this file exists
 #
-# `workflows/` declares four state machines. `integrations/` ships two plugins. Nothing joined the
+# `workflows/` declares six state machines. `integrations/` ships two plugins. Nothing joined the
 # two, so "the plugin teaches the workflow" was a sentence a reader had to take on trust, and the
 # more interesting half — *which states nothing teaches* — was not written down anywhere at all. A
 # three-arm evaluation that measures how well a harness follows these workflows needs to know, before
@@ -156,6 +156,30 @@ workflows:
           pause — is exactly the kind of sequencing an agent gets wrong when nothing told it. This
           is the whole workflow, uncovered, and it is the gap the evaluation's release cases measure
           the raw arm against.
+
+  # --------------------------------------------------------------------------------------------
+  - workflow: release/source
+    document: workflows/releases/source.yaml
+    covered_by: []
+    gaps:
+      - id: no-source-release-surface
+        states: [inspect, qualify, await_approval, publish, verify, complete]
+        reason: >-
+          The planning plugins do not teach release provenance, tagging, publication or artifact
+          verification. In particular, nothing in either surface may teach a model to satisfy the
+          human release-approval boundary; that authority must remain outside the plugin.
+
+  # --------------------------------------------------------------------------------------------
+  - workflow: release/dependency-promotion
+    document: workflows/releases/dependency-promotion.yaml
+    covered_by: []
+    gaps:
+      - id: no-dependency-promotion-surface
+        states: [observe, prepare, gate, review, merge, await_release_approval, release, verify, complete]
+        reason: >-
+          Neither planning plugin teaches a cross-repository dependency graph, consolidated pin
+          updates or the consumer release sequence. Atlas owns that graph and its focused skill;
+          these generic planning plugins deliberately do not claim it as their surface.
 
   # --------------------------------------------------------------------------------------------
   - workflow: incident/standard

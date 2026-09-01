@@ -43,12 +43,12 @@ fn the_document_tree_loads_and_is_internally_consistent() {
 
     let registry = &outcome.registry;
     assert_eq!(registry.protocols().count(), 3, "aep/1, adp/1 and aop/1");
-    assert_eq!(registry.workflows().count(), 4);
+    assert_eq!(registry.workflows().count(), 6);
     assert_eq!(
         registry.profiles().count(),
-        6,
+        8,
         "three development points on one scale, `development.driven` beside them, incident and \
-         release"
+         three release profiles"
     );
     assert!(
         registry.principles().count() >= 20,
@@ -71,6 +71,8 @@ fn every_profile_resolves_for_a_task_of_its_kind() {
         ("development.driven", "feature", "adp/1"),
         ("incident.standard", "incident", "aop/1"),
         ("release.progressive", "release", "aop/1"),
+        ("release.source", "release", "aop/1"),
+        ("release.dependency-chain", "release", "aop/1"),
     ];
 
     let mut failures: Vec<String> = Vec::new();
