@@ -7,6 +7,7 @@ title: Define the generic secret-store threat model
 relations:
 - decomposes: epic:encrypted-secret-store-service
 - serves: vision:O1
+- depends_on: story:secrets-service-repository
 revision: 1
 ---
 ## Context

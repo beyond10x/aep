@@ -9,6 +9,7 @@ relations:
 - depends_on: story:encrypted-secret-store-threat-model
 - serves: vision:O1
 - serves: vision:O5
+- depends_on: story:secrets-service-repository
 revision: 1
 ---
 ## Context
