@@ -1,6 +1,7 @@
 import type {PrismTheme} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import docsSystemPlugin from '@beyond10x/docs-system/docusaurus';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -106,6 +107,7 @@ const config: Config = {
   },
 
   themes: ['@docusaurus/theme-mermaid'],
+  plugins: [docsSystemPlugin],
 
   i18n: {
     defaultLocale: 'en',
@@ -165,6 +167,8 @@ const config: Config = {
         height: 26,
       },
       items: [
+        {href: 'https://beyond10x.github.io/getting-started/', label: 'beyond10x', position: 'left'},
+        {href: 'https://beyond10x.github.io/getting-started/ecosystem', label: 'Ecosystem', position: 'left'},
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
