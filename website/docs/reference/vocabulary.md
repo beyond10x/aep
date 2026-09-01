@@ -52,7 +52,7 @@ review:
 
 ```text
 ess_conformance     an implementation against an ESS model — imported from a standalone report
-trace_conformance   an agent run against a trace-spec/1 document — protocol trace evidence
+trace_conformance   an agent run against a trace-spec/1 document — aep trace evidence
 ```
 
 ESS owns the standalone conformance workflow. See

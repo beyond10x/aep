@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.40.3] — 2026-09-01
+
+### Fixed
+
+- Complete the canonical-command sweep across AEP's own profiles, driver prompts, planning
+  templates, examples, and public documentation. The `protocol` executable remains the exact
+  compatibility alias; newly authored operational guidance now consistently invokes `aep`.
+
 ## [0.40.2] — 2026-09-01
 
 ### Changed

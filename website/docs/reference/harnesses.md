@@ -54,7 +54,7 @@ For a governed live run, choose a step map and one of the two selectors `aep dri
 supports:
 
 ```console
-$ METAHARNESS_LIVE=1 protocol drive run --project . --map development/default \
+$ METAHARNESS_LIVE=1 aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
 ```

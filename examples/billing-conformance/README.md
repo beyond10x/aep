@@ -11,7 +11,7 @@ proves nothing a hardcoded `true` would not.
 
 ```console
 $ cargo build -p protocol-cli
-$ B=target/debug/protocol
+$ B=target/debug/aep
 ```
 
 ## The three documents

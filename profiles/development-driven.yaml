@@ -32,7 +32,7 @@
 #   * the driver's own per-call policy is the constraint (`decide_tool` in protocol-cli's
 #     drive.rs, answering the metaharness seam in ask mode — formerly the plugin's
 #     `driven-surface.sh` hook, retired under `epic:metaharness-migration`). It denies any `Bash`
-#     call that is not one simple invocation of `protocol artifact …` or `protocol trace …` — no
+#     call that is not one simple invocation of `aep artifact …` or `aep trace …` — no
 #     pipes, no redirection, no `&&`, no command substitution, because a composed command line is
 #     a second command wearing the first one's name.
 #
@@ -54,14 +54,14 @@
 #
 # ## When to choose it
 #
-# Only for a run under `protocol drive`. An interactive session needs no shell grant from a profile
+# Only for a run under `aep drive`. An interactive session needs no shell grant from a profile
 # — the operator has one — and a run driven by a harness that ships no equivalent of the surface
 # hook is a run where this profile's grant is unconstrained. Use `development.standard` there.
 id: development.driven
 version: 1
 title: Driven development
 summary: >-
-  Choose this only for a run under `protocol drive`, where a model's shell is held to the `protocol`
+  Choose this only for a run under `aep drive`, where a model's shell is held to the `protocol`
   CLI by the driver's own enforcement hooks. It is `development.standard` plus `command.execute`,
   granted so that the planning store's verbs are reachable from a driven step and for nothing else.
   Choose `development.standard` for interactive work and for any harness that cannot constrain a

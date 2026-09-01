@@ -164,7 +164,7 @@ verb that draws it:
 
 ```console
 $ $B serve
-protocol serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
+aep serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
 http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27
 ```
 

@@ -6,7 +6,7 @@ so it cannot drift from what the engine actually does.
 
 ```console
 $ cargo build -p protocol-cli
-$ B=target/debug/protocol
+$ B=target/debug/aep
 ```
 
 ## What the task is held to

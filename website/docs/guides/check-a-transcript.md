@@ -29,7 +29,7 @@ changed because the *reader* changed is visible as that rather than as a change 
 behaviour. Try it on the committed driven step:
 
 ```bash
-target/debug/protocol trace check \
+target/debug/aep trace check \
   --spec conformance/trace/expectations.driven-step.trace.yaml \
   --transcript crates/trace-spec/tests/fixtures/metaharness-driven-honest-step.jsonl
 ```
@@ -37,7 +37,7 @@ target/debug/protocol trace check \
 ## See what the transcript contains
 
 ```bash
-B=target/debug/protocol
+B=target/debug/aep
 $B trace inspect --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
 ```
 
@@ -87,14 +87,14 @@ cache use, per-step timing), each `gate` or `advisory`:
   expect:
     order:
       first: {tool: Skill}
-      before: {tool: Bash, args: {command: {contains: "protocol artifact"}}}
+      before: {tool: Bash, args: {command: {contains: "aep artifact"}}}
 
 - id: created-through-the-cli
   statement: artifacts were created with the CLI, not with hand-written frontmatter
   expect:
     tool.called:
       tool: Bash
-      args: {command: {contains: "protocol artifact new"}}
+      args: {command: {contains: "aep artifact new"}}
 ```
 
 ### The five matchers, and the one difference that catches people
@@ -145,8 +145,8 @@ planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap,
   ok        the-skill-was-offered                          skill aep-planning:planning is among 17 offered at event 0
   ok        the-decomposer-loaded                          agent aep-planning:decomposer is among 7 offered at event 0
   ok        skill-completed                                aep-planning:planning completed 1 time(s) with success=true, at least 1 at events 5, 6
-  ok        consulted-the-skill-before-touching-the-store  first Skill at 5, first Bash(command ~ "protocol artifact") at 10 at events 5, 10
-  ok        created-through-the-cli                        Bash(command ~ "protocol artifact new") called 2 time(s), at least 1 at events 13, 15
+  ok        consulted-the-skill-before-touching-the-store  first Skill at 5, first Bash(command ~ "aep artifact") at 10 at events 5, 10
+  ok        created-through-the-cli                        Bash(command ~ "aep artifact new") called 2 time(s), at least 1 at events 13, 15
 ```
 
 The rows in between are the resource-shaped ones, each marked `ok (adv)`: an advisory expectation

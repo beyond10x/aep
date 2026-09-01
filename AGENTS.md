@@ -159,18 +159,18 @@ The planning store is `.engineering/planning/`. Its local skill at
 Before the first planning-store write in a session, run:
 
 ```console
-protocol artifact list
+aep artifact list
 ```
 
 Rules:
 
 1. Never edit a planning artifact or journal directly.
-2. Create with `protocol artifact new`, relate with `relate`, write prose with `body`, and change
+2. Create with `aep artifact new`, relate with `relate`, write prose with `body`, and change
    status only with `move`.
 3. A status move is a claim about project state. Propose it unless the operator requested that
    exact move.
 4. A refusal is an answer. Relay the legal moves the command prints; do not route around it.
-5. After a batch, run `protocol artifact validate` and relay its output verbatim.
+5. After a batch, run `aep artifact validate` and relay its output verbatim.
 6. An already-satisfied or invalid request still gets an artifact recording the finding when the
    operator asked for planning work.
 

@@ -8,7 +8,7 @@ description: Put a task of your own under a profile — the task file, the artif
 
 This guide takes a team that already has rules — in a wiki, a `CONTRIBUTING.md`, or one senior
 engineer's head — and puts a real task under the protocol. Commands assume
-`B=target/debug/protocol` after `cargo build -p protocol-cli`, the convention
+`B=target/debug/aep` after `cargo build -p protocol-cli`, the convention
 [Getting started](../getting-started.md) sets.
 
 ## What you write

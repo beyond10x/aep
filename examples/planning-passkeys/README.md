@@ -21,10 +21,10 @@ One artifact per file, YAML frontmatter the tooling reads, and a markdown body i
 ## Try it
 
 ```console
-protocol artifact list     --store .engineering/planning --root ../..
-protocol artifact board    --store .engineering/planning --root ../..
-protocol artifact graph    --store .engineering/planning --root ../.. | dot -Tsvg > plan.svg
-protocol artifact validate --store .engineering/planning --root ../..
+aep artifact list     --store .engineering/planning --root ../..
+aep artifact board    --store .engineering/planning --root ../..
+aep artifact graph    --store .engineering/planning --root ../.. | dot -Tsvg > plan.svg
+aep artifact validate --store .engineering/planning --root ../..
 ```
 
 `--root` points at the document tree the lifecycles come from — this repository. Inside a project
@@ -66,8 +66,8 @@ store:
     replica: { sqlite: replica.sqlite3 }
 ```
 
-Every verb writes both. When the replica would not take a write, `protocol artifact divergences`
-says so and which side is authoritative; `protocol artifact catch-up` replays it. The record lives in
+Every verb writes both. When the replica would not take a write, `aep artifact divergences`
+says so and which side is authoritative; `aep artifact catch-up` replays it. The record lives in
 `planning/divergences.jsonl` between commands.
 
 ## The contrast with `development-passkeys` is the point
@@ -90,7 +90,7 @@ they are both here so that neither reads as an accident:
 |---|---|---|
 | where the plan lives | Linear | this repository |
 | how AEP sees it | `artifacts.yaml`, `location: {provider, reference}` | `.engineering/planning/*.md`, `location: <path>` |
-| what moves a status | Linear's UI | `protocol artifact move`, refused against the kind's lifecycle |
+| what moves a status | Linear's UI | `aep artifact move`, refused against the kind's lifecycle |
 | history | Linear's | `git log` |
 | what it costs | AEP cannot check the plan's own contents | the plan is one more thing in the repository to review |
 
@@ -105,5 +105,5 @@ other without the protocol noticing.
 validates clean, that `list --format json` is byte-identical across two runs, and that
 `protocol entity list --planning` counts what is here. `crates/protocol-cli/tests/store_selection.rs`
 seeds the seven artifacts into a markdown copy, into the SQLite variant and into the hybrid variant,
-runs every `protocol artifact` verb over all three, each as its own process, asserting the output is
+runs every `aep artifact` verb over all three, each as its own process, asserting the output is
 the same — and makes the hybrid's replica refuse a write, to list the divergence and catch it up.

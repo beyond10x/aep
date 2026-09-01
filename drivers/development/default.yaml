@@ -28,16 +28,16 @@
 # Its sibling **[`checks.yaml`](checks.yaml)** — `development/checks` — is the map for that work: it
 # verifies by running the checks the story itself carries, and names no compiler anywhere.
 #
-# **Two maps now fit `adp/default/1`, so `protocol drive run` refuses to choose between them** and
+# **Two maps now fit `adp/default/1`, so `aep drive run` refuses to choose between them** and
 # `--map` says which one. That refusal names both ids (`crates/protocol-cli/src/drive.rs:376-388`)
-# and is the same position `protocol artifact move` takes on an illegal transition: the driver does
+# and is the same position `aep artifact move` takes on an illegal transition: the driver does
 # not guess which document the run is under.
 format: aep.driver-steps/1
 id: development/default
 # Pinned, and the pin is mandatory. A step map names states and orders steps inside them, so an
 # unpinned one is an instruction sheet for whatever happens to be in the tree. The refusal this
 # comment used to predict has now happened once and worked exactly as written: `adp/default` went to
-# version 2 and `protocol validate` named both maps and both versions rather than applying either to
+# version 2 and `aep validate` named both maps and both versions rather than applying either to
 # a state graph it was not written against.
 #
 # **Repinned to version 2, with no new steps.** The bump added a terminal `declined` state and three
@@ -70,7 +70,7 @@ states:
         # a library the model chooses from is the other case.
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -91,7 +91,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -101,7 +101,7 @@ states:
             write: denied
         prompt: >-
           Write the specification for this task as a planning artifact of kind `specification`,
-          through `protocol artifact new`. State the required behaviour so that a verifier could
+          through `aep artifact new`. State the required behaviour so that a verifier could
           disagree with it: anything left only in the prompt cannot be checked later. The transition
           out of this state is guarded on `artifact.specification.exists`, so the artifact is what
           moves the run, not a description of one.
@@ -114,7 +114,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -124,7 +124,7 @@ states:
             write: denied
         prompt: >-
           Break the specification into tasks that can each be implemented and verified on their own,
-          through `protocol artifact new` and `protocol artifact relate`. Every task states its own
+          through `aep artifact new` and `aep artifact relate`. Every task states its own
           acceptance. A unit nobody can verify separately is a unit that will be declared done by
           assertion.
 
@@ -136,7 +136,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -158,7 +158,7 @@ states:
           suite: unit
           verifier: test-runner
       # A person, and the step this map did not have. `spec-driven.before_implementation` wants a
-      # specification whose status is `approved`, `protocol artifact new` leaves `draft`, and no
+      # specification whose status is `approved`, `aep artifact new` leaves `draft`, and no
       # prompt in this map used to ask for the move — so a run under it walked into `implement`
       # only because nothing had looked, or did not walk in at all. It is an `operator` step and
       # not an `llm` one because approving a specification is a person's act: a run that approved
@@ -172,7 +172,7 @@ states:
         prompt: >-
           Read the specification this run wrote and the suite it just ran red. If it states the
           required behaviour well enough for those tests to decide it, move it to `approved` —
-          `protocol artifact move <id> in_review` then `protocol artifact move <id> approved`. If
+          `aep artifact move <id> in_review` then `aep artifact move <id> approved`. If
           it does not, leave it in `draft` and say so: the transition into `implement` is guarded
           on an approved specification, so the run stops here either way and nothing is implemented
           against a specification nobody agreed to. Write each requirement so that a fact decides
@@ -188,7 +188,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -289,7 +289,7 @@ states:
           record: "{run_directory}/property.yaml"
       # `provenance-tracking` owes an independent `verification` record before completion, and the
       # kind is not mintable either: a `verification` names a claim and a verifier, and an exit
-      # status names neither. `protocol validate` is the verifier — it reads every protocol,
+      # status names neither. `aep validate` is the verifier — it reads every protocol,
       # workflow, profile, lifecycle and step map and cross-validates them against each other — and
       # `--evidence` is it writing down what it found. The claim is `document-tree-valid` and
       # deliberately not `invariant`: `verification.invariant.passed` is read by three shipped
@@ -316,7 +316,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `protocol artifact` owns every mutation, including bodies.
+        # native file writers because `aep artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -372,7 +372,7 @@ states:
       #
       # `--task {task}` is the document *this run* was started from, filled in by the driver. Without
       # it the verb falls back to its own discovery — the task `project.yaml` names — so a run driven
-      # with `protocol drive run --task <a path that is not the project's>` decided the wrong story's
+      # with `aep drive run --task <a path that is not the project's>` decided the wrong story's
       # specification, or refused over it, while the engine's cursor said something else entirely.
       # A step map is written once and driven many times, so this is the only way it can say
       # *whichever task this run is about*.
