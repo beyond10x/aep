@@ -1,0 +1,15 @@
+schema: b10x-change/v1
+id: aep/canonical-command-0.40.0
+repository: aep
+publishedAt: 2026-09-01T06:47:23Z
+title: AEP becomes the canonical protocol command
+summary: AEP 0.40.0 establishes aep as the authored command, retains protocol as an exact compatibility alias, and keeps ESS adaptation at one optional evidence boundary.
+kind: migration
+impact: significant
+source:
+  url: https://github.com/beyond10x/aep/releases/tag/0.40.0
+  version: 0.40.0
+journeys: [plan-work, specify, build-agents, operate-services]
+affectedSurfaces: [aep/docs]
+relations:
+  - {target: change:ess/standalone-0.1.0, kind: integrates-with, label: Consumes only the closed ESS conformance report}

@@ -1,4 +1,4 @@
-schema: b10x-docs/v1
+schema: b10x-docs/v2
 repository:
   id: aep
   url: https://github.com/beyond10x/aep
@@ -12,7 +12,7 @@ surfaces:
     availability: published
     discoverability: public
     audiences: [adopter, developer, operator]
-    journeys: [specify, build-agents, operate-services]
+    journeys: [plan-work, specify, build-agents, operate-services]
     capabilities: [aep, engineering-workflows, evidence-gates, contract-generation]
     sections:
       - {label: Getting started, url: https://beyond10x.github.io/aep/docs/getting-started, kind: quickstart}
@@ -24,6 +24,13 @@ surfaces:
       - {target: aep-service/docs, kind: specifies}
     feeds:
       - {label: Release notes RSS, url: https://beyond10x.github.io/aep/releases/rss.xml, kind: feed}
+    adoption:
+      label: Create governed work
+      url: https://beyond10x.github.io/aep/docs/getting-started
+      mode: source-build
+      estimatedMinutes: 12
+      prerequisites: [Rust toolchain]
+      outcome: Create and validate a typed planning artifact through the AEP command.
     accent: "#a5d6ff"
     mark: website/static/img/mark.svg
-    shell: {integration: docusaurus, revision: 0cbd1f1b6951fec95767332e3a1792f838feb62d}
+    shell: {integration: docusaurus, revision: 73aefe1ca268cc853ed38fb23478454496462a03}
