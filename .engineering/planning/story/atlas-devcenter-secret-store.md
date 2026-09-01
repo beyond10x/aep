@@ -2,14 +2,14 @@
 format: aep.planning-md/1
 id: story:atlas-devcenter-secret-store
 kind: story
-status: active
+status: archived
 title: Record Devcenter secret-store ownership in Atlas
 summary: Capture the coordinated runtime-edge change, released evidence, and remaining production gaps.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O4
 - serves: vision:O5
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

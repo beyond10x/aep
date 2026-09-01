@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:devcenter-vault-chart
 kind: story
-status: active
+status: archived
 title: Package an internal Vault in the Devcenter chart
 summary: Render an internal-only, persistent, auto-unsealed Vault and wire only its CA to Connectors.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O4
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

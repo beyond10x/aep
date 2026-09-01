@@ -2,14 +2,14 @@
 format: aep.planning-md/1
 id: story:migrate-connectors-custody
 kind: story
-status: active
+status: archived
 title: Migrate Connectors credentials without exporting them to product APIs
 summary: Copy the current tenant KV state through a bounded administrative migration and cut Connectors over.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O1
 - serves: vision:O5
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

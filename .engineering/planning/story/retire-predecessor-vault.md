@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:retire-predecessor-vault
 kind: story
-status: active
+status: archived
 title: Remove the predecessor Vault runtime dependency
 summary: Destroy the old runtime only after migration, restart, backup, and restore proofs pass.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O4
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

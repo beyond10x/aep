@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:devcenter-vault-operations
 kind: story
-status: active
+status: archived
 title: Operate Vault through devcenterctl
 summary: Initialize, reconcile, verify, snapshot, and recover Vault without persisting root material.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O4
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

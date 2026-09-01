@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:devcenter-vault-backup
 kind: story
-status: active
+status: archived
 title: Back up and restore the Devcenter Vault
 summary: Continuously retain encrypted Raft snapshots and prove one can be restored.
 relations:
 - decomposes: epic:devcenter-owned-credential-store
 - serves: vision:O4
-revision: 3
+revision: 4
 ---
 ## Acceptance
 

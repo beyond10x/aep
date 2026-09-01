@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: epic:devcenter-owned-credential-store
 kind: epic
-status: active
+status: archived
 title: Devcenter owns its credential store lifecycle
 summary: Package, operate, recover, and verify an optional Vault without a predecessor deployment dependency.
 relations:
 - serves: vision:O4
 - serves: vision:O5
-revision: 3
+revision: 4
 ---
 ## Outcome
 
