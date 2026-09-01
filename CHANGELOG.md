@@ -17,7 +17,10 @@ belongs in the commit message or in `docs/design/`.
   status compatibility alias.
 - The optional `aep-ess-evidence` crate converts the closed standalone ESS conformance report into
   AEP `ess_conformance` evidence without linking AEP to ESS modeling types.
-
+- `release.source` and `release.dependency-chain` profiles now govern source release verification
+  and provider-first dependency promotion. Their workflows require default-branch provenance,
+  repository gates, review, convergence evidence, and explicit human approval before any
+  post-merge release is created.
 - Public harness-integration documentation now gives the local `protocol drive` installation and
   run sequence, the free native comparison command, and a feature/confinement matrix for Claude
   Code, Codex, and the b10x native loop. It distinguishes an inner harness transcript, an outer

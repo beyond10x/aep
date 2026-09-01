@@ -1,0 +1,28 @@
+id: release.source
+version: 1
+title: Source release
+summary: >-
+  Qualify and verify source releases freely, while requiring a recorded human approval before any
+  direct default-branch release housekeeping or immutable tag creation.
+protocol: aop/1
+workflow: release/source
+
+principles:
+  - provenance-tracking
+  - contract-testing
+  - approval-gates
+  - verify-after-action
+
+capabilities:
+  allow:
+    - repository.read
+    - tests.execute
+    - artifact.read
+    - approval.request
+  require_approval:
+    - repository.write
+
+completion:
+  all:
+    - verification.source-release.passed
+    - evidence.missing == 0

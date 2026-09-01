@@ -1,0 +1,119 @@
+# One consumer step in a larger dependency DAG. Scheduling and fan-out belong to the caller that
+# owns that graph; this workflow owns the order inside one provider-to-consumer promotion.
+id: release/dependency-promotion
+version: 1
+title: Dependency promotion
+summary: >-
+  Observe a verified provider release, prepare one consolidated consumer change, gate and review
+  it, observe its merge to the default branch, release the consumer when required, and verify the
+  resulting pins.
+
+initial: observe
+
+states:
+  observe:
+    title: Observe provider
+    summary: Bind the step to verified provider releases and one immutable graph snapshot.
+    phases: [preparation]
+
+  prepare:
+    title: Prepare consumer change
+    summary: Update every member of the declared atomic pin group in one branch and pull request.
+    phases: [implementation]
+
+  gate:
+    title: Gate consumer
+    summary: Run the consumer's complete declared gate against the proposed dependency change.
+    phases: [qualification]
+
+  review:
+    title: Review pull request
+    summary: Wait for ordinary human review; the workflow never merges around branch protection.
+    phases: [review]
+
+  merge:
+    title: Observe merge
+    summary: Confirm the reviewed commit is reachable from the consumer's default branch.
+    phases: [promotion]
+
+  await_release_approval:
+    title: Await consumer release approval
+    summary: Ask separately before creating the consumer's immutable tag and release.
+    phases: [review]
+
+  release:
+    title: Release consumer
+    summary: Run the consumer's declared source-release procedure.
+    phases: [promotion]
+
+  verify:
+    title: Verify convergence
+    summary: Re-read manifests and release evidence rather than trusting the change that wrote them.
+    phases: [verification]
+
+  complete:
+    title: Complete
+    terminal: true
+    summary: The consumer is on every target provider release and its own release is verified when required.
+    phases: [completion]
+
+transitions:
+  - from: observe
+    to: prepare
+    description: Every provider release needed by this consolidated consumer step is verified.
+    when: verification.provider-releases.passed
+
+  - from: prepare
+    to: gate
+    description: A dependency-only diff exists and every declared atomic pin moved together.
+    when:
+      all:
+        - diff.exists
+        - verification.atomic-pin-group.passed
+
+  - from: gate
+    to: review
+    description: The consumer's complete gate is green on the proposed branch.
+    when: tests.repository-gate.failed == 0
+
+  - from: review
+    to: merge
+    description: A human approved the pull request.
+    when:
+      all:
+        - review.approved
+        - review.by_human
+
+  - from: merge
+    to: verify
+    description: An unversioned terminal consumer needs convergence verification but no invented release.
+    when:
+      all:
+        - verification.change-on-default-branch.passed
+        - verification.consumer-release-not-required.passed
+
+  - from: merge
+    to: await_release_approval
+    description: A versioned consumer was merged and now needs its own immutable release.
+    when:
+      all:
+        - verification.change-on-default-branch.passed
+        - verification.consumer-release-required.passed
+
+  - from: await_release_approval
+    to: release
+    description: A human separately approved the consumer release subject.
+    when:
+      all:
+        - approval.release-create.granted
+        - approval.release-create.by_human
+
+  - from: release
+    to: verify
+    description: The consumer source release passed the source-release workflow.
+    when: verification.source-release.passed
+
+  - from: verify
+    to: complete
+    description: Every managed component dependency now resolves to the run's snapshotted target.
+    when: verification.dependency-convergence.passed

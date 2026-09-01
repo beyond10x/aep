@@ -1,0 +1,32 @@
+id: release.dependency-chain
+version: 1
+title: Dependency promotion chain
+summary: >-
+  Prepare dependency branches and request ordinary review, but never merge around branch
+  protection and never create a consumer release without a separate recorded approval.
+protocol: aop/1
+workflow: release/dependency-promotion
+
+principles:
+  - provenance-tracking
+  - contract-testing
+  - approval-gates
+  - verify-after-action
+
+capabilities:
+  allow:
+    - repository.read
+    # The caller narrows this to a dedicated dependency branch. Tagging is a separate workflow
+    # state whose transition still requires the named human approval below; no command-capability
+    # grant is present here for an agent to manufacture a tag itself.
+    - repository.write
+    - tests.execute
+    - artifact.read
+    - artifact.write
+    - review.request
+    - approval.request
+
+completion:
+  all:
+    - verification.dependency-convergence.passed
+    - evidence.missing == 0

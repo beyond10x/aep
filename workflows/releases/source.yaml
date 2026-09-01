@@ -1,0 +1,80 @@
+# A source release is an immutable tag and its published artifacts, not a deployment. The existing
+# release/progressive workflow governs traffic movement; this one governs the source boundary that
+# downstream repositories pin.
+id: release/source
+version: 1
+title: Source release
+summary: >-
+  Prove a candidate is on the default branch, qualify it, obtain approval for the immutable tag,
+  publish it, and verify the release and its declared artifacts.
+
+initial: inspect
+
+states:
+  inspect:
+    title: Inspect
+    summary: Resolve the candidate version, commit, default branch and repository release policy.
+    phases: [preparation]
+
+  qualify:
+    title: Qualify
+    summary: Run the repository gate and verify version, changelog and tag provenance inputs.
+    phases: [qualification]
+
+  await_approval:
+    title: Await release approval
+    summary: Ask a human to authorize this exact repository, version and commit.
+    phases: [review]
+
+  publish:
+    title: Publish
+    summary: Create and push the immutable tag using the repository's declared release procedure.
+    phases: [promotion]
+
+  verify:
+    title: Verify
+    summary: Verify the remote tag, gate run, GitHub Release and policy-declared artifacts.
+    phases: [verification]
+
+  complete:
+    title: Complete
+    terminal: true
+    summary: The source release is published from the default branch and independently verified.
+    phases: [completion]
+
+transitions:
+  - from: inspect
+    to: verify
+    description: An already-published release still has to pass the same independent verification.
+    when: verification.release-published.passed
+
+  - from: inspect
+    to: qualify
+    description: The candidate commit is reachable from the repository's declared default branch.
+    when: verification.release-on-default-branch.passed
+
+  - from: qualify
+    to: await_approval
+    description: The complete repository gate is green and the release inputs agree.
+    when:
+      all:
+        - tests.repository-gate.failed == 0
+        - verification.release-inputs.passed
+
+  - from: await_approval
+    to: publish
+    description: A human approved the exact immutable release subject.
+    when:
+      all:
+        - approval.release-create.granted
+        - approval.release-create.by_human
+
+  - from: publish
+    to: verify
+    description: The remote now holds the requested tag; publication claims are checked next.
+    when: verification.release-tag-pushed.passed
+
+  - from: verify
+    to: complete
+    description: The tag, gate, release record and every declared artifact were verified remotely.
+    when: verification.source-release.passed
