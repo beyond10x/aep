@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.40.1] — 2026-09-01
+
+### Fixed
+
+- Repinned Entity Runtime to its sanitized `0.17.4` release so fresh AEP builds resolve the public
+  provider history after the coordinated repository privacy migration.
+
 ## [0.40.0] — 2026-09-01
 
 ### Added
