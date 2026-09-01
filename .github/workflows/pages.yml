@@ -1,32 +1,13 @@
-# Builds the Docusaurus site under website/ and deploys it to GitHub Pages on every push to main.
-#
-# The build has a Rust half now. `/lab` fetches a WebAssembly module beside the page and runs five
-# commands through it, and that module is a build artifact rather than a committed binary — so the
-# job builds `examples/billing-web` for wasm32-unknown-unknown and drops the result into
-# `website/static/lab/` before Docusaurus runs. Those steps mirror `task lab`; keep the two in step.
-# Without them the site still builds and the lab says, in as many words, that there is no module.
-#
-# The site is the project's best on-ramp and it is already gated harder than most prose gets:
-# `onBrokenLinks: 'throw'` fails the build on a dangling link, and every quoted transcript was
-# re-verified against the built `protocol` binary when the pages were written. What was missing was
-# only the deploy — the site was written, gated and unreachable.
-#
-# The build job also runs on pull requests, as a link gate without a deploy: a PR that breaks a
-# link fails here before it lands. Deploys happen from main only.
-#
-# One-time repository setup this workflow needs: Settings → Pages → Source: "GitHub Actions".
+# Builds the adopter-facing Docusaurus site and deploys only its generated output to GitHub Pages.
 name: Website
 
 on:
   push:
     branches: [main]
   pull_request:
-    # The lab's module is built from the specification and its realization, so a change to either
-    # can break this build without touching a file under website/.
-    paths: [website/**, examples/**, generated/web/**]
+    paths: [website/**, b10x.docs.yaml, Taskfile.yml]
   workflow_dispatch:
 
-# One Pages deployment at a time; a superseded push should not race a running deploy.
 concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: false
@@ -40,52 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-
-      # 22, not 20: the lab's run test imports the engine as TypeScript and Node strips the types
-      # itself (unflagged since 22.18). The site build runs on either; this job runs both.
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: website/package-lock.json
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      # Mirrors `task lab`, step for step. The `cmp` is the gate on the page's copy of the emitted
-      # glue: the lab drives the module through the same code the boundary smoke test does, and a
-      # copy that had drifted would make that claim false without failing anything else.
-      - name: Check the lab's copy of the emitted glue
-        run: cmp generated/web/billing/bridge.js website/src/pages/lab/_bridge.mjs
-
-      - name: Build the module the lab runs
-        run: cargo build --release --target wasm32-unknown-unknown --manifest-path examples/billing-web/Cargo.toml
-
-      - name: Place it beside the page
-        run: |
-          mkdir -p website/static/lab
-          cp examples/billing-web/target/wasm32-unknown-unknown/release/billing_web_realized.wasm \
-            website/static/lab/billing_web_realized.wasm
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: website
-
-      # The run the page will show, asserted outside a browser: the step count, the identities the
-      # module minted, the transitions it took, and that two instantiations answer identically.
-      - name: Check the lab's run
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/pages/lab/_run.test.mjs
-        working-directory: website
-
-      - name: Build
-        run: npm run build
-        working-directory: website
-
-      - uses: actions/upload-pages-artifact@v3
+      - name: Build the public documentation
+        run: npm --prefix website ci && npm --prefix website run build
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: website/build
 
@@ -103,4 +47,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

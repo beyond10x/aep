@@ -1,13 +1,13 @@
 schema: b10x-docs/v1
 repository:
-  id: engineering-protocols
-  url: https://github.com/beyond10x/engineering-protocols
+  id: aep
+  url: https://github.com/beyond10x/aep
 surfaces:
   - id: docs
-    name: Engineering Protocols
+    name: AEP
     summary: Typed, portable, machine-executable specifications for performing and proving autonomous engineering work.
     kind: documentation
-    canonicalUrl: https://beyond10x.github.io/engineering-protocols/
+    canonicalUrl: https://beyond10x.github.io/aep/
     maturity: development
     availability: published
     discoverability: public
@@ -15,15 +15,15 @@ surfaces:
     journeys: [specify, build-agents, operate-services]
     capabilities: [aep, engineering-workflows, evidence-gates, contract-generation]
     sections:
-      - {label: Getting started, url: https://beyond10x.github.io/engineering-protocols/docs/getting-started, kind: quickstart}
-      - {label: Concepts, url: https://beyond10x.github.io/engineering-protocols/docs/concepts/overview, kind: docs}
-      - {label: CLI, url: https://beyond10x.github.io/engineering-protocols/docs/reference/cli, kind: reference}
-      - {label: Status, url: https://beyond10x.github.io/engineering-protocols/docs/status/where-this-stands, kind: status}
-      - {label: Source, url: https://github.com/beyond10x/engineering-protocols, kind: source}
+      - {label: Getting started, url: https://beyond10x.github.io/aep/docs/getting-started, kind: quickstart}
+      - {label: Concepts, url: https://beyond10x.github.io/aep/docs/concepts/overview, kind: docs}
+      - {label: CLI, url: https://beyond10x.github.io/aep/docs/reference/cli, kind: reference}
+      - {label: Status, url: https://beyond10x.github.io/aep/docs/status/where-this-stands, kind: status}
+      - {label: Source, url: https://github.com/beyond10x/aep, kind: source}
     relationships:
       - {target: aep-service/docs, kind: specifies}
     feeds:
-      - {label: Release notes RSS, url: https://beyond10x.github.io/engineering-protocols/releases/rss.xml, kind: feed}
+      - {label: Release notes RSS, url: https://beyond10x.github.io/aep/releases/rss.xml, kind: feed}
     accent: "#a5d6ff"
     mark: website/static/img/mark.svg
     shell: {integration: docusaurus, revision: 0cbd1f1b6951fec95767332e3a1792f838feb62d}

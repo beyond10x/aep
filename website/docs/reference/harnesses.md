@@ -7,7 +7,7 @@ description: How Claude Code, Codex, and the b10x native loop are launched, gove
 
 The three harnesses are comparison arms, not interchangeable binaries. Claude Code and Codex own
 vendor loops that metaharness drives. `b10x-harness` owns a direct-provider loop that metaharness
-observes. Engineering Protocols owns the workflow and capability decisions; substrate owns process
+observes. AEP owns the workflow and capability decisions; substrate owns process
 confinement.
 
 | Property | Claude Code | Codex | b10x-harness |
@@ -33,7 +33,7 @@ mount, network, environment, or resource surface.
 
 ## Local run sequence
 
-From an Engineering Protocols checkout with sibling `metaharness` and `harness` checkouts:
+From an AEP checkout with sibling `metaharness` and `harness` checkouts:
 
 ```console
 $ cargo install --locked --path crates/protocol-cli
