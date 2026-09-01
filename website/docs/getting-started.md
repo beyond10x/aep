@@ -21,7 +21,7 @@ task against evidence, and asking how old that evidence is.
 
 ## Build
 
-```console
+```shell-session
 $ git clone https://github.com/beyond10x/aep
 $ cd aep
 $ cargo build -p protocol-cli
@@ -32,7 +32,7 @@ The rest of this page uses `$B` for the binary.
 
 ## 1. Validate the document tree
 
-```console
+```shell-session
 $ $B validate
 45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
 valid
@@ -51,7 +51,7 @@ workflow state, and it is what the reference driver walks. Nothing else in this 
 The worked example is a feature task — adding passkey authentication — governed by the standard
 development profile. The task file names exactly two things: an objective and a profile.
 
-```console
+```shell-session
 $ $B resolve --task examples/development-passkeys/task.yaml
 inputs      . and examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
@@ -81,7 +81,7 @@ profile. Nothing in the task restates them, so nothing in the task can drift out
 
 ## 3. Ask whether an action is allowed
 
-```console
+```shell-session
 $ $B explain --task examples/development-passkeys/task.yaml --action production.write
 production.write denied
   operation: change production state
@@ -101,7 +101,7 @@ workflow the question was asked. Nobody wrote this denial into the task or the p
 
 Evidence is submitted as records — here, a test run that produced one failing test:
 
-```console
+```shell-session
 $ $B evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
@@ -146,7 +146,7 @@ stored — a calendar date only once that day has begun in no timezone, an epoch
 refusal is per record and names the file and the position in it; the rest of the document is still
 submitted.
 
-```console
+```shell-session
 $ $B evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
@@ -162,7 +162,7 @@ check has not failed — nobody has run it. See
 Everything above is a terminal answering one question at a time. A plan is a shape, so there is one
 verb that draws it:
 
-```console
+```shell-session
 $ $B serve
 aep serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
 http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27

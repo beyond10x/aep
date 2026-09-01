@@ -11,7 +11,7 @@ release_tag: "0.18.0"
 release_commit: 6409587e6cec97e300e53566acc00c3e2393d2ca
 ---
 
-```console
+```shell-session
 $ protocol artifact lifecycle blocker
 blocker starts at open
   cleared -> nothing

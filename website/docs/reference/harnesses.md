@@ -35,7 +35,7 @@ mount, network, environment, or resource surface.
 
 From an AEP checkout with sibling `metaharness` and `harness` checkouts:
 
-```console
+```shell-session
 $ cargo install --locked --path crates/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
@@ -44,7 +44,7 @@ $ aep drive status
 
 The free native comparison performs all setup and confinement checks, then stops before a model:
 
-```console
+```shell-session
 $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
     -p metaharness-aep-eval -- native \
     --ep-repo "$PWD" --harness-repo ../harness
@@ -53,7 +53,7 @@ $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
 For a governed live run, choose a step map and one of the two selectors `aep drive` currently
 supports:
 
-```console
+```shell-session
 $ METAHARNESS_LIVE=1 aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1

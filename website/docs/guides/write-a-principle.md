@@ -77,7 +77,7 @@ principles:
 **Applicability.** Two tasks under the same profile — one declares `change.database_schema: true`,
 the other declares it `false`:
 
-```console
+```shell-session
 $ $B resolve --root . --task task.yaml | grep -E '^(task|principles|obligations)'
 task        BILL-88 (feature)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes, migration-has-a-way-back
@@ -100,7 +100,7 @@ rule nobody can rely on. Opting out is a declaration a reviewer can see.
 **Timing.** With the migration plan in the manifest, a failing test carries the task into
 implementation. Remove the plan from the manifest and the same evidence stops one state short:
 
-```console
+```shell-session
 $ $B evaluate --root . --task task.yaml --artifacts artifacts-without-the-plan.yaml \
     --evidence red-test.yaml --advance | grep -E '^(state|transitions)| -> implement|migration-plan'
 state       establish_verifiers (Establish verifiers)
@@ -117,7 +117,7 @@ rule — both better outcomes than an agent quietly writing the migration.
 **1. A fact the protocol does not declare.** Suppose the rule had reached for
 `migration.rollback_tested`, which reads perfectly well in English:
 
-```console
+```shell-session
 $ $B validate --root .
 47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
 1 problem(s):
@@ -133,7 +133,7 @@ spelling — here, `verification.recovery.passed`.
 **2. A declared family, but a spelling nothing projects.** This one passes validation and then never
 becomes true:
 
-```console
+```shell-session
 $ $B validate --root .
 47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
 valid

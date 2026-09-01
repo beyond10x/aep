@@ -38,7 +38,7 @@ transitions:
 Put a `<kind>.yaml` in your own document tree, point `--root` at it, and `new`, `move`, `board`,
 `lifecycle` and `validate` all understand the kind. No crate changes on either side.
 
-```console
+```shell-session
 $ protocol artifact lifecycle blocker
 blocker starts at open
   cleared -> nothing

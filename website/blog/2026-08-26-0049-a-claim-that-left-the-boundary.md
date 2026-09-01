@@ -22,7 +22,7 @@ boundary**, and nothing here modelled them.
 
 ## The ladder
 
-```console
+```shell-session
 $ protocol artifact lifecycle outbound-claim
 outbound-claim starts at draft
   cleared -> sent
@@ -35,7 +35,7 @@ outbound-claim starts at draft
 
 **Sending is not undoable, and the ladder says so:**
 
-```console
+```shell-session
 $ protocol artifact move outbound-claim:q3-uptime --to sent
 outbound-claim:q3-uptime moved cleared -> sent (revision 3)
 

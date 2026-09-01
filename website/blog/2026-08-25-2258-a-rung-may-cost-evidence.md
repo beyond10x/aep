@@ -28,7 +28,7 @@ requires:
 
 And the refusal **says which kind of no it is**, which is the whole design:
 
-```console
+```shell-session
 $ protocol artifact move outbound-claim:q3-uptime --to cleared
 outbound-claim:q3-uptime is draft; cleared is on the ladder and not yet earned: reaching cleared
 needs at least 1 approval record(s). Nothing was presented at $args.evidence.approval

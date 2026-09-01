@@ -13,7 +13,7 @@ release_commit: 51f55f4cc26e7c689c341e81b902cdd2dc763f6c
 
 `0.15.0` let a rung cost evidence. This release is how the evidence gets there.
 
-```console
+```shell-session
 $ protocol artifact evidence outbound-claim:q3-uptime \
     --kind approval --source "legal review" --ref https://example.invalid/approvals/814
 outbound-claim:q3-uptime: approval recorded from legal review

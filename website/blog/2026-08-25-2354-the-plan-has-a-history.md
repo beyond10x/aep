@@ -14,7 +14,7 @@ release_commit: ab48bc8884620805a8efcce4a1aebc9b3eb6239d
 The planning store is markdown files in git, so its history was always *there* — as `git log`, in a
 form you had to reconstruct. This release makes it a question you can ask.
 
-```console
+```shell-session
 $ protocol artifact history outbound-claim:q3-uptime
 2026-08-26T00:08:16Z  operator  created as draft (revision 1)
 2026-08-26T00:08:20Z  operator  approval recorded from legal review (https://example.invalid/approvals/814) (revision 1)

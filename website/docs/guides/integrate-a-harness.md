@@ -20,7 +20,7 @@ what it did:
 Install the three local binaries from source checkouts and verify what will be resolved from
 `PATH` before crossing a model boundary:
 
-```console
+```shell-session
 $ cargo install --locked --path crates/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
@@ -34,7 +34,7 @@ $ aep drive status
 metaharness checkout goes further: it assembles the fixture, projects the workflow, exercises the
 confinement governor and stops before any model request unless `--spend` is present:
 
-```console
+```shell-session
 $ cargo run --locked --manifest-path ../metaharness/Cargo.toml \
     -p metaharness-aep-eval -- native \
     --ep-repo "$PWD" --harness-repo ../harness
@@ -44,7 +44,7 @@ Its success line is explicit: `Everything free has run. No model was started.` P
 different invocation and additionally requires `METAHARNESS_LIVE=1`, `--spend`, and an exact
 budget. See the [harness and confinement matrix](../reference/harnesses.md) before choosing an arm.
 
-```console
+```shell-session
 $ aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
@@ -190,7 +190,7 @@ them:
   holds at the document boundary — a record with no observation time is not parsed, and one dated
   ahead of the clock is refused rather than recorded:
 
-  ```console
+  ```shell-session
   $ aep evaluate --task task.yaml --artifacts artifacts.yaml --evidence no-observed-at.yaml
   error: evidence document (no-observed-at.yaml): .[0]: missing field `observed_at` at line 1 column 3   # exit 1
 
@@ -383,7 +383,7 @@ serialises; show text to people and JSON to programs, and do not invent a third 
 itself — `b10x-harness workflow run` takes a flow document and runs one model turn per step, one
 session per section — and `aep workflow flow` writes that document from a workflow here:
 
-```console
+```shell-session
 $ aep workflow flow --id adp/default --map development/default --out adp.flow.yaml
 $ b10x-harness workflow plan --flow adp.flow.yaml          # no endpoint: is the shape sound?
 $ b10x-harness workflow run  --flow adp.flow.yaml --input "AUTH-142" --hooks hooks.json …

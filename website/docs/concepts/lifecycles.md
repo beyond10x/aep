@@ -70,7 +70,7 @@ A ladder that only says *what may follow what* models permission, not earning. `
 a rung costs, and the refusal names which kind of `no` it is — which is the part that matters when
 you are the person being refused:
 
-```console
+```shell-session
 $ aep artifact move outbound-claim:q3-uptime --to cleared
 outbound-claim:q3-uptime is draft; cleared is on the ladder and not yet earned: reaching cleared
 needs at least 1 approval record(s). Nothing was presented at $args.evidence.approval
@@ -79,7 +79,7 @@ needs at least 1 approval record(s). Nothing was presented at $args.evidence.app
 *On the ladder and not yet earned* is a different sentence from *not on the ladder*, and the two
 lead to different next actions. Record the observation and the same move goes through:
 
-```console
+```shell-session
 $ aep artifact evidence outbound-claim:q3-uptime \
     --kind approval --source "legal review" --ref https://example.invalid/approvals/814
 outbound-claim:q3-uptime: approval recorded from legal review
@@ -130,7 +130,7 @@ see [blocker types](../reference/vocabulary.md).
 
 That is also what makes unblocking a *move* rather than an edit:
 
-```console
+```shell-session
 $ aep artifact blocked
 credential-blocker:api-token-scope  credential  open, withholding test_result  CI cannot mint a read-scope token
   blocks story:ci-evidence      active  Evidence job for the contract suite
@@ -148,7 +148,7 @@ one reopened — otherwise *how long were we stuck* has no answer.
 else here. Every other ladder models evidence flowing **inward**. An outbound claim is an assertion
 that already left, and **sending is not undoable**:
 
-```console
+```shell-session
 $ aep artifact move outbound-claim:q3-uptime --to sent
 outbound-claim:q3-uptime moved cleared -> sent (revision 3)
 
@@ -172,7 +172,7 @@ an artifact may take next are buttons and the ones it has not earned carry their
 Moves, creations and evidence records all append to a per-store journal, so an artifact's past is a
 question you can ask rather than a `git log` you have to read:
 
-```console
+```shell-session
 $ aep artifact history outbound-claim:q3-uptime
 2026-08-26T00:08:16Z  operator  created as draft (revision 1)
 2026-08-26T00:08:20Z  operator  approval recorded from legal review (https://example.invalid/approvals/814) (revision 1)
@@ -190,7 +190,7 @@ later.
 
 ## Writing your own
 
-```console
+```shell-session
 $ aep artifact lifecycle outbound-claim
 outbound-claim starts at draft
   cleared -> sent

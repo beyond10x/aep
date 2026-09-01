@@ -75,7 +75,7 @@ begun nowhere stays refused, and the refusal is not a warning.
 record in the document, prints its evaluation, and exits `1` with one line per refused record naming
 the file, the position in it, and the date as the writer wrote it:
 
-```console
+```text
 verify.yaml: record 12: the observation time 2026-08-30 has not happened yet; the clock reads 2026-08-28T22:27:33Z (1787956053626ms)
 ```
 
@@ -84,7 +84,7 @@ A document whose every record is future-dated still fails.
 `aep evidence inspect` reads a record file and reports the ages without evaluating anything. It
 puts every record to the same comparison, so the two verbs answer identically about one file:
 
-```console
+```shell-session
 $ aep evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
@@ -130,7 +130,7 @@ beside the classification — how many annotation-shaped occurrences it saw agai
 it parsed, per file, because an annotation that is present, correct and legible to a human but
 invisible to the gate is the failure worth catching:
 
-```console
+```shell-session
 $ aep evidence scan examples/evidence-horizons-corpus/corpus --at 2026-09-01 --warn-days 2
 ...
 43 occurrence(s), 43 record(s), 0 unparsed — 16 ok, 17 expiring, 10 expired, 8 malformed (at 2026-09-01)

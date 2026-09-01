@@ -94,7 +94,7 @@ missing directories are not an error.
 
 Loading this repository's own tree:
 
-```console
+```shell-session
 $ $B validate --root .
 45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
 valid
@@ -116,7 +116,7 @@ schemas: schemas       # project JSON Schema registry; this is also the default
 
 With `.engineering/project.yaml` and `.engineering/task.yaml` in place, the flags become optional:
 
-```console
+```shell-session
 $ $B resolve
 inputs      project …/aep
 task        W4-1 (feature)
@@ -141,7 +141,7 @@ the registry from this file, while `--schemas` exists for fixtures and non-proje
 The profile picks a workflow, and the workflow is where the guards live. `aep workflow render`
 draws it without running anything:
 
-```console
+```shell-session
 $ $B workflow render --id adp/default --format tui
 Standard development workflow
 adp/default/1 · 9 states · 9 transitions
@@ -208,7 +208,7 @@ The critical row's freshness requirement is the one that bites. The worked examp
 the design at version 7 and the review approved version 3, and the evaluation says so in its own
 words:
 
-```console
+```shell-session
 $ $B evaluate --root . --task task-critical.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml
@@ -227,7 +227,7 @@ $ $B evaluate --root . --task task-critical.yaml \
 The worked example ships five evidence files. Submitting them in order and asking the engine to
 advance shows the whole lifecycle. One file carries the task to `implement` and stops it there:
 
-```console
+```shell-session
 $ $B evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
@@ -255,7 +255,7 @@ it, and which of the three truth values it holds: `✓` observed and true, `✗`
 `?` nobody observed it. The blocked transition names its guard. Submit all five files on one command
 line and the same invocation reaches `complete`:
 
-```console
+```shell-session
 $ $B evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
@@ -284,7 +284,7 @@ of step a map declares (`command`, `llm`, `operator`) and records what it did. I
 itself, which is the point: a driver that could evaluate a gate would be a second protocol
 implementation with none of the conformance suites behind it.
 
-```console
+```shell-session
 $ $B drive run --project . --plugin-dir /path/to/agentplugins/plugins/aep-planning --map development/default \
     --pause-on-approval
 $ $B drive status
@@ -295,7 +295,7 @@ $ $B drive resume W4-1/1
 status` reads the run directory and needs nothing. This repository's own first governed run is
 recorded there:
 
-```console
+```shell-session
 $ $B drive status
 lock       free
 run        W4-1/1

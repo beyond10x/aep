@@ -29,7 +29,7 @@ ADP and AOP use AEP's planning and evidence substrate; they do not implement sep
 
 `aep` is canonical. `protocol` is an exact compatibility alias for existing automation.
 
-```console
+```bash
 aep validate
 aep artifact board
 aep explain --action production.write

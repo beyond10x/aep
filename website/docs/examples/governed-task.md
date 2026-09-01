@@ -119,7 +119,7 @@ stops the walk early: `test-driven` requires `test.first_result == failed` befor
 
 ## Where it stops, and why
 
-```console
+```shell-session
 $ aep evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml --advance

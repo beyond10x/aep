@@ -23,7 +23,7 @@ evaluating a tool you do not trust yet: the worst case is a report you disagree 
 
 ## `reverse scan` — what the repository says about itself
 
-```console
+```shell-session
 $ protocol reverse scan .
 aep.reverse-scan/1
 
@@ -44,7 +44,7 @@ that renders as `text`, `yaml` or `json`. Nothing is written.
 
 This is the one that surprises people. Run against this repository:
 
-```console
+```shell-session
 $ protocol reverse history . --top 5
 aep.reverse-history/1
 
@@ -75,7 +75,7 @@ ranked section reports.
 
 ## `reverse openapi` — a specification you already published
 
-```console
+```shell-session
 $ protocol reverse openapi openapi.yaml --domain acme.billing
 ```
 
@@ -85,7 +85,7 @@ is a verb nobody tries twice.
 
 ## `reverse init` — the one that writes
 
-```console
+```shell-session
 $ protocol reverse init \
     --protocols git+https://github.com/beyond10x/aep#<40-hex> \
     --profile development.standard
