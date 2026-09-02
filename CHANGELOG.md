@@ -59,6 +59,17 @@ belongs in the commit message or in `docs/design/`.
 - `aep artifact validate` lists every story past its ladder's first rung and short of its end that
   declares no `scope`. Reported, never failed on, and deliberately not a `--strict` class: 24 of 40
   stories would have gone red on the day it landed, which is how a check gets muted.
+- `aep reverse openapi` drafts a `relations:` block on every type whose schema states one. Two
+  signals and no others: a property whose schema is a `$ref` to a schema that becomes an entity
+  (`cardinality: one`, or `many` when the property is an array of that `$ref`), and a property named
+  `<x>_id` or `<x>Id` whose type is the type of entity `X`'s own identity property. Every relation
+  is `kind: references` — an OpenAPI document says a payload carries a reference and says nothing
+  about whose life bounds whose, so `owns` is never inferred and every relation read from an id
+  field carries an `UNMAPPED: ownership` line. A property that states its target two ways, such as
+  `oneOf: [Carrier, [Carrier]]`, is emitted with `UNMAPPED: cardinality` over the placeholder
+  `cardinality: one`; a property with neither signal produces nothing at all, and a schema with no
+  signal carries no block. The second adopter's plan defect was an undecided domain relation, and
+  this puts the ones the contract does state into the draft with the undecided half named.
 
 ### Fixed
 

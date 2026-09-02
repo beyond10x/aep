@@ -1,0 +1,121 @@
+# A synthetic OpenAPI document, written for `reverse_openapi_relations.rs`.
+#
+# Invented rather than copied, for the reason `reverse_cli.rs` states about its own fixtures: a
+# document lifted out of a real service would carry that service's domain language into a public
+# repository. Every schema here exists to exercise exactly one arm of the relation projection —
+# a `$ref`, an array of `$ref`, an `<x>_id`, an `<x>Id`, a composition, and the five shapes that
+# carry no relation signal at all.
+openapi: 3.1.0
+info:
+  title: Order service
+  version: v1
+paths:
+  /orders:
+    post:
+      operationId: placeOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '201':
+          description: Placed.
+        '409':
+          description: Refused.
+components:
+  schemas:
+    Order:
+      type: object
+      required: [id, customer, lines]
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer:
+          $ref: '#/components/schemas/Customer'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        warehouse_id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: integer
+        broker:
+          allOf:
+            - $ref: '#/components/schemas/Broker'
+        shipper:
+          oneOf:
+            - $ref: '#/components/schemas/Carrier'
+            - type: array
+              items:
+                $ref: '#/components/schemas/Carrier'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        reference:
+          $ref: '#/components/schemas/Reference'
+        courier_id:
+          type: string
+        region_id:
+          type: string
+          format: uuid
+        note:
+          type: string
+    Customer:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    OrderLine:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+    Warehouse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+    Invoice:
+      type: object
+      required: [invoice_id]
+      properties:
+        invoice_id:
+          type: integer
+    Broker:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+    Carrier:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+    Courier:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+    OrderStatus:
+      enum: [placed, shipped]
+    Reference:
+      type: string
