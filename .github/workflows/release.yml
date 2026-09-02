@@ -1,17 +1,13 @@
-# Cuts a GitHub Release for every version tag: the gate first — `ci.yml` itself, called rather than
-# copied, so a tag cannot ship against a shorter gate than main does — then one release whose notes
-# are the tag's own section of CHANGELOG.md.
+# Cuts a GitHub Release for every version tag: the repository gate first, then native `aep` and
+# `protocol` binaries for Linux and macOS, then one release carrying the archives, a SHA256SUMS
+# file, and the tag's own CHANGELOG section. Manual dispatch exists only to backfill an already-cut
+# annotated tag; a normal release is always driven by the tag push.
 #
-# Tags are the bare version (`0.24.0`, atlas § Naming); the `v*` pattern is accepted so a tag pushed
-# with the prefix still releases rather than silently doing nothing.
+# Tags are bare SemVer (`0.43.0`, Atlas § Naming). The `v*` trigger remains a compatibility fence:
+# provenance accepts it only when the Cargo and changelog versions agree after removing the prefix.
 #
-# No binaries are attached. Every release this repository has cut carries none, and `protocol` is
-# built from source by anybody using it (`cargo build --release -p protocol-cli`). Adding archives
-# later is a matrix job beside this one; shipping them for the first time inside a release-notes fix
-# would be two changes wearing one commit.
-#
-# Every action is pinned by commit: the release job holds a token that can publish, and a retargeted
-# mutable tag would run inside it.
+# Every third-party action is pinned by commit. The release job holds write authority, so neither
+# action code nor the source revision it packages may float.
 name: Release
 
 on:
@@ -19,6 +15,12 @@ on:
     tags:
       - "[0-9]*.[0-9]*.[0-9]*"
       - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated release tag to backfill
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -27,20 +29,127 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  provenance:
+    name: Verify tag provenance
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - id: release
+        name: Tag, Cargo, changelog, and checkout agree
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${TAG#v}"
+          test "$(git cat-file -t "refs/tags/${TAG}")" = tag
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "${TAG}^{commit}")"
+          cargo_version="$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "protocol-cli") | .version')"
+          test "$version" = "$cargo_version"
+          grep -Eq "^## \[$version\] — [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   gate:
+    name: Gate the newly pushed tag
+    if: github.event_name == 'push'
+    needs: provenance
     uses: ./.github/workflows/ci.yml
 
+  build:
+    name: Build ${{ matrix.target }}
+    if: >-
+      always() && needs.provenance.result == 'success' &&
+      (needs.gate.result == 'success' || needs.gate.result == 'skipped')
+    needs: [provenance, gate]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ needs.provenance.outputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Build both command names from the locked release
+        run: cargo build --release --locked -p protocol-cli --target ${{ matrix.target }}
+
+      - name: Verify and package
+        shell: bash
+        env:
+          TAG: ${{ needs.provenance.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.provenance.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$("target/${TARGET}/release/aep" --version)" = "protocol ${VERSION}"
+          test "$("target/${TARGET}/release/protocol" --version)" = "protocol ${VERSION}"
+          name="aep-${VERSION}-${TARGET}"
+          mkdir -p "dist/${name}"
+          cp LICENSE README.md CHANGELOG.md "dist/${name}/"
+          cp "target/${TARGET}/release/aep" "target/${TARGET}/release/protocol" "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          rm -r "dist/${name}"
+          test -s "dist/${name}.tar.gz"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   release:
-    name: Publish the release
-    needs: gate
-    runs-on: ubuntu-latest
+    name: Publish binaries and release notes
+    needs: [provenance, build]
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+          ref: refs/tags/${{ needs.provenance.outputs.tag }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the checksum manifest
+        working-directory: dist
+        run: sha256sum *.tar.gz > SHA256SUMS && sha256sum --check SHA256SUMS
 
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
 
@@ -48,40 +157,23 @@ jobs:
         with:
           key: release-notes
 
-      # The notes are the tag's own section of CHANGELOG.md — the text written for the person
-      # hitting the behaviour, not a commit list. A tag with no section gets GitHub's generated
-      # notes and says so, rather than an empty page.
-      #
-      # Reflowed on the way out, because release notes render as **GFM** and GFM turns a single
-      # newline into a `<br>`. Confirmed against GitHub's own `/markdown` endpoint rather than
-      # assumed. CHANGELOG.md stays wrapped at 100 columns, which is the right shape for a file
-      # somebody reviews in a diff; only the notes are joined. `cargo xtask notes --self-test`
-      # holds the shapes that must survive — fences, tables, headings, blockquotes, list
-      # boundaries, and a deliberate two-space break.
       - name: Release notes from CHANGELOG.md
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.provenance.outputs.version }}
         run: |
           set -euo pipefail
-          version="${TAG#v}"
           cargo xtask notes --self-test
-          cargo xtask notes "$version" > notes.md || true
-          if [[ -s notes.md ]]; then
-            echo "notes: CHANGELOG.md section for ${version}"
-            echo "GENERATE=false" >> "$GITHUB_ENV"
-          else
-            echo "notes: no CHANGELOG.md section for ${version}; using generated notes"
-            printf 'No CHANGELOG.md section for %s.\n' "$version" > notes.md
-            echo "GENERATE=true" >> "$GITHUB_ENV"
-          fi
-          cat notes.md
+          cargo xtask notes "$VERSION" > notes.md
+          test -s notes.md
 
-      - name: Create the GitHub Release
+      - name: Create or backfill the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.provenance.outputs.tag }}
         run: |
           set -euo pipefail
-          args=(--title "$TAG" --notes-file notes.md --verify-tag)
-          if [[ "$GENERATE" == "true" ]]; then args+=(--generate-notes); fi
-          gh release create "$TAG" "${args[@]}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" --notes-file notes.md --verify-tag
+          fi

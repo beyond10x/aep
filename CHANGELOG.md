@@ -79,6 +79,12 @@ belongs in the commit message or in `docs/design/`.
   refused on an immutable kind — which is why no review could name the run manifest its cost is read
   from. Shipped broken in 0.41.0.
 
+### Changed
+
+- Publish tag-pinned `aep` and `protocol` archives for x86-64 and ARM64 Linux and macOS with a
+  verified `SHA256SUMS` manifest on every release; manual dispatch can backfill an existing
+  annotated tag without weakening the normal tag gate.
+
 ## [0.43.0] — 2026-09-03
 
 ### Added
