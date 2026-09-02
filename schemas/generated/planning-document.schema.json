@@ -38,6 +38,14 @@
         "null"
       ]
     },
+    "refs": {
+      "description": "Records of the same work elsewhere, as written.\n\n[`Node`] and not [`ExternalRef`] so a malformed entry is reported beside every other defect in the document rather than aborting the parse of the whole file — the reason `withholds` is text here too.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Node"
+      }
+    },
     "relations": {
       "description": "Its outgoing edges, each a single-entry mapping such as `{derived_from: epic:passwordless}`.",
       "default": [],

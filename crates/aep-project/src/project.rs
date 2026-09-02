@@ -181,6 +181,17 @@ pub fn load_local_paths(root: &Path) -> Result<ProjectLocalPaths, LoadErrors> {
         .map_err(|failure| LoadErrors::from_failures(vec![failure]))
 }
 
+/// Loads only a project's configuration, resolving nothing it names.
+///
+/// The lightest of the three loaders. Use it for a question the configuration itself answers — how
+/// this project builds a link for `jira:DEV-630` — where loading the protocol tree would make a
+/// listing depend on a network fetch it has no other reason to make.
+pub fn load_config(root: &Path) -> Result<ProjectConfig, LoadErrors> {
+    read_config(root)
+        .map(|(_, _, config)| config)
+        .map_err(|failure| LoadErrors::from_failures(vec![failure]))
+}
+
 /// Loads a project, or returns every failure found.
 // One pass over one directory. Splitting it would thread the failure list through five helpers to
 // hide the fact that loading a project is, in order: read the config, load the tree, merge the

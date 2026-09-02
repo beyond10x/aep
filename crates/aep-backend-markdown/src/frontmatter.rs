@@ -17,8 +17,8 @@
 //! revision: 1
 //! ```
 //!
-//! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags`, `relations` and
-//! `withholds` are optional; `format` and `revision` default. Everything else a document carries
+//! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags`, `refs`,
+//! `relations` and `withholds` are optional; `format` and `revision` default. Everything else a document carries
 //! is **kept** — see [`PlanningFrontmatter::extra`] — because a store that silently drops the
 //! field somebody's own tooling writes is a store they will stop trusting after the first round
 //! trip.
@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use aep_domain::artifact::{
     Artifact, ArtifactId, ArtifactKind, ArtifactLocation, ArtifactMetadata, ArtifactRelation,
-    ArtifactStatus, ArtifactVersion, RelationKind,
+    ArtifactStatus, ArtifactVersion, ExternalRef, RelationKind,
 };
 use aep_domain::error::{ValidationCode, ValidationError, ValidationErrors};
 use aep_domain::evidence::EvidenceKind;
@@ -84,6 +84,13 @@ pub struct RawPlanningFrontmatter {
     /// Free-form labels.
     #[serde(default)]
     pub tags: BTreeSet<String>,
+    /// Records of the same work elsewhere, as written.
+    ///
+    /// [`Node`] and not [`ExternalRef`] so a malformed entry is reported beside every other defect
+    /// in the document rather than aborting the parse of the whole file — the reason `withholds` is
+    /// text here too.
+    #[serde(default)]
+    pub refs: Vec<Node>,
     /// Its outgoing edges, each a single-entry mapping such as `{derived_from: epic:passwordless}`.
     #[serde(default)]
     pub relations: Vec<ArtifactRelation>,
@@ -122,6 +129,12 @@ pub struct PlanningFrontmatter {
     pub owner: Option<String>,
     /// Free-form labels.
     pub tags: BTreeSet<String>,
+    /// Records of the same work in systems AEP does not own, such as `jira:DEV-630`.
+    ///
+    /// **The join a body paragraph cannot carry.** A team adopting this already has a tracker, and
+    /// a ticket id written into prose is invisible to `protocol artifact list` and unchecked by
+    /// anything. Here it is a field, so it can be filtered on and refused when it is malformed.
+    pub refs: BTreeSet<ExternalRef>,
     /// Its outgoing edges.
     pub relations: Vec<ArtifactRelation>,
     /// The evidence kind this artifact is stopping anybody from producing.
@@ -164,6 +177,7 @@ impl PlanningFrontmatter {
             summary: None,
             owner: None,
             tags: BTreeSet::new(),
+            refs: BTreeSet::new(),
             relations: Vec::new(),
             withholds: None,
             revision: default_revision(),
@@ -231,6 +245,7 @@ impl PlanningFrontmatter {
             summary: self.summary.clone(),
             owner: self.owner.clone(),
             tags: self.tags.clone(),
+            refs: self.refs.clone(),
             extra: self.extra.clone(),
         };
         artifact
@@ -253,6 +268,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(self.summary.is_some())
             + usize::from(self.owner.is_some())
             + usize::from(!self.tags.is_empty())
+            + usize::from(!self.refs.is_empty())
             + usize::from(!self.relations.is_empty())
             + usize::from(self.withholds.is_some())
             + self.extra.len();
@@ -273,6 +289,9 @@ impl serde::Serialize for PlanningFrontmatter {
         }
         if !self.tags.is_empty() {
             map.serialize_entry("tags", &self.tags)?;
+        }
+        if !self.refs.is_empty() {
+            map.serialize_entry("refs", &self.refs)?;
         }
         if !self.relations.is_empty() {
             map.serialize_entry("relations", &self.relations)?;
@@ -351,6 +370,27 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             },
         };
 
+        // Every entry is attempted, so a document with two malformed references reports both.
+        let mut refs = BTreeSet::new();
+        for (index, node) in raw.refs.iter().enumerate() {
+            match ExternalRef::from_node(node) {
+                Ok(reference) => {
+                    refs.insert(reference);
+                }
+                Err(error) => errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("planning.refs[{index}]"),
+                        error.to_string(),
+                    )
+                    .with_hint(
+                        "a reference is `{provider: jira, reference: DEV-630}`, or the shorthand \
+                         `jira:DEV-630`",
+                    ),
+                ),
+            }
+        }
+
         errors.into_result(Self {
             id: raw.id,
             kind: raw.kind,
@@ -359,6 +399,7 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             summary: raw.summary,
             owner: raw.owner,
             tags: raw.tags,
+            refs,
             relations: raw.relations,
             withholds,
             revision: raw.revision,
@@ -414,6 +455,66 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![ValidationCode::UndeclaredEvidenceKind],
             "{errors}"
+        );
+    }
+
+    #[test]
+    fn both_written_forms_of_a_reference_read_and_only_the_mapping_is_written_back() {
+        // The shorthand exists because it is what a person types and what `--ref` takes; the
+        // mapping is what the file carries, so a document written by hand and one written by the
+        // CLI are the same bytes after one write.
+        let front = PlanningFrontmatter::try_from(raw(&format!(
+            "{MINIMAL}refs:\n  - jira:DEV-630\n  - provider: zendesk\n    reference: \"8812\"\n"
+        )))
+        .expect("both forms are accepted");
+        assert_eq!(
+            front
+                .refs
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            vec!["jira:DEV-630".to_owned(), "zendesk:8812".to_owned()],
+            "a set, so the order is the provider's and not the file's"
+        );
+        assert_eq!(
+            front.to_artifact("story/passkey-login.md").metadata.refs,
+            front.refs,
+            "and they reach the artifact the graph validates"
+        );
+
+        let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
+        assert!(written.contains("provider: jira"), "{written}");
+        assert!(
+            !written.contains("jira:DEV-630"),
+            "the shorthand is an input form, not an output one: {written}"
+        );
+        let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
+        assert_eq!(again.refs, front.refs);
+        assert!(
+            !again.extra.contains_key("refs"),
+            "a named key must not also land in `extra`: {:?}",
+            again.extra
+        );
+    }
+
+    #[test]
+    fn every_malformed_reference_is_reported_and_not_just_the_first() {
+        // Invariant 3 again, and the case it matters for: a migration writes twenty of these at
+        // once, and a validator that stopped at the first would be run twenty times.
+        let errors = PlanningFrontmatter::try_from(raw(&format!(
+            "{MINIMAL}refs:\n  - DEV-630\n  - jira:has a space\n  - provider: jira\n"
+        )))
+        .expect_err(
+            "a key with no provider, a key with whitespace and a mapping with no \
+                     reference are all refused",
+        );
+        assert_eq!(errors.len(), 3, "{errors}");
+        assert!(
+            errors
+                .as_slice()
+                .iter()
+                .all(|error| error.location.starts_with("planning.refs[")),
+            "each names the entry it came from: {errors}"
         );
     }
 

@@ -198,6 +198,8 @@ pub(crate) enum ReverseCommand {
     Openapi(OpenapiArgs),
     /// Read what the repository's own history says, without writing anything.
     History(HistoryArgs),
+    /// Join the tracker keys in the history and the plan's prose to the references it holds.
+    Tickets(TicketsArgs),
 }
 
 /// Inputs for a scan.
@@ -278,6 +280,7 @@ pub(crate) fn run(command: ReverseCommand) -> Result<ExitCode> {
         ReverseCommand::Init(args) => init(&args),
         ReverseCommand::Openapi(args) => openapi(&args),
         ReverseCommand::History(args) => history(&args),
+        ReverseCommand::Tickets(args) => tickets_report(&args),
     }
 }
 
@@ -2779,4 +2782,178 @@ fn render_history(bundle: &HistoryBundle) {
             age.subject
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tickets
+// ---------------------------------------------------------------------------------------------
+
+/// The format version of what `reverse tickets` prints.
+const TICKETS_VERSION: &str = "aep.reverse-tickets/1";
+
+/// Inputs for joining a repository's tracker keys to its plan.
+#[derive(Debug, Args)]
+pub(crate) struct TicketsArgs {
+    /// Where the plan is.
+    #[command(flatten)]
+    store: crate::planning::StoreLocation,
+    /// The repository whose history to read. The current directory when absent.
+    ///
+    /// Not `--root`: that is `StoreLocation`'s, and it names the document tree the lifecycles come
+    /// from, which is frequently a different repository from the one being read.
+    #[arg(long, default_value = ".")]
+    repository: PathBuf,
+    /// The system the keys belong to, such as `jira`.
+    ///
+    /// **Required, and not guessed.** `DEV-630` says which project inside a tracker and nothing at
+    /// all about which tracker; a default here would put every key in the same system on the say-so
+    /// of a shape, and the whole point of a reference is that it resolves.
+    #[arg(long)]
+    provider: String,
+    /// How many of the most-mentioned keys to consider.
+    #[arg(long, default_value_t = 100)]
+    top: usize,
+    /// How to render the result.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+}
+
+/// One artifact that names a tracker key it does not reference.
+#[derive(Debug, Serialize)]
+struct Proposal {
+    /// The artifact naming it.
+    artifact: String,
+    /// The key, such as `DEV-630`.
+    key: String,
+    /// Where in the artifact the key was read: `title`, `summary` or `body`.
+    read_from: &'static str,
+    /// The command that would record it.
+    command: String,
+}
+
+/// What `reverse tickets` found.
+#[derive(Debug, Serialize)]
+struct TicketReport {
+    /// The bundle format, so a consumer can refuse a shape it does not know.
+    version: &'static str,
+    /// References the store already holds, `provider:key`.
+    held: Vec<String>,
+    /// Artifacts naming a key in prose that no `refs:` entry records.
+    proposed: Vec<Proposal>,
+    /// Keys the history mentions that no artifact names at all.
+    ///
+    /// Read this second. A key with commits behind it and no plan item is either work nobody wrote
+    /// down or a tracker the repository stopped using, and the two are told apart by the date.
+    unclaimed: Vec<Ticket>,
+}
+
+/// `protocol reverse tickets`
+///
+/// **Proposes, never writes.** The join is a text match — a key spelled in a title, a summary or a
+/// body — and a text match is a good enough reason to show somebody a command and not a good enough
+/// reason to run it. `reverse init` draws the same line for the same reason.
+fn tickets_report(args: &TicketsArgs) -> Result<ExitCode> {
+    let provider = aep_domain::ids::ProviderId::new(&args.provider)
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let root = args
+        .repository
+        .canonicalize()
+        .with_context(|| format!("cannot read {}", args.repository.display()))?;
+    if git(&root, &["rev-parse", "--is-inside-work-tree"]).is_none() {
+        bail!(
+            "{} is not a Git working tree, so it has no history to read",
+            root.display()
+        );
+    }
+
+    let documents = crate::planning::documents_of(&args.store)?;
+    let mut held: Vec<String> = Vec::new();
+    let mut proposed: Vec<Proposal> = Vec::new();
+    let mut named: BTreeSet<String> = BTreeSet::new();
+
+    for (id, front, body) in &documents {
+        for reference in &front.refs {
+            held.push(reference.to_string());
+            named.insert(reference.reference.clone());
+        }
+        // Title, then summary, then body: the first place a key is found is the one reported, so a
+        // key written in all three produces one row rather than three.
+        for (read_from, text) in [
+            ("title", front.title.clone().unwrap_or_default()),
+            ("summary", front.summary.clone().unwrap_or_default()),
+            ("body", body.clone()),
+        ] {
+            for key in tracker_ids(&text) {
+                named.insert(key.clone());
+                if front
+                    .refs
+                    .iter()
+                    .any(|reference| reference.reference == key)
+                    || proposed
+                        .iter()
+                        .any(|earlier| earlier.artifact == *id && earlier.key == key)
+                {
+                    continue;
+                }
+                proposed.push(Proposal {
+                    artifact: id.clone(),
+                    key: key.clone(),
+                    read_from,
+                    command: format!("protocol artifact set {id} --ref {provider}:{key}"),
+                });
+            }
+        }
+    }
+    held.sort();
+    held.dedup();
+    proposed.sort_by(|left, right| {
+        left.artifact
+            .cmp(&right.artifact)
+            .then_with(|| left.key.cmp(&right.key))
+    });
+
+    let unclaimed: Vec<Ticket> = tickets(&root, args.top)
+        .into_iter()
+        .filter(|ticket| !named.contains(&ticket.id))
+        .collect();
+
+    let report = TicketReport {
+        version: TICKETS_VERSION,
+        held,
+        proposed,
+        unclaimed,
+    };
+
+    match args.format {
+        Format::Text => {
+            outln!(
+                "{} reference(s) already recorded, {} proposed, {} key(s) in the history that no \
+                 artifact names",
+                report.held.len(),
+                report.proposed.len(),
+                report.unclaimed.len()
+            );
+            if !report.proposed.is_empty() {
+                outln!();
+                outln!("proposed — each read from the artifact's own prose, none written:");
+                for proposal in &report.proposed {
+                    outln!("  {}  ({})", proposal.command, proposal.read_from);
+                }
+            }
+            if !report.unclaimed.is_empty() {
+                outln!();
+                outln!("in the history, not in the plan:");
+                for ticket in &report.unclaimed {
+                    outln!(
+                        "  {}  {} commit(s), last {}",
+                        ticket.id,
+                        ticket.commits,
+                        ticket.last_seen
+                    );
+                }
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(&report, args.format)?,
+    }
+    Ok(ExitCode::SUCCESS)
 }

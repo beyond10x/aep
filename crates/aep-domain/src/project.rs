@@ -22,10 +22,12 @@
 //! contracts under the JSON Schema registry named by `schemas`. Each remains in its own validated
 //! format; the project file only locates them.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::error::{ValidationCode, ValidationError, ValidationErrors};
+use crate::ids::ProviderId;
 use crate::version::{ProfileVersionedRef, ProtocolRef};
 
 /// The default name of the directory a project keeps its machine-readable metadata in.
@@ -287,6 +289,32 @@ pub struct ProjectConfig {
     /// Where the plan is kept.
     #[serde(default)]
     pub store: StoreConfig,
+    /// How to build a link for each external system an artifact may reference.
+    ///
+    /// ```yaml
+    /// providers:
+    ///   jira: https://acme.atlassian.net/browse/{key}
+    ///   zendesk: https://acme.zendesk.com/agent/tickets/{key}
+    /// ```
+    ///
+    /// **Configured once, not written per artifact.** A `refs:` entry carries a provider and a key
+    /// and no URL, because a URL repeated into every file is the same fact copied N times and it is
+    /// the copies that are wrong after a tracker migration. A provider nobody declares here is not
+    /// an error: the reference still names the record, it just renders as text.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub providers: BTreeMap<ProviderId, String>,
+}
+
+impl ProjectConfig {
+    /// The URL for `reference`, when this project declares how to build one.
+    ///
+    /// `None` for an undeclared provider, deliberately: an approximate link is worse than none,
+    /// because a reader cannot tell by looking that it lands in the wrong place.
+    pub fn link(&self, reference: &crate::artifact::ExternalRef) -> Option<String> {
+        self.providers
+            .get(&reference.provider)
+            .map(|pattern| pattern.replace(PROVIDER_KEY, &reference.reference))
+    }
 }
 
 impl fmt::Display for ProjectConfig {
@@ -591,7 +619,13 @@ pub struct RawProjectConfig {
     /// Where the plan is kept. Absent means `markdown`.
     #[serde(default)]
     pub store: Option<RawStore>,
+    /// A URL pattern per external system, each carrying `{key}`.
+    #[serde(default)]
+    pub providers: BTreeMap<String, String>,
 }
+
+/// The placeholder a provider's URL pattern must carry.
+pub const PROVIDER_KEY: &str = "{key}";
 
 /// Serde default for the format version.
 fn default_version() -> String {
@@ -628,6 +662,39 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             },
             None => ProtocolSource::default(),
         };
+        // A pattern with no `{key}` in it is the mistake that produces a link to a tracker's front
+        // page for every artifact — it opens, so nobody notices it is the wrong page. Refused here
+        // rather than at render time, where nothing is looking.
+        let mut providers = BTreeMap::new();
+        for (name, pattern) in raw.providers {
+            let provider = match ProviderId::new(&name) {
+                Ok(provider) => provider,
+                Err(error) => {
+                    errors.push(ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("project.providers.{name}"),
+                        error.to_string(),
+                    ));
+                    continue;
+                }
+            };
+            if !pattern.contains(PROVIDER_KEY) {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("project.providers.{name}"),
+                        format!(
+                            "`{pattern}` carries no `{PROVIDER_KEY}`, so every reference would \
+                             render the same link"
+                        ),
+                    )
+                    .with_hint("write the pattern as `https://…/browse/{key}`"),
+                );
+                continue;
+            }
+            providers.insert(provider, pattern);
+        }
+
         let defaults = ProjectLocalPaths::default();
         let paths = ProjectLocalPaths {
             artifacts: raw.artifacts.unwrap_or(defaults.artifacts),
@@ -681,6 +748,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             protocols,
             paths,
             store,
+            providers,
         };
         errors.into_result(config)
     }

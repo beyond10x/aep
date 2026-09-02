@@ -9,6 +9,7 @@
         "title": "Golden epic",
         "path": "epic/golden.md",
         "relations": [],
+        "refs": [],
         "blocked_by": []
       },
       {
@@ -27,6 +28,7 @@
             "target": "story:golden-one"
           }
         ],
+        "refs": [],
         "blocked_by": []
       },
       {
@@ -41,6 +43,7 @@
             "target": "epic:golden"
           }
         ],
+        "refs": [],
         "blocked_by": []
       }
     ]
@@ -60,6 +63,7 @@
             "target": "epic:golden"
           }
         ],
+        "refs": [],
         "blocked_by": []
       }
     ]

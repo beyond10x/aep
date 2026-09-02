@@ -56,6 +56,14 @@
         "null"
       ]
     },
+    "providers": {
+      "description": "A URL pattern per external system, each carrying `{key}`.",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "schemas": {
       "description": "Where project-owned JSON Schema contracts are.",
       "default": null,

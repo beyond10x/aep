@@ -67,7 +67,9 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactRelation, ArtifactStatus};
+use aep_domain::artifact::{
+    ArtifactId, ArtifactKind, ArtifactRelation, ArtifactStatus, ExternalRef,
+};
 use aep_domain::node::Node;
 use entity_core::{Decision, DomainEvent, EntityInstance};
 use entity_store::{
@@ -321,6 +323,12 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
             Value::Array(frontmatter.tags.iter().cloned().map(Value::from).collect()),
         );
     }
+    if !frontmatter.refs.is_empty() {
+        fields.insert(
+            "refs".to_owned(),
+            serde_json::to_value(&frontmatter.refs).unwrap_or(Value::Null),
+        );
+    }
     if !frontmatter.relations.is_empty() {
         fields.insert(
             "relations".to_owned(),
@@ -390,6 +398,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
     let owner = text("owner")?;
 
     let tags = tags_of(&mut fields).map_err(refuse)?;
+    let refs = refs_of(&mut fields).map_err(refuse)?;
 
     let relations: Vec<ArtifactRelation> = match fields.remove("relations") {
         None => Vec::new(),
@@ -432,6 +441,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             summary,
             owner,
             tags,
+            refs,
             relations,
             withholds,
             revision: instance.revision,
@@ -503,6 +513,26 @@ fn tags_of(fields: &mut Map<String, Value>) -> Result<BTreeSet<String>, String> 
             })
             .collect(),
         Some(other) => Err(format!("the `tags` field is {other}, not a list")),
+    }
+}
+
+/// The `refs` field as the frontmatter's set, or nothing.
+///
+/// Both written forms are accepted here for the same reason they are accepted in a file: this is
+/// the door a second backend's records come through, and one of them will have stored the
+/// shorthand.
+fn refs_of(fields: &mut Map<String, Value>) -> Result<BTreeSet<ExternalRef>, String> {
+    match fields.remove("refs") {
+        None => Ok(BTreeSet::new()),
+        Some(Value::Array(refs)) => refs
+            .into_iter()
+            .map(|value| {
+                let node: Node = serde_json::from_value(value)
+                    .map_err(|error| format!("a reference: {error}"))?;
+                ExternalRef::from_node(&node).map_err(|error| error.to_string())
+            })
+            .collect(),
+        Some(other) => Err(format!("the `refs` field is {other}, not a list")),
     }
 }
 

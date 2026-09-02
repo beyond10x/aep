@@ -2625,6 +2625,110 @@ fn show_body_only_prints_the_bytes_body_from_would_write_back() {
     );
 }
 
+/// **A reference reaches the file, and `list --ref` finds it there.**
+///
+/// The bug this exists against: `set --ref` printed `refs set (revision 2)` and wrote nothing. Every
+/// field the write path carries is named in one list in the projection, `refs` was not in it, and
+/// the CLI reported the change it had asked for rather than the change that landed. So this asserts
+/// on the *file* and on a *query*, never on what the verb said about itself.
+#[test]
+fn a_reference_reaches_the_file_and_a_query_finds_it() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-planning-refs");
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let document = store.join("task/assertion-verification.md");
+
+    let set = protocol(&[
+        "artifact",
+        "set",
+        "task:assertion-verification",
+        "--ref",
+        "jira:DEV-630",
+        "--ref",
+        "zendesk:8812",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&set), 0, "{}", stderr(&set));
+
+    let text = std::fs::read_to_string(&document).expect("readable");
+    assert!(text.contains("- provider: jira"), "{text}");
+    assert!(text.contains("reference: DEV-630"), "{text}");
+    assert!(
+        text.contains("reference: \'8812\'"),
+        "the key stays text: {text}"
+    );
+
+    // A second identical write is not a write: the revision the store counts is the count of
+    // changes it made, and `--ref` on a reference already held made none.
+    let again = protocol(&[
+        "artifact",
+        "set",
+        "task:assertion-verification",
+        "--ref",
+        "jira:DEV-630",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&again), 0, "{}", stderr(&again));
+    assert!(
+        stdout(&again).contains("already reads that way"),
+        "{}",
+        stdout(&again)
+    );
+
+    let found = protocol(&[
+        "artifact",
+        "list",
+        "--ref",
+        "jira:DEV-630",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&found), 0, "{}", stderr(&found));
+    assert!(
+        stdout(&found).contains("task:assertion-verification"),
+        "{}",
+        stdout(&found)
+    );
+    let missing = protocol(&[
+        "artifact",
+        "list",
+        "--ref",
+        "jira:DEV-999",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&missing), 0, "{}", stderr(&missing));
+    assert!(
+        stdout(&missing).trim().is_empty(),
+        "a reference nothing holds matches nothing: {}",
+        stdout(&missing)
+    );
+
+    // A key with no provider is refused rather than matching nothing, because an empty list reads
+    // as *this ticket is not in the plan* and that is a different fact.
+    let bare = protocol(&[
+        "artifact", "list", "--ref", "DEV-630", "--store", at, "--root", tree,
+    ]);
+    assert_ne!(code(&bare), 0, "{}", stdout(&bare));
+    assert!(
+        stderr(&bare).contains("provider:reference"),
+        "{}",
+        stderr(&bare)
+    );
+}
+
 /// **One frontmatter field has a verb, and four of them are refused by name.**
 ///
 /// `ed007513#209-#274` spent about twenty-five turns writing documents with heredocs because no

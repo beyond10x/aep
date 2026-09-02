@@ -1436,6 +1436,180 @@ pub enum FreshnessPolicy {
     BoundToDependencySet,
 }
 
+/// A pointer at the same work in a system AEP does not own.
+///
+/// Almost every team adopting this already has a tracker, and the story in the store and the ticket
+/// in Jira are one piece of work with two records. Without somewhere to write that down the join
+/// lives in a body paragraph, where `protocol artifact list` cannot reach it and a rename in either
+/// system breaks it silently.
+///
+/// **It is a reference, not an identity.** [`ArtifactId`] stays the name of the artifact; a key such
+/// as `DEV-630` is unique inside one tracker, changes when work moves between systems, and two
+/// organisations can hold it for different things — the same reasoning
+/// [`EntityId`](crate::entity::EntityId) gives for refusing `AUTH-142` as identity.
+///
+/// The document form is a mapping, and the shorthand is accepted on the way in:
+///
+/// ```yaml
+/// refs:
+///   - provider: jira
+///     reference: DEV-630
+///   - jira:DEV-425          # the same thing, written short
+/// ```
+///
+/// **No URL field.** A link is `provider` plus `reference` plus the base the organisation configures
+/// once in `.engineering/project.yaml`; a URL written per artifact is the same fact copied into
+/// every file, and it is the copy that is wrong after a tracker migration.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExternalRef {
+    /// The system holding the record, such as `jira` or `zendesk`.
+    pub provider: ProviderId,
+    /// Its key in that system, such as `DEV-630`.
+    pub reference: String,
+}
+
+impl ExternalRef {
+    /// Builds a reference.
+    pub fn new(provider: ProviderId, reference: impl Into<String>) -> Result<Self, ParseError> {
+        let reference = reference.into();
+        Self::check(&reference)?;
+        Ok(Self {
+            provider,
+            reference,
+        })
+    }
+
+    /// Refuses a key that is empty or carries whitespace.
+    ///
+    /// Deliberately nothing stricter. Tracker keys are `DEV-630`, `SUP#8812`, a Zendesk integer and
+    /// a UUID, and a pattern tight enough to describe Jira would refuse three of those. What is
+    /// refused is what cannot be round-tripped or pasted into a URL.
+    fn check(reference: &str) -> Result<(), ParseError> {
+        if reference.is_empty() {
+            return Err(ParseError::shape(
+                "artifact.refs[].reference",
+                "a key in the external system",
+                "an empty string",
+            ));
+        }
+        if reference.chars().any(char::is_whitespace) {
+            return Err(ParseError::identifier(
+                "reference",
+                reference,
+                "a key must not contain whitespace".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Parses the document form: `{provider: jira, reference: DEV-630}` or `jira:DEV-630`.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        match node {
+            Node::Text(text) => Self::parse(text),
+            Node::Map(entries) => {
+                let Some(provider) = entries.get("provider").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.refs[]",
+                        "a mapping with `provider` and `reference`, such as `{provider: jira, \
+                         reference: DEV-630}`",
+                        "a mapping with no `provider`",
+                    ));
+                };
+                let Some(reference) = entries.get("reference").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.refs[]",
+                        "a mapping with `provider` and `reference`, such as `{provider: jira, \
+                         reference: DEV-630}`",
+                        "a mapping with no `reference`",
+                    ));
+                };
+                Self::new(ProviderId::new(provider)?, reference)
+            }
+            other => Err(ParseError::shape(
+                "artifact.refs[]",
+                "`provider:reference`, or a mapping carrying both",
+                other.type_name(),
+            )),
+        }
+    }
+
+    /// Parses the shorthand `provider:reference`.
+    ///
+    /// Split at the **first** colon, so a reference that carries one of its own survives.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        let Some((provider, reference)) = value.split_once(':') else {
+            return Err(ParseError::identifier(
+                "reference",
+                value,
+                "write it as `provider:reference`, such as `jira:DEV-630`".to_owned(),
+            ));
+        };
+        Self::new(ProviderId::new(provider)?, reference)
+    }
+
+    /// Renders this reference back into document form.
+    pub fn to_node(&self) -> Node {
+        Node::Map(
+            [
+                (
+                    "provider".to_owned(),
+                    Node::Text(self.provider.as_str().to_owned()),
+                ),
+                ("reference".to_owned(), Node::Text(self.reference.clone())),
+            ]
+            .into(),
+        )
+    }
+}
+
+impl fmt::Display for ExternalRef {
+    /// The shorthand, which is what a person types and what a refusal should quote back.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.provider, self.reference)
+    }
+}
+
+impl FromStr for ExternalRef {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ExternalRef {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExternalRef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ExternalRef {
+    fn schema_name() -> String {
+        "ExternalRef".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schema.metadata().description = Some(
+            "A record of the same work in a system AEP does not own, written as a mapping with \
+             `provider` and `reference` or as the shorthand `provider:reference`."
+                .to_owned(),
+        );
+        schema.metadata().examples = vec![
+            serde_json::json!({ "provider": "jira", "reference": "DEV-630" }),
+            serde_json::json!("zendesk:8812"),
+        ];
+        schema.into()
+    }
+}
+
 /// Human-facing description of an artifact.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
@@ -1454,6 +1628,12 @@ pub struct ArtifactMetadata {
     /// Free-form labels.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub tags: BTreeSet<String>,
+    /// Records of the same work in systems AEP does not own.
+    ///
+    /// A set, so the same ticket named twice is named once and the order in a file is the order a
+    /// reader gets — the same promise `tags` makes, for the same reason.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub refs: BTreeSet<ExternalRef>,
     /// Anything else the organisation wants to carry.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty", flatten)]
     pub extra: BTreeMap<String, Node>,

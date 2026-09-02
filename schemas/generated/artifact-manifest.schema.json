@@ -192,6 +192,14 @@
             "null"
           ]
         },
+        "refs": {
+          "description": "Records of the same work in systems AEP does not own.\n\nA set, so the same ticket named twice is named once and the order in a file is the order a reader gets — the same promise `tags` makes, for the same reason.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          },
+          "uniqueItems": true
+        },
         "summary": {
           "description": "One-line summary.",
           "type": [
@@ -397,6 +405,16 @@
         "verification_record",
         "specification_record",
         "ess_conformance_result"
+      ]
+    },
+    "ExternalRef": {
+      "description": "A record of the same work in a system AEP does not own, written as a mapping with `provider` and `reference` or as the shorthand `provider:reference`.",
+      "examples": [
+        {
+          "provider": "jira",
+          "reference": "DEV-630"
+        },
+        "zendesk:8812"
       ]
     },
     "FreshnessPolicy": {

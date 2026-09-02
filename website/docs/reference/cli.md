@@ -173,6 +173,7 @@ and the worst case is a report you disagree with.
 |---|---|
 | `aep reverse scan [root] [--format text\|yaml\|json]` | reads a repository and reports what it already says about itself — headings, declared toolchains, gates, test layout — as an `aep.reverse-scan/1` bundle. **Writes nothing** |
 | `aep reverse history [root] [--recent 500] [--top 15] [--format …]` | reads what the repository's own git history says: who touches what, which areas are dormant, where change concentrates. **Writes nothing** |
+| `aep reverse tickets --provider <name> [--repository .] [--top 100] [--format …]` | joins the tracker keys in the history and in the plan's prose to the references the store holds: what is recorded, what an `artifact set --ref` would record, and which keys no artifact names. **Writes nothing** |
 | `aep reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists; standard output when `--out` is absent |
 | `aep reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
 

@@ -9,6 +9,27 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-09-02
+
+### Added
+
+- Planning artifacts carry `refs:` — a record of the same work in a system AEP does not own, such as
+  `jira:DEV-630`. Written as a mapping (`{provider: jira, reference: DEV-630}`) and accepted as the
+  shorthand; `aep artifact new --ref`, `aep artifact set --ref/--unref` and
+  `aep artifact list --ref <provider>:<key>` are the doors. A ticket id kept in a body paragraph is
+  invisible to every verb that knows what an artifact is, which is what this closes.
+- `.engineering/project.yaml` takes a `providers:` map — one URL pattern per external system, each
+  carrying `{key}`. `aep artifact show` renders the link beside the reference; a provider with no
+  pattern renders as text rather than as a guessed URL. The pattern is configured once instead of
+  copied into every artifact, so a tracker migration is one edit.
+- `aep reverse tickets` joins the tracker keys a repository's history mentions to the plan: it
+  reports the references already held, proposes an `artifact set --ref` line for every key an
+  artifact spells in its own prose without recording, and lists the keys the history carries that no
+  artifact names. It writes nothing — the join is a text match, which is reason enough to show a
+  command and not to run one.
+- `aep artifact list --format json` and `board --format json` carry `refs` on every entry, always
+  written and `[]` when empty, so a board can be joined to a tracker without parsing prose.
+
 ## [0.40.3] — 2026-09-01
 
 ### Fixed

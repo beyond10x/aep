@@ -40,7 +40,7 @@ use aep_contract::error::CommandError;
 use aep_contract::query::{QueryService, RelationQuery};
 use aep_contract::testing::block_on;
 use aep_contract::QueryConsistency;
-use aep_domain::artifact::ArtifactId;
+use aep_domain::artifact::{ArtifactId, ExternalRef};
 use aep_domain::command::Command;
 use aep_domain::entity::{ActorRef, EntityId, EntityRef};
 use aep_domain::ids::IdempotencyKey;
@@ -696,6 +696,16 @@ fn apply_body(frontmatter: &mut PlanningFrontmatter, body: &Node) {
                 Node::Text(text) => Some(text.clone()),
                 _ => None,
             })
+            .collect();
+    }
+    // External references, same rule again. An entry that does not parse is dropped rather than
+    // written through, for the reason `withholds` above gives: the frontmatter's own validator
+    // would refuse the file this command just wrote, and a command that leaves an unreadable
+    // document behind is worse than one that leaves a field unchanged.
+    if let Some(Node::Seq(refs)) = fields.get("refs") {
+        frontmatter.refs = refs
+            .iter()
+            .filter_map(|node| ExternalRef::from_node(node).ok())
             .collect();
     }
 }

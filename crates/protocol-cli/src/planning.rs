@@ -29,7 +29,7 @@ use std::process::ExitCode;
 use aep_backend_markdown::{MarkdownStore, PlanningDocument, PlanningFrontmatter, StoreReport};
 use aep_domain::artifact::{
     ArtifactGraph, ArtifactId, ArtifactKind, ArtifactLifecycle, ArtifactRef, ArtifactStatus,
-    RelationKind,
+    ExternalRef, RelationKind,
 };
 use aep_project::project::project_directory;
 use anyhow::{bail, Context, Result};
@@ -991,6 +991,12 @@ pub(crate) enum ArtifactCommand {
         /// A label to remove. Repeat for more than one.
         #[arg(long = "untag", allow_hyphen_values = true)]
         untag: Vec<String>,
+        /// A record of the same work elsewhere to add, written `<provider>:<reference>`.
+        #[arg(long = "ref", value_name = "PROVIDER:REFERENCE")]
+        reference: Vec<String>,
+        /// A record of the same work elsewhere to remove, written `<provider>:<reference>`.
+        #[arg(long = "unref", value_name = "PROVIDER:REFERENCE")]
+        unreference: Vec<String>,
         /// Not a field this verb changes; `move` does, and records why.
         #[arg(long, hide = true, allow_hyphen_values = true)]
         status: Option<String>,
@@ -1039,6 +1045,12 @@ pub(crate) enum ArtifactCommand {
         /// Only this status.
         #[arg(long)]
         status: Option<String>,
+        /// Only artifacts carrying this external reference, written `<provider>:<reference>`.
+        ///
+        /// The question a tracker asks back: *what, here, is this ticket*. Without it a ticket id
+        /// written into a body is findable by `grep` and by nothing that knows what an artifact is.
+        #[arg(long = "ref", value_name = "PROVIDER:REFERENCE")]
+        reference: Option<String>,
     },
     /// Show what is blocked, grouped by the single thing blocking it.
     ///
@@ -1239,6 +1251,12 @@ pub(crate) struct NewArgs {
     /// A label. Repeat for more than one.
     #[arg(long = "tag")]
     tag: Vec<String>,
+    /// A record of the same work elsewhere, written `<provider>:<reference>`, such as
+    /// `jira:DEV-630`.
+    ///
+    /// Split at the **first** colon, so a key carrying one of its own survives.
+    #[arg(long = "ref", value_name = "PROVIDER:REFERENCE")]
+    reference: Vec<String>,
     /// An edge, written `<relation>:<artifact-id>`, such as `derived_from:epic:passwordless`.
     ///
     /// Split at the **first** colon, which is unambiguous because no relation name contains one
@@ -1310,6 +1328,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             owner,
             tag,
             untag,
+            reference,
+            unreference,
             status,
             revision,
             identity,
@@ -1323,6 +1343,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
                 owner,
                 tag,
                 untag,
+                reference,
+                unreference,
             },
             &[
                 ("status", status),
@@ -1340,7 +1362,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             store,
             kind,
             status,
-        } => list(&store, kind.as_deref(), status.as_deref()),
+            reference,
+        } => list(&store, kind.as_deref(), status.as_deref(), reference.as_deref()),
         ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
@@ -1699,6 +1722,11 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     frontmatter.summary.clone_from(&args.summary);
     frontmatter.owner.clone_from(&args.owner);
     frontmatter.tags = args.tag.iter().cloned().collect();
+    for value in &args.reference {
+        frontmatter.refs.insert(
+            ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?,
+        );
+    }
     if let Some(value) = &args.withholds {
         frontmatter.withholds = Some(
             aep_domain::evidence::EvidenceKind::parse(value)
@@ -2667,6 +2695,10 @@ struct Fields {
     tag: Vec<String>,
     /// Labels to remove.
     untag: Vec<String>,
+    /// External references to add.
+    reference: Vec<String>,
+    /// External references to remove.
+    unreference: Vec<String>,
 }
 
 impl Fields {
@@ -2677,6 +2709,8 @@ impl Fields {
             && self.owner.is_none()
             && self.tag.is_empty()
             && self.untag.is_empty()
+            && self.reference.is_empty()
+            && self.unreference.is_empty()
     }
 }
 
@@ -2723,7 +2757,7 @@ fn set(
     if fields.nothing_named() {
         anyhow::bail!(
             "nothing to set; name a field, such as `--title`, `--summary`, `--owner`, `--tag` or \
-             `--untag`"
+             `--untag`, `--ref` or `--unref`"
         );
     }
     let id = artifact_id(id)?;
@@ -2778,6 +2812,25 @@ fn set(
         }
     }
 
+    if !fields.reference.is_empty() || !fields.unreference.is_empty() {
+        let mut refs = front.refs.clone();
+        for value in &fields.reference {
+            refs.insert(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
+        }
+        for value in &fields.unreference {
+            refs.remove(&ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
+        }
+        if refs != front.refs {
+            changes.push((
+                "refs".to_owned(),
+                aep_domain::node::Node::Seq(
+                    refs.iter().map(aep_domain::artifact::ExternalRef::to_node).collect(),
+                ),
+            ));
+            named.push("refs".to_owned());
+        }
+    }
+
     if changes.is_empty() {
         outln!("{id} already reads that way; nothing to do");
         return Ok(ExitCode::SUCCESS);
@@ -2827,7 +2880,10 @@ fn set(
 ///
 /// Lifted so the two cannot drift: a field added here appears in the terminal and in the browser at
 /// once, and a field added to only one of them is the defect this shape exists to prevent.
-fn shown_from(stored: &aep_backend_markdown::StoredDocument) -> Shown {
+fn shown_from(
+    stored: &aep_backend_markdown::StoredDocument,
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> Shown {
     let frontmatter = &stored.document.frontmatter;
     Shown {
         id: frontmatter.id.to_string(),
@@ -2843,6 +2899,17 @@ fn shown_from(stored: &aep_backend_markdown::StoredDocument) -> Shown {
             .map(|relation| ShownRelation {
                 relation: relation.kind.as_str(),
                 target: relation.target.to_string(),
+            })
+            .collect(),
+        refs: frontmatter
+            .refs
+            .iter()
+            .map(|reference| ShownRef {
+                reference: reference.to_string(),
+                // A link only where the project said how to build one. An undeclared provider
+                // renders as its shorthand and nothing else, because a link that opens the wrong
+                // page cannot be told from a right one by looking at it.
+                url: providers.and_then(|config| config.link(reference)),
             })
             .collect(),
         withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
@@ -2866,7 +2933,11 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
         .documents
         .get(&id)
         .with_context(|| opened.missing(&id))?;
-    let shown = shown_from(stored);
+    // The configuration only, and a failure to read it is not a failure to show an artifact: a
+    // store handed to `--store` outside any project has no project.yaml, and printing the
+    // references without their links is the right answer there.
+    let config = aep_project::project::load_config(&args.repository_root()).ok();
+    let shown = shown_from(stored, config.as_ref());
 
     // The bytes and nothing else — no labels, no blank line, no newline this verb added. What
     // `body --from` would write straight back, which is what makes *read it, edit it, hand it
@@ -2894,6 +2965,16 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
                 if let Some(value) = value {
                     rows.push(vec![label.to_owned(), value.to_owned()]);
                 }
+            }
+            // One row per reference and a label on the first only, the way `relations` below
+            // reads: a joined list of URLs is a line nobody can click a single item out of.
+            for (index, reference) in shown.refs.iter().enumerate() {
+                let label = if index == 0 { "refs" } else { "" };
+                let rendered = match &reference.url {
+                    Some(url) => format!("{}  {url}", reference.reference),
+                    None => reference.reference.clone(),
+                };
+                rows.push(vec![label.to_owned(), rendered]);
             }
             if !shown.tags.is_empty() {
                 rows.push(vec!["tags".to_owned(), shown.tags.join(", ")]);
@@ -2923,11 +3004,16 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
 }
 
 /// `protocol artifact list`
-fn list(args: &StoreArgs, kind: Option<&str>, status: Option<&str>) -> Result<ExitCode> {
+fn list(
+    args: &StoreArgs,
+    kind: Option<&str>,
+    status: Option<&str>,
+    reference: Option<&str>,
+) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let ladders = ladders_or_none(args);
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
-    let listed = select(&opened.report, &blocked, kind, status)?;
+    let listed = select(&opened.report, &blocked, kind, status, reference)?;
 
     match args.format {
         Format::Text => crate::print_table(
@@ -2970,7 +3056,7 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let ladders = ladders_or_none(args);
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
-    let listed = select(&opened.report, &blocked, kind, None)?;
+    let listed = select(&opened.report, &blocked, kind, None, None)?;
     let columns = columns_for(&listed, ladders.lifecycles());
 
     match args.format {
@@ -4844,6 +4930,7 @@ fn select(
     blocked: &BTreeMap<ArtifactId, Vec<Blocking>>,
     kind: Option<&str>,
     status: Option<&str>,
+    reference: Option<&str>,
 ) -> Result<Vec<Listed>> {
     let kind = match kind {
         Some(value) => {
@@ -4853,6 +4940,15 @@ fn select(
     };
     let status = match status {
         Some(value) => Some(parse_status(value)?),
+        None => None,
+    };
+    // Parsed once, and refused here rather than silently matching nothing: `--ref DEV-630` with no
+    // provider is a filter that would quietly return an empty list, which reads as *this ticket is
+    // not in the plan* and is a different fact.
+    let reference = match reference {
+        Some(value) => {
+            Some(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?)
+        }
         None => None,
     };
 
@@ -4868,6 +4964,9 @@ fn select(
                 && status
                     .as_ref()
                     .is_none_or(|wanted| &frontmatter.status == wanted)
+                && reference
+                    .as_ref()
+                    .is_none_or(|wanted| frontmatter.refs.contains(wanted))
         })
         .map(|stored| Listed {
             id: stored.document.frontmatter.id.to_string(),
@@ -4884,6 +4983,13 @@ fn select(
                     relation: relation.kind.as_str(),
                     target: relation.target.to_string(),
                 })
+                .collect(),
+            refs: stored
+                .document
+                .frontmatter
+                .refs
+                .iter()
+                .map(ExternalRef::to_string)
                 .collect(),
             blocked_by: blocked
                 .get(&stored.document.frontmatter.id)
@@ -4975,6 +5081,12 @@ pub(crate) struct Listed {
     /// disappears is a key every consumer has to write a branch for. Same reasoning as `blocked_by`
     /// beside it, and the same shape `show` prints.
     relations: Vec<ShownRelation>,
+    /// Its external references as `provider:reference`, `[]` for an artifact that has none.
+    ///
+    /// The shorthand rather than the mapping, because this is a listing: a consumer joining a board
+    /// to a tracker wants one string to match on, and `provider` is the first thing before a colon
+    /// in it. Always written, never omitted when empty, for the reason `relations` beside it is.
+    refs: Vec<String>,
     /// Every blocker still in force against it, empty for an artifact nothing stops.
     ///
     /// Always written, never omitted when empty: `active` and `active but parked on a credential`
@@ -5046,11 +5158,23 @@ pub(crate) struct Shown {
     owner: Option<String>,
     tags: Vec<String>,
     relations: Vec<ShownRelation>,
+    /// Its external references, each with the link this project builds for it when it declares one.
+    refs: Vec<ShownRef>,
     /// The evidence kind this artifact is stopping anybody from producing.
     withholds: Option<String>,
     revision: u64,
     /// The markdown body, exactly as the store holds it.
     body: String,
+}
+
+/// One external reference, as `show` prints it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ShownRef {
+    /// The shorthand, `provider:reference`.
+    reference: String,
+    /// Where it resolves, when `.engineering/project.yaml` declares a pattern for the provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
 }
 
 /// One outgoing edge, as `show` prints it.
@@ -5363,8 +5487,30 @@ pub(crate) fn board_of(location: &StoreLocation, kind: Option<&str>) -> Result<V
     let opened = open(location, false)?;
     let ladders = ladders_or_none(&args);
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
-    let listed = select(&opened.report, &blocked, kind, None)?;
+    let listed = select(&opened.report, &blocked, kind, None, None)?;
     Ok(columns_for(&listed, ladders.lifecycles()))
+}
+
+/// Every document in the store as `(id, frontmatter, body)`, for a caller outside this module.
+///
+/// The whole document rather than a [`Listed`] row: the one caller is `reverse tickets`, which
+/// reads prose looking for a tracker key, and a listing carries no prose.
+pub(crate) fn documents_of(
+    location: &StoreLocation,
+) -> Result<Vec<(String, aep_backend_markdown::PlanningFrontmatter, String)>> {
+    let opened = open(location, false)?;
+    Ok(opened
+        .report
+        .documents
+        .values()
+        .map(|stored| {
+            (
+                stored.document.frontmatter.id.to_string(),
+                stored.document.frontmatter.clone(),
+                stored.document.body.clone(),
+            )
+        })
+        .collect())
 }
 
 /// One artifact: its fields, its edges and its body.
@@ -5376,7 +5522,8 @@ pub(crate) fn shown_of(location: &StoreLocation, id: &str) -> Result<Shown> {
         .documents
         .get(&id)
         .with_context(|| opened.missing(&id))?;
-    Ok(shown_from(stored))
+    let config = aep_project::project::load_config(&location.repository_root()).ok();
+    Ok(shown_from(stored, config.as_ref()))
 }
 
 /// Where one artifact may go next, what each rung costs, and what it already holds.
