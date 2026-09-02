@@ -510,7 +510,8 @@ fn authoritative_gate_contract(root: &Path) -> Result<()> {
         fs::read_to_string(&ci_path).with_context(|| format!("reading {}", ci_path.display()))?;
     let release = fs::read_to_string(&release_path)
         .with_context(|| format!("reading {}", release_path.display()))?;
-    authoritative_gate_text(&ci, &release)
+    authoritative_gate_text(&ci, &release)?;
+    release_asset_text(&release)
 }
 
 /// The text-level contract is intentionally exact: a renamed or wrapped command is a reviewable
@@ -534,6 +535,58 @@ fn authoritative_gate_text(ci: &str, release: &str) -> Result<()> {
             "{RELEASE_WORKFLOW} must reuse {CI_WORKFLOW}; release verification cannot carry a \
              second gate"
         );
+    }
+    Ok(())
+}
+
+/// Holds every cut release to the binary platforms and verification record promised to adopters.
+fn release_asset_text(release: &str) -> Result<()> {
+    const TARGETS: [&str; 4] = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+    ];
+    for target in TARGETS {
+        let matrix_entry = format!("- target: {target}");
+        if !release.lines().any(|line| line.trim() == matrix_entry) {
+            bail!("{RELEASE_WORKFLOW} must build release target `{target}`");
+        }
+    }
+    if release.to_ascii_lowercase().contains("windows") {
+        bail!("{RELEASE_WORKFLOW} may publish only the declared Linux and macOS targets");
+    }
+    for required in [
+        "workflow_dispatch:",
+        "cargo build --release --locked -p protocol-cli --target ${{ matrix.target }}",
+        "target/${TARGET}/release/aep",
+        "target/${TARGET}/release/protocol",
+        "actions/upload-artifact@",
+        "actions/download-artifact@",
+        "SHA256SUMS",
+        "sha256sum --check SHA256SUMS",
+    ] {
+        if !release.contains(required) {
+            bail!("{RELEASE_WORKFLOW} is missing release-asset control `{required}`");
+        }
+    }
+    for line in release.lines().map(str::trim) {
+        let Some(action) = line.strip_prefix("- uses: ") else {
+            continue;
+        };
+        if action.starts_with("./") {
+            continue;
+        }
+        let Some((_, revision_with_comment)) = action.split_once('@') else {
+            bail!("{RELEASE_WORKFLOW} has an unversioned action `{action}`");
+        };
+        let revision = revision_with_comment
+            .split_whitespace()
+            .next()
+            .unwrap_or_default();
+        if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            bail!("{RELEASE_WORKFLOW} action `{action}` is not pinned to a commit");
+        }
     }
     Ok(())
 }
@@ -1838,8 +1891,8 @@ mod tests {
 mod currency_tests {
     use super::{
         authoritative_gate_contract, authoritative_gate_text, currency, gate_steps,
-        generated_status_region_inventory, hold_region, splice_generated, workspace_root,
-        SITE_STATUS_BEGIN, SITE_STATUS_END,
+        generated_status_region_inventory, hold_region, release_asset_text, splice_generated,
+        workspace_root, RELEASE_WORKFLOW, SITE_STATUS_BEGIN, SITE_STATUS_END,
     };
 
     #[test]
@@ -1865,6 +1918,28 @@ mod currency_tests {
         assert!(
             authoritative_gate_text(ci, &copied_release).is_err(),
             "release verification cannot stop reusing CI's gate"
+        );
+    }
+
+    #[test]
+    fn removing_a_release_target_or_checksum_is_drift() {
+        let path = workspace_root().join(RELEASE_WORKFLOW);
+        let release = std::fs::read_to_string(path).expect("reading the release workflow");
+        release_asset_text(&release).expect("the release asset contract holds");
+
+        let missing_target = release.replace(
+            "- target: aarch64-apple-darwin",
+            "- target: aarch64-unknown-linux-musl",
+        );
+        assert!(
+            release_asset_text(&missing_target).is_err(),
+            "removing Apple Silicon must be detected"
+        );
+
+        let missing_checksum = release.replace("sha256sum --check SHA256SUMS", "ls -l");
+        assert!(
+            release_asset_text(&missing_checksum).is_err(),
+            "a checksum file that is never verified must be detected"
         );
     }
 
