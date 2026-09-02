@@ -3,7 +3,7 @@ id: aep/second-adopter-0.42.0
 repository: aep
 publishedAt: 2026-09-02T18:18:01Z
 title: aep doctor, classified ambiguities in the templates, and the install path that exists
-summary: AEP 0.42.0 answers the second adopter's report — aep doctor reports in six ok/warn/fail lines whether a checkout is ready to be planned in, the epic, story and specification templates seed an Ambiguities section that classifies each gap as inferable or requires-stakeholder-input, and the README and site name beyond10x/agentplugins as where the plugins come from.
+summary: AEP 0.42.0 answers the second adopter's report — aep doctor says in six ok/warn/fail lines whether a checkout is ready to be planned in, the epic, story and specification templates seed an Ambiguities section classifying each gap as inferable or requires-stakeholder-input, and the README and site name beyond10x/agentplugins as where the plugins come from.
 kind: capability
 impact: significant
 source:
