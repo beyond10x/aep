@@ -714,6 +714,99 @@ fn the_board_groups_the_fixture_into_status_columns() {
     }
 }
 
+/// The report says which specification was checked, at which digest, by what, how many scenarios
+/// ran and when the run finished. Typed by hand those become a source and an instant somebody
+/// chose, and the instant is the one that matters: a caller who supplies it can supply *now* for a
+/// run that happened last week.
+#[test]
+fn a_conformance_report_is_read_into_the_record_rather_than_typed_at_it() {
+    let store = scratch("aep-evidence-from-report");
+    let repository = root();
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let report =
+        repository.join("crates/protocol-cli/tests/fixtures/conformance-reports/passed.json");
+
+    let recorded = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        report.to_str().expect("a printable path"),
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    let printed = stdout(&recorded);
+    assert!(printed.contains("ess_conformance recorded"), "{printed}");
+    assert!(
+        printed.contains("billing-reference 0.3.0 against billing/v3"),
+        "the source names what was held to what: {printed}"
+    );
+    assert!(
+        printed.contains("13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861"),
+        "and at which revision of it, which is the part that makes the record worth anything: \
+         {printed}"
+    );
+
+    let history = stdout(&protocol(&[
+        "artifact",
+        "history",
+        "story:passkey-login",
+        "--store",
+        at,
+    ]));
+    assert!(history.contains("ess_conformance"), "{history}");
+}
+
+#[test]
+fn a_report_of_no_scenarios_is_refused_because_it_asserts_nothing() {
+    let store = scratch("aep-evidence-empty-report");
+    let repository = root();
+    copy_tree(&repository.join(FIXTURE), &store);
+    let report =
+        repository.join("crates/protocol-cli/tests/fixtures/conformance-reports/empty.json");
+
+    let refused = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        report.to_str().expect("a printable path"),
+        "--store",
+        printable(&store),
+    ]);
+    assert_ne!(code(&refused), 0, "a suite that ran nothing was recorded");
+    assert!(
+        stderr(&refused).contains("asserts nothing"),
+        "{}",
+        stderr(&refused)
+    );
+}
+
+#[test]
+fn reading_a_record_and_typing_one_are_not_combined() {
+    let refused = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        "somewhere.json",
+        "--kind",
+        "test_result",
+        "--source",
+        "task check",
+        "--store",
+        FIXTURE,
+    ]);
+    assert_ne!(code(&refused), 0);
+    assert!(
+        stderr(&refused).contains("cannot be used with"),
+        "a record is read or written, and half of each is neither: {}",
+        stderr(&refused)
+    );
+}
+
 #[test]
 fn the_board_renders_as_a_markdown_page_a_site_can_publish_unedited() {
     let output = protocol(&[

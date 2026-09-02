@@ -1182,13 +1182,28 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// What the evidence is about, such as `story:passkey-login`.
         id: String,
+        /// An `ess-conformance-report/1` to read the record out of, instead of typing it.
+        ///
+        /// The report already states which specification was checked, at which digest, by which
+        /// implementation, how many scenarios ran and when the run finished. Typed by hand those
+        /// four become a kind, a source and an instant somebody chose — and the instant is the one
+        /// that matters, because a caller who supplies it can supply *now* for a run that happened
+        /// last week, which is exactly what evidence horizons exist to catch.
+        ///
+        /// Refuses a report of no scenarios, for the reason `contract evidence` refuses a run that
+        /// checked nothing: a suite that ran nothing also failed nothing, so recording it would
+        /// discharge the obligation on the strength of a run that asserted nothing.
+        #[arg(long, value_name = "REPORT", conflicts_with_all = ["kind", "source", "at"])]
+        from: Option<PathBuf>,
         /// The kind of observation, such as `test_result` or `approval`.
-        #[arg(long)]
-        kind: String,
+        #[arg(long, required_unless_present = "from")]
+        kind: Option<String>,
         /// Where it came from — `task check`, a CI run URL, a person's name.
-        #[arg(long)]
-        source: String,
+        #[arg(long, required_unless_present = "from")]
+        source: Option<String>,
         /// Where to go and look: a URL, a run id, a file path.
+        ///
+        /// With `--from` this defaults to the report's own path, which is where to go and look.
         #[arg(long = "ref", value_name = "REFERENCE")]
         reference: Option<String>,
         /// When it was observed, ISO-8601. Defaults to now, read at the edge.
@@ -1409,18 +1424,12 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
         ArtifactCommand::CatchUp { store } => catch_up(&store),
-        ArtifactCommand::Evidence {
-            store,
-            id,
-            kind,
-            source,
-            reference,
-            at,
-        } => record_evidence(
+        ArtifactCommand::Evidence { store, id, from, kind, source, reference, at } => record_evidence(
             &store,
             &id,
-            &kind,
-            &source,
+            from.as_deref(),
+            kind.as_deref(),
+            source.as_deref(),
             reference.as_deref(),
             at.as_deref(),
         ),
@@ -4292,26 +4301,150 @@ fn evidence_through_a_command(
 
 /// command that recorded evidence *and* moved the artifact would make the evidence a formality of
 /// the move rather than a thing that existed before it.
+/// One evidence record, however it was arrived at.
+struct Recorded {
+    kind: aep_domain::evidence::EvidenceKind,
+    source: String,
+    reference: Option<String>,
+    at: String,
+}
+
+/// The four fields, read out of an `ess-conformance-report/1`.
+///
+/// Every one of them is the report's own. Nothing here decides a verdict, adjusts a count or
+/// supplies a time: a red run is recorded as readily as a green one, because whether a red record
+/// permits a move is the ladder's decision and not this verb's.
+fn recorded_from_report(path: &Path) -> Result<Recorded> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading {}", path.display()))?;
+    let report: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not JSON", path.display()))?;
+
+    let format = report.get("format").and_then(serde_json::Value::as_str);
+    if format != Some("ess-conformance-report/1") {
+        anyhow::bail!(
+            "{} says `format: {}` and this reads an `ess-conformance-report/1`. The format is the \
+             document's own field, so a report of another kind says so here rather than having \
+             its numbers read as conformance",
+            path.display(),
+            format.unwrap_or("(none)")
+        );
+    }
+
+    let total = report
+        .get("scenarios_total")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+    if total == 0 {
+        anyhow::bail!(
+            "{} reports no scenarios, so it asserts nothing: a suite that ran nothing also failed \
+             nothing. Recording it would discharge whatever the ladder asks for on the strength of \
+             a run that checked no part of the specification. Synthesize the suite against a model \
+             that obliges something, or record nothing",
+            path.display()
+        );
+    }
+
+    let specification = report
+        .get("specification")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("an unnamed specification");
+    let implementation = report
+        .get("implementation")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("an unnamed implementation");
+    let digest = report
+        .get("spec_digest")
+        .and_then(serde_json::Value::as_str)
+        .with_context(|| {
+            format!(
+                "{} states no `spec_digest`, and without it the record says that some \
+                 implementation passed some suite",
+                path.display()
+            )
+        })?;
+    let failed = report
+        .get("scenarios_failed")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+
+    // The source names all four things a reader needs to go and check: what was held to what, at
+    // which revision of it, and how it went.
+    let source = format!(
+        "ess conform run: {implementation} against {specification} at {digest}, {failed} of \
+         {total} scenario(s) failed"
+    );
+
+    // The report's own instant, not this process's. A caller who supplies the time can supply
+    // `now` for a run that happened last week, which is the back-dating by omission evidence
+    // horizons exist to catch.
+    let at = report
+        .get("completed_at")
+        .and_then(serde_json::Value::as_i64)
+        .map(|millis| millis.to_string())
+        .with_context(|| {
+            format!(
+                "{} states no `completed_at`, and this verb will not stamp a run it did not watch",
+                path.display()
+            )
+        })?;
+
+    Ok(Recorded {
+        kind: aep_domain::evidence::EvidenceKind::EssConformance,
+        source,
+        reference: Some(path.display().to_string()),
+        at,
+    })
+}
+
 fn record_evidence(
     args: &StoreArgs,
     id: &str,
-    kind: &str,
-    source: &str,
+    from: Option<&Path>,
+    kind: Option<&str>,
+    source: Option<&str>,
     reference: Option<&str>,
     at: Option<&str>,
 ) -> Result<ExitCode> {
     let id = artifact_id(id)?;
-    // Built rather than wrapped in a `context`, which would put the advice in front of the list it
-    // is advice about. The refusal has to **end** with the two kinds, because that is the part a
-    // reader who did not find their word in fifteen names still needs.
-    let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
-        .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
-    if source.trim().is_empty() {
-        anyhow::bail!(
-            "evidence needs a source; write where it came from, such as --source 'task check'"
-        );
-    }
-    let at = at.map_or_else(now_at_the_edge, str::to_owned);
+
+    let recorded = if let Some(report) = from {
+        let mut read = recorded_from_report(report)?;
+        // `--ref` still wins: the report's path is where this process found it, and a CI run URL
+        // is where anybody else can.
+        if let Some(reference) = reference {
+            read.reference = Some(reference.to_owned());
+        }
+        read
+    } else {
+        let (Some(kind), Some(source)) = (kind, source) else {
+            anyhow::bail!(
+                "evidence needs a `--kind` and a `--source`, or a `--from` to read both out of"
+            );
+        };
+        // Built rather than wrapped in a `context`, which would put the advice in front of the
+        // list it is advice about. The refusal has to **end** with the two kinds, because that is
+        // the part a reader who did not find their word in fifteen names still needs.
+        let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
+            .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
+        if source.trim().is_empty() {
+            anyhow::bail!(
+                "evidence needs a source; write where it came from, such as --source 'task check'"
+            );
+        }
+        Recorded {
+            kind,
+            source: source.to_owned(),
+            reference: reference.map(ToOwned::to_owned),
+            at: at.map_or_else(now_at_the_edge, str::to_owned),
+        }
+    };
+    let Recorded {
+        kind,
+        source,
+        reference,
+        at,
+    } = recorded;
 
     let opened = open(&args.location, true)?;
     // The artifact must exist. Evidence about nothing is not evidence, and a typo'd id would
@@ -4331,8 +4464,8 @@ fn record_evidence(
         opened.backend()?,
         &id,
         kind,
-        source,
-        reference,
+        &source,
+        reference.as_deref(),
         instant(&at)?,
     )?;
 
