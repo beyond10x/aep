@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:review-value-table
 kind: story
-status: draft
+status: implemented
 title: One table says, per critic, what its findings changed and what its verdicts cost
 summary: 'aep artifact review-value: per reviewer, reviews, findings, no-op, fixed, escalated, cost or unknown; counts only, no score.'
 owner: protocol
@@ -14,7 +14,7 @@ relations:
 - depends_on: story:review-outcome-field
 - depends_on: story:structured-findings-on-review-result
 - serves: vision:O6
-revision: 1
+revision: 4
 ---
 # Story: One table says, per critic, what its findings changed and what its verdicts cost
 

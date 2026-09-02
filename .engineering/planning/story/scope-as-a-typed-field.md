@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:scope-as-a-typed-field
 kind: story
-status: draft
+status: implemented
 title: A story's scope is a typed field a verb sets
 summary: 'aep artifact scope <id> --add <path> [--inferred] writes a scope: list in frontmatter; show and list --format json return it as data.'
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:wave-derivation
 - serves: vision:O2
 - informed_by: story:a-story-records-where-it-lands
-revision: 1
+revision: 4
 ---
 # Story: A story's scope is a typed field a verb sets
 

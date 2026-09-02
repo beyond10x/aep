@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: epic:review-facts
 kind: epic
-status: draft
+status: implemented
 title: Reviews leave facts the next review and the operator can compute over
 summary: Structured findings on review-result, a findings ledger verb, a recorded outcome per review, and a counts-only review-value table.
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - serves: vision:O2
 - serves: vision:O6
-revision: 1
+revision: 4
 ---
 # Epic: Reviews leave facts the next review and the operator can compute over
 

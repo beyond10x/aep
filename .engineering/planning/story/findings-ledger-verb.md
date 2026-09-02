@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:findings-ledger-verb
 kind: story
-status: draft
+status: implemented
 title: aep artifact findings says what the second review found that the first did not
 summary: Carried, new, resolved between two review-results by signature (reviewer, file, category, normalised message, line +-3).
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:review-facts
 - depends_on: story:structured-findings-on-review-result
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 # Story: `aep artifact findings` says what the second review found that the first did not
 

@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:review-outcome-field
 kind: story
-status: draft
+status: implemented
 title: 'A review-result records what happened to it: no-op, fixed or escalated'
 summary: A review_outcome evidence record referencing the review-result, refused when the review does not review the artifact.
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:review-facts
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 # Story: A review-result records what happened to it: no-op, fixed or escalated
 

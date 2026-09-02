@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:artifact-waves-verb
 kind: story
-status: draft
+status: implemented
 title: aep artifact waves derives waves and names collisions, and exits 2 on a cycle
 summary: Waves from scope and depends_on; collisions per pair per path; unassessed stories never placed; read-only; byte-exact on a fixture store.
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:wave-derivation
 - depends_on: story:scope-as-a-typed-field
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 # Story: `aep artifact waves` derives waves and names collisions, and exits 2 on a cycle
 

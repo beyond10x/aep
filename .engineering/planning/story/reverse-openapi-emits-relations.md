@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:reverse-openapi-emits-relations
 kind: story
-status: draft
+status: implemented
 title: aep reverse openapi drafts relations from $ref and id fields, UNMAPPED where cardinality is unknown
 summary: A $ref or an <x>_id property becomes a references relation in the ess/1 draft; ownership and unknown cardinality are marked UNMAPPED, never guessed.
 owner: protocol
@@ -12,7 +12,7 @@ tags:
 relations:
 - informed_by: epic:adopter-feedback-round-2
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 # Story: `aep reverse openapi` drafts `relations:` from `$ref` and id fields, `UNMAPPED:` where cardinality is unknown
 

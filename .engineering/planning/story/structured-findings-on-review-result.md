@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:structured-findings-on-review-result
 kind: story
-status: draft
+status: implemented
 title: A review-result carries its findings as data, not only prose
 summary: A fenced findings block parsed at new, returned by show --format json, reported by validate when absent.
 owner: protocol
@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:review-facts
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 # Story: A review-result carries its findings as data, not only prose
 
