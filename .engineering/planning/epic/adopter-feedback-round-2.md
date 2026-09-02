@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: epic:adopter-feedback-round-2
 kind: epic
-status: active
+status: implemented
 title: The second adopter, and the install path that broke under them
 summary: 'Round 2 of adopter defects: the 0.14.0 install instruction points at a repository with no marketplace, templates have no home for a classified ambiguity, and nothing says whether a checkout is ready to be planned in.'
 relations:
 - decomposes: initiative:the-repo-governs-itself
 - informed_by: epic:adopter-feedback-round-1
-revision: 3
+revision: 4
 ---
 # Epic: The second adopter, and the install path that broke under them
 

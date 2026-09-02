@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:install-instruction-names-agentplugins
 kind: story
-status: active
+status: implemented
 title: The install instruction names the marketplace that exists
 relations:
 - decomposes: epic:adopter-feedback-round-2
 - serves: vision:O3
-revision: 3
+revision: 4
 ---
 # Story: The install instruction names the marketplace that exists
 

@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:aep-doctor-preflight
 kind: story
-status: active
+status: implemented
 title: aep doctor says whether this checkout is ready to be planned in
 relations:
 - decomposes: epic:adopter-feedback-round-2
 - serves: vision:O3
-revision: 3
+revision: 4
 ---
 # Story: `aep doctor` says whether this checkout is ready to be planned in
 

@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:templates-hold-ambiguities
 kind: story
-status: active
+status: implemented
 title: Templates hold an ambiguity as a classified entry
 relations:
 - decomposes: epic:adopter-feedback-round-2
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 # Story: Templates hold an ambiguity as a classified entry
 
