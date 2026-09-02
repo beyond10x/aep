@@ -39,7 +39,8 @@ otherwise, and a broad grant counts: `allow: [network.read]` is refused unless
 
 ```text
 test_result  static_analysis  contract_result  property_test_result  deployment_result
-metric_observation  health_observation  approval  diff  artifact  review  verification  specification
+metric_observation  health_observation  approval  diff  artifact  review  review_outcome
+verification  specification
 ```
 
 **Verifiers**:

@@ -37,6 +37,9 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use crate::Format;
 
+/// How many days a review may go without a recorded outcome before `validate` says so.
+pub(crate) const OUTCOME_DAYS: u64 = 14;
+
 /// The directory inside `.engineering` that holds the plan.
 const PLANNING_DIRECTORY: &str = "planning";
 
@@ -1173,18 +1176,90 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// What the evidence is about, such as `story:passkey-login`.
         id: String,
-        /// The kind of observation, such as `test_result` or `approval`.
+        /// The kind of observation, such as `test_result`, `approval` or `review_outcome`.
+        ///
+        /// `review_outcome` is the one kind with two flags of its own: it records what became of a
+        /// review — `--review <review-result-id> --outcome no-op|fixed|escalated` — against the
+        /// artifact that was reviewed. A review is immutable once recorded, so what happened next
+        /// cannot be an edit to it and is this record instead.
         #[arg(long)]
         kind: String,
         /// Where it came from — `task check`, a CI run URL, a person's name.
+        ///
+        /// Required, except on a `review_outcome`, where the review it names is where it came from
+        /// and repeating the id as a source would be ceremony.
         #[arg(long)]
-        source: String,
+        source: Option<String>,
+        /// The review this record answers. Only on `--kind review_outcome`.
+        ///
+        /// Refused when that review does not `reviews` the artifact: a record joining a verdict to
+        /// work it was never about would put the outcome on somebody else's lens.
+        #[arg(long, value_name = "REVIEW-RESULT-ID")]
+        review: Option<String>,
+        /// What became of that review. Only on `--kind review_outcome`.
+        #[arg(long, value_enum)]
+        outcome: Option<OutcomeArg>,
         /// Where to go and look: a URL, a run id, a file path.
         #[arg(long = "ref", value_name = "REFERENCE")]
         reference: Option<String>,
         /// When it was observed, ISO-8601. Defaults to now, read at the edge.
         #[arg(long, value_name = "INSTANT")]
         at: Option<String>,
+    },
+    /// Say what the second review of an artifact found that the first did not.
+    ///
+    /// Three lists — `carried`, `new`, `resolved` — over the findings blocks of the two most recent
+    /// `review-result` records that `reviews` the artifact, or of the two `--from` and `--to` name.
+    ///
+    /// **The question a second attack cannot answer by itself.** The wave's budget is a sentence
+    /// ("after two attacks, hand it over"), and what makes a third round worth anything is whether
+    /// the second found the first's findings again or found different ones — which is a comparison
+    /// of two prose reports by eye unless something computes it.
+    ///
+    /// A finding is the same finding when its file, its category and its message match — the message
+    /// lowercased with its whitespace collapsed — and its line is within three. **The reviewer is
+    /// not part of that.** Two critics finding one defect have found one defect, and a ledger keyed
+    /// by who said it would report every second opinion as new work; the reviewer is printed beside
+    /// the row instead, which is where a reader can use it.
+    ///
+    /// Always exits 0. This is a report, and an exit code that moved with the counts would make
+    /// every converging loop a red build.
+    Findings {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact the reviews are of, such as `epic:review-facts`.
+        id: String,
+        /// The earlier review. Without it, the second-most-recent review of the artifact.
+        #[arg(long, value_name = "REVIEW-RESULT-ID", requires = "to")]
+        from: Option<String>,
+        /// The later review. Without it, the most recent review of the artifact.
+        #[arg(long, value_name = "REVIEW-RESULT-ID", requires = "from")]
+        to: Option<String>,
+    },
+    /// Say, per reviewer, what their findings changed and what their verdicts cost.
+    ///
+    /// One row per reviewer — the `review-result`'s `owner`, or a `reviewer:` key its document
+    /// carries — with how many reviews they recorded, how many findings those reviews state, how
+    /// many of them were recorded `no-op`, `fixed` or `escalated`, and what the runs behind them
+    /// cost where a run manifest named by one of the review's `--ref` values said. A cost nobody
+    /// recorded prints as `unknown` and never as `0`: a run that was free and a run whose cost
+    /// nobody wrote down are different facts.
+    ///
+    /// **No score, no ranking and no percentage**, and that is a rule rather than an omission —
+    /// the same position `protocol eval matrix` takes and for the same reason. A scalar would have
+    /// to fold *nobody recorded an outcome* into either *it changed something* or *it changed
+    /// nothing*, and each of those is a claim the store does not hold. Which lenses stay is the
+    /// operator's decision; this is the table it is made on.
+    ///
+    /// Always exits 0. A table is a report.
+    ReviewValue {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// Only reviews recorded on or after this date, `YYYY-MM-DD`.
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
     },
     /// Check the whole plan: every file, every edge, every status.
     ///
@@ -1205,6 +1280,18 @@ pub(crate) enum ArtifactCommand {
         /// refuse. Without this flag the output and the exit code are exactly what they were.
         #[arg(long)]
         strict: bool,
+        /// How many days a review may go without a recorded outcome before it is reported.
+        ///
+        /// A `review-result` at least this old with no `review_outcome` record naming it is
+        /// reported and **not** failed on, in the class above: a review nobody has acted on yet is
+        /// work outstanding, not a broken store. Fourteen days by default, which is a judgement and
+        /// not a discovery — long enough that a review filed on a Friday is not overdue on Monday,
+        /// short enough that a lens nobody ever acts on shows up inside a sprint.
+        ///
+        /// This is the one line of this verb that is a function of when it was run: the age is
+        /// read against the clock **here**, at the edge, and the store decides nothing about it.
+        #[arg(long, value_name = "DAYS", default_value_t = OUTCOME_DAYS)]
+        outcome_within: u64,
     },
     /// List the artifact kinds, marking the ones that are planning rather than output.
     ///
@@ -1294,6 +1381,32 @@ pub(crate) struct NewArgs {
     withholds: Option<String>,
 }
 
+/// What became of a review, as `--outcome` spells it.
+///
+/// A `ValueEnum` and not a parsed string, so `--help` prints the three words and a fourth is
+/// refused by `clap` before the store is opened. The domain owns the vocabulary
+/// ([`aep_domain::review::ReviewOutcome`]); this is only how a command line spells it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum OutcomeArg {
+    /// Nothing changed because of the review.
+    #[value(name = "no-op")]
+    NoOp,
+    /// Somebody addressed what it found.
+    Fixed,
+    /// It went to a person to decide.
+    Escalated,
+}
+
+impl From<OutcomeArg> for aep_domain::review::ReviewOutcome {
+    fn from(value: OutcomeArg) -> Self {
+        match value {
+            OutcomeArg::NoOp => Self::NoOp,
+            OutcomeArg::Fixed => Self::Fixed,
+            OutcomeArg::Escalated => Self::Escalated,
+        }
+    }
+}
+
 /// How to render the plan's graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum PlanningGraphFormat {
@@ -1304,6 +1417,12 @@ pub(crate) enum PlanningGraphFormat {
 }
 
 /// `protocol artifact`
+///
+/// One arm per verb, and **exhaustive on purpose**: this table is the only thing that says every
+/// verb the family declares is answered, so a variant added without a handler must fail to compile
+/// here rather than fall through a catch-all. Splitting it in two would buy the line count and cost
+/// exactly that, because the second half would need a wildcard the compiler stops checking.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
     match command {
         ArtifactCommand::New(args) => create(&args),
@@ -1380,7 +1499,11 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
-        ArtifactCommand::Validate { store, strict } => validate(&store, strict),
+        ArtifactCommand::Validate {
+            store,
+            strict,
+            outcome_within,
+        } => validate(&store, strict, outcome_within),
         ArtifactCommand::History { store, id } => history(&store, &id),
         ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
@@ -1390,16 +1513,29 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             id,
             kind,
             source,
+            review,
+            outcome,
             reference,
             at,
         } => record_evidence(
             &store,
             &id,
-            &kind,
-            &source,
-            reference.as_deref(),
-            at.as_deref(),
+            &EvidenceRequest {
+                kind: &kind,
+                source: source.as_deref(),
+                review: review.as_deref(),
+                outcome: outcome.map(Into::into),
+                reference: reference.as_deref(),
+                at: at.as_deref(),
+            },
         ),
+        ArtifactCommand::Findings {
+            store,
+            id,
+            from,
+            to,
+        } => findings_ledger(&store, &id, from.as_deref(), to.as_deref()),
+        ArtifactCommand::ReviewValue { store, since } => review_value(&store, since.as_deref()),
         ArtifactCommand::Kinds { store } => kinds(&store),
         ArtifactCommand::Relations { store } => relations(&store),
         ArtifactCommand::Lifecycle { store, kind } => lifecycle(&store, &kind),
@@ -1617,6 +1753,23 @@ fn entity_body(
             ),
         );
     }
+    // The same shape `set --ref` writes, and it was missing here: every reference given at `new`
+    // was accepted, echoed and dropped. On a `review-result` that is the only door — `set` is
+    // refused on an immutable kind — so a review could never carry the run manifest
+    // `protocol artifact review-value` reads its cost out of, and every cost it printed was
+    // `unknown` for a reason that had nothing to do with the manifest.
+    if !front.refs.is_empty() {
+        data.insert(
+            "refs".to_owned(),
+            Node::Seq(
+                front
+                    .refs
+                    .iter()
+                    .map(aep_domain::artifact::ExternalRef::to_node)
+                    .collect(),
+            ),
+        );
+    }
     if let Some(withholds) = front.withholds {
         data.insert("withholds".to_owned(), Node::from(withholds.as_str()));
     }
@@ -1762,6 +1915,17 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
         Some(from) => read_body(from)?,
         None => template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title)),
     };
+    // **Refused here, before anything is written.** A `review-result` cannot be edited after the
+    // fact, so a block that is wrong on the way in is wrong for ever — and a store holding a
+    // review whose findings nothing can read is the state `story:structured-findings-on-review-
+    // result` exists to prevent. The refusal carries the line, because sending somebody back to a
+    // document to find a defect this code has already located is a refusal that does half its job.
+    aep_backend_markdown::findings::parse(&body).map_err(|error| {
+        anyhow::anyhow!(
+            "{error}. Entries are `{{file, line, category, severity, verdict, origin, message}}`; \
+             `file`, `category`, `severity` and `message` are required"
+        )
+    })?;
     let document = PlanningDocument::new(frontmatter, body);
 
     // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
@@ -2927,8 +3091,30 @@ fn shown_from(
             .collect(),
         withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
         revision: frontmatter.revision,
+        // Always an array, `[]` where the body carries no block and `[]` where it carries one this
+        // build cannot read — `validate` is what reports the second, because `show` printing an
+        // error in place of a document would make an unreadable block hide the document it is in.
+        findings: aep_backend_markdown::findings::parse(&stored.document.body).unwrap_or_default(),
+        outcomes: Vec::new(),
         body: stored.document.body.clone(),
     }
+}
+
+/// `2 (1 blocker, 1 note)` — how many findings, and how they are weighted.
+fn severity_breakdown(findings: &[aep_backend_markdown::findings::Finding]) -> String {
+    use aep_backend_markdown::findings::Severity;
+
+    let counted: Vec<String> = Severity::ALL
+        .iter()
+        .filter_map(|severity| {
+            let count = findings
+                .iter()
+                .filter(|finding| finding.severity == *severity)
+                .count();
+            (count > 0).then(|| format!("{count} {severity}"))
+        })
+        .collect();
+    format!("{} ({})", findings.len(), counted.join(", "))
 }
 
 fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
@@ -2950,7 +3136,14 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
     // store handed to `--store` outside any project has no project.yaml, and printing the
     // references without their links is the right answer there.
     let config = aep_project::project::load_config(&args.repository_root()).ok();
-    let shown = shown_from(stored, config.as_ref());
+    let mut shown = shown_from(stored, config.as_ref());
+    // On the review, not on the artifact it is about. A reader holding a review id is asking
+    // whether that lens ever changed anything, and the record that answers it is filed against the
+    // reviewed artifact — so a verb that only showed what is filed *here* would answer *no* to a
+    // question the store holds the answer to.
+    if stored.document.frontmatter.kind == ArtifactKind::ReviewResult {
+        shown.outcomes = outcomes_of(&opened, &id);
+    }
 
     // The bytes and nothing else — no labels, no blank line, no newline this verb added. What
     // `body --from` would write straight back, which is what makes *read it, edit it, hand it
@@ -2991,6 +3184,36 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
             }
             if !shown.tags.is_empty() {
                 rows.push(vec!["tags".to_owned(), shown.tags.join(", ")]);
+            }
+            // The count and the breakdown, not the entries: the block itself is printed verbatim a
+            // few lines below, and a verb that listed each finding twice would be padding.
+            if !shown.findings.is_empty() {
+                rows.push(vec!["findings".to_owned(), severity_breakdown(&shown.findings)]);
+            }
+            // One line per outcome, labelled once. This is the answer to *did this review ever
+            // change anything*, and it is on the review rather than on the artifact because the
+            // review is what a reader has the id of.
+            for (index, outcome) in shown.outcomes.iter().enumerate() {
+                let label = if index == 0 { "outcomes" } else { "" };
+                let reference = outcome
+                    .reference
+                    .as_ref()
+                    .map_or_else(String::new, |reference| format!(" ({reference})"));
+                // The source is left off when it is the review's own id, which is what the edge
+                // writes when the caller gave no `--source`: repeating the id a line already
+                // names is noise in the one row a reader is here for.
+                let from = if outcome.source == shown.id {
+                    String::new()
+                } else {
+                    format!(" from {}", outcome.source)
+                };
+                rows.push(vec![
+                    label.to_owned(),
+                    format!(
+                        "{} on {} at {}{from}{reference}",
+                        outcome.outcome, outcome.reviewed, outcome.at
+                    ),
+                ]);
             }
             // One edge per line, labelled once: a document with six relations on one line is a line
             // nobody reads to the end.
@@ -3605,6 +3828,528 @@ fn log_findings(
     }
 }
 
+/// Who a review is by: its `owner`, or a `reviewer:` key the document carries beside the fields
+/// this CLI owns.
+///
+/// The fallback is not a second field this store writes — nothing here sets `reviewer` — it is the
+/// one an emitter outside this repository may already be writing, kept because the frontmatter
+/// preserves every key it does not name (`PlanningFrontmatter::extra`) and dropping a reviewer's
+/// name on the floor would make every such review read as anonymous.
+fn reviewer_of(stored: &aep_backend_markdown::StoredDocument) -> String {
+    let front = &stored.document.frontmatter;
+    front
+        .owner
+        .clone()
+        .or_else(|| {
+            front
+                .extra
+                .get("reviewer")
+                .and_then(aep_domain::node::Node::as_text)
+                .map(ToOwned::to_owned)
+        })
+        .unwrap_or_else(|| "unattributed".to_owned())
+}
+
+/// Whether `stored` is a `review-result` that declares it `reviews` `subject`.
+fn reviews(stored: &aep_backend_markdown::StoredDocument, subject: &ArtifactId) -> bool {
+    let front = &stored.document.frontmatter;
+    front.kind == ArtifactKind::ReviewResult
+        && front.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Reviews && relation.target.id() == subject
+        })
+}
+
+/// The reviews of `subject`, oldest first.
+///
+/// Ordered by **log order** and not by the instants the documents carry, for the reason
+/// [`joined`] gives: `at` is when the caller says they looked, it is written to the second, and
+/// two reviews recorded in one second have the same one. What the journal holds is the order the
+/// store was actually written in, which is the order a second round happened in. A plan whose
+/// journal says nothing about a review falls back to the id, so the answer is at least stable.
+fn reviews_of<'a>(
+    opened: &'a Opened,
+    subject: &ArtifactId,
+) -> Vec<&'a aep_backend_markdown::StoredDocument> {
+    let order: BTreeMap<ArtifactId, usize> = opened
+        .files
+        .as_ref()
+        .map(|store| {
+            aep_backend_markdown::journal::read(store.root())
+                .0
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| (entry.artifact, index))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut found: Vec<&aep_backend_markdown::StoredDocument> = opened
+        .report
+        .documents
+        .values()
+        .filter(|stored| reviews(stored, subject))
+        .collect();
+    found.sort_by(|left, right| {
+        let key = |stored: &aep_backend_markdown::StoredDocument| {
+            (
+                order.get(&stored.document.frontmatter.id).copied(),
+                stored.document.frontmatter.id.to_string(),
+            )
+        };
+        key(left).cmp(&key(right))
+    });
+    found
+}
+
+/// The review `id` names, checked to be one and checked to be about `subject`.
+fn review_named<'a>(
+    opened: &'a Opened,
+    subject: &ArtifactId,
+    id: &str,
+) -> Result<&'a aep_backend_markdown::StoredDocument> {
+    let review = artifact_id(id)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&review)
+        .with_context(|| opened.missing(&review))?;
+    if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
+        bail!(
+            "`{review}` is a {} and a ledger compares reviews; name a `review-result`",
+            stored.document.frontmatter.kind
+        );
+    }
+    if !reviews(stored, subject) {
+        bail!(
+            "`{review}` does not review `{subject}` — it declares no `reviews` edge to it, so \
+             comparing the two would be comparing findings about different work. \
+             `protocol artifact relate {review} reviews:{subject}` is the edge it is missing, if \
+             that is what it is"
+        );
+    }
+    Ok(stored)
+}
+
+/// `protocol artifact findings`
+fn findings_ledger(
+    args: &StoreArgs,
+    id: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<ExitCode> {
+    use aep_backend_markdown::findings;
+
+    let subject = artifact_id(id)?;
+    let opened = open(&args.location, false)?;
+    // The artifact has to exist. A ledger over a typo'd id would answer "no reviews", which reads
+    // as *nobody has reviewed this* rather than as *there is no such thing*.
+    opened
+        .report
+        .documents
+        .get(&subject)
+        .with_context(|| opened.missing(&subject))?;
+
+    let found = reviews_of(&opened, &subject);
+    let held = found.len();
+    let pair = if let (Some(from), Some(to)) = (from, to) {
+        Some((
+            review_named(&opened, &subject, from)?,
+            review_named(&opened, &subject, to)?,
+        ))
+    } else if held < 2 {
+        None
+    } else {
+        Some((found[held - 2], found[held - 1]))
+    };
+    let Some((earlier, later)) = pair else {
+        let ledger = FindingsLedger {
+            artifact: subject.to_string(),
+            reviews: held,
+            from: None,
+            from_reviewer: None,
+            to: None,
+            to_reviewer: None,
+            carried: Vec::new(),
+            new: Vec::new(),
+            resolved: Vec::new(),
+        };
+        match args.format {
+            Format::Text => outln!(
+                "{subject}: {}",
+                if held == 0 {
+                    "no review reviews this, so there is nothing to compare".to_owned()
+                } else {
+                    "one review reviews this, and a first round has nothing to be compared against"
+                        .to_owned()
+                }
+            ),
+            Format::Yaml | Format::Json => crate::print_serialised(&ledger, args.format)?,
+        }
+        // Zero, still. A first round is an answer, not a failure, and a skill that read an exit
+        // code here would stop on the one case it is written to handle.
+        return Ok(ExitCode::SUCCESS);
+    };
+
+    // A block this build cannot read is empty here rather than fatal: `validate` reports it, and a
+    // ledger that refused to answer because one of four reviews is malformed would be a report
+    // nobody could get out of a store that has a defect in it.
+    let before = findings::parse(&earlier.document.body).unwrap_or_default();
+    let after = findings::parse(&later.document.body).unwrap_or_default();
+    let compared = findings::compare(&before, &after);
+
+    let ledger = FindingsLedger {
+        artifact: subject.to_string(),
+        reviews: held,
+        from: Some(earlier.document.frontmatter.id.to_string()),
+        from_reviewer: Some(reviewer_of(earlier)),
+        to: Some(later.document.frontmatter.id.to_string()),
+        to_reviewer: Some(reviewer_of(later)),
+        carried: compared
+            .carried
+            .iter()
+            .map(|(was, now)| CarriedFinding {
+                was: was.clone(),
+                now: now.clone(),
+            })
+            .collect(),
+        new: compared.new.clone(),
+        resolved: compared.resolved.clone(),
+    };
+
+    match args.format {
+        Format::Text => print_ledger(&ledger),
+        Format::Yaml | Format::Json => crate::print_serialised(&ledger, args.format)?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// One finding, on one line: where it is, what class it is, and what it says.
+fn finding_line(finding: &aep_backend_markdown::findings::Finding) -> String {
+    let at = finding
+        .line
+        .map_or_else(|| finding.file.clone(), |line| format!("{}:{line}", finding.file));
+    format!(
+        "{at}  {}  {}  {}",
+        finding.severity,
+        finding.category,
+        finding.message
+    )
+}
+
+/// The ledger, for a person.
+fn print_ledger(ledger: &FindingsLedger) {
+    outln!(
+        "{}: {} ({}) -> {} ({})",
+        ledger.artifact,
+        ledger.from.as_deref().unwrap_or("-"),
+        ledger.from_reviewer.as_deref().unwrap_or("-"),
+        ledger.to.as_deref().unwrap_or("-"),
+        ledger.to_reviewer.as_deref().unwrap_or("-")
+    );
+    outln!("carried {}:", ledger.carried.len());
+    for carried in &ledger.carried {
+        let moved = match (carried.was.line, carried.now.line) {
+            (Some(was), Some(now)) if was != now => format!("  (was line {was})"),
+            _ => String::new(),
+        };
+        outln!("  - {}{moved}", finding_line(&carried.now));
+    }
+    outln!("new {}:", ledger.new.len());
+    for finding in &ledger.new {
+        outln!("  - {}", finding_line(finding));
+    }
+    outln!("resolved {}:", ledger.resolved.len());
+    for finding in &ledger.resolved {
+        outln!("  - {}", finding_line(finding));
+    }
+}
+
+/// Reviews at least `days` old that no `review_outcome` record names.
+///
+/// The age is the instant the journal recorded the review's **creation**, against the clock read
+/// here. A review the journal says nothing about has no age this can compute, and is left out
+/// rather than guessed at: a document predating the event log is already its own reported class,
+/// and reporting it twice under a second heading would say two things about one gap.
+fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
+    use aep_backend_markdown::journal::Change;
+
+    let Some(store) = opened.files.as_ref() else {
+        return Vec::new();
+    };
+    let entries = aep_backend_markdown::journal::read(store.root()).0;
+    let mut created: BTreeMap<ArtifactId, String> = BTreeMap::new();
+    let mut answered: BTreeSet<ArtifactId> = BTreeSet::new();
+    for entry in entries {
+        match entry.change {
+            Change::Created { .. } => {
+                created.entry(entry.artifact).or_insert(entry.at);
+            }
+            Change::Evidence {
+                review: Some(review),
+                outcome: Some(_),
+                ..
+            } => {
+                answered.insert(review);
+            }
+            _ => {}
+        }
+    }
+
+    let now = instant(&now_at_the_edge()).ok();
+    let mut overdue = Vec::new();
+    for stored in opened.report.documents.values() {
+        let id = &stored.document.frontmatter.id;
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult
+            || answered.contains(id)
+        {
+            continue;
+        }
+        let (Some(now), Some(at)) = (now, created.get(id).and_then(|at| instant(at).ok())) else {
+            continue;
+        };
+        let age = now.epoch_millis().saturating_sub(at.epoch_millis()) / 86_400_000;
+        if age >= days {
+            overdue.push(format!(
+                "{id} was recorded {age} day(s) ago and nothing says what became of it — \
+                 `protocol artifact evidence <reviewed-id> --kind review_outcome --review {id} \
+                 --outcome no-op|fixed|escalated` is the record it is missing"
+            ));
+        }
+    }
+    overdue
+}
+
+/// What one reviewer's reviews came to, and what they cost.
+///
+/// **No column here is a ratio, a ranking or a percentage**, and that is a rule rather than an
+/// omission — see [`ArtifactCommand::ReviewValue`] for the argument, which is `protocol eval
+/// matrix`'s own. The columns are counts and one amount of money.
+#[derive(Debug, serde::Serialize)]
+struct ReviewValueRow {
+    /// The review's `owner`, or the `reviewer:` key its document carries.
+    reviewer: String,
+    /// How many reviews they recorded.
+    reviews: usize,
+    /// How many findings those reviews state, as data rather than as prose.
+    findings: usize,
+    /// Reviews recorded as having changed nothing.
+    no_op: usize,
+    /// Reviews somebody addressed.
+    fixed: usize,
+    /// Reviews that went to a person.
+    escalated: usize,
+    /// What the runs behind them cost, where a manifest said. `null` where none did.
+    cost_micro_usd: Option<u64>,
+    /// The same amount as a reader sees it, or the literal `unknown`.
+    cost: String,
+}
+
+/// One reviewer's running totals, while the table is being counted.
+#[derive(Debug, Default)]
+struct Tally {
+    /// How many reviews they recorded.
+    reviews: usize,
+    /// How many findings those reviews state.
+    findings: usize,
+    /// How many of each outcome was recorded against them.
+    outcomes: BTreeMap<aep_domain::review::ReviewOutcome, usize>,
+    /// What the runs behind them cost, where any manifest said. `None` is not zero.
+    cost: Option<u64>,
+}
+
+/// The table `review-value` prints.
+#[derive(Debug, serde::Serialize)]
+struct ReviewValueTable {
+    /// The date the rows were cut from, where the caller named one.
+    since: Option<String>,
+    /// How many reviews the rows are over.
+    reviews: usize,
+    /// One row per reviewer, by name.
+    reviewers: Vec<ReviewValueRow>,
+}
+
+/// What the store recorded about every review, gathered once.
+#[derive(Debug, Default)]
+struct ReviewRecords {
+    /// When each artifact was created, as the journal recorded it.
+    created: BTreeMap<ArtifactId, String>,
+    /// Every outcome recorded against each review.
+    outcomes: BTreeMap<ArtifactId, Vec<aep_domain::review::ReviewOutcome>>,
+}
+
+/// The journal, read once for both things the table needs from it.
+fn review_records(opened: &Opened) -> ReviewRecords {
+    use aep_backend_markdown::journal::Change;
+
+    let mut records = ReviewRecords::default();
+    let Some(store) = opened.files.as_ref() else {
+        return records;
+    };
+    for entry in aep_backend_markdown::journal::read(store.root()).0 {
+        match entry.change {
+            Change::Created { .. } => {
+                records.created.entry(entry.artifact).or_insert(entry.at);
+            }
+            Change::Evidence {
+                review: Some(review),
+                outcome: Some(outcome),
+                ..
+            } => records.outcomes.entry(review).or_default().push(outcome),
+            _ => {}
+        }
+    }
+    records
+}
+
+/// What the runs behind one review cost, where one of its references names a manifest that said.
+///
+/// Every reference is tried as a path, and none is refused for its provider: a repository that
+/// files its runs under `run:` and one that files them under `eval:` are both saying the same thing,
+/// and a whitelist here would be this verb inventing a vocabulary the store does not have. A
+/// reference that is not a readable manifest simply is not one — a `jira:DEV-630` names no file and
+/// costs nothing to try.
+fn cost_of(repository: &Path, stored: &aep_backend_markdown::StoredDocument) -> Option<u64> {
+    let mut total: Option<u64> = None;
+    for reference in &stored.document.frontmatter.refs {
+        let named = Path::new(&reference.reference);
+        let path = if named.is_absolute() {
+            named.to_path_buf()
+        } else {
+            repository.join(named)
+        };
+        if let Some(cost) = crate::eval::manifest_cost_micro_usd(&path) {
+            total = Some(total.unwrap_or(0).saturating_add(cost));
+        }
+    }
+    total
+}
+
+/// `protocol artifact review-value`
+fn review_value(args: &StoreArgs, since: Option<&str>) -> Result<ExitCode> {
+    use aep_domain::review::ReviewOutcome;
+
+    // Parsed before the store is opened, so a date nobody can read is refused as a date rather
+    // than reported as an empty table — which reads as *nothing happened*.
+    let cutoff = match since {
+        Some(written) => Some(instant(written).with_context(|| {
+            format!("`{written}` is not a date this build can read; write `YYYY-MM-DD`")
+        })?),
+        None => None,
+    };
+    let opened = open(&args.location, false)?;
+    let records = review_records(&opened);
+    let repository = args.repository_root();
+
+    let mut tallies: BTreeMap<String, Tally> = BTreeMap::new();
+    let mut counted = 0;
+
+    for stored in opened.report.documents.values() {
+        let id = &stored.document.frontmatter.id;
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
+            continue;
+        }
+        if let Some(cutoff) = cutoff {
+            // A review the journal says nothing about has no date, and *unknown* cannot satisfy
+            // `--since`. Leaving it in would be answering a question about a window with a record
+            // that may sit outside it.
+            let Some(at) = records.created.get(id).and_then(|at| instant(at).ok()) else {
+                continue;
+            };
+            if at.epoch_millis() < cutoff.epoch_millis() {
+                continue;
+            }
+        }
+        counted += 1;
+        let tally = tallies.entry(reviewer_of(stored)).or_default();
+        tally.reviews += 1;
+        // A block this build cannot read counts as no findings, and `validate` is what says so:
+        // a table that refused to be printed because one review of forty is malformed would be a
+        // report nobody can get out of a store that has a defect in it.
+        tally.findings += aep_backend_markdown::findings::parse(&stored.document.body)
+            .map(|found| found.len())
+            .unwrap_or_default();
+        for outcome in records.outcomes.get(id).into_iter().flatten() {
+            *tally.outcomes.entry(*outcome).or_default() += 1;
+        }
+        if let Some(cost) = cost_of(&repository, stored) {
+            tally.cost = Some(tally.cost.unwrap_or(0).saturating_add(cost));
+        }
+    }
+
+    let table = ReviewValueTable {
+        since: since.map(ToOwned::to_owned),
+        reviews: counted,
+        reviewers: tallies
+            .into_iter()
+            .map(|(reviewer, tally)| ReviewValueRow {
+                reviewer,
+                reviews: tally.reviews,
+                findings: tally.findings,
+                no_op: tally.outcomes.get(&ReviewOutcome::NoOp).copied().unwrap_or(0),
+                fixed: tally.outcomes.get(&ReviewOutcome::Fixed).copied().unwrap_or(0),
+                escalated: tally
+                    .outcomes
+                    .get(&ReviewOutcome::Escalated)
+                    .copied()
+                    .unwrap_or(0),
+                cost_micro_usd: tally.cost,
+                cost: tally
+                    .cost
+                    .map_or_else(|| UNKNOWN_COST.to_owned(), crate::money::dollars),
+            })
+            .collect(),
+    };
+
+    match args.format {
+        Format::Text => print_review_value(&table),
+        Format::Yaml | Format::Json => crate::print_serialised(&table, args.format)?,
+    }
+    // Zero, whatever it says. A table is a report, the position `eval matrix` takes, and an exit
+    // code that moved with the counts would be the scalar this verb refuses to compute.
+    Ok(ExitCode::SUCCESS)
+}
+
+/// What a cost nobody recorded prints as. Never `0`, and never `$0.000000`.
+const UNKNOWN_COST: &str = "unknown";
+
+/// The table, for a person.
+fn print_review_value(table: &ReviewValueTable) {
+    let mut rows = vec![vec![
+        "reviewer".to_owned(),
+        "reviews".to_owned(),
+        "findings".to_owned(),
+        "no-op".to_owned(),
+        "fixed".to_owned(),
+        "escalated".to_owned(),
+        "cost".to_owned(),
+    ]];
+    for row in &table.reviewers {
+        rows.push(vec![
+            row.reviewer.clone(),
+            row.reviews.to_string(),
+            row.findings.to_string(),
+            row.no_op.to_string(),
+            row.fixed.to_string(),
+            row.escalated.to_string(),
+            row.cost.clone(),
+        ]);
+    }
+    crate::print_table(&rows);
+    if table.reviewers.is_empty() {
+        outln!(
+            "no review-result records{}",
+            table
+                .since
+                .as_ref()
+                .map_or_else(String::new, |since| format!(" since {since}"))
+        );
+    }
+    outln!(
+        "{} review(s). Counts, never a score: no ranking and no percentage — which of these lenses \
+         earns its cost is the operator's judgement, and this table is what it is made on.",
+        table.reviews
+    );
+}
+
 /// `protocol artifact validate`
 ///
 /// `strict` turns each *reported* class into an exit code, and changes nothing else: the same lines
@@ -3612,10 +4357,11 @@ fn log_findings(
 /// `story:completion-needs-evidence`'s recorded position — a store somebody is working in must be
 /// able to hold a status closed on an assertion, and a gate must be able to refuse one — so the
 /// caller who wants the second says so rather than the tool deciding for both.
-fn validate(args: &StoreArgs, strict: bool) -> Result<ExitCode> {
+fn validate(args: &StoreArgs, strict: bool, outcome_within: u64) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let registry = args.lifecycles()?;
-    let summary = findings(&opened, &registry, &args.repository_root());
+    let mut summary = findings(&opened, &registry, &args.repository_root());
+    summary.without_an_outcome = reviews_without_an_outcome(&opened, outcome_within);
 
     match args.format {
         Format::Text => print_validation(&summary, strict),
@@ -3702,6 +4448,24 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
         }
     }
 
+    // The findings block, on the kind that is supposed to carry one. A block that does not parse is
+    // a **problem**: `new` refuses one, so a broken block in the store was hand-written past the
+    // command, which is the same class as drift. A block that is simply absent is reported.
+    let mut without_findings = Vec::new();
+    for stored in report.documents.values() {
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
+            continue;
+        }
+        let id = &stored.document.frontmatter.id;
+        match aep_backend_markdown::findings::parse(&stored.document.body) {
+            Err(error) => problems.push(format!("{id}: {error}")),
+            Ok(found) if found.is_empty() => without_findings.push(format!(
+                "{id} states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"
+            )),
+            Ok(_) => {}
+        }
+    }
+
     Summary {
         store: opened.plan.describe(),
         files_read: report.files_read,
@@ -3712,6 +4476,8 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
         forged: forged_findings,
         deleted: deleted_findings,
         pre_provider,
+        without_findings,
+        without_an_outcome: Vec::new(),
     }
 }
 
@@ -3761,6 +4527,17 @@ fn print_validation(summary: &Summary, strict: bool) {
             outln!("  - {note}");
         }
     }
+    for (heading, notes) in [
+        ("recorded no findings block", &summary.without_findings),
+        ("have no recorded outcome", &summary.without_an_outcome),
+    ] {
+        if !notes.is_empty() {
+            outln!("{} review(s) {heading}:", notes.len());
+            for note in notes {
+                outln!("  - {note}");
+            }
+        }
+    }
     if summary.problems.is_empty() {
         outln!("valid");
     } else {
@@ -3797,6 +4574,8 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         ("drifted", summary.drift.len()),
         ("forged revision", summary.forged.len()),
         ("deleted", summary.deleted.len()),
+        ("recording no findings block", summary.without_findings.len()),
+        ("without a recorded outcome", summary.without_an_outcome.len()),
     ] {
         if count > 0 {
             refusing.push(format!("{count} {label}"));
@@ -4051,12 +4830,123 @@ fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
     ))
 }
 
+/// What `protocol artifact evidence` was asked to record.
+///
+/// Its own struct rather than seven arguments on one function, for the reason [`NewArgs`] is one:
+/// four of them are `Option<&str>` and a caller could transpose two without the compiler having
+/// anything to say about it.
+pub(crate) struct EvidenceRequest<'a> {
+    /// The kind of observation, as the caller spelled it.
+    pub(crate) kind: &'a str,
+    /// Where it came from, where the caller said.
+    pub(crate) source: Option<&'a str>,
+    /// The review it answers, on a `review_outcome`.
+    pub(crate) review: Option<&'a str>,
+    /// What became of that review.
+    pub(crate) outcome: Option<aep_domain::review::ReviewOutcome>,
+    /// Where to go and look.
+    pub(crate) reference: Option<&'a str>,
+    /// When it was observed, where the caller said.
+    pub(crate) at: Option<&'a str>,
+}
+
+/// The review and outcome a `review_outcome` record carries, checked against the store.
+///
+/// Four refusals, and each of them is a record somebody would otherwise have to notice was wrong
+/// by reading it: the kind without its two keys, either key without the kind, a review that is not
+/// a review, and a review that is not about this artifact. The last is the one the story names —
+/// a `review_outcome` joining a verdict to work it was never about would credit the wrong lens,
+/// and `review-value` counts exactly that join.
+fn review_outcome_of<'a>(
+    opened: &'a Opened,
+    id: &ArtifactId,
+    kind: aep_domain::evidence::EvidenceKind,
+    request: &EvidenceRequest<'_>,
+) -> Result<Option<(&'a ArtifactId, aep_domain::review::ReviewOutcome)>> {
+    use aep_domain::evidence::EvidenceKind;
+
+    let named = EvidenceKind::ReviewOutcome.as_str();
+    if kind != EvidenceKind::ReviewOutcome {
+        if request.review.is_some() || request.outcome.is_some() {
+            bail!(
+                "`--review` and `--outcome` record what became of a review, which is what \
+                 `--kind {named}` is; `{}` is a different observation and takes neither",
+                kind.as_str()
+            );
+        }
+        return Ok(None);
+    }
+    let (Some(review), Some(outcome)) = (request.review, request.outcome) else {
+        bail!(
+            "`--kind {named}` needs `--review <review-result-id>` and `--outcome \
+             no-op|fixed|escalated`: a record that says a review was acted on without saying which \
+             review or what happened is a count with no subject, which is the thing this kind \
+             exists to replace"
+        );
+    };
+    let review = artifact_id(review)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&review)
+        .with_context(|| opened.missing(&review))?;
+    if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
+        bail!(
+            "`{review}` is a {} and an outcome is what became of a review; name a `review-result`",
+            stored.document.frontmatter.kind
+        );
+    }
+    if !reviews(stored, id) {
+        bail!(
+            "`{review}` does not review `{id}` — it declares no `reviews` edge to it, so this \
+             record would say a review of other work was acted on here"
+        );
+    }
+    Ok(Some((&stored.document.frontmatter.id, outcome)))
+}
+
+/// Every recorded outcome of one review, oldest first.
+///
+/// Read from the journal rather than from the reviewed artifact's own evidence count, because the
+/// count says *how many `review_outcome` records* and this question is *which review*. A markdown
+/// plan is the only one with a journal file; a store that keeps its history in the contract
+/// answers no outcomes here rather than a wrong number, which is invariant 5 rather than a gap
+/// nobody wrote down.
+fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
+    use aep_backend_markdown::journal::Change;
+
+    let Some(store) = opened.files.as_ref() else {
+        return Vec::new();
+    };
+    aep_backend_markdown::journal::read(store.root())
+        .0
+        .into_iter()
+        .filter_map(|entry| match entry.change {
+            Change::Evidence {
+                review: Some(named),
+                outcome: Some(outcome),
+                source,
+                reference,
+                ..
+            } if &named == review => Some(ShownOutcome {
+                reviewed: entry.artifact.to_string(),
+                outcome: outcome.as_str().to_owned(),
+                source,
+                reference,
+                at: entry.at,
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Issues the `RecordEvidence` command that records one observation.
 fn evidence_through_a_command(
     backend: &PlanBackend,
     id: &ArtifactId,
     kind: aep_domain::evidence::EvidenceKind,
     source: &str,
+    answers: Option<(&ArtifactId, aep_domain::review::ReviewOutcome)>,
     reference: Option<&str>,
     at: aep_domain::time::Timestamp,
 ) -> Result<()> {
@@ -4088,6 +4978,8 @@ fn evidence_through_a_command(
             kind: kind.to_string(),
             source: source.to_owned(),
             reference: reference.map(ToOwned::to_owned),
+            review: answers.map(|(review, _)| review.to_string()),
+            outcome: answers.map(|(_, outcome)| outcome.as_str().to_owned()),
         }),
         at,
     )?;
@@ -4097,26 +4989,16 @@ fn evidence_through_a_command(
 
 /// command that recorded evidence *and* moved the artifact would make the evidence a formality of
 /// the move rather than a thing that existed before it.
-fn record_evidence(
-    args: &StoreArgs,
-    id: &str,
-    kind: &str,
-    source: &str,
-    reference: Option<&str>,
-    at: Option<&str>,
-) -> Result<ExitCode> {
+fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) -> Result<ExitCode> {
+    use aep_domain::evidence::EvidenceKind;
+
     let id = artifact_id(id)?;
     // Built rather than wrapped in a `context`, which would put the advice in front of the list it
     // is advice about. The refusal has to **end** with the two kinds, because that is the part a
     // reader who did not find their word in fifteen names still needs.
-    let kind = aep_domain::evidence::EvidenceKind::parse(kind.trim())
+    let kind = EvidenceKind::parse(request.kind.trim())
         .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
-    if source.trim().is_empty() {
-        anyhow::bail!(
-            "evidence needs a source; write where it came from, such as --source 'task check'"
-        );
-    }
-    let at = at.map_or_else(now_at_the_edge, str::to_owned);
+    let at = request.at.map_or_else(now_at_the_edge, str::to_owned);
 
     let opened = open(&args.location, true)?;
     // The artifact must exist. Evidence about nothing is not evidence, and a typo'd id would
@@ -4126,25 +5008,44 @@ fn record_evidence(
         .documents
         .get(&id)
         .with_context(|| opened.missing(&id))?;
+    let _ = stored;
+
+    // The two keys and the kind are made of each other: neither is meaningful without the other,
+    // and either without the kind is a record whose shape says one thing and whose word says
+    // another. Refused here, at the edge, because the check that matters — *does that review review
+    // this artifact* — needs the store, and a domain type that cannot see one could not make it.
+    let answers = review_outcome_of(&opened, &id, kind, request)?;
+    let source = match (request.source, answers) {
+        (Some(source), _) if !source.trim().is_empty() => source.to_owned(),
+        (_, Some((review, _))) => review.to_string(),
+        _ => anyhow::bail!(
+            "evidence needs a source; write where it came from, such as --source 'task check'"
+        ),
+    };
 
     // Through a command, like every other write. An evidence record is the **input to the
     // evidence-gated move decision**, so a verb appending one directly writes the thing the
     // decision reads without passing the door every other write passes — the same deviation D-P1
     // was, and invisible to a scan looking only for store writes.
-    let _ = stored;
     evidence_through_a_command(
         opened.backend()?,
         &id,
         kind,
-        source,
-        reference,
+        &source,
+        answers,
+        request.reference,
         instant(&at)?,
     )?;
 
     let on_hand = opened.evidence_on_hand(&id)?;
     match args.format {
         Format::Text => {
-            outln!("{id}: {} recorded from {source}", kind.as_str());
+            match answers {
+                Some((review, outcome)) => {
+                    outln!("{id}: {} recorded — {review} was {outcome}", kind.as_str());
+                }
+                None => outln!("{id}: {} recorded from {source}", kind.as_str()),
+            }
             let held: Vec<String> = on_hand
                 .iter()
                 .map(|(kind, count)| format!("{}={count}", kind.as_str()))
@@ -4467,6 +5368,7 @@ fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Ve
                 kind,
                 source,
                 reference,
+                ..
             } => since.push(Admitted {
                 kind: kind.as_str().to_owned(),
                 source: source.clone(),
@@ -4674,6 +5576,8 @@ fn entry_from_event(
             kind: text("kind")?.parse().ok()?,
             source: text("source")?.to_owned(),
             reference: text("reference").map(str::to_owned),
+            review: text("review").and_then(|written| ArtifactId::new(written).ok()),
+            outcome: text("outcome").and_then(aep_domain::review::ReviewOutcome::parse),
         },
         _ => return None,
     };
@@ -5208,8 +6112,31 @@ pub(crate) struct Shown {
     /// The evidence kind this artifact is stopping anybody from producing.
     withholds: Option<String>,
     revision: u64,
+    /// The findings its body states, `[]` when it states none.
+    ///
+    /// Always written, on any kind. A `review-result` is where one belongs, and a reader that had
+    /// to know the kind before it knew whether the key would be there would be reading two shapes.
+    findings: Vec<aep_backend_markdown::findings::Finding>,
+    /// What became of it, for a `review-result`: every `review_outcome` record naming it.
+    outcomes: Vec<ShownOutcome>,
     /// The markdown body, exactly as the store holds it.
     body: String,
+}
+
+/// One recorded outcome of a review, as `show` prints it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ShownOutcome {
+    /// The artifact the review was of, and the one the record is about.
+    reviewed: String,
+    /// What became of the review: `no-op`, `fixed` or `escalated`.
+    outcome: String,
+    /// Where the record came from, as the recorder was willing to say.
+    source: String,
+    /// Where to go and look, where the record named somewhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference: Option<String>,
+    /// When it was recorded, as the edge observed it.
+    at: String,
 }
 
 /// One external reference, as `show` prints it.
@@ -5393,6 +6320,60 @@ pub(crate) struct Summary {
     deleted: Vec<String>,
     /// Documents with no events at all — they predate the provider, which is not a defect.
     pre_provider: usize,
+    /// Reviews that recorded their findings as prose only.
+    ///
+    /// Reported and **not** counted as a problem, for the reason `closed_on_an_assertion` is: a
+    /// review written before the block existed is still a review, and refusing the store it sits in
+    /// would make the feature retroactive on a kind that cannot be edited. What it must not be is
+    /// invisible — a critic whose findings nothing can enumerate is a critic the next round repeats.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    without_findings: Vec<String>,
+    /// Reviews old enough to have been acted on, with no `review_outcome` record naming them.
+    ///
+    /// Reported and not counted as a problem, and the age is read from the clock **here**, at the
+    /// edge: this is the one line of `validate` that is a function of when it was run, and it says
+    /// so rather than pretending the store decided it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    without_an_outcome: Vec<String>,
+}
+
+/// What `findings` compared, and what it found.
+///
+/// `from` and `to` are the review ids as text rather than a nested object: a skill reading this
+/// wants the id it would pass back to `show`, and a wrapper around one string is a shape a `jq`
+/// expression has to know about for no gain.
+#[derive(Debug, serde::Serialize)]
+struct FindingsLedger {
+    /// The artifact the reviews are of.
+    artifact: String,
+    /// How many reviews review it, which is what says whether a third round is even a question.
+    reviews: usize,
+    /// The earlier review, where there was one.
+    from: Option<String>,
+    /// Who wrote it. Printed, never matched on.
+    from_reviewer: Option<String>,
+    /// The later review, where there was one.
+    to: Option<String>,
+    /// Who wrote it. Printed, never matched on.
+    to_reviewer: Option<String>,
+    /// Findings both reviews state.
+    carried: Vec<CarriedFinding>,
+    /// Findings only the later review states.
+    new: Vec<aep_backend_markdown::findings::Finding>,
+    /// Findings only the earlier review states.
+    resolved: Vec<aep_backend_markdown::findings::Finding>,
+}
+
+/// A finding both reviews state, as each of them wrote it.
+///
+/// Both sides, not one: the line it moved to is what a reader needs to go and look, and the line it
+/// moved from is what says the ledger matched across drift rather than by luck.
+#[derive(Debug, serde::Serialize)]
+struct CarriedFinding {
+    /// As the earlier review wrote it.
+    was: aep_backend_markdown::findings::Finding,
+    /// As the later review wrote it.
+    now: aep_backend_markdown::findings::Finding,
 }
 
 /// One kind in the vocabulary.

@@ -82,8 +82,29 @@ struct Current {
     decided_on: Option<journal::Provenance>,
     /// Sources whose document a relation command changes without changing the entity.
     touched: Vec<EntityId>,
-    /// An observation about an artifact: target, kind, source, reference.
-    observation: Option<(EntityId, String, String, Option<String>)>,
+    /// An observation about an artifact, as the command stated it.
+    observation: Option<Observation>,
+}
+
+/// One `RecordEvidence` in flight, as the journal will spell it.
+///
+/// A struct rather than the tuple this was, because the tuple grew a fifth and a sixth member —
+/// which review the record answers and what became of it — and a six-tuple of four `String`-shaped
+/// things is a shape a caller can transpose without the compiler noticing.
+#[derive(Debug, Clone)]
+struct Observation {
+    /// The artifact the observation is about.
+    target: EntityId,
+    /// What kind of observation it is, as the command spelled it.
+    kind: String,
+    /// Where it came from.
+    source: String,
+    /// Where to go and look.
+    reference: Option<String>,
+    /// The review it answers, on a `review_outcome`.
+    review: Option<String>,
+    /// What became of that review.
+    outcome: Option<String>,
 }
 
 impl MarkdownProjection {
@@ -281,11 +302,16 @@ impl MarkdownProjection {
         &mut self,
         store: &S,
         inner: &MemoryBackend,
-        target: &EntityId,
-        kind: &str,
-        source: &str,
-        reference: Option<&str>,
+        observation: &Observation,
     ) -> Result<Option<Placement>, CommandError> {
+        let Observation {
+            target,
+            kind,
+            source,
+            reference,
+            review,
+            outcome,
+        } = observation;
         let Some((artifact, directory, name)) = self.locate(inner, target)? else {
             return Ok(None);
         };
@@ -294,6 +320,25 @@ impl MarkdownProjection {
             .map_err(|error| CommandError::Conflict {
                 reason: format!("`{kind}` is not an evidence kind: {error}"),
             })?;
+        let review =
+            match review {
+                None => None,
+                Some(written) => Some(ArtifactId::new(written.clone()).map_err(|error| {
+                    CommandError::Conflict {
+                        reason: format!("`{written}` is not an artifact id: {error}"),
+                    }
+                })?),
+            };
+        let outcome = match outcome {
+            None => None,
+            Some(written) => Some(
+                written
+                    .parse::<aep_domain::review::ReviewOutcome>()
+                    .map_err(|error| CommandError::Conflict {
+                        reason: format!("`{written}` is not a review outcome: {error}"),
+                    })?,
+            ),
+        };
         let Some(existing) = Self::existing(store, &directory, &name)? else {
             return Err(CommandError::Conflict {
                 reason: format!("`{artifact}` is no longer in the store"),
@@ -302,8 +347,10 @@ impl MarkdownProjection {
         let instance = instance_of(&directory, &name, &existing);
         let change = journal::Change::Evidence {
             kind: parsed,
-            source: source.to_owned(),
-            reference: reference.map(ToOwned::to_owned),
+            source: source.clone(),
+            reference: reference.clone(),
+            review,
+            outcome,
         };
         Ok(Some(Placement {
             entity: directory,
@@ -519,12 +566,14 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
             _ => None,
         };
         let observation = match &envelope.payload {
-            Command::RecordEvidence(record) => Some((
-                record.target.id.clone(),
-                record.kind.clone(),
-                record.source.clone(),
-                record.reference.clone(),
-            )),
+            Command::RecordEvidence(record) => Some(Observation {
+                target: record.target.id.clone(),
+                kind: record.kind.clone(),
+                source: record.source.clone(),
+                reference: record.reference.clone(),
+                review: record.review.clone(),
+                outcome: record.outcome.clone(),
+            }),
             _ => None,
         };
         self.current = Current {
@@ -567,10 +616,8 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
                 placements.push(placement);
             }
         }
-        if let Some((target, kind, source, reference)) = self.current.observation.take() {
-            if let Some(placement) =
-                self.observe(store, inner, &target, &kind, &source, reference.as_deref())?
-            {
+        if let Some(observation) = self.current.observation.take() {
+            if let Some(placement) = self.observe(store, inner, &observation)? {
                 placements.push(placement);
             }
         }

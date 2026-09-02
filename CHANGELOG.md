@@ -9,6 +9,46 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- A `review-result` body may carry a fenced ```` ```findings ```` block of YAML — entries of
+  `{file, line, category, severity, verdict, origin, message}`, where `file`, `category`, `severity`
+  and `message` are required and an unwritten `origin` reads as `undecided`. `aep artifact new`
+  parses it and refuses a malformed one **with the body line it is wrong on**; `aep artifact show
+  --format json` returns it as a `findings` array; `aep artifact validate` reports a `review-result`
+  that states its findings as prose only, without failing. `severity` is `blocker|warning|note`,
+  `verdict` the adversary's `CONFIRMED|NEEDS-CHANGE|INFEASIBLE` or a critic's
+  `approve|needs-revision`, `origin` `introduced|pre-existing|undecided`. Before this, a review's
+  findings were sentences: the next round of the same reviewer started from nowhere.
+- `aep artifact findings <artifact-id> [--from <review-result-id> --to <review-result-id>]` says
+  what the second review of an artifact found that the first did not — `carried`, `new`, `resolved`
+  over the two most recent `review-result` records that `reviews` it, or the two named. A finding is
+  the same finding when its file, its category and its normalised message match and its line is
+  within three, so a finding that moved because somebody added an import is carried rather than new.
+  The reviewer is printed and never matched on. Always exits 0.
+- Evidence kind `review_outcome`, and the two flags it is made of:
+  `aep artifact evidence <reviewed-id> --kind review_outcome --review <review-result-id> --outcome
+  no-op|fixed|escalated`. A review is immutable once recorded, so what became of it is a later record
+  naming it rather than an edit to it. Refused when that review declares no `reviews` edge to the
+  artifact, when either flag is given without the kind, and when the kind is given without both.
+  `aep artifact show <review-result-id>` prints every outcome recorded against it, and
+  `aep artifact validate --outcome-within <days>` (14 by default) reports a review older than that
+  which nothing says happened to — reported, not failed on.
+- `aep artifact review-value [--since <YYYY-MM-DD>]` prints one row per reviewer — the
+  `review-result`'s `owner`, or a `reviewer:` key its document carries — with reviews, findings,
+  `no-op`, `fixed`, `escalated`, and what the runs behind them cost where a run manifest named by one
+  of the review's `--ref` values said so. **No score, no ranking and no percentage**: the position
+  `aep eval matrix` takes, for the same reason. A cost nobody recorded prints as `unknown`, never as
+  `0`.
+
+### Fixed
+
+- `aep artifact new --ref <provider>:<key>` writes the reference to the document. It was accepted,
+  echoed in the result and dropped, so no artifact created with it carried the reference and
+  `aep artifact list --ref` could not find it. On a `review-result` this was the only door — `set` is
+  refused on an immutable kind — which is why no review could name the run manifest its cost is read
+  from. Shipped broken in 0.41.0.
+
 ## [0.42.0] — 2026-09-02
 
 ### Added

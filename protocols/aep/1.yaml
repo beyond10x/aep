@@ -60,6 +60,11 @@ evidence_kinds:
   - diff
   - artifact
   - review
+  # What became of a review: `no-op`, `fixed` or `escalated`. In the base protocol rather than in
+  # `adp/1` because reviewing and acting on a review are not development-specific — an operations
+  # change review has the same three outcomes — and because widening it later is additive while
+  # narrowing it would not be.
+  - review_outcome
   - verification
   - specification
 

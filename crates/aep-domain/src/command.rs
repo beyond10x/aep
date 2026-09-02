@@ -238,6 +238,23 @@ pub struct RecordEvidence {
     /// What it points at — a run, a digest, a suite's own words.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
+    /// The review this observation answers, for a
+    /// [`ReviewOutcome`](crate::evidence::EvidenceKind::ReviewOutcome) record.
+    ///
+    /// # Why the generic command carries it
+    ///
+    /// A review is immutable once recorded, so what became of it cannot be an edit to it and has to
+    /// be a later record referencing it (`epic:review-facts`). That record is evidence about the
+    /// *reviewed* artifact — which review it answers is therefore not derivable from the target, and
+    /// a record that did not name it would say only that *some* review was acted on. Both keys are
+    /// optional and every other kind leaves them unset; the edge refuses the combinations that do
+    /// not make sense, because the check needs the store (does that review review this artifact)
+    /// and this type has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<String>,
+    /// What became of that review: `no-op`, `fixed` or `escalated`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
 }
 
 /// Moving an artifact along the status ladder its kind declares.
@@ -755,6 +772,8 @@ mod tests {
                 kind: "test_result".to_owned(),
                 source: "task check".to_owned(),
                 reference: Some("63 suites, exit 0".to_owned()),
+                review: None,
+                outcome: None,
             }),
             Command::UpdateEntity(UpdateEntity {
                 target: reference(DESIGN),

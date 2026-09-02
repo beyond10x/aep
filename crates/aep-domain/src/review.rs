@@ -258,6 +258,97 @@ impl ReviewResult {
     }
 }
 
+/// What became of a review, once somebody acted on it.
+///
+/// # Why three words and not a boolean
+///
+/// *Did this review change anything* has three answers, not two, and folding the third into either
+/// of the others loses the one a reader is deciding on. A review that found nothing worth changing
+/// did its job; a review whose findings went to a person because nobody here could settle them did
+/// a different job; and only the middle one is code that moved. A `bool` would have to call the
+/// first and the third the same thing.
+///
+/// The three are `bdfinst/agentic-dev-team`'s, as `review-value.jsonl` records them at
+/// `dev-team-v13.0.0` — kept verbatim rather than renamed, so a number published against their
+/// corpus and a number published against this store are comparable.
+///
+/// It is recorded as a [`crate::evidence::EvidenceKind::ReviewOutcome`] record naming the review,
+/// never as an edit to it: a review is immutable once recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReviewOutcome {
+    /// Nothing changed because of it.
+    #[serde(rename = "no-op")]
+    NoOp,
+    /// Somebody addressed what it found.
+    Fixed,
+    /// It went to a person to decide.
+    Escalated,
+}
+
+impl ReviewOutcome {
+    /// Every outcome, in the order a table reads them.
+    pub const ALL: &'static [Self] = &[Self::NoOp, Self::Fixed, Self::Escalated];
+
+    /// The outcome as written in a record.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NoOp => "no-op",
+            Self::Fixed => "fixed",
+            Self::Escalated => "escalated",
+        }
+    }
+
+    /// The outcome a record spells, or nothing when the word is outside the three.
+    #[must_use]
+    pub fn parse(written: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .find(|outcome| outcome.as_str() == written)
+            .copied()
+    }
+}
+
+impl fmt::Display for ReviewOutcome {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ReviewOutcome {
+    type Err = crate::error::ParseError;
+
+    fn from_str(written: &str) -> Result<Self, Self::Err> {
+        Self::parse(written).ok_or_else(|| {
+            crate::error::ParseError::identifier(
+                "review outcome",
+                written,
+                format!(
+                    "expected one of {}",
+                    Self::ALL
+                        .iter()
+                        .map(|outcome| outcome.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,5 +408,19 @@ mod tests {
         });
         assert!(!result.is_clean_approval());
         assert_eq!(result.blocking_findings().count(), 1);
+    }
+
+    #[test]
+    fn a_review_outcome_reads_and_writes_the_three_words_it_was_recorded_with() {
+        for outcome in ReviewOutcome::ALL {
+            assert_eq!(ReviewOutcome::parse(outcome.as_str()), Some(*outcome));
+            let written = serde_json::to_string(outcome).expect("an outcome serialises");
+            assert_eq!(written, format!("\"{}\"", outcome.as_str()));
+            let read: ReviewOutcome =
+                serde_json::from_str(&written).expect("what it wrote, it reads");
+            assert_eq!(read, *outcome);
+        }
+        assert!(ReviewOutcome::parse("ignored").is_none());
+        assert!(serde_json::from_str::<ReviewOutcome>("\"no_op\"").is_err());
     }
 }

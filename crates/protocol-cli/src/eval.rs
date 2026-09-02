@@ -592,6 +592,25 @@ struct RawRunManifest {
     wall_time_ms: Option<u64>,
 }
 
+/// What one run manifest says the run cost, in millionths of a US dollar.
+///
+/// `None` when the file is not there, is not a `eval.run-manifest/1`, or stated no cost — and
+/// **never `Some(0)`** for any of those. A run whose cost nobody recorded and a run that was free
+/// are different facts; the table that reads this prints the first as `unknown`, on the same
+/// reasoning the matrix totals a cell over the runs that stated a cost rather than treating an
+/// absent key as zero.
+///
+/// Read through [`RawRunManifest`] and not through a fresh reader, so the one document format this
+/// crate publishes has one parser: a second reader that accepted a manifest this one refuses would
+/// be a second definition of what a manifest is.
+pub(crate) fn manifest_cost_micro_usd(path: &Path) -> Option<u64> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let raw: RawRunManifest = serde_yaml::from_str(&text).ok()?;
+    (raw.format.as_deref() == Some(MANIFEST_FORMAT))
+        .then_some(raw.cost_micro_usd)
+        .flatten()
+}
+
 /// What a document wrote for a key that must be written down.
 ///
 /// Three states, because there are three: the key is not there, the key is there and says `null`,

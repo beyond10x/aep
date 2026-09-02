@@ -189,6 +189,8 @@ const VERBS: &[&str] = &[
     "board",
     "blocked",
     "graph",
+    "findings",
+    "review-value",
     "validate",
     "kinds",
     "relations",
@@ -3808,4 +3810,1079 @@ fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
         ]);
         assert_eq!(code(&output), 0, "`{kind}`: {}", stderr(&output));
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// `epic:review-facts` — a review leaves facts the next review and the operator can compute over.
+// ---------------------------------------------------------------------------------------------
+
+/// A `review-result` body carrying a fenced `findings` block, for the tests below.
+///
+/// Written as a function rather than a `const` because each test wants its own line numbers and
+/// its own message: the ledger's whole job is to tell two findings apart, and two tests sharing
+/// one fixture cannot show that it does.
+fn findings_body(entries: &str) -> String {
+    format!("# Attack on the passkey login\n\n## Findings\n\n```findings\n{entries}```\n")
+}
+
+/// One finding, spelled the way the adversary and the critics spell one.
+fn finding(file: &str, line: u32, message: &str) -> String {
+    format!(
+        "- file: {file}\n  line: {line}\n  category: correctness\n  severity: blocker\n  \
+         verdict: CONFIRMED\n  origin: introduced\n  message: {message}\n"
+    )
+}
+
+/// Creates an epic and a `review-result` that `reviews` it, with `body` as the review's body.
+fn review_of(store: &Path, drafts: &Path, name: &str, subject: &str, body: &str) {
+    let path = drafts.join(format!("{name}.md"));
+    write(&path, body);
+    let created = protocol(&[
+        "artifact",
+        "new",
+        "review-result",
+        name,
+        "--title",
+        name,
+        "--owner",
+        "agent:adversary",
+        "--relate",
+        &format!("reviews:{subject}"),
+        "--from",
+        printable(&path),
+        "--store",
+        printable(store),
+    ]);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+}
+
+/// Creates the epic every review below is about.
+fn subject_epic(store: &Path) {
+    let subject = protocol(&[
+        "artifact",
+        "new",
+        "epic",
+        "objectives",
+        "--title",
+        "Objectives",
+        "--store",
+        printable(store),
+    ]);
+    assert_eq!(code(&subject), 0, "{}", stderr(&subject));
+}
+
+#[test]
+fn a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_array() {
+    let store = scratch("aep-planning-findings-parsed");
+    let drafts = scratch("aep-planning-findings-parsed-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "first-attack",
+        "epic:objectives",
+        &findings_body(&format!(
+            "{}{}",
+            finding(
+                "crates/aep-domain/src/artifact.rs",
+                1462,
+                "The loop never advances"
+            ),
+            "- file: crates/protocol-cli/src/planning.rs\n  category: docs\n  severity: note\n  \
+             message: The refusal does not name the flag\n"
+        )),
+    );
+
+    let shown = protocol(&[
+        "artifact",
+        "show",
+        "review-result:first-attack",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&shown), 0, "{}", stderr(&shown));
+    let value: serde_json::Value =
+        serde_json::from_str(&stdout(&shown)).expect("show --format json is JSON");
+    let findings = value
+        .get("findings")
+        .and_then(serde_json::Value::as_array)
+        .expect("the findings are an array");
+    assert_eq!(findings.len(), 2, "{}", stdout(&shown));
+    assert_eq!(
+        findings[0]
+            .get("severity")
+            .and_then(serde_json::Value::as_str),
+        Some("blocker"),
+        "{}",
+        stdout(&shown)
+    );
+    assert_eq!(
+        findings[0].get("line").and_then(serde_json::Value::as_u64),
+        Some(1462),
+        "{}",
+        stdout(&shown)
+    );
+    assert_eq!(
+        findings[1]
+            .get("origin")
+            .and_then(serde_json::Value::as_str),
+        Some("undecided"),
+        "an unwritten origin is undecided, not absent: {}",
+        stdout(&shown)
+    );
+}
+
+#[test]
+fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
+    let store = scratch("aep-planning-findings-malformed");
+    let drafts = scratch("aep-planning-findings-malformed-drafts");
+    subject_epic(&store);
+
+    // `severity: catastrophic` is not in the vocabulary. The fence opens on body line 5, so the
+    // entry starts on 6 and the severity is written on 9.
+    let body = findings_body(
+        "- file: a.rs\n  line: 1\n  category: correctness\n  severity: catastrophic\n  \
+         message: boom\n",
+    );
+    let path = drafts.join("bad.md");
+    write(&path, &body);
+    let created = protocol(&[
+        "artifact",
+        "new",
+        "review-result",
+        "bad-block",
+        "--title",
+        "Bad block",
+        "--relate",
+        "reviews:epic:objectives",
+        "--from",
+        printable(&path),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 1, "a malformed block was accepted");
+    let said = format!("{}{}", stdout(&created), stderr(&created));
+    assert!(
+        said.contains("findings") && said.contains("line 9"),
+        "the refusal does not position the defect: {said}"
+    );
+    assert!(
+        said.contains("catastrophic"),
+        "the refusal does not quote what was wrong: {said}"
+    );
+    assert!(
+        !store.join("review-result/bad-block.md").exists(),
+        "a refused `new` wrote the document anyway"
+    );
+}
+
+#[test]
+fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
+    let store = scratch("aep-planning-findings-absent");
+    let drafts = scratch("aep-planning-findings-absent-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "prose-only",
+        "epic:objectives",
+        "# Prose only\n\nEvery epic names an objective.\n",
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(
+        code(&validated),
+        0,
+        "a review without findings is reported, not failed: {}",
+        stderr(&validated)
+    );
+    assert!(
+        stdout(&validated).contains("review-result:prose-only")
+            && stdout(&validated).contains("findings"),
+        "{}",
+        stdout(&validated)
+    );
+}
+
+#[test]
+fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
+    let store = scratch("aep-planning-findings-ledger");
+    let drafts = scratch("aep-planning-findings-ledger-drafts");
+    subject_epic(&store);
+
+    // The first attack: two findings.
+    review_of(
+        &store,
+        &drafts,
+        "attack-1",
+        "epic:objectives",
+        &findings_body(&format!(
+            "{}{}",
+            finding("src/a.rs", 40, "The loop never advances"),
+            finding("src/b.rs", 7, "The refusal names no flag")
+        )),
+    );
+    // The second attack, by a different reviewer: the first finding moved two lines and was
+    // re-wrapped, the second is gone, and a third is new.
+    review_of(
+        &store,
+        &drafts,
+        "attack-2",
+        "epic:objectives",
+        &findings_body(&format!(
+            "{}{}",
+            finding("src/a.rs", 42, "the loop  never   advances"),
+            finding("src/c.rs", 3, "The guard is never reached")
+        )),
+    );
+
+    let ledger = protocol(&[
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(
+        code(&ledger),
+        0,
+        "a ledger is a report: {}",
+        stderr(&ledger)
+    );
+    let said = stdout(&ledger);
+    assert!(
+        said.contains("carried") && said.contains("new") && said.contains("resolved"),
+        "{said}"
+    );
+    assert!(
+        said.contains("agent:adversary"),
+        "the reviewer is printed: {said}"
+    );
+
+    let json = protocol(&[
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&json), 0, "{}", stderr(&json));
+    let value: serde_json::Value =
+        serde_json::from_str(&stdout(&json)).expect("findings --format json is JSON");
+    let count = |key: &str| {
+        value
+            .get(key)
+            .and_then(serde_json::Value::as_array)
+            .unwrap_or_else(|| panic!("`{key}` is an array: {}", stdout(&json)))
+            .len()
+    };
+    assert_eq!(count("carried"), 1, "{}", stdout(&json));
+    assert_eq!(count("new"), 1, "{}", stdout(&json));
+    assert_eq!(count("resolved"), 1, "{}", stdout(&json));
+    assert_eq!(
+        value.get("from").and_then(serde_json::Value::as_str),
+        Some("review-result:attack-1"),
+        "{}",
+        stdout(&json)
+    );
+    assert_eq!(
+        value.get("to").and_then(serde_json::Value::as_str),
+        Some("review-result:attack-2"),
+        "{}",
+        stdout(&json)
+    );
+}
+
+#[test]
+fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_review() {
+    let store = scratch("aep-planning-findings-chosen");
+    let drafts = scratch("aep-planning-findings-chosen-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "attack-1",
+        "epic:objectives",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+
+    // One review is not a comparison, and it is still not an error: a first round has nothing to
+    // be compared against, which is an answer.
+    let alone = protocol(&[
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&alone), 0, "{}", stderr(&alone));
+    assert!(stdout(&alone).contains("one review"), "{}", stdout(&alone));
+
+    review_of(
+        &store,
+        &drafts,
+        "attack-2",
+        "epic:objectives",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+    review_of(
+        &store,
+        &drafts,
+        "attack-3",
+        "epic:objectives",
+        &findings_body(&finding("src/z.rs", 1, "Something else entirely")),
+    );
+
+    // Named explicitly, the pair is the pair asked for and not the newest two.
+    let chosen = protocol(&[
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--from",
+        "review-result:attack-1",
+        "--to",
+        "review-result:attack-2",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&chosen), 0, "{}", stderr(&chosen));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&chosen)).expect("JSON");
+    assert_eq!(
+        value
+            .get("carried")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(1),
+        "{}",
+        stdout(&chosen)
+    );
+}
+
+#[test]
+fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
+    let store = scratch("aep-planning-findings-unrelated");
+    let drafts = scratch("aep-planning-findings-unrelated-drafts");
+    subject_epic(&store);
+    let other = protocol(&[
+        "artifact",
+        "new",
+        "epic",
+        "elsewhere",
+        "--title",
+        "Elsewhere",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&other), 0, "{}", stderr(&other));
+    review_of(
+        &store,
+        &drafts,
+        "attack-1",
+        "epic:objectives",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+    review_of(
+        &store,
+        &drafts,
+        "unrelated",
+        "epic:elsewhere",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+
+    let refused = protocol(&[
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--from",
+        "review-result:attack-1",
+        "--to",
+        "review-result:unrelated",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&refused), 1, "an unrelated review was compared");
+    let said = format!("{}{}", stdout(&refused), stderr(&refused));
+    assert!(
+        said.contains("review-result:unrelated") && said.contains("epic:objectives"),
+        "{said}"
+    );
+}
+
+/// Two reviews of one epic, one of them about a different epic, for the outcome tests.
+fn a_store_with_two_reviews(name: &str) -> (PathBuf, PathBuf) {
+    let store = scratch(name);
+    let drafts = scratch(&format!("{name}-drafts"));
+    subject_epic(&store);
+    let other = protocol(&[
+        "artifact",
+        "new",
+        "epic",
+        "elsewhere",
+        "--title",
+        "Elsewhere",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&other), 0, "{}", stderr(&other));
+    review_of(
+        &store,
+        &drafts,
+        "attack-1",
+        "epic:objectives",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+    review_of(
+        &store,
+        &drafts,
+        "unrelated",
+        "epic:elsewhere",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+    (store, drafts)
+}
+
+#[test]
+fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the_review() {
+    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome");
+
+    let recorded = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--review",
+        "review-result:attack-1",
+        "--outcome",
+        "fixed",
+        "--ref",
+        "runs/2026-09-02.manifest.yaml",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    assert!(
+        stdout(&recorded).contains("review_outcome"),
+        "{}",
+        stdout(&recorded)
+    );
+
+    // The record is about the reviewed artifact and it is *printed on the review*, because the
+    // review is the thing whose worth the question is about.
+    let shown = protocol(&[
+        "artifact",
+        "show",
+        "review-result:attack-1",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&shown), 0, "{}", stderr(&shown));
+    assert!(
+        stdout(&shown).contains("fixed") && stdout(&shown).contains("epic:objectives"),
+        "{}",
+        stdout(&shown)
+    );
+
+    let json = protocol(&[
+        "artifact",
+        "show",
+        "review-result:attack-1",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
+    let outcomes = value
+        .get("outcomes")
+        .and_then(serde_json::Value::as_array)
+        .expect("the outcomes are an array");
+    assert_eq!(outcomes.len(), 1, "{}", stdout(&json));
+    assert_eq!(
+        outcomes[0]
+            .get("outcome")
+            .and_then(serde_json::Value::as_str),
+        Some("fixed"),
+        "{}",
+        stdout(&json)
+    );
+    assert_eq!(
+        outcomes[0]
+            .get("reviewed")
+            .and_then(serde_json::Value::as_str),
+        Some("epic:objectives"),
+        "{}",
+        stdout(&json)
+    );
+}
+
+#[test]
+fn a_review_outcome_naming_a_review_of_something_else_is_refused() {
+    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-unrelated");
+
+    let refused = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--review",
+        "review-result:unrelated",
+        "--outcome",
+        "no-op",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&refused), 1, "an unrelated review was accepted");
+    let said = format!("{}{}", stdout(&refused), stderr(&refused));
+    assert!(
+        said.contains("review-result:unrelated") && said.contains("epic:objectives"),
+        "{said}"
+    );
+
+    // And nothing was written: a refusal changes nothing.
+    let shown = protocol(&[
+        "artifact",
+        "show",
+        "review-result:unrelated",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&shown)).expect("JSON");
+    assert_eq!(
+        value
+            .get("outcomes")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(0),
+        "{}",
+        stdout(&shown)
+    );
+}
+
+#[test]
+fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
+    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-flags");
+    let at = printable(&store);
+
+    // The kind without the two things it is made of.
+    let bare = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&bare), 1, "{}", stdout(&bare));
+    let said = format!("{}{}", stdout(&bare), stderr(&bare));
+    assert!(
+        said.contains("--review") && said.contains("--outcome"),
+        "{said}"
+    );
+
+    // And the two things on a kind that is not made of them.
+    let misplaced = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "test_result",
+        "--source",
+        "task check",
+        "--outcome",
+        "fixed",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&misplaced), 1, "{}", stdout(&misplaced));
+    let said = format!("{}{}", stdout(&misplaced), stderr(&misplaced));
+    assert!(said.contains("review_outcome"), "{said}");
+
+    // A word outside the three.
+    let invented = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--review",
+        "review-result:attack-1",
+        "--outcome",
+        "ignored",
+        "--store",
+        at,
+    ]);
+    assert_eq!(
+        code(&invented),
+        2,
+        "clap owns the value list: {}",
+        stdout(&invented)
+    );
+}
+
+#[test]
+fn the_evidence_help_names_the_review_outcome_kind_and_what_it_needs() {
+    let helped = protocol(&["artifact", "evidence", "--help"]);
+    assert_eq!(code(&helped), 0, "{}", stderr(&helped));
+    assert!(
+        stdout(&helped).contains("review_outcome"),
+        "{}",
+        stdout(&helped)
+    );
+}
+
+#[test]
+fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_flag() {
+    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-validate");
+    let at = printable(&store);
+
+    // Nothing is old enough at the default, so nothing is said about outcomes.
+    let quiet = protocol(&["artifact", "validate", "--store", at]);
+    assert_eq!(code(&quiet), 0, "{}", stderr(&quiet));
+    assert!(
+        !stdout(&quiet).contains("no recorded outcome"),
+        "a review recorded today is not overdue: {}",
+        stdout(&quiet)
+    );
+
+    // At zero days every review that has not been acted on is overdue, and it is still not a
+    // failure: an outcome nobody has recorded yet is work outstanding, not a broken store.
+    let reported = protocol(&[
+        "artifact",
+        "validate",
+        "--outcome-within",
+        "0",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&reported), 0, "{}", stderr(&reported));
+    assert!(
+        stdout(&reported).contains("review-result:attack-1")
+            && stdout(&reported).contains("outcome"),
+        "{}",
+        stdout(&reported)
+    );
+
+    // Recording one takes it off the list.
+    let recorded = protocol(&[
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--review",
+        "review-result:attack-1",
+        "--outcome",
+        "no-op",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    let again = protocol(&[
+        "artifact",
+        "validate",
+        "--outcome-within",
+        "0",
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&again), 0, "{}", stderr(&again));
+    assert!(
+        !again_names(&stdout(&again), "review-result:attack-1"),
+        "{}",
+        stdout(&again)
+    );
+    assert!(
+        stdout(&again).contains("review-result:unrelated"),
+        "the other review is still outstanding: {}",
+        stdout(&again)
+    );
+}
+
+/// Whether the outcome section of a `validate` report names `id`.
+fn again_names(said: &str, id: &str) -> bool {
+    said.lines()
+        .skip_while(|line| !line.contains("no recorded outcome"))
+        .any(|line| line.contains(id))
+}
+
+/// A run manifest the review-value table can read a cost out of.
+const MANIFEST: &str = "format: eval.run-manifest/1\narm: plugin\nharness: claude\nworkflow: \
+                        adp/default\ncase: case:attack\nplugin_digest: null\nmodel: \
+                        claude-sonnet-5\nharness_version: claude 2.1.239\ntranscript_digest: \
+                        6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b\n\
+                        observed_at: 2026-08-23\ncost_micro_usd: 273659\n";
+
+/// Creates a review with an owner of its own and an optional external reference.
+fn review_by(
+    store: &Path,
+    drafts: &Path,
+    name: &str,
+    owner: &str,
+    reference: Option<&str>,
+    body: &str,
+) {
+    let path = drafts.join(format!("{name}.md"));
+    write(&path, body);
+    let mut args = vec![
+        "artifact".to_owned(),
+        "new".to_owned(),
+        "review-result".to_owned(),
+        name.to_owned(),
+        "--title".to_owned(),
+        name.to_owned(),
+        "--owner".to_owned(),
+        owner.to_owned(),
+        "--relate".to_owned(),
+        "reviews:epic:objectives".to_owned(),
+        "--from".to_owned(),
+        printable(&path).to_owned(),
+        "--store".to_owned(),
+        printable(store).to_owned(),
+    ];
+    if let Some(reference) = reference {
+        args.push("--ref".to_owned());
+        args.push(reference.to_owned());
+    }
+    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+    let created = protocol(&borrowed);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+}
+
+// One store, three reviews, three outcomes and one manifest, asserted as one table — because every
+// column of that table is counted from a different part of the store and a test that split them
+// would be four stores that each prove one column and nothing that proves they agree.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_cost() {
+    let store = scratch("aep-planning-review-value");
+    let drafts = scratch("aep-planning-review-value-drafts");
+    subject_epic(&store);
+
+    let manifest = drafts.join("attack.manifest.yaml");
+    write(&manifest, MANIFEST);
+
+    review_by(
+        &store,
+        &drafts,
+        "attack-1",
+        "agent:adversary",
+        Some(&format!("run:{}", printable(&manifest))),
+        &findings_body(&format!(
+            "{}{}",
+            finding("src/a.rs", 40, "The loop never advances"),
+            finding("src/b.rs", 7, "The refusal names no flag")
+        )),
+    );
+    review_by(
+        &store,
+        &drafts,
+        "attack-2",
+        "agent:adversary",
+        None,
+        &findings_body(&finding("src/c.rs", 3, "The guard is never reached")),
+    );
+    review_by(
+        &store,
+        &drafts,
+        "critique-1",
+        "agent:critic",
+        None,
+        &findings_body(&finding("src/d.rs", 9, "The story names no acceptance")),
+    );
+
+    for (review, outcome) in [
+        ("review-result:attack-1", "fixed"),
+        ("review-result:attack-2", "no-op"),
+        ("review-result:critique-1", "escalated"),
+    ] {
+        let recorded = protocol(&[
+            "artifact",
+            "evidence",
+            "epic:objectives",
+            "--kind",
+            "review_outcome",
+            "--review",
+            review,
+            "--outcome",
+            outcome,
+            "--store",
+            printable(&store),
+        ]);
+        assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    }
+
+    let table = protocol(&["artifact", "review-value", "--store", printable(&store)]);
+    assert_eq!(code(&table), 0, "a table is a report: {}", stderr(&table));
+    let said = stdout(&table);
+    assert!(
+        said.contains("agent:adversary") && said.contains("agent:critic"),
+        "{said}"
+    );
+    assert!(
+        said.contains("unknown"),
+        "an unstated cost is unknown: {said}"
+    );
+
+    let json = protocol(&[
+        "artifact",
+        "review-value",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&json), 0, "{}", stderr(&json));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
+    let rows = value
+        .get("reviewers")
+        .and_then(serde_json::Value::as_array)
+        .expect("one row per reviewer");
+    assert_eq!(rows.len(), 2, "{}", stdout(&json));
+
+    let row = |who: &str| {
+        rows.iter()
+            .find(|row| row.get("reviewer").and_then(serde_json::Value::as_str) == Some(who))
+            .unwrap_or_else(|| panic!("no row for {who}: {}", stdout(&json)))
+            .clone()
+    };
+    let adversary = row("agent:adversary");
+    assert_eq!(
+        adversary.get("reviews").and_then(serde_json::Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        adversary
+            .get("findings")
+            .and_then(serde_json::Value::as_u64),
+        Some(3)
+    );
+    assert_eq!(
+        adversary.get("fixed").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        adversary.get("no_op").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        adversary
+            .get("escalated")
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        adversary
+            .get("cost_micro_usd")
+            .and_then(serde_json::Value::as_u64),
+        Some(273_659),
+        "{}",
+        stdout(&json)
+    );
+
+    let critic = row("agent:critic");
+    assert_eq!(
+        critic.get("reviews").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        critic.get("escalated").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert!(
+        critic
+            .get("cost_micro_usd")
+            .is_some_and(serde_json::Value::is_null),
+        "an unstated cost is null, never 0: {}",
+        stdout(&json)
+    );
+    assert_eq!(
+        critic.get("cost").and_then(serde_json::Value::as_str),
+        Some("unknown"),
+        "{}",
+        stdout(&json)
+    );
+
+    // No column is a ratio and no column is a score.
+    for forbidden in ["ratio", "score", "rank", "%"] {
+        assert!(
+            !rows[0]
+                .as_object()
+                .expect("a row is an object")
+                .keys()
+                .any(|key| key.contains(forbidden)),
+            "`{forbidden}` is a column: {}",
+            stdout(&json)
+        );
+    }
+}
+
+#[test]
+fn review_value_says_in_eval_matrixs_own_words_why_it_computes_no_score() {
+    let helped = protocol(&["artifact", "review-value", "--help"]);
+    assert_eq!(code(&helped), 0, "{}", stderr(&helped));
+    let said = stdout(&helped);
+    for word in ["No score", "no ranking", "no percentage"] {
+        assert!(said.contains(word), "`{word}` is not in the help: {said}");
+    }
+}
+
+#[test]
+fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
+    let store = scratch("aep-planning-review-value-since");
+    let drafts = scratch("aep-planning-review-value-since-drafts");
+    subject_epic(&store);
+    review_by(
+        &store,
+        &drafts,
+        "attack-1",
+        "agent:adversary",
+        None,
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+    );
+
+    let now = protocol(&[
+        "artifact",
+        "review-value",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&now)).expect("JSON");
+    assert_eq!(
+        value
+            .get("reviewers")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(1),
+        "{}",
+        stdout(&now)
+    );
+
+    let later = protocol(&[
+        "artifact",
+        "review-value",
+        "--since",
+        "2099-01-01",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&later), 0, "{}", stderr(&later));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&later)).expect("JSON");
+    assert_eq!(
+        value
+            .get("reviewers")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(0),
+        "nothing was recorded after 2099: {}",
+        stdout(&later)
+    );
+}
+
+/// `new --ref` wrote nothing at all, and on the one kind that matters it was the only door.
+///
+/// `set --ref` is refused on a `review-result` — the kind is immutable — so a reference that does
+/// not arrive with the record can never arrive. `review-value` reads the run manifest a review's
+/// reference names, and every cost it could report was `unknown` because of this.
+#[test]
+fn a_reference_given_at_new_is_written_to_the_document() {
+    let store = scratch("aep-planning-new-ref");
+    let created = protocol(&[
+        "artifact",
+        "new",
+        "story",
+        "demo",
+        "--title",
+        "Demo",
+        "--ref",
+        "jira:DEV-630",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+
+    let text = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
+    assert!(
+        text.contains("refs:") && text.contains("DEV-630"),
+        "the reference did not arrive with the record: {text}"
+    );
+
+    // And it is findable by the verb that exists to find it.
+    let listed = protocol(&[
+        "artifact",
+        "list",
+        "--ref",
+        "jira:DEV-630",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    assert!(
+        stdout(&listed).contains("story:demo"),
+        "{}",
+        stdout(&listed)
+    );
+}
+
+/// A review whose reviewer is a `reviewer:` key rather than an `owner`.
+///
+/// Hand-written into the store on purpose: nothing here writes that key — it is the one an emitter
+/// outside this repository may already be writing, and the frontmatter keeps every key it does not
+/// name. A row that read `unattributed` for such a review would be a table blind to whoever
+/// produced most of its rows.
+#[test]
+fn review_value_falls_back_to_a_reviewer_key_when_the_review_has_no_owner() {
+    let store = scratch("aep-planning-review-value-reviewer-key");
+    write(
+        &store.join("epic/e.md"),
+        "---\nformat: aep.planning-md/1\nid: epic:e\nkind: epic\nstatus: draft\ntitle: E\n\
+         revision: 1\n---\n# E\n",
+    );
+    write(
+        &store.join("review-result/hand.md"),
+        "---\nformat: aep.planning-md/1\nid: review-result:hand\nkind: review-result\n\
+         status: active\ntitle: Hand written\nreviewer: agent:critic-consistency\nrelations:\n\
+         - reviews: epic:e\nrevision: 1\n---\n# Hand written\n\n```findings\n- file: a.rs\n  \
+         category: c\n  severity: note\n  message: m\n```\n",
+    );
+
+    let table = protocol(&[
+        "artifact",
+        "review-value",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&table), 0, "{}", stderr(&table));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&table)).expect("JSON");
+    let rows = value
+        .get("reviewers")
+        .and_then(serde_json::Value::as_array)
+        .expect("one row per reviewer");
+    assert_eq!(rows.len(), 1, "{}", stdout(&table));
+    assert_eq!(
+        rows[0].get("reviewer").and_then(serde_json::Value::as_str),
+        Some("agent:critic-consistency"),
+        "{}",
+        stdout(&table)
+    );
+    assert_eq!(
+        rows[0].get("findings").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
 }

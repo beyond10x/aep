@@ -89,6 +89,7 @@ pub mod backend;
 pub mod claim;
 pub mod document;
 pub mod drift;
+pub mod findings;
 pub mod frontmatter;
 pub mod journal;
 pub mod kernel;

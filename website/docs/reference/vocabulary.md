@@ -43,9 +43,15 @@ DM*.
 
 ```text
 test_result  static_analysis  contract_result  property_test_result  deployment_result
-metric_observation  health_observation  approval  diff  artifact  review  verification
-specification
+metric_observation  health_observation  approval  diff  artifact  review  review_outcome
+verification  specification
 ```
+
+`review` is what somebody concluded about a piece of work; `review_outcome` is what became of that
+conclusion — `no-op`, `fixed` or `escalated`. They are separate kinds because they are separate
+facts: a review that found three blockers and a review nobody acted on are the same `review` record
+and different `review_outcome` ones. The outcome is a record naming the review rather than a field
+on it, because a review is immutable once recorded.
 
 `adp/1` adds two more, each minted by the verb that ran the check rather than by the party under
 review:

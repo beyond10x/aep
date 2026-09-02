@@ -86,6 +86,8 @@ fn a_second_process_answers_the_history_the_first_wrote() {
             kind: "test_result".to_owned(),
             source: "task check".to_owned(),
             reference: None,
+            review: None,
+            outcome: None,
         }),
         "evidence",
         1_700_000_002_000,

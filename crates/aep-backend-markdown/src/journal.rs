@@ -47,6 +47,7 @@ use std::collections::BTreeMap;
 
 use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, RelationKind};
 use aep_domain::evidence::EvidenceKind;
+use aep_domain::review::ReviewOutcome;
 
 /// Where the journal lives, relative to the store root.
 pub const JOURNAL: &str = "journal.jsonl";
@@ -124,6 +125,15 @@ pub enum Change {
         /// retrievable address is still better attributed than a bare number.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reference: Option<String>,
+        /// The review this record answers, on a `review_outcome`.
+        ///
+        /// `#[serde(default)]` for the reason `decided_on` has one: entries written before the
+        /// kind existed name no review, and an empty one is the honest reading of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        review: Option<ArtifactId>,
+        /// What became of that review.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        outcome: Option<ReviewOutcome>,
     },
 }
 
@@ -194,8 +204,13 @@ impl fmt::Display for Change {
                 kind,
                 source,
                 reference,
+                review,
+                outcome,
             } => {
                 write!(f, "{} recorded from {source}", kind.as_str())?;
+                if let (Some(review), Some(outcome)) = (review, outcome) {
+                    write!(f, ": {review} was {outcome}")?;
+                }
                 if let Some(reference) = reference {
                     write!(f, " ({reference})")?;
                 }

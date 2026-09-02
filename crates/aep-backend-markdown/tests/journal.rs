@@ -40,6 +40,8 @@ fn evidence_about(artifact: &ArtifactId, source: &str) -> Entry {
             kind: EvidenceKind::TestResult,
             source: source.to_owned(),
             reference: None,
+            review: None,
+            outcome: None,
         },
     }
 }
@@ -173,6 +175,8 @@ fn every_change_round_trips() {
             kind: EvidenceKind::Approval,
             source: "a person".to_owned(),
             reference: Some("https://example.invalid/8814".to_owned()),
+            review: None,
+            outcome: None,
         },
     ];
     for change in &changes {
@@ -305,6 +309,8 @@ fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
                 kind: EvidenceKind::TestResult,
                 source: "task check".to_owned(),
                 reference: None,
+                review: None,
+                outcome: None,
             },
         },
     )

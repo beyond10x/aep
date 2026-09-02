@@ -62,6 +62,7 @@
         "diff",
         "artifact",
         "review",
+        "review_outcome",
         "verification",
         "specification",
         "ess_conformance",

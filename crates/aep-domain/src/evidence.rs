@@ -1216,6 +1216,20 @@ pub enum EvidenceKind {
     Artifact,
     /// A review outcome.
     Review,
+    /// What became of a recorded review: `no-op`, `fixed` or `escalated`.
+    ///
+    /// Distinct from [`EvidenceKind::Review`], which is the review *itself* — what somebody
+    /// concluded about a piece of work. This is what happened next, and the two are different
+    /// facts: a review that found three blockers and a review nobody acted on are the same
+    /// `review` record and different `review_outcome` ones. Without the second, *did this lens ever
+    /// change anything* has nothing behind it but memory, which is the question
+    /// `epic:review-facts` exists to make answerable.
+    ///
+    /// It is a separate record and not a field on the review because a review is immutable once
+    /// recorded (`artifacts/lifecycles/review-result.yaml`): a verdict that could be improved after
+    /// the fact is an opinion with a timestamp, and the outcome arrives strictly later than the
+    /// verdict it is about.
+    ReviewOutcome,
     /// A verifier's statement about a claim.
     Verification,
     /// Specification satisfaction.
@@ -1259,6 +1273,7 @@ impl EvidenceKind {
         Self::Diff,
         Self::Artifact,
         Self::Review,
+        Self::ReviewOutcome,
         Self::Verification,
         Self::Specification,
         Self::EssConformance,
@@ -1279,6 +1294,7 @@ impl EvidenceKind {
             Self::Diff => "diff",
             Self::Artifact => "artifact",
             Self::Review => "review",
+            Self::ReviewOutcome => "review_outcome",
             Self::Verification => "verification",
             Self::Specification => "specification",
             Self::EssConformance => "ess_conformance",
@@ -1340,7 +1356,11 @@ impl EvidenceKind {
             Self::Approval => &[Verifier::HumanApproval],
             Self::Diff => &[Verifier::Compiler, Verifier::StaticAnalyzer],
             Self::Artifact => &[Verifier::ArtifactValidator],
-            Self::Review => &[Verifier::HumanReview],
+            // Whoever acted on the review, which for the outcome is the same class as for the
+            // review itself. Nothing automated can establish it — the only evidence that a finding
+            // was fixed rather than ignored is somebody saying so — and inventing a verifier class
+            // for a judgement no tool makes would be publishing a producer nobody runs.
+            Self::Review | Self::ReviewOutcome => &[Verifier::HumanReview],
             Self::Verification => &[Verifier::PolicyEngine, Verifier::ModelChecker],
             Self::Specification => &[Verifier::TestRunner, Verifier::HumanReview],
             Self::EssConformance => &[Verifier::ConformanceRunner],
