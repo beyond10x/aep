@@ -558,6 +558,7 @@ fn release_asset_text(release: &str) -> Result<()> {
     }
     for required in [
         "workflow_dispatch:",
+        "always() && needs.provenance.result == 'success' && needs.build.result == 'success'",
         "cargo build --release --locked -p protocol-cli --target ${{ matrix.target }}",
         "target/${TARGET}/release/aep",
         "target/${TARGET}/release/protocol",
@@ -1940,6 +1941,15 @@ mod currency_tests {
         assert!(
             release_asset_text(&missing_checksum).is_err(),
             "a checksum file that is never verified must be detected"
+        );
+
+        let skipped_backfill = release.replace(
+            "always() && needs.provenance.result == 'success' && needs.build.result == 'success'",
+            "success()",
+        );
+        assert!(
+            release_asset_text(&skipped_backfill).is_err(),
+            "a manual backfill cannot inherit the skipped tag-only gate"
         );
     }
 
