@@ -9,6 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- Planning stories carry `scope:` — the surfaces a story lands on, each entry a `path` and a
+  `confidence` of `cited` (read out of the artifact, a diff or a file somebody opened) or `inferred`
+  (worked out and not read anywhere). `aep artifact scope <id> --add <path> [--inferred]` and
+  `--remove <path>` are the doors; `show` prints the list and `show --format json` carries it as an
+  array. Story only. A path already declared is replaced rather than doubled, one command is one
+  write and one revision, and the write is journalled like every other mutation. Nothing is
+  normalised: `crates/x` and `crates/x/src/lib.rs` are two surfaces on purpose.
+- `aep artifact waves` derives which stories may be implemented at once, from `scope` and
+  `depends_on` and nothing else. Inside a wave no two stories share a scope path; a story is never
+  in the same wave as anything it depends on, nor before it, including through a story that was not
+  itself placed. Every pair sharing a path prints as `collision: <a> <b> <path>`, marked
+  `(inferred)` when either side worked the path out rather than reading it. A story with no `scope`
+  prints under `unassessed` and is never placed — an unassessed story reads exactly like a safe one,
+  which is the defect. A `depends_on` cycle prints its own ids and exits `2`. `--kind` defaults to
+  `story` and `--status` narrows to one part of the board. It reads and prints: choosing the wave
+  stays the operator's.
+- `aep artifact validate` lists every story past its ladder's first rung and short of its end that
+  declares no `scope`. Reported, never failed on, and deliberately not a `--strict` class: 24 of 40
+  stories would have gone red on the day it landed, which is how a check gets muted.
+
 ## [0.42.0] — 2026-09-02
 
 ### Added

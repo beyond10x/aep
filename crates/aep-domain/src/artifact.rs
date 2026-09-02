@@ -1610,6 +1610,228 @@ impl schemars::JsonSchema for ExternalRef {
     }
 }
 
+/// How well a scope entry is known: read out of something, or worked out from something.
+///
+/// **Not a weasel word, and the reason the field is worth having.** A scope that mixes what was
+/// read with what was guessed is trusted exactly where it is weakest. Keeping the two apart is
+/// what lets a selection step say *this wave's disjointness rests on two cited surfaces and one
+/// inferred one*, which is a sentence somebody can act on; *these three do not overlap* is not.
+///
+/// The vocabulary is closed at two on purpose. A third value would be a confidence nothing
+/// decides on, and the only decision taken here is whether to mark a collision.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ScopeConfidence {
+    /// Read out of the artifact's own prose, a diff, or a file somebody opened. The default: a
+    /// path written with nothing beside it is one somebody had a reason to write.
+    #[default]
+    Cited,
+    /// Worked out from what the artifact is about, and not read anywhere.
+    Inferred,
+}
+
+impl ScopeConfidence {
+    /// The wire spelling, which is what the document carries and what a refusal quotes.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cited => "cited",
+            Self::Inferred => "inferred",
+        }
+    }
+
+    /// Parses the wire spelling.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when `value` is neither `cited` nor `inferred`. Refused by name rather than
+    /// defaulted: an invented confidence would read to a person as a value the engine tracks.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        match value {
+            "cited" => Ok(Self::Cited),
+            "inferred" => Ok(Self::Inferred),
+            other => Err(ParseError::identifier(
+                "confidence",
+                other,
+                "a scope entry is `cited` — read somewhere — or `inferred` — worked out; there is \
+                 no third value, because the only thing decided on it is whether to mark a \
+                 collision"
+                    .to_owned(),
+            )),
+        }
+    }
+}
+
+impl fmt::Display for ScopeConfidence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// One surface a story lands on, and how well that is known.
+///
+/// **The property a concurrent wave rests on, written down.** Selecting several stories to
+/// implement at once is a claim that they touch different surfaces; without somewhere to record a
+/// surface that claim is a pairwise reading of prose, and an unassessed story reads exactly like a
+/// safe one. Here it is a field, so `aep artifact waves` can derive the answer and name what it
+/// excluded.
+///
+/// **Nothing is normalised.** `crates/aep-domain` and `crates/aep-domain/src/artifact.rs` are two
+/// surfaces, and the verb reports collisions at whatever granularity the entries declare. A
+/// normaliser would have to decide that a directory contains a file, which is a claim about a
+/// working tree this crate cannot see and must not guess at.
+///
+/// The document form is a mapping, and the bare path is accepted on the way in:
+///
+/// ```yaml
+/// scope:
+///   - path: crates/aep-domain/src/artifact.rs
+///     confidence: cited
+///   - crates/protocol-cli/src/planning.rs   # the same thing, cited by default
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScopeEntry {
+    /// The surface, as a repository-relative path.
+    pub path: String,
+    /// How well it is known.
+    pub confidence: ScopeConfidence,
+}
+
+impl ScopeEntry {
+    /// Builds an entry.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the path is empty or nothing but whitespace.
+    pub fn new(path: impl Into<String>, confidence: ScopeConfidence) -> Result<Self, ParseError> {
+        let path = path.into();
+        if path.trim().is_empty() {
+            return Err(ParseError::shape(
+                "artifact.scope[].path",
+                "a repository-relative path, such as `crates/aep-domain/src/artifact.rs`",
+                if path.is_empty() {
+                    "an empty string"
+                } else {
+                    "whitespace"
+                },
+            ));
+        }
+        Ok(Self { path, confidence })
+    }
+
+    /// Parses the document form: `{path: …, confidence: cited}`, or the bare path.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the node is neither, when the mapping has no `path`, or when the
+    /// confidence is a word this vocabulary does not have.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        match node {
+            Node::Text(path) => Self::new(path.clone(), ScopeConfidence::default()),
+            Node::Map(entries) => {
+                let Some(path) = entries.get("path").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.scope[]",
+                        "a mapping with `path`, such as `{path: crates/x.rs, confidence: cited}`",
+                        "a mapping with no `path`",
+                    ));
+                };
+                let confidence = match entries.get("confidence") {
+                    None => ScopeConfidence::default(),
+                    Some(node) => match node.as_text() {
+                        Some(text) => ScopeConfidence::parse(text)?,
+                        None => {
+                            return Err(ParseError::shape(
+                                "artifact.scope[].confidence",
+                                "`cited` or `inferred`",
+                                node.type_name(),
+                            ))
+                        }
+                    },
+                };
+                Self::new(path, confidence)
+            }
+            other => Err(ParseError::shape(
+                "artifact.scope[]",
+                "a path, or a mapping carrying `path` and `confidence`",
+                other.type_name(),
+            )),
+        }
+    }
+
+    /// Renders this entry back into document form.
+    ///
+    /// Always the mapping, never the bare path: the confidence is the half a reader most needs and
+    /// the half a shorthand drops, so a document written by a command says both out loud.
+    pub fn to_node(&self) -> Node {
+        Node::Map(
+            [
+                ("path".to_owned(), Node::Text(self.path.clone())),
+                (
+                    "confidence".to_owned(),
+                    Node::Text(self.confidence.as_str().to_owned()),
+                ),
+            ]
+            .into(),
+        )
+    }
+}
+
+impl fmt::Display for ScopeEntry {
+    /// The path, with the confidence beside it only where it is the one somebody guessed.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.confidence {
+            ScopeConfidence::Cited => f.write_str(&self.path),
+            ScopeConfidence::Inferred => write!(f, "{} (inferred)", self.path),
+        }
+    }
+}
+
+impl serde::Serialize for ScopeEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ScopeEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ScopeEntry {
+    fn schema_name() -> String {
+        "ScopeEntry".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schema.metadata().description = Some(
+            "A surface a story lands on, written as a mapping with `path` and `confidence` \
+             (`cited` or `inferred`), or as the bare path, which is `cited`."
+                .to_owned(),
+        );
+        schema.metadata().examples = vec![
+            serde_json::json!({ "path": "crates/aep-domain/src/artifact.rs", "confidence": "cited" }),
+            serde_json::json!("crates/protocol-cli/src/planning.rs"),
+        ];
+        schema.into()
+    }
+}
+
 /// Human-facing description of an artifact.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
@@ -3256,6 +3478,74 @@ mod tests {
             value("artifact.runbook.exists"),
             None,
             "absent kinds stay unknown"
+        );
+    }
+
+    /// A scope entry is a path plus how well it is known, and both document forms mean the same
+    /// entry: the mapping is what is written back, the bare path is what a person types.
+    #[test]
+    fn a_scope_entry_reads_the_mapping_and_the_bare_path_as_one_thing() {
+        let mapping = ScopeEntry::from_node(&Node::Map(
+            [
+                (
+                    "path".to_owned(),
+                    Node::Text("crates/aep-domain/src/artifact.rs".to_owned()),
+                ),
+                ("confidence".to_owned(), Node::Text("inferred".to_owned())),
+            ]
+            .into(),
+        ))
+        .expect("the mapping form parses");
+        assert_eq!(mapping.path, "crates/aep-domain/src/artifact.rs");
+        assert_eq!(mapping.confidence, ScopeConfidence::Inferred);
+
+        let bare =
+            ScopeEntry::from_node(&Node::Text("crates/aep-domain/src/artifact.rs".to_owned()))
+                .expect("the bare path parses");
+        assert_eq!(
+            bare.confidence,
+            ScopeConfidence::Cited,
+            "a path written without a confidence is one somebody read, not one somebody guessed"
+        );
+        assert_eq!(
+            mapping.to_node(),
+            ScopeEntry::from_node(&mapping.to_node())
+                .expect("the written form parses back")
+                .to_node(),
+            "the written form is the form that round-trips"
+        );
+    }
+
+    /// The one rule the path has, and the reason it has no others: the verb reports collisions at
+    /// the declared granularity and normalises nothing, so `crates/x` and `crates/x/src/lib.rs` are
+    /// two surfaces on purpose.
+    #[test]
+    fn a_scope_entry_refuses_an_empty_path_and_accepts_any_granularity() {
+        assert!(ScopeEntry::from_node(&Node::Text(String::new())).is_err());
+        assert!(ScopeEntry::from_node(&Node::Text("   ".to_owned())).is_err());
+        assert_eq!(
+            ScopeEntry::new("crates/aep-domain", ScopeConfidence::Cited)
+                .expect("a directory is a surface")
+                .path,
+            "crates/aep-domain"
+        );
+    }
+
+    /// An unrecognised confidence is refused by name rather than defaulted: `confidence: probably`
+    /// would read to a person as a value the engine tracks, and it tracks two.
+    #[test]
+    fn a_confidence_the_vocabulary_does_not_have_is_refused_by_name() {
+        let error = ScopeEntry::from_node(&Node::Map(
+            [
+                ("path".to_owned(), Node::Text("crates/x.rs".to_owned())),
+                ("confidence".to_owned(), Node::Text("probably".to_owned())),
+            ]
+            .into(),
+        ))
+        .expect_err("an invented confidence is refused");
+        assert!(
+            error.to_string().contains("probably"),
+            "the refusal quotes what was written: {error}"
         );
     }
 }

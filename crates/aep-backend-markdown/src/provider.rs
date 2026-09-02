@@ -68,7 +68,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use aep_domain::artifact::{
-    ArtifactId, ArtifactKind, ArtifactRelation, ArtifactStatus, ExternalRef,
+    ArtifactId, ArtifactKind, ArtifactRelation, ArtifactStatus, ExternalRef, ScopeEntry,
 };
 use aep_domain::node::Node;
 use entity_core::{Decision, DomainEvent, EntityInstance};
@@ -335,6 +335,12 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
             serde_json::to_value(&frontmatter.relations).unwrap_or(Value::Null),
         );
     }
+    if !frontmatter.scope.is_empty() {
+        fields.insert(
+            "scope".to_owned(),
+            serde_json::to_value(&frontmatter.scope).unwrap_or(Value::Null),
+        );
+    }
     if let Some(withholds) = frontmatter.withholds {
         fields.insert("withholds".to_owned(), Value::from(withholds.as_str()));
     }
@@ -399,6 +405,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
 
     let tags = tags_of(&mut fields).map_err(refuse)?;
     let refs = refs_of(&mut fields).map_err(refuse)?;
+    let scope = scope_of(&mut fields).map_err(refuse)?;
 
     let relations: Vec<ArtifactRelation> = match fields.remove("relations") {
         None => Vec::new(),
@@ -443,6 +450,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             tags,
             refs,
             relations,
+            scope,
             withholds,
             revision: instance.revision,
             extra,
@@ -533,6 +541,26 @@ fn refs_of(fields: &mut Map<String, Value>) -> Result<BTreeSet<ExternalRef>, Str
             })
             .collect(),
         Some(other) => Err(format!("the `refs` field is {other}, not a list")),
+    }
+}
+
+/// The scope entries an instance carries, in the document's own form.
+///
+/// Refused rather than dropped, for the reason a reference is: a surface nothing can read is a
+/// surface a wave would silently treat as absent, and absent is what says *this story is safe to
+/// run beside anything*.
+fn scope_of(fields: &mut Map<String, Value>) -> Result<Vec<ScopeEntry>, String> {
+    match fields.remove("scope") {
+        None => Ok(Vec::new()),
+        Some(Value::Array(entries)) => entries
+            .into_iter()
+            .map(|value| {
+                let node: Node =
+                    serde_json::from_value(value).map_err(|error| format!("a surface: {error}"))?;
+                ScopeEntry::from_node(&node).map_err(|error| error.to_string())
+            })
+            .collect(),
+        Some(other) => Err(format!("the `scope` field is {other}, not a list")),
     }
 }
 

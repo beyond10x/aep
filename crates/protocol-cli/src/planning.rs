@@ -37,6 +37,11 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use crate::Format;
 
+// The wave derivation, which is a function over ordered collections and nothing else: no store, no
+// file, no clock. Split out because `waves` is the one verb here that *computes* rather than reads
+// and renders, and a derivation nobody can unit-test without a directory is one nobody unit-tests.
+mod waves;
+
 /// The directory inside `.engineering` that holds the plan.
 const PLANNING_DIRECTORY: &str = "planning";
 
@@ -1023,6 +1028,67 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, hide = true, allow_hyphen_values = true)]
         kind: Option<String>,
     },
+    /// Record which surfaces a story lands on, so a wave can be derived rather than asserted.
+    ///
+    /// Selecting several stories to implement at once is a claim that they touch different
+    /// surfaces. Before this there was nowhere to write a surface down, so the claim was a pairwise
+    /// reading of `## Scope` prose — and **an unassessed story reads exactly like a safe one**,
+    /// which is the defect. `aep artifact waves` reads what this writes.
+    ///
+    /// Each entry carries `cited` — read out of the artifact, a diff or a file somebody opened — or
+    /// `inferred`, worked out and not read anywhere. The two are kept apart because a scope that
+    /// mixes them is trusted exactly where it is weakest.
+    ///
+    /// **Nothing is normalised.** `crates/aep-domain` and `crates/aep-domain/src/artifact.rs` are
+    /// two surfaces, and `waves` reports collisions at whatever granularity is declared here. A
+    /// normaliser would have to decide that a directory contains a file, which is a claim about a
+    /// working tree the store cannot see.
+    ///
+    /// The `## Scope` section stays what a person reads; this is what a computation reads, and the
+    /// scoper writes both.
+    Scope {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The story, such as `story:passkey-login`.
+        id: String,
+        /// A path this story lands on. Repeat for more than one.
+        #[arg(long = "add", value_name = "PATH")]
+        add: Vec<String>,
+        /// A path to take out. Repeat for more than one.
+        #[arg(long = "remove", value_name = "PATH")]
+        remove: Vec<String>,
+        /// Record every `--add` of this command as worked out rather than read.
+        #[arg(long, requires = "add")]
+        inferred: bool,
+    },
+    /// Derive the waves: which stories may be implemented at once, and what was kept apart.
+    ///
+    /// Reads `scope` and `depends_on` and prints the waves in the order they must run. Inside a
+    /// wave no two stories share a scope path; a story is never in the same wave as anything it
+    /// depends on, nor before it. Every pair sharing a path is printed as
+    /// `collision: <a> <b> <path>`, marked `(inferred)` when either side worked the path out rather
+    /// than reading it — an inferred entry **counts** as a collision, because putting the pair in
+    /// one wave on the strength of a guess is the failure this verb exists against.
+    ///
+    /// A story with no scope is printed under `unassessed` and **never placed**. A `depends_on`
+    /// cycle is printed with its own ids and exits `2`, because a cycle has no ordering and
+    /// inventing one would be worse than saying so.
+    ///
+    /// **It reads and prints.** Choosing which wave to run is the operator's, and so is deciding
+    /// that a reported collision may be worked anyway. Granularity is whatever the entries say:
+    /// nothing here normalises `crates/x/src/lib.rs` to `crates/x`.
+    Waves {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// Which kind to sequence, and the kinds that specialise it. `scope` is a story's field.
+        #[arg(long, default_value = "story")]
+        kind: String,
+        /// Only artifacts at this status, such as `proposed`.
+        #[arg(long)]
+        status: Option<String>,
+    },
     /// Print one artifact: its frontmatter fields, then its body.
     ///
     /// The verb for an id in hand, and the one this family did not have. `list` prints the whole
@@ -1304,6 +1370,11 @@ pub(crate) enum PlanningGraphFormat {
 }
 
 /// `protocol artifact`
+///
+/// One arm per verb and nothing else. It is over a hundred lines because the family has over
+/// twenty verbs, and splitting a dispatch in two would put the answer to *what handles this*
+/// in whichever half a reader did not open first.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
     match command {
         ArtifactCommand::New(args) => create(&args),
@@ -1366,6 +1437,18 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
                 ("kind", kind),
             ],
         ),
+        ArtifactCommand::Scope {
+            store,
+            id,
+            add,
+            remove,
+            inferred,
+        } => scope(&store, &id, &add, &remove, inferred),
+        ArtifactCommand::Waves {
+            store,
+            kind,
+            status,
+        } => derive_waves(&store, &kind, status.as_deref()),
         ArtifactCommand::Show {
             store,
             id,
@@ -1619,6 +1702,9 @@ fn entity_body(
     }
     if let Some(withholds) = front.withholds {
         data.insert("withholds".to_owned(), Node::from(withholds.as_str()));
+    }
+    if !front.scope.is_empty() {
+        data.insert("scope".to_owned(), scope_node(&front.scope));
     }
     data.insert(
         aep_backend_markdown::backend::BODY_KEY.to_owned(),
@@ -2875,6 +2961,246 @@ fn set(
     Ok(ExitCode::SUCCESS)
 }
 
+/// The scope entries as the document form a command carries.
+///
+/// An **empty** sequence is written rather than the key omitted, because `--remove` taking out the
+/// last path is a command that meant exactly that, and a field a command says nothing about is a
+/// field the write leaves alone.
+fn scope_node(entries: &[aep_domain::artifact::ScopeEntry]) -> aep_domain::node::Node {
+    aep_domain::node::Node::Seq(
+        entries
+            .iter()
+            .map(aep_domain::artifact::ScopeEntry::to_node)
+            .collect(),
+    )
+}
+
+/// `protocol artifact scope`
+///
+/// The verb `story:a-story-records-where-it-lands` put out of its own scope for want of a door:
+/// `artifact` had `new`, `move`, `relate` and `body`, and nothing that edited one frontmatter key,
+/// so a machine-readable surface could not be written without a frontmatter splitter and a journal
+/// entry nobody made. This is that door, through the same command path every other write passes.
+///
+/// One command is one write and one revision, whatever it names — the same rule `set` follows, and
+/// the store's own: `revision` counts the writes it made.
+fn scope(
+    args: &StoreArgs,
+    id: &str,
+    add: &[String],
+    remove: &[String],
+    inferred: bool,
+) -> Result<ExitCode> {
+    use aep_domain::artifact::{ScopeConfidence, ScopeEntry};
+
+    if add.is_empty() && remove.is_empty() {
+        anyhow::bail!(
+            "nothing to scope; name a path, such as `--add crates/aep-domain/src/artifact.rs`, or \
+             `--remove <path>` to take one out"
+        );
+    }
+    let id = artifact_id(id)?;
+    let opened = open(&args.location, true)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let front = &stored.document.frontmatter;
+
+    // Story only, and refused by name rather than written anywhere it would go unread. The default
+    // `story:a-story-records-where-it-lands` records: a task is already the decomposed unit and
+    // inherits its story's surface, and a wave has never been assembled from anything else.
+    if !front.kind.is_a(&ArtifactKind::Story) {
+        anyhow::bail!(
+            "`scope` is a field of `story`, and `{id}` is a `{}`: a task inherits the surface of \
+             the story it decomposes, and nothing above a story is a unit anybody puts in a wave. \
+             Record the scope on the stories instead",
+            front.kind
+        );
+    }
+
+    let confidence = if inferred {
+        ScopeConfidence::Inferred
+    } else {
+        ScopeConfidence::Cited
+    };
+    let mut entries = front.scope.clone();
+    let mut added: Vec<ScopeEntry> = Vec::new();
+    for path in add {
+        let entry = ScopeEntry::new(path.clone(), confidence)
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        // A path already declared is **replaced**, never doubled: two entries for one surface would
+        // be a document saying two things about it, and a computation reading it would pick one.
+        match entries.iter_mut().find(|held| held.path == entry.path) {
+            Some(held) => held.clone_from(&entry),
+            None => entries.push(entry.clone()),
+        }
+        added.push(entry);
+    }
+    let mut removed: Vec<String> = Vec::new();
+    for path in remove {
+        if entries.iter().any(|held| &held.path == path) {
+            entries.retain(|held| &held.path != path);
+            removed.push(path.clone());
+        }
+    }
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+
+    // Only what differs travels, for the reason `set` gives: a command carrying what the document
+    // already says is a write with nothing in it and a revision nobody can explain.
+    if entries == front.scope {
+        outln!("{id} already reads that way; nothing to do");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let revision = front.revision.saturating_add(1);
+    let relative = stored.relative_path.clone();
+    let written = entries.clone();
+    update_through_a_command(
+        opened.backend()?,
+        &id,
+        vec![("scope".to_owned(), scope_node(&entries))],
+        "protocol-artifact-scope",
+    )?;
+
+    let path = opened.path_of(&id);
+    match args.format {
+        Format::Text => {
+            outln!("{id} scope set (revision {revision}) at {path}");
+            for entry in &added {
+                outln!("  + {} ({})", entry.path, entry.confidence);
+            }
+            for gone in &removed {
+                outln!("  - {gone}");
+            }
+        }
+        Format::Yaml | Format::Json => crate::print_serialised(
+            &ScopeSet {
+                id: id.to_string(),
+                added,
+                removed,
+                scope: written,
+                revision,
+                path: relative,
+            },
+            args.format,
+        )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `protocol artifact waves`
+///
+/// Selects the candidates, hands them to the derivation and renders what came back. The exit code
+/// is `2` on a `depends_on` cycle and `0` otherwise — including when every pair collides, because
+/// *these two cannot run together* is an answer about the plan and not a failure of this program,
+/// which is the same reasoning every other refusal in this module rests on.
+fn derive_waves(args: &StoreArgs, kind: &str, status: Option<&str>) -> Result<ExitCode> {
+    let kind = ArtifactKind::parse(kind).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let status = match status {
+        Some(value) => Some(parse_status(value)?),
+        None => None,
+    };
+    let opened = open(&args.location, false)?;
+    let candidates: Vec<waves::Candidate> = opened
+        .report
+        .documents
+        .values()
+        .filter(|stored| {
+            let front = &stored.document.frontmatter;
+            front.kind.is_a(&kind)
+                && status
+                    .as_ref()
+                    .is_none_or(|wanted| &front.status == wanted)
+        })
+        .map(|stored| {
+            let front = &stored.document.frontmatter;
+            waves::Candidate {
+                id: front.id.to_string(),
+                scope: front.scope.clone(),
+                depends_on: front
+                    .targets(RelationKind::DependsOn)
+                    .map(|relation| relation.target.id().to_string())
+                    .collect(),
+            }
+        })
+        .collect();
+
+    let derived = waves::derive(&candidates);
+    match args.format {
+        Format::Text => print_waves(&derived),
+        Format::Yaml | Format::Json => crate::print_serialised(&derived, args.format)?,
+    }
+    // Exit 2, and only for a cycle. It is the one condition under which the verb has no answer at
+    // all — `bdfinst/agentic-dev-team`'s `scripts/plan_waves.py` reserves the same code for it.
+    Ok(if derived.cycles.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(2)
+    })
+}
+
+/// What `waves` prints for a person.
+fn print_waves(derived: &waves::Derivation) {
+    use aep_domain::artifact::ScopeConfidence;
+
+    if !derived.cycles.is_empty() {
+        for cycle in &derived.cycles {
+            outln!("cycle: {}", cycle.join(" -> "));
+        }
+        outln!(
+            "{} cycle(s): there is no order until one edge of each is cut",
+            derived.cycles.len()
+        );
+        return;
+    }
+    // Said out loud rather than printed as an empty answer, on `blocked`'s reasoning: *no waves*
+    // over a store where nothing declares a surface reads as good news about a mechanism the plan
+    // does not have.
+    if derived.waves.is_empty() {
+        outln!(
+            "no wave: nothing selected declares a scope; `aep artifact scope <id> --add <path>` \
+             records one"
+        );
+    }
+    for wave in &derived.waves {
+        outln!("wave {}", wave.wave);
+        for placed in &wave.artifacts {
+            if placed.inferred {
+                outln!("  {} (inferred)", placed.id);
+            } else {
+                outln!("  {}", placed.id);
+            }
+        }
+    }
+    for collision in &derived.collisions {
+        match collision.confidence {
+            ScopeConfidence::Cited => outln!(
+                "collision: {} {} {}",
+                collision.a,
+                collision.b,
+                collision.path
+            ),
+            ScopeConfidence::Inferred => outln!(
+                "collision: {} {} {} (inferred)",
+                collision.a,
+                collision.b,
+                collision.path
+            ),
+        }
+    }
+    for id in &derived.unassessed {
+        outln!("unassessed: {id}");
+    }
+    outln!(
+        "{} wave(s), {} collision(s), {} unassessed",
+        derived.waves.len(),
+        derived.collisions.len(),
+        derived.unassessed.len()
+    );
+}
+
 /// `protocol artifact show`
 ///
 /// One artifact, printed: the frontmatter fields a reader asks about, then the body as the store
@@ -2926,6 +3252,14 @@ fn shown_from(
             })
             .collect(),
         withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
+        scope: frontmatter
+            .scope
+            .iter()
+            .map(|entry| ShownScope {
+                path: entry.path.clone(),
+                confidence: entry.confidence.as_str(),
+            })
+            .collect(),
         revision: frontmatter.revision,
         body: stored.document.body.clone(),
     }
@@ -2991,6 +3325,16 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
             }
             if !shown.tags.is_empty() {
                 rows.push(vec!["tags".to_owned(), shown.tags.join(", ")]);
+            }
+            // One surface per line and the confidence beside it, labelled once: which of a story's
+            // surfaces was read and which was guessed is the whole reason the field is two columns
+            // rather than a list of strings.
+            for (index, entry) in shown.scope.iter().enumerate() {
+                let label = if index == 0 { "scope" } else { "" };
+                rows.push(vec![
+                    label.to_owned(),
+                    format!("{}  {}", entry.path, entry.confidence),
+                ]);
             }
             // One edge per line, labelled once: a document with six relations on one line is a line
             // nobody reads to the end.
@@ -3712,7 +4056,70 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
         forged: forged_findings,
         deleted: deleted_findings,
         pre_provider,
+        unscoped: unscoped_stories(report, registry.lifecycles()),
     }
+}
+
+/// Stories a wave could be assembled from that do not say where they land.
+///
+/// **An unassessed story reads exactly like a safe one, and that is the defect** — dry-running the
+/// wave skill's selection step on this repository's own store on 2026-08-30 found 24 of 40 draft
+/// stories citing no source path at all, so the property a concurrent wave rests on was not
+/// derivable for 60% of it.
+///
+/// Which stories are on the list is decided by the kind's own ladder rather than by the word
+/// `draft`:
+///
+/// * **the first rung is off it.** A story somebody is still writing has not been offered to
+///   anybody, and demanding a surface before it is proposed is demanding it before it is known.
+/// * **the end of the ladder is off it too.** A rung from which every legal move lands on a rung
+///   nothing follows — `implemented`, `rejected`, `archived` under this repository's story ladder —
+///   is a story nobody can put in a wave, so listing it is noise in a report whose whole value is
+///   being a list somebody can work through.
+///
+/// A kind with no ladder is not on it either: without a ladder there is no first rung, and "not
+/// draft" would be a guess about a vocabulary the documents never declared.
+fn unscoped_stories(
+    report: &StoreReport,
+    lifecycles: &aep_domain::artifact::LifecycleRegistry,
+) -> Vec<String> {
+    let mut unscoped = Vec::new();
+    for stored in report.documents.values() {
+        let front = &stored.document.frontmatter;
+        if !front.kind.is_a(&ArtifactKind::Story) || !front.scope.is_empty() {
+            continue;
+        }
+        let Some(ladder) = lifecycles.for_kind(&front.kind) else {
+            continue;
+        };
+        if front.status == ladder.initial || at_the_end_of(ladder, &front.status) {
+            continue;
+        }
+        unscoped.push(format!(
+            "{} is {} and declares no scope, so nothing can tell whether it may be worked beside \
+             another story — `aep artifact scope {} --add <path>` records one",
+            front.id,
+            front.status.as_str(),
+            front.id
+        ));
+    }
+    unscoped
+}
+
+/// `true` when every move this rung permits lands somewhere nothing follows.
+///
+/// The ladder's own definition of *done with*, rather than a list of status names this binary
+/// happens to know: `implemented -> [archived]` and `archived -> []` are both the end of a story
+/// under `artifacts/lifecycles/story.yaml`, and a document tree that spells its last rungs
+/// differently gets the same answer without a release here.
+fn at_the_end_of(ladder: &ArtifactLifecycle, status: &ArtifactStatus) -> bool {
+    let terminal = |rung: &ArtifactStatus| {
+        ladder
+            .transitions
+            .get(rung)
+            .is_none_or(std::collections::BTreeSet::is_empty)
+    };
+    terminal(status) || ladder.transitions[status].iter().all(terminal)
 }
 
 /// What `protocol artifact validate` would report about the plan `root` names.
@@ -3758,6 +4165,14 @@ fn print_validation(summary: &Summary, strict: bool) {
             summary.closed_on_an_assertion.len()
         );
         for note in &summary.closed_on_an_assertion {
+            outln!("  - {note}");
+        }
+    }
+    // Reported, and deliberately not a problem: see `Summary::unscoped`. The list is the point —
+    // a gap somebody can work through, one story at a time.
+    if !summary.unscoped.is_empty() {
+        outln!("{} without a scope:", summary.unscoped.len());
+        for note in &summary.unscoped {
             outln!("  - {note}");
         }
     }
@@ -5207,9 +5622,24 @@ pub(crate) struct Shown {
     refs: Vec<ShownRef>,
     /// The evidence kind this artifact is stopping anybody from producing.
     withholds: Option<String>,
+    /// The surfaces it declares, `[]` for an artifact that declares none.
+    ///
+    /// Always written, never omitted when empty: *this story touches nothing* and *nobody has said
+    /// what this story touches* are two documents to a machine as well as to a reader, and the
+    /// second is the one a wave must not place.
+    scope: Vec<ShownScope>,
     revision: u64,
     /// The markdown body, exactly as the store holds it.
     body: String,
+}
+
+/// One surface, as `show` prints it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ShownScope {
+    /// The path, at whatever granularity it was declared.
+    path: String,
+    /// `cited` — read somewhere — or `inferred`, worked out.
+    confidence: &'static str,
 }
 
 /// One external reference, as `show` prints it.
@@ -5353,6 +5783,20 @@ struct BodyReplaced {
 }
 
 /// What `set` changed, and what the document reads at afterwards.
+/// What `scope` wrote.
+#[derive(Debug, serde::Serialize)]
+struct ScopeSet {
+    id: String,
+    /// The entries this command put in, each as it now stands.
+    added: Vec<aep_domain::artifact::ScopeEntry>,
+    /// The paths this command took out.
+    removed: Vec<String>,
+    /// The whole scope after the write, ordered by path.
+    scope: Vec<aep_domain::artifact::ScopeEntry>,
+    revision: u64,
+    path: String,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct FieldsSet {
     id: String,
@@ -5393,6 +5837,14 @@ pub(crate) struct Summary {
     deleted: Vec<String>,
     /// Documents with no events at all — they predate the provider, which is not a defect.
     pre_provider: usize,
+    /// Stories past their ladder's first rung and still short of its end that declare no `scope`.
+    ///
+    /// Reported and **not** counted as a problem, and deliberately not a `--strict` class either.
+    /// `story:a-story-records-where-it-lands` argues the tier out: 24 of 40 stories would have gone
+    /// red on the day it landed, "which is how a check gets muted". It is a list somebody works
+    /// through, not a gate.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    unscoped: Vec<String>,
 }
 
 /// One kind in the vocabulary.

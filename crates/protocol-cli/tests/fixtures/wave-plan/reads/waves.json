@@ -1,0 +1,82 @@
+{
+  "waves": [
+    {
+      "wave": 1,
+      "artifacts": [
+        {
+          "id": "story:alpha",
+          "inferred": false,
+          "scope": [
+            {
+              "confidence": "cited",
+              "path": "crates/aep-domain/src/artifact.rs"
+            }
+          ]
+        },
+        {
+          "id": "story:beta",
+          "inferred": false,
+          "scope": [
+            {
+              "confidence": "cited",
+              "path": "crates/protocol-cli/src/planning.rs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "artifacts": [
+        {
+          "id": "story:delta",
+          "inferred": false,
+          "scope": [
+            {
+              "confidence": "cited",
+              "path": "website/docs/reference/cli.md"
+            }
+          ]
+        },
+        {
+          "id": "story:epsilon",
+          "inferred": true,
+          "scope": [
+            {
+              "confidence": "inferred",
+              "path": "crates/protocol-cli/src/planning.rs"
+            }
+          ]
+        },
+        {
+          "id": "story:gamma",
+          "inferred": false,
+          "scope": [
+            {
+              "confidence": "cited",
+              "path": "crates/aep-domain/src/artifact.rs"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "collisions": [
+    {
+      "a": "story:alpha",
+      "b": "story:gamma",
+      "path": "crates/aep-domain/src/artifact.rs",
+      "confidence": "cited"
+    },
+    {
+      "a": "story:beta",
+      "b": "story:epsilon",
+      "path": "crates/protocol-cli/src/planning.rs",
+      "confidence": "inferred"
+    }
+  ],
+  "unassessed": [
+    "story:zeta"
+  ],
+  "cycles": []
+}

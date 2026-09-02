@@ -3,5 +3,8 @@
   "files_read": 4,
   "artifacts": 4,
   "problems": [],
-  "pre_provider": 1
+  "pre_provider": 1,
+  "unscoped": [
+    "story:golden-one is proposed and declares no scope, so nothing can tell whether it may be worked beside another story — `aep artifact scope story:golden-one --add <path>` records one"
+  ]
 }
