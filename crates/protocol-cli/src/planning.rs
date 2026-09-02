@@ -1087,10 +1087,19 @@ pub(crate) enum ArtifactCommand {
         category: Option<String>,
     },
     /// Show the plan as status columns.
+    ///
+    /// `markdown` renders a page: one section per column, a table per section, and each column's
+    /// description from its own ladder. It exists so a documentation site does not have to
+    /// reimplement the board from `--format json` — every consumer that did carried a hard-coded
+    /// map of status to blurb beside the renderer, which is a second copy of a vocabulary the
+    /// ladders own.
     Board {
-        /// Where the plan is and how to render.
+        /// Where the plan is.
         #[command(flatten)]
-        store: StoreArgs,
+        store: StoreLocation,
+        /// How to render the board.
+        #[arg(long, value_enum, default_value_t = PlanningBoardFormat::Text)]
+        format: PlanningBoardFormat,
         /// Only this kind, and the kinds that specialise it.
         #[arg(long)]
         kind: Option<String>,
@@ -1299,8 +1308,23 @@ pub(crate) struct NewArgs {
 pub(crate) enum PlanningGraphFormat {
     /// Graphviz DOT, for `dot -Tsvg`.
     Dot,
+    /// Mermaid `flowchart LR`, for a markdown page that renders diagrams itself.
+    Mermaid,
     /// The artifact graph itself.
     Json,
+}
+
+/// How to render the board.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum PlanningBoardFormat {
+    /// Human-readable lines.
+    Text,
+    /// YAML, for another tool to read.
+    Yaml,
+    /// JSON, for another tool to read.
+    Json,
+    /// A markdown page: one section per column, with each column's own description.
+    Markdown,
 }
 
 /// `protocol artifact`
@@ -1377,7 +1401,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             status,
             reference,
         } => list(&store, kind.as_deref(), status.as_deref(), reference.as_deref()),
-        ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
+        ArtifactCommand::Board { store, format, kind } => board(&store, format, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate { store, strict } => validate(&store, strict),
@@ -3065,15 +3089,29 @@ fn ladders_or_none(args: &StoreArgs) -> aep_engine::Registry {
 }
 
 /// `protocol artifact board`
-fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
-    let opened = open(&args.location, false)?;
-    let ladders = ladders_or_none(args);
+fn board(
+    location: &StoreLocation,
+    format: PlanningBoardFormat,
+    kind: Option<&str>,
+) -> Result<ExitCode> {
+    let opened = open(location, false)?;
+    let ladders = location.lifecycles().unwrap_or_default();
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
     let listed = select(&opened.report, &blocked, kind, None, None)?;
     let columns = columns_for(&listed, ladders.lifecycles());
 
-    match args.format {
-        Format::Text => {
+    match format {
+        PlanningBoardFormat::Markdown => {
+            // The configuration only, and a failure to read it is not a failure to render: a store
+            // outside any project has no `project.yaml`, and a reference with no link is the right
+            // answer there. Same reading `show` takes.
+            let config = aep_project::project::load_config(&location.repository_root()).ok();
+            out!(
+                "{}",
+                board_markdown(&columns, ladders.lifecycles(), config.as_ref())
+            );
+        }
+        PlanningBoardFormat::Text => {
             for (index, column) in columns.iter().enumerate() {
                 if index > 0 {
                     outln!();
@@ -3094,9 +3132,122 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
                 }
             }
         }
-        Format::Yaml | Format::Json => crate::print_serialised(&columns, args.format)?,
+        PlanningBoardFormat::Yaml => crate::print_serialised(&columns, Format::Yaml)?,
+        PlanningBoardFormat::Json => crate::print_serialised(&columns, Format::Json)?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// The board as a markdown page.
+///
+/// One `##` per column, the column's own description under it where its ladder writes one, then a
+/// table. A reference becomes a link only where the project said how to build one — an undeclared
+/// provider renders as its shorthand, because a link that opens the wrong page cannot be told from
+/// a right one by looking at it.
+fn board_markdown(
+    columns: &[Column],
+    lifecycles: &aep_domain::LifecycleRegistry,
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> String {
+    let total: usize = columns.iter().map(|column| column.artifacts.len()).sum();
+    let mut page = format!(
+        "{total} artifact(s) in the planning store, one column per status.\n\nGenerated by \
+         `protocol artifact board --format markdown`; nothing on this page is written by hand.\n"
+    );
+
+    for column in columns {
+        let _ = write!(
+            page,
+            "\n## {} ({})\n",
+            column.status,
+            column.artifacts.len()
+        );
+        if let Some(description) = description_for(lifecycles, &column.artifacts, &column.status) {
+            let _ = write!(page, "\n_{description}_\n");
+        }
+        page.push_str("\n| artifact | kind | title | reference | blocked by |\n");
+        page.push_str("|---|---|---|---|---|\n");
+        for entry in &column.artifacts {
+            let _ = writeln!(
+                page,
+                "| `{}` | {} | {} | {} | {} |",
+                entry.id,
+                entry.kind,
+                cell(entry.title.as_deref().unwrap_or_default()),
+                references(&entry.refs, providers),
+                blocked_cell(&entry.blocked_by),
+            );
+        }
+    }
+    page
+}
+
+/// One column's description, taken from a ladder that actually governs something in it.
+///
+/// A column is a rung name, and two kinds may both use `draft` while describing it differently, so
+/// the description cannot be looked up by status alone. It is read from the ladders of the kinds
+/// standing in this column, and used only where every one of them agrees — a column holding a story
+/// and a decision that describe `draft` differently gets no description rather than one of them.
+fn description_for(
+    lifecycles: &aep_domain::LifecycleRegistry,
+    artifacts: &[Listed],
+    status: &str,
+) -> Option<String> {
+    let status = ArtifactStatus::parse(status).ok()?;
+    let mut found: Option<&str> = None;
+    for artifact in artifacts {
+        let kind = ArtifactKind::parse(&artifact.kind).ok()?;
+        let described = lifecycles
+            .for_kind(&kind)
+            .and_then(|ladder| ladder.descriptions.get(&status))?;
+        match found {
+            None => found = Some(described.as_str()),
+            Some(agreed) if agreed == described => {}
+            Some(_) => return None,
+        }
+    }
+    found.map(ToOwned::to_owned)
+}
+
+/// Every reference on one artifact, linked where the project declared how.
+fn references(
+    refs: &[String],
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> String {
+    refs.iter()
+        .map(|shorthand| {
+            // The key alone in the cell: a board joined to a tracker is read by people who already
+            // know which tracker it is, and `jira:` on every row is a column of one word repeated.
+            let key = shorthand
+                .split_once(':')
+                .map_or(shorthand.as_str(), |(_, key)| key);
+            let url = providers.and_then(|config| {
+                shorthand
+                    .parse::<aep_domain::artifact::ExternalRef>()
+                    .ok()
+                    .and_then(|reference| config.link(&reference))
+            });
+            match url {
+                Some(url) => format!("[{}]({url})", cell(key)),
+                None => cell(key),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What is stopping one artifact, for the board's last column.
+fn blocked_cell(blocked_by: &[Blocking]) -> String {
+    blocked_by
+        .iter()
+        .map(|blocking| format!("`{}`", blocking.blocker))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// One table cell: a pipe would end the column it is in.
+fn cell(value: &str) -> String {
+    value.replace('|', "\\|")
 }
 
 /// Where the compiled vocabulary puts a rung, and after every rung it names, the ones it cannot.
@@ -3506,6 +3657,7 @@ fn graph(args: &StoreLocation, format: PlanningGraphFormat) -> Result<ExitCode> 
 
     match format {
         PlanningGraphFormat::Dot => out!("{}", dot(&graph)),
+        PlanningGraphFormat::Mermaid => out!("{}", mermaid(&graph)),
         PlanningGraphFormat::Json => crate::print_serialised(&graph, Format::Json)?,
     }
     Ok(ExitCode::SUCCESS)
@@ -3537,6 +3689,49 @@ fn dot(graph: &ArtifactGraph) -> String {
         }
     }
     rendered.push_str("}\n");
+    rendered
+}
+
+/// The plan as a Mermaid `flowchart LR`.
+///
+/// Node ids are not artifact ids: Mermaid gives `:` and `/` meaning inside an id, and an
+/// [`ArtifactId`] has both. So each node is declared once under a mangled id carrying its real id
+/// as the label, in the order the edges introduce them, and every edge refers to the mangled form.
+fn mermaid(graph: &ArtifactGraph) -> String {
+    let mangle = |id: &str| {
+        id.chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>()
+    };
+
+    let mut rendered = String::from("flowchart LR\n");
+    for artifact in graph.artifacts() {
+        let _ = writeln!(
+            rendered,
+            "    {}[\"{}<br/>{} · {}\"]",
+            mangle(&artifact.id.to_string()),
+            artifact.id,
+            artifact.kind,
+            artifact.status
+        );
+    }
+    for artifact in graph.artifacts() {
+        for relation in &artifact.relations {
+            let _ = writeln!(
+                rendered,
+                "    {} -->|\"{}\"| {}",
+                mangle(&artifact.id.to_string()),
+                relation.kind,
+                mangle(&relation.target.id().to_string())
+            );
+        }
+    }
     rendered
 }
 

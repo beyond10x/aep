@@ -1,4 +1,4 @@
 error: invalid value 'text' for '--format <FORMAT>'
-  [possible values: dot, json]
+  [possible values: dot, mermaid, json]
 
 For more information, try '--help'.

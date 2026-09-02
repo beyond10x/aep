@@ -714,6 +714,70 @@ fn the_board_groups_the_fixture_into_status_columns() {
     }
 }
 
+#[test]
+fn the_board_renders_as_a_markdown_page_a_site_can_publish_unedited() {
+    let output = protocol(&[
+        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let page = stdout(&output);
+
+    assert!(page.contains("## active (4)"), "{page}");
+    assert!(
+        page.contains("| artifact | kind | title | reference | blocked by |"),
+        "{page}"
+    );
+    assert!(page.contains("| `story:passkey-login` |"), "{page}");
+    assert!(
+        page.contains("nothing on this page is written by hand"),
+        "the page says what wrote it: {page}"
+    );
+}
+
+/// A column's blurb comes from the ladder, which is the point: every consumer that rendered a board
+/// carried its own map of status to prose, in a file nothing validates.
+#[test]
+fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
+    let output = protocol(&[
+        "artifact", "board", "--format", "markdown", "--kind", "story", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let page = stdout(&output);
+    assert!(
+        page.contains("_Being worked on now._"),
+        "`active` on a story ladder says what it means: {page}"
+    );
+
+    // Unfiltered, the same column holds kinds whose ladders describe nothing, and a description
+    // read off one of them would be a claim about the others.
+    let mixed = stdout(&protocol(&[
+        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+    ]));
+    assert!(
+        !mixed.contains("_Being worked on now._"),
+        "a mixed column takes no description: {mixed}"
+    );
+}
+
+#[test]
+fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
+    let output = protocol(&[
+        "artifact", "graph", "--format", "mermaid", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let diagram = stdout(&output);
+
+    assert!(diagram.starts_with("flowchart LR\n"), "{diagram}");
+    assert!(
+        diagram.contains("story_passkey_login[\"story:passkey-login<br/>"),
+        "the node id is mangled and the real id is the label: {diagram}"
+    );
+    assert!(
+        !diagram.contains("    story:passkey-login["),
+        "a raw `:` in a node id is Mermaid syntax, not a name: {diagram}"
+    );
+}
+
 /// The passkeys fixture plus two blockers: a column exists for a rung only a lifecycle document
 /// names, in the order that document puts its rungs in.
 ///

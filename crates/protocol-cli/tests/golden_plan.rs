@@ -31,6 +31,10 @@
 //! `reads/board.json` carry the new key; the text renderings are unchanged, and so is every other
 //! recording.
 //!
+//! On 2026-09-02 (`board --format markdown`) `graph` gained a `mermaid` format, so the recorded
+//! refusal of `--format text` lists one more value. Nothing else moved: the board's own recordings
+//! are of `text` and `json`, and a new format neither of them names cannot change what they print.
+//!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
 //! than the 0.19.0 entry — `journal::read` answers the same entries for both, which is what
