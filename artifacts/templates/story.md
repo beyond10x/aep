@@ -25,7 +25,16 @@ correctly" is not one of them.*
 *What a reasonable reader would expect to be included and is not — the boundary that stops this
 story quietly becoming an epic.*
 
+## Ambiguities
+
+*Each gap this story found and did not close, classified. `inferable` — the answer is already
+written down, so give the `path:line` or the artifact id that settles it.
+`requires-stakeholder-input` — nobody here can decide it, so name who does, and raise that entry as
+a `decision-blocker` with a `blocks` edge to this story, or it is a sentence somebody improvises
+later.*
+
 ## Open Questions
 
-*What is still undecided, each with who decides it. A story carrying an unowned question is a story
-that stalls without anybody noticing.*
+*Anything still undecided belongs in `## Ambiguities` above, classified and with its citation or its
+decider. Keep this section for a question that is neither — an unowned question is a story that
+stalls without anybody noticing.*

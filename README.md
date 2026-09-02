@@ -59,7 +59,8 @@ AEP is intentionally separate from two sibling projects:
   AEP compiling against ESS modeling types.
 - [agentplugins](https://github.com/beyond10x/agentplugins) is the curated `beyond10x`
   marketplace. AEP does not bundle harness-specific skills or agents. `aep eval run` and
-  `aep drive run` accept explicit plugin directories at their execution boundaries.
+  `aep drive run` accept explicit plugin directories at their execution boundaries. See
+  [Agent plugins](#agent-plugins) for how to install them.
 
 The reference driver is not an LLM orchestration framework. It proves the protocol contract has a
 caller. AEP chooses no credentials, model, endpoint, marketplace, or plugin installation.
@@ -67,6 +68,28 @@ caller. AEP chooses no credentials, model, endpoint, marketplace, or plugin inst
 The workspace depends on [entity-runtime](https://github.com/beyond10x/entity-runtime) for its
 IO-free entity kernel and provider foundations. The dependency arrow points from AEP to Entity
 Runtime, never the reverse.
+
+## Agent plugins
+
+This repository carries no plugin source and no marketplace manifest, so it is not a marketplace
+source. The Claude Code and Codex plugins live in the sibling public repository
+[beyond10x/agentplugins](https://github.com/beyond10x/agentplugins), which publishes the `beyond10x`
+marketplace. Its install page is <https://beyond10x.github.io/agentplugins/>.
+
+In Claude Code, add the marketplace and install a plugin from it:
+
+```text
+/plugin marketplace add beyond10x/agentplugins
+/plugin install aep-planning@beyond10x
+```
+
+`adp@beyond10x` and `ess-schema@beyond10x` install the same way. In Codex, add the same GitHub
+repository as a marketplace from the Plugins surface and select the plugin there. The install page
+carries the current plugin list and how to pin a release tag.
+
+Nothing here chooses a plugin for you: `aep eval run --arm plugin` requires an explicit
+`--plugin-dir`, and `aep drive run` accepts repeatable `--plugin-dir` values and the
+`AEP_DRIVE_PLUGIN_DIR` fallback. Neither guesses a path under this checkout.
 
 ## Evidence and completion
 
@@ -88,6 +111,7 @@ conformance can enter the same evidence system only through the optional report 
 |---|---|
 | adopt AEP in an existing repository | [`docs/guide/adopting.md`](docs/guide/adopting.md) |
 | integrate an agent harness | [`docs/guide/harness.md`](docs/guide/harness.md) |
+| install the Claude Code or Codex plugins | [beyond10x/agentplugins](https://beyond10x.github.io/agentplugins/) |
 | choose or implement a backend | [`docs/guide/backend.md`](docs/guide/backend.md) |
 | understand open vocabulary rules | [`docs/guide/open-vocabulary.md`](docs/guide/open-vocabulary.md) |
 | inspect delivered releases | [`docs/status.md`](docs/status.md) |

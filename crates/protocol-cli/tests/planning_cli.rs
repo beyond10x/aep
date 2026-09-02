@@ -259,6 +259,68 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
 }
 
 #[test]
+fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_section() {
+    // `story:templates-hold-ambiguities`. A gap an author found had nowhere to go but prose: the
+    // story template had `## Open Questions` with no classification, and the epic and specification
+    // templates had nothing at all. The seeded section has to name both classes, because an entry
+    // nobody can settle from the tree is a `decision-blocker` and an entry somebody can is a
+    // citation — and a template that says "undecided" without saying which gets improvised later.
+    let store = scratch("aep-planning-ambiguities");
+    for (kind, name) in [
+        ("epic", "seeded-epic"),
+        ("story", "seeded-story"),
+        ("specification", "seeded-specification"),
+    ] {
+        let created = protocol(&[
+            "artifact",
+            "new",
+            kind,
+            name,
+            "--title",
+            "Seeded",
+            "--store",
+            printable(&store),
+        ]);
+        assert_eq!(code(&created), 0, "{}", stderr(&created));
+
+        let text = std::fs::read_to_string(store.join(format!("{kind}/{name}.md")))
+            .expect("the seeded document is readable");
+        assert!(
+            text.contains("\n## Ambiguities\n"),
+            "the {kind} template seeds the section: {text}"
+        );
+        assert!(
+            text.contains("`inferable`") && text.contains("`path:line`"),
+            "an inferable ambiguity is seeded with what settles it: {text}"
+        );
+        assert!(
+            text.contains("`requires-stakeholder-input`"),
+            "and the class that nobody here can settle: {text}"
+        );
+        assert!(
+            text.contains("`decision-blocker`") && text.contains("`blocks`"),
+            "which the guidance sends to a typed blocker with an edge: {text}"
+        );
+    }
+
+    // The story's own `## Open Questions` points at the new section rather than restating it; two
+    // sections asking for the same thing is how one of them stops being filled in.
+    let seeded = std::fs::read_to_string(store.join("story/seeded-story.md"))
+        .expect("the seeded story is readable");
+    let questions = seeded
+        .split_once("\n## Open Questions\n")
+        .expect("the story keeps its open questions section")
+        .1;
+    assert!(
+        questions.contains("## Ambiguities"),
+        "the open questions guidance points at the classified section: {questions}"
+    );
+
+    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stderr(&validated));
+}
+
+#[test]
 fn creating_the_same_artifact_twice_is_refused_rather_than_overwriting_it() {
     let store = scratch("aep-planning-twice");
     let arguments = [

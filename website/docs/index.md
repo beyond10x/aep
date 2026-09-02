@@ -37,8 +37,14 @@ aep trace check --spec expectations.trace.yaml --transcript run.jsonl
 ```
 
 The CLI also includes a reference driver. It proves the harness contract has a real caller but does
-not choose a model, credential, endpoint, or plugin. Harness-specific skills and agents come from
-the separate `beyond10x` agentplugins marketplace and are supplied explicitly.
+not choose a model, credential, endpoint, or plugin. Harness-specific skills and agents are not in
+this repository. They come from the sibling repository `beyond10x/agentplugins`, which publishes the
+`beyond10x` marketplace, and they are supplied explicitly.
+
+In Claude Code that is `/plugin marketplace add beyond10x/agentplugins` followed by
+`/plugin install aep-planning@beyond10x` (also `adp@beyond10x` and `ess-schema@beyond10x`). In Codex,
+add the same GitHub repository as a marketplace from the Plugins surface. The
+[agent plugins install page](https://beyond10x.github.io/agentplugins/) carries the current list.
 
 ## What lives elsewhere
 
@@ -54,6 +60,7 @@ report and has no AEP dependency. The optional AEP-side adapter converts that re
 | understand the architecture | [Architecture overview](./concepts/overview.md) |
 | govern a task | [Govern a task](./guides/govern-a-task.md) |
 | integrate a harness | [Integrate an agent harness](./guides/integrate-a-harness.md) |
+| install the agent plugins | [beyond10x/agentplugins](https://beyond10x.github.io/agentplugins/) |
 | inspect a complete example | [A governed task, end to end](./examples/governed-task.md) |
 | understand evidence | [Evidence](./concepts/evidence.md) |
 | see current delivery state | [Where this stands](./status/where-this-stands.md) |

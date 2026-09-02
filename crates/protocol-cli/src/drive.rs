@@ -179,7 +179,11 @@ fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
     Ok(expanded)
 }
 
-const PLUGIN_DIR_ENV: &str = "AEP_DRIVE_PLUGIN_DIR";
+/// The one environment variable that may name a plugin directory (AGENTS.md invariant 12).
+///
+/// `pub(crate)` because `aep doctor` reports on the same directories this drives with, and a second
+/// spelling of the name is how a rename leaves the preflight checking a variable nothing reads.
+pub(crate) const PLUGIN_DIR_ENV: &str = "AEP_DRIVE_PLUGIN_DIR";
 
 /// What can be done with a driven run.
 #[derive(Debug, Subcommand)]

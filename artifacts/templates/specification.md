@@ -30,6 +30,14 @@
 
 *How satisfaction is demonstrated — the evidence, not the intent.*
 
+## Ambiguities
+
+*Each point this specification could not state precisely, classified. `inferable` — the answer is
+already written down, so give the `path:line` or the artifact id that settles it.
+`requires-stakeholder-input` — nobody here can decide it, so name who does, and raise that entry as
+a `decision-blocker` with a `blocks` edge to this specification, or it is a sentence somebody
+improvises later.*
+
 ## Open Questions
 
 *Unresolved points, each with who decides.*

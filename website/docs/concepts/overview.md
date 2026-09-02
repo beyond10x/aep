@@ -44,8 +44,9 @@ not engine code.
   Runtime release; the reverse dependency does not exist.
 - ESS is standalone and shares no modeling crate with AEP. Only `aep-ess-evidence` understands the
   standalone ESS report at the optional evidence boundary.
-- Agent plugins live in the curated `beyond10x` marketplace. The driver and evaluation runner accept
-  plugin directories from the operator and guess none.
+- Agent plugins live in the sibling repository `beyond10x/agentplugins`, which publishes the curated
+  `beyond10x` marketplace; this repository carries no plugin and no marketplace manifest. The driver
+  and evaluation runner accept plugin directories from the operator and guess none.
 - Metaharness owns vendor-specific transcript readers and paid execution. AEP owns the neutral trace
   vocabulary and deterministic checker.
 

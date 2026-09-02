@@ -9,6 +9,33 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-09-02
+
+### Added
+
+- `aep doctor` reports whether a checkout is in a state the other verbs will accept — the binary's
+  version, `.engineering/project.yaml`, the `protocols:` source it names, the planning store
+  (through `artifact validate`'s own accumulation), each `--plugin-dir` or `AEP_DRIVE_PLUGIN_DIR`
+  directory, and the newest bare-version tag reachable from `HEAD` — one line each as
+  `ok`/`warn`/`fail`, exit `1` on any `fail`. It fixes nothing, reads no clock and opens no
+  connection: a pinned `git+…#<40-hex>` source is checked for shape and for a cached snapshot, never
+  fetched. Asked for by the second adopter, whose report ended "I am still unsure if I even used
+  them properly".
+- The epic, story and specification templates seed an `## Ambiguities` section. Each gap is
+  classified `inferable`, with the `path:line` or artifact id that settles it, or
+  `requires-stakeholder-input`, with who decides — and the second kind is raised as a
+  `decision-blocker` with a `blocks` edge to the artifact. The story template's `## Open Questions`
+  points there rather than restating it. An undecided domain relation was the second adopter's
+  plan defect; this gives it a line somebody reads.
+
+### Changed
+
+- The README and the documentation site name `beyond10x/agentplugins` and its install page as the
+  source of the Claude Code and Codex plugins, with the `/plugin marketplace add
+  beyond10x/agentplugins` then `/plugin install aep-planning@beyond10x` form. The 2026-09-01 split
+  removed this repository's marketplace manifest; an adopter following the 0.14.0 instruction added
+  a marketplace source that no longer exists.
+
 ## [0.41.0] — 2026-09-02
 
 ### Added

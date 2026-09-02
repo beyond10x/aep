@@ -91,10 +91,10 @@ impl StoreArgs {
 impl StoreLocation {
     /// A location built by something other than a command line.
     ///
-    /// Only tests need this: every shipped caller gets its `StoreLocation` from clap. It exists so
-    /// a test of something that *holds* one — a served request, say — can be written without
-    /// parsing a command line to get there.
-    #[cfg(test)]
+    /// Two callers need it. A test of something that *holds* one — a served request, say — can be
+    /// written without parsing a command line to get there; and [`store_findings`] builds one for
+    /// `aep doctor`, which asks about the tree `--root` names rather than the one this process's
+    /// working directory would discover.
     pub(crate) fn at(store: Option<PathBuf>, root: Option<PathBuf>) -> Self {
         Self { store, root }
     }
@@ -704,7 +704,20 @@ fn relative_path_for(id: &ArtifactId) -> String {
 /// and a markdown plan that cannot be read cleanly is refused rather than warned about, because a
 /// write into a plan with an unreadable document is a write into a plan nobody can see whole.
 fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
-    let plan = args.plan()?;
+    open_plan(args.plan()?, args, with_backend)
+}
+
+/// [`open`], for a caller that has already decided which plan it means.
+///
+/// `aep doctor` is that caller, and the distinction is the whole reason this split exists: every
+/// `protocol artifact` verb asks about the plan the **working directory** discovers, and `doctor`
+/// asks about the plan a `--root` names. Routing the second through the first would have `doctor`
+/// report on one repository while its other five checks report on another.
+///
+/// `args` is read only when `with_backend` is set — building a backend needs the workspace and the
+/// ladders the writing verbs carry — so a caller that only reads may pass a location that answers
+/// nothing else.
+fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
     match &plan {
         Plan::Markdown { root } => {
             let store = MarkdownStore::open(root.clone());
@@ -3601,11 +3614,33 @@ fn log_findings(
 /// caller who wants the second says so rather than the tool deciding for both.
 fn validate(args: &StoreArgs, strict: bool) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
-    let report = &opened.report;
     let registry = args.lifecycles()?;
+    let summary = findings(&opened, &registry, &args.repository_root());
+
+    match args.format {
+        Format::Text => print_validation(&summary, strict),
+        Format::Yaml | Format::Json => crate::print_serialised(&summary, args.format)?,
+    }
+    Ok(crate::exit_code(
+        summary.problems.is_empty() && (!strict || strictly_refused(&summary).is_empty()),
+    ))
+}
+
+/// Everything `validate` reports, decided about a plan somebody has already opened.
+///
+/// Split out of [`validate`] so `aep doctor` can answer *would `validate` pass* from the same
+/// accumulation rather than a second, weaker reading of the same store — the failure mode
+/// `story:aep-doctor-preflight` exists to avoid, where a preflight says ready and the verb it was
+/// preflighting refuses.
+///
+/// `repository_root` is the repository the plan sits in, and it is a parameter rather than
+/// something derived here because it decides which workspace manifest names the members a
+/// cross-repository relation may point at.
+fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &Path) -> Summary {
+    let report = &opened.report;
 
     let mut problems: Vec<String> = report.failures.iter().map(ToString::to_string).collect();
-    match report.graph_in_workspace(declared_members(&args.repository_root())) {
+    match report.graph_in_workspace(declared_members(repository_root)) {
         Ok(graph) => problems.extend(
             graph
                 .validate_lifecycles(registry.lifecycles())
@@ -3667,25 +3702,35 @@ fn validate(args: &StoreArgs, strict: bool) -> Result<ExitCode> {
         }
     }
 
-    let summary = Summary {
+    Summary {
         store: opened.plan.describe(),
         files_read: report.files_read,
         artifacts: report.documents.len(),
-        problems: problems.clone(),
-        closed_on_an_assertion: asserted.clone(),
+        problems,
+        closed_on_an_assertion: asserted,
         drift: drift_findings,
         forged: forged_findings,
         deleted: deleted_findings,
         pre_provider,
-    };
-
-    match args.format {
-        Format::Text => print_validation(&summary, strict),
-        Format::Yaml | Format::Json => crate::print_serialised(&summary, args.format)?,
     }
-    Ok(crate::exit_code(
-        summary.problems.is_empty() && (!strict || strictly_refused(&summary).is_empty()),
-    ))
+}
+
+/// What `protocol artifact validate` would report about the plan `root` names.
+///
+/// The entry point `aep doctor` uses, and deliberately the *only* one: it locates the plan the way
+/// the verbs do ([`Plan::for_project`]), reads it the way they do ([`open_plan`]) and accumulates
+/// the way they do ([`findings`]). What it does not do is render or exit — the caller has five
+/// other lines to print beside this one.
+///
+/// `document_root` is the protocol tree the lifecycles come from. It is a parameter because
+/// `doctor` has already resolved the project's `protocols:` source **offline** by the time it asks
+/// this, and resolving it a second time through the loader would fetch a pinned Git source, which
+/// is exactly what a preflight must not do.
+pub(crate) fn store_findings(plan: Plan, root: &Path, document_root: &Path) -> Result<Summary> {
+    let location = StoreLocation::at(None, Some(document_root.to_path_buf()));
+    let opened = open_plan(plan, &location, false)?;
+    let registry = location.lifecycles()?;
+    Ok(findings(&opened, &registry, root))
 }
 
 /// What `validate` prints for a person: the counts, the classes it reports, then the verdict.
@@ -5319,11 +5364,14 @@ struct FieldsSet {
 
 /// What `validate` found.
 #[derive(Debug, serde::Serialize)]
-struct Summary {
-    store: String,
+pub(crate) struct Summary {
+    /// Where the plan is, in the words a message uses.
+    pub(crate) store: String,
     files_read: usize,
-    artifacts: usize,
-    problems: Vec<String>,
+    /// How many artifacts the plan holds.
+    pub(crate) artifacts: usize,
+    /// Every defect found, accumulated — never only the first.
+    pub(crate) problems: Vec<String>,
     /// Statuses reached because a caller said the evidence existed, not because the store held it.
     ///
     /// Reported and **not** counted as a problem: refusing an assertion outright would stop

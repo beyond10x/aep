@@ -283,6 +283,16 @@ enum Command {
         #[command(subcommand)]
         command: reverse::ReverseCommand,
     },
+    /// Report whether this checkout is in a state the other verbs will accept.
+    ///
+    /// One line per check — the binary's version, the project file, the protocol source it names,
+    /// the planning store, each plugin directory given, and the checkout's newest release tag —
+    /// each `ok`, `warn` or `fail`. Exit `1` on any `fail`.
+    ///
+    /// It fixes nothing, which is what makes it safe to run first: a checker that also repairs
+    /// cannot be run to find out what is wrong. It reads no clock and opens no connection, so a
+    /// pinned protocol source is checked for shape and for a cached snapshot and never fetched.
+    Doctor(doctor::DoctorArgs),
     /// Judge an agent run against a typed specification, or report what is in one.
     ///
     /// The transcript comes from a harness that has already finished — these verbs never start an
@@ -724,6 +734,13 @@ mod schema;
 // stated in it rather than assumed from the rest.
 mod reverse;
 
+// Not a verb family at all — one verb, and the only one here that answers about the *installation*
+// rather than about a document. It is a module because its six checks each reuse a different part
+// of this binary (the project loader, the source locator, the planning store's own validation, the
+// driver's plugin rule, the tag listing) and a verb that reaches that widely does not belong inline
+// in the dispatcher.
+mod doctor;
+
 // Not a verb family: the envelope every producer added after
 // `story:evidence-producers-for-the-driven-map` puts around a record, said once. See the module for
 // why the three older minting verbs are deliberately not migrated onto it.
@@ -830,6 +847,7 @@ fn run() -> Result<ExitCode> {
             }
         },
         Command::Reverse { command } => reverse::run(command),
+        Command::Doctor(args) => doctor::run(&args),
         Command::Workspace { command } => workspace::run(command),
         Command::Schema { command } => schema::run(command),
         Command::Conformance {

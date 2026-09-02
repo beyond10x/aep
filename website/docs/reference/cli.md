@@ -176,9 +176,15 @@ and the worst case is a report you disagree with.
 | `aep reverse tickets --provider <name> [--repository .] [--top 100] [--format …]` | joins the tracker keys in the history and in the plan's prose to the references the store holds: what is recorded, what an `artifact set --ref` would record, and which keys no artifact names. **Writes nothing** |
 | `aep reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists; standard output when `--out` is absent |
 | `aep reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
+| `aep doctor [--root .] [--plugin-dir <path>]… [--format text\|json]` | whether this checkout is in a state the other verbs will accept, one line per check with `ok`, `warn` or `fail`: the binary's version; whether `.engineering/project.yaml` is there and parses; whether the `protocols:` source it names resolves — a path that exists, or a pinned `git+…#<40-hex>` locator whose snapshot is already cached, and the line says which; whether the planning store is there and `artifact validate` would pass over it, decided by that verb's own accumulation; whether each plugin directory given, or the one `AEP_DRIVE_PLUGIN_DIR` names, carries a `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`; and whether the newest bare-version tag reachable from `HEAD` is this binary's version. Exit `1` on any `fail`. **Fixes nothing** — a checker that repaired could not be run to find out what is wrong — and reads no clock and opens no connection, so a pinned source is never fetched and a plan kept in PostgreSQL is reported as not checked here. `--root` is taken literally: it reports on the directory you point it at and walks up to no parent |
 
 `--protocols` takes a path or a pinned `git+…#<40-hex>` locator: a governing document tree that
 could move under you is a gate whose meaning changes without a commit in your repository.
+
+`aep doctor` is the verb that comes before all of those and after the last of them. It answers, in
+one report, the question an adopter has before they have learnt which of the other verbs to ask —
+*is this checkout in a state the tooling will accept?* — and it answers it without changing
+anything, which is what makes it safe to run first.
 
 See [Adopting a repository that already exists](https://github.com/beyond10x/aep/blob/main/docs/guide/adopting.md)
 for the walkthrough.

@@ -44,6 +44,13 @@ Its success line is explicit: `Everything free has run. No model was started.` P
 different invocation and additionally requires `METAHARNESS_LIVE=1`, `--spend`, and an exact
 budget. See the [harness and confinement matrix](../reference/harnesses.md) before choosing an arm.
 
+`--plugin-dir` names a plugin you supply; this repository ships none and guesses no path under the
+checkout. The Claude Code and Codex plugins live in the sibling repository `beyond10x/agentplugins`.
+Clone it beside this checkout for the directory below, or install it into a harness — in Claude Code,
+`/plugin marketplace add beyond10x/agentplugins` then `/plugin install aep-planning@beyond10x`; in
+Codex, add the same GitHub repository as a marketplace from the Plugins surface. The
+[agent plugins install page](https://beyond10x.github.io/agentplugins/) carries the current list.
+
 ```shell-session
 $ aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \

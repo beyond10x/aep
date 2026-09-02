@@ -28,6 +28,14 @@ three months when somebody asks why the thing they wanted is missing.*
 
 *What could make this take twice as long or land wrong, and what would show it early.*
 
+## Ambiguities
+
+*Each gap this epic leaves for the stories under it, classified. `inferable` — the answer is
+already written down, so give the `path:line` or the artifact id that settles it.
+`requires-stakeholder-input` — nobody here can decide it, so name who does, and raise that entry as
+a `decision-blocker` with a `blocks` edge to this epic, or it is a sentence somebody improvises
+later.*
+
 ## Done When
 
 *The condition under which this epic moves to `implemented` — stated once, here, so it is not

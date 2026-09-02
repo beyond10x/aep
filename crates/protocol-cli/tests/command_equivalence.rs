@@ -47,6 +47,22 @@ fn the_canonical_command_and_alias_match_on_a_domain_refusal() {
     assert_eq!(output.status.code(), Some(1));
 }
 
+/// `doctor` is the one verb whose whole output is a report about the installation, so the two names
+/// disagreeing here would be the alias reporting on a different binary than the one that answered.
+/// Run at this crate's own directory, which holds no project file: the report has failures in it,
+/// which exercises the exit status as well as the bytes.
+#[test]
+fn the_canonical_command_and_alias_match_on_a_preflight_that_reports_failures() {
+    let output = assert_equivalent(&["doctor"]);
+    assert_eq!(output.status.code(), Some(1));
+}
+
+/// The same, in the rendering a script reads.
+#[test]
+fn the_canonical_command_and_alias_match_on_a_preflight_rendered_as_json() {
+    assert_equivalent(&["doctor", "--format", "json"]);
+}
+
 #[test]
 fn the_canonical_command_and_alias_match_on_a_usage_error() {
     let output = assert_equivalent(&["not-a-command"]);
