@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep reverse openapi` drafts a `relations:` block on every type whose schema states one. Two
+  signals and no others: a property whose schema is a `$ref` to a schema that becomes an entity
+  (`cardinality: one`, or `many` when the property is an array of that `$ref`), and a property named
+  `<x>_id` or `<x>Id` whose type is the type of entity `X`'s own identity property. Every relation
+  is `kind: references` — an OpenAPI document says a payload carries a reference and says nothing
+  about whose life bounds whose, so `owns` is never inferred and every relation read from an id
+  field carries an `UNMAPPED: ownership` line. A property that states its target two ways, such as
+  `oneOf: [Carrier, [Carrier]]`, is emitted with `UNMAPPED: cardinality` over the placeholder
+  `cardinality: one`; a property with neither signal produces nothing at all, and a schema with no
+  signal carries no block. The second adopter's plan defect was an undecided domain relation, and
+  this puts the ones the contract does state into the draft with the undecided half named.
+
 ## [0.42.0] — 2026-09-02
 
 ### Added

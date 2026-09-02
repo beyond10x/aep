@@ -54,6 +54,8 @@ use aep_project::project::project_directory;
 
 use crate::Format;
 
+mod relations;
+
 /// The bundle format `reverse scan` emits, versioned like every other document here.
 const BUNDLE_VERSION: &str = "aep.reverse-scan/1";
 
@@ -1486,11 +1488,11 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 /// verb that claimed to would be inviting somebody to commit a specification that describes a wire
 /// format rather than a system.
 ///
-/// What it does instead is remove the typing. Types, command names and their inputs are mechanical
-/// and are emitted; everything else it can see but cannot decide is emitted as an `UNMAPPED:`
-/// comment naming the construct and the choice it is waiting for. A silent omission would be the
-/// one failure mode worth ruling out — the reader cannot tell an absent lifecycle from an absent
-/// decision about one.
+/// What it does instead is remove the typing. Types, command names, their inputs and the relations
+/// the document actually states — see [`relations`] — are mechanical and are emitted; everything
+/// else it can see but cannot decide is emitted as an `UNMAPPED:` comment naming the construct and
+/// the choice it is waiting for. A silent omission would be the one failure mode worth ruling out —
+/// the reader cannot tell an absent lifecycle from an absent decision about one.
 fn openapi(args: &OpenapiArgs) -> Result<ExitCode> {
     let text = fs::read_to_string(&args.path)
         .with_context(|| format!("cannot read {}", args.path.display()))?;
@@ -1667,6 +1669,8 @@ fn write_types(text: &mut String, domain: &str, document: &Yaml) {
                     let _ = writeln!(text, "      # UNMAPPED: the schema declares no properties.");
                 }
             }
+            let edges = relations::relations_for(&qualified, schema, schemas, domain);
+            relations::write_block(text, &qualified, &edges);
             let _ = writeln!(text);
         } else {
             let _ = writeln!(text, "  - name: {qualified}");

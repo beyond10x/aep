@@ -174,12 +174,25 @@ and the worst case is a report you disagree with.
 | `aep reverse scan [root] [--format text\|yaml\|json]` | reads a repository and reports what it already says about itself — headings, declared toolchains, gates, test layout — as an `aep.reverse-scan/1` bundle. **Writes nothing** |
 | `aep reverse history [root] [--recent 500] [--top 15] [--format …]` | reads what the repository's own git history says: who touches what, which areas are dormant, where change concentrates. **Writes nothing** |
 | `aep reverse tickets --provider <name> [--repository .] [--top 100] [--format …]` | joins the tracker keys in the history and in the plan's prose to the references the store holds: what is recorded, what an `artifact set --ref` would record, and which keys no artifact names. **Writes nothing** |
-| `aep reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists; standard output when `--out` is absent |
+| `aep reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists, including a `relations:` block on every type whose schema states one; standard output when `--out` is absent |
 | `aep reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
 | `aep doctor [--root .] [--plugin-dir <path>]… [--format text\|json]` | whether this checkout is in a state the other verbs will accept, one line per check with `ok`, `warn` or `fail`: the binary's version; whether `.engineering/project.yaml` is there and parses; whether the `protocols:` source it names resolves — a path that exists, or a pinned `git+…#<40-hex>` locator whose snapshot is already cached, and the line says which; whether the planning store is there and `artifact validate` would pass over it, decided by that verb's own accumulation; whether each plugin directory given, or the one `AEP_DRIVE_PLUGIN_DIR` names, carries a `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`; and whether the newest bare-version tag reachable from `HEAD` is this binary's version. Exit `1` on any `fail`. **Fixes nothing** — a checker that repaired could not be run to find out what is wrong — and reads no clock and opens no connection, so a pinned source is never fetched and a plan kept in PostgreSQL is reported as not checked here. `--root` is taken literally: it reports on the directory you point it at and walks up to no parent |
 
 `--protocols` takes a path or a pinned `git+…#<40-hex>` locator: a governing document tree that
 could move under you is a gate whose meaning changes without a commit in your repository.
+
+`aep reverse openapi` reads relations from two signals and from nothing else. A property whose
+schema is a `$ref` to a schema that becomes an entity is a `references` relation with
+`cardinality: one`, and an array of that `$ref` is the same relation with `cardinality: many`; a
+property named `<x>_id` or `<x>Id` whose type is the type of entity `X`'s own identity property is a
+`references` relation to `X`. Each relation names the property it travels on in `via:`. `owns` is
+never inferred — an OpenAPI document says a payload carries a reference and says nothing about
+whether the referent's life is bounded by the referrer's — so every relation read from an id field
+carries an `# UNMAPPED: ownership` line, and a property that states its target two ways, such as
+`oneOf: [Carrier, [Carrier]]`, carries `# UNMAPPED: cardinality` over the placeholder
+`cardinality: one`. A property with neither signal produces no relation and a schema with no signal
+carries no block at all, which is the same rule the rest of this verb follows: what the document
+does not state is marked, and what it does not imply is not written.
 
 `aep doctor` is the verb that comes before all of those and after the last of them. It answers, in
 one report, the question an adopter has before they have learnt which of the other verbs to ask —
