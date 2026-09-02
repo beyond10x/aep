@@ -31,6 +31,12 @@
 //! `reads/board.json` carry the new key; the text renderings are unchanged, and so is every other
 //! recording.
 //!
+//! On 2026-09-03 (`story:scope-as-a-typed-field`) `validate` gained a fourth reported class: every
+//! story past its ladder's first rung and short of its end that declares no `scope`. `story:golden-one`
+//! is `proposed` in `expected/` and declares none, so `reads/validate.text` and `reads/validate.json`
+//! were re-recorded with the line and the `unscoped` key. Nothing else moved — it is reported, never
+//! failed on, so the exit status and every other recording are what 0.28.0 produced.
+//!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
 //! than the 0.19.0 entry — `journal::read` answers the same entries for both, which is what

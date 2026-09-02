@@ -18,7 +18,7 @@
 //! ```
 //!
 //! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags`, `refs`,
-//! `relations` and `withholds` are optional; `format` and `revision` default. Everything else a document carries
+//! `relations`, `scope` and `withholds` are optional; `format` and `revision` default. Everything else a document carries
 //! is **kept** — see [`PlanningFrontmatter::extra`] — because a store that silently drops the
 //! field somebody's own tooling writes is a store they will stop trusting after the first round
 //! trip.
@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use aep_domain::artifact::{
     Artifact, ArtifactId, ArtifactKind, ArtifactLocation, ArtifactMetadata, ArtifactRelation,
-    ArtifactStatus, ArtifactVersion, ExternalRef, RelationKind,
+    ArtifactStatus, ArtifactVersion, ExternalRef, RelationKind, ScopeEntry,
 };
 use aep_domain::error::{ValidationCode, ValidationError, ValidationErrors};
 use aep_domain::evidence::EvidenceKind;
@@ -94,6 +94,13 @@ pub struct RawPlanningFrontmatter {
     /// Its outgoing edges, each a single-entry mapping such as `{derived_from: epic:passwordless}`.
     #[serde(default)]
     pub relations: Vec<ArtifactRelation>,
+    /// The surfaces this artifact lands on, as written.
+    ///
+    /// [`Node`] and not [`ScopeEntry`] for the reason `refs` above is: a malformed entry is
+    /// reported beside every other defect in the document rather than aborting the parse of the
+    /// whole file.
+    #[serde(default)]
+    pub scope: Vec<Node>,
     /// The evidence kind this artifact is stopping anybody from producing, as written.
     ///
     /// Text here and an [`EvidenceKind`] after validation, so a misspelling is reported beside
@@ -137,6 +144,17 @@ pub struct PlanningFrontmatter {
     pub refs: BTreeSet<ExternalRef>,
     /// Its outgoing edges.
     pub relations: Vec<ArtifactRelation>,
+    /// The surfaces this artifact lands on, each `cited` or `inferred`, ordered by path.
+    ///
+    /// **What a wave's disjointness claim is derived from.** `aep artifact waves` reads this and
+    /// nothing else to decide whether two stories may be implemented at once; a story that
+    /// declares none is listed as unassessed and never placed, because an unassessed story reads
+    /// exactly like a safe one and that is the defect the field exists against.
+    ///
+    /// Ordered by path and holding one entry per path, so two renderings of one document are the
+    /// same bytes and a computation reading it never has to pick between two claims about one
+    /// surface.
+    pub scope: Vec<ScopeEntry>,
     /// The evidence kind this artifact is stopping anybody from producing.
     ///
     /// **The join between a blocker and an evidence gate.** A rung asks for a `test_result`; the
@@ -179,6 +197,7 @@ impl PlanningFrontmatter {
             tags: BTreeSet::new(),
             refs: BTreeSet::new(),
             relations: Vec::new(),
+            scope: Vec::new(),
             withholds: None,
             revision: default_revision(),
             extra: BTreeMap::new(),
@@ -270,6 +289,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(!self.tags.is_empty())
             + usize::from(!self.refs.is_empty())
             + usize::from(!self.relations.is_empty())
+            + usize::from(!self.scope.is_empty())
             + usize::from(self.withholds.is_some())
             + self.extra.len();
 
@@ -295,6 +315,9 @@ impl serde::Serialize for PlanningFrontmatter {
         }
         if !self.relations.is_empty() {
             map.serialize_entry("relations", &self.relations)?;
+        }
+        if !self.scope.is_empty() {
+            map.serialize_entry("scope", &self.scope)?;
         }
         if let Some(withholds) = &self.withholds {
             map.serialize_entry("withholds", withholds.as_str())?;
@@ -391,6 +414,8 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             }
         }
 
+        let scope = validated_scope(&raw.scope, &mut errors);
+
         errors.into_result(Self {
             id: raw.id,
             kind: raw.kind,
@@ -401,11 +426,61 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             tags: raw.tags,
             refs,
             relations: raw.relations,
+            scope,
             withholds,
             revision: raw.revision,
             extra: raw.extra,
         })
     }
+}
+
+/// The scope entries a document declares, validated, with every defect accumulated into `errors`.
+///
+/// Lifted out of [`TryFrom`] so that block reads as the list of checks it is. Every entry is
+/// attempted, so a document wrong about two surfaces reports both, and a path declared twice is
+/// refused rather than resolved: the document would be saying two things about one surface, and a
+/// computation reading it would have to pick one.
+fn validated_scope(raw: &[Node], errors: &mut ValidationErrors) -> Vec<ScopeEntry> {
+    let mut scope: Vec<ScopeEntry> = Vec::new();
+    for (index, node) in raw.iter().enumerate() {
+        match ScopeEntry::from_node(node) {
+            Ok(entry) => {
+                if scope.iter().any(|held| held.path == entry.path) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("planning.scope[{index}]"),
+                            format!(
+                                "`{}` is declared twice, and the two entries may disagree about \
+                                 how well it is known",
+                                entry.path
+                            ),
+                        )
+                        .with_hint(
+                            "one entry per path; `aep artifact scope <id> --add <path>` replaces \
+                             the entry a path already has rather than adding a second",
+                        ),
+                    );
+                } else {
+                    scope.push(entry);
+                }
+            }
+            Err(error) => errors.push(
+                ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    format!("planning.scope[{index}]"),
+                    error.to_string(),
+                )
+                .with_hint(
+                    "a scope entry is `{path: crates/x/src/lib.rs, confidence: cited}`, or the \
+                     bare path, which is `cited`",
+                ),
+            ),
+        }
+    }
+    // Ordered by path, which is what makes two renderings of one document the same bytes.
+    scope.sort_by(|left, right| left.path.cmp(&right.path));
+    scope
 }
 
 #[cfg(test)]
@@ -610,6 +685,59 @@ mod tests {
         assert_eq!(
             artifact.version.as_ref().map(ArtifactVersion::as_str),
             Some("1")
+        );
+    }
+
+    /// The field a wave is derived from has to come back out of the file exactly as it went in,
+    /// because the computation that reads it is comparing paths for equality.
+    #[test]
+    fn a_scope_round_trips_and_keeps_the_confidence_each_entry_was_written_with() {
+        let front = PlanningFrontmatter::try_from(raw(&format!(
+            "{MINIMAL}scope:\n  - path: crates/aep-domain/src/artifact.rs\n    \
+             confidence: cited\n  - path: crates/protocol-cli/src/planning.rs\n    \
+             confidence: inferred\n"
+        )))
+        .expect("both entries are accepted");
+        assert_eq!(
+            front
+                .scope
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry.confidence))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "crates/aep-domain/src/artifact.rs",
+                    aep_domain::artifact::ScopeConfidence::Cited
+                ),
+                (
+                    "crates/protocol-cli/src/planning.rs",
+                    aep_domain::artifact::ScopeConfidence::Inferred
+                ),
+            ]
+        );
+
+        let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
+        let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
+        assert_eq!(again.scope, front.scope);
+        assert!(
+            !again.extra.contains_key("scope"),
+            "a named key must not also land in `extra`: {:?}",
+            again.extra
+        );
+    }
+
+    /// Two entries for one path is a document that says two things about the same surface, and a
+    /// computation reading it would have to pick one. Refused where every other defect is.
+    #[test]
+    fn one_path_declared_twice_is_refused_naming_the_path() {
+        let errors = PlanningFrontmatter::try_from(raw(&format!(
+            "{MINIMAL}scope:\n  - path: crates/x.rs\n    confidence: cited\n  \
+             - path: crates/x.rs\n    confidence: inferred\n"
+        )))
+        .expect_err("a duplicate path is refused");
+        assert!(
+            errors.to_string().contains("crates/x.rs"),
+            "the refusal names the path: {errors}"
         );
     }
 }

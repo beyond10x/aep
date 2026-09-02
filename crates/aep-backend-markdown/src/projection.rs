@@ -755,4 +755,21 @@ fn apply_body(frontmatter: &mut PlanningFrontmatter, body: &Node) {
             .filter_map(|node| ExternalRef::from_node(node).ok())
             .collect();
     }
+    // The surfaces, same rule and same reason. An entry that does not parse is dropped rather than
+    // written through: the frontmatter's own validator would refuse the file this command just
+    // wrote, and a command that leaves an unreadable document behind is worse than one that leaves
+    // a field unchanged. An **empty** sequence clears the field, because `scope --remove` taking
+    // out the last path is a command that meant exactly that.
+    if let Some(Node::Seq(scope)) = fields.get("scope") {
+        let mut entries: Vec<aep_domain::artifact::ScopeEntry> = Vec::new();
+        for node in scope {
+            if let Ok(entry) = aep_domain::artifact::ScopeEntry::from_node(node) {
+                if !entries.iter().any(|held| held.path == entry.path) {
+                    entries.push(entry);
+                }
+            }
+        }
+        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        frontmatter.scope = entries;
+    }
 }

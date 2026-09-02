@@ -1,3 +1,5 @@
 4 file(s) in <store>: 4 artifact(s)
 1 document(s) predate the event log
+1 without a scope:
+  - story:golden-one is proposed and declares no scope, so nothing can tell whether it may be worked beside another story — `aep artifact scope story:golden-one --add <path>` records one
 valid

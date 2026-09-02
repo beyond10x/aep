@@ -235,7 +235,20 @@ pub fn detect(root: &Path, documents: &BTreeMap<ArtifactId, StoredDocument>) -> 
             if field == BODY_FIELD {
                 continue;
             }
-            if instance.fields.get(field) != Some(value) {
+            let held = instance.fields.get(field);
+            // **`null` in the log is a field a command removed.** Every list this format carries —
+            // `tags`, `refs`, `scope` — is omitted from the document when it is empty, so taking
+            // the last entry out leaves an instance with no such key, which
+            // `aep_backend_entity::changed_between` records as `null`. Absent and `null` are the
+            // same claim to a document that omits its empty lists, so either satisfies it — and a
+            // document that still carries the field is drift, exactly as before.
+            if value.is_null() {
+                if held.is_some_and(|held| !held.is_null()) {
+                    fields.push(field.clone());
+                }
+                continue;
+            }
+            if held != Some(value) {
                 fields.push(field.clone());
             }
         }
@@ -345,6 +358,60 @@ mod tests {
 
     fn report(store: &MarkdownStore) -> Report {
         detect(store.root(), &store.load().documents)
+    }
+
+    /// Clearing the last entry of a list is a write, and a write is not drift.
+    ///
+    /// The document carries no `tags:` key once the last tag is gone, and the event that removed it
+    /// says `tags: null`. Reading those as a disagreement turned `artifact set --untag` and
+    /// `artifact scope --remove` into commands that made `validate` report their own work as an
+    /// edit made outside a command.
+    #[test]
+    fn a_list_a_command_emptied_is_not_reported_as_an_edit_outside_a_command() {
+        let store = scratch("emptied");
+        document(&store, "one", "draft", 2);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story", "tags": ["one"] }),
+        );
+        event(
+            &store,
+            "one",
+            2,
+            Some("draft"),
+            &serde_json::json!({ "tags": null }),
+        );
+
+        let found = report(&store);
+        assert!(
+            found.drift.is_empty(),
+            "the document holds no `tags:` because the command took the last one out: {found:?}"
+        );
+
+        // And the rule is load-bearing only where the log **says** the field was removed: a
+        // document that lost a tag no event took out is drift, exactly as it was.
+        let store = scratch("emptied-partly");
+        document(&store, "one", "draft", 2);
+        event(
+            &store,
+            "one",
+            1,
+            None,
+            &serde_json::json!({ "title": "A story" }),
+        );
+        event(
+            &store,
+            "one",
+            2,
+            Some("draft"),
+            &serde_json::json!({ "tags": ["one"] }),
+        );
+        let found = report(&store);
+        assert_eq!(found.drift.len(), 1, "{found:?}");
+        assert_eq!(found.drift[0].fields, vec!["tags".to_owned()]);
     }
 
     #[test]

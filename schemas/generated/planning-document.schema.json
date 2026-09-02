@@ -61,6 +61,14 @@
       "format": "uint64",
       "minimum": 0.0
     },
+    "scope": {
+      "description": "The surfaces this artifact lands on, as written.\n\n[`Node`] and not [`ScopeEntry`] for the reason `refs` above is: a malformed entry is reported beside every other defect in the document rather than aborting the parse of the whole file.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Node"
+      }
+    },
     "status": {
       "description": "Where its lifecycle has got to.",
       "allOf": [

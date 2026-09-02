@@ -248,16 +248,29 @@ fn recorded(sealed: &Envelope<DomainEvent>, at: Timestamp, executor: Option<&Act
     })
 }
 
-/// The fields `after` holds that `before` did not, or held differently.
+/// The fields `after` holds that `before` did not, or held differently — and the ones it lost.
 ///
-/// A field `before` had and `after` lacks is not representable: the contract's `UpdateEntity`
-/// merges and never removes, so the case does not arise today, and an event format that could say
-/// "removed" is the runtime's to add (`DomainEvent::changed` is a map of values).
+/// **A field `before` had and `after` lacks is recorded as `null`.** The case does arise: a planning
+/// document omits an empty list, so a command that takes the last entry out of `tags`, `refs` or
+/// `scope` produces an instance with no such key. Leaving that out of the event made the write
+/// invisible to the log, and `aep artifact validate` then read the command's own work as **drift** —
+/// an edit made outside a command, which is the one thing it was not. `set --untag <the last tag>`
+/// turned a clean store red for exactly this reason.
+///
+/// `null` and *absent* are the same claim to a document that omits its empty lists, so the reader
+/// (`aep_backend_markdown::drift`) accepts either — which is also the honest reading of the one
+/// other way a `null` reaches this map, a field whose value genuinely became `null`.
 fn changed_between(before: &Map<String, Value>, after: &Map<String, Value>) -> Map<String, Value> {
     after
         .iter()
         .filter(|(name, value)| before.get(*name) != Some(*value))
         .map(|(name, value)| (name.clone(), value.clone()))
+        .chain(
+            before
+                .keys()
+                .filter(|name| !after.contains_key(*name))
+                .map(|name| (name.clone(), Value::Null)),
+        )
         .collect()
 }
 
