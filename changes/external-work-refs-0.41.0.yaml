@@ -1,0 +1,15 @@
+schema: b10x-change/v1
+id: aep/external-work-refs-0.41.0
+repository: aep
+publishedAt: 2026-09-02T14:13:58Z
+title: AEP links planning artifacts to external work
+summary: AEP 0.41.0 gives planning artifacts typed external references, provider-level URL patterns, reference filtering, and a read-only reverse-ticket audit so repository plans can be joined to trackers without parsing prose or granting write authority.
+kind: capability
+impact: significant
+source:
+  url: https://github.com/beyond10x/aep/releases/tag/0.41.0
+  version: 0.41.0
+journeys: [plan-work, specify]
+affectedSurfaces: [aep/docs, agentplugins/docs]
+relations:
+  - {target: change:agentplugins/aep-refs-0.3.7, kind: integrates-with, label: Portable planning skills preserve the typed references}
