@@ -451,6 +451,7 @@ mod tests {
             initial: ArtifactStatus::Draft,
             transitions,
             requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
         }
     }

@@ -716,6 +716,163 @@ fn the_board_groups_the_fixture_into_status_columns() {
     }
 }
 
+/// The report says which specification was checked, at which digest, by what, how many scenarios
+/// ran and when the run finished. Typed by hand those become a source and an instant somebody
+/// chose, and the instant is the one that matters: a caller who supplies it can supply *now* for a
+/// run that happened last week.
+#[test]
+fn a_conformance_report_is_read_into_the_record_rather_than_typed_at_it() {
+    let store = scratch("aep-evidence-from-report");
+    let repository = root();
+    copy_tree(&repository.join(FIXTURE), &store);
+    let at = printable(&store);
+    let report =
+        repository.join("crates/protocol-cli/tests/fixtures/conformance-reports/passed.json");
+
+    let recorded = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        report.to_str().expect("a printable path"),
+        "--store",
+        at,
+    ]);
+    assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
+    let printed = stdout(&recorded);
+    assert!(printed.contains("ess_conformance recorded"), "{printed}");
+    assert!(
+        printed.contains("billing-reference 0.3.0 against billing/v3"),
+        "the source names what was held to what: {printed}"
+    );
+    assert!(
+        printed.contains("13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861"),
+        "and at which revision of it, which is the part that makes the record worth anything: \
+         {printed}"
+    );
+
+    let history = stdout(&protocol(&[
+        "artifact",
+        "history",
+        "story:passkey-login",
+        "--store",
+        at,
+    ]));
+    assert!(history.contains("ess_conformance"), "{history}");
+}
+
+#[test]
+fn a_report_of_no_scenarios_is_refused_because_it_asserts_nothing() {
+    let store = scratch("aep-evidence-empty-report");
+    let repository = root();
+    copy_tree(&repository.join(FIXTURE), &store);
+    let report =
+        repository.join("crates/protocol-cli/tests/fixtures/conformance-reports/empty.json");
+
+    let refused = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        report.to_str().expect("a printable path"),
+        "--store",
+        printable(&store),
+    ]);
+    assert_ne!(code(&refused), 0, "a suite that ran nothing was recorded");
+    assert!(
+        stderr(&refused).contains("asserts nothing"),
+        "{}",
+        stderr(&refused)
+    );
+}
+
+#[test]
+fn reading_a_record_and_typing_one_are_not_combined() {
+    let refused = protocol(&[
+        "artifact",
+        "evidence",
+        "story:passkey-login",
+        "--from",
+        "somewhere.json",
+        "--kind",
+        "test_result",
+        "--source",
+        "task check",
+        "--store",
+        FIXTURE,
+    ]);
+    assert_ne!(code(&refused), 0);
+    assert!(
+        stderr(&refused).contains("cannot be used with"),
+        "a record is read or written, and half of each is neither: {}",
+        stderr(&refused)
+    );
+}
+
+#[test]
+fn the_board_renders_as_a_markdown_page_a_site_can_publish_unedited() {
+    let output = protocol(&[
+        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let page = stdout(&output);
+
+    assert!(page.contains("## active (4)"), "{page}");
+    assert!(
+        page.contains("| artifact | kind | title | reference | blocked by |"),
+        "{page}"
+    );
+    assert!(page.contains("| `story:passkey-login` |"), "{page}");
+    assert!(
+        page.contains("nothing on this page is written by hand"),
+        "the page says what wrote it: {page}"
+    );
+}
+
+/// A column's blurb comes from the ladder, which is the point: every consumer that rendered a board
+/// carried its own map of status to prose, in a file nothing validates.
+#[test]
+fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
+    let output = protocol(&[
+        "artifact", "board", "--format", "markdown", "--kind", "story", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let page = stdout(&output);
+    assert!(
+        page.contains("_Being worked on now._"),
+        "`active` on a story ladder says what it means: {page}"
+    );
+
+    // Unfiltered, the same column holds kinds whose ladders describe nothing, and a description
+    // read off one of them would be a claim about the others.
+    let mixed = stdout(&protocol(&[
+        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+    ]));
+    assert!(
+        !mixed.contains("_Being worked on now._"),
+        "a mixed column takes no description: {mixed}"
+    );
+}
+
+#[test]
+fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
+    let output = protocol(&[
+        "artifact", "graph", "--format", "mermaid", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let diagram = stdout(&output);
+
+    assert!(diagram.starts_with("flowchart LR\n"), "{diagram}");
+    assert!(
+        diagram.contains("story_passkey_login[\"story:passkey-login<br/>"),
+        "the node id is mangled and the real id is the label: {diagram}"
+    );
+    assert!(
+        !diagram.contains("    story:passkey-login["),
+        "a raw `:` in a node id is Mermaid syntax, not a name: {diagram}"
+    );
+}
+
 /// The passkeys fixture plus two blockers: a column exists for a rung only a lifecycle document
 /// names, in the order that document puts its rungs in.
 ///

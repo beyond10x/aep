@@ -1,0 +1,12 @@
+{
+  "format": "ess-conformance-report/1",
+  "specification": "billing/v3",
+  "spec_digest": "13577b3ce695932e980d418d5863bcde07f4c362516d53147870d31eaf2ed861",
+  "implementation": "billing-reference 0.3.0",
+  "status": "passed",
+  "scenarios_total": 29,
+  "scenarios_failed": 0,
+  "suite_version": "ess-conformance/1",
+  "failed_scenarios": [],
+  "completed_at": 1700000009900
+}

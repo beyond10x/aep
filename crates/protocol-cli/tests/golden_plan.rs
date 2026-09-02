@@ -31,6 +31,10 @@
 //! `reads/board.json` carry the new key; the text renderings are unchanged, and so is every other
 //! recording.
 //!
+//! On 2026-09-02 (`board --format markdown`) `graph` gained a `mermaid` format, so the recorded
+//! refusal of `--format text` lists one more value. Nothing else moved: the board's own recordings
+//! are of `text` and `json`, and a new format neither of them names cannot change what they print.
+//!
 //! On 2026-09-03 (`story:scope-as-a-typed-field`) `validate` gained a fourth reported class: every
 //! story past its ladder's first rung and short of its end that declares no `scope`. `story:golden-one`
 //! is `proposed` in `expected/` and declares none, so `reads/validate.text` and `reads/validate.json`

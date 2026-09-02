@@ -2045,6 +2045,19 @@ pub struct ArtifactLifecycle {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub requires: BTreeMap<ArtifactStatus, Vec<StatusRequirement>>,
 
+    /// For each status, one line saying what being at it means.
+    ///
+    /// Empty by default, and absence is not a defect: a ladder whose rung names say enough needs
+    /// nothing here. It exists because a rendered board has a column heading and no room to explain
+    /// it, and the alternative every consumer reached for was a hard-coded map of status to blurb
+    /// living beside the renderer — a second copy of the vocabulary, in a file nothing validates,
+    /// which goes stale the first time a ladder invents a rung.
+    ///
+    /// A description is prose about *this* ladder's rung, so `draft` on a story and `draft` on a
+    /// decision may say different things, and neither has to say anything.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub descriptions: BTreeMap<ArtifactStatus, String>,
+
     /// For each status, a date that must have passed — or not yet — before it can be reached.
     ///
     /// Gap-register `:73`: *time-based transitions of any kind, which today live in scripts
@@ -2136,6 +2149,7 @@ impl ArtifactLifecycle {
                 })
                 .collect(),
             requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
         }
     }
@@ -2956,6 +2970,7 @@ mod tests {
                 initial: ArtifactStatus::Draft,
                 transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
                 requires: BTreeMap::new(),
+                descriptions: BTreeMap::new(),
                 when: BTreeMap::new(),
             },
         );
@@ -2985,6 +3000,7 @@ mod tests {
             initial: ArtifactStatus::Draft,
             transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
             requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
         };
         let fallback = ArtifactLifecycle {
@@ -2992,6 +3008,7 @@ mod tests {
             initial: ArtifactStatus::Proposed,
             transitions: [(ArtifactStatus::Proposed, [ArtifactStatus::Accepted].into())].into(),
             requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
         };
         registry.insert(ArtifactKind::Other("log".to_owned()), logs.clone());
@@ -3314,6 +3331,7 @@ mod tests {
                 ]
                 .into(),
                 requires: BTreeMap::new(),
+                descriptions: BTreeMap::new(),
                 when: BTreeMap::new(),
             },
         );
@@ -3377,6 +3395,7 @@ mod tests {
             ]
             .into(),
             requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
         };
 

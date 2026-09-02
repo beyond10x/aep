@@ -7,6 +7,13 @@
     "initial"
   ],
   "properties": {
+    "descriptions": {
+      "description": "For each status, one line saying what being at it means.\n\nEmpty by default, and absence is not a defect: a ladder whose rung names say enough needs nothing here. It exists because a rendered board has a column heading and no room to explain it, and the alternative every consumer reached for was a hard-coded map of status to blurb living beside the renderer — a second copy of the vocabulary, in a file nothing validates, which goes stale the first time a ladder invents a rung.\n\nA description is prose about *this* ladder's rung, so `draft` on a story and `draft` on a decision may say different things, and neither has to say anything.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "initial": {
       "description": "The status a new artifact starts in.",
       "allOf": [

@@ -79,6 +79,32 @@ belongs in the commit message or in `docs/design/`.
   refused on an immutable kind — which is why no review could name the run manifest its cost is read
   from. Shipped broken in 0.41.0.
 
+## [0.43.0] — 2026-09-03
+
+### Added
+
+- `aep artifact board --format markdown` writes the board as a page: one section per column, a
+  table per section, and each artifact's external references linked through the project's own
+  `providers:` map. It exists because every consumer that published a board rebuilt it from
+  `--format json` and carried two things beside the renderer — a Mermaid writer duplicating
+  `graph`, and a hard-coded map of status to blurb, which is a second copy of a vocabulary the
+  ladders own in a file nothing validates.
+- `aep artifact graph --format mermaid` writes a `flowchart LR`. Node ids are mangled and carry the
+  real id as a label, because Mermaid gives `:` and `/` meaning inside an id and an artifact id has
+  both.
+- A lifecycle document may carry `descriptions:` — one line per rung, in that ladder's own words.
+  `draft` on a design is not `draft` on a task, which is why it is per ladder rather than a table
+  of status names. Filled in for `story`, `task` and `design`; the other ladders say nothing, which
+  stays a real answer. A rendered column takes a description only where every kind standing in it
+  agrees, rather than presenting one kind's prose as covering the others.
+- `aep artifact evidence <id> --from <report>` reads an `ess-conformance-report/1` instead of
+  taking a kind, a source and an instant typed by hand. The instant is the report's own
+  `completed_at`: a caller who supplies it can supply *now* for a run that happened last week,
+  which is the back-dating by omission evidence horizons exist to catch. It refuses a report of no
+  scenarios — a suite that ran nothing also failed nothing — one with no `spec_digest`, and a
+  document of another format. A red report is recorded as readily as a green one, because whether
+  it permits a move is the ladder's decision.
+
 ## [0.42.0] — 2026-09-02
 
 ### Added

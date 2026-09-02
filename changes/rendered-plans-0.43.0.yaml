@@ -1,0 +1,13 @@
+schema: b10x-change/v1
+id: aep/rendered-plans-0.43.0
+repository: aep
+publishedAt: 2026-09-03T00:00:00Z
+title: The plan renders itself, and a conformance report becomes evidence without being retyped
+summary: AEP 0.43.0 lets a documentation site publish a plan without rebuilding it — `artifact board --format markdown` writes the page and `artifact graph --format mermaid` writes the diagram, with each column's blurb coming from `descriptions:` on its own ladder rather than a hard-coded map beside the renderer. `artifact evidence --from` reads an `ess-conformance-report/1` into the record it implies, taking the run's own instant rather than one the caller chose.
+kind: capability
+impact: significant
+source:
+  url: https://github.com/beyond10x/aep/releases/tag/0.43.0
+  version: 0.43.0
+journeys: [plan-work, specify]
+affectedSurfaces: [aep/docs]

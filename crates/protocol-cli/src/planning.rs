@@ -1155,10 +1155,19 @@ pub(crate) enum ArtifactCommand {
         category: Option<String>,
     },
     /// Show the plan as status columns.
+    ///
+    /// `markdown` renders a page: one section per column, a table per section, and each column's
+    /// description from its own ladder. It exists so a documentation site does not have to
+    /// reimplement the board from `--format json` — every consumer that did carried a hard-coded
+    /// map of status to blurb beside the renderer, which is a second copy of a vocabulary the
+    /// ladders own.
     Board {
-        /// Where the plan is and how to render.
+        /// Where the plan is.
         #[command(flatten)]
-        store: StoreArgs,
+        store: StoreLocation,
+        /// How to render the board.
+        #[arg(long, value_enum, default_value_t = PlanningBoardFormat::Text)]
+        format: PlanningBoardFormat,
         /// Only this kind, and the kinds that specialise it.
         #[arg(long)]
         kind: Option<String>,
@@ -1241,18 +1250,38 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// What the evidence is about, such as `story:passkey-login`.
         id: String,
+        /// An `ess-conformance-report/1` to read the record out of, instead of typing it.
+        ///
+        /// The report already states which specification was checked, at which digest, by which
+        /// implementation, how many scenarios ran and when the run finished. Typed by hand those
+        /// four become a kind, a source and an instant somebody chose — and the instant is the one
+        /// that matters, because a caller who supplies it can supply *now* for a run that happened
+        /// last week, which is exactly what evidence horizons exist to catch.
+        ///
+        /// Refuses a report of no scenarios, for the reason `contract evidence` refuses a run that
+        /// checked nothing: a suite that ran nothing also failed nothing, so recording it would
+        /// discharge the obligation on the strength of a run that asserted nothing.
+        #[arg(
+            long,
+            value_name = "REPORT",
+            conflicts_with_all = ["kind", "source", "at", "review", "outcome"]
+        )]
+        from: Option<PathBuf>,
         /// The kind of observation, such as `test_result`, `approval` or `review_outcome`.
         ///
         /// `review_outcome` is the one kind with two flags of its own: it records what became of a
         /// review — `--review <review-result-id> --outcome no-op|fixed|escalated` — against the
         /// artifact that was reviewed. A review is immutable once recorded, so what happened next
         /// cannot be an edit to it and is this record instead.
-        #[arg(long)]
-        kind: String,
+        ///
+        /// Omitted only with `--from`, which reads the kind out of the report.
+        #[arg(long, required_unless_present = "from")]
+        kind: Option<String>,
         /// Where it came from — `task check`, a CI run URL, a person's name.
         ///
         /// Required, except on a `review_outcome`, where the review it names is where it came from
-        /// and repeating the id as a source would be ceremony.
+        /// and repeating the id as a source would be ceremony, and with `--from`, where the report
+        /// states it.
         #[arg(long)]
         source: Option<String>,
         /// The review this record answers. Only on `--kind review_outcome`.
@@ -1265,6 +1294,8 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, value_enum)]
         outcome: Option<OutcomeArg>,
         /// Where to go and look: a URL, a run id, a file path.
+        ///
+        /// With `--from` this defaults to the report's own path, which is where to go and look.
         #[arg(long = "ref", value_name = "REFERENCE")]
         reference: Option<String>,
         /// When it was observed, ISO-8601. Defaults to now, read at the edge.
@@ -1477,8 +1508,23 @@ impl From<OutcomeArg> for aep_domain::review::ReviewOutcome {
 pub(crate) enum PlanningGraphFormat {
     /// Graphviz DOT, for `dot -Tsvg`.
     Dot,
+    /// Mermaid `flowchart LR`, for a markdown page that renders diagrams itself.
+    Mermaid,
     /// The artifact graph itself.
     Json,
+}
+
+/// How to render the board.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum PlanningBoardFormat {
+    /// Human-readable lines.
+    Text,
+    /// YAML, for another tool to read.
+    Yaml,
+    /// JSON, for another tool to read.
+    Json,
+    /// A markdown page: one section per column, with each column's own description.
+    Markdown,
 }
 
 /// `protocol artifact`
@@ -1573,7 +1619,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             status,
             reference,
         } => list(&store, kind.as_deref(), status.as_deref(), reference.as_deref()),
-        ArtifactCommand::Board { store, kind } => board(&store, kind.as_deref()),
+        ArtifactCommand::Board { store, format, kind } => board(&store, format, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate {
@@ -1588,6 +1634,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         ArtifactCommand::Evidence {
             store,
             id,
+            from,
             kind,
             source,
             review,
@@ -1598,7 +1645,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             &store,
             &id,
             &EvidenceRequest {
-                kind: &kind,
+                from: from.as_deref(),
+                kind: kind.as_deref(),
                 source: source.as_deref(),
                 review: review.as_deref(),
                 outcome: outcome.map(Into::into),
@@ -3626,15 +3674,29 @@ fn ladders_or_none(args: &StoreArgs) -> aep_engine::Registry {
 }
 
 /// `protocol artifact board`
-fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
-    let opened = open(&args.location, false)?;
-    let ladders = ladders_or_none(args);
+fn board(
+    location: &StoreLocation,
+    format: PlanningBoardFormat,
+    kind: Option<&str>,
+) -> Result<ExitCode> {
+    let opened = open(location, false)?;
+    let ladders = location.lifecycles().unwrap_or_default();
     let blocked = blockers_by_target(&opened.report, ladders.lifecycles());
     let listed = select(&opened.report, &blocked, kind, None, None)?;
     let columns = columns_for(&listed, ladders.lifecycles());
 
-    match args.format {
-        Format::Text => {
+    match format {
+        PlanningBoardFormat::Markdown => {
+            // The configuration only, and a failure to read it is not a failure to render: a store
+            // outside any project has no `project.yaml`, and a reference with no link is the right
+            // answer there. Same reading `show` takes.
+            let config = aep_project::project::load_config(&location.repository_root()).ok();
+            out!(
+                "{}",
+                board_markdown(&columns, ladders.lifecycles(), config.as_ref())
+            );
+        }
+        PlanningBoardFormat::Text => {
             for (index, column) in columns.iter().enumerate() {
                 if index > 0 {
                     outln!();
@@ -3655,9 +3717,122 @@ fn board(args: &StoreArgs, kind: Option<&str>) -> Result<ExitCode> {
                 }
             }
         }
-        Format::Yaml | Format::Json => crate::print_serialised(&columns, args.format)?,
+        PlanningBoardFormat::Yaml => crate::print_serialised(&columns, Format::Yaml)?,
+        PlanningBoardFormat::Json => crate::print_serialised(&columns, Format::Json)?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// The board as a markdown page.
+///
+/// One `##` per column, the column's own description under it where its ladder writes one, then a
+/// table. A reference becomes a link only where the project said how to build one — an undeclared
+/// provider renders as its shorthand, because a link that opens the wrong page cannot be told from
+/// a right one by looking at it.
+fn board_markdown(
+    columns: &[Column],
+    lifecycles: &aep_domain::LifecycleRegistry,
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> String {
+    let total: usize = columns.iter().map(|column| column.artifacts.len()).sum();
+    let mut page = format!(
+        "{total} artifact(s) in the planning store, one column per status.\n\nGenerated by \
+         `protocol artifact board --format markdown`; nothing on this page is written by hand.\n"
+    );
+
+    for column in columns {
+        let _ = write!(
+            page,
+            "\n## {} ({})\n",
+            column.status,
+            column.artifacts.len()
+        );
+        if let Some(description) = description_for(lifecycles, &column.artifacts, &column.status) {
+            let _ = write!(page, "\n_{description}_\n");
+        }
+        page.push_str("\n| artifact | kind | title | reference | blocked by |\n");
+        page.push_str("|---|---|---|---|---|\n");
+        for entry in &column.artifacts {
+            let _ = writeln!(
+                page,
+                "| `{}` | {} | {} | {} | {} |",
+                entry.id,
+                entry.kind,
+                cell(entry.title.as_deref().unwrap_or_default()),
+                references(&entry.refs, providers),
+                blocked_cell(&entry.blocked_by),
+            );
+        }
+    }
+    page
+}
+
+/// One column's description, taken from a ladder that actually governs something in it.
+///
+/// A column is a rung name, and two kinds may both use `draft` while describing it differently, so
+/// the description cannot be looked up by status alone. It is read from the ladders of the kinds
+/// standing in this column, and used only where every one of them agrees — a column holding a story
+/// and a decision that describe `draft` differently gets no description rather than one of them.
+fn description_for(
+    lifecycles: &aep_domain::LifecycleRegistry,
+    artifacts: &[Listed],
+    status: &str,
+) -> Option<String> {
+    let status = ArtifactStatus::parse(status).ok()?;
+    let mut found: Option<&str> = None;
+    for artifact in artifacts {
+        let kind = ArtifactKind::parse(&artifact.kind).ok()?;
+        let described = lifecycles
+            .for_kind(&kind)
+            .and_then(|ladder| ladder.descriptions.get(&status))?;
+        match found {
+            None => found = Some(described.as_str()),
+            Some(agreed) if agreed == described => {}
+            Some(_) => return None,
+        }
+    }
+    found.map(ToOwned::to_owned)
+}
+
+/// Every reference on one artifact, linked where the project declared how.
+fn references(
+    refs: &[String],
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> String {
+    refs.iter()
+        .map(|shorthand| {
+            // The key alone in the cell: a board joined to a tracker is read by people who already
+            // know which tracker it is, and `jira:` on every row is a column of one word repeated.
+            let key = shorthand
+                .split_once(':')
+                .map_or(shorthand.as_str(), |(_, key)| key);
+            let url = providers.and_then(|config| {
+                shorthand
+                    .parse::<aep_domain::artifact::ExternalRef>()
+                    .ok()
+                    .and_then(|reference| config.link(&reference))
+            });
+            match url {
+                Some(url) => format!("[{}]({url})", cell(key)),
+                None => cell(key),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What is stopping one artifact, for the board's last column.
+fn blocked_cell(blocked_by: &[Blocking]) -> String {
+    blocked_by
+        .iter()
+        .map(|blocking| format!("`{}`", blocking.blocker))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// One table cell: a pipe would end the column it is in.
+fn cell(value: &str) -> String {
+    value.replace('|', "\\|")
 }
 
 /// Where the compiled vocabulary puts a rung, and after every rung it names, the ones it cannot.
@@ -4067,6 +4242,7 @@ fn graph(args: &StoreLocation, format: PlanningGraphFormat) -> Result<ExitCode> 
 
     match format {
         PlanningGraphFormat::Dot => out!("{}", dot(&graph)),
+        PlanningGraphFormat::Mermaid => out!("{}", mermaid(&graph)),
         PlanningGraphFormat::Json => crate::print_serialised(&graph, Format::Json)?,
     }
     Ok(ExitCode::SUCCESS)
@@ -4098,6 +4274,49 @@ fn dot(graph: &ArtifactGraph) -> String {
         }
     }
     rendered.push_str("}\n");
+    rendered
+}
+
+/// The plan as a Mermaid `flowchart LR`.
+///
+/// Node ids are not artifact ids: Mermaid gives `:` and `/` meaning inside an id, and an
+/// [`ArtifactId`] has both. So each node is declared once under a mangled id carrying its real id
+/// as the label, in the order the edges introduce them, and every edge refers to the mangled form.
+fn mermaid(graph: &ArtifactGraph) -> String {
+    let mangle = |id: &str| {
+        id.chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>()
+    };
+
+    let mut rendered = String::from("flowchart LR\n");
+    for artifact in graph.artifacts() {
+        let _ = writeln!(
+            rendered,
+            "    {}[\"{}<br/>{} · {}\"]",
+            mangle(&artifact.id.to_string()),
+            artifact.id,
+            artifact.kind,
+            artifact.status
+        );
+    }
+    for artifact in graph.artifacts() {
+        for relation in &artifact.relations {
+            let _ = writeln!(
+                rendered,
+                "    {} -->|\"{}\"| {}",
+                mangle(&artifact.id.to_string()),
+                relation.kind,
+                mangle(&relation.target.id().to_string())
+            );
+        }
+    }
     rendered
 }
 
@@ -5245,8 +5464,10 @@ fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
 /// four of them are `Option<&str>` and a caller could transpose two without the compiler having
 /// anything to say about it.
 pub(crate) struct EvidenceRequest<'a> {
-    /// The kind of observation, as the caller spelled it.
-    pub(crate) kind: &'a str,
+    /// A report to read the record out of, instead of the flags below.
+    pub(crate) from: Option<&'a Path>,
+    /// The kind of observation, as the caller spelled it. Absent only with `from`.
+    pub(crate) kind: Option<&'a str>,
     /// Where it came from, where the caller said.
     pub(crate) source: Option<&'a str>,
     /// The review it answers, on a `review_outcome`.
@@ -5398,16 +5619,136 @@ fn evidence_through_a_command(
 
 /// command that recorded evidence *and* moved the artifact would make the evidence a formality of
 /// the move rather than a thing that existed before it.
+/// One evidence record, however it was arrived at.
+struct Recorded {
+    kind: aep_domain::evidence::EvidenceKind,
+    source: String,
+    reference: Option<String>,
+    at: String,
+}
+
+/// The four fields, read out of an `ess-conformance-report/1`.
+///
+/// Every one of them is the report's own. Nothing here decides a verdict, adjusts a count or
+/// supplies a time: a red run is recorded as readily as a green one, because whether a red record
+/// permits a move is the ladder's decision and not this verb's.
+fn recorded_from_report(path: &Path) -> Result<Recorded> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading {}", path.display()))?;
+    let report: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not JSON", path.display()))?;
+
+    let format = report.get("format").and_then(serde_json::Value::as_str);
+    if format != Some("ess-conformance-report/1") {
+        anyhow::bail!(
+            "{} says `format: {}` and this reads an `ess-conformance-report/1`. The format is the \
+             document's own field, so a report of another kind says so here rather than having \
+             its numbers read as conformance",
+            path.display(),
+            format.unwrap_or("(none)")
+        );
+    }
+
+    let total = report
+        .get("scenarios_total")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+    if total == 0 {
+        anyhow::bail!(
+            "{} reports no scenarios, so it asserts nothing: a suite that ran nothing also failed \
+             nothing. Recording it would discharge whatever the ladder asks for on the strength of \
+             a run that checked no part of the specification. Synthesize the suite against a model \
+             that obliges something, or record nothing",
+            path.display()
+        );
+    }
+
+    let specification = report
+        .get("specification")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("an unnamed specification");
+    let implementation = report
+        .get("implementation")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("an unnamed implementation");
+    let digest = report
+        .get("spec_digest")
+        .and_then(serde_json::Value::as_str)
+        .with_context(|| {
+            format!(
+                "{} states no `spec_digest`, and without it the record says that some \
+                 implementation passed some suite",
+                path.display()
+            )
+        })?;
+    let failed = report
+        .get("scenarios_failed")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+
+    // The source names all four things a reader needs to go and check: what was held to what, at
+    // which revision of it, and how it went.
+    let source = format!(
+        "ess conform run: {implementation} against {specification} at {digest}, {failed} of \
+         {total} scenario(s) failed"
+    );
+
+    // The report's own instant, not this process's. A caller who supplies the time can supply
+    // `now` for a run that happened last week, which is the back-dating by omission evidence
+    // horizons exist to catch.
+    let at = report
+        .get("completed_at")
+        .and_then(serde_json::Value::as_i64)
+        .map(|millis| millis.to_string())
+        .with_context(|| {
+            format!(
+                "{} states no `completed_at`, and this verb will not stamp a run it did not watch",
+                path.display()
+            )
+        })?;
+
+    Ok(Recorded {
+        kind: aep_domain::evidence::EvidenceKind::EssConformance,
+        source,
+        reference: Some(path.display().to_string()),
+        at,
+    })
+}
+
 fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) -> Result<ExitCode> {
     use aep_domain::evidence::EvidenceKind;
 
     let id = artifact_id(id)?;
-    // Built rather than wrapped in a `context`, which would put the advice in front of the list it
-    // is advice about. The refusal has to **end** with the two kinds, because that is the part a
-    // reader who did not find their word in fifteen names still needs.
-    let kind = EvidenceKind::parse(request.kind.trim())
-        .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
-    let at = request.at.map_or_else(now_at_the_edge, str::to_owned);
+
+    // `--from` reads the kind, the source and the instant out of a report that already states
+    // them; the flags are how the same record is made when there is no report to read.
+    let read = match request.from {
+        Some(report) => {
+            let mut read = recorded_from_report(report)?;
+            // `--ref` still wins: the report's path is where this process found it, and a CI run
+            // URL is where anybody else can.
+            if let Some(reference) = request.reference {
+                read.reference = Some(reference.to_owned());
+            }
+            Some(read)
+        }
+        None => None,
+    };
+
+    let kind = if let Some(read) = &read {
+        read.kind
+    } else {
+        let Some(kind) = request.kind else {
+            anyhow::bail!(
+                "evidence needs a `--kind` and a `--source`, or a `--from` to read both out of"
+            );
+        };
+        // Built rather than wrapped in a `context`, which would put the advice in front of the
+        // list it is advice about. The refusal has to **end** with the two kinds, because that is
+        // the part a reader who did not find their word in fifteen names still needs.
+        EvidenceKind::parse(kind.trim())
+            .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?
+    };
 
     let opened = open(&args.location, true)?;
     // The artifact must exist. Evidence about nothing is not evidence, and a typo'd id would
@@ -5424,12 +5765,21 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     // another. Refused here, at the edge, because the check that matters — *does that review review
     // this artifact* — needs the store, and a domain type that cannot see one could not make it.
     let answers = review_outcome_of(&opened, &id, kind, request)?;
-    let source = match (request.source, answers) {
-        (Some(source), _) if !source.trim().is_empty() => source.to_owned(),
-        (_, Some((review, _))) => review.to_string(),
-        _ => anyhow::bail!(
-            "evidence needs a source; write where it came from, such as --source 'task check'"
-        ),
+    let (source, reference, at) = if let Some(read) = read {
+        (read.source, read.reference, read.at)
+    } else {
+        let source = match (request.source, answers) {
+            (Some(source), _) if !source.trim().is_empty() => source.to_owned(),
+            (_, Some((review, _))) => review.to_string(),
+            _ => anyhow::bail!(
+                "evidence needs a source; write where it came from, such as --source 'task check'"
+            ),
+        };
+        (
+            source,
+            request.reference.map(ToOwned::to_owned),
+            request.at.map_or_else(now_at_the_edge, str::to_owned),
+        )
     };
 
     // Through a command, like every other write. An evidence record is the **input to the
@@ -5442,7 +5792,7 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
         kind,
         &source,
         answers,
-        request.reference,
+        reference.as_deref(),
         instant(&at)?,
     )?;
 
