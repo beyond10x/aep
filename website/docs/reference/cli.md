@@ -87,7 +87,8 @@ in `aep artifact history` rather than as the operator's. Nothing here *verifies*
 identity — it is a declaration, exactly as strong as the rest of the provenance model.
 
 **A review's findings are data.** A `review-result` body may carry one fenced ` ```findings ` block
-of YAML — a sequence of `{file, line, category, severity, verdict, origin, message}` entries, where
+of YAML — a sequence of entries with `file`, `line`, `category`, `severity`, `verdict`, `origin`,
+and `message` fields, where
 `file`, `category`, `severity` and `message` are required. `severity` is `blocker`, `warning` or
 `note`; `verdict` is the adversary's `CONFIRMED`, `NEEDS-CHANGE` or `INFEASIBLE` or a critic's
 `approve` or `needs-revision`; `origin` is `introduced`, `pre-existing` or `undecided`, and an
@@ -154,8 +155,8 @@ approved `specification` whose `specifies` edge lands on the work the task decla
 `spec-driven.before_implementation` states, evaluated by the engine's own function, so the verb
 cannot decide a document the guard it serves would refuse. The task is `--task <file>`, or the one
 `project.yaml` names when the flag is absent; with neither in reach the selection is unbound and
-falls back to the store's one in-force specification. A driven step writes `--task {task}`, which
-the driver expands to the document *that run* was started from.
+falls back to the store's one in-force specification. A driven step writes the task document
+through `--task`, which the driver expands to the document *that run* was started from.
 
 `--artifact` names *which* specification, never *whether* the binding applies: an id that does not
 specify this task's work is refused. It does lift the status half, so a `draft` can be asked whether
@@ -227,7 +228,7 @@ with none of the conformance suites behind it.
 |---|---|
 | `aep drive run [--map <file-or-id>] [--budget-usd <usd> --assume-usd-per-run <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3`; a map with an `llm` step requires both cost flags and `METAHARNESS_LIVE=1` |
 | `aep drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
-| `aep drive transition [--run <id>]` | answers a native loop's `transition` hook from the engine: the loop's JSON on stdin; exit `0` proceeds, `2` refuses with `{"reason": …}`; writes nothing |
+| `aep drive transition [--run <id>]` | answers a native loop's `transition` hook from the engine: the loop's JSON on stdin; exit `0` proceeds, `2` refuses with a JSON `reason`; writes nothing |
 | `aep drive resume <run> [--budget-usd <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock; the optional budget may narrow, never raise, the launch cap |
 
 All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and
@@ -411,8 +412,8 @@ share the word and nothing else.
 |---|---|
 | `aep contract evidence --record <file> --observed-at <date> [--out <file>]` | reads a `contract_result` record a contract runner emitted and writes the AEP evidence document it implies (producer `contract-runner`, the record's bytes digested into the provenance) that `aep evaluate --evidence` accepts |
 
-The record is one JSON object in the shape `aep-domain` defines —
-`{kind, checked, failed, breaking_changes, provider, consumer}` — which is what
+The record is one JSON object in the shape `aep-domain` defines, with the `kind`, `checked`,
+`failed`, `breaking_changes`, `provider`, and `consumer` fields — which is what
 `metaharness conformance <kind> --contract` prints. Redirect it to a file and hand the file over;
 `--record` takes a path rather than standard input so that the bytes the provenance digest names
 exist somewhere a later reader can go and check.
