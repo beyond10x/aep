@@ -36,7 +36,7 @@ mount, network, environment, or resource surface.
 From an AEP checkout with sibling `metaharness` and `harness` checkouts:
 
 ```shell-session
-$ cargo install --locked --path crates/protocol-cli
+$ cargo install --locked --path crates/edge/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
 $ aep drive status

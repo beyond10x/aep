@@ -22,7 +22,7 @@ summary: >-
 #
 # What that does *not* do is create an exemption by omission. `change.code` unset evaluates Unknown,
 # `Principle::applies` removes a principle only on an explicit False
-# (`crates/aep-domain/src/principle.rs:688-691`), and so silence keeps this rule in force. Only a
+# (`crates/govern/aep-domain/src/principle.rs:688-691`), and so silence keeps this rule in force. Only a
 # deliberate written `false` turns it off, and nothing mechanical checks that the writing was true:
 # `docs/design/fact-scoped-applicability-design-v0.1.md` § 5 is the honest statement of that limit.
 applies_when: change.code

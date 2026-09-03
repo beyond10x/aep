@@ -13,14 +13,14 @@ relations:
 - serves: vision:O2
 scope:
 - confidence: cited
-  path: crates/aep-backend-markdown
+  path: crates/edge/protocol-cli
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/govern/aep-domain
 - confidence: cited
-  path: crates/protocol-cli
+  path: crates/plan/aep-backend-markdown
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 8
+revision: 10
 ---
 # Story: One spelling for an edge, and a way to take one back
 
@@ -42,9 +42,9 @@ revision: 8
 
 ## Still open — `unrelate` needs the markdown backend first
 
-`aep-domain` declares `Command::RemoveRelation` (`crates/aep-domain/src/command.rs:71,113,326`) and
+`aep-domain` declares `Command::RemoveRelation` (`crates/govern/aep-domain/src/command.rs:71,113,326`) and
 `aep-backend-memory` implements it, but `aep-backend-markdown` refuses to project it on purpose:
-`MarkdownProjection::before` (`crates/aep-backend-markdown/src/projection.rs:486-494`) excludes it
+`MarkdownProjection::before` (`crates/plan/aep-backend-markdown/src/projection.rs:486-494`) excludes it
 ("the frontmatter adds and does not remove") and `apply_relations` (`:364-403`) never deletes. A
 CLI verb today would issue a command the store silently drops. The edit is three-fold: `before`
 resolves the relation's source; `apply_relations` removes exactly the named `(kind, target)` and

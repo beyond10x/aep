@@ -34,10 +34,10 @@ implemented at once and merged onto one branch closed by one gate run.**
 
 | # | story | serves | surface | confidence | verdict |
 |---|---|---|---|---|---|
-| 1 | `story:board-columns-come-from-the-ladders` | O2 | `crates/protocol-cli/src/planning.rs:2132-2177` | **high** — only column build in the tree | **in** |
-| 2 | `story:usage-series-assertions` | O3 | `crates/trace-domain` + `crates/trace-spec`, one enum behind an exhaustive dispatch | **high** — two precedent commits show the exact file set | **in, with a caveat** |
+| 1 | `story:board-columns-come-from-the-ladders` | O2 | `crates/edge/protocol-cli/src/planning.rs:2132-2177` | **high** — only column build in the tree | **in** |
+| 2 | `story:usage-series-assertions` | O3 | `crates/observe/trace-domain` + `crates/observe/trace-spec`, one enum behind an exhaustive dispatch | **high** — two precedent commits show the exact file set | **in, with a caveat** |
 | — | `story:recurrence-key` | — | `aop-domain` + `aep-domain/src/workflow.rs` + generated schema | **medium** | **out** |
-| — | `story:evidence-subject-binding` | — | `crates/aep-domain/src/requirement.rs:374-382` | high on the remainder | **out — verify first** |
+| — | `story:evidence-subject-binding` | — | `crates/govern/aep-domain/src/requirement.rs:374-382` | high on the remainder | **out — verify first** |
 
 **A wave of two, not three.** Every scope section is now in the story it describes, so the next
 replan starts from a better store than this one did.

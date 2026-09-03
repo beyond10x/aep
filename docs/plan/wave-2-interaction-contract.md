@@ -106,7 +106,7 @@ production-write-requires-approval` — is queryable next to the mutations it pr
 Acceptance: ~20 tests. The one that matters: a denied command produces an audit record and no state
 change.
 
-## W2.5 In-memory reference backend — `crates/aep-backend-memory`
+## W2.5 In-memory reference backend — `crates/plan/aep-backend-memory`
 
 A complete implementation of both traits over `BTreeMap`s, so the contract is exercised by something
 before anyone builds a real one. Deliberately boring and deliberately correct: idempotent replay

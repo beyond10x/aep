@@ -12,7 +12,7 @@ tags:
 relations:
 - specifies: story:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
-revision: 3
+revision: 4
 ---
 # Specification: every adopter-facing declaration, in one table a check can decide
 
@@ -38,7 +38,7 @@ rather than argued:
 | | Where the vocabulary lives | Consequence for an adopter |
 |---|---|---|
 | Open | a key in a protocol document — `protocols/aep/1.yaml` declares `capabilities:` (l.14), `evidence_kinds:` (l.41), `verifiers:` (l.57), `artifact_kinds:` (l.70), `phases:` (l.99), `observables:` (l.111), `scales:` (l.144), and `protocols/adp/1.yaml` extends five of them (l.11-40) | writes an extension document |
-| Closed | a Rust item — `crates/aep-domain/src/artifact.rs:707` `pub enum ArtifactStatus`, and no `statuses:` key exists in any file under `protocols/` | must patch and rebuild this repository |
+| Closed | a Rust item — `crates/govern/aep-domain/src/artifact.rs:707` `pub enum ArtifactStatus`, and no `statuses:` key exists in any file under `protocols/` | must patch and rebuild this repository |
 
 That is B1 stated as a fact about two paths. The same test separates the other candidates:
 `artifacts/lifecycles/*.yaml` lets an adopter declare a kind's ladder in a document, but every rung
@@ -115,7 +115,7 @@ which is the signal the next round needs.
 
 **R7.** `Decided by` holds a path in this repository that settles the verdict: a document key for an
 open row (`protocols/aep/1.yaml:capabilities`), a `file:line` for a closed one
-(`crates/aep-domain/src/artifact.rs:707`). Checks assert the file part exists, and for a `file:line`
+(`crates/govern/aep-domain/src/artifact.rs:707`). Checks assert the file part exists, and for a `file:line`
 form that the file has at least that many lines. An `open` row is therefore as falsifiable as a
 closed one; a verdict with no path behind it cannot be entered.
 

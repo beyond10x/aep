@@ -111,7 +111,7 @@ What the loop asks you to trust is narrow and named: that a producer declaring i
 Everything downstream of that declaration is checked.
 
 That one declaration is a gap, and it is worth naming as one. `independent: true` is a boolean over a
-self-declared `Producer` (`crates/aep-domain/src/evidence.rs`); nothing binds a verifier's identity to
+self-declared `Producer` (`crates/govern/aep-domain/src/evidence.rs`); nothing binds a verifier's identity to
 the evidence it submits, and the harness guide says so outright — the engine will record a test result
 the harness invented. Closing it means attested
 evidence: a signature over the record and a key the protocol already knows. There is no signature, no

@@ -18,8 +18,8 @@ scope:
 - confidence: inferred
   path: artifacts/lifecycles
 - confidence: inferred
-  path: crates/aep-domain/src/artifact.rs
-revision: 5
+  path: crates/govern/aep-domain/src/artifact.rs
+revision: 6
 ---
 # Story: A decision the calendar answers anyway is a recorded event, not a silence
 

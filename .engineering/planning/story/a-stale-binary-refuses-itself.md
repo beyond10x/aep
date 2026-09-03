@@ -17,10 +17,10 @@ scope:
 - confidence: cited
   path: Taskfile.yml
 - confidence: inferred
-  path: crates/aep-backend-markdown/src/journal.rs
+  path: crates/edge/protocol-cli/src/planning.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/planning.rs
-revision: 6
+  path: crates/plan/aep-backend-markdown/src/journal.rs
+revision: 8
 ---
 # Story: A stale `protocol` refuses the store it cannot read correctly
 
@@ -47,14 +47,14 @@ hard-coded floor that cannot see a fix in a later patch release (`ed007513#2748`
 
 ## Landed 2026-08-30 (this story stays open for the rest)
 
-- `task install` (`cargo install --path crates/protocol-cli --locked --force`) and `AGENTS.md`
+- `task install` (`cargo install --path crates/edge/protocol-cli --locked --force`) and `AGENTS.md`
   § Releases ends with it; `task release-check` follows.
 
 ## Acceptance
 
 - Every journal event carries `protocol: <version>` of the writer (today `journal.jsonl` carries `actor` only).
 - Every `artifact` verb compares its own version to the newest `protocol:` in the journal; an older
-  binary refuses, naming both versions and `cargo install --path crates/protocol-cli --locked --force`.
+  binary refuses, naming both versions and `cargo install --path crates/edge/protocol-cli --locked --force`.
   `--allow-older` overrides for one command and is journalled.
 - A project whose `protocols:` pin is a Git source is compared against the pin's declared CLI version
   where the pinned tree states one.

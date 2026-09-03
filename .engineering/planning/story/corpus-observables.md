@@ -18,7 +18,7 @@ scope:
   path: examples
 - confidence: cited
   path: protocols
-revision: 7
+revision: 8
 ---
 # Story: Freshness is what an ingestion pipeline exists to provide, and it cannot appear in a completion condition
 
@@ -51,7 +51,7 @@ valid
 
 `docs/guide/open-vocabulary.md:159` already records *A protocol document's `observables:` block —
 open*, and `Protocol::merge` unions a base's families into an extension's
-(`crates/aep-domain/src/protocol.rs:154-158`). So the row's conclusion is wrong on the mechanism and
+(`crates/govern/aep-domain/src/protocol.rs:154-158`). So the row's conclusion is wrong on the mechanism and
 right on the experience: an adopter with only `aep/1` and `aop/1` in front of them sees a fixed list
 that has `service.**` and nothing for a corpus, and there is no sentence anywhere in their path
 telling them a third protocol document is theirs to write.
@@ -59,7 +59,7 @@ telling them a third protocol document is theirs to write.
 **And the facts have a producer, which is the part nobody would guess.** All four conditions the row
 names are numbers, and `metric_observation` projects a number at a path the **caller** chooses:
 `EvidenceKind::facts` pushes both `metric.<path>` and the bare `<path>` itself
-(`crates/aep-domain/src/evidence.rs:1699-1709`), over `MetricObservation { metric: FactPath, value:
+(`crates/govern/aep-domain/src/evidence.rs:1699-1709`), over `MetricObservation { metric: FactPath, value:
 Number }` (`evidence.rs:400-404`). Declare the family, submit a `metric_observation` whose metric is
 `ingest.lag_seconds`, and `ingest.lag_seconds < 3600` is decided. It is the only arm of `facts()`
 that writes to a caller-named path, and no guide says so — every worked example writes

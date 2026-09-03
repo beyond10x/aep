@@ -26,14 +26,14 @@ lifecycle document itself.
 
 | fact | evidence |
 |---|---|
-| Two versions of `entity-core` are compiled into this workspace | `cargo tree -i entity-core` → *"specification is ambiguous: entity-core@0.5.2, entity-core@0.8.0"*; `crates/aep-backend-markdown/Cargo.toml:31` pins `0.5.2`, `crates/aep-backend-sqlite/Cargo.toml:21-23` pin `0.8.0`; `entity-runtime` is at `0.9.1` (`Cargo.toml:15`) |
+| Two versions of `entity-core` are compiled into this workspace | `cargo tree -i entity-core` → *"specification is ambiguous: entity-core@0.5.2, entity-core@0.8.0"*; `crates/plan/aep-backend-markdown/Cargo.toml:31` pins `0.5.2`, `crates/plan/aep-backend-sqlite/Cargo.toml:21-23` pin `0.8.0`; `entity-runtime` is at `0.9.1` (`Cargo.toml:15`) |
 | `AGENTS.md` says there is one `entity-runtime` dependency | `AGENTS.md:528` — *"the eleventh is `entity-core` in `aep-backend-markdown`, the only dependency"*. There are three crates from that repository in two of ours |
-| `SqliteBackend` writes **no events** into the store | `crates/aep-backend-sqlite/src/lib.rs:189-192` — `Decision { instance, events: Vec::new() }`. `entity-sqlite` writes instance and events in one transaction (R-83); we hand it nothing to write |
+| `SqliteBackend` writes **no events** into the store | `crates/plan/aep-backend-sqlite/src/lib.rs:189-192` — `Decision { instance, events: Vec::new() }`. `entity-sqlite` writes instance and events in one transaction (R-83); we hand it nothing to write |
 | `SqliteBackend` cannot read a database back | `lib.rs:60-76` — `written` set; *"Hydration is P5; point this at an empty database until then"*. Relations, audit and history live only in the per-process `MemoryBackend` |
-| `SqliteBackend` has no CLI surface | `crates/protocol-cli/src/planning.rs:501-503` opens `MarkdownBackend` only; `BackendArgs` (`main.rs:200-219`) has no backend selector; `protocol conformance` is hard-coded to `MemoryBackend` (`story:conformance-verb-takes-a-backend`) |
-| `MarkdownBackend` is a second hand-written durability layer | `crates/aep-backend-markdown/src/backend.rs` — its own `persist`, latch, `journal::append`; 883 lines beside `store.rs` 706 and `journal.rs` 404. Both it and `SqliteBackend` wrap `MemoryBackend` and add durability separately |
+| `SqliteBackend` has no CLI surface | `crates/edge/protocol-cli/src/planning.rs:501-503` opens `MarkdownBackend` only; `BackendArgs` (`main.rs:200-219`) has no backend selector; `protocol conformance` is hard-coded to `MemoryBackend` (`story:conformance-verb-takes-a-backend`) |
+| `MarkdownBackend` is a second hand-written durability layer | `crates/plan/aep-backend-markdown/src/backend.rs` — its own `persist`, latch, `journal::append`; 883 lines beside `store.rs` 706 and `journal.rs` 404. Both it and `SqliteBackend` wrap `MemoryBackend` and add durability separately |
 | `history`, `audit`, `describe_type` are answered by the in-memory backend in both durable backends | `backend.rs:870-882`, `lib.rs:311-335`. `protocol artifact history` reads `journal.jsonl` by a separate path |
-| D-P5 open: `TypeDescriptor::lifecycle` is `None` everywhere | `crates/aep-contract/src/registry.rs:78`; `journal-backed-store` acceptance line struck through |
+| D-P5 open: `TypeDescriptor::lifecycle` is `None` everywhere | `crates/plan/aep-contract/src/registry.rs:78`; `journal-backed-store` acceptance line struck through |
 | The markdown write path is fixed | `store.rs:271` pid+counter temp name, `store.rs:289` `sync_all` — the defect P3 found is closed; G1 keeps this shape |
 | `entity-store`'s `Store` has no enumeration | `entity-runtime/crates/entity-store/src/lib.rs:147-190` — `load`, `revision_of`, `events`, `commit`. Nothing lists what a store holds, so nothing can hydrate from one |
 | `entity-remote`'s `Hybrid` composes **any two** stores | `crates/entity-remote/src/hybrid.rs:168,175,411` — `Hybrid<L: Store, R: Store>`. A hybrid of two local stores needs no network |
@@ -58,7 +58,7 @@ lifecycle document itself.
 6. **`describe_type` reports the ladder** the kernel decides with. D-P5 closes.
 
 Invariant 14 (*exactly one write path*) is what makes 1 and 2 a narrowing rather than a rewrite:
-`crates/aep-contract/tests/write_surface.rs` refuses a second trait, and the adapter is not one — it
+`crates/plan/aep-contract/tests/write_surface.rs` refuses a second trait, and the adapter is not one — it
 is the existing traits over a provider.
 
 ## 3. The three waves

@@ -15,12 +15,12 @@ scope:
 - confidence: inferred
   path: .engineering/checks/run.sh
 - confidence: cited
-  path: crates/aep-domain/src/requirement.rs
+  path: crates/govern/aep-domain/src/requirement.rs
 - confidence: inferred
-  path: crates/aep-engine/src/evaluate.rs
+  path: crates/govern/aep-engine/src/evaluate.rs
 - confidence: cited
   path: docs/plan/gap-register.md
-revision: 5
+revision: 7
 ---
 # Story: A gate that reports and counts, and its written route back to blocking
 

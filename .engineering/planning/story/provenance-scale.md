@@ -16,12 +16,12 @@ relations:
 - depends_on: story:source-record-evidence
 scope:
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/govern/aep-domain
 - confidence: cited
   path: docs/guide/open-vocabulary.md
 - confidence: inferred
   path: protocols/aep/1.yaml
-revision: 7
+revision: 9
 ---
 # Story: 5,503 records ordered by how they were known, and a predicate that can only ever read Unknown
 
@@ -58,12 +58,12 @@ valid
 
 `docs/guide/open-vocabulary.md:160` records *A protocol document's `scales:` block — open*, and
 `Protocol::merge` unions a base's scales into an extension's
-(`crates/aep-domain/src/protocol.rs:159`). So the scale is one line and the adopter may write it
+(`crates/govern/aep-domain/src/protocol.rs:159`). So the scale is one line and the adopter may write it
 today, in their own tree, without asking anybody.
 
 **And it would buy them nothing, which is the story.** A scale orders a fact; something has to
 produce the fact. Reading every arm of `EvidenceKind::facts`
-(`crates/aep-domain/src/evidence.rs:1573-1908`): every **text**-valued fact is projected at a path the
+(`crates/govern/aep-domain/src/evidence.rs:1573-1908`): every **text**-valued fact is projected at a path the
 **engine** fixes — `tests.<suite>.result`, `static_analysis.result`, `service.health`,
 `approval.<id>.decision`, `verification.<claim>.status` — and the one arm that writes to a path the
 **caller** names is `MetricObservation` (`evidence.rs:1699-1709`), whose value is

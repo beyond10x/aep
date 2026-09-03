@@ -13,8 +13,8 @@ relations:
 - decomposes: epic:self-evaluation
 scope:
 - confidence: inferred
-  path: crates/protocol-cli
-revision: 2
+  path: crates/edge/protocol-cli
+revision: 3
 ---
 # Story: Move the plugin eval onto `claude plugin eval`
 

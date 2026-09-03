@@ -335,7 +335,7 @@ what keeps `independent: true` honestly satisfiable.
 
 Without `record:`, the driver mints the record from the program's exit status, so the kind has to be
 one an exit status can carry: `test_result`, `static_analysis`, `contract_result` or `diff`
-(`EvidenceMapping::MINTABLE`, `crates/aep-driver-spec/src/map.rs:531-536`). `record: <path>` says
+(`EvidenceMapping::MINTABLE`, `crates/drive/aep-driver-spec/src/map.rs:531-536`). `record: <path>` says
 the program writes the record itself, and then the driver reads that document and submits what it
 says rather than minting anything. That is what makes `trace_conformance` reachable from a map at
 all: its record carries a specification digest, a transcript digest and three counts, and an exit

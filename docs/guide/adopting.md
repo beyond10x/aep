@@ -519,7 +519,7 @@ one failed assertion inside a test log:
 Keep at least one representative task per profile you ship. `validate` alone will not tell you that a
 principle is timed against a phase your workflow does not have.
 
-This repository does the same thing from the other side: `crates/aep-engine/tests/documents.rs` loads
+This repository does the same thing from the other side: `crates/govern/aep-engine/tests/documents.rs` loads
 the tree, asserts it has no failures, and resolves a task against every profile — so a principle that
 could never fire cannot be committed. Its own gate is `task check`, and a step whose
 toolchain is missing fails and names it rather than skipping.

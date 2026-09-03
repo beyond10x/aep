@@ -20,16 +20,23 @@ A change that advances neither objective is a question for the operator, not an 
 
 ## What this repository is
 
-A Rust library collection, a typed document tree, and one command with two names:
+A Rust library collection, a typed document tree, and one command with two names. Every crate lives
+under the area that says what it is for; `xtask` is the build tool and has no area:
 
-- `aep-domain`, `aep-engine`, `aep-contract`, `aep-conformance`, and the `aep-backend-*` crates own
-  the generic protocol and planning substrate.
-- `adp-domain` and `aop-domain` add development and operations vocabulary over that substrate.
-- `aep-driver-spec` and `aep-driver` own reference step maps and deterministic driving.
-- `trace-domain` and `trace-spec` normalize and check recorded harness activity.
-- `aep-schema` publishes the document schemas.
-- `aep-ess-evidence` is an optional report adapter at the AEP boundary.
-- `protocol-cli` publishes canonical `aep` and the exact `protocol` compatibility alias.
+- `crates/govern/` — `aep-domain` and `aep-engine`: the protocol vocabulary and the deterministic
+  decisions taken over it.
+- `crates/plan/` — `aep-contract`, `aep-conformance`, `aep-client` and the `aep-backend-*` crates:
+  the storage contract, the suites that hold a provider to it, the official client, and the
+  backends.
+- `crates/drive/` — `aep-driver-spec`, `aep-driver` and `aep-render`: reference step maps,
+  deterministic driving, and drawing a workflow and a run over it.
+- `crates/observe/` — `trace-domain`, `trace-spec` and `aep-ess-evidence`: normalizing and checking
+  recorded harness activity, and the optional ESS report adapter at the AEP boundary.
+- `crates/profile/` — `adp-domain` and `aop-domain`: development and operations vocabulary over the
+  substrate.
+- `crates/edge/` — `aep-schema`, `aep-project` and `protocol-cli`: the published document schemas,
+  the filesystem and Git acquisition edge, and canonical `aep` with the exact `protocol`
+  compatibility alias.
 
 It is not an LLM orchestration framework, hosted database, CI system, deployment platform,
 marketplace, system-modeling toolchain, or credential holder. The engine decides from caller-supplied
@@ -50,6 +57,17 @@ A design is proposed until a plan or planning artifact accepts it. Historical pr
 override a later accepted decision.
 
 ## Repository boundaries
+
+### Areas
+
+`crates/<area>/<crate>` is a dependency claim, not filing. A crate compiles against its own area and
+the ones under it: `edge` → `{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. One
+compiled dependency crosses it the other way — `aep-engine` uses `aep_contract::command`
+(`crates/govern/aep-engine/src/trail.rs:15`) so a decision can carry the command context that caused
+it — and it is left in place rather than papered over. Test-only dependencies are outside the rule
+and two of them point at `edge`: `aep-engine` and `aep-driver` are tested against `aep-project` and
+`aep-schema`. The layout itself is checked by `xtask`'s `layout_tests`, which refuse a member
+outside an area and a crate the workspace does not build.
 
 ### Entity Runtime
 

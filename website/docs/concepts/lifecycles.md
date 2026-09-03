@@ -38,7 +38,7 @@ compiled in.
 
 ## Who decides
 
-The decision is not made here. `crates/aep-backend-markdown/src/kernel.rs` hands the definition and
+The decision is not made here. `crates/plan/aep-backend-markdown/src/kernel.rs` hands the definition and
 the attempted move to [`entity-core`](https://github.com/beyond10x/entity-runtime), a separate
 kernel taken as a pinned dependency, and reads back a verdict.
 
@@ -60,7 +60,7 @@ of `entity-runtime`'s, at any version. A kernel that depended on its adopter cou
 and then its verdicts would stop being a general answer.
 
 The dependency is also **reversible**, which is what made it safe to take.
-`crates/aep-backend-markdown/tests/kernel_equivalence.rs` holds the kernel's verdict identical to
+`crates/plan/aep-backend-markdown/tests/kernel_equivalence.rs` holds the kernel's verdict identical to
 the hand-written lookup it replaced across every kind/status pair; delete the module and the lookup
 is still standing behind it.
 

@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The crates moved under area directories.** `crates/<area>/<crate>`, where the area is one of
+  `govern`, `plan`, `drive`, `observe`, `profile` and `edge`, instead of twenty-two directories flat
+  under `crates/`. The directory now states what a crate is for and what it may depend on
+  (`AGENTS.md` § *Areas*). **No crate and no binary was renamed**: every `[package] name` is what it
+  was, `aep` and `protocol` remain the two names of the one command, and nothing a consumer pins by
+  name changes. Only paths moved — the workspace member list, the `[workspace.dependencies]` paths,
+  and the references that named a file by its old path.
+
 ## [0.50.0] — 2026-09-03
 
 ### Added

@@ -144,7 +144,7 @@ tasks:
       got a wrong `validate` or `history` answer from a binary older than the store it read, and the
       install that would have prevented it was nowhere in the procedure.
     cmds:
-      - cargo install --path crates/protocol-cli --locked --force
+      - cargo install --path crates/edge/protocol-cli --locked --force
       # `~/.local/bin` is the one directory a metaharness-spawned session has on its PATH
       # (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`, constructed, never inherited). A copy left
       # there is the `aep` every eval and every driven run actually executes: on 2026-09-03 a 0.40.1

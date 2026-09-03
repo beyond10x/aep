@@ -750,7 +750,8 @@ fn deps(root: &Path) -> Result<()> {
              One kernel decides every `protocol artifact move` and another sits under the SQLite \
              backend, so a claim about \"the runtime\" is about one of them and silent about the \
              other. Every `entity-*` dependency must name the same tag \
-             (`crates/aep-backend-markdown/Cargo.toml`, `crates/aep-backend-sqlite/Cargo.toml`), \
+             (`crates/plan/aep-backend-markdown/Cargo.toml`, \
+             `crates/plan/aep-backend-sqlite/Cargo.toml`), \
              then `cargo update -p <crate>` until `cargo tree -i entity-core` is unambiguous.",
             duplicated.join("\n")
         );
@@ -896,7 +897,11 @@ fn guards(root: &Path) -> Result<()> {
             continue;
         }
         let relative = entry.strip_prefix(root).unwrap_or(&entry);
-        let crate_name = relative.components().nth(1).map_or_else(
+        // `crates/<area>/<crate>/…`, so the crate is the *third* component. It was the second
+        // while the crates sat flat, and reading the area instead would have collapsed every
+        // crate of an area into one name — which would excuse the parallel vocabularies by
+        // accident and report duplicates between two crates of the same area as one.
+        let crate_name = relative.components().nth(2).map_or_else(
             || "?".to_owned(),
             |c| c.as_os_str().to_string_lossy().into_owned(),
         );
@@ -2275,5 +2280,247 @@ source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
+    }
+}
+
+/// The directory tree is the architecture claim: `crates/<area>/<crate>`, and nothing else.
+///
+/// Twenty-two crates sat flat under `crates/` while the dependency graph already had five contexts
+/// and an IO edge, so the tree said nothing about which crate was the protocol, which was the store
+/// and which was the driver — the reading an operator got wrong three days after the repository
+/// split. These assert the *rule* rather than the twenty-two placements: an area may gain a crate
+/// without touching this file, and a crate cannot arrive without being given an area.
+#[cfg(test)]
+mod layout_tests {
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
+    use super::workspace_root;
+
+    /// The bounded-context directories every crate lives under.
+    ///
+    /// `crates/` names the repository's contexts instead of listing twenty-two flat directories:
+    /// `govern` decides, `plan` stores, `drive` runs a workflow, `observe` reads a transcript,
+    /// `profile` adds a vocabulary over the substrate, and `edge` owns IO and document formats. The
+    /// directory is the claim about what a crate may depend on (`AGENTS.md` § *Areas*), so a crate
+    /// sitting outside one carries no claim at all — which is what this list exists to refuse.
+    const AREAS: &[&str] = &["govern", "plan", "drive", "observe", "profile", "edge"];
+
+    /// The `[workspace] members` paths, in the order the manifest declares them.
+    fn workspace_members(manifest: &str) -> Vec<String> {
+        let Some((_, rest)) = manifest.split_once("members = [") else {
+            return Vec::new();
+        };
+        let Some((list, _)) = rest.split_once(']') else {
+            return Vec::new();
+        };
+        list.lines()
+            .filter_map(|line| line.trim().strip_prefix('"'))
+            .filter_map(|line| line.split('"').next())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// Every `[workspace.dependencies]` entry that names a `path`, as `(dependency, path)`.
+    fn workspace_dependency_paths(manifest: &str) -> Vec<(String, String)> {
+        let Some((_, section)) = manifest.split_once("[workspace.dependencies]") else {
+            return Vec::new();
+        };
+        let section = section.split("\n[").next().unwrap_or(section);
+        section
+            .lines()
+            .filter_map(|line| {
+                let (name, rest) = line.split_once('=')?;
+                let (_, after) = rest.split_once("path = \"")?;
+                let (path, _) = after.split_once('"')?;
+                Some((name.trim().to_owned(), path.to_owned()))
+            })
+            .collect()
+    }
+
+    /// `("govern", "aep-domain")` for `crates/govern/aep-domain`; `None` for any other shape.
+    fn area_and_crate(path: &str) -> Option<(&str, &str)> {
+        let rest = path.strip_prefix("crates/")?;
+        let (area, name) = rest.split_once('/')?;
+        (!name.is_empty() && !name.contains('/')).then_some((area, name))
+    }
+
+    fn manifest() -> String {
+        std::fs::read_to_string(workspace_root().join("Cargo.toml"))
+            .expect("reading the workspace manifest")
+    }
+
+    #[test]
+    fn every_workspace_member_lives_under_one_of_the_named_areas() {
+        let root = workspace_root();
+        let members = workspace_members(&manifest());
+        assert!(
+            members.len() > 20,
+            "the member list parse found only {members:?}, so it is reading the wrong block"
+        );
+        let mut findings = Vec::new();
+        for member in &members {
+            if member == "xtask" {
+                // The build tool is not a crate of the protocol and has no area.
+                continue;
+            }
+            match area_and_crate(member) {
+                Some((area, name)) if AREAS.contains(&area) => {
+                    assert!(
+                        root.join(member).join("Cargo.toml").is_file(),
+                        "`{member}` is a member but has no manifest on disk"
+                    );
+                    assert!(!name.is_empty());
+                }
+                _ => findings.push(member.clone()),
+            }
+        }
+        assert!(
+            findings.is_empty(),
+            "every member is `crates/<area>/<crate>` with an area of {AREAS:?}; these are not: \
+             {findings:?}"
+        );
+    }
+
+    #[test]
+    fn crates_holds_area_directories_and_no_crate_of_its_own() {
+        let directory = workspace_root().join("crates");
+        let mut entries = BTreeSet::new();
+        for entry in std::fs::read_dir(&directory).expect("reading crates/") {
+            let entry = entry.expect("reading a crates/ entry");
+            let name = entry.file_name().to_string_lossy().into_owned();
+            assert!(
+                !entry.path().join("Cargo.toml").is_file(),
+                "`crates/{name}` is a crate directly under `crates/`, so it names no area"
+            );
+            entries.insert(name);
+        }
+        let areas: BTreeSet<String> = AREAS.iter().map(|area| (*area).to_owned()).collect();
+        assert_eq!(
+            entries, areas,
+            "`crates/` holds exactly the area directories"
+        );
+    }
+
+    /// Every directory under `crates/` that holds a `Cargo.toml`, repository-relative and sorted.
+    ///
+    /// **The walk is recursive, and it stops at a crate.** Reading only the immediate children of
+    /// each area was this scan's first shape, and a manifest at
+    /// `crates/<area>/<group>/<crate>/Cargo.toml` was invisible to it — not a crate directly under
+    /// `crates/`, not an immediate child of an area — so a crate the workspace does not build was
+    /// seen by no test at all. Stopping at the first manifest rather than descending through it is
+    /// deliberate the other way: a `Cargo.toml` *inside* a crate is a fixture, not a member, and a
+    /// scan that reported those would be one somebody switches off.
+    fn manifest_directories(root: &Path) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut pending = vec![root.join("crates")];
+        while let Some(directory) = pending.pop() {
+            let Ok(entries) = std::fs::read_dir(&directory) else {
+                continue;
+            };
+            for entry in entries {
+                let path = entry.expect("reading a crates/ entry").path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if path.join("Cargo.toml").is_file() {
+                    let relative = path.strip_prefix(root).unwrap_or(&path);
+                    found.push(relative.to_string_lossy().replace('\\', "/"));
+                } else {
+                    pending.push(path);
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn every_crate_manifest_under_crates_is_a_member_at_area_depth() {
+        let root = workspace_root();
+        let members: BTreeSet<String> = workspace_members(&manifest()).into_iter().collect();
+        let manifests = manifest_directories(&root);
+        assert!(
+            manifests.len() > 20,
+            "the walk found only {manifests:?}, so it is reading the wrong tree"
+        );
+        let mut findings = Vec::new();
+        for directory in &manifests {
+            let at_area_depth =
+                area_and_crate(directory).is_some_and(|(area, _)| AREAS.contains(&area));
+            if !at_area_depth {
+                findings.push(format!("{directory} (not `crates/<area>/<crate>`)"));
+            } else if !members.contains(directory) {
+                findings.push(format!("{directory} (not a workspace member)"));
+            }
+        }
+        assert!(
+            findings.is_empty(),
+            "a crate the workspace does not build, or does not build at area depth, is a crate \
+             nothing checks: {findings:?}"
+        );
+    }
+
+    /// The guard of the guard: a crate one level deeper than an area is found, and reported.
+    ///
+    /// `AGENTS.md` invariant 15 — break the guarded condition, observe the named failure. The
+    /// mutation is a manifest at `crates/<area>/<group>/<crate>`, which is exactly what the
+    /// immediate-children scan this replaced could not see.
+    #[test]
+    fn a_crate_nested_below_an_area_is_found_and_is_not_at_area_depth() {
+        let root = workspace_root().join("target/xtask-tests/layout-nested-crate");
+        let _ = std::fs::remove_dir_all(&root);
+        let nested = root.join("crates/govern/group/aep-nested");
+        std::fs::create_dir_all(&nested).expect("creating the fixture tree");
+        std::fs::create_dir_all(root.join("crates/govern/aep-domain"))
+            .expect("creating the fixture tree");
+        std::fs::write(
+            nested.join("Cargo.toml"),
+            "[package]\nname = \"aep-nested\"\n",
+        )
+        .expect("the fixture is writable");
+        std::fs::write(
+            root.join("crates/govern/aep-domain/Cargo.toml"),
+            "[package]\nname = \"aep-domain\"\n",
+        )
+        .expect("the fixture is writable");
+
+        let found = manifest_directories(&root);
+        assert_eq!(
+            found,
+            vec![
+                "crates/govern/aep-domain".to_owned(),
+                "crates/govern/group/aep-nested".to_owned()
+            ],
+            "the walk has to reach a crate that is not an immediate child of its area"
+        );
+        assert!(
+            area_and_crate("crates/govern/group/aep-nested").is_none(),
+            "and the nested path must not read as `crates/<area>/<crate>`, or the test above \
+             would pass it"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn every_workspace_dependency_path_is_that_crate_s_member_path() {
+        let members: BTreeSet<String> = workspace_members(&manifest()).into_iter().collect();
+        let paths = workspace_dependency_paths(&manifest());
+        assert!(
+            paths.len() > 20,
+            "the dependency parse found only {paths:?}, so it is reading the wrong block"
+        );
+        let mut findings = Vec::new();
+        for (name, path) in &paths {
+            let named_crate = area_and_crate(path).map(|(_, krate)| krate);
+            if named_crate != Some(name.as_str()) || !members.contains(path) {
+                findings.push(format!("{name} = {path}"));
+            }
+        }
+        assert!(
+            findings.is_empty(),
+            "a workspace dependency path has to be the member path of the crate it names: \
+             {findings:?}"
+        );
     }
 }

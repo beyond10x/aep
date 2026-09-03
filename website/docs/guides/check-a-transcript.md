@@ -31,14 +31,14 @@ behaviour. Try it on the committed driven step:
 ```bash
 target/debug/aep trace check \
   --spec conformance/trace/expectations.driven-step.trace.yaml \
-  --transcript crates/trace-spec/tests/fixtures/metaharness-driven-honest-step.jsonl
+  --transcript crates/observe/trace-spec/tests/fixtures/metaharness-driven-honest-step.jsonl
 ```
 
 ## See what the transcript contains
 
 ```bash
 B=target/debug/aep
-$B trace inspect --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+$B trace inspect --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
 ```
 
 ```text
@@ -131,7 +131,7 @@ below takes the first twelve lines rather than abridging by hand:
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
-    --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | head -12
+    --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | head -12
 ```
 
 ```text
@@ -155,7 +155,7 @@ turn a job red on its own. The last four lines close the report:
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
-    --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | tail -4
+    --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | tail -4
 ```
 
 ```text
@@ -179,7 +179,7 @@ requests. **`--redact` replaces every citation with an event index and a digest:
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
-    --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl --redact | head -6
+    --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl --redact | head -6
 ```
 
 ```text
@@ -199,7 +199,7 @@ evaluated, still printed, and the report names every id that was downgraded:
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
-    --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
+    --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
     --advisory billed-to-the-session | grep -E 'billed|downgraded'
 ```
 
@@ -218,7 +218,7 @@ a requirement the protocol asked for.
 
 ```bash
 $B trace evidence --spec conformance/trace/expectations.trace.yaml \
-    --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
+    --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
     --observed-at 2026-08-21 --out evidence.yaml
 ```
 
@@ -237,10 +237,10 @@ $B trace evidence --spec conformance/trace/expectations.trace.yaml \
     producer: verifier
     verifier: trace-checker
   provenance:
-    command: aep trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+    command: aep trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
     inputs:
     - conformance/trace/expectations.trace.yaml
-    - crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+    - crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
 ```
 
 `observed_at` is required, and it defaults to now — the truth, since the transcript is checked by
@@ -290,12 +290,12 @@ what it cost and what broke, is `docs/plan/harness-wave-4-governed-dogfood.md` �
 
 ## Sources
 
-The checker and IR live in `crates/trace-domain` and `crates/trace-spec`; the specification
+The checker and IR live in `crates/observe/trace-domain` and `crates/observe/trace-spec`; the specification
 format is published as `schemas/generated/trace-spec.schema.json`; the worked specification is
 `conformance/trace/expectations.trace.yaml`, whose forty-two expectations are checked
 against two committed transcripts by the ordinary test suite. Design and acceptance:
 `docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
-The driver is `crates/aep-driver` behind `aep drive`, its enforcement arm is the plugin's
+The driver is `crates/drive/aep-driver` behind `aep drive`, its enforcement arm is the plugin's
 hooks (`/path/to/agentplugins/plugins/aep-planning/README.md` § *The hooks, and what changed about "no hooks"*), and
 the governed-run record is `docs/plan/harness-wave-4-governed-dogfood.md`. For building a driver of
 your own against the same engine calls, see [Integrate an agent

@@ -15,7 +15,7 @@
 # is.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-ENUM_FILE="crates/aep-domain/src/artifact.rs"
+ENUM_FILE="crates/govern/aep-domain/src/artifact.rs"
 ENUM_DECL="pub enum RelationKind"
 DOC_DIR="artifacts/relations"
 

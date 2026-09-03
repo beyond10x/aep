@@ -21,7 +21,7 @@ Install the three local binaries from source checkouts and verify what will be r
 `PATH` before crossing a model boundary:
 
 ```shell-session
-$ cargo install --locked --path crates/protocol-cli
+$ cargo install --locked --path crates/edge/protocol-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
 $ aep --version
@@ -64,7 +64,7 @@ environment opt-in `METAHARNESS_LIVE=1`, an outer `--budget-usd`, and a conserva
 `--assume-usd-per-run` charge that it reserves before every launch. `drive status` reads the run
 directory and needs nothing. `--map` is not optional in this tree: two step maps are written
 against `adp/default/1`, so a `drive run` given neither is refused, naming both ids rather than picking the first
-(`crates/protocol-cli/src/drive.rs:401-411`).
+(`crates/edge/protocol-cli/src/drive.rs:401-411`).
 
 It evaluates no gate itself. A driver that could evaluate a gate would be a second protocol
 implementation with none of the conformance suites behind it, and the first time the two disagreed
@@ -217,7 +217,7 @@ like a broken rule.
 ### 2. Map capabilities onto the tools you actually have
 
 `capabilities()` returns the policy in force in the current state. Every `Action` maps to exactly
-one `Capability` (`Action::required_capability`, `crates/aep-domain/src/action.rs:252`), so
+one `Capability` (`Action::required_capability`, `crates/govern/aep-domain/src/action.rs:252`), so
 authorisation is a lookup:
 
 | Action | Capability |
@@ -282,7 +282,7 @@ fail differently:
 | a pre-tool hook | the call's **arguments** | nothing about workflow state, unless you hand it some |
 
 The reference driver runs both. It derives the tool set per state, not per run, from
-`tool_config(&effective_policy(execution))` (`crates/aep-driver/src/run.rs:690`), and passes the
+`tool_config(&effective_policy(execution))` (`crates/drive/aep-driver/src/run.rs:690`), and passes the
 plugin directory into every model session with `--plugin-dir` (or `AEP_DRIVE_PLUGIN_DIR`), because a
 session that never loaded the plugin never loaded the hooks. Every session also carries
 `--strict-mcp-config`, so a session's MCP surface is what that line gave it, which is nothing: an
@@ -344,7 +344,7 @@ Three limits worth knowing before you copy the shape:
   already refused, which is deliberate: a refusal belongs to the layer that took it.
 * **The launched tool set is not audited from the transcript.** A Claude Code `SessionStart` event
   lists the harness's tool *inventory*, not the session's allow rules. The committed fixture
-  `crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl` lists **thirty-two** tools in its init
+  `crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl` lists **thirty-two** tools in its init
   event; the gap register records that it was launched with nine. A transcript check can rule out
   *"the tool did not exist"* as an explanation for a refusal; it cannot confirm the allowlist you
   passed.

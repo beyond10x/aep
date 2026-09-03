@@ -1,0 +1,170 @@
+# Drafted by `protocol reverse openapi` from crates/edge/protocol-cli/tests/fixtures/reverse-openapi/order-service.yaml.
+#
+# This is a draft and not a specification. An OpenAPI document says what a service accepts;
+# a specification says what the system is. Every entity, lifecycle, invariant and refusal
+# below is a decision nobody has taken yet — they are marked UNMAPPED, and every one of them
+# has to be answered before `protocol ess validate` will accept this file.
+domain: acme.order
+
+summary: Order service
+
+types:
+  - name: acme.order.Order
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+      - name: customer
+        type: acme.order.Customer
+      - name: lines
+        type: List<acme.order.OrderLine>
+      - name: warehouse_id
+        type: Optional<Uuid>
+      - name: invoiceId
+        type: Optional<Integer>
+      - name: broker
+        type: Optional<String>
+      - name: shipper
+        type: Optional<String>
+      - name: status
+        type: Optional<acme.order.OrderStatus>
+      - name: reference
+        type: Optional<acme.order.Reference>
+      - name: courier_id
+        type: Optional<String>
+      - name: region_id
+        type: Optional<Uuid>
+      - name: note
+        type: Optional<String>
+    # Relations read from this schema's own properties. They belong to the entity this
+    # type becomes; which type that is is the first UNMAPPED question at the foot.
+    relations:
+      - name: customer
+        kind: references
+        target: acme.order.Customer
+        cardinality: one
+        via: customer
+      - name: lines
+        kind: references
+        target: acme.order.OrderLine
+        cardinality: many
+        via: lines
+      # UNMAPPED: ownership — the document cannot say whether acme.order.Order owns acme.order.Warehouse
+      - name: warehouse
+        kind: references
+        target: acme.order.Warehouse
+        cardinality: one
+        via: warehouse_id
+      # UNMAPPED: ownership — the document cannot say whether acme.order.Order owns acme.order.Invoice
+      - name: invoice
+        kind: references
+        target: acme.order.Invoice
+        cardinality: one
+        via: invoiceId
+      - name: broker
+        kind: references
+        target: acme.order.Broker
+        cardinality: one
+        via: broker
+      # UNMAPPED: cardinality
+      - name: shipper
+        kind: references
+        target: acme.order.Carrier
+        cardinality: one
+        via: shipper
+
+  - name: acme.order.Customer
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+      - name: name
+        type: Optional<String>
+
+  - name: acme.order.OrderLine
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+      - name: quantity
+        type: Optional<Integer>
+
+  - name: acme.order.Warehouse
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+
+  - name: acme.order.Invoice
+    kind: struct
+    fields:
+      - name: invoice_id
+        type: Integer
+
+  - name: acme.order.Broker
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+
+  - name: acme.order.Carrier
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+
+  - name: acme.order.Courier
+    kind: struct
+    fields:
+      - name: id
+        type: Uuid
+
+  - name: acme.order.OrderStatus
+    kind: enum
+    variants: [Placed, Shipped]
+
+  - name: acme.order.Reference
+    kind: newtype
+    of: String
+
+errors:
+  # UNMAPPED: every name here is a status code, and an error is a domain fact rather than
+  # a transport one. Rename each to what actually went wrong, and give it the fields a
+  # caller needs in order to do something other than retry.
+  - name: acme.order.Refused409
+    summary: The request was refused with HTTP 409.
+
+commands:
+  - name: acme.order.PlaceOrder
+    # POST /orders
+    naming:
+      wire: place-order
+
+    input:
+      - name: body
+        type: acme.order.Order
+
+    outcomes:
+      - name: accepted-201
+        # HTTP 201
+        # UNMAPPED: `when:`, `creates:` and `emits:` — which entity this
+        # produces, and under what condition, is not in the contract.
+        summary: Placed.
+      - name: refused-409
+        error: acme.order.Refused409
+        summary: Refused.
+
+
+# UNMAPPED: entities. An OpenAPI schema is a payload shape, and an
+# entity is a thing with an identity and a life. Which of the types
+# above is an entity, and what its identity field is, is the first
+# question this draft cannot answer.
+#
+# UNMAPPED: lifecycles. Nothing in an HTTP contract says which states
+# an entity holds or which command moves it between them.
+#
+# UNMAPPED: invariants. A schema constrains one payload; an invariant
+# holds over an entity for its whole life. None can be read off here.
+#
+# UNMAPPED: actors. Who may issue each command is a fact about the
+# organisation, not about the transport.

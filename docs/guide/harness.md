@@ -90,7 +90,7 @@ run* was started from. Discovery is the fallback and it answers a different ques
 does this project name?* — so a run driven with `aep drive run --task <a path that is not the
 project's>` used to decide the project's story's specification while the engine's cursor said
 something else. The three placeholders a map may write — `{run_directory}`, `{task}`, `{transcript}`
-— are `CommandStep::PLACEHOLDERS` (`crates/aep-driver-spec/src/map.rs`), and a misspelling is
+— are `CommandStep::PLACEHOLDERS` (`crates/drive/aep-driver-spec/src/map.rs`), and a misspelling is
 refused at load rather than handed to a program as literal braces.
 
 It writes nothing and says why when the store holds none of this task's or
@@ -102,7 +102,7 @@ a flag that produced the record would be the way around the guard rather than th
 
 Before the first step runs, the driver compares every evidence kind the **plan** will demand against
 every kind the **map** declares, and refuses a run that could not finish
-(`crates/aep-driver/src/coverage.rs`). It is an economic check and not a protocol one: the run would
+(`crates/drive/aep-driver/src/coverage.rs`). It is an economic check and not a protocol one: the run would
 otherwise walk every state and block at the guard that wanted the record, which cost one measured run
 $31.46 and 76 minutes. `--allow-evidence-gap` prints the gap and starts anyway, which is the position
 somebody driving to a `--pause-on-approval` stop and supplying the record by hand is legitimately in.
@@ -117,7 +117,7 @@ pass this check and still block at completion, and the shipped cargo map carries
 
 Enforcement is one policy with one enforcer, since `epic:metaharness-migration` (2026-08-22):
 every `llm` step is spawned through `metaharness run claude` in ask mode, and the driver's own
-per-call policy — `decide_tool` in `crates/protocol-cli/src/drive.rs`, the retired shell hooks
+per-call policy — `decide_tool` in `crates/edge/protocol-cli/src/drive.rs`, the retired shell hooks
 ported to Rust plus the per-state allowlist — answers each `tool.requested` event before the call
 runs. It is the only layer that sees a call's **arguments**, and its decisions are `tool.decided`
 events in the run's own event stream rather than a side-channel log. Afterwards the record says

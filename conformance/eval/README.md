@@ -8,7 +8,7 @@ One directory per case. A case is three things and no others:
 | the expectations | `expectations.trace.yaml` | a `trace-spec/1` document — what the run must have looked like |
 | the transcript | `transcript.jsonl` | a committed run, replayed through the checker in the gate |
 
-`crates/protocol-cli/tests/eval_corpus.rs` enumerates this directory and replays every case. Nothing
+`crates/edge/protocol-cli/tests/eval_corpus.rs` enumerates this directory and replays every case. Nothing
 registers a case anywhere: a new directory with a `case.yaml` in it **is** a new case, and one whose
 transcript stops satisfying its own document turns `task check` red naming the expectation that
 stopped holding.
@@ -43,7 +43,7 @@ same rows and the only difference between them is what the agent did.
 ## The transcripts are synthesized, and that is stated rather than implied
 
 Every transcript here is written by hand against the `metaharness.event/1` event stream — the same
-construction, and for the same reason, as `crates/trace-spec/tests/fixtures/metaharness-driven-*.jsonl`,
+construction, and for the same reason, as `crates/observe/trace-spec/tests/fixtures/metaharness-driven-*.jsonl`,
 whose module documentation makes the argument at length. They are **structurally faithful and not
 observed**: a number in one of these files is a number this corpus chose, so a failing assertion here
 is a change in the checker or in a document, never a finding about a harness.
@@ -70,7 +70,7 @@ expect:
     before: {tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
 ```
 
-The list is `crates/protocol-cli/src/drive.rs`'s — exactly the three verbs it renders to the
+The list is `crates/edge/protocol-cli/src/drive.rs`'s — exactly the three verbs it renders to the
 `repository.write` capability — so this repository's own driver stays the authority on what a write
 is and a fourth verb is added in one place.
 
@@ -81,7 +81,7 @@ shrugging at work that had visibly happened. `Edit` before `Edit` is the same or
 `Write` before `Write` was. Dropping the tool scope entirely and matching `file_path` alone would
 have been a real weakening, because `Read` carries a `file_path` too and *read the test first* is not
 *wrote the test first*. Both directions are mutation-tested in
-`crates/trace-spec/tests/write_selectors.rs`.
+`crates/observe/trace-spec/tests/write_selectors.rs`.
 
 **A forbidding row is not the same set as a witnessing row.** `no-artifact-file-was-rewritten-whole`
 names `[NotebookEdit, Write]` and deliberately leaves `Edit` out, because the store's rule denies a

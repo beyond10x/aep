@@ -30,7 +30,7 @@ adopter-facing defects that need no decision are gone — before any new capabil
 | fact | evidence |
 |---|---|
 | `epic:planning-store-as-backend` is `implemented`: 16/17 stories, one archived as superseded | `.engineering/planning/epic/planning-store-as-backend.md`; `protocol artifact validate` → `valid` |
-| `epic:reference-driver` is `draft` at 1/12, yet the driver exists | `crates/aep-driver`, `crates/aep-driver-spec`, `crates/protocol-cli/src/drive.rs` (90 functions), `drivers/development/`; `story:driver-spec-crate`, `story:protocol-drive-verb`, `story:default-step-map`, `story:own-engineering-store` sit at `active`/`proposed` |
+| `epic:reference-driver` is `draft` at 1/12, yet the driver exists | `crates/drive/aep-driver`, `crates/drive/aep-driver-spec`, `crates/edge/protocol-cli/src/drive.rs` (90 functions), `drivers/development/`; `story:driver-spec-crate`, `story:protocol-drive-verb`, `story:default-step-map`, `story:own-engineering-store` sit at `active`/`proposed` |
 | `epic:evidence-gated-completion` is 4/7; the three open stories name what the store waves just enabled | `story:completion-audit-join` (join through the journal → the event log exists in every store since G3/H1), `story:completion-needs-evidence` (a verdict, its two mechanism halves marked **Shipped** in its own body), `story:evidence-producers-for-the-driven-map` |
 | `story:governed-dogfood-run` (W4.1) was run once and stopped short | `harness-wave-4-governed-dogfood.md:3` — *"W4.1 has been run once — W4-1/1, 2026-08-21, and it stopped short"* |
 | Every store now counts evidence from the entity's events; a move over SQLite is decided on what was recorded | `e550a6c`; `store_selection.rs` 6/6 with exit codes asserted |

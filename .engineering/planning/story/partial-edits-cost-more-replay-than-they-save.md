@@ -13,12 +13,12 @@ relations:
 - decomposes: epic:self-evaluation
 scope:
 - confidence: inferred
-  path: crates/aep-driver
+  path: crates/drive/aep-driver
 - confidence: cited
-  path: crates/aep-driver-spec
+  path: crates/drive/aep-driver-spec
 - confidence: inferred
   path: docs/reviews/2026-08-24-scope-cache-and-the-native-arm.md
-revision: 4
+revision: 6
 ---
 # Story: the cheap way to honour the store rule
 

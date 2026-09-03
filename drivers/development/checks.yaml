@@ -36,7 +36,7 @@
 # ## Red before there is anything to be green about
 #
 # `test.first_result` is the **first** test result ever recorded in a run and it never changes
-# (`crates/aep-engine/src/execution.rs:366-378`), and `establish_verifiers → implement` is guarded
+# (`crates/govern/aep-engine/src/execution.rs:366-378`), and `establish_verifiers → implement` is guarded
 # on `test.first_result == failed` by `test-driven`. So the checks are run **in
 # `establish_verifiers`, before any implementation exists**, and the run's first recorded suite is
 # the red one. Run `W4-1/1` is what this is written against: it wrote nine red shell checks and then

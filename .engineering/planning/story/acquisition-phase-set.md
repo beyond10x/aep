@@ -21,7 +21,7 @@ scope:
   path: principles
 - confidence: cited
   path: protocols
-revision: 8
+revision: 9
 ---
 # Story: Six ingestion states flatten onto three phases, and nothing told the adopter they could declare their own
 
@@ -56,8 +56,8 @@ valid
 ```
 
 So the row's premise holds — a workflow may only declare phases its protocol knows — and its
-conclusion does not: `PhaseId` is an open identifier (`crates/aep-domain/src/ids.rs:252`, charset
-kebab), `Protocol::merge` unions a base's phases into an extension's (`crates/aep-domain/src/protocol.rs:153`),
+conclusion does not: `PhaseId` is an open identifier (`crates/govern/aep-domain/src/ids.rs:252`, charset
+kebab), `Protocol::merge` unions a base's phases into an extension's (`crates/govern/aep-domain/src/protocol.rs:153`),
 and `docs/guide/open-vocabulary.md:158` already records *A protocol document's `phases:` block —
 open*. The adopter could have written `aip/1` in their own tree on the day, and `protocols/README.md`
 even says how — *"`adp/1` and `aop/1` extend it rather than restating it; extension is additive"*.

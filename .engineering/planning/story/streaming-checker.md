@@ -12,10 +12,10 @@ relations:
 - decomposes: epic:checker-vocabulary-depth
 scope:
 - confidence: inferred
-  path: crates/trace-domain
+  path: crates/observe/trace-domain
 - confidence: inferred
-  path: crates/trace-spec
-revision: 3
+  path: crates/observe/trace-spec
+revision: 4
 ---
 # Story: Checking a run while it is still running
 

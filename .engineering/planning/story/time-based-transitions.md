@@ -16,10 +16,10 @@ scope:
 - confidence: inferred
   path: artifacts/lifecycles
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/govern/aep-domain
 - confidence: inferred
-  path: crates/aep-engine
-revision: 5
+  path: crates/govern/aep-engine
+revision: 8
 ---
 # Story: A transition the clock can trigger
 
@@ -45,7 +45,7 @@ this ordering avoids is two clocks in one engine — the general design must be 
 narrow one, and the acceptance says so.
 
 The engine's determinism invariant is the constraint that shapes the whole story: `aep-domain` is
-clock-free and RNG-free, scanned for banned tokens by `crates/aep-domain/tests/determinism.rs`. So the
+clock-free and RNG-free, scanned for banned tokens by `crates/govern/aep-domain/tests/determinism.rs`. So the
 clock is **read at the edge and passed in**, never read in the domain — an evaluation is a pure
 function of the documents, the facts and one supplied instant, and the same inputs give the same
 answer a year later.

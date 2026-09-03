@@ -7,13 +7,13 @@ title: A store adopted into the event log has no documents the drift check must 
 relations:
 - informed_by: story:skill-text-cannot-instruct-a-direct-store-write
 scope:
+- confidence: inferred
+  path: crates/edge/protocol-cli/src/reverse.rs
 - confidence: cited
-  path: crates/aep-backend-markdown/src/drift.rs
+  path: crates/plan/aep-backend-markdown/src/drift.rs
 - confidence: inferred
-  path: crates/aep-backend-markdown/src/journal.rs
-- confidence: inferred
-  path: crates/protocol-cli/src/reverse.rs
-revision: 5
+  path: crates/plan/aep-backend-markdown/src/journal.rs
+revision: 8
 ---
 # Story: A store adopted into the event log has no documents the drift check must ignore
 
@@ -24,7 +24,7 @@ the store is drift-checkable and **pre-provider** stops being a status any docum
 
 ## Context
 
-`crates/aep-backend-markdown/src/drift.rs:16` states the gap in its own table:
+`crates/plan/aep-backend-markdown/src/drift.rs:16` states the gap in its own table:
 
 | finding | what it means | exit |
 |---|---|---|

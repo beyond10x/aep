@@ -19,8 +19,8 @@ scope:
 - confidence: cited
   path: conformance/trace/expectations.trace.yaml
 - confidence: inferred
-  path: crates/trace-spec
-revision: 5
+  path: crates/observe/trace-spec
+revision: 6
 ---
 # Story: The two planning agents, held to their charters by a run
 

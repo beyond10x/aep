@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - informed_by: story:workflow-plugin-coverage
-revision: 1
+revision: 2
 ---
 # Story: The plugin ships an implementor and an adversary, and the reasons it did not are answered
 
@@ -52,14 +52,14 @@ the reason `agents/adversary.md` is **not a verifier**. It emits no evidence:
   `Producer::Verifier` — independent absolutely, today, with no D-3. The case is independent
   because a program ran it, not because the agent says it was impartial.
 - Its judgement output is a `review-result` from an agent. `Reviewer::is_human()` is false for
-  `Agent` (`crates/aep-domain/src/review.rs`), so it satisfies no review requirement carrying
+  `Agent` (`crates/govern/aep-domain/src/review.rs`), so it satisfies no review requirement carrying
   `human: true` — which is the one `development.critical` imposes. Nothing gates on its opinion.
 - An `llm` step has no `evidence` key and cannot be given one
-  (`crates/aep-driver-spec/src/map.rs`): *"a step kind that could mint evidence from a model's
+  (`crates/drive/aep-driver-spec/src/map.rs`): *"a step kind that could mint evidence from a model's
   output would be the single change that unpicks the whole loop."* The interactive agent holds
   itself to the same rule.
 
-`crates/aep-domain/src/requirement.rs` is untouched. Gap register **D-3** stays proposed, and the
+`crates/govern/aep-domain/src/requirement.rs` is untouched. Gap register **D-3** stays proposed, and the
 verifier agent it blocks stays unbuilt — that one really does wait for a signature.
 
 **Why this is not the LLM judge the repository refuses twice by name**

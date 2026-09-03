@@ -94,7 +94,7 @@ green report and wonders which ticks meant anything.
 **Saying nothing is not the same as saying no.** Leave `change.database_schema` out of the second
 task entirely and the rule stays in force, all twelve obligations with it. An applicability condition
 the engine cannot evaluate resolves to *applies*
-(`crates/aep-domain/src/principle.rs:688`), because a rule that can rule itself out by silence is a
+(`crates/govern/aep-domain/src/principle.rs:688`), because a rule that can rule itself out by silence is a
 rule nobody can rely on. Opting out is a declaration a reviewer can see.
 
 **Timing.** With the migration plan in the manifest, a failing test carries the task into
@@ -160,7 +160,7 @@ rest of the rule.
   capability policy, so it cannot change any outcome`.
 * A principle's `capabilities:` may only take away. `deny` and `require_approval` are applied; an
   `allow:` parses, validates and is then **ignored** — a principle restricts, and granting is a
-  profile's or a protocol's job (`crates/aep-domain/src/capability.rs:630`). Adding
+  profile's or a protocol's job (`crates/govern/aep-domain/src/capability.rs:630`). Adding
   `allow: [secret.read]` to the rule above leaves `denied secret.read` in the resolved plan.
 * Extending a profile can only make completion harder: conditions are conjoined — `acme.service`
   inherits `development.fast`'s completion condition through `development.standard` and reports both,

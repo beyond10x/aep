@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: specification:agent-charter-eval-cases
 - derived_from: task:w4-1-agent-eval-cases
-revision: 1
+revision: 2
 ---
 # Task: the two trace specifications
 
@@ -70,7 +70,7 @@ and no dependency on the runner existing.
 
 ## Notes
 
-- `crates/trace-domain/src/spec.rs`'s `ExpectationKind` enum is the vocabulary; read it rather than
+- `crates/observe/trace-domain/src/spec.rs`'s `ExpectationKind` enum is the vocabulary; read it rather than
   inventing a kind name.
 - Wiring these two documents into `cargo test -p trace-spec` is **out of scope** — it is `crates/`,
   which the task's constraints exclude. Between live runs they are held only by the runner's offline

@@ -11,17 +11,17 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
 scope:
+- confidence: inferred
+  path: crates/edge/aep-project/src/load.rs
+- confidence: inferred
+  path: crates/edge/protocol-cli/src/planning.rs
+- confidence: inferred
+  path: crates/edge/protocol-cli/src/reverse.rs
 - confidence: cited
-  path: crates/aep-domain/src/artifact.rs
-- confidence: inferred
-  path: crates/aep-project/src/load.rs
-- confidence: inferred
-  path: crates/protocol-cli/src/planning.rs
-- confidence: inferred
-  path: crates/protocol-cli/src/reverse.rs
+  path: crates/govern/aep-domain/src/artifact.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 9
+revision: 12
 ---
 # Story: Six small refusals that each cost a session one retry
 
@@ -44,7 +44,7 @@ Each item is one retry in one or more sessions; together they are a round of fri
 
 - 1 (`allow_hyphen_values` on `--title`/`--summary`, `new` and `set`); 3 for `list` and `show`
   (`graph --format json` still omits an empty `relations`: `skip_serializing_if` at
-  `crates/aep-domain/src/artifact.rs:1475`); 5 (`move --via`).
+  `crates/govern/aep-domain/src/artifact.rs:1475`); 5 (`move --via`).
 
 ## Still open
 

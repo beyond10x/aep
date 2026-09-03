@@ -12,7 +12,7 @@ tags:
 relations:
 - specifies: story:agent-eval-cases
 - derived_from: task:w4-1-agent-eval-cases
-revision: 1
+revision: 2
 ---
 # Specification: the two planning agents, held to their charters by a run
 
@@ -43,7 +43,7 @@ already there.
 
 The `trace-spec/1` vocabulary is transcript-derived throughout: forty-odd kinds over environment,
 tools, ordering, terminal record, tokens, cost and timing, and **no kind that can read a file or the
-git index** (`crates/trace-domain/src/spec.rs`, the `ExpectationKind` enum). R11 records what that
+git index** (`crates/observe/trace-domain/src/spec.rs`, the `ExpectationKind` enum). R11 records what that
 forces on the story's fourth acceptance bullet.
 
 This specifies `story:agent-eval-cases`, under `epic:self-evaluation`, for task `W4-1`.

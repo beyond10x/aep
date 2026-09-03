@@ -17,14 +17,14 @@ scope:
 - confidence: cited
   path: AGENTS.md
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/edge/protocol-cli
 - confidence: cited
-  path: crates/aep-engine
+  path: crates/govern/aep-domain
 - confidence: cited
-  path: crates/protocol-cli
+  path: crates/govern/aep-engine
 - confidence: cited
   path: examples/evidence-horizons-corpus/distribution.json
-revision: 8
+revision: 10
 ---
 # Story: Twelve horizons in one corpus, and one number the engine will hold
 
@@ -51,13 +51,13 @@ its reason. What is new is a measurement of what the default costs the corpus it
 ### What the engine does today, re-verified against this checkout
 
 * A horizon is a field on an **evidence requirement** and nowhere else —
-  `crates/aep-domain/src/requirement.rs:279`, with the reason in the doc comment above it at
+  `crates/govern/aep-domain/src/requirement.rs:279`, with the reason in the doc comment above it at
   `:264-277`.
-* Lapse is decided against that one number: `crates/aep-domain/src/requirement.rs:454-471` reads
+* Lapse is decided against that one number: `crates/govern/aep-domain/src/requirement.rs:454-471` reads
   `self.horizon`, compares it to the record's `observed_at`, and returns a reason naming the
   horizon, the observation date and the day it lapsed.
 * For fact withholding the plan collapses every requirement to **one horizon per evidence kind,
-  plan-wide, strictest wins** — `crates/aep-engine/src/execution.rs:386-397`
+  plan-wide, strictest wins** — `crates/govern/aep-engine/src/execution.rs:386-397`
   (`strictest_horizon`), read by `:442-448` (`has_lapsed`).
 * The semantics past the horizon are correct and are not in question: the observation reads `?`,
   never `✗`, and the reason names the lapse date. That is invariant 5 and it stays.
@@ -98,7 +98,7 @@ about where the number belongs, not an oversight**, and cite this repository's o
 
 Invariant 17 defends against one move: **extension**. *"If `extend` is as easy to call as
 `re-check`, it is the one that gets called — every time, under pressure, by whoever is trying to get
-a gate green"* (`crates/aep-domain/src/requirement.rs:268`,
+a gate green"* (`crates/govern/aep-domain/src/requirement.rs:268`,
 `examples/evidence-horizons-corpus/README.md:108`). A record that sets its own expiry can set it
 later. That is right, and it is why *shipping a `horizon` field on a record* is not what is asked
 for here.
@@ -113,7 +113,7 @@ record's horizon past the requirement's is a refusal, not a slower gate.
 
 ### What exists already and is one flag short
 
-`protocol evidence inspect --horizon` (`crates/protocol-cli/src/main.rs:4818-4894`) already renders a
+`protocol evidence inspect --horizon` (`crates/edge/protocol-cli/src/main.rs:4818-4894`) already renders a
 per-record `ok`/`expired` column, and already reports a future observation per record rather than
 refusing the file. But its horizon is a single value on the command line, applied to every record —
 its own help says *"report only … a what-if applied to a printed table"*. So it answers *which of
@@ -133,7 +133,7 @@ the adopter's gate answers 215 times a run.
   horizon and **that record's** lapse date; and the lapsed record still reads `?` and never `✗`,
   because invariant 5 does not move for this.
 - The plan's fact-withholding follows the same number. `strictest_horizon`
-  (`crates/aep-engine/src/execution.rs:386-397`) currently answers per kind; a record carrying its
+  (`crates/govern/aep-engine/src/execution.rs:386-397`) currently answers per kind; a record carrying its
   own horizon is withheld on its own clock, so `has_lapsed` and the requirement outcome cannot
   disagree about one record — which is the property `has_lapsed`'s doc comment already says it is
   public in order to hold.
@@ -144,7 +144,7 @@ the adopter's gate answers 215 times a run.
   mechanism — *"an evidence record has no horizon field, so there is nothing on a record to
   mutate"* — stops being true, and the invariant must state what replaced it: no assignment, no
   `&mut self` mutator, and the horizon re-read from a parsed document on every resolve.
-  `crates/aep-domain/tests/horizon_immutability.rs` extends its scan to the record type. An
+  `crates/govern/aep-domain/tests/horizon_immutability.rs` extends its scan to the record type. An
   invariant whose stated enforcement no longer exists is worse than no invariant.
 - The horizon corpus gains the twelve-horizon fixture.
   `examples/evidence-horizons-corpus/distribution.json` records **ten** horizons over **167** tokens,
@@ -181,7 +181,7 @@ where they recorded it.
 answers: **on the envelope, beside `observed_at`**. Both are the caller's statement about the
 observation rather than about its content, invariant 7 already draws the line there — *the engine
 does not decide when the observation happened* — and it keeps `Evidence`'s payload types, which the
-source scan in `crates/aep-engine/tests/evidence_scan.rs` enumerates, untouched.
+source scan in `crates/govern/aep-engine/tests/evidence_scan.rs` enumerates, untouched.
 
 **Shorten-only, or free?** Decides: protocol owner. Default if nobody answers: **shorten-only**,
 refusing a record horizon longer than the requirement's by name. It covers the adopter's whole

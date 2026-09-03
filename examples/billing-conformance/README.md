@@ -81,7 +81,7 @@ Three fields carry the weight:
   out. "Nobody found out" is not "the implementation is wrong", and neither is a pass.
 
 The command that produced the committed record is in the record. It is regenerated and compared byte
-for byte by `crates/protocol-cli/tests/cli.rs`, so nobody can edit these two files by hand without a
+for byte by `crates/edge/protocol-cli/tests/cli.rs`, so nobody can edit these two files by hand without a
 test noticing.
 
 ## 3. The task completes — because of the run, and only because of it
@@ -172,7 +172,7 @@ task: it is a true report about a different resolution of the specification. Tha
 as `examples/development-passkeys/`'s stale approval, one layer down — an approval of version 3 does
 not cover version 7, and a suite run against yesterday's model does not attest today's.
 `a_conformance_run_against_another_revision_of_the_model_does_not_close_the_task` in
-`crates/protocol-cli/tests/cli.rs` is that check.
+`crates/edge/protocol-cli/tests/cli.rs` is that check.
 
 ## What is not proven here
 

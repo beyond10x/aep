@@ -12,7 +12,7 @@ tags:
 relations:
 - informed_by: story:wave-as-a-surface
 - decomposes: epic:self-evaluation
-revision: 6
+revision: 7
 ---
 # Story: Seven defects the wave skill found by being run once
 
@@ -105,7 +105,7 @@ them. `AGENTS.md:499-502` says the opposite in as many words: *"`store_selection
 `CARGO_TARGET_TMPDIR` lies under the repository root and fails eleven tests whenever the
 target is elsewhere. Each worktree builds into its own `target/`."* It does. Measured: `cargo
 test -p protocol-cli` in `impl/protocol-drive-verb` exited **101** with **11 failures, all of
-them `crates/protocol-cli/tests/store_selection.rs:77` — `the scratch tree is under the
+them `crates/edge/protocol-cli/tests/store_selection.rs:77` — `the scratch tree is under the
 repository: StripPrefixError(())`** — and none of them touching the unit's change. Because
 cargo stops at the first failing target, the two suites the unit actually owed
 (`drive_cli`, `driving`) **never ran**, so the gate was not merely noisy, it was empty. One

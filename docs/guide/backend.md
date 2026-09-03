@@ -128,7 +128,7 @@ suite named after it.
 | `NoOp` | Accepted, and nothing changed, because the state already matched |
 
 A replay must not advance the revision. From the reference scenario
-([`crates/aep-backend-memory/tests/scenario.rs`](../../crates/aep-backend-memory/tests/scenario.rs)):
+([`crates/plan/aep-backend-memory/tests/scenario.rs`](../../crates/plan/aep-backend-memory/tests/scenario.rs)):
 
 ```rust
 assert_eq!(replay.outcome, CommandOutcome::Replayed);
@@ -337,21 +337,21 @@ behaviour holds.
 ## Nobody has proved a durable backend against these suites
 
 Worth knowing before you start: if you write one, you are the first. The contract has exactly one
-implementor — [`aep-backend-memory`](../../crates/aep-backend-memory/) — and every one of the sixteen
+implementor — [`aep-backend-memory`](../../crates/plan/aep-backend-memory/) — and every one of the sixteen
 suites runs against that and nothing else. A backend that survives a process exit has never been held
 to them.
 
 Three durable backends exist and a composite of two of them; all implement the contract, and all
 are **one shape**: the adapter
-[`aep-backend-entity`](../../crates/aep-backend-entity/) — the contract over any
+[`aep-backend-entity`](../../crates/plan/aep-backend-entity/) — the contract over any
 `entity_store::Store` from `entity-runtime` — instantiated over a provider.
-[`aep-backend-sqlite`](../../crates/aep-backend-sqlite/) is that adapter over
+[`aep-backend-sqlite`](../../crates/plan/aep-backend-sqlite/) is that adapter over
 `entity_sqlite::SqliteStore`: whatever the contract holds, in one file, no server.
-[`aep-backend-markdown`](../../crates/aep-backend-markdown/) is the same adapter over the plan's
+[`aep-backend-markdown`](../../crates/plan/aep-backend-markdown/) is the same adapter over the plan's
 own provider — the markdown files under `.engineering/planning/` as a `Store`, one artifact per
 file, `journal.jsonl` as the event log — with a *projection* that keeps what a plan keeps and an
 entity does not carry: the prose, the edges in frontmatter, the ladder a status is checked against.
-This repository plans its own work in it. [`aep-backend-postgres`](../../crates/aep-backend-postgres/)
+This repository plans its own work in it. [`aep-backend-postgres`](../../crates/plan/aep-backend-postgres/)
 is the adapter over `entity_postgres::PostgresStore` — the store an organisation actually runs, two
 processes writing one artifact resolving to one accepted write and one refusal naming the revision
 it lost to; its tests run when `ENTITY_POSTGRES_URL` names a server. The next durable backend is the
@@ -392,7 +392,7 @@ store: { postgres: "postgres://user:secret@db.internal/plans" }
 ```
 
 Nothing else about the project changes. `--store <dir>` stays the override for the markdown form.
-The verbs answer alike whichever store is named — `crates/protocol-cli/tests/store_selection.rs`
+The verbs answer alike whichever store is named — `crates/edge/protocol-cli/tests/store_selection.rs`
 runs every one of them, each as its own process, over `examples/planning-passkeys/` on files and on
 `project.sqlite.yaml`, and compares the output — with one difference recorded rather than hidden:
 
@@ -455,7 +455,7 @@ would be a second and worse `explain`; and an id the plan does not hold is refus
 way `explain` and `history` refuse one. It reads through the contract like every other read, so the
 markdown, SQLite, Postgres and hybrid answers are one answer — held to that by
 `show_prints_one_artifact_with_its_body_verbatim_in_every_store` in
-`crates/protocol-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
+`crates/edge/protocol-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
 keys this format does not name: they are a markdown document's own, and a plan that keeps no
 documents has never been told about them.
 
@@ -504,7 +504,7 @@ store:
     replica: { sqlite: replica.sqlite3 }     # or { postgres: "postgres://…" }
 ```
 
-This is [`aep-backend-hybrid`](../../crates/aep-backend-hybrid/): the same adapter, the plan's own
+This is [`aep-backend-hybrid`](../../crates/plan/aep-backend-hybrid/): the same adapter, the plan's own
 projection, over `entity-runtime`'s `Hybrid<MarkdownProvider, R>` (`story:hybrid-backend`). The
 atomicity guarantee is the runtime's, cited rather than chosen (`store-v0.1.md` § 10): a write one
 side took and the other refused is a **divergence**, recorded and never swallowed; under
@@ -525,7 +525,7 @@ a third.
 
 ## The reference to diff against
 
-[`crates/aep-backend-memory/`](../../crates/aep-backend-memory/) is the known-good implementation: a
+[`crates/plan/aep-backend-memory/`](../../crates/plan/aep-backend-memory/) is the known-good implementation: a
 few `BTreeMap`s behind one lock, no persistence, no cleverness. It exists so the contract is exercised
 by something real, and so a conformance suite has something to check itself against.
 

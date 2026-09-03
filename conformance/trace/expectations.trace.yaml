@@ -17,7 +17,7 @@ title: The planning plugin behaves as its skill says it does
 #
 # Every advisory bound is calibrated at roughly three to ten times an observed value, and the
 # observation is in the comment beside it, so the next reader knows what it was set against. The
-# two runs it was written from are committed at `crates/trace-spec/tests/fixtures/`, and
+# two runs it was written from are committed at `crates/observe/trace-spec/tests/fixtures/`, and
 # `cargo test -p trace-spec` checks this document against both of them — so a bound that stops
 # holding is caught by the gate rather than by a paid eval run.
 

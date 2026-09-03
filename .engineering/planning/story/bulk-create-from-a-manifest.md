@@ -7,8 +7,8 @@ title: Many artifacts arrive in one command
 summary: new creates one artifact per call, so every adopter with a backlog writes the same loop and answers partial failure differently.
 scope:
 - confidence: cited
-  path: crates/protocol-cli/src/planning.rs
-revision: 2
+  path: crates/edge/protocol-cli/src/planning.rs
+revision: 4
 ---
 ## Context
 
@@ -34,7 +34,7 @@ each reimplementation answers it differently.
 
 ## Evidence for the gap
 
-`crates/protocol-cli/src/planning.rs` — `create()` takes one `NewArgs` and builds one
+`crates/edge/protocol-cli/src/planning.rs` — `create()` takes one `NewArgs` and builds one
 `PlanningDocument`. The `story-migration` skill's § 3 is the workaround, and its
 `aep-planning` 0.3.7 revision documents that each duplicate create exits non-zero, which is the
 detail every caller's loop has to handle.

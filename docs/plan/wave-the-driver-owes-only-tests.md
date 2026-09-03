@@ -34,10 +34,10 @@ read out of each story's own re-verification table, which names `file:line` for 
 
 | # | story | status in | surface | overlap |
 |---|---|---|---|---|
-| 1 | `story:driver-spec-crate` | active | `crates/aep-engine/src/registry.rs` (new `mod tests`), `crates/aep-driver-spec/src/map.rs` (tests) | none |
-| 2 | `story:driver-router` | active | `crates/aep-driver/tests/determinism.rs`, `crates/aep-driver/tests/tool_config.rs` | none |
-| 3 | `story:protocol-drive-verb` | proposed → active | `crates/protocol-cli/tests/drive_cli.rs`, `crates/aep-driver/tests/driving.rs` | none |
-| 4 | `story:default-step-map` | proposed → active | `crates/aep-engine/tests/` (new file) | none |
+| 1 | `story:driver-spec-crate` | active | `crates/govern/aep-engine/src/registry.rs` (new `mod tests`), `crates/drive/aep-driver-spec/src/map.rs` (tests) | none |
+| 2 | `story:driver-router` | active | `crates/drive/aep-driver/tests/determinism.rs`, `crates/drive/aep-driver/tests/tool_config.rs` | none |
+| 3 | `story:protocol-drive-verb` | proposed → active | `crates/edge/protocol-cli/tests/drive_cli.rs`, `crates/drive/aep-driver/tests/driving.rs` | none |
+| 4 | `story:default-step-map` | proposed → active | `crates/govern/aep-engine/tests/` (new file) | none |
 
 **Pairwise, by file.** 1×2 disjoint. 1×3 disjoint **only because of a routing decision taken here**
 (below). 1×4 share the `aep-engine` package and no file — one edits `src/registry.rs`, the other
@@ -45,43 +45,43 @@ adds a file under `tests/`. 2×3 share the `aep-driver` package and no file — 
 `tool_config.rs` against `driving.rs`. 3×4 disjoint. 2×4 disjoint.
 
 **The one routing decision.** `story:driver-spec-crate`'s `UndeclaredEvidenceKind` red-path test
-would naturally have gone into `crates/protocol-cli/tests/drive_cli.rs`, beside the green-path
+would naturally have gone into `crates/edge/protocol-cli/tests/drive_cli.rs`, beside the green-path
 `check_run` test at `:921` — which is the file unit 3 adds three tests to, and the only real
-collision in the set. It is sent to `crates/aep-driver-spec/src/map.rs`'s own `mod tests` instead,
-which is reachable because `check_run` is `pub fn` (`crates/aep-driver-spec/src/map.rs:899`) and is
+collision in the set. It is sent to `crates/drive/aep-driver-spec/src/map.rs`'s own `mod tests` instead,
+which is reachable because `check_run` is `pub fn` (`crates/drive/aep-driver-spec/src/map.rs:899`) and is
 the better home anyway: the refusal is produced twelve lines below it, at `:913`.
 
 ## 3. What each unit owes
 
 **1 — `story:driver-spec-crate`.** Two red-path tests, no production code.
-- An orphan major pin refused at load. `crates/aep-engine/src/registry.rs` has **no `mod tests` at
+- An orphan major pin refused at load. `crates/govern/aep-engine/src/registry.rs` has **no `mod tests` at
   all**; the production branch is `:377-398`. The nearest existing assertion
-  (`crates/aep-driver-spec/src/map.rs:1585`) calls `cross_validate` directly and never loads through
+  (`crates/drive/aep-driver-spec/src/map.rs:1585`) calls `cross_validate` directly and never loads through
   the registry, so it does not reach it.
-- `UndeclaredEvidenceKind` fires. It appears once, at `crates/aep-driver-spec/src/map.rs:913`, in
+- `UndeclaredEvidenceKind` fires. It appears once, at `crates/drive/aep-driver-spec/src/map.rs:913`, in
   production code only; the sole `check_run` test asserts `refusals.is_empty()`.
 
 **2 — `story:driver-router`.** Two test additions, no production code.
-- An environment token in `BANNED`. `crates/aep-driver/tests/determinism.rs:21-29` bans `HashMap`,
+- An environment token in `BANNED`. `crates/drive/aep-driver/tests/determinism.rs:21-29` bans `HashMap`,
   `HashSet`, `SystemTime`, `Instant::now`, `rand::`, `getrandom`, `thread_rng` — and no environment
   token, while the crate's purity claim is *no clock, no randomness, no ambient environment*.
 - One capability in `allow`, `approval_required` **and** `deny` at once, asserted through
-  `tool_config`. `crates/aep-driver/tests/tool_config.rs:18-32` uses three *different* capabilities.
+  `tool_config`. `crates/drive/aep-driver/tests/tool_config.rs:18-32` uses three *different* capabilities.
 
 **3 — `story:protocol-drive-verb`.** Three tests and one line of prose.
 - Assert the host in the lock refusal. `a_second_driver_is_refused_by_name_and_writes_nothing`
-  (`crates/protocol-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and asserts only the
+  (`crates/edge/protocol-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and asserts only the
   run id, the pid and `--take-lock`.
 - A `command` step that **creates** an artifact, with the next evaluation reading the higher
   `artifact.<kind>.count`. The three existing call sites of `story_count`
-  (`crates/aep-driver/tests/driving.rs:727`, `:755`, `:800`) are all F7 *shrink* assertions.
+  (`crates/drive/aep-driver/tests/driving.rs:727`, `:755`, `:800`) are all F7 *shrink* assertions.
 - Two `Engine` values in one process that do not collide on a run directory. A search for `collide`,
-  `collision`, `two engine`, `concurrent` over `crates/aep-driver/tests/` and `drive_cli.rs` returns
+  `collision`, `two engine`, `concurrent` over `crates/drive/aep-driver/tests/` and `drive_cli.rs` returns
   nothing.
 
 **4 — `story:default-step-map`.** One test.
-- The loader's `TREE` table has `drivers` last (`crates/aep-engine/src/load.rs:33`) and is walked at
-  `:131`, and no test in `crates/aep-engine/tests/` reads the table or its order. The comment above
+- The loader's `TREE` table has `drivers` last (`crates/govern/aep-engine/src/load.rs:33`) and is walked at
+  `:131`, and no test in `crates/govern/aep-engine/tests/` reads the table or its order. The comment above
   the row says the order is load-bearing; nothing holds it there.
 
 ## 4. What is not dispatched, and why
@@ -89,13 +89,13 @@ the better home anyway: the refusal is produced twelve lines below it, at `:913`
 **The `declined` decision is the coordinator's, not an implementor's.** The map declares nine states
 and the workflow ten — `declined` is in `workflows/development/default.yaml:105` and not in the map.
 The default taken, absent an operator answer: **the shipped rule stands** — a state the map is
-silent about transitions immediately (`crates/aep-driver/tests/routing.rs:83`,
-`crates/aep-driver-spec/src/map.rs:754-762`), because a terminal state has nothing for a step to do.
+silent about transitions immediately (`crates/drive/aep-driver/tests/routing.rs:83`,
+`crates/drive/aep-driver-spec/src/map.rs:754-762`), because a terminal state has nothing for a step to do.
 That rewrites one acceptance line in `story:default-step-map` and builds nothing, so it is a store
 write and stays with the coordinator.
 
-**The lock-path wording, same reason.** `crates/aep-driver/src/lock.rs:9` documents *one fixed path
-per store*; `crates/protocol-cli/src/drive.rs:99` puts `lock.json` under the project's
+**The lock-path wording, same reason.** `crates/drive/aep-driver/src/lock.rs:9` documents *one fixed path
+per store*; `crates/edge/protocol-cli/src/drive.rs:99` puts `lock.json` under the project's
 `.engineering/runs/`, which `--store` does not move. One line of prose in whichever direction the
 driver owner picks — not an implementor's call.
 
@@ -112,7 +112,7 @@ missing gate itself.
 
 | unit | diff | production code | gate | adversary |
 |---|---|---|---|---|
-| `story:driver-router` | +119 / −3, both test files | none — `git diff --stat -- crates/aep-driver/src/` empty | `cargo test -p aep-driver` **exit 0**, 69 passed; `determinism` 2→3, `tool_config` 5→6 | killed before reading |
+| `story:driver-router` | +119 / −3, both test files | none — `git diff --stat -- crates/drive/aep-driver/src/` empty | `cargo test -p aep-driver` **exit 0**, 69 passed; `determinism` 2→3, `tool_config` 5→6 | killed before reading |
 | `story:default-step-map` | +214, one new file | none | `cargo test -p aep-engine` **exit 0**; lib 62→64, new suite 2 | killed before reading |
 | `story:driver-spec-crate` | +145 / −0 | none — insertions only, first `mod tests` in `registry.rs` | `cargo test -p aep-driver-spec -p aep-engine` **exit 0**; `aep-driver-spec` 35→36 | killed before reading |
 | `story:protocol-drive-verb` | +270 / −0 | none | see below — **exit 0**, 609 passed across 36 suites | never dispatched |
@@ -121,7 +121,7 @@ missing gate itself.
 `story:driver-spec-crate`'s first draft of the orphan-pin test asserted `contains(VersionMismatch)`
 plus message text, and **survived the mutation meant to redden it** — `StepMap::cross_validate`
 raises the same code with nearly the same wording, so the draft never reached the registry branch at
-`crates/aep-engine/src/registry.rs:377-398` at all. It now asserts `location == "step map
+`crates/govern/aep-engine/src/registry.rs:377-398` at all. It now asserts `location == "step map
 development/default"`, a string only the registry produces. That is the same defect class as the
 previous wave's non-discriminating `one_ladders_column_order_…` case, caught one stage earlier.
 
@@ -130,7 +130,7 @@ previous wave's non-discriminating `one_ladders_column_order_…` case, caught o
 The coordinator placed each build directory **outside** its worktree, following the skill's
 `references/branch-and-merge.md` — *"one per worktree, usually outside it"*. `AGENTS.md:499-502`
 says the opposite in as many words. The first gate of `impl/protocol-drive-verb` exited **101** with
-**11 failures, every one of them `crates/protocol-cli/tests/store_selection.rs:77` — `the scratch
+**11 failures, every one of them `crates/edge/protocol-cli/tests/store_selection.rs:77` — `the scratch
 tree is under the repository: StripPrefixError(())`** — none touching the unit's change. Because
 cargo stops at the first failing target, `drive_cli` and `driving`, the two suites the unit
 actually owed, **never ran**: the gate was not noisy, it was empty.

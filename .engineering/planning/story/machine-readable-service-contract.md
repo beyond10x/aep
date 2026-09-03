@@ -10,13 +10,13 @@ relations:
 - serves: vision:O6
 - informed_by: story:aep-service-wire-and-client
 scope:
+- confidence: inferred
+  path: crates/edge/protocol-cli/src/serve
 - confidence: cited
-  path: crates/aep-client
+  path: crates/plan/aep-client
 - confidence: inferred
-  path: crates/aep-conformance
-- confidence: inferred
-  path: crates/protocol-cli/src/serve
-revision: 4
+  path: crates/plan/aep-conformance
+revision: 6
 ---
 ## Context
 

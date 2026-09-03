@@ -11,7 +11,7 @@ tags:
 - harness
 relations:
 - decomposes: initiative:the-repo-governs-itself
-revision: 4
+revision: 5
 ---
 # Epic: The reference driver
 
@@ -53,7 +53,7 @@ here is a status somebody assigned.
 | `story:retry-budgets` | **implemented, 2026-08-28** | all five lines, `aep-driver::driving` 12 / `::routing` 7 passed. Its Open Question's default was reversed on purpose — a per-step `retries` override shipped |
 | `story:plugin-enforcement-hooks` | **archived, superseded** | the outcome lives in `story:metaharness-executor`; the hooks, `--settings` and `hook-decisions.jsonl` went with `integrations/claude-code/hooks/` on 2026-08-22 |
 | `story:driver-spec-crate` | active, re-scoped | three red-path tests owed, no production code |
-| `story:driver-router` | active, re-scoped | its *no development profile grants `command.execute`* line is **false** (`profiles/development-driven.yaml:78`), and its *no filesystem access* line is contradicted by `crates/aep-driver/src/run.rs` |
+| `story:driver-router` | active, re-scoped | its *no development profile grants `command.execute`* line is **false** (`profiles/development-driven.yaml:78`), and its *no filesystem access* line is contradicted by `crates/drive/aep-driver/src/run.rs` |
 | `story:default-step-map` | proposed, re-scoped | the map pins `adp/default/2`, not `/1`; *a state with no step is a refusal* is contradicted by the rule that shipped and needs a decision, not a build |
 | `story:protocol-drive-verb` | proposed, re-scoped | four assertions and one message field; the lock is per project, not per store |
 | `story:operator-resume-ux` | draft, re-scoped | one real defect — `--take-lock` prints the theft and never persists it |

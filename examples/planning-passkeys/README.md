@@ -95,15 +95,15 @@ they are both here so that neither reads as an accident:
 | what it costs | AEP cannot check the plan's own contents | the plan is one more thing in the repository to review |
 
 The graph is the same shape either way, which is what
-[`ArtifactLocation`](../../crates/aep-domain/src/artifact.rs) exists to make true: location is
+[`ArtifactLocation`](../../crates/govern/aep-domain/src/artifact.rs) exists to make true: location is
 metadata, and only the graph is normative. A team can start in one arrangement and move to the
 other without the protocol noticing.
 
 ## What this fixture is used by
 
-`crates/protocol-cli/tests/planning_cli.rs` drives the real binary against it: that the store
+`crates/edge/protocol-cli/tests/planning_cli.rs` drives the real binary against it: that the store
 validates clean, that `list --format json` is byte-identical across two runs, and that
-`protocol entity list --planning` counts what is here. `crates/protocol-cli/tests/store_selection.rs`
+`protocol entity list --planning` counts what is here. `crates/edge/protocol-cli/tests/store_selection.rs`
 seeds the seven artifacts into a markdown copy, into the SQLite variant and into the hybrid variant,
 runs every `aep artifact` verb over all three, each as its own process, asserting the output is
 the same — and makes the hybrid's replica refuse a write, to list the divergence and catch it up.

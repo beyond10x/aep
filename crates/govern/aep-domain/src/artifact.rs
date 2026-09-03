@@ -1,0 +1,3571 @@
+//! The engineering artifact graph.
+//!
+//! Work does not only move through workflow states; it also creates and consumes durable
+//! artifacts — specifications, designs, ADRs, runbooks, postmortems — and the *relationships*
+//! between them are what carry intent from "why" to "what changed".
+//!
+//! # What this buys a reader
+//!
+//! Someone picking up `AUTH-142` six months later can ask which specification governs it,
+//! which design satisfies that specification, whether the approval on that design was given
+//! against the revision that shipped, and which ADR recorded the decision — and get answers
+//! from typed data rather than from archaeology in a chat log.
+//!
+//! # Location is not identity
+//!
+//! An artifact's [`ArtifactLocation`] is metadata. A design in `docs/designs/`, a PRD in
+//! Linear and an architecture description generated from source are all the same kind of
+//! thing to the protocol; only the graph is normative. This is why AEP can be adopted without
+//! moving anybody's documents.
+
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::fmt;
+use std::str::FromStr;
+
+use crate::error::{ParseError, ValidationCode, ValidationError, ValidationErrors};
+use crate::evidence::{Producer, SpecDigest};
+use crate::facts::{FactPath, FactStore, FactValue};
+use crate::ids::{ProviderId, RepositoryRef};
+use crate::node::Node;
+use crate::time::Timestamp;
+use crate::workspace::MemberName;
+
+/// Identifier of an artifact, written `<namespace>:<name>`, such as `design:passkeys-auth`.
+///
+/// The namespace is a convention for humans reading the manifest; the artifact's [`ArtifactKind`]
+/// is what the protocol reasons about, so `doc:passkeys` with `kind: design` is equally valid.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(into = "String")]
+pub struct ArtifactId {
+    namespace: String,
+    name: String,
+}
+
+impl ArtifactId {
+    /// The member this id names, when it names one.
+    ///
+    /// `entity-runtime/story:provider-spi` is `Some("entity-runtime")`; `story:provider-spi` is
+    /// `None`, meaning *whichever store this was written in*. The separator is the one character an
+    /// id already permits and nothing has ever used — see [`crate::workspace::WorkspaceRef`], which
+    /// is where the spelling is defined and where a reference is resolved.
+    #[must_use]
+    pub fn member(&self) -> Option<&str> {
+        self.namespace.split_once('/').map(|(member, _)| member)
+    }
+
+    /// Parses an artifact id.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, ParseError> {
+        let value = value.as_ref();
+        let Some((namespace, name)) = value.split_once(':') else {
+            return Err(ParseError::identifier(
+                "artifact",
+                value,
+                "must be written `<namespace>:<name>`, for example `design:passkeys-auth`"
+                    .to_owned(),
+            ));
+        };
+        if namespace.is_empty() || name.is_empty() {
+            return Err(ParseError::identifier(
+                "artifact",
+                value,
+                "both the namespace and the name must be non-empty".to_owned(),
+            ));
+        }
+        for (part, label) in [(namespace, "namespace"), (name, "name")] {
+            for ch in part.chars() {
+                if !(ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/')) {
+                    return Err(ParseError::identifier(
+                        "artifact",
+                        value,
+                        format!("{label} contains disallowed character {ch:?}"),
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            namespace: namespace.to_owned(),
+            name: name.to_owned(),
+        })
+    }
+
+    /// The namespace, such as `design`.
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    /// The name, such as `passkeys-auth`.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The pattern published in generated JSON Schema.
+    pub const PATTERN: &'static str = "^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$";
+}
+
+impl fmt::Display for ArtifactId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.namespace, self.name)
+    }
+}
+
+impl fmt::Debug for ArtifactId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ArtifactId({self})")
+    }
+}
+
+impl FromStr for ArtifactId {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl From<ArtifactId> for String {
+    fn from(value: ArtifactId) -> Self {
+        value.to_string()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::new(raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactId {
+    fn schema_name() -> String {
+        "ArtifactId".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        schema.string().pattern = Some(Self::PATTERN.to_owned());
+        schema.metadata().description =
+            Some("Artifact identifier, written `<namespace>:<name>`.".to_owned());
+        schema.into()
+    }
+}
+
+/// A label for one version of an artifact, such as `3` or a content digest.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(transparent)]
+pub struct ArtifactVersion(String);
+
+impl ArtifactVersion {
+    /// Builds an artifact version label.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// The label.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ArtifactVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A source-control revision, such as a commit SHA.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(transparent)]
+pub struct Revision(String);
+
+impl Revision {
+    /// Builds a revision.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// The revision string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Revision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A reference to an artifact, optionally pinned to one of its versions.
+///
+/// Written `design:passkeys-auth` or `design:passkeys-auth@3`. Pinning matters for review
+/// freshness: an approval of version 3 must not silently approve version 7.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(into = "String")]
+pub struct ArtifactRef {
+    id: ArtifactId,
+    version: Option<ArtifactVersion>,
+}
+
+impl ArtifactRef {
+    /// Builds a reference.
+    pub fn new(id: ArtifactId, version: Option<ArtifactVersion>) -> Self {
+        Self { id, version }
+    }
+
+    /// Builds an unpinned reference.
+    pub fn unpinned(id: ArtifactId) -> Self {
+        Self { id, version: None }
+    }
+
+    /// Parses `<id>` or `<id>@<version>`.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        match value.split_once('@') {
+            Some((id, version)) => Ok(Self {
+                id: ArtifactId::new(id)?,
+                version: Some(ArtifactVersion::new(version)),
+            }),
+            None => Ok(Self::unpinned(ArtifactId::new(value)?)),
+        }
+    }
+
+    /// The referenced artifact.
+    pub fn id(&self) -> &ArtifactId {
+        &self.id
+    }
+
+    /// The pinned version, if any.
+    pub fn version(&self) -> Option<&ArtifactVersion> {
+        self.version.as_ref()
+    }
+
+    /// The pattern published in generated JSON Schema.
+    pub const PATTERN: &'static str =
+        "^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(@[^@]+)?$";
+}
+
+impl fmt::Display for ArtifactRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.version {
+            Some(version) => write!(f, "{}@{version}", self.id),
+            None => write!(f, "{}", self.id),
+        }
+    }
+}
+
+impl fmt::Debug for ArtifactRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ArtifactRef({self})")
+    }
+}
+
+impl FromStr for ArtifactRef {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl From<ArtifactRef> for String {
+    fn from(value: ArtifactRef) -> Self {
+        value.to_string()
+    }
+}
+
+impl From<ArtifactId> for ArtifactRef {
+    fn from(id: ArtifactId) -> Self {
+        Self::unpinned(id)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactRef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactRef {
+    fn schema_name() -> String {
+        "ArtifactRef".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        schema.string().pattern = Some(Self::PATTERN.to_owned());
+        schema.metadata().description =
+            Some("Reference to an artifact, optionally pinned with `@<version>`.".to_owned());
+        schema.into()
+    }
+}
+
+/// The kind every typed blocker specialises, and the suffix its name is read from.
+///
+/// Not an [`ArtifactKind`] variant: the whole point of the typed blocker is that a type costs a
+/// name in a document and no change here. This is the one word the rule needs to know, written
+/// once so [`ArtifactKind::blocker_type`] and [`ArtifactKind::is_blocker`] cannot drift apart.
+pub const BLOCKER: &str = "blocker";
+
+/// What kind of artifact this is.
+///
+/// The taxonomy is deliberately shallow and extensible: [`ArtifactKind::Other`] carries a kind
+/// this vocabulary does not name, because no fixed ontology survives contact with a second
+/// organisation.
+///
+/// Kinds form a hierarchy by name: a requirement for a `design` is satisfied by an
+/// `architecture-design`, because the last hyphen segment names the parent. The rule is applied to
+/// [`ArtifactKind::Other`] too, so a team's own family of kinds shares one ladder rather than
+/// needing a lifecycle document each — see [`ArtifactKind::parent`] and [`ArtifactKind::is_a`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ArtifactKind {
+    /// Long-range direction.
+    Vision,
+    /// What outcome should exist, for whom.
+    ProductRequirements,
+    /// A large body of work above an epic.
+    Initiative,
+    /// A major deliverable.
+    Epic,
+    /// An independently meaningful change.
+    Story,
+    /// A concrete unit of work.
+    Task,
+    /// Precisely what behaviour and constraints the implementation must satisfy.
+    Specification,
+    /// The conditions under which work is accepted.
+    AcceptanceCriteria,
+    /// A proposed solution.
+    Design,
+    /// A design scoped to a feature.
+    FeatureDesign,
+    /// A design scoped to a component.
+    ComponentDesign,
+    /// A design spanning systems, with stronger governance.
+    ArchitectureDesign,
+    /// A design of an interface.
+    ApiDesign,
+    /// A design of storage or data flow.
+    DataDesign,
+    /// A durable decision with its context and consequences.
+    ArchitectureDecisionRecord,
+    /// How the work will be tested.
+    TestPlan,
+    /// How the work will be evaluated where testing is not enough.
+    EvaluationPlan,
+    /// The outcome of verification.
+    VerificationReport,
+    /// The outcome of a review.
+    ReviewResult,
+    /// A recorded human approval.
+    ApprovalRecord,
+    /// How a change reaches production.
+    ReleasePlan,
+    /// How data or systems are migrated.
+    MigrationPlan,
+    /// Operational instructions.
+    Runbook,
+    /// What happened during an incident.
+    IncidentReport,
+    /// What was learned from an incident.
+    Postmortem,
+    /// A typed, technology-independent specification of a software system.
+    ///
+    /// Distinct from a [`Specification`](ArtifactKind::Specification), which states what an
+    /// implementation must satisfy in prose a person reads. An executable system specification is
+    /// compiled: contracts, tests and structural code are derived from it, and an implementation is
+    /// checked against the same document that generated them.
+    ExecutableSystemSpecification,
+    /// A kind this vocabulary does not name.
+    Other(String),
+}
+
+impl ArtifactKind {
+    /// Every named kind, for vocabulary listing and schema examples.
+    pub const NAMED: &'static [Self] = &[
+        Self::Vision,
+        Self::ProductRequirements,
+        Self::Initiative,
+        Self::Epic,
+        Self::Story,
+        Self::Task,
+        Self::Specification,
+        Self::AcceptanceCriteria,
+        Self::Design,
+        Self::FeatureDesign,
+        Self::ComponentDesign,
+        Self::ArchitectureDesign,
+        Self::ApiDesign,
+        Self::DataDesign,
+        Self::ArchitectureDecisionRecord,
+        Self::TestPlan,
+        Self::EvaluationPlan,
+        Self::VerificationReport,
+        Self::ReviewResult,
+        Self::ApprovalRecord,
+        Self::ReleasePlan,
+        Self::MigrationPlan,
+        Self::Runbook,
+        Self::IncidentReport,
+        Self::Postmortem,
+        Self::ExecutableSystemSpecification,
+    ];
+
+    /// The kind as written in documents, in kebab-case.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Vision => "vision",
+            Self::ProductRequirements => "product-requirements",
+            Self::Initiative => "initiative",
+            Self::Epic => "epic",
+            Self::Story => "story",
+            Self::Task => "task",
+            Self::Specification => "specification",
+            Self::AcceptanceCriteria => "acceptance-criteria",
+            Self::Design => "design",
+            Self::FeatureDesign => "feature-design",
+            Self::ComponentDesign => "component-design",
+            Self::ArchitectureDesign => "architecture-design",
+            Self::ApiDesign => "api-design",
+            Self::DataDesign => "data-design",
+            Self::ArchitectureDecisionRecord => "architecture-decision-record",
+            Self::TestPlan => "test-plan",
+            Self::EvaluationPlan => "evaluation-plan",
+            Self::VerificationReport => "verification-report",
+            Self::ReviewResult => "review-result",
+            Self::ApprovalRecord => "approval-record",
+            Self::ReleasePlan => "release-plan",
+            Self::MigrationPlan => "migration-plan",
+            Self::Runbook => "runbook",
+            Self::IncidentReport => "incident-report",
+            Self::Postmortem => "postmortem",
+            Self::ExecutableSystemSpecification => "executable-system-specification",
+            Self::Other(name) => name,
+        }
+    }
+
+    /// Parses a kind name, accepting `adr` and `prd` as aliases.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        if let Some(known) = Self::NAMED.iter().find(|kind| kind.as_str() == value) {
+            return Ok(known.clone());
+        }
+        Ok(match value {
+            "adr" => Self::ArchitectureDecisionRecord,
+            "ess" => Self::ExecutableSystemSpecification,
+            "prd" => Self::ProductRequirements,
+            "spec" => Self::Specification,
+            "review" => Self::ReviewResult,
+            other => {
+                let named = crate::ids::PrincipleId::new(other).map_err(|_| {
+                    ParseError::identifier(
+                        "artifact kind",
+                        other,
+                        "artifact kinds are lower-case kebab-case, such as `architecture-design`"
+                            .to_owned(),
+                    )
+                })?;
+                Self::Other(named.as_str().to_owned())
+            }
+        })
+    }
+
+    /// The kind this one specialises, if any.
+    ///
+    /// # The rule, which is one rule and not two
+    ///
+    /// **A hyphenated kind's parent is the kind its last segment names.** `feature-design`,
+    /// `architecture-design` and `api-design` are all a `design`, and the reason is not that they
+    /// are listed here: it is that the suffix is the noun and everything before it narrows it. The
+    /// named variants above are that rule spelled out for the vocabulary this crate ships; an
+    /// organisation-specific [`Other`](ArtifactKind::Other) kind gets the same rule applied to its
+    /// own name, so `observation-log` *is a* `log` and `weekly-digest` *is a* `digest` without this
+    /// crate having to have heard of either.
+    ///
+    /// That matters because the hierarchy is what makes one ladder serve a family: a lifecycle
+    /// registered for `log` governs every `*-log` a team invents (see
+    /// [`LifecycleRegistry::for_kind`]), and a requirement for a `log` is satisfied by one. Without
+    /// it a team's own kinds are each an island, and every one of them needs its own lifecycle
+    /// document saying the same thing.
+    ///
+    /// # What it deliberately does not do
+    ///
+    /// * A single-segment custom kind has **no** parent — `log` is the top of its own family, and
+    ///   there is nothing above it to invent.
+    /// * The last segment is matched against the **canonical** kind names only, never the aliases
+    ///   [`parse`](ArtifactKind::parse) accepts, so `openapi-spec` is a custom `spec` and not a
+    ///   [`Specification`](ArtifactKind::Specification). An alias is a spelling of a name a person
+    ///   typed, not a claim about lineage.
+    /// * Lineage always terminates: a parent derived this way has no hyphen left in it, so it is
+    ///   either a single-word named kind (none of which has a parent) or a single-segment custom
+    ///   kind (which has none by the rule above). One step, then the top.
+    pub fn parent(&self) -> Option<Self> {
+        match self {
+            Self::FeatureDesign
+            | Self::ComponentDesign
+            | Self::ArchitectureDesign
+            | Self::ApiDesign
+            | Self::DataDesign => Some(Self::Design),
+            Self::Other(name) => Self::suffix_parent(name),
+            _ => None,
+        }
+    }
+
+    /// The kind a custom kind's last hyphen segment names, if it names one at all.
+    ///
+    /// Split out so the one place the rule lives is greppable, and so the guarantee that matters —
+    /// that what comes back can never contain a hyphen, and therefore can never lead back here —
+    /// is readable in six lines rather than inferred from [`parent`](ArtifactKind::parent).
+    fn suffix_parent(name: &str) -> Option<Self> {
+        let (_, suffix) = name.rsplit_once('-')?;
+        if suffix.is_empty() {
+            return None;
+        }
+        Some(
+            Self::NAMED
+                .iter()
+                .find(|kind| kind.as_str() == suffix)
+                .cloned()
+                .unwrap_or_else(|| Self::Other(suffix.to_owned())),
+        )
+    }
+
+    /// What kind of blocker this is — the part of the name before `-blocker` — or `None`.
+    ///
+    /// **A blocker is typed by what would clear it**, and the type is the *kind*, not a field:
+    /// `credential-blocker`, `decision-blocker` and a team's own `procurement-blocker` all resolve
+    /// to the one `blocker` ladder through [`parent`](ArtifactKind::parent), so a new type costs a
+    /// name and nothing else — no document, no enum, no release. This reads that type back out, so
+    /// a listing can say *parked on a credential* where it used to say only *active*.
+    ///
+    /// The vocabulary is **open**: `artifacts/kinds/blocker.yaml` ships six types as a starting
+    /// set, and a seventh is accepted here without being on it. Nothing in this crate checks the
+    /// name against a list, which is what open means — closing it would be the defect the story
+    /// that asked for this was filed against.
+    ///
+    /// A bare `blocker` has no type and answers `None`: *something is stopping this* is a
+    /// complaint, and the type is what turns five of them into one conversation.
+    pub fn blocker_type(&self) -> Option<&str> {
+        let Self::Other(name) = self else {
+            return None;
+        };
+        let (prefix, suffix) = name.rsplit_once('-')?;
+        (suffix == BLOCKER && !prefix.is_empty()).then_some(prefix)
+    }
+
+    /// `true` when this kind is a blocker: the bare `blocker`, or any `<type>-blocker`.
+    pub fn is_blocker(&self) -> bool {
+        self.as_str() == BLOCKER || self.blocker_type().is_some()
+    }
+
+    /// `true` when this kind satisfies a requirement for `other`.
+    ///
+    /// Reflexive, and follows the hierarchy upwards: an `architecture-design` *is a* `design`, so
+    /// a principle requiring a design is satisfied by one — and an `observation-log` *is a* `log`
+    /// for the same reason, by the same rule, without either name being known here. See
+    /// [`parent`](ArtifactKind::parent).
+    pub fn is_a(&self, other: &Self) -> bool {
+        let mut current = Some(self.clone());
+        while let Some(kind) = current {
+            if &kind == other {
+                return true;
+            }
+            current = kind.parent();
+        }
+        false
+    }
+
+    /// This kind and every kind it specialises, nearest first.
+    ///
+    /// `architecture-design` gives `[architecture-design, design]`; `observation-log` gives
+    /// `[observation-log, log]`. The list is finite for every kind, including one nobody here has
+    /// seen — [`parent`](ArtifactKind::parent) says why.
+    pub fn lineage(&self) -> Vec<Self> {
+        let mut lineage = vec![self.clone()];
+        let mut current = self.parent();
+        while let Some(kind) = current {
+            current = kind.parent();
+            lineage.push(kind);
+        }
+        lineage
+    }
+
+    /// `true` when this kind carries architectural weight, and therefore stronger governance.
+    pub fn is_architectural(&self) -> bool {
+        matches!(
+            self,
+            Self::ArchitectureDesign | Self::ArchitectureDecisionRecord
+        )
+    }
+
+    /// `true` when this kind's content identity is a digest, and not only a version label.
+    ///
+    /// The scoping of the revision binding on [`Artifact::model_digest`], written down as one
+    /// predicate rather than left implicit in an `if let Some`. Most of the kinds in this
+    /// vocabulary have no digest concept at all: a runbook is prose, and asking whether a
+    /// postmortem is at the revision some evidence was produced against is not a question. So the
+    /// binding must not apply to them, and the place that decides which kinds it *does* apply to
+    /// is here — one list, greppable, extended deliberately rather than by accident.
+    ///
+    /// Today that is exactly [`ArtifactKind::ExecutableSystemSpecification`]: ESS reports the
+    /// content digest of its resolved model as part of standalone conformance. When a second
+    /// compiled kind arrives it is added here, and every rule that reads this predicate picks it
+    /// up.
+    pub fn carries_model_digest(&self) -> bool {
+        matches!(self, Self::ExecutableSystemSpecification)
+    }
+
+    /// The entity type this artifact kind corresponds to, such as `aep.design/v1`.
+    ///
+    /// Artifact kinds are the human-facing vocabulary; entity types are what the interaction
+    /// contract addresses. One maps onto the other so a manifest written in kinds can be stored as
+    /// entities without a translation table anybody has to maintain.
+    pub fn entity_type(&self) -> crate::entity::EntityType {
+        crate::entity::EntityType::new("aep", self.as_str(), 1)
+            .unwrap_or_else(|error| panic!("artifact kinds are valid type names: {error}"))
+    }
+
+    /// `true` when this kind belongs to intent decomposition rather than to engineering output.
+    ///
+    /// A vision, a PRD, an initiative, an epic, a story and a task are the layer where somebody
+    /// decides *what should happen*; everything else in this vocabulary is a record of engineering
+    /// having happened. That is the distinction, and it is the whole of it.
+    ///
+    /// **It is no longer an ownership boundary.** This used to say AEP models these kinds but does
+    /// not own them, because they usually live in a planning system — and that sentence stopped
+    /// being true when `aep-backend-markdown` gave AEP a first-party store for them: a directory of
+    /// markdown files under `.engineering/planning/`, with the same lifecycles, the same graph and
+    /// the same validation as everything else. A team can now keep its epics and stories here.
+    ///
+    /// A team can equally keep them in Linear or Jira and point at them from a manifest —
+    /// `examples/development-passkeys` is that arrangement and stays that way deliberately. Which
+    /// is why the predicate is still useful and still means only what it says: it marks a layer, so
+    /// a caller can ask "is this intent or is this output?" without a hard-coded list. It does not
+    /// say where the document lives, and nothing should read it as though it did.
+    pub fn is_planning(&self) -> bool {
+        matches!(
+            self,
+            Self::Vision
+                | Self::ProductRequirements
+                | Self::Initiative
+                | Self::Epic
+                | Self::Story
+                | Self::Task
+        )
+    }
+}
+
+impl fmt::Display for ArtifactKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ArtifactKind {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ArtifactKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactKind {
+    fn schema_name() -> String {
+        "ArtifactKind".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        // `parse` sends anything it does not name to `PrincipleId::new`, so `Charset::Kebab`'s
+        // rule is this schema's rule. The paraphrase this replaces put `-` inside the character
+        // class and so called `adr-` and `a--b` valid that `ArtifactKind::parse` refuses. Every
+        // alias `parse` takes — `adr`, `ess`, `prd`, `spec`, `review` — is kebab-case already.
+        schema.string().pattern = Some(crate::identifier_pattern!(Kebab, "^", "$").to_owned());
+        schema.string().max_length = Some(crate::ids::MAX_LENGTH);
+        schema.metadata().description = Some(
+            "Artifact kind in kebab-case; the named vocabulary is listed in `examples`, and any \
+             other kebab-case name is accepted as an organisation-specific kind."
+                .to_owned(),
+        );
+        schema.metadata().examples = ArtifactKind::NAMED
+            .iter()
+            .map(|kind| serde_json::Value::String(kind.as_str().to_owned()))
+            .collect();
+        schema.into()
+    }
+}
+
+/// Where an artifact's lifecycle has got to.
+///
+/// This is independent of workflow state: a design can be `approved` while the task that
+/// consumes it is still in `implement`.
+/// The vocabulary is **open**: [`ArtifactStatus::Other`] carries a rung this repository does not
+/// name, so a lifecycle document can declare one without a release here. That is deliberate and it
+/// was expensive to learn — an adopter needed `correction-owed` (sent, known wrong, audience not
+/// yet told) and there was no rung and no near neighbour, because a ten-variant enum decided what
+/// their process was allowed to say. See `docs/guide/open-vocabulary.md`.
+///
+/// What the closure used to buy — *a status name means the same rung to every tool that reads the
+/// artifact graph* — is now bought by the **ladder** instead: a status is only reachable if some
+/// `artifacts/lifecycles/*.yaml` declares it, so the vocabulary is open to authors and still closed
+/// to typos. Opening the type without that check would have traded a rigid process for a silent one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ArtifactStatus {
+    /// Being written.
+    Draft,
+    /// Put forward for a decision.
+    Proposed,
+    /// Under review.
+    InReview,
+    /// Reviewed and agreed.
+    Approved,
+    /// Decided and in force; the ADR spelling of `approved`.
+    Accepted,
+    /// Reviewed and turned down.
+    Rejected,
+    /// Current and in use.
+    Active,
+    /// Realised in the system.
+    Implemented,
+    /// Replaced by a later artifact.
+    Superseded,
+    /// Kept for the record only.
+    Archived,
+    /// A rung this vocabulary does not name, carried verbatim.
+    ///
+    /// Reachable only when a lifecycle document declares it — see the type's own note.
+    Other(String),
+}
+
+impl ArtifactStatus {
+    /// Every status this vocabulary names. An [`ArtifactStatus::Other`] is not in it, by
+    /// definition: a list of the rungs anyone might invent is not a list.
+    pub const ALL: &'static [Self] = &[
+        Self::Draft,
+        Self::Proposed,
+        Self::InReview,
+        Self::Approved,
+        Self::Accepted,
+        Self::Rejected,
+        Self::Active,
+        Self::Implemented,
+        Self::Superseded,
+        Self::Archived,
+    ];
+
+    /// The pattern a status name must match: lower-case, starting with a letter, with `_` or `-`
+    /// between words. Both separators are accepted because the named rungs use `in_review` and the
+    /// first rung an adopter asked for was `correction-owed`; refusing one of those spellings would
+    /// be a rule about their punctuation, not about their process.
+    pub const PATTERN: &'static str = "^[a-z][a-z0-9_-]*$";
+
+    /// The status as written in documents.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Draft => "draft",
+            Self::Proposed => "proposed",
+            Self::InReview => "in_review",
+            Self::Approved => "approved",
+            Self::Accepted => "accepted",
+            Self::Rejected => "rejected",
+            Self::Active => "active",
+            Self::Implemented => "implemented",
+            Self::Superseded => "superseded",
+            Self::Archived => "archived",
+            Self::Other(name) => name,
+        }
+    }
+
+    /// Reads a status name, naming what is wrong when it is not one.
+    ///
+    /// A name this vocabulary knows becomes that variant, so `draft` is always `Draft` and never an
+    /// `Other` that merely prints the same — two values that render identically and compare unequal
+    /// are the defect an open vocabulary invites, and this is where it is refused.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the name is empty or does not match [`ArtifactStatus::PATTERN`].
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        if let Some(known) = Self::ALL.iter().find(|status| status.as_str() == value) {
+            return Ok(known.clone());
+        }
+        if value.is_empty() {
+            return Err(ParseError::identifier(
+                "status",
+                value,
+                "a status name is not empty".to_owned(),
+            ));
+        }
+        let mut characters = value.chars();
+        let first_is_letter = characters
+            .next()
+            .is_some_and(|first| first.is_ascii_lowercase());
+        let rest_is_name = value.chars().all(|character| {
+            character.is_ascii_lowercase()
+                || character.is_ascii_digit()
+                || character == '_'
+                || character == '-'
+        });
+        if !first_is_letter || !rest_is_name {
+            return Err(ParseError::identifier(
+                "status",
+                value,
+                "expected lower-case letters, digits, `_` or `-`, starting with a letter"
+                    .to_owned(),
+            ));
+        }
+        Ok(Self::Other(value.to_owned()))
+    }
+
+    /// `true` when this vocabulary names the status, rather than carrying it verbatim.
+    pub fn is_named(&self) -> bool {
+        !matches!(self, Self::Other(_))
+    }
+
+    /// `true` when the artifact has been agreed and may be relied on.
+    ///
+    /// Requirements written as `status: approved` accept any of these, because
+    /// `accepted`/`active`/`implemented` are all downstream of approval. An
+    /// [`ArtifactStatus::Other`] is **never** approved: this repository cannot know what a rung it
+    /// has never seen means, and reading an unknown name as *agreed and relied on* is the one
+    /// mistake an open vocabulary must not make.
+    pub fn is_approved(&self) -> bool {
+        matches!(
+            self,
+            Self::Approved | Self::Accepted | Self::Active | Self::Implemented
+        )
+    }
+
+    /// `true` when the artifact no longer describes the current state of the world.
+    ///
+    /// An [`ArtifactStatus::Other`] is not retired either, for the same reason and with the
+    /// opposite consequence: an unknown rung keeps an artifact live rather than quietly retiring it.
+    pub fn is_retired(&self) -> bool {
+        matches!(self, Self::Superseded | Self::Archived | Self::Rejected)
+    }
+
+    /// `true` when an artifact in this status satisfies a requirement for `required`.
+    pub fn satisfies(&self, required: &Self) -> bool {
+        if self == required {
+            return true;
+        }
+        required == &Self::Approved && self.is_approved()
+    }
+}
+
+impl fmt::Display for ArtifactStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ArtifactStatus {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ArtifactStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactStatus {
+    fn schema_name() -> String {
+        "ArtifactStatus".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        schema.string().pattern = Some(Self::PATTERN.to_owned());
+        schema.metadata().description = Some(
+            "Artifact status. The named vocabulary is listed in `examples`; any other name a \
+             lifecycle document declares is carried verbatim, so a rung is a line in a YAML file \
+             rather than a release of the engine."
+                .to_owned(),
+        );
+        schema.metadata().examples = Self::ALL
+            .iter()
+            .map(|status| serde_json::Value::String(status.as_str().to_owned()))
+            .collect();
+        schemars::schema::Schema::Object(schema)
+    }
+}
+
+/// Where an artifact lives.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ArtifactLocation {
+    /// A path inside a repository.
+    RepositoryPath {
+        /// The repository, when the artifact lives outside the current one.
+        repository: Option<RepositoryRef>,
+        /// The path, relative to the repository root.
+        path: String,
+    },
+    /// A URL.
+    Url(String),
+    /// An object in an external system, resolved by a connector rather than by AEP.
+    External {
+        /// The system holding it, such as `linear`.
+        provider: ProviderId,
+        /// Its identifier in that system.
+        reference: String,
+    },
+    /// Carried in the manifest itself, with no external body.
+    Inline,
+}
+
+impl ArtifactLocation {
+    /// Parses a location from document form.
+    ///
+    /// Accepts `inline`, a bare repository path, a URL string, or a mapping with `path`
+    /// (optionally `repository`), `url`, or `provider` and `reference`.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        match node {
+            Node::Text(text) if text == "inline" => Ok(Self::Inline),
+            Node::Text(text) if text.starts_with("http://") || text.starts_with("https://") => {
+                Ok(Self::Url(text.clone()))
+            }
+            Node::Text(text) => Ok(Self::RepositoryPath {
+                repository: None,
+                path: text.clone(),
+            }),
+            Node::Map(entries) => {
+                if let Some(url) = entries.get("url").and_then(Node::as_text) {
+                    return Ok(Self::Url(url.to_owned()));
+                }
+                if let Some(path) = entries.get("path").and_then(Node::as_text) {
+                    let repository = match entries.get("repository").and_then(Node::as_text) {
+                        Some(repository) => Some(RepositoryRef::new(repository)?),
+                        None => None,
+                    };
+                    return Ok(Self::RepositoryPath {
+                        repository,
+                        path: path.to_owned(),
+                    });
+                }
+                match (
+                    entries.get("provider").and_then(Node::as_text),
+                    entries.get("reference").and_then(Node::as_text),
+                ) {
+                    (Some(provider), Some(reference)) => Ok(Self::External {
+                        provider: ProviderId::new(provider)?,
+                        reference: reference.to_owned(),
+                    }),
+                    (Some(_), None) => Err(ParseError::shape(
+                        "artifact.location",
+                        "`reference` alongside `provider`",
+                        "only `provider`",
+                    )),
+                    _ => Err(ParseError::shape(
+                        "artifact.location",
+                        "one of `path`, `url`, or `provider` with `reference`",
+                        format!("keys {:?}", entries.keys().collect::<Vec<_>>()),
+                    )),
+                }
+            }
+            other => Err(ParseError::shape(
+                "artifact.location",
+                "a string or a mapping",
+                other.type_name(),
+            )),
+        }
+    }
+
+    /// Renders this location back into document form.
+    pub fn to_node(&self) -> Node {
+        match self {
+            Self::Inline => Node::Text("inline".to_owned()),
+            Self::Url(url) => Node::Map([("url".to_owned(), Node::Text(url.clone()))].into()),
+            Self::RepositoryPath { repository, path } => {
+                let mut entries = BTreeMap::new();
+                entries.insert("path".to_owned(), Node::Text(path.clone()));
+                if let Some(repository) = repository {
+                    entries.insert(
+                        "repository".to_owned(),
+                        Node::Text(repository.as_str().to_owned()),
+                    );
+                }
+                Node::Map(entries)
+            }
+            Self::External {
+                provider,
+                reference,
+            } => Node::Map(
+                [
+                    (
+                        "provider".to_owned(),
+                        Node::Text(provider.as_str().to_owned()),
+                    ),
+                    ("reference".to_owned(), Node::Text(reference.clone())),
+                ]
+                .into(),
+            ),
+        }
+    }
+
+    /// The repository path, when the artifact is a file in a repository.
+    ///
+    /// This is the only case a local validator can open, which is why it is called out.
+    pub fn local_path(&self) -> Option<&str> {
+        match self {
+            Self::RepositoryPath {
+                repository: None,
+                path,
+            } => Some(path),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for ArtifactLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Inline => f.write_str("inline"),
+            Self::Url(url) => f.write_str(url),
+            Self::RepositoryPath {
+                repository: Some(repository),
+                path,
+            } => write!(f, "{repository}:{path}"),
+            Self::RepositoryPath {
+                repository: None,
+                path,
+            } => f.write_str(path),
+            Self::External {
+                provider,
+                reference,
+            } => write!(f, "{provider}/{reference}"),
+        }
+    }
+}
+
+impl serde::Serialize for ArtifactLocation {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactLocation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactLocation {
+    fn schema_name() -> String {
+        "ArtifactLocation".to_owned()
+    }
+
+    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schema.subschemas().any_of = Some(vec![
+            <String>::json_schema(generator),
+            <BTreeMap<String, String>>::json_schema(generator),
+        ]);
+        schema.metadata().description = Some(
+            "Where the artifact lives: `inline`, a repository path, a URL, or `{provider, \
+             reference}` for an object in an external system."
+                .to_owned(),
+        );
+        schema.into()
+    }
+}
+
+/// The meaning of an edge in the artifact graph.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationKind {
+    /// Shaped by, without being derived from.
+    InformedBy,
+    /// Produced from a higher-level artifact.
+    DerivedFrom,
+    /// Breaks a larger artifact into smaller work.
+    Decomposes,
+    /// States the required behaviour of something.
+    Specifies,
+    /// Proposes how to satisfy something.
+    Designs,
+    /// Realises something in the system.
+    Implements,
+    /// Records a decision taken within something.
+    Decides,
+    /// Assesses something.
+    Reviews,
+    /// Establishes that something holds.
+    Verifies,
+    /// Prevents progress on something.
+    Blocks,
+    /// Needs something else first.
+    DependsOn,
+    /// Replaces something.
+    Supersedes,
+    /// Produces the outcome something asked for.
+    Delivers,
+    /// Moves an objective the collection has set — a `vision` artifact — and says which.
+    Serves,
+}
+
+impl RelationKind {
+    /// Every relation kind.
+    pub const ALL: &'static [Self] = &[
+        Self::InformedBy,
+        Self::DerivedFrom,
+        Self::Decomposes,
+        Self::Specifies,
+        Self::Designs,
+        Self::Implements,
+        Self::Decides,
+        Self::Reviews,
+        Self::Verifies,
+        Self::Blocks,
+        Self::DependsOn,
+        Self::Supersedes,
+        Self::Delivers,
+        Self::Serves,
+    ];
+
+    /// The relation as written in documents.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InformedBy => "informed_by",
+            Self::DerivedFrom => "derived_from",
+            Self::Decomposes => "decomposes",
+            Self::Specifies => "specifies",
+            Self::Designs => "designs",
+            Self::Implements => "implements",
+            Self::Decides => "decides",
+            Self::Reviews => "reviews",
+            Self::Verifies => "verifies",
+            Self::Blocks => "blocks",
+            Self::DependsOn => "depends_on",
+            Self::Supersedes => "supersedes",
+            Self::Delivers => "delivers",
+            Self::Serves => "serves",
+        }
+    }
+
+    /// Parses a relation name.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|relation| relation.as_str() == value)
+            .ok_or_else(|| {
+                ParseError::identifier(
+                    "artifact relation",
+                    value,
+                    format!(
+                        "expected one of {}",
+                        Self::ALL
+                            .iter()
+                            .map(|relation| relation.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                )
+            })
+    }
+
+    /// How the edge reads in the other direction, for explanations.
+    pub fn inverse_label(self) -> &'static str {
+        match self {
+            Self::InformedBy => "informs",
+            Self::DerivedFrom => "derived into",
+            Self::Decomposes => "decomposed by",
+            Self::Specifies => "specified by",
+            Self::Designs => "designed by",
+            Self::Implements => "implemented by",
+            Self::Decides => "decided by",
+            Self::Reviews => "reviewed by",
+            Self::Verifies => "verified by",
+            Self::Blocks => "blocked by",
+            Self::DependsOn => "depended on by",
+            Self::Supersedes => "superseded by",
+            Self::Delivers => "delivered by",
+            Self::Serves => "served by",
+        }
+    }
+}
+
+impl fmt::Display for RelationKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// One edge of the artifact graph.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ArtifactRelation {
+    /// What the edge means.
+    pub kind: RelationKind,
+    /// What it points at.
+    pub target: ArtifactRef,
+}
+
+impl ArtifactRelation {
+    /// Builds a relation.
+    pub fn new(kind: RelationKind, target: ArtifactRef) -> Self {
+        Self { kind, target }
+    }
+
+    /// Parses the document form `{<relation>: <artifact-ref>}`.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        let Some((key, value)) = node.as_single_entry() else {
+            return Err(ParseError::shape(
+                "artifact.relations[]",
+                "a single-entry mapping such as `{designs: spec:passkeys-auth}`",
+                node.type_name(),
+            ));
+        };
+        let Some(target) = value.as_text() else {
+            return Err(ParseError::shape(
+                format!("artifact.relations[].{key}"),
+                "an artifact reference",
+                value.type_name(),
+            ));
+        };
+        Ok(Self {
+            kind: RelationKind::parse(key)?,
+            target: ArtifactRef::parse(target)?,
+        })
+    }
+
+    /// Renders this relation back into document form.
+    pub fn to_node(&self) -> Node {
+        Node::Map(
+            [(
+                self.kind.as_str().to_owned(),
+                Node::Text(self.target.to_string()),
+            )]
+            .into(),
+        )
+    }
+}
+
+impl fmt::Display for ArtifactRelation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.kind, self.target)
+    }
+}
+
+impl serde::Serialize for ArtifactRelation {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ArtifactRelation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ArtifactRelation {
+    fn schema_name() -> String {
+        "ArtifactRelation".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::Object.into()),
+            ..Default::default()
+        };
+        schema.object().max_properties = Some(1);
+        schema.object().min_properties = Some(1);
+        schema.metadata().description = Some(
+            "A single-entry mapping from a relation name to an artifact reference, such as \
+             `{designs: spec:passkeys-auth}`."
+                .to_owned(),
+        );
+        schema.metadata().examples = RelationKind::ALL
+            .iter()
+            .map(|relation| serde_json::json!({ relation.as_str(): "design:passkeys-auth" }))
+            .collect();
+        schema.into()
+    }
+}
+
+/// How an artifact came to exist.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactSource {
+    /// Written by a person.
+    HumanAuthored,
+    /// Written by an agent.
+    AgentAuthored,
+    /// Produced by a tool from something else.
+    ToolGenerated,
+    /// Derived from another artifact.
+    Derived,
+    /// Brought in from another system.
+    Imported,
+}
+
+/// Who made an artifact, when, and from what.
+///
+/// Authorship is recorded, not scored: an agent-authored design is not thereby less
+/// trustworthy than a human-authored one. What it changes is what evidence a protocol may
+/// reasonably ask for.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactProvenance {
+    /// Who created it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<Producer>,
+    /// When it was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<Timestamp>,
+    /// How it came to exist.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<ArtifactSource>,
+    /// The source revision it was generated from, for generated artifacts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<Revision>,
+}
+
+/// How long an artifact stays valid.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum FreshnessPolicy {
+    /// Never goes stale.
+    AlwaysValid,
+    /// Valid until something supersedes it. The default.
+    #[default]
+    UntilSuperseded,
+    /// Valid only for the revision it was approved against.
+    BoundToRevision,
+    /// Valid only while its dependencies are unchanged.
+    BoundToDependencySet,
+}
+
+/// A pointer at the same work in a system AEP does not own.
+///
+/// Almost every team adopting this already has a tracker, and the story in the store and the ticket
+/// in Jira are one piece of work with two records. Without somewhere to write that down the join
+/// lives in a body paragraph, where `protocol artifact list` cannot reach it and a rename in either
+/// system breaks it silently.
+///
+/// **It is a reference, not an identity.** [`ArtifactId`] stays the name of the artifact; a key such
+/// as `DEV-630` is unique inside one tracker, changes when work moves between systems, and two
+/// organisations can hold it for different things — the same reasoning
+/// [`EntityId`](crate::entity::EntityId) gives for refusing `AUTH-142` as identity.
+///
+/// The document form is a mapping, and the shorthand is accepted on the way in:
+///
+/// ```yaml
+/// refs:
+///   - provider: jira
+///     reference: DEV-630
+///   - jira:DEV-425          # the same thing, written short
+/// ```
+///
+/// **No URL field.** A link is `provider` plus `reference` plus the base the organisation configures
+/// once in `.engineering/project.yaml`; a URL written per artifact is the same fact copied into
+/// every file, and it is the copy that is wrong after a tracker migration.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExternalRef {
+    /// The system holding the record, such as `jira` or `zendesk`.
+    pub provider: ProviderId,
+    /// Its key in that system, such as `DEV-630`.
+    pub reference: String,
+}
+
+impl ExternalRef {
+    /// Builds a reference.
+    pub fn new(provider: ProviderId, reference: impl Into<String>) -> Result<Self, ParseError> {
+        let reference = reference.into();
+        Self::check(&reference)?;
+        Ok(Self {
+            provider,
+            reference,
+        })
+    }
+
+    /// Refuses a key that is empty or carries whitespace.
+    ///
+    /// Deliberately nothing stricter. Tracker keys are `DEV-630`, `SUP#8812`, a Zendesk integer and
+    /// a UUID, and a pattern tight enough to describe Jira would refuse three of those. What is
+    /// refused is what cannot be round-tripped or pasted into a URL.
+    fn check(reference: &str) -> Result<(), ParseError> {
+        if reference.is_empty() {
+            return Err(ParseError::shape(
+                "artifact.refs[].reference",
+                "a key in the external system",
+                "an empty string",
+            ));
+        }
+        if reference.chars().any(char::is_whitespace) {
+            return Err(ParseError::identifier(
+                "reference",
+                reference,
+                "a key must not contain whitespace".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Parses the document form: `{provider: jira, reference: DEV-630}` or `jira:DEV-630`.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        match node {
+            Node::Text(text) => Self::parse(text),
+            Node::Map(entries) => {
+                let Some(provider) = entries.get("provider").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.refs[]",
+                        "a mapping with `provider` and `reference`, such as `{provider: jira, \
+                         reference: DEV-630}`",
+                        "a mapping with no `provider`",
+                    ));
+                };
+                let Some(reference) = entries.get("reference").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.refs[]",
+                        "a mapping with `provider` and `reference`, such as `{provider: jira, \
+                         reference: DEV-630}`",
+                        "a mapping with no `reference`",
+                    ));
+                };
+                Self::new(ProviderId::new(provider)?, reference)
+            }
+            other => Err(ParseError::shape(
+                "artifact.refs[]",
+                "`provider:reference`, or a mapping carrying both",
+                other.type_name(),
+            )),
+        }
+    }
+
+    /// Parses the shorthand `provider:reference`.
+    ///
+    /// Split at the **first** colon, so a reference that carries one of its own survives.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        let Some((provider, reference)) = value.split_once(':') else {
+            return Err(ParseError::identifier(
+                "reference",
+                value,
+                "write it as `provider:reference`, such as `jira:DEV-630`".to_owned(),
+            ));
+        };
+        Self::new(ProviderId::new(provider)?, reference)
+    }
+
+    /// Renders this reference back into document form.
+    pub fn to_node(&self) -> Node {
+        Node::Map(
+            [
+                (
+                    "provider".to_owned(),
+                    Node::Text(self.provider.as_str().to_owned()),
+                ),
+                ("reference".to_owned(), Node::Text(self.reference.clone())),
+            ]
+            .into(),
+        )
+    }
+}
+
+impl fmt::Display for ExternalRef {
+    /// The shorthand, which is what a person types and what a refusal should quote back.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.provider, self.reference)
+    }
+}
+
+impl FromStr for ExternalRef {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ExternalRef {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExternalRef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ExternalRef {
+    fn schema_name() -> String {
+        "ExternalRef".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schema.metadata().description = Some(
+            "A record of the same work in a system AEP does not own, written as a mapping with \
+             `provider` and `reference` or as the shorthand `provider:reference`."
+                .to_owned(),
+        );
+        schema.metadata().examples = vec![
+            serde_json::json!({ "provider": "jira", "reference": "DEV-630" }),
+            serde_json::json!("zendesk:8812"),
+        ];
+        schema.into()
+    }
+}
+
+/// How well a scope entry is known: read out of something, or worked out from something.
+///
+/// **Not a weasel word, and the reason the field is worth having.** A scope that mixes what was
+/// read with what was guessed is trusted exactly where it is weakest. Keeping the two apart is
+/// what lets a selection step say *this wave's disjointness rests on two cited surfaces and one
+/// inferred one*, which is a sentence somebody can act on; *these three do not overlap* is not.
+///
+/// The vocabulary is closed at two on purpose. A third value would be a confidence nothing
+/// decides on, and the only decision taken here is whether to mark a collision.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ScopeConfidence {
+    /// Read out of the artifact's own prose, a diff, or a file somebody opened. The default: a
+    /// path written with nothing beside it is one somebody had a reason to write.
+    #[default]
+    Cited,
+    /// Worked out from what the artifact is about, and not read anywhere.
+    Inferred,
+}
+
+impl ScopeConfidence {
+    /// The wire spelling, which is what the document carries and what a refusal quotes.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cited => "cited",
+            Self::Inferred => "inferred",
+        }
+    }
+
+    /// Parses the wire spelling.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when `value` is neither `cited` nor `inferred`. Refused by name rather than
+    /// defaulted: an invented confidence would read to a person as a value the engine tracks.
+    pub fn parse(value: &str) -> Result<Self, ParseError> {
+        match value {
+            "cited" => Ok(Self::Cited),
+            "inferred" => Ok(Self::Inferred),
+            other => Err(ParseError::identifier(
+                "confidence",
+                other,
+                "a scope entry is `cited` — read somewhere — or `inferred` — worked out; there is \
+                 no third value, because the only thing decided on it is whether to mark a \
+                 collision"
+                    .to_owned(),
+            )),
+        }
+    }
+}
+
+impl fmt::Display for ScopeConfidence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// One surface a story lands on, and how well that is known.
+///
+/// **The property a concurrent wave rests on, written down.** Selecting several stories to
+/// implement at once is a claim that they touch different surfaces; without somewhere to record a
+/// surface that claim is a pairwise reading of prose, and an unassessed story reads exactly like a
+/// safe one. Here it is a field, so `aep artifact waves` can derive the answer and name what it
+/// excluded.
+///
+/// **Nothing is normalised.** `crates/govern/aep-domain` and `crates/govern/aep-domain/src/artifact.rs` are two
+/// surfaces, and the verb reports collisions at whatever granularity the entries declare. A
+/// normaliser would have to decide that a directory contains a file, which is a claim about a
+/// working tree this crate cannot see and must not guess at.
+///
+/// The document form is a mapping, and the bare path is accepted on the way in:
+///
+/// ```yaml
+/// scope:
+///   - path: crates/govern/aep-domain/src/artifact.rs
+///     confidence: cited
+///   - crates/edge/protocol-cli/src/planning.rs   # the same thing, cited by default
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScopeEntry {
+    /// The surface, as a repository-relative path.
+    pub path: String,
+    /// How well it is known.
+    pub confidence: ScopeConfidence,
+}
+
+impl ScopeEntry {
+    /// Builds an entry.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the path is empty or nothing but whitespace.
+    pub fn new(path: impl Into<String>, confidence: ScopeConfidence) -> Result<Self, ParseError> {
+        let path = path.into();
+        if path.trim().is_empty() {
+            return Err(ParseError::shape(
+                "artifact.scope[].path",
+                "a repository-relative path, such as `crates/govern/aep-domain/src/artifact.rs`",
+                if path.is_empty() {
+                    "an empty string"
+                } else {
+                    "whitespace"
+                },
+            ));
+        }
+        Ok(Self { path, confidence })
+    }
+
+    /// Parses the document form: `{path: …, confidence: cited}`, or the bare path.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError`] when the node is neither, when the mapping has no `path`, or when the
+    /// confidence is a word this vocabulary does not have.
+    pub fn from_node(node: &Node) -> Result<Self, ParseError> {
+        match node {
+            Node::Text(path) => Self::new(path.clone(), ScopeConfidence::default()),
+            Node::Map(entries) => {
+                let Some(path) = entries.get("path").and_then(Node::as_text) else {
+                    return Err(ParseError::shape(
+                        "artifact.scope[]",
+                        "a mapping with `path`, such as `{path: crates/x.rs, confidence: cited}`",
+                        "a mapping with no `path`",
+                    ));
+                };
+                let confidence = match entries.get("confidence") {
+                    None => ScopeConfidence::default(),
+                    Some(node) => match node.as_text() {
+                        Some(text) => ScopeConfidence::parse(text)?,
+                        None => {
+                            return Err(ParseError::shape(
+                                "artifact.scope[].confidence",
+                                "`cited` or `inferred`",
+                                node.type_name(),
+                            ))
+                        }
+                    },
+                };
+                Self::new(path, confidence)
+            }
+            other => Err(ParseError::shape(
+                "artifact.scope[]",
+                "a path, or a mapping carrying `path` and `confidence`",
+                other.type_name(),
+            )),
+        }
+    }
+
+    /// Renders this entry back into document form.
+    ///
+    /// Always the mapping, never the bare path: the confidence is the half a reader most needs and
+    /// the half a shorthand drops, so a document written by a command says both out loud.
+    pub fn to_node(&self) -> Node {
+        Node::Map(
+            [
+                ("path".to_owned(), Node::Text(self.path.clone())),
+                (
+                    "confidence".to_owned(),
+                    Node::Text(self.confidence.as_str().to_owned()),
+                ),
+            ]
+            .into(),
+        )
+    }
+}
+
+impl fmt::Display for ScopeEntry {
+    /// The path, with the confidence beside it only where it is the one somebody guessed.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.confidence {
+            ScopeConfidence::Cited => f.write_str(&self.path),
+            ScopeConfidence::Inferred => write!(f, "{} (inferred)", self.path),
+        }
+    }
+}
+
+impl serde::Serialize for ScopeEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_node().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ScopeEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let node = Node::deserialize(deserializer)?;
+        Self::from_node(&node).map_err(serde::de::Error::custom)
+    }
+}
+
+impl schemars::JsonSchema for ScopeEntry {
+    fn schema_name() -> String {
+        "ScopeEntry".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schema.metadata().description = Some(
+            "A surface a story lands on, written as a mapping with `path` and `confidence` \
+             (`cited` or `inferred`), or as the bare path, which is `cited`."
+                .to_owned(),
+        );
+        schema.metadata().examples = vec![
+            serde_json::json!({ "path": "crates/govern/aep-domain/src/artifact.rs", "confidence": "cited" }),
+            serde_json::json!("crates/edge/protocol-cli/src/planning.rs"),
+        ];
+        schema.into()
+    }
+}
+
+/// Human-facing description of an artifact.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactMetadata {
+    /// Its title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// One-line summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Who owns it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    /// Free-form labels.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub tags: BTreeSet<String>,
+    /// Records of the same work in systems AEP does not own.
+    ///
+    /// A set, so the same ticket named twice is named once and the order in a file is the order a
+    /// reader gets — the same promise `tags` makes, for the same reason.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub refs: BTreeSet<ExternalRef>,
+    /// Anything else the organisation wants to carry.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty", flatten)]
+    pub extra: BTreeMap<String, Node>,
+}
+
+/// A durable engineering artifact.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct Artifact {
+    /// Its identifier.
+    pub id: ArtifactId,
+    /// What kind of artifact it is.
+    pub kind: ArtifactKind,
+    /// Which version this record describes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<ArtifactVersion>,
+    /// Where its lifecycle has got to.
+    pub status: ArtifactStatus,
+    /// Where it lives.
+    pub location: ArtifactLocation,
+    /// Its outgoing edges.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relations: Vec<ArtifactRelation>,
+    /// Human-facing description.
+    #[serde(default, skip_serializing_if = "is_default_metadata")]
+    pub metadata: ArtifactMetadata,
+    /// Who made it and from what.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ArtifactProvenance>,
+    /// How long it stays valid.
+    #[serde(default, skip_serializing_if = "is_default_freshness")]
+    pub freshness: FreshnessPolicy,
+    /// The evidence kind this artifact is stopping anybody from producing.
+    ///
+    /// **The join between a blocker and an evidence gate.** A requirement asks for a
+    /// `test_result`; the CI job that would produce one cannot mint a read-scope token; so the
+    /// record of *why the fact does not exist* is a `credential-blocker` that `blocks` the work
+    /// and names `test_result` here. Without it the store holds two unrelated facts — a missing
+    /// record and a parked item — and a reader has to join them by hand, which is exactly the
+    /// join a status field cannot make.
+    ///
+    /// Meaningful only alongside at least one [`RelationKind::Blocks`] edge, and
+    /// [`ArtifactGraph::validate_lifecycles`] says so: evidence withheld from nothing is a
+    /// sentence about nobody.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withholds: Option<crate::evidence::EvidenceKind>,
+    /// The digest of the resolved model this record describes, for a kind that has one.
+    ///
+    /// The content identity of a compiled specification, as distinct from [`Self::version`], which
+    /// is a label a person reads: `billing/v3` is a name two resolutions can share, and a digest is
+    /// not. Only kinds for which [`ArtifactKind::carries_model_digest`] holds may record one; the
+    /// manifest refuses it on any other kind, because a digest nothing will ever compare against
+    /// reads as a guarantee and is not one.
+    ///
+    /// **Written from outside this crate.** The standalone system-modeling toolchain computes it
+    /// and publishes it in its own report; the AEP-side adapter copies it across, the same way a
+    /// person records a commit SHA in [`ArtifactProvenance::revision`].
+    ///
+    /// **Absent means unverifiable, not fine.** Conformance evidence about a specification that
+    /// records no digest does not satisfy a requirement — see
+    /// [`ArtifactGraph::governing_models`].
+    //
+    // Why the value cannot simply be computed here: `aep-domain` does not depend on ESS modeling
+    // crates and must not. The repositories are independently usable; only the optional adapter
+    // understands both report vocabularies. Hence this field is populated rather than derived.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_digest: Option<SpecDigest>,
+}
+
+/// Whether metadata is empty, for output suppression.
+fn is_default_metadata(metadata: &ArtifactMetadata) -> bool {
+    metadata == &ArtifactMetadata::default()
+}
+
+/// Whether a freshness policy is the default, for output suppression.
+///
+/// Takes a reference because that is the signature `skip_serializing_if` requires.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_default_freshness(freshness: &FreshnessPolicy) -> bool {
+    *freshness == FreshnessPolicy::default()
+}
+
+impl Artifact {
+    /// A minimal artifact.
+    pub fn new(
+        id: ArtifactId,
+        kind: ArtifactKind,
+        status: ArtifactStatus,
+        location: ArtifactLocation,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            version: None,
+            status,
+            location,
+            relations: Vec::new(),
+            metadata: ArtifactMetadata::default(),
+            provenance: None,
+            freshness: FreshnessPolicy::default(),
+            withholds: None,
+            model_digest: None,
+        }
+    }
+
+    /// Adds a relation, builder-style.
+    #[must_use]
+    pub fn with_relation(mut self, kind: RelationKind, target: ArtifactRef) -> Self {
+        self.relations.push(ArtifactRelation::new(kind, target));
+        self
+    }
+
+    /// Records the digest of the resolved model this artifact describes, builder-style.
+    ///
+    /// The value comes from the specification compiler, never from here — see
+    /// [`Self::model_digest`].
+    #[must_use]
+    pub fn with_model_digest(mut self, digest: SpecDigest) -> Self {
+        self.model_digest = Some(digest);
+        self
+    }
+
+    /// Every target of `kind`.
+    pub fn targets(&self, kind: RelationKind) -> impl Iterator<Item = &ArtifactRef> {
+        self.relations
+            .iter()
+            .filter(move |relation| relation.kind == kind)
+            .map(|relation| &relation.target)
+    }
+
+    /// `true` when this artifact satisfies a requirement for `kind`, following the hierarchy.
+    pub fn is_kind(&self, kind: &ArtifactKind) -> bool {
+        self.kind.is_a(kind)
+    }
+
+    /// `true` when `digest` is the resolved model this record describes.
+    ///
+    /// The one comparison the revision binding is made of, so that there is one place to read and
+    /// one place to break. It **fails closed**: an artifact that records no digest is at no
+    /// revision anything can be checked against, and answers `false` to every digest rather than
+    /// waving them all through. See [`Self::model_digest`] for why the value has to arrive from
+    /// outside this crate, and
+    /// [`EssConformanceResult::covers`](crate::evidence::EssConformanceResult::covers) for the
+    /// polarity argument.
+    pub fn is_at_revision(&self, digest: &SpecDigest) -> bool {
+        self.model_digest.as_ref() == Some(digest)
+    }
+}
+
+/// The legal statuses and status transitions for one artifact kind.
+///
+/// Lifecycles differ by kind — an ADR goes `proposed → accepted → superseded`, a design goes
+/// `draft → in_review → approved → implemented` — and validation rejects a status a kind does
+/// not have, which catches the copy-paste error that would otherwise make a requirement
+/// silently unsatisfiable.
+///
+/// A document that names **no** kind is the tree's fallback: the lifecycle every kind with no
+/// nearer one is held to, and the only way to make a rule bind kinds nobody has enumerated. One
+/// tree may declare at most one. A lifecycle registered for the kind itself, or for a kind it
+/// specialises, always wins over it.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactLifecycle {
+    /// The kind this lifecycle governs; absent for the fallback lifecycle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<ArtifactKind>,
+    /// The status a new artifact starts in.
+    pub initial: ArtifactStatus,
+    /// For each status, the statuses it may move to.
+    #[serde(default)]
+    pub transitions: BTreeMap<ArtifactStatus, BTreeSet<ArtifactStatus>>,
+
+    /// For each status, the evidence an artifact must carry to reach it.
+    ///
+    /// Empty by default, and an empty map means exactly what it did before this field existed: the
+    /// ladder governs *which* moves are legal and says nothing about whether one is earned. That is
+    /// gap-register `:39` — "a story's `implemented` is a claim nothing checks" — and this is where
+    /// a ladder gets to check it.
+    ///
+    /// A requirement is declared beside the rung it guards, rather than in the artifact-kind
+    /// document or in a requirement document, because the refusal a person reads names a rung and
+    /// the thing explaining a rung should sit next to it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub requires: BTreeMap<ArtifactStatus, Vec<StatusRequirement>>,
+
+    /// For each status, one line saying what being at it means.
+    ///
+    /// Empty by default, and absence is not a defect: a ladder whose rung names say enough needs
+    /// nothing here. It exists because a rendered board has a column heading and no room to explain
+    /// it, and the alternative every consumer reached for was a hard-coded map of status to blurb
+    /// living beside the renderer — a second copy of the vocabulary, in a file nothing validates,
+    /// which goes stale the first time a ladder invents a rung.
+    ///
+    /// A description is prose about *this* ladder's rung, so `draft` on a story and `draft` on a
+    /// decision may say different things, and neither has to say anything.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub descriptions: BTreeMap<ArtifactStatus, String>,
+
+    /// For each status, a date that must have passed — or not yet — before it can be reached.
+    ///
+    /// Gap-register `:73`: *time-based transitions of any kind, which today live in scripts
+    /// `explain` cannot see*. A rung that opens on a date is now a line in this document rather
+    /// than a cron job nobody can read.
+    ///
+    /// The clock is **not** here. This names a key in the artifact's own frontmatter; the instant
+    /// to compare it against is read at the edge and handed in, which is what keeps `aep-domain`
+    /// clock-free and its banned-token scan passing.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub when: BTreeMap<ArtifactStatus, TimeGuard>,
+}
+
+/// When a status may be reached, relative to a date the artifact itself records.
+///
+/// Both fields name a **frontmatter key**, not a date: `after: expires_at` means *not until now is
+/// past whatever this artifact's `expires_at` says*. Putting a literal date here would make the
+/// ladder a document about one artifact.
+///
+/// An empty guard constrains nothing, which is what a `when:` entry someone started and did not
+/// finish should do — refusing every move because a document is half-written is a worse failure
+/// than permitting them.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct TimeGuard {
+    /// Reachable only once the supplied instant is **after** the date this key records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Reachable only while the supplied instant is **before** the date this key records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+}
+
+impl TimeGuard {
+    /// Every frontmatter key this guard reads.
+    #[must_use]
+    pub fn keys(&self) -> Vec<&str> {
+        self.after
+            .iter()
+            .chain(self.before.iter())
+            .map(String::as_str)
+            .collect()
+    }
+}
+
+/// What reaching a status costs: evidence of a kind, at least so many times.
+///
+/// Deliberately **smaller** than [`EvidenceRequirement`](crate::requirement::EvidenceRequirement),
+/// which also carries `subject`, `verifier` and `independent`. Those are judgements the engine
+/// makes about a record — whether the producer was independent of the author, whether the record is
+/// about *this* artifact — and a ladder that declared them without the engine evaluating them would
+/// be a document making a promise nothing keeps. What a ladder can honestly say is *how many of
+/// what kind*, and a shell counts.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct StatusRequirement {
+    /// The kind of evidence.
+    pub evidence: crate::evidence::EvidenceKind,
+    /// How many records of that kind are needed. One by default, because zero would be a
+    /// requirement that requires nothing, written by somebody who believed it required something.
+    #[serde(default = "one")]
+    pub at_least: usize,
+}
+
+fn one() -> usize {
+    1
+}
+
+impl ArtifactLifecycle {
+    /// The permissive lifecycle used for kinds that declare none: every status is legal.
+    ///
+    /// It requires nothing, and that is the honest default: refusing a move for want of evidence
+    /// nobody asked for would make the store unusable for the kinds it has no opinion about.
+    pub fn permissive() -> Self {
+        Self {
+            kind: None,
+            initial: ArtifactStatus::Draft,
+            transitions: ArtifactStatus::ALL
+                .iter()
+                .map(|status| {
+                    (
+                        status.clone(),
+                        ArtifactStatus::ALL.iter().cloned().collect(),
+                    )
+                })
+                .collect(),
+            requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
+            when: BTreeMap::new(),
+        }
+    }
+
+    /// What reaching `status` costs, which is nothing unless the ladder says otherwise.
+    #[must_use]
+    pub fn requirements_for(&self, status: &ArtifactStatus) -> &[StatusRequirement] {
+        self.requires.get(status).map_or(&[], Vec::as_slice)
+    }
+
+    /// When `status` may be reached, which is always unless the ladder says otherwise.
+    #[must_use]
+    pub fn timing_for(&self, status: &ArtifactStatus) -> Option<&TimeGuard> {
+        self.when.get(status)
+    }
+
+    /// Every status this lifecycle mentions.
+    pub fn statuses(&self) -> BTreeSet<ArtifactStatus> {
+        let mut statuses: BTreeSet<ArtifactStatus> = [self.initial.clone()].into();
+        for (from, to) in &self.transitions {
+            statuses.insert(from.clone());
+            statuses.extend(to.iter().cloned());
+        }
+        statuses
+    }
+
+    /// `true` when `status` is legal for this kind.
+    pub fn permits(&self, status: &ArtifactStatus) -> bool {
+        self.statuses().contains(status)
+    }
+
+    /// `true` when an artifact may move from `from` to `to`.
+    pub fn permits_transition(&self, from: &ArtifactStatus, to: &ArtifactStatus) -> bool {
+        self.transitions
+            .get(from)
+            .is_some_and(|targets| targets.contains(to))
+    }
+
+    /// `true` when `status` is the end of this ladder: a rung with nowhere left to go.
+    ///
+    /// The ladder decides, not a list of status names in this crate. That is what makes *lifting a
+    /// blocker* a move like any other: `blocker`'s `cleared` is terminal because
+    /// `artifacts/lifecycles/blocker.yaml` gives it no successor, and a tree that renames the rung
+    /// keeps the meaning without touching a line of Rust.
+    ///
+    /// [`permissive`](ArtifactLifecycle::permissive) has no terminal rung at all, deliberately: a
+    /// kind nobody wrote a ladder for has not declared any state to be the end, and reading one
+    /// into it would be this crate deciding what a document did not say.
+    #[must_use]
+    pub fn is_terminal(&self, status: &ArtifactStatus) -> bool {
+        self.transitions.get(status).is_some_and(BTreeSet::is_empty)
+    }
+}
+
+/// Lifecycles by artifact kind, with hierarchy fallback and one kind-less fallback.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct LifecycleRegistry {
+    lifecycles: BTreeMap<ArtifactKind, ArtifactLifecycle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fallback: Option<ArtifactLifecycle>,
+}
+
+impl LifecycleRegistry {
+    /// An empty registry, which treats every status as legal.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a lifecycle for a kind.
+    pub fn insert(&mut self, kind: ArtifactKind, lifecycle: ArtifactLifecycle) {
+        self.lifecycles.insert(kind, lifecycle);
+    }
+
+    /// Registers the kind-less fallback, replacing any earlier one.
+    ///
+    /// Whoever calls this decides what a *second* fallback document means; a registry cannot see
+    /// two files. The document loader refuses the second one rather than letting the last file read
+    /// win, because which file that is depends on directory order.
+    pub fn set_fallback(&mut self, lifecycle: ArtifactLifecycle) {
+        self.fallback = Some(lifecycle);
+    }
+
+    /// The kind-less fallback, if one is registered.
+    pub fn fallback(&self) -> Option<&ArtifactLifecycle> {
+        self.fallback.as_ref()
+    }
+
+    /// The lifecycle governing `kind`.
+    ///
+    /// Three chances, in this order, and the first one that answers wins:
+    ///
+    /// 1. a lifecycle registered for exactly this kind;
+    /// 2. one registered for a kind it specialises — so `observation-log` is governed by `log`'s,
+    ///    and a family of kinds shares one ladder (see [`ArtifactKind::parent`]);
+    /// 3. the kind-less fallback, if the tree declares one.
+    ///
+    /// `None` means the tree said nothing about this kind at all, and a caller that has to have a
+    /// lifecycle uses [`ArtifactLifecycle::permissive`]. That is a different answer from the
+    /// fallback: permissive is this crate shrugging, the fallback is a document somebody wrote.
+    pub fn for_kind(&self, kind: &ArtifactKind) -> Option<&ArtifactLifecycle> {
+        kind.lineage()
+            .iter()
+            .find_map(|candidate| self.lifecycles.get(candidate))
+            .or(self.fallback.as_ref())
+    }
+
+    /// The lifecycle registered for exactly this kind, without hierarchy or fallback.
+    pub fn for_kind_exact(&self, kind: &ArtifactKind) -> Option<&ArtifactLifecycle> {
+        self.lifecycles.get(kind)
+    }
+
+    /// How many lifecycles are registered, counting the fallback as one.
+    pub fn len(&self) -> usize {
+        self.lifecycles.len() + usize::from(self.fallback.is_some())
+    }
+
+    /// `true` when nothing is registered, fallback included.
+    pub fn is_empty(&self) -> bool {
+        self.lifecycles.is_empty() && self.fallback.is_none()
+    }
+
+    /// Every lifecycle registered for a named kind.
+    ///
+    /// The fallback is not here — it has no kind to be keyed by, which is what it is for. Read it
+    /// with [`fallback`](Self::fallback).
+    pub fn iter(&self) -> impl Iterator<Item = (&ArtifactKind, &ArtifactLifecycle)> {
+        self.lifecycles.iter()
+    }
+}
+
+/// The artifact graph for one execution.
+///
+/// Construction validates the graph, so a [`ArtifactGraph`] in hand is one whose edges all
+/// resolve — the same raw-versus-validated split the rest of the domain uses.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(transparent)]
+pub struct ArtifactGraph {
+    artifacts: BTreeMap<ArtifactId, Artifact>,
+    /// The members a workspace declares, when this graph was built inside one.
+    ///
+    /// Empty for a plain single-repository store, which is the common case and the safe default:
+    /// with no workspace, a member-qualified target is a target this manifest cannot possibly
+    /// resolve, and saying nothing about it would let `entity-runtme/story:typo` pass as a
+    /// deliberate crossing rather than the misspelling it is.
+    ///
+    /// Not serialised: a serialised graph is its artifacts, and which workspace it happened to be
+    /// validated inside is not a property of the graph.
+    #[serde(skip)]
+    members: BTreeSet<MemberName>,
+}
+
+impl ArtifactGraph {
+    /// An empty graph.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Builds and validates a graph.
+    ///
+    /// Rejects duplicate ids, edges pointing at artifacts that do not exist, self-supersession
+    /// and cycles within one relation kind. Lifecycle checks need a
+    /// [`LifecycleRegistry`]; pass one to [`ArtifactGraph::validate_lifecycles`].
+    pub fn build<I: IntoIterator<Item = Artifact>>(artifacts: I) -> Result<Self, ValidationErrors> {
+        let mut graph = Self::new();
+        let mut errors = ValidationErrors::new();
+
+        for artifact in artifacts {
+            let id = artifact.id.clone();
+            if graph.artifacts.insert(id.clone(), artifact).is_some() {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::DuplicateDeclaration,
+                        format!("artifacts.{id}"),
+                        format!("artifact {id} is declared more than once"),
+                    )
+                    .with_hint("artifact identifiers must be unique within a manifest"),
+                );
+            }
+        }
+
+        errors.extend(graph.validate_edges());
+        errors.into_result(graph)
+    }
+
+    /// The same, for a graph built inside a workspace that declares `members`.
+    ///
+    /// A relation targeting one of them is a crossing and is left for an [`Assembly`] to resolve;
+    /// one targeting anything else is checked here exactly as a local target is.
+    ///
+    /// [`Assembly`]: https://docs.rs/aep-backend-markdown
+    ///
+    /// # Errors
+    ///
+    /// The same defects [`ArtifactGraph::build`] rejects.
+    pub fn build_in_workspace<I, M>(artifacts: I, members: M) -> Result<Self, ValidationErrors>
+    where
+        I: IntoIterator<Item = Artifact>,
+        M: IntoIterator<Item = MemberName>,
+    {
+        let mut graph = Self::new();
+        graph.members = members.into_iter().collect();
+        let mut errors = ValidationErrors::new();
+
+        for artifact in artifacts {
+            let id = artifact.id.clone();
+            if graph.artifacts.insert(id.clone(), artifact).is_some() {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::DuplicateDeclaration,
+                        format!("artifacts.{id}"),
+                        format!("artifact {id} is declared more than once"),
+                    )
+                    .with_hint("artifact identifiers must be unique within a manifest"),
+                );
+            }
+        }
+
+        errors.extend(graph.validate_edges());
+        errors.into_result(graph)
+    }
+
+    /// Adds an artifact, replacing any previous record with the same id.
+    pub fn insert(&mut self, artifact: Artifact) {
+        self.artifacts.insert(artifact.id.clone(), artifact);
+    }
+
+    /// The artifact with this id.
+    pub fn get(&self, id: &ArtifactId) -> Option<&Artifact> {
+        self.artifacts.get(id)
+    }
+
+    /// The artifact a reference points at.
+    pub fn resolve(&self, reference: &ArtifactRef) -> Option<&Artifact> {
+        self.get(reference.id())
+    }
+
+    /// Every artifact, in id order.
+    pub fn artifacts(&self) -> impl Iterator<Item = &Artifact> {
+        self.artifacts.values()
+    }
+
+    /// The number of artifacts.
+    pub fn len(&self) -> usize {
+        self.artifacts.len()
+    }
+
+    /// `true` when the graph holds nothing.
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
+
+    /// Every artifact that pins a revision evidence must have been produced against.
+    ///
+    /// The scope of the revision binding, as one query rather than as a condition repeated at each
+    /// call site. An artifact is in it when both hold:
+    ///
+    /// * its kind [carries a model digest](ArtifactKind::carries_model_digest) — the binding says
+    ///   nothing about a runbook or a postmortem, and must not block work that owes neither; and
+    /// * its [`FreshnessPolicy`] is not [`FreshnessPolicy::AlwaysValid`] — the one declared,
+    ///   version-controlled opt-out, the same one
+    ///   [`ReviewResult::covers`](crate::review::ReviewResult::covers) honours for an approval.
+    ///
+    /// An artifact **in scope that records no digest is still returned**, and that is the point.
+    /// It is what makes the rule fail closed: it contributes no accepted digest, so every
+    /// conformance run measured against it is unverifiable and therefore unsatisfying, and the
+    /// requirement's detail names the artifact that owes a digest. The alternative — skipping it —
+    /// would make forgetting to record a digest indistinguishable from checking one.
+    pub fn governing_models(&self) -> impl Iterator<Item = &Artifact> {
+        self.artifacts.values().filter(|artifact| {
+            artifact.kind.carries_model_digest()
+                && artifact.freshness != FreshnessPolicy::AlwaysValid
+        })
+    }
+
+    /// Every artifact of `kind`, including kinds that specialise it.
+    pub fn of_kind<'a>(&'a self, kind: &'a ArtifactKind) -> impl Iterator<Item = &'a Artifact> {
+        self.artifacts
+            .values()
+            .filter(move |artifact| artifact.is_kind(kind))
+    }
+
+    /// Artifacts `id` points at with `relation`.
+    pub fn related(&self, id: &ArtifactId, relation: RelationKind) -> Vec<&Artifact> {
+        let Some(artifact) = self.get(id) else {
+            return Vec::new();
+        };
+        artifact
+            .targets(relation)
+            .filter_map(|target| self.get(target.id()))
+            .collect()
+    }
+
+    /// Artifacts that point at `id` with `relation`.
+    ///
+    /// This is how "which artifact supersedes this ADR?" and "which review approved this
+    /// design?" are answered, since both edges are stored on the newer artifact.
+    pub fn inverse(&self, id: &ArtifactId, relation: RelationKind) -> Vec<&Artifact> {
+        self.artifacts
+            .values()
+            .filter(|artifact| artifact.targets(relation).any(|target| target.id() == id))
+            .collect()
+    }
+
+    /// Walks `relation` edges from `id` transitively, nearest first, excluding `id` itself.
+    pub fn ancestors(&self, id: &ArtifactId, relation: RelationKind) -> Vec<&Artifact> {
+        let mut seen: BTreeSet<&ArtifactId> = [id].into();
+        let mut queue: VecDeque<&ArtifactId> = [id].into();
+        let mut found = Vec::new();
+        while let Some(current) = queue.pop_front() {
+            for artifact in self.related(current, relation) {
+                if seen.insert(&artifact.id) {
+                    found.push(artifact);
+                    queue.push_back(&artifact.id);
+                }
+            }
+        }
+        found
+    }
+
+    /// Checks every edge resolves, nothing supersedes itself, and no relation kind cycles.
+    fn validate_edges(&self) -> ValidationErrors {
+        let mut errors = ValidationErrors::new();
+
+        for artifact in self.artifacts.values() {
+            // The revision binding is scoped to kinds that have a model. A digest recorded on a
+            // kind that has none would never be compared against anything, and an unread guarantee
+            // is worse than none: a reader seeing `model_digest` on a runbook concludes that
+            // something checks it.
+            if artifact.model_digest.is_some() && !artifact.kind.carries_model_digest() {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::ConflictingDeclaration,
+                        format!("artifacts.{}.model_digest", artifact.id),
+                        format!(
+                            "{} is a {}, which has no compiled model, so a model digest on it \
+                             names nothing",
+                            artifact.id, artifact.kind
+                        ),
+                    )
+                    .with_hint(
+                        "record a digest only on a kind compiled from a model, such as \
+                         `executable-system-specification`; for a commit SHA use \
+                         `provenance.revision`",
+                    ),
+                );
+            }
+            for (index, relation) in artifact.relations.iter().enumerate() {
+                let location = format!("artifacts.{}.relations[{index}]", artifact.id);
+                // A target naming a member **this workspace declares** is outside this manifest by
+                // construction, so "the manifest does not declare it" is not a defect — it is the
+                // whole point of a workspace. Whether that member holds it is a question only an
+                // assembly of every member can answer, and it answers it as a typed fact rather
+                // than an error, because a member nobody checked out holds nothing and that is
+                // normal.
+                //
+                // A member this workspace does **not** declare is a different thing entirely, and
+                // exempting it was a hole: with no workspace file at all, every dangling edge
+                // could be hidden behind a `/`, and a misspelled member name passed silently in a
+                // plain single-repository store.
+                let crosses_to_a_declared_member =
+                    relation.target.id().member().is_some_and(|member| {
+                        self.members.iter().any(|known| known.as_str() == member)
+                    });
+                if !crosses_to_a_declared_member
+                    && !self.artifacts.contains_key(relation.target.id())
+                {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::UndeclaredReference,
+                            location.clone(),
+                            format!(
+                                "{} {} points at {}, which the manifest does not declare",
+                                artifact.id, relation.kind, relation.target
+                            ),
+                        )
+                        .with_hint(
+                            "declare the target artifact, or drop the relation; a dangling edge \
+                             cannot be checked later",
+                        ),
+                    );
+                }
+                if relation.target.id() == &artifact.id {
+                    errors.push(ValidationError::new(
+                        ValidationCode::SelfReference,
+                        location,
+                        format!("{} {} itself", artifact.id, relation.kind),
+                    ));
+                }
+            }
+        }
+
+        for relation in RelationKind::ALL {
+            if let Some(cycle) = self.find_cycle(*relation) {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::SelfReference,
+                        "artifacts",
+                        format!(
+                            "`{relation}` edges form a cycle: {}",
+                            cycle
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(" -> ")
+                        ),
+                    )
+                    .with_hint("relations describe derivation, which cannot be circular"),
+                );
+            }
+        }
+
+        errors
+    }
+
+    /// Finds one cycle among `relation` edges, if any.
+    fn find_cycle(&self, relation: RelationKind) -> Option<Vec<&ArtifactId>> {
+        #[derive(Clone, Copy, PartialEq)]
+        enum Mark {
+            Open,
+            Done,
+        }
+
+        fn walk<'a>(
+            graph: &'a ArtifactGraph,
+            relation: RelationKind,
+            id: &'a ArtifactId,
+            marks: &mut BTreeMap<&'a ArtifactId, Mark>,
+            stack: &mut Vec<&'a ArtifactId>,
+        ) -> Option<Vec<&'a ArtifactId>> {
+            marks.insert(id, Mark::Open);
+            stack.push(id);
+            for next in graph.related(id, relation) {
+                match marks.get(&next.id) {
+                    Some(Mark::Open) => {
+                        let start = stack
+                            .iter()
+                            .position(|entry| *entry == &next.id)
+                            .unwrap_or(0);
+                        let mut cycle: Vec<&ArtifactId> = stack[start..].to_vec();
+                        cycle.push(&next.id);
+                        return Some(cycle);
+                    }
+                    Some(Mark::Done) => {}
+                    None => {
+                        if let Some(cycle) = walk(graph, relation, &next.id, marks, stack) {
+                            return Some(cycle);
+                        }
+                    }
+                }
+            }
+            stack.pop();
+            marks.insert(id, Mark::Done);
+            None
+        }
+
+        let mut marks = BTreeMap::new();
+        for id in self.artifacts.keys() {
+            if marks.contains_key(id) {
+                continue;
+            }
+            let mut stack = Vec::new();
+            if let Some(cycle) = walk(self, relation, id, &mut marks, &mut stack) {
+                return Some(cycle);
+            }
+        }
+        None
+    }
+
+    /// Checks every artifact's status against its kind's lifecycle, and that a superseded
+    /// artifact names its successor.
+    pub fn validate_lifecycles(&self, lifecycles: &LifecycleRegistry) -> ValidationErrors {
+        let mut errors = ValidationErrors::new();
+
+        for artifact in self.artifacts.values() {
+            if let Some(lifecycle) = lifecycles.for_kind(&artifact.kind) {
+                if !lifecycle.permits(&artifact.status) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::UnknownState,
+                            format!("artifacts.{}.status", artifact.id),
+                            format!(
+                                "status `{}` is not part of the {} lifecycle ({})",
+                                artifact.status,
+                                artifact.kind,
+                                lifecycle
+                                    .statuses()
+                                    .iter()
+                                    .map(ArtifactStatus::as_str)
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        )
+                        .with_hint("use a status the kind's lifecycle declares"),
+                    );
+                }
+            }
+
+            if artifact.status == ArtifactStatus::Superseded
+                && self
+                    .inverse(&artifact.id, RelationKind::Supersedes)
+                    .is_empty()
+            {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::UndeclaredReference,
+                        format!("artifacts.{}.status", artifact.id),
+                        format!(
+                            "{} is marked superseded but nothing declares `supersedes: {}`",
+                            artifact.id, artifact.id
+                        ),
+                    )
+                    .with_hint(
+                        "add the successor artifact with a `supersedes` relation, so the chain of \
+                         decisions stays followable",
+                    ),
+                );
+            }
+
+            if artifact.kind == ArtifactKind::ReviewResult
+                && artifact.targets(RelationKind::Reviews).next().is_none()
+            {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::EmptyDeclaration,
+                        format!("artifacts.{}.relations", artifact.id),
+                        format!("review {} does not say what it reviews", artifact.id),
+                    )
+                    .with_hint("add a `reviews` relation naming the subject"),
+                );
+            }
+
+            // `serves` points at an objective and nothing else. An edge that reads "serves" into
+            // a story would be a story claiming to be somebody's purpose.
+            for relation in artifact.targets(RelationKind::Serves) {
+                let target_kind = self.artifacts.get(&relation.id).map(|target| &target.kind);
+                if target_kind.is_some_and(|kind| *kind != ArtifactKind::Vision) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("artifacts.{}.relations", artifact.id),
+                            format!(
+                                "{} says it serves {}, which is a {} and not a vision",
+                                artifact.id,
+                                relation.id,
+                                target_kind.map_or("?", ArtifactKind::as_str)
+                            ),
+                        )
+                        .with_hint("`serves` names an objective: a `vision` artifact"),
+                    );
+                }
+            }
+
+            // Evidence is withheld *from* something. An artifact naming a kind of proof nobody
+            // can produce, while blocking nothing, is a sentence about nobody — and the reader it
+            // would mislead is the one asking why a required fact is missing.
+            if artifact.withholds.is_some()
+                && artifact.targets(RelationKind::Blocks).next().is_none()
+            {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::MissingDeclaration,
+                        format!("artifacts.{}.withholds", artifact.id),
+                        format!(
+                            "{} withholds {} and blocks nothing, so nothing is waiting for it",
+                            artifact.id,
+                            artifact
+                                .withholds
+                                .map_or("?", crate::evidence::EvidenceKind::as_str)
+                        ),
+                    )
+                    .with_hint(
+                        "add a `blocks` relation naming the work whose evidence this is stopping",
+                    ),
+                );
+            }
+        }
+
+        self.validate_grounding(&mut errors);
+
+        errors
+    }
+
+    /// **Grounding.** Where a store declares objectives, the work that is agreed and not yet done
+    /// says which of them it moves (atlas ADR 0005).
+    ///
+    /// A story or task that is `proposed`, `approved` or `active` and serves nothing is a question
+    /// for the operator, not a task. History is not rewritten: `implemented` and `archived` are
+    /// exempt, and so is a `draft`, which nobody has agreed to yet. A store with no `vision`
+    /// artifact has declared nothing to serve, and the rule waits for the first one rather than
+    /// refusing every store that has not adopted objectives.
+    fn validate_grounding(&self, errors: &mut ValidationErrors) {
+        let declares_objectives = self
+            .artifacts
+            .values()
+            .any(|artifact| artifact.kind == ArtifactKind::Vision);
+        if declares_objectives {
+            for artifact in self.artifacts.values() {
+                let live = matches!(
+                    artifact.status,
+                    ArtifactStatus::Proposed | ArtifactStatus::Approved | ArtifactStatus::Active
+                );
+                let work = matches!(artifact.kind, ArtifactKind::Story | ArtifactKind::Task);
+                if work && live && artifact.targets(RelationKind::Serves).next().is_none() {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::EmptyDeclaration,
+                            format!("artifacts.{}.relations", artifact.id),
+                            format!(
+                                "{} is {} and serves no objective: this store declares objectives \
+                                 (`vision` artifacts), and agreed work says which it moves",
+                                artifact.id, artifact.status
+                            ),
+                        )
+                        .with_hint(
+                            "`protocol artifact relate <id> serves vision:<objective>` — or ask \
+                             the operator which objective this work is for",
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Projects the graph into facts, so predicates can be written against it.
+    ///
+    /// For every kind present (and every kind it specialises) this emits:
+    ///
+    /// ```text
+    /// artifact.<kind>.exists            bool
+    /// artifact.<kind>.count             number
+    /// artifact.<kind>.approved          bool    at least one approved, not retired
+    /// artifact.<kind>.approved.count    number
+    /// artifact.<kind>.<status>.count    number
+    /// artifact.total                    number
+    /// ```
+    pub fn facts(&self) -> FactStore {
+        let mut store = FactStore::new();
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        let mut approved: BTreeMap<String, usize> = BTreeMap::new();
+        let mut by_status: BTreeMap<(String, ArtifactStatus), usize> = BTreeMap::new();
+
+        for artifact in self.artifacts.values() {
+            for kind in artifact.kind.lineage() {
+                let key = kind.as_str().to_owned();
+                *counts.entry(key.clone()).or_default() += 1;
+                *by_status
+                    .entry((key.clone(), artifact.status.clone()))
+                    .or_default() += 1;
+                if artifact.status.is_approved() {
+                    *approved.entry(key).or_default() += 1;
+                }
+            }
+        }
+
+        store.set(
+            FactPath::from_segments(["artifact", "total"]),
+            FactValue::count(self.len()),
+        );
+
+        for (kind, count) in &counts {
+            let base = FactPath::from_segments(["artifact", kind]);
+            store.set(base.child("exists"), FactValue::bool(true));
+            store.set(base.child("count"), FactValue::count(*count));
+            let approved_count = approved.get(kind).copied().unwrap_or_default();
+            store.set(base.child("approved"), FactValue::bool(approved_count > 0));
+            store.set(
+                base.child("approved").child("count"),
+                FactValue::count(approved_count),
+            );
+        }
+
+        for ((kind, status), count) in &by_status {
+            let base = FactPath::from_segments(["artifact", kind]);
+            store.set(
+                base.child(status.as_str()).child("count"),
+                FactValue::count(*count),
+            );
+        }
+
+        store
+    }
+}
+
+/// An artifact manifest document, as parsed.
+///
+/// This is the file a project keeps — conventionally `.engineering/artifacts.yaml` — that points
+/// at its artifacts rather than duplicating them:
+///
+/// ```yaml
+/// version: aep.artifacts/1
+/// artifacts:
+///   - id: spec:passkeys-auth
+///     kind: specification
+///     status: approved
+///     location:
+///       path: docs/specs/passkeys-auth.md
+///     relations:
+///       - specifies: story:AUTH-142
+/// ```
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawArtifactManifest {
+    /// The manifest format version.
+    #[serde(default = "default_manifest_version")]
+    pub version: String,
+    /// The artifacts it declares.
+    #[serde(default)]
+    pub artifacts: Vec<Artifact>,
+}
+
+/// The manifest format version this build writes.
+pub const ARTIFACT_MANIFEST_VERSION: &str = "aep.artifacts/1";
+
+/// Serde default for the manifest version.
+fn default_manifest_version() -> String {
+    ARTIFACT_MANIFEST_VERSION.to_owned()
+}
+
+impl TryFrom<RawArtifactManifest> for ArtifactGraph {
+    type Error = ValidationErrors;
+
+    fn try_from(raw: RawArtifactManifest) -> Result<Self, Self::Error> {
+        if raw.version != ARTIFACT_MANIFEST_VERSION {
+            return Err(ValidationError::new(
+                ValidationCode::UnsupportedProtocolVersion,
+                "artifacts.version",
+                format!(
+                    "this build reads manifest version `{ARTIFACT_MANIFEST_VERSION}`, not `{}`",
+                    raw.version
+                ),
+            )
+            .into());
+        }
+        Self::build(raw.artifacts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn artifact(id: &str, kind: &str, status: ArtifactStatus) -> Artifact {
+        Artifact::new(
+            ArtifactId::new(id).expect("id"),
+            ArtifactKind::parse(kind).expect("kind"),
+            status,
+            ArtifactLocation::Inline,
+        )
+    }
+
+    fn reference(id: &str) -> ArtifactRef {
+        ArtifactRef::parse(id).expect("reference")
+    }
+
+    #[test]
+    fn design_subkinds_satisfy_a_design_requirement() {
+        assert!(ArtifactKind::ArchitectureDesign.is_a(&ArtifactKind::Design));
+        assert!(ArtifactKind::Design.is_a(&ArtifactKind::Design));
+        assert!(!ArtifactKind::Design.is_a(&ArtifactKind::ArchitectureDesign));
+        assert!(!ArtifactKind::Runbook.is_a(&ArtifactKind::Design));
+    }
+
+    #[test]
+    fn a_custom_kinds_parent_is_the_kind_its_last_segment_names() {
+        let observation_log = ArtifactKind::parse("observation-log").expect("kind");
+        assert_eq!(
+            observation_log.parent(),
+            Some(ArtifactKind::Other("log".to_owned()))
+        );
+        assert!(observation_log.is_a(&ArtifactKind::Other("log".to_owned())));
+        assert_eq!(
+            observation_log.lineage(),
+            vec![
+                observation_log.clone(),
+                ArtifactKind::Other("log".to_owned())
+            ],
+            "two rungs and no more: `log` has no hyphen left to derive a third from"
+        );
+
+        // The same rule reaching the named vocabulary, which is where it came from.
+        assert_eq!(
+            ArtifactKind::parse("threat-design").expect("kind").parent(),
+            Some(ArtifactKind::Design)
+        );
+    }
+
+    #[test]
+    fn a_single_segment_custom_kind_is_the_top_of_its_own_family() {
+        let log = ArtifactKind::parse("log").expect("kind");
+        assert_eq!(log.parent(), None);
+        assert_eq!(log.lineage(), vec![log.clone()]);
+        assert!(!log.is_a(&ArtifactKind::Other("observation-log".to_owned())));
+    }
+
+    #[test]
+    fn lineage_never_reads_an_alias_as_a_parent() {
+        // `parse` accepts `spec` as a spelling of `specification`; lineage does not, because a
+        // suffix is a claim about what the kind *is*, and inheriting a governed kind's lifecycle
+        // by abbreviation is not something anybody asked for.
+        assert_eq!(
+            ArtifactKind::parse("openapi-spec").expect("kind").parent(),
+            Some(ArtifactKind::Other("spec".to_owned()))
+        );
+        assert!(!ArtifactKind::parse("openapi-spec")
+            .expect("kind")
+            .is_a(&ArtifactKind::Specification));
+    }
+
+    #[test]
+    fn one_lifecycle_on_a_custom_parent_kind_governs_the_whole_family() {
+        // A2's consequence: a team's family of kinds shares one ladder instead of needing a
+        // lifecycle document each.
+        let mut registry = LifecycleRegistry::new();
+        registry.insert(
+            ArtifactKind::Other("log".to_owned()),
+            ArtifactLifecycle {
+                kind: Some(ArtifactKind::Other("log".to_owned())),
+                initial: ArtifactStatus::Draft,
+                transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
+                requires: BTreeMap::new(),
+                descriptions: BTreeMap::new(),
+                when: BTreeMap::new(),
+            },
+        );
+
+        let observation_log = ArtifactKind::parse("observation-log").expect("kind");
+        assert!(
+            registry.for_kind_exact(&observation_log).is_none(),
+            "nothing is registered for this kind itself"
+        );
+        let governing = registry
+            .for_kind(&observation_log)
+            .expect("the parent kind's lifecycle governs it");
+        assert!(governing.permits_transition(&ArtifactStatus::Draft, &ArtifactStatus::Active));
+        assert!(!governing.permits(&ArtifactStatus::Rejected));
+
+        // A kind outside the family is untouched, so the ladder is shared and not global.
+        assert!(registry
+            .for_kind(&ArtifactKind::parse("weekly-digest").expect("kind"))
+            .is_none());
+    }
+
+    #[test]
+    fn the_fallback_is_consulted_last_and_only_when_nothing_nearer_answers() {
+        let mut registry = LifecycleRegistry::new();
+        let logs = ArtifactLifecycle {
+            kind: Some(ArtifactKind::Other("log".to_owned())),
+            initial: ArtifactStatus::Draft,
+            transitions: [(ArtifactStatus::Draft, [ArtifactStatus::Active].into())].into(),
+            requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
+            when: BTreeMap::new(),
+        };
+        let fallback = ArtifactLifecycle {
+            kind: None,
+            initial: ArtifactStatus::Proposed,
+            transitions: [(ArtifactStatus::Proposed, [ArtifactStatus::Accepted].into())].into(),
+            requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
+            when: BTreeMap::new(),
+        };
+        registry.insert(ArtifactKind::Other("log".to_owned()), logs.clone());
+        registry.set_fallback(fallback.clone());
+
+        assert_eq!(registry.len(), 2, "the fallback counts as a lifecycle");
+        assert_eq!(
+            registry.for_kind(&ArtifactKind::parse("observation-log").expect("kind")),
+            Some(&logs),
+            "the kind hierarchy is nearer than the fallback"
+        );
+        assert_eq!(
+            registry.for_kind(&ArtifactKind::parse("weekly-digest").expect("kind")),
+            Some(&fallback),
+            "and a kind with nothing nearer reaches it"
+        );
+        assert!(
+            registry
+                .for_kind_exact(&ArtifactKind::parse("weekly-digest").expect("kind"))
+                .is_none(),
+            "the exact lookup never falls back — that is what it is for"
+        );
+    }
+
+    #[test]
+    fn parses_kind_aliases_and_unknown_kinds() {
+        assert_eq!(
+            ArtifactKind::parse("adr").expect("alias"),
+            ArtifactKind::ArchitectureDecisionRecord
+        );
+        assert_eq!(
+            ArtifactKind::parse("threat-model").expect("extension"),
+            ArtifactKind::Other("threat-model".to_owned())
+        );
+        assert!(ArtifactKind::parse("Threat Model").is_err());
+    }
+
+    #[test]
+    fn parses_locations_in_every_documented_form() {
+        let path = ArtifactLocation::from_node(&Node::Map(
+            [("path".to_owned(), Node::from("docs/designs/passkeys.md"))].into(),
+        ))
+        .expect("path form");
+        assert_eq!(path.local_path(), Some("docs/designs/passkeys.md"));
+
+        let external = ArtifactLocation::from_node(&Node::Map(
+            [
+                ("provider".to_owned(), Node::from("linear")),
+                ("reference".to_owned(), Node::from("AUTH-142")),
+            ]
+            .into(),
+        ))
+        .expect("external form");
+        assert!(matches!(external, ArtifactLocation::External { .. }));
+        assert_eq!(external.local_path(), None);
+
+        let inline = ArtifactLocation::from_node(&Node::from("inline")).expect("inline form");
+        assert_eq!(inline, ArtifactLocation::Inline);
+
+        let error = ArtifactLocation::from_node(&Node::Map(
+            [("provider".to_owned(), Node::from("linear"))].into(),
+        ))
+        .expect_err("provider without reference");
+        assert!(error.to_string().contains("reference"), "{error}");
+    }
+
+    #[test]
+    fn a_model_digest_is_refused_on_a_kind_that_has_no_model() {
+        // The scoping of the revision binding, enforced rather than merely documented. Twenty-five
+        // of the twenty-six kinds have no compiled model, so a digest on one would be a field
+        // nothing ever compares — and an unread guarantee reads to the next person as a checked
+        // one.
+        let digest = SpecDigest::new("4e1d3f8a9b2c1d0e").expect("a digest");
+
+        let permitted = ArtifactGraph::build([artifact(
+            "ess:billing/v3",
+            "executable-system-specification",
+            ArtifactStatus::Approved,
+        )
+        .with_model_digest(digest.clone())])
+        .expect("a specification may record the model it resolved to");
+        assert!(
+            permitted
+                .get(&ArtifactId::new("ess:billing/v3").expect("id"))
+                .expect("present")
+                .is_at_revision(&digest),
+            "the fixture must actually carry the digest, or the refusal below proves nothing"
+        );
+
+        let refused = ArtifactGraph::build([artifact(
+            "runbook:failover",
+            "runbook",
+            ArtifactStatus::Approved,
+        )
+        .with_model_digest(digest)])
+        .expect_err("a runbook has no compiled model to digest");
+        assert!(
+            refused.contains(ValidationCode::ConflictingDeclaration),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn only_a_revision_bound_model_is_governing() {
+        // `governing_models` is the scope of the whole rule, so what it does and does not return is
+        // the rule. A specification with no digest stays in — that is what makes the binding fail
+        // closed — and one declared version-independent drops out, which is the single declared
+        // opt-out.
+        let with_digest = artifact(
+            "ess:billing/v3",
+            "executable-system-specification",
+            ArtifactStatus::Approved,
+        )
+        .with_model_digest(SpecDigest::new("4e1d3f8a9b2c1d0e").expect("a digest"));
+        let without_digest = artifact(
+            "ess:email/v1",
+            "executable-system-specification",
+            ArtifactStatus::Approved,
+        );
+        let mut version_independent = artifact(
+            "ess:legacy/v1",
+            "executable-system-specification",
+            ArtifactStatus::Approved,
+        );
+        version_independent.freshness = FreshnessPolicy::AlwaysValid;
+        let design = artifact("design:passkeys", "design", ArtifactStatus::Approved);
+
+        let graph =
+            ArtifactGraph::build([with_digest, without_digest, version_independent, design])
+                .expect("a valid graph");
+
+        let governing: Vec<String> = graph
+            .governing_models()
+            .map(|artifact| artifact.id.to_string())
+            .collect();
+        assert_eq!(
+            governing,
+            vec!["ess:billing/v3".to_owned(), "ess:email/v1".to_owned()],
+            "a specification with no digest is still governing — it is the case that fails closed"
+        );
+    }
+
+    #[test]
+    fn rejects_dangling_edges_and_cycles() {
+        let dangling =
+            ArtifactGraph::build([artifact("design:x", "design", ArtifactStatus::Draft)
+                .with_relation(RelationKind::Designs, reference("spec:missing"))])
+            .expect_err("dangling edge");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+
+        let cyclic = ArtifactGraph::build([
+            artifact("design:a", "design", ArtifactStatus::Draft)
+                .with_relation(RelationKind::DerivedFrom, reference("design:b")),
+            artifact("design:b", "design", ArtifactStatus::Draft)
+                .with_relation(RelationKind::DerivedFrom, reference("design:a")),
+        ])
+        .expect_err("cycle");
+        assert!(cyclic.to_string().contains("cycle"), "{cyclic}");
+    }
+
+    #[test]
+    fn a_relation_naming_another_member_is_external_rather_than_dangling() {
+        // The point of a workspace: this manifest genuinely does not declare the target, and that
+        // is correct rather than broken. Whether the member holds it is a question only an assembly
+        // of every member can answer, and `protocol workspace crossings` is where it is answered.
+        //
+        // Only for a member the workspace **declares** — see the two tests below, which are the
+        // hole this one used to leave open.
+        let graph = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtime/story:provider-spi"),
+                ),
+            ],
+            [MemberName::parse("entity-runtime").expect("a name")],
+        )
+        .expect("a member-qualified target is outside this manifest by construction");
+
+        assert_eq!(graph.len(), 1);
+        let target = ArtifactId::new("entity-runtime/story:provider-spi").expect("id");
+        assert_eq!(target.member(), Some("entity-runtime"));
+        assert_eq!(
+            ArtifactId::new("story:provider-spi").expect("id").member(),
+            None,
+            "an unqualified id means the store it was written in, which is never ambiguous"
+        );
+    }
+
+    #[test]
+    fn an_unqualified_dangling_edge_is_still_refused() {
+        // The escape hatch is exactly one character wide: without a member, nothing changed.
+        let dangling =
+            ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
+                .with_relation(RelationKind::DependsOn, reference("story:missing"))])
+            .expect_err("a local dangling edge is still a dangling edge");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn a_member_qualified_target_in_a_store_with_no_workspace_is_still_dangling() {
+        // The hole: the exemption applied to *any* target whose namespace held a `/`, workspace or
+        // no workspace. In a plain single-repository store every dangling edge could be hidden
+        // behind one character, which is the opposite of what a workspace is for.
+        let dangling =
+            ArtifactGraph::build([artifact("story:alpha", "story", ArtifactStatus::Draft)
+                .with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtime/story:provider-spi"),
+                )])
+            .expect_err("no workspace declares that member, so nothing can resolve it");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn a_misspelled_member_is_dangling_even_inside_a_workspace() {
+        // `entity-runtme` is nobody's repository. Passing it silently as a deliberate crossing is
+        // how a typo becomes an edge nobody ever checks.
+        let dangling = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("entity-runtme/story:provider-spi"),
+                ),
+            ],
+            [MemberName::parse("entity-runtime").expect("a name")],
+        )
+        .expect_err("the workspace declares `entity-runtime`, not `entity-runtme`");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn walks_relations_forwards_and_backwards() {
+        let graph = ArtifactGraph::build([
+            artifact(
+                "prd:passkeys",
+                "product-requirements",
+                ArtifactStatus::Active,
+            ),
+            artifact("story:auth-142", "story", ArtifactStatus::Active)
+                .with_relation(RelationKind::DerivedFrom, reference("prd:passkeys")),
+            artifact("spec:passkeys", "specification", ArtifactStatus::Approved)
+                .with_relation(RelationKind::Specifies, reference("story:auth-142")),
+            artifact("design:passkeys", "design", ArtifactStatus::Approved)
+                .with_relation(RelationKind::Designs, reference("spec:passkeys")),
+            artifact("adr:0042", "adr", ArtifactStatus::Accepted)
+                .with_relation(RelationKind::Decides, reference("design:passkeys")),
+        ])
+        .expect("valid graph");
+
+        let story = ArtifactId::new("story:auth-142").expect("id");
+        assert_eq!(
+            graph.related(&story, RelationKind::DerivedFrom)[0]
+                .id
+                .to_string(),
+            "prd:passkeys"
+        );
+        let design = ArtifactId::new("design:passkeys").expect("id");
+        assert_eq!(
+            graph.inverse(&design, RelationKind::Decides)[0]
+                .id
+                .to_string(),
+            "adr:0042"
+        );
+        let chain = graph.ancestors(
+            &ArtifactId::new("design:passkeys").expect("id"),
+            RelationKind::Designs,
+        );
+        assert_eq!(chain.len(), 1, "design designs exactly one spec");
+    }
+
+    #[test]
+    fn superseded_artifacts_must_name_a_successor() {
+        let graph = ArtifactGraph::build([artifact("adr:0001", "adr", ArtifactStatus::Superseded)])
+            .expect("edges are fine");
+        let errors = graph.validate_lifecycles(&LifecycleRegistry::new());
+        assert_eq!(errors.len(), 1, "{errors}");
+        assert!(errors.to_string().contains("supersedes"), "{errors}");
+
+        let chained = ArtifactGraph::build([
+            artifact("adr:0001", "adr", ArtifactStatus::Superseded),
+            artifact("adr:0002", "adr", ArtifactStatus::Accepted)
+                .with_relation(RelationKind::Supersedes, reference("adr:0001")),
+        ])
+        .expect("valid");
+        assert!(chained
+            .validate_lifecycles(&LifecycleRegistry::new())
+            .is_empty());
+    }
+
+    #[test]
+    fn lifecycle_rejects_a_status_the_kind_does_not_have() {
+        let mut registry = LifecycleRegistry::new();
+        registry.insert(
+            ArtifactKind::ArchitectureDecisionRecord,
+            ArtifactLifecycle {
+                kind: Some(ArtifactKind::ArchitectureDecisionRecord),
+                initial: ArtifactStatus::Proposed,
+                transitions: [
+                    (
+                        ArtifactStatus::Proposed,
+                        [ArtifactStatus::Accepted, ArtifactStatus::Rejected].into(),
+                    ),
+                    (
+                        ArtifactStatus::Accepted,
+                        [ArtifactStatus::Superseded].into(),
+                    ),
+                ]
+                .into(),
+                requires: BTreeMap::new(),
+                descriptions: BTreeMap::new(),
+                when: BTreeMap::new(),
+            },
+        );
+
+        let graph =
+            ArtifactGraph::build([artifact("adr:0007", "adr", ArtifactStatus::Implemented)])
+                .expect("edges are fine");
+        let errors = graph.validate_lifecycles(&registry);
+        assert!(errors.to_string().contains("not part of the"), "{errors}");
+        assert!(registry
+            .for_kind(&ArtifactKind::ArchitectureDecisionRecord)
+            .expect("registered")
+            .permits_transition(&ArtifactStatus::Proposed, &ArtifactStatus::Accepted));
+    }
+
+    #[test]
+    fn a_blockers_type_is_the_part_of_its_kind_before_blocker() {
+        // The type is what turns five stuck items into one conversation, and it costs a name:
+        // nothing here has heard of `procurement` and it still answers.
+        for (kind, expected) in [
+            ("credential-blocker", Some("credential")),
+            ("decision-blocker", Some("decision")),
+            ("third-party-blocker", Some("third-party")),
+            ("procurement-blocker", Some("procurement")),
+        ] {
+            let parsed = ArtifactKind::parse(kind).expect("kind");
+            assert_eq!(parsed.blocker_type(), expected, "{kind}");
+            assert!(parsed.is_blocker(), "{kind}");
+            assert!(
+                parsed.is_a(&ArtifactKind::Other(BLOCKER.to_owned())),
+                "{kind} must reach the one blocker ladder"
+            );
+        }
+
+        // A bare `blocker` is a blocker with no type: *something is stopping this*, which is the
+        // complaint the type exists to replace.
+        let bare = ArtifactKind::parse(BLOCKER).expect("kind");
+        assert!(bare.is_blocker());
+        assert_eq!(bare.blocker_type(), None);
+
+        // And a kind that merely ends in something else is not one.
+        let log = ArtifactKind::parse("observation-log").expect("kind");
+        assert!(!log.is_blocker());
+        assert_eq!(log.blocker_type(), None);
+        assert_eq!(ArtifactKind::Story.blocker_type(), None);
+    }
+
+    #[test]
+    fn the_end_of_a_ladder_is_the_rung_with_nowhere_to_go() {
+        // What lifts a blocker is decided by the document, not by a status name written here: a
+        // tree that calls the rung something else keeps the meaning.
+        let ladder = ArtifactLifecycle {
+            kind: Some(ArtifactKind::Other(BLOCKER.to_owned())),
+            initial: ArtifactStatus::Other("open".to_owned()),
+            transitions: [
+                (
+                    ArtifactStatus::Other("open".to_owned()),
+                    [ArtifactStatus::Other("cleared".to_owned())].into(),
+                ),
+                (ArtifactStatus::Other("cleared".to_owned()), BTreeSet::new()),
+            ]
+            .into(),
+            requires: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
+            when: BTreeMap::new(),
+        };
+
+        assert!(
+            !ladder.is_terminal(&ArtifactStatus::Other("open".to_owned())),
+            "an open blocker is still blocking"
+        );
+        assert!(
+            ladder.is_terminal(&ArtifactStatus::Other("cleared".to_owned())),
+            "`cleared` has no successor, so it is the end"
+        );
+        assert!(
+            !ladder.is_terminal(&ArtifactStatus::Archived),
+            "a rung this ladder never mentions is not its end"
+        );
+        assert!(
+            !ArtifactLifecycle::permissive().is_terminal(&ArtifactStatus::Archived),
+            "a kind with no ladder has declared no end"
+        );
+    }
+
+    #[test]
+    fn evidence_withheld_from_nothing_is_refused_by_name() {
+        // The state the rule is load-bearing in: an artifact that names a withheld evidence kind
+        // and blocks nothing. Asserted first, so this cannot pass on a fixture that never got
+        // there.
+        let mut orphan = artifact(
+            "blocker:api-token",
+            "credential-blocker",
+            ArtifactStatus::Other("open".to_owned()),
+        );
+        orphan.withholds = Some(crate::evidence::EvidenceKind::TestResult);
+        assert!(
+            orphan.targets(RelationKind::Blocks).next().is_none(),
+            "the fixture must withhold and block nothing"
+        );
+
+        let ladders = LifecycleRegistry::new();
+        let graph = ArtifactGraph::build([
+            orphan.clone(),
+            artifact("story:ci-evidence", "story", ArtifactStatus::Active),
+        ])
+        .expect("the graph builds");
+        let errors = graph.validate_lifecycles(&ladders);
+        let codes: Vec<ValidationCode> = errors.as_slice().iter().map(|error| error.code).collect();
+        assert_eq!(codes, vec![ValidationCode::MissingDeclaration], "{errors}");
+        assert!(
+            errors.as_slice().iter().any(|error| error
+                .message
+                .contains("withholds test_result and blocks nothing")),
+            "{errors}"
+        );
+
+        // Joined to the work it is stopping, the same record is accepted.
+        let joined = orphan.with_relation(RelationKind::Blocks, reference("story:ci-evidence"));
+        let graph = ArtifactGraph::build([
+            joined,
+            artifact("story:ci-evidence", "story", ArtifactStatus::Active),
+        ])
+        .expect("the graph builds");
+        assert!(
+            graph.validate_lifecycles(&ladders).is_empty(),
+            "{}",
+            graph.validate_lifecycles(&ladders)
+        );
+    }
+
+    #[test]
+    fn projects_facts_including_the_kind_hierarchy() {
+        let graph = ArtifactGraph::build([
+            artifact("design:a", "architecture-design", ArtifactStatus::Approved),
+            artifact("design:b", "design", ArtifactStatus::Draft),
+        ])
+        .expect("valid");
+
+        let facts = graph.facts();
+        let value = |path: &str| {
+            crate::facts::FactSource::fact(&facts, &FactPath::new(path).expect("path"))
+        };
+
+        assert_eq!(value("artifact.design.count"), Some(FactValue::count(2)));
+        assert_eq!(
+            value("artifact.architecture-design.count"),
+            Some(FactValue::count(1))
+        );
+        assert_eq!(
+            value("artifact.design.approved"),
+            Some(FactValue::bool(true))
+        );
+        assert_eq!(
+            value("artifact.design.approved.count"),
+            Some(FactValue::count(1))
+        );
+        assert_eq!(
+            value("artifact.design.draft.count"),
+            Some(FactValue::count(1))
+        );
+        assert_eq!(
+            value("artifact.runbook.exists"),
+            None,
+            "absent kinds stay unknown"
+        );
+    }
+
+    /// A scope entry is a path plus how well it is known, and both document forms mean the same
+    /// entry: the mapping is what is written back, the bare path is what a person types.
+    #[test]
+    fn a_scope_entry_reads_the_mapping_and_the_bare_path_as_one_thing() {
+        let mapping = ScopeEntry::from_node(&Node::Map(
+            [
+                (
+                    "path".to_owned(),
+                    Node::Text("crates/govern/aep-domain/src/artifact.rs".to_owned()),
+                ),
+                ("confidence".to_owned(), Node::Text("inferred".to_owned())),
+            ]
+            .into(),
+        ))
+        .expect("the mapping form parses");
+        assert_eq!(mapping.path, "crates/govern/aep-domain/src/artifact.rs");
+        assert_eq!(mapping.confidence, ScopeConfidence::Inferred);
+
+        let bare = ScopeEntry::from_node(&Node::Text(
+            "crates/govern/aep-domain/src/artifact.rs".to_owned(),
+        ))
+        .expect("the bare path parses");
+        assert_eq!(
+            bare.confidence,
+            ScopeConfidence::Cited,
+            "a path written without a confidence is one somebody read, not one somebody guessed"
+        );
+        assert_eq!(
+            mapping.to_node(),
+            ScopeEntry::from_node(&mapping.to_node())
+                .expect("the written form parses back")
+                .to_node(),
+            "the written form is the form that round-trips"
+        );
+    }
+
+    /// The one rule the path has, and the reason it has no others: the verb reports collisions at
+    /// the declared granularity and normalises nothing, so `crates/x` and `crates/x/src/lib.rs` are
+    /// two surfaces on purpose.
+    #[test]
+    fn a_scope_entry_refuses_an_empty_path_and_accepts_any_granularity() {
+        assert!(ScopeEntry::from_node(&Node::Text(String::new())).is_err());
+        assert!(ScopeEntry::from_node(&Node::Text("   ".to_owned())).is_err());
+        assert_eq!(
+            ScopeEntry::new("crates/govern/aep-domain", ScopeConfidence::Cited)
+                .expect("a directory is a surface")
+                .path,
+            "crates/govern/aep-domain"
+        );
+    }
+
+    /// An unrecognised confidence is refused by name rather than defaulted: `confidence: probably`
+    /// would read to a person as a value the engine tracks, and it tracks two.
+    #[test]
+    fn a_confidence_the_vocabulary_does_not_have_is_refused_by_name() {
+        let error = ScopeEntry::from_node(&Node::Map(
+            [
+                ("path".to_owned(), Node::Text("crates/x.rs".to_owned())),
+                ("confidence".to_owned(), Node::Text("probably".to_owned())),
+            ]
+            .into(),
+        ))
+        .expect_err("an invented confidence is refused");
+        assert!(
+            error.to_string().contains("probably"),
+            "the refusal quotes what was written: {error}"
+        );
+    }
+}

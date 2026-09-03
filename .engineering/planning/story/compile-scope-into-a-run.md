@@ -11,7 +11,7 @@ tags:
 - harness
 relations:
 - decomposes: epic:self-evaluation
-revision: 4
+revision: 5
 ---
 # Story: the declaration reaches the run
 
@@ -44,8 +44,8 @@ Verified against the tree at `52d529c`:
 
 * **The driver already compiles both keys.** `b10x_argv` renders `scope:` as ordered
   `--write-scope <glob>=<word>` arguments and `context:` as `--context <file>`
-  (`crates/protocol-cli/src/drive.rs:3706-3717`), and its caller `argv_for` hands it the validated
-  step's own fields (`crates/protocol-cli/src/drive.rs:1490-1496`). Nobody names a flag.
+  (`crates/edge/protocol-cli/src/drive.rs:3706-3717`), and its caller `argv_for` hands it the validated
+  step's own fields (`crates/edge/protocol-cli/src/drive.rs:1490-1496`). Nobody names a flag.
 * **The eval-runner half is already on that route and needs nothing of its own.**
   `metaharness/evals/engineering-protocols/run-driven.sh:291` launches `protocol drive run --map
   "$MAP"`; the only arm flags it adds are machine facts a pinned map cannot carry —
@@ -63,28 +63,28 @@ below.
 ## Acceptance
 
 - **Met.** A run assembled from a step-map step carries that step's `scope` and `context`, with
-  nobody naming a flag — `argv_for` (`crates/protocol-cli/src/drive.rs:1490-1496`) passes the
+  nobody naming a flag — `argv_for` (`crates/edge/protocol-cli/src/drive.rs:1490-1496`) passes the
   parsed `LlmStep`'s own fields to `b10x_argv`, which renders them at
-  `crates/protocol-cli/src/drive.rs:3706-3717`. Asserted by
+  `crates/edge/protocol-cli/src/drive.rs:3706-3717`. Asserted by
   `the_b10x_argv_carries_the_scope_and_never_the_frame_that_loop_would_refuse`
-  (`crates/protocol-cli/src/drive.rs:5491`), which calls `b10x_argv` directly, and by
+  (`crates/edge/protocol-cli/src/drive.rs:5491`), which calls `b10x_argv` directly, and by
   `the_committed_step_map_compiles_into_the_exact_argv_a_native_run_is_launched_with`
-  (`crates/protocol-cli/src/drive.rs:6693`), which goes through `argv_for` and so closes the one
+  (`crates/edge/protocol-cli/src/drive.rs:6693`), which goes through `argv_for` and so closes the one
   seam nothing used to assert: that the caller hands the compile the step's *own* fields.
   Mutation-checked — `&step.scope` replaced by `&[]` turns it red.
 - **Met.** Rule order survives the compile, and the scope is an ordered list from the document to
   the argv. `LlmStep::scope` is a `Vec<ScopeRule>` documented *first match wins*
-  (`crates/aep-driver-spec/src/map.rs:645-652`); `validated_scope` keeps the written order, never
+  (`crates/drive/aep-driver-spec/src/map.rs:645-652`); `validated_scope` keeps the written order, never
   sorts, and refuses a scope whose last rule does not name `**`
-  (`crates/aep-driver-spec/src/map.rs:315-359`); `b10x_argv` pushes one `--write-scope` per path in
-  that order (`crates/protocol-cli/src/drive.rs:3706-3712`). Asserted as an exact ordered vector at
-  `crates/protocol-cli/src/drive.rs:5539-5542`, with the word spelling held to the map's own by
+  (`crates/drive/aep-driver-spec/src/map.rs:315-359`); `b10x_argv` pushes one `--write-scope` per path in
+  that order (`crates/edge/protocol-cli/src/drive.rs:3706-3712`). Asserted as an exact ordered vector at
+  `crates/edge/protocol-cli/src/drive.rs:5539-5542`, with the word spelling held to the map's own by
   `the_write_scope_words_are_the_ones_the_step_map_is_written_in`
-  (`crates/protocol-cli/src/drive.rs:5750`), and the parse side by
+  (`crates/edge/protocol-cli/src/drive.rs:5750`), and the parse side by
   `a_step_may_declare_the_files_it_is_given_and_where_it_may_write`
-  (`crates/aep-driver-spec/src/map.rs:1613`) and
+  (`crates/drive/aep-driver-spec/src/map.rs:1613`) and
   `a_scope_whose_last_rule_is_not_a_catch_all_is_refused`
-  (`crates/aep-driver-spec/src/map.rs:1654`).
+  (`crates/drive/aep-driver-spec/src/map.rs:1654`).
 - **Met — by a test in the harness repository, and by a recorded decision that the refusal is
   the loop's to test.** `harness/crates/harness-cli/tests/context.rs:188`
   `a_declared_context_file_that_is_absent_refuses_the_run_before_any_session` runs `b10x-harness
@@ -101,7 +101,7 @@ below.
   binary and the adapter, never a declared file, because the loop refuses first and says which.
 - **Met.** One test compiles the committed `drivers/development/default.yaml` step and asserts the
   exact argv: `the_committed_step_map_compiles_into_the_exact_argv_a_native_run_is_launched_with`
-  (`crates/protocol-cli/src/drive.rs:6693`). It reads the committed file, takes the `llm` step
+  (`crates/edge/protocol-cli/src/drive.rs:6693`). It reads the committed file, takes the `llm` step
   `receive` declares — `drivers/development/default.yaml:62-73`, one `context:` file and a
   three-rule `scope:` ending in the `**` catch-all — and asserts the whole vector `argv_for`
   returns for the native arm, in order: the six `--write-scope <glob>=<word>` arguments those three
@@ -122,5 +122,5 @@ the harness test above is committed; until then bullet three rests on an uncommi
 
 The vendor arms. Their scope travels as `Frame.subjects`, which is
 `story:frame-subjects-from-the-step-map`. `context:` likewise reaches only the b10x arm today:
-`metaharness_argv` (`crates/protocol-cli/src/drive.rs:3534-3587`) renders no `--context` and no
+`metaharness_argv` (`crates/edge/protocol-cli/src/drive.rs:3534-3587`) renders no `--context` and no
 `--write-scope`.

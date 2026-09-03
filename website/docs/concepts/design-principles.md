@@ -253,7 +253,7 @@ Workflow movement and entity mutation use related but separate boundaries:
 The memory-backend regression test exercises the failure that the unguided path could not prevent:
 accept an ADR while asking it to supersede an entity that does not exist. This excerpt is
 **illustrative, not standalone**; its complete compiled form is
-`crates/aep-backend-memory/tests/failure_atomicity.rs`.
+`crates/plan/aep-backend-memory/tests/failure_atomicity.rs`.
 
 ```rust
 let error = block_on(backend.execute(envelope(
@@ -418,7 +418,7 @@ harness integration, read [Integrate an agent harness](../guides/integrate-a-har
 ---
 
 **Executable sources.** `examples/development-passkeys/`;
-`crates/protocol-cli/tests/cli.rs`; `crates/aep-engine/tests/end_to_end.rs`;
-`crates/aep-backend-memory/tests/failure_atomicity.rs`; `crates/aep-schema/tests/published.rs`;
-`crates/protocol-cli/tests/command_equivalence.rs`; `crates/aep-ess-evidence/src/lib.rs`;
+`crates/edge/protocol-cli/tests/cli.rs`; `crates/govern/aep-engine/tests/end_to_end.rs`;
+`crates/plan/aep-backend-memory/tests/failure_atomicity.rs`; `crates/edge/aep-schema/tests/published.rs`;
+`crates/edge/protocol-cli/tests/command_equivalence.rs`; `crates/observe/aep-ess-evidence/src/lib.rs`;
 `drivers/development/default.yaml`.

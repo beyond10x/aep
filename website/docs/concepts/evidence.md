@@ -234,10 +234,10 @@ remove. See [Check a transcript](../guides/check-a-transcript.md).
 
 ---
 
-**Sources.** `crates/aep-domain/src/evidence.rs`; `crates/aep-domain/src/requirement.rs` (the
-`horizon` field and why it lives there); `crates/aep-engine/src/error.rs`
-(`observation_in_future`); `crates/aep-domain/tests/horizon_immutability.rs` (the five scanned
-crates); `crates/aep-domain/src/predicate.rs` (the `Truth` type);
+**Sources.** `crates/govern/aep-domain/src/evidence.rs`; `crates/govern/aep-domain/src/requirement.rs` (the
+`horizon` field and why it lives there); `crates/govern/aep-engine/src/error.rs`
+(`observation_in_future`); `crates/govern/aep-domain/tests/horizon_immutability.rs` (the five scanned
+crates); `crates/govern/aep-domain/src/predicate.rs` (the `Truth` type);
 `principles/verification/ess-conformance.yaml`; `examples/evidence-horizons-corpus/`;
 `examples/billing-conformance/`; `docs/design/evidence-horizons-design-v0.1.md`;
 `docs/guide/harness.md`; `AGENTS.md` § *Invariants* 5 and 7. Command output on this page was

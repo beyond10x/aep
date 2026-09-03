@@ -14,14 +14,14 @@ relations:
 - depends_on: story:shell-echo-harness
 scope:
 - confidence: inferred
-  path: crates/aep-driver/tests/shell_echo.rs
+  path: crates/drive/aep-driver/tests/shell_echo.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/drive.rs
+  path: crates/edge/protocol-cli/src/drive.rs
 - confidence: inferred
-  path: crates/trace-spec/src/adapter.rs
+  path: crates/observe/trace-spec/src/adapter.rs
 - confidence: cited
-  path: crates/trace-spec/src/codex.rs
-revision: 5
+  path: crates/observe/trace-spec/src/codex.rs
+revision: 7
 ---
 # Story: A real second harness — the Codex adapter
 

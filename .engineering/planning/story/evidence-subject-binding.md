@@ -13,9 +13,9 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 scope:
 - confidence: cited
-  path: crates/aep-domain/src/requirement.rs
+  path: crates/govern/aep-domain/src/requirement.rs
 - confidence: cited
-  path: crates/aep-engine/src/execution.rs
+  path: crates/govern/aep-engine/src/execution.rs
 - confidence: cited
   path: docs/plan/gap-register.md
 - confidence: cited
@@ -24,7 +24,7 @@ scope:
   path: website/docs/concepts/evidence.md
 - confidence: cited
   path: website/docs/status/limitations.md
-revision: 8
+revision: 10
 ---
 # Story: Evidence names its subject, and a guard checks it is the one being moved
 
@@ -83,11 +83,11 @@ half; `docs/plan/gap-register.md:72` says the C2 axis was **Done** on that date 
 that code. It is still `draft`, with one revision and no evidence, and no store record explains the
 gap. **Verify before implementing anything.**
 
-- **Primary surface (the live remainder):** `crates/aep-domain/src/requirement.rs` — the evidence-requirement matcher — cited, `docs/plan/gap-register.md:79` names it as the one increment still owed
-- **Files:** `crates/aep-domain/src/requirement.rs:374-382` (`matches`, the subject branch), `:266` (the `subject` field), `:315-363` (`from_node`, where a parse-time refusal would go) — cited
-- **Files:** `crates/aep-engine/src/execution.rs:605-620` (`satisfies_evidence`) — cited, the only call site of `matches` outside `aep-domain`; a semantic change lands here in the same commit
+- **Primary surface (the live remainder):** `crates/govern/aep-domain/src/requirement.rs` — the evidence-requirement matcher — cited, `docs/plan/gap-register.md:79` names it as the one increment still owed
+- **Files:** `crates/govern/aep-domain/src/requirement.rs:374-382` (`matches`, the subject branch), `:266` (the `subject` field), `:315-363` (`from_node`, where a parse-time refusal would go) — cited
+- **Files:** `crates/govern/aep-engine/src/execution.rs:605-620` (`satisfies_evidence`) — cited, the only call site of `matches` outside `aep-domain`; a semantic change lands here in the same commit
 - **Symbols:** `EvidenceRequirement::matches`, `::subject`, `::from_node` — cited
-- **Symbols (already shipped — do not re-open):** `Task::subject` (`crates/aep-domain/src/task.rs:348`), `ProtocolError::EvidenceSubjectMismatch`/`EvidenceSubjectMissing` (`crates/aep-engine/src/error.rs:60,80`), the guard at `crates/aep-engine/src/engine.rs:376-391`, `EvidenceEnvelope::subject`/`with_subject` (`crates/aep-domain/src/evidence.rs:1939,1978`), `EvidenceInput::about` (`crates/aep-schema/src/parse.rs:337`) — cited
+- **Symbols (already shipped — do not re-open):** `Task::subject` (`crates/govern/aep-domain/src/task.rs:348`), `ProtocolError::EvidenceSubjectMismatch`/`EvidenceSubjectMissing` (`crates/govern/aep-engine/src/error.rs:60,80`), the guard at `crates/govern/aep-engine/src/engine.rs:376-391`, `EvidenceEnvelope::subject`/`with_subject` (`crates/govern/aep-domain/src/evidence.rs:1939,1978`), `EvidenceInput::about` (`crates/edge/aep-schema/src/parse.rs:337`) — cited
 - **Documents:** `website/docs/status/limitations.md:127-136` and `:200`, `website/docs/concepts/evidence.md:120-123`, `website/docs/concepts/design-principles.md:150` — cited, **each still states the limitation as live**. `docs/plan/gap-register.md:79` and `docs/design/evidence-horizons-design-v0.1.md:188-195`, `:692` record finding **F26**.
 - **Confidence:** **high** for the remaining increment — the register names the file, the function and the finding id, and the branch is still at `requirement.rs:378`. **Medium** if the story is read from its literal acceptance rather than from `:79`, because three of four lines are already satisfied across four crates and nothing in the store records that.
 - **Would collide with:** any unit touching `aep-domain`'s requirement matcher or `EvidenceRequirement` parsing, or `aep-engine`'s evidence evaluation; any unit editing the horizons/evidence pages under `website/docs`; and `docs/plan/gap-register.md` and `CHANGELOG.md`, which every unit in any wave touches.

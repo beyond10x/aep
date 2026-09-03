@@ -16,10 +16,10 @@ scope:
 - confidence: cited
   path: CHANGELOG.md
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/govern/aep-domain
 - confidence: cited
   path: docs/guide/open-vocabulary.md
-revision: 6
+revision: 8
 ---
 # Story: Where this sentence came from is not an evidence kind
 
@@ -64,9 +64,9 @@ valid
 ```
 
 **The verifier half is already open, and it is inert.** `source-reader` parses as
-`Verifier::ExternalTool(ToolRef)` (`crates/aep-domain/src/verification.rs:67`), which is why it
+`Verifier::ExternalTool(ToolRef)` (`crates/govern/aep-domain/src/verification.rs:67`), which is why it
 validates. But `Protocol::can_establish` asks `EvidenceKind::default_verifiers()`
-(`crates/aep-domain/src/evidence.rs:1325-1342`), and that table returns a **named** verifier for every
+(`crates/govern/aep-domain/src/evidence.rs:1325-1342`), and that table returns a **named** verifier for every
 kind and never an external tool. A declared `source-reader` can therefore establish nothing, for any
 kind, today. The row's sentence *"a required evidence kind with no verifier is a validation error"* is
 `ValidationCode::NoVerifierForEvidence`, and it is the wall behind the wall: even with the kind added,
@@ -75,7 +75,7 @@ declare.
 
 This is the second of the two deliberately closed rows in
 [`docs/guide/open-vocabulary.md:168`](../../../docs/guide/open-vocabulary.md) — *Evidence kind names
-the engine accepts*, closed at `crates/aep-domain/src/evidence.rs:1189`, guarantee: *an evidence kind
+the engine accepts*, closed at `crates/govern/aep-domain/src/evidence.rs:1189`, guarantee: *an evidence kind
 carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one
 cannot be satisfied by a record that means something else.* That page and `AGENTS.md` both name
 `evidence_kinds` as closed **correctly**, and this story does not argue with that. It argues that the

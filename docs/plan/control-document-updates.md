@@ -140,8 +140,8 @@ that entry belongs in the commit that makes the change, not in a control-documen
 `docs/VISION.md:97`: *"Nothing in the loop asks anyone to be trusted."*
 
 It is not true today. Independence is a single boolean over a self-declared enum
-(`crates/aep-domain/src/requirement.rs:254`); nothing binds a verifier's identity to its output, no
-submitter is recorded on evidence (`crates/aep-engine/src/engine.rs:50-65` has no such field), and
+(`crates/govern/aep-domain/src/requirement.rs:254`); nothing binds a verifier's identity to its output, no
+submitter is recorded on evidence (`crates/govern/aep-engine/src/engine.rs:50-65` has no such field), and
 `docs/guide/harness.md:112` admits it. Grep finds no attestation, no signature, no key.
 
 This is the sentence the whole document turns on, so it should say what is actually mechanised:

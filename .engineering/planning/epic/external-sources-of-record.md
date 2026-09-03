@@ -12,7 +12,7 @@ tags:
 - store
 relations:
 - decomposes: initiative:the-repo-governs-itself
-revision: 3
+revision: 4
 ---
 # Epic: An artifact whose record of truth lives outside this repository
 
@@ -26,7 +26,7 @@ asserting.
 ## Why Now
 
 The **location** already exists and nothing resolves it. `ArtifactLocation::External { provider,
-reference }` (`crates/aep-domain/src/artifact.rs:913`) is documented as *"an object in an external
+reference }` (`crates/govern/aep-domain/src/artifact.rs:913`) is documented as *"an object in an external
 system, resolved by a connector rather than by AEP"* — and there is no connector, in this repository
 or any other. The vocabulary invites a thing the toolchain cannot do, which is the shape of defect
 `docs/plan/gap-register.md:76` was opened about.

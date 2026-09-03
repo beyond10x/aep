@@ -25,15 +25,19 @@ protocols + profiles + task + evidence
 
 ## Layers
 
-| Layer | Crates | Responsibility |
-|---|---|---|
-| vocabulary | `aep-domain`, `adp-domain`, `aop-domain` | typed rules, tasks, evidence, predicates, and profile vocabulary |
-| decision | `aep-engine` | resolution, evaluation, authorization, and transitions |
-| storage contract | `aep-contract`, `aep-conformance` | provider-independent commands, queries, and black-box suites |
-| providers | `aep-backend-*` | memory, markdown, SQLite, PostgreSQL, Entity Runtime, and hybrid edges |
-| driving | `aep-driver-spec`, `aep-driver` | step maps and the reference workflow caller |
-| observation | `trace-domain`, `trace-spec` | normalized transcript IR and typed expectations |
-| shell | `protocol-cli` | canonical `aep` command and exact `protocol` alias |
+Each layer is a directory under `crates/`, so the tree says which crate is which.
+
+| Layer | Directory | Crates | Responsibility |
+|---|---|---|---|
+| vocabulary and decision | `crates/govern/` | `aep-domain`, `aep-engine` | typed rules, tasks, evidence and predicates; resolution, evaluation, authorization, and transitions |
+| storage contract and providers | `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | provider-independent commands, queries and black-box suites; memory, markdown, SQLite, PostgreSQL, Entity Runtime, and hybrid edges |
+| driving | `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow caller, and drawing a run |
+| observation | `crates/observe/` | `trace-domain`, `trace-spec`, `aep-ess-evidence` | normalized transcript IR, typed expectations, and the optional ESS report adapter |
+| profiles | `crates/profile/` | `adp-domain`, `aop-domain` | development and operations vocabulary over the substrate |
+| shell | `crates/edge/` | `aep-schema`, `aep-project`, `protocol-cli` | published document schemas, the filesystem and Git acquisition edge, and the canonical `aep` command with its exact `protocol` alias |
+
+A crate depends on its own directory and the ones under it — `edge` → `{profile, drive, observe}` →
+`{govern, plan}` → `aep-domain`. The repository's `AGENTS.md` records the one compiled exception.
 
 The document tree is data. A new lifecycle, principle, profile, or workflow normally changes YAML,
 not engine code.

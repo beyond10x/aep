@@ -12,10 +12,10 @@ scope:
 - confidence: cited
   path: AGENTS.md
 - confidence: cited
-  path: crates/protocol-cli/tests
+  path: crates/edge/protocol-cli/tests
 - confidence: cited
-  path: crates/protocol-cli/tests/store_selection.rs
-revision: 6
+  path: crates/edge/protocol-cli/tests/store_selection.rs
+revision: 8
 ---
 # Story: The harness refuses a direct write to the planning store, so no prose has to ask it not to
 
@@ -76,14 +76,14 @@ one path. A wider match breaks the test suites described below.
 ## Not established
 
 **This repository is the hard case, and the reason is worth stating before anybody starts.** Here
-the planning store is both the product's subject *and* its test fixture: `crates/protocol-cli/tests/`
+the planning store is both the product's subject *and* its test fixture: `crates/edge/protocol-cli/tests/`
 creates and edits stores constantly, and several suites assert on what a hand edit does — the drift
 tests exist precisely to check that an out-of-band edit is caught. A deny that matched every
 `planning` path would break the tests that prove the rule.
 
 The split that looks right, **inferred and not measured**: deny `.engineering/planning/**`, this
 repository's own store, and leave scratch stores alone. Test fixtures already build under
-`CARGO_TARGET_TMPDIR`, which `crates/protocol-cli/tests/store_selection.rs:77` asserts lies under
+`CARGO_TARGET_TMPDIR`, which `crates/edge/protocol-cli/tests/store_selection.rs:77` asserts lies under
 the repository root — so the two are distinguishable by path. **Nobody has run the suite under a
 deny rule to confirm it**, and that measurement is the first task of this story, not an assumption
 it may rest on.

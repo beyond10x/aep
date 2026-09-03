@@ -69,7 +69,7 @@ for the protocol to reason about them.
 ## Where the documents live
 
 The loader walks six directories under one root, recursively, skipping anything dot-prefixed
-(`crates/aep-project/src/load.rs`). Vendor the upstream documents (submodule, subtree or copy —
+(`crates/edge/aep-project/src/load.rs`). Vendor the upstream documents (submodule, subtree or copy —
 the loader cares about content, not provenance) and put yours beside them:
 
 ```text
@@ -198,7 +198,7 @@ and who has to sign.
 `development.driven`'s grant is the one place in this directory where a profile widens what an agent
 may reach, and the profile's own header says so rather than leaving it to be discovered. The
 narrowing is a hook, not a capability:
-the driver's own per-call policy (`decide_tool` in `crates/protocol-cli/src/drive.rs`,
+the driver's own per-call policy (`decide_tool` in `crates/edge/protocol-cli/src/drive.rs`,
 answering the metaharness seam) denies any `Bash` call that is not one simple
 invocation of `aep artifact …` or `aep trace …`. That constraint is pattern-based and
 best-effort — granting `command.execute` grants a superset of the shell's reach, and a hook narrows

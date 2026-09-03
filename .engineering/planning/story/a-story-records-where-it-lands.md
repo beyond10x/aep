@@ -16,10 +16,10 @@ scope:
 - confidence: cited
   path: artifacts/kinds
 - confidence: inferred
-  path: crates/aep-domain/src/artifact.rs
+  path: crates/edge/protocol-cli/src/planning.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/planning.rs
-revision: 4
+  path: crates/govern/aep-domain/src/artifact.rs
+revision: 5
 ---
 # Story: A story records where it lands, so a wave can be sequenced
 

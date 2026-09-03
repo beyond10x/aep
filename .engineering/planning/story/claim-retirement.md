@@ -8,11 +8,11 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
 scope:
-- confidence: cited
-  path: crates/aep-backend-markdown/src/claim.rs
 - confidence: inferred
-  path: crates/aep-domain/src/evidence.rs
-revision: 5
+  path: crates/govern/aep-domain/src/evidence.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/claim.rs
+revision: 7
 ---
 # Story: An answered question must not leave a permanent re-check obligation behind it
 

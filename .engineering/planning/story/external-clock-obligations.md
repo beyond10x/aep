@@ -18,10 +18,10 @@ scope:
 - confidence: cited
   path: artifacts/lifecycles/obligation.yaml
 - confidence: inferred
-  path: crates/aep-backend-markdown/tests/evidence.rs
+  path: crates/edge/protocol-cli/src/planning.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/planning.rs
-revision: 6
+  path: crates/plan/aep-backend-markdown/tests/evidence.rs
+revision: 7
 ---
 # Story: An obligation never gates a transition — it raises
 

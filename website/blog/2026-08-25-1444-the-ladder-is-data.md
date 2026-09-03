@@ -47,7 +47,7 @@ blocker starts at open
 
 ## Who decides
 
-Not this repository. `crates/aep-backend-markdown/src/kernel.rs` hands the definition and the
+Not this repository. `crates/plan/aep-backend-markdown/src/kernel.rs` hands the definition and the
 attempted move to [`entity-core`](https://github.com/beyond10x/entity-runtime), a kernel that lives
 in a separate repository and is taken here as a **git-pinned** dependency.
 
@@ -72,7 +72,7 @@ and its verdicts would stop being a general answer.
 
 Because it is reversible, and that was built before the dependency was taken.
 
-`crates/aep-backend-markdown/tests/kernel_equivalence.rs` holds the kernel's verdict identical to
+`crates/plan/aep-backend-markdown/tests/kernel_equivalence.rs` holds the kernel's verdict identical to
 the hand-written lookup it replaced, across every kind-and-status pair. Delete the module and the
 lookup is still standing behind it. A dependency you cannot undo is a decision somebody else gets to
 make later.

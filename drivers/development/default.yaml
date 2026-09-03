@@ -24,12 +24,12 @@
 # because the suite the driver runs is a different suite: run `W4-1/1` wrote nine deliberately red
 # shell checks in `establish_verifiers` and then `cargo test --workspace` recorded 138 suites `ok`,
 # which is `test.first_result = passed`, which never changes
-# (`crates/aep-engine/src/execution.rs:366-378`). That run could not move afterwards by any route.
+# (`crates/govern/aep-engine/src/execution.rs:366-378`). That run could not move afterwards by any route.
 # Its sibling **[`checks.yaml`](checks.yaml)** — `development/checks` — is the map for that work: it
 # verifies by running the checks the story itself carries, and names no compiler anywhere.
 #
 # **Two maps now fit `adp/default/1`, so `aep drive run` refuses to choose between them** and
-# `--map` says which one. That refusal names both ids (`crates/protocol-cli/src/drive.rs:376-388`)
+# `--map` says which one. That refusal names both ids (`crates/edge/protocol-cli/src/drive.rs:376-388`)
 # and is the same position `aep artifact move` takes on an illegal transition: the driver does
 # not guess which document the run is under.
 format: aep.driver-steps/1
@@ -251,7 +251,7 @@ states:
       # four kinds where that is honest: `contract_result` is in `EvidenceMapping::MINTABLE`
       # because *did the runner produce a verdict, and was it yes or no* is the whole of what the
       # counts need here. The committed records under
-      # `crates/protocol-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
+      # `crates/edge/protocol-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
       # used: they are the provider's captured bytes from 2026-08-23, they describe metaharness's
       # adapters rather than the change under review, and `protocol contract evidence` requires an
       # `--observed-at` that a committed map could only supply as a literal — a map claiming a fresh
@@ -341,7 +341,7 @@ states:
       # `regression_suite.result == passed` is *everything that already worked still works* — and
       # `test-driven` owes the second before completion. The coverage pre-flight cannot see that
       # obligation at all, because it is a predicate rather than an evidence requirement
-      # (`crates/aep-driver/src/coverage.rs`, § "What this cannot see"), so a map without this step
+      # (`crates/drive/aep-driver/src/coverage.rs`, § "What this cannot see"), so a map without this step
       # passes the launch check and then blocks at completion with nothing to say why.
       #
       # A step declares one evidence mapping, so one suite label per run of the command. Relabelling

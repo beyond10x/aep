@@ -8,12 +8,12 @@ relations:
 - decomposes: epic:cross-harness-portability
 scope:
 - confidence: inferred
-  path: crates/aep-driver/src/run.rs
+  path: crates/drive/aep-driver/src/run.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/drive.rs
+  path: crates/edge/protocol-cli/src/drive.rs
 - confidence: inferred
-  path: crates/trace-spec/src/report.rs
-revision: 5
+  path: crates/observe/trace-spec/src/report.rs
+revision: 6
 ---
 # Story: A driven arm on an autoscaled endpoint holds its request instead of paying for the boot every step
 

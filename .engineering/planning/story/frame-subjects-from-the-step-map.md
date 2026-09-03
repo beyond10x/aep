@@ -13,12 +13,12 @@ relations:
 - decomposes: epic:self-evaluation
 scope:
 - confidence: inferred
-  path: crates/aep-driver-spec/src/map.rs
+  path: crates/drive/aep-driver-spec/src/map.rs
 - confidence: cited
-  path: crates/protocol-cli/src/drive.rs
+  path: crates/edge/protocol-cli/src/drive.rs
 - confidence: cited
-  path: crates/trace-domain/src/ir.rs
-revision: 4
+  path: crates/observe/trace-domain/src/ir.rs
+revision: 6
 ---
 # Story: the vendor arms get the same boundary
 

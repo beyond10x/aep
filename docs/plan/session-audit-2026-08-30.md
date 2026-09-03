@@ -49,7 +49,7 @@ stories, the code and plugin changes, and one `chore(store):` closing commit car
 ## Found on the way, filed rather than fixed
 
 - `set --untag` that empties the tag set makes `validate` report drift: `instance_of`
-  (`crates/aep-backend-markdown/src/provider.rs:197`) omits empty `tags`/`relations` from the event,
+  (`crates/plan/aep-backend-markdown/src/provider.rs:197`) omits empty `tags`/`relations` from the event,
   so *emptied* is indistinguishable from *never set*. Recorded in `story:body-edits-have-a-verb`'s
   scope for the next pass.
 - `task release-check` against `0.33.0`: four `ok`, one `MISSING` — no `test_result` in the store

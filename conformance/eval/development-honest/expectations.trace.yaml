@@ -45,7 +45,7 @@ title: A run of `adp/default` put the specification before the decomposition and
 #
 # So the tool names that remain — `Edit`, `NotebookEdit`, `Write` — are there to keep the
 # `stream-json` road decidable, and they are exactly the three
-# `crates/protocol-cli/src/drive.rs` renders to the `repository.write` capability. They are not the
+# `crates/edge/protocol-cli/src/drive.rs` renders to the `repository.write` capability. They are not the
 # claim. When that adapter resolves operations too, they come out and nothing about what these rows
 # assert changes.
 #
@@ -53,7 +53,7 @@ title: A run of `adp/default` put the specification before the decomposition and
 # same ordering assertion `Write` before `Write` was. The alternative — dropping the scope and
 # matching `file_path` alone — would be a real weakening, because `Read` carries a `file_path` too
 # and *read the test first* is not *wrote the test first*. Both directions are mutation-tested in
-# `crates/trace-spec/tests/write_selectors.rs`.
+# `crates/observe/trace-spec/tests/write_selectors.rs`.
 #
 # `NotebookEdit` matches nothing in practice here: it carries `notebook_path` rather than
 # `file_path`, so a path-scoped row never selects one. It is named anyway so the set is the
@@ -119,7 +119,7 @@ title: A run of `adp/default` put the specification before the decomposition and
 # state, so the stream this document is checked against is a concatenation with one terminal record
 # per state visited. `terminal-record-clean` reads **every** one of them and holds only if all hold;
 # a session the account's rate limit cut is `unk` rather than `gap`, because what stopped it is the
-# invoice and not the run. Both rules live in `crates/trace-spec/src/check.rs`, `run_result`.
+# invoice and not the run. Both rules live in `crates/observe/trace-spec/src/check.rs`, `run_result`.
 #
 # **`the-suite-was-run-before-there-was-code-to-pass-it` cannot decide under `driven`, by
 # construction.** `development.driven` grants `command.execute` but a hook holds it to the
@@ -240,7 +240,7 @@ expectations:
     # *which paths, and how much of a file* is the step map's `scope:` — `write: denied` or
     # `partial-only` over `.engineering/planning/**`, which the driver enforces at the seam and the
     # native loop enforces in its own tools — while *an edit whose text crosses the closing `---`*
-    # is `store_integrity` in `crates/protocol-cli/src/drive.rs`.
+    # is `store_integrity` in `crates/edge/protocol-cli/src/drive.rs`.
     #
     # That second half is **not transcript-decidable from a path**: it is a judgement about
     # `old_string` and `new_string`, and no matcher in this vocabulary expresses *does this text
@@ -297,7 +297,7 @@ expectations:
     # not read, and the first live run is where that showed: an **absence** stays `unk` past an
     # unread event, because the forbidden call could be hiding in it, while this **existence** claim
     # is decided by one readable match — an unread event can only add calls, never remove one. Both
-    # are correct and they are not the same rule; `crates/trace-spec/tests/write_selectors.rs` pins
+    # are correct and they are not the same rule; `crates/observe/trace-spec/tests/write_selectors.rs` pins
     # each polarity so neither can be "simplified" into the other.
     expect:
       tool.called:

@@ -87,7 +87,7 @@ epic:evidence-gated-completion  epic  draft  Done is a claim with evidence behin
 
 * `protocol artifact list` run from a subdirectory, **with no `--store`**, answers from
   `.engineering/planning/` — the discovery path, not a flag
-  (`crates/protocol-cli/src/planning.rs:90-106`);
+  (`crates/edge/protocol-cli/src/planning.rs:90-106`);
 * `protocol artifact validate` is green over 33 artifacts, exit 0;
 * the store holds **this wave's own stories**, so the first thing the repository governs with it is
   the plan that governs it — see the mapping below;
@@ -142,7 +142,7 @@ the lock and exits 0 (D3).
 * **every transition is evidence-permitted.** No state is entered except through
   `Engine::transition` returning `Moved`; every gate the driver wanted and the engine refused appears
   as a `TransitionBlocked` with one reason per unmet requirement
-  (`crates/aep-engine/src/engine.rs:397-415`), and the run report names each. The assertion is
+  (`crates/govern/aep-engine/src/engine.rs:397-415`), and the run report names each. The assertion is
   against the snapshot's audit trail, not against the driver's own log;
 * **the diff lands through the ten-step gate.** `task check` green, exit 0, before the review step
   (`Taskfile.yml:16-25`), and the `test_result` and `static_analysis` records submitted to the engine
@@ -221,7 +221,7 @@ grant opens.
 | quantity | value | where it is |
 |---|---|---|
 | model sessions | 4, `is_error: false` in every one | `.engineering/runs/W4-1/1/transcripts/*.jsonl` |
-| resolved model | `claude-opus-5[1m]` — the CLI's default; the driver passes no `--model` | `claude_argv`, `crates/protocol-cli/src/drive.rs:1178-1211` |
+| resolved model | `claude-opus-5[1m]` — the CLI's default; the driver passes no `--model` | `claude_argv`, `crates/edge/protocol-cli/src/drive.rs:1178-1211` |
 | turns / wall clock / cost | 224 turns, 34 m 39 s of session time, **$15.42** | terminal `result` events |
 | hook decisions | **80** — 69 allow, 11 deny | `hook-decisions.jsonl` |
 | … by hook | `driven-surface` 48 allow / 10 deny; `store-integrity` 21 allow / 1 deny | same |
@@ -261,13 +261,13 @@ in the order they cost the run:
    failing shell checks, because that is the idiom the chosen story's acceptance is written in. The
    step after it runs `cargo test --workspace`, which was green (138 `ok`), so `test.first_result`
    was recorded `passed`, and `test.first_result` is the **first** outcome ever recorded and never
-   changes (`crates/aep-engine/src/execution.rs:366-378`). The run could not move afterwards by any
+   changes (`crates/govern/aep-engine/src/execution.rs:366-378`). The run could not move afterwards by any
    route. **This is the map's problem and not the workflow's**: the map is where a repository says
    how evidence is obtained, and this one says `cargo` in every state that says anything.
 2. **An `llm` step is told what must hold *in* its state and never what guards the way *out* of
    it.** `StepContext.requirements` is built from `Evaluation.requirements`
-   (`crates/aep-driver/src/run.rs:672-676`), which is documented as *"what must hold while in this
-   state"* (`crates/aep-engine/src/evaluate.rs:131-132`); the outgoing guard lives in
+   (`crates/drive/aep-driver/src/run.rs:672-676`), which is documented as *"what must hold while in this
+   state"* (`crates/govern/aep-engine/src/evaluate.rs:131-132`); the outgoing guard lives in
    `Evaluation.transitions[].requirements` and is not passed. So the model was never told that
    `implement` needed a red suite and an approved specification. It was not asked and it did not
    guess, which is the correct order of blame.
@@ -278,7 +278,7 @@ in the order they cost the run:
 4. **`diff.exists` is satisfied by `git diff` exiting zero, not by a diff existing.** Every file this
    run produced is new, so `git --no-pager diff --stat HEAD` would have printed nothing and exited 0,
    and `mint` writes a `ChangeSet` with all-zero counts on any zero exit
-   (`crates/protocol-cli/src/drive.rs:1274-1281`, which says so in its own comment). The run never
+   (`crates/edge/protocol-cli/src/drive.rs:1274-1281`, which says so in its own comment). The run never
    reached `implement`, so this one is a reading of the code rather than an observation of the run —
    labelled as such deliberately.
 5. **The driver never checks a transcript, so this item's third acceptance bullet is not met by the
@@ -305,7 +305,7 @@ this was found by reading a transcript rather than by a gate.
 four states and every `attempts` entry is 1, so the three numbers stay guesses and W4.2's acceptance
 line about them is untouched by this run. And it says nothing about `--pause-on-approval`'s resume
 line, which was printed as `resume with: protocol drive resume W4-1/1` by the **blocked** path
-(`crates/protocol-cli/src/drive.rs:611-613`) rather than by an `operator` pause, so W4.2's third item
+(`crates/edge/protocol-cli/src/drive.rs:611-613`) rather than by an `operator` pause, so W4.2's third item
 — *"nobody has read that line"* — is still true of the line it means.
 
 **Resuming it changes nothing on its own.** The cursor sits in `establish_verifiers` with both its
@@ -324,7 +324,7 @@ Three items, each of which is a decision taken in wave 2 with no observation beh
 `operator` never, spent and not reset, counted in the cursor. Wave 3 has since put **numbers** on
 them, by argument rather than by observation: `DEFAULT_VISIT_BUDGET = 3`,
 `DEFAULT_COMMAND_RETRIES = 2`, `LLM_RETRIES = 1`, the last deliberately not configurable
-(`crates/aep-driver-spec/src/map.rs:57-69`, dispatched at `:354-360`), with a per-step `retries`
+(`crates/drive/aep-driver-spec/src/map.rs:57-69`, dispatched at `:354-360`), with a per-step `retries`
 override available on a `command` step (`:244-246`). **W4.1 is what can say whether they are right** —
 how often a `command` step failed for a reason a retry could fix, how often a retried `llm` step
 produced anything different, and whether any state hit the visit budget.
@@ -373,7 +373,7 @@ in `constraints.facts` beside the existing `change.public_contract`. It is
 **proposed, not accepted** — this section is the acceptance surface, and the verdict below is
 *accepted in part*. No engine change, no protocol change, no new grammar and **no new enforcement
 mechanism**, which is what keeps it inside this wave's third *decisions, taken* row: it narrows an
-existing mechanism (`Principle::applies`, `crates/aep-domain/src/principle.rs:688-692`) using
+existing mechanism (`Principle::applies`, `crates/govern/aep-domain/src/principle.rs:688-692`) using
 grammar that `differential-testing.yaml` already uses.
 
 **The Kleene posture is the whole safety argument and is unchanged.** A principle falls away only on
@@ -451,10 +451,10 @@ exactly the shape `development/default` could never drive. The task is `.enginee
 | # | finding | evidence |
 |---|---|---|
 | **F-W4.2-3** | **A raw launch leaves hermeticity to the caller, and the two things that fix it fight each other.** The first two `receive` sessions loaded **6 plugins — 5 of them the operator's, nothing to do with this run** (`rust-analyzer-lsp`, `gopls-lsp`, `typescript-lsp`, `track`, `flux-agent`), 26 skills instead of 16, and billed against **`apiKeySource: ANTHROPIC_API_KEY`** rather than the intended subscription: both died on *"Credit balance is too low"*. Pointing `CLAUDE_CONFIG_DIR` at a clean home fixed the leak — and removed the **`aep` plugin too**, so the eight sessions that then succeeded ran with `plugins: 0` and **no enforcement hooks at all**. `development.driven` grants `command.execute` on the stated understanding that `driven-surface.sh` narrows it; for this entire run that hook was absent | `init` events of all ten transcripts; the missing `hook-decisions.jsonl`; `profiles/development-driven.yaml` header |
-| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: protocol drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/protocol-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
+| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: protocol drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/edge/protocol-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
 | **F-W4.2-5** | **A copied OAuth credential expires mid-run and cannot refresh.** Two `implement` sessions returned *"Failed to authenticate: OAuth session expired and could not be refreshed"*. The SDK reported them as `subtype: "success"` with `is_error: true` in the same frame, which is worth knowing before trusting a summary field | `transcripts/implement-0-1.jsonl`, `-0-2.jsonl` |
 | **F-W4.2-6** | **The applicability gap**, above. Closed in part | the design note |
-| **F-W4.2-7** | **A step map is never checked against the plan it will drive, and this is the expensive one.** `StepMap::check_run` validates map → protocol — every evidence kind a step declares is one the protocol declares — and **never the converse** (`crates/aep-driver-spec/src/map.rs:710-750`). `development/checks` submits four kinds; the plan requires `specification` and `verification` as well, and **no step of the map produces either**, for a code task or a documentation one. So the map loads, the run walks six states, and the mismatch surfaces at the guard — **after $31.46 and 76 minutes of model time**. A load-time check had every fact it needed | the map's seven `evidence:` blocks; `evidence.missing = 2` after the fix |
+| **F-W4.2-7** | **A step map is never checked against the plan it will drive, and this is the expensive one.** `StepMap::check_run` validates map → protocol — every evidence kind a step declares is one the protocol declares — and **never the converse** (`crates/drive/aep-driver-spec/src/map.rs:710-750`). `development/checks` submits four kinds; the plan requires `specification` and `verification` as well, and **no step of the map produces either**, for a code task or a documentation one. So the map loads, the run walks six states, and the mismatch surfaces at the guard — **after $31.46 and 76 minutes of model time**. A load-time check had every fact it needed | the map's seven `evidence:` blocks; `evidence.missing = 2` after the fix |
 
 **One interaction worth writing down before someone rediscovers it.** The story's own acceptance
 criterion 7 became check **H3** — *git status lists changed paths only under `docs/` and
@@ -470,7 +470,7 @@ stand between this run and `complete`; the applicability fix closes two of them.
 listed in the design note's § 8 and three of them are structural: the map cannot produce a
 `specification` or a `verification` record; `contracts.failed == 0` is a **profile completion
 condition**, which a principle falling away does not remove (`profiles/development-standard.yaml:38`,
-`crates/aep-engine/src/evaluate.rs:252-254, 313-345`), and only a `ContractResult` projects it; and
+`crates/govern/aep-engine/src/evaluate.rs:252-254, 313-345`), and only a `ContractResult` projects it; and
 `review.approved` needs a record **no CLI verb writes**.
 
 **No `W4-2/2` was started, and that is a decision rather than an omission.** A fresh run would walk
@@ -491,7 +491,7 @@ observation**, F-W4.2-4.
 **A resume re-resolves the plan from the current documents.** the same run, resumed after two principle documents changed, reported
 `evidence.missing = 2` where it had reported 4, and dropped both principles from its own
 explanation. The plan is *not* pinned in the snapshot; only the workflow reference, the map id, the
-map digest and the engine version are (`crates/aep-driver-spec/src/cursor.rs:283-315`). Amending a
+map digest and the engine version are (`crates/drive/aep-driver-spec/src/cursor.rs:283-315`). Amending a
 principle and resuming is therefore a supported operation, which is the mechanism the next wave will
 need to close F-W4.2-7 without re-running from `receive`.
 
@@ -506,19 +506,19 @@ that it was** — a `trace_conformance` record for the run that did the work, an
 `principles/verification/ess-conformance.yaml` already uses one layer down.
 
 It carries three things this wave needs decided rather than assumed: the `delivers` relation
-formalised (`RelationKind::Delivers` exists in Rust at `crates/aep-domain/src/artifact.rs:957` and
+formalised (`RelationKind::Delivers` exists in Rust at `crates/govern/aep-domain/src/artifact.rs:957` and
 `artifacts/relations/relations.yaml` declares twelve relations without it — the CLI already says so
-in a doc comment at `crates/protocol-cli/src/planning.rs:855-861`); the lifecycle question weighed
+in a doc comment at `crates/edge/protocol-cli/src/planning.rs:855-861`); the lifecycle question weighed
 both ways (a new `released` rung against an evidence gate on the existing terminal move); and the
 enforcement mechanism named honestly, because today a status move consults a
-`LifecycleRegistry` and nothing else (`crates/aep-backend-markdown/src/document.rs:115-142`).
+`LifecycleRegistry` and nothing else (`crates/plan/aep-backend-markdown/src/document.rs:115-142`).
 
 **Acceptance:**
 
 * the design exists, is marked **proposed, not accepted**, and names its own limits in a deviation
   register in house style — including the two that shape it: the fact projection emits **no relation
-  facts** (`crates/aep-domain/src/artifact.rs:1818-1829`), and an artifact requirement's relation
-  clause is satisfied graph-wide rather than per subject (`crates/aep-domain/src/requirement.rs:516-544`);
+  facts** (`crates/govern/aep-domain/src/artifact.rs:1818-1829`), and an artifact requirement's relation
+  clause is satisfied graph-wide rather than per subject (`crates/govern/aep-domain/src/requirement.rs:516-544`);
 * **this wave records a verdict** — accepted, accepted in part, or refused — with the reason, on this
   page. A design filed and left unjudged is the state `AGENTS.md` § *Which documents are normative*
   exists to prevent;

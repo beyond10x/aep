@@ -46,27 +46,27 @@ three adapter points — invoke-the-agent, capabilities-to-tool-config, and a tr
 
 | decision | taken as | why |
 |---|---|---|
-| **D1 step-map versioning** | the map pins `workflow: adp/default/1` — a `WorkflowRef`, **mandatory** — and a workflow major bump orphans it at load, as a refusal | `Registry::workflow` filters on `WorkflowRef::accepts`, which is equality against the pin (`crates/aep-engine/src/registry.rs:118-123`, `crates/aep-domain/src/version.rs:206-208`), so the orphaning is free and loud. **§ 4.2's `adp/default@1` is wrong**: `Display` writes `{id}/{major}` (`version.rs:214-221`) and a second spelling of a version pin is a second parser |
-| D1, second half | cross-validation runs in **two phases** — states and **named** verifiers at load, evidence kinds and the workflow pin at run start. **F5:** `Verifier::ExternalTool` is exempt at load | the protocol in force comes from the *task* (`crates/aep-domain/src/task.rs:338`), which no document loader has seen. One-phase validation would let a map pass and then fail at `ProtocolError::EvidenceRejected` (`crates/aep-engine/src/engine.rs:321-332`) mid-run — the exact failure the check exists to prevent |
+| **D1 step-map versioning** | the map pins `workflow: adp/default/1` — a `WorkflowRef`, **mandatory** — and a workflow major bump orphans it at load, as a refusal | `Registry::workflow` filters on `WorkflowRef::accepts`, which is equality against the pin (`crates/govern/aep-engine/src/registry.rs:118-123`, `crates/govern/aep-domain/src/version.rs:206-208`), so the orphaning is free and loud. **§ 4.2's `adp/default@1` is wrong**: `Display` writes `{id}/{major}` (`version.rs:214-221`) and a second spelling of a version pin is a second parser |
+| D1, second half | cross-validation runs in **two phases** — states and **named** verifiers at load, evidence kinds and the workflow pin at run start. **F5:** `Verifier::ExternalTool` is exempt at load | the protocol in force comes from the *task* (`crates/govern/aep-domain/src/task.rs:338`), which no document loader has seen. One-phase validation would let a map pass and then fail at `ProtocolError::EvidenceRejected` (`crates/govern/aep-engine/src/engine.rs:321-332`) mid-run — the exact failure the check exists to prevent |
 | D1, the pin as a type | **F6:** `PinnedWorkflowRef` in the step-map crate — `TryFrom<WorkflowRef>` refusing `major() == None`, publishing the same pattern with the version group **required** | as written the decision was stricter than the schema it would publish: `major` is `Option` (`version.rs:200-202`), the pattern makes the group optional (`:296`) and the `JsonSchema` impl writes it verbatim (`:325`). An editor would have told an author their map was fine and the loader would have refused it. `ProtocolRef` is the type-level precedent, not just a rhetorical one (`version.rs:108-112`, `:132`) |
-| D1, where the types live | **F1, INFEASIBLE as sequenced:** two crates — leaf **`aep-driver-spec`** (`RawStepMap`→`StepMap`, `PinnedWorkflowRef`, cursor, `ToolConfig`; `aep-domain` only) and **`aep-driver`** (router, `LlmStepExecutor`, `tool_config`) | one crate is the cycle `aep-schema → aep-driver → aep-engine → aep-schema`: `load_tree` is in `aep-engine` (`crates/aep-engine/src/load.rs:22-28`), its values are `aep_schema::parse::DocumentKind`, and the router must see `Evaluation` (`evaluate.rs:124`). `aep-schema` already carries sideways edges to three **leaves**; this is the fourth. `drivers/` is the **last** `TREE` row, because phase 1 reads `workflow.states` out of a registry the earlier rows fill |
-| D1, runs in flight | the **cursor** records the resolved `workflow: <id>/<major>`, the step map's digest **and the engine version** (**F20**); `--resume` refuses when any moved | `Snapshot` carries no workflow id and no version (`crates/aep-engine/src/execution.rs:56-74`), and `Execution::restore` checks only the task id and that the *state name* still exists (`:257-293`). A workflow that renamed nothing and rewrote every guard restores silently today |
-| **D2 store → facts** | rebuild the `ArtifactGraph` from the store **every iteration** and hand it to `Engine::restore`; no cache | `MarkdownStore::load()` → `StoreReport::graph()` (`crates/aep-backend-markdown/src/store.rs:85`, `:329-330`) and `Execution::restore` → `refresh_facts()` (`crates/aep-engine/src/execution.rs:291`, `:297-319`) already do it. The rebuild *is* the store's integrity check, so the cost buys the correctness. A cache is a second copy of the membership list — § 2.1's argument against an index file, one layer out |
-| D2, when to stop | **F7:** stop when **`report.is_clean()` is false** (`crates/aep-backend-markdown/src/store.rs:314`) **or** `graph()` errors, consulting `is_clean` **first** | `graph()` returns `Ok` for a store with parse failures — the crate says so at `store.rs:319-328`, deliberately, because a listing beats a refusal for *reading*. A file that did not parse sits in `report.failures` (`:100-120`) and is not in the graph to be wrong about, so a `graph()`-only check evaluates a **completion gate** against a fact base that silently shrank |
+| D1, where the types live | **F1, INFEASIBLE as sequenced:** two crates — leaf **`aep-driver-spec`** (`RawStepMap`→`StepMap`, `PinnedWorkflowRef`, cursor, `ToolConfig`; `aep-domain` only) and **`aep-driver`** (router, `LlmStepExecutor`, `tool_config`) | one crate is the cycle `aep-schema → aep-driver → aep-engine → aep-schema`: `load_tree` is in `aep-engine` (`crates/govern/aep-engine/src/load.rs:22-28`), its values are `aep_schema::parse::DocumentKind`, and the router must see `Evaluation` (`evaluate.rs:124`). `aep-schema` already carries sideways edges to three **leaves**; this is the fourth. `drivers/` is the **last** `TREE` row, because phase 1 reads `workflow.states` out of a registry the earlier rows fill |
+| D1, runs in flight | the **cursor** records the resolved `workflow: <id>/<major>`, the step map's digest **and the engine version** (**F20**); `--resume` refuses when any moved | `Snapshot` carries no workflow id and no version (`crates/govern/aep-engine/src/execution.rs:56-74`), and `Execution::restore` checks only the task id and that the *state name* still exists (`:257-293`). A workflow that renamed nothing and rewrote every guard restores silently today |
+| **D2 store → facts** | rebuild the `ArtifactGraph` from the store **every iteration** and hand it to `Engine::restore`; no cache | `MarkdownStore::load()` → `StoreReport::graph()` (`crates/plan/aep-backend-markdown/src/store.rs:85`, `:329-330`) and `Execution::restore` → `refresh_facts()` (`crates/govern/aep-engine/src/execution.rs:291`, `:297-319`) already do it. The rebuild *is* the store's integrity check, so the cost buys the correctness. A cache is a second copy of the membership list — § 2.1's argument against an index file, one layer out |
+| D2, when to stop | **F7:** stop when **`report.is_clean()` is false** (`crates/plan/aep-backend-markdown/src/store.rs:314`) **or** `graph()` errors, consulting `is_clean` **first** | `graph()` returns `Ok` for a store with parse failures — the crate says so at `store.rs:319-328`, deliberately, because a listing beats a refusal for *reading*. A file that did not parse sits in `report.failures` (`:100-120`) and is not in the graph to be wrong about, so a `graph()`-only check evaluates a **completion gate** against a fact base that silently shrank |
 | D2, the cost | **F8:** a full read and parse of **every** planning document (`store.rs:105-120`, `:371`) **plus a full plan re-resolution** (`engine.rs:250-258`) per iteration; registry loaded **once per invocation**, store rebuilt **per iteration** | the first draft said "one directory walk". Both are linear, pure, local and clock-free, so the conclusion holds — but the number is the number. The registry/store asymmetry was falling out of an implementation detail and is now chosen: D1's cursor pins the workflow precisely so a governing document cannot move under a live run |
-| D2, the boundary | `artifact.**` from the graph; `evidence.**` / `required_evidence.**` / `state.**` / `approvals.granted` from the engine; `tests.*`, `diff.*`, `static_analysis.*`, `trace_conformance.*` from evidence payloads. **The driver writes into no family** | `ArtifactGraph::facts()` (`crates/aep-domain/src/artifact.rs:1830-1872`) and `Execution::derived_facts` (`execution.rs:322-398`) are the only two producers. A fact the driver minted would be a gate the driver evaluated, which § 4.1 forbids |
+| D2, the boundary | `artifact.**` from the graph; `evidence.**` / `required_evidence.**` / `state.**` / `approvals.granted` from the engine; `tests.*`, `diff.*`, `static_analysis.*`, `trace_conformance.*` from evidence payloads. **The driver writes into no family** | `ArtifactGraph::facts()` (`crates/govern/aep-domain/src/artifact.rs:1830-1872`) and `Execution::derived_facts` (`execution.rs:322-398`) are the only two producers. A fact the driver minted would be a gate the driver evaluated, which § 4.1 forbids |
 | **D3 `require_approval` headless** | an approval-gated capability is **never a tool**; a capability is offered **iff `policy.decide(&capability) == Allowed`** (**F3**) | *"derive from `.allow` only"* is not invariant 6's ordering — the ordering lives in `decide` (`capability.rs:588-599`). The three sets are independent (`grant` extends all three, `:619-624`) and membership is by `covers`, not equality (`:612-614`, `:240-246`), so an unscoped `allow: deployment.create` **covers** `deployment.create:production` and iterating `.allow` hands out the tool `approval-gates.yaml:38` gates. `release-progressive.yaml:29-31` avoids it *in a comment* |
 | D3, interactive | an approval the plan owes becomes an `operator` step — print `CompletionExplanation` verbatim, persist, release the lock, exit 0 with a resume line | a driver holding a terminal open for a person loses the run when the terminal closes. The snapshot is already a queue that survives a reboot |
 | D3, the walk | **F9:** the scan also walks `workflow.transitions[].requires` (`workflow.rs:127-138`) and **recurses** through nested conditionals (`requirement.rs:895-900`) | a transition's requirement set is first-class to the evaluator (`evaluate.rs:215`, beside `:203` and `:226`), so a `human: true` approval on a transition is genuinely owed and was invisible to the scan. `count_missing_evidence` descends one level *by design* because it counts; a reachability scan that stops there under-reports, and under-reporting starts a run that wedges |
 | D3, two consequences | **F4(2):** `development.standard` starts **only because** `approval-gates`' guard is `defined(...)` (`predicate.rs:402`), and `development.critical` **refuses** a headless start on its unconditional `human: true` design review (`profiles/development-critical.yaml:46-52`) | the headline test is green for a reason outside D3. A future principle author writing the bare comparison instead of `defined(...)` would turn every headless development run into a refusal with nothing explaining why. The `critical` refusal is right behaviour and a surprise if nobody writes it down |
-| D3, headless | **refuse to start** when an approval is *reachable*; `--pause-on-approval` is the opt-in route | *"refuse when `approval_required` is non-empty"* refuses **every** run: `least-privilege` has no `applies_when` and gates `production.write`, `deployment.create`, `network.write` for every task under every profile (`principles/governance/least-privilege.yaml:19-22`). Reachability is static and decidable — `human: true` approvals and reviews, human verifiers (`Verifier::is_human`, `crates/aep-domain/src/verification.rs:120-122`), and gated capabilities a `command` step would exercise |
-| D3, auto-approve | **never, under any flag**; the driver constructs no `Evidence::Approval` and never stamps `Producer::Human` | `approval_recorded` matches on subject and decision and **does not check who granted it** (`crates/aep-engine/src/policy.rs:135-151`), unlike `ApprovalRequirement::evaluate`, which does (`crates/aep-domain/src/requirement.rs:839-874`). Nothing below the driver would stop a harness minting its own approval, so the refusal has to be the driver's |
-| **D4 session granularity** | one `claude -p` session **per `llm` step**; context via the store and the prompt, never session memory | replay is only checkable if each step's input is a function of persisted state; the allowlist changes at every `Moved` (`effective_policy`, `crates/aep-engine/src/policy.rs:84-92`) and a session outliving a transition outlives its allowlist; a retry inside a shared session retries with the failure in context. The token cost is real, and is *measured* by the trace census rather than argued about |
+| D3, headless | **refuse to start** when an approval is *reachable*; `--pause-on-approval` is the opt-in route | *"refuse when `approval_required` is non-empty"* refuses **every** run: `least-privilege` has no `applies_when` and gates `production.write`, `deployment.create`, `network.write` for every task under every profile (`principles/governance/least-privilege.yaml:19-22`). Reachability is static and decidable — `human: true` approvals and reviews, human verifiers (`Verifier::is_human`, `crates/govern/aep-domain/src/verification.rs:120-122`), and gated capabilities a `command` step would exercise |
+| D3, auto-approve | **never, under any flag**; the driver constructs no `Evidence::Approval` and never stamps `Producer::Human` | `approval_recorded` matches on subject and decision and **does not check who granted it** (`crates/govern/aep-engine/src/policy.rs:135-151`), unlike `ApprovalRequirement::evaluate`, which does (`crates/govern/aep-domain/src/requirement.rs:839-874`). Nothing below the driver would stop a harness minting its own approval, so the refusal has to be the driver's |
+| **D4 session granularity** | one `claude -p` session **per `llm` step**; context via the store and the prompt, never session memory | replay is only checkable if each step's input is a function of persisted state; the allowlist changes at every `Moved` (`effective_policy`, `crates/govern/aep-engine/src/policy.rs:84-92`) and a session outliving a transition outlives its allowlist; a retry inside a shared session retries with the failure in context. The token cost is real, and is *measured* by the trace census rather than argued about |
 | D4, the fourth reason | per-step sessions are the **only** granularity at which a launch-time flag can express a per-state tool set | `--allowedTools` is fixed at session launch, with no mid-session swap (hooks reference). A step never spans a transition, so every session launches with its state's set. Per-state sessions would already be wrong; one session per run would be unimplementable. The review found this while filling open cell (b), and it is the strongest of the four reasons |
 | D4, the command line | **F15:** the driver **never passes `--bare`**; hook configuration goes through `--settings`, asserted by a test over the constructed argv | `--bare` skips hooks. Nothing constrained the command line, so an implementer reaching for a clean reproducible environment would **silently delete the driver's own enforcement arm** — partial, silent, and exactly what a register exists to catch |
 | D4, resume | a resumed run is a **new session with the same inputs**, and its transcript digest differs | the step did run twice. A record claiming one run would be the record lying |
 | **D5 failure taxonomy** | crashed step ⇒ **submit nothing** (`Unknown`); suite ran and failed ⇒ submit the failing evidence (`False`); budget exhausted ⇒ snapshot, `Blocked` reasons verbatim, exit | the engine has no `Unknown` to submit — absence is the fact not being in the store. With no test evidence **both** `verify` guards are `Unknown` and `transition()` returns `Blocked` (`workflows/development/default.yaml:106-127`, `engine.rs:397-415`), which is exactly the state to retry against. Collapsing a crash into `False` takes the back-edge and sends an agent to fix code nobody ran |
-| D5, the ambiguous ones | one question — **did a verifier produce a verdict?** timeout, OOM, network error ⇒ Unknown; a suite that completed with failures ⇒ False | a partial suite is not a failing suite. `trace check` exit 3 is the one Unknown that is still *recorded*, because `trace evidence` writes `status: inconclusive` and `trace_conformance.passed` stays false (`crates/trace-spec/src/evidence.rs:43-54`) |
+| D5, the ambiguous ones | one question — **did a verifier produce a verdict?** timeout, OOM, network error ⇒ Unknown; a suite that completed with failures ⇒ False | a partial suite is not a failing suite. `trace check` exit 3 is the one Unknown that is still *recorded*, because `trace evidence` writes `status: inconclusive` and `trace_conformance.passed` stays false (`crates/observe/trace-spec/src/evidence.rs:43-54`) |
 | D5, retries | budget **per step kind** — `command` retries, `llm` once, `operator` never — spent and not reset, counted in the cursor | a person is not a flaky dependency. A retried success does not erase the first attempt: there is no evidence to erase, but the attempt count stays and the run report names it |
 | **D6 concurrency** | **F2, INFEASIBLE:** one fixed path, `.engineering/runs/lock.json`, `create_new` **before** any run-id allocation; run directories hold no lock; `--resume` **re-takes** it | the reviewed version put the lock inside the directory the lock was allocating. Two invocations counting at slightly different moments get `3` and `4` and **both `create_new` succeed** — D6's own rejected option, *"no lock, last writer wins"*, reached by accident. The holder's run id now lives inside the lock, so a refusal prints it without a second read. One atomic syscall, no advisory locking, and its failure mode is the one we want |
 | D6, placement | **F19:** the lock file, the pid-liveness probe and the run directory are `protocol-cli`'s; `aep-driver` is handed a `LockState` | a liveness probe reads ambient OS state and uses neither `SystemTime::now` nor `rand`, so a banned-token scan would not catch it. Placement is the only thing keeping the pure crate's claim true — and it makes the lock testable without a second process |
@@ -76,16 +76,16 @@ three adapter points — invoke-the-agent, capabilities-to-tool-config, and a tr
 | D6, a second invocation | refuses, printing the holder's run id, pid, host and cursor state, and names both routes out | the same choice `protocol artifact move` makes for an illegal transition: the refusal is the answer |
 | **enforcement mapping** | § 4.8 — one row per rule class, each naming the mechanism, the layer and what audits it. **All three open cells are filled**; three audit columns were wrong and are corrected | *a rule nothing checks is a rule that has already drifted somewhere* — applied to the section itself, which is what produced F12, F13 and F14 |
 | the shell property | **the model never holds a shell in a development run.** `Bash` is offered only when `decide(command.execute) == Allowed`, and no development profile grants it (`profiles/development-fast.yaml:30-35`, `development-standard.yaml:28-30`). **Corrected by the build, W3.6 below: `development.driven` grants it, held to the `protocol` CLI by a hook. The two profiles named here are unchanged** | `Bash` is the one tool that is not a function of a capability: one call can be `tests.execute`, `repository.write`, `network.write` or `secret.read`. Rather than gate it by pattern — best-effort, and now stated as such — the property does the work: `cargo test` runs as a **`command` step the driver executes**, not as a tool the model holds. It is also what makes § 4.8's write-guard matcher exhaustive |
-| `Skill` and `Task` | `Skill` is a **named exemption** (it loads instructions and takes no action); `Task` and the agent-spawning family are **never offered**, audited by `subagent.spawned: at_most 0` | a tool with no `Action` cannot be governed (`docs/guide/harness.md:144-146`), and a subagent's tool set is derived by nothing in D1–D6 — so it would be a route around the per-state allowlist. The audit kind already ships (`crates/trace-domain/src/spec.rs:797`) |
-| **F12 — the missing audit** | a **50th expectation kind, `env.tool_available`**, becomes a named wave-3 build item in the trace crates, sequenced **before** the hooks | the per-state tool set had no audit: `SessionStart.tools` is in the IR (`crates/trace-domain/src/ir.rs:222-223`) and no expectation kind reads it (49 names, `spec.rs:777-830`). `tool.absent` is not a substitute — it asserts a tool was never *called*, and an allowlist bug offers a tool nobody calls |
+| `Skill` and `Task` | `Skill` is a **named exemption** (it loads instructions and takes no action); `Task` and the agent-spawning family are **never offered**, audited by `subagent.spawned: at_most 0` | a tool with no `Action` cannot be governed (`docs/guide/harness.md:144-146`), and a subagent's tool set is derived by nothing in D1–D6 — so it would be a route around the per-state allowlist. The audit kind already ships (`crates/observe/trace-domain/src/spec.rs:797`) |
+| **F12 — the missing audit** | a **50th expectation kind, `env.tool_available`**, becomes a named wave-3 build item in the trace crates, sequenced **before** the hooks | the per-state tool set had no audit: `SessionStart.tools` is in the IR (`crates/observe/trace-domain/src/ir.rs:222-223`) and no expectation kind reads it (49 names, `spec.rs:777-830`). `tool.absent` is not a substitute — it asserts a tool was never *called*, and an allowlist bug offers a tool nobody calls |
 | **F14 — the hook↔engine channel** | the hook appends to `.engineering/runs/<run-id>/hook-decisions.jsonl`; the driver folds each line in through `Engine::authorize` after the step exits | a hook is a separate process and `authorize` takes `&mut Execution` (`engine.rs:285`), so the audit column named a trail the hook cannot reach. Folding late is safe because `transition()` is not called until the step's process has exited (D4) — the same reason the TOCTOU window is zero. A socket adds a hang to a batch program; hook-enforces-without-asking would mean rewriting rows 1 and 2 to say *the transcript* |
 | **F13/F15 — what is not claimed** | `permission.denied` is a **whole-run count** and `0` is ambiguous; the plugin-hook **trust model is undocumented** and is named as an assumption | attribution needs a deliberate-attempt case in W3.6. If the trust assumption is wrong the hook layer degrades to advisory and `--allowedTools` carries enforcement alone. Whether a hook deny increments `permission_denials` is unverified and closes with one command |
 | the boundary | enforcement is complete over **actions** and **transitions**; **text is free** | every tool call maps to exactly one `Capability` or has no tool, and the driver never evaluates a gate. What the model *says* is not governed and is safe unbounded for three reasons already in place: an `llm` step cannot carry evidence, `Producer::Agent` does not satisfy `independent: true`, and a claim about how an agent worked is established by a checker reading the transcript |
 | enforce **and** verify | hooks and the allowlist stop the action; `trace check` reads the transcript and says whether they did | an enforcement mechanism nobody audits is a claim; an audit with no enforcement is a report about a horse that has left |
 | hooks versus § 3.6 | the plugin's refusal of hooks **stands for a plugin that ships alone**; hooks ship in the *driver's* wave, configured by the driver from `capabilities()` | § 3.6's reason was that a hook layer would be *a second, weaker driver* with no execution to ask about. Under the driver it is not a second driver — it is the driver's enforcement arm, and it has an execution |
 | **adapter surface** | exactly **three** points: an `LlmStepExecutor` trait in `aep-driver`; `tool_config(&CapabilityPolicy) -> ToolConfig` as a **pure function, not a trait**, deciding by `decide()` (**F3**); a transcript reader returning `TraceIr` | a surface nobody bounded grows a fourth point the first time something is awkward. Point 2 is a function because a trait would let a second harness quietly re-decide that `repository.write` admits a shell |
-| the transcript seam, corrected | **there is no adapter trait in `trace-spec`** — the seam is the IR: `read_transcript` (`crates/trace-spec/src/adapter.rs:102`) stamping `AdapterRef` into `TraceIr` (`crates/trace-domain/src/ir.rs:506`, `:516`, `:528`), with `check`, `CheckReport` and `to_evidence` all taking `&TraceIr` | a second adapter is a second free function, not a trait added speculatively before there is a second implementation to design it against. Trace wave 1 already says the neutrality claim is untested (`trace-wave-1-transcript-checker.md:263-265`) |
-| where step maps live | `drivers/`, taking design open decision **D4** | `load_tree` walks a fixed directory-to-kind table (`crates/aep-engine/src/load.rs:22-28`) and a step map is a validated, versioned, schema-generated document exactly like the four in it. Anywhere else is a fifth kind loaded by a second mechanism |
+| the transcript seam, corrected | **there is no adapter trait in `trace-spec`** — the seam is the IR: `read_transcript` (`crates/observe/trace-spec/src/adapter.rs:102`) stamping `AdapterRef` into `TraceIr` (`crates/observe/trace-domain/src/ir.rs:506`, `:516`, `:528`), with `check`, `CheckReport` and `to_evidence` all taking `&TraceIr` | a second adapter is a second free function, not a trait added speculatively before there is a second implementation to design it against. Trace wave 1 already says the neutrality claim is untested (`trace-wave-1-transcript-checker.md:263-265`) |
+| where step maps live | `drivers/`, taking design open decision **D4** | `load_tree` walks a fixed directory-to-kind table (`crates/govern/aep-engine/src/load.rs:22-28`) and a step map is a validated, versioned, schema-generated document exactly like the four in it. Anywhere else is a fifth kind loaded by a second mechanism |
 
 ## W2.1 — the decisions, recorded in the design
 
@@ -164,10 +164,10 @@ the record against.
 
 | | what | resting on |
 |---|---|---|
-| **W3.0** | **`env.tool_available`** — the 50th expectation kind, in `trace-domain` and `trace-spec`: a `RawExpectationKind` variant, a `NAMES` entry, a name arm and four lines of dispatch against `SessionStart.tools`, mirroring `env.skill_available` (`crates/trace-spec/src/check.rs:103-107`) | **F12.** It ships *first* because without it the per-state allowlist has nothing that can audit it, and § 4.8's own standard would be asserted rather than met |
-| **W3.1a** | **`crates/aep-driver-spec`** — a leaf on `aep-domain` only: `RawStepMap` → `StepMap`, `PinnedWorkflowRef`, the cursor types, `ToolConfig`, both cross-validation phases | **F1, F6.** `aep-schema` takes the dependency, exactly as it already does for `aep-backend-markdown` |
-| **W3.1b** | **`crates/aep-driver`** — the three-valued router, `LlmStepExecutor`, `tool_config` over `CapabilityPolicy::decide` | **F1, F3.** Depends on `aep-domain`, `aep-engine`, `aep-driver-spec` |
-| **W3.1c** | both manifests carry `[lints] workspace = true`; `crates/aep-driver/tests/determinism.rs` ships with them, and invariant 9's list in `AGENTS.md` gains its row in the same change | **F19.** `AGENTS.md:213-214` — a crate that omits the lints line is outside every lint here; `AGENTS.md:141-144` — do not write an enforcement you cannot point at, and § 4.1 makes a purity claim for this crate stronger than `aep-engine`'s |
+| **W3.0** | **`env.tool_available`** — the 50th expectation kind, in `trace-domain` and `trace-spec`: a `RawExpectationKind` variant, a `NAMES` entry, a name arm and four lines of dispatch against `SessionStart.tools`, mirroring `env.skill_available` (`crates/observe/trace-spec/src/check.rs:103-107`) | **F12.** It ships *first* because without it the per-state allowlist has nothing that can audit it, and § 4.8's own standard would be asserted rather than met |
+| **W3.1a** | **`crates/drive/aep-driver-spec`** — a leaf on `aep-domain` only: `RawStepMap` → `StepMap`, `PinnedWorkflowRef`, the cursor types, `ToolConfig`, both cross-validation phases | **F1, F6.** `aep-schema` takes the dependency, exactly as it already does for `aep-backend-markdown` |
+| **W3.1b** | **`crates/drive/aep-driver`** — the three-valued router, `LlmStepExecutor`, `tool_config` over `CapabilityPolicy::decide` | **F1, F3.** Depends on `aep-domain`, `aep-engine`, `aep-driver-spec` |
+| **W3.1c** | both manifests carry `[lints] workspace = true`; `crates/drive/aep-driver/tests/determinism.rs` ships with them, and invariant 9's list in `AGENTS.md` gains its row in the same change | **F19.** `AGENTS.md:213-214` — a crate that omits the lints line is outside every lint here; `AGENTS.md:141-144` — do not write an enforcement you cannot point at, and § 4.1 makes a purity claim for this crate stronger than `aep-engine`'s |
 | **W3.2** | `drivers/development/default.yaml` — the first step map over `adp/default/1`, plus `schemas/generated/driver-steps.schema.json`; `drivers/` added as the **last** row of `load.rs`'s `TREE` | D1, design D4, **F1** |
 | **W3.3** | `protocol drive` — the executors that touch the world (`command`, `llm`, `operator`), the run directory, the **store lock at `.engineering/runs/lock.json`**, the pid-liveness probe, `--resume` (which re-takes the lock), `--restart`, `--take-lock`, `--pause-on-approval` | D3, D6, **F2, F19** |
 | **W3.4** | the plugin's hooks, **Phase 2**: `PreToolUse` deny from the per-state set, the `.engineering/planning/**` write guard with `matcher: "Edit\|Write\|NotebookEdit"`, and the `hook-decisions.jsonl` channel the driver folds in | § 4.8; **F14, F15, F16**; **needs W3.0**. The driver's `claude -p` line carries `--settings` and never `--bare` |
@@ -220,12 +220,12 @@ number below was read out of this tree, or out of a run whose records survive.
 
 ### W3.0 — the 50th expectation kind
 
-`env.tool_available`: the variant (`crates/trace-domain/src/spec.rs:231-232`), the `NAMES` entry
+`env.tool_available`: the variant (`crates/observe/trace-domain/src/spec.rs:231-232`), the `NAMES` entry
 (`:843`), the name arm (`:773`), and four lines of dispatch against `SessionStart.tools`
-(`crates/trace-spec/src/check.rs:113` → `env_tool_available`, `:563`).
+(`crates/observe/trace-spec/src/check.rs:113` → `env_tool_available`, `:563`).
 
 **Acceptance — met.** `ExpectationKind::NAMES` is **50** entries. The drift test that holds the raw
-and validated vocabularies together (`crates/trace-domain/src/spec.rs:772-776`) still passes, so a
+and validated vocabularies together (`crates/observe/trace-domain/src/spec.rs:772-776`) still passes, so a
 half-done job would have failed the ordinary gate rather than shipped. It landed **before** the
 hooks, which is what F12 asked for.
 
@@ -235,20 +235,20 @@ allowlist. § 4.8 row 3 stays open and now says so.
 
 ### W3.1 — two crates, because one was a cycle
 
-`crates/aep-driver-spec` — 1,883 source lines over `map.rs`, `cursor.rs`, `pin.rs`, `tool.rs` and
+`crates/drive/aep-driver-spec` — 1,883 source lines over `map.rs`, `cursor.rs`, `pin.rs`, `tool.rs` and
 `digest.rs`, on `aep-domain` alone: `RawStepMap → StepMap`, `PinnedWorkflowRef`, the cursor types,
 `ToolConfig` and both cross-validation phases.
-`crates/aep-driver` — 1,577 source lines over `run.rs`, `approval.rs`, `executor.rs`, `lock.rs`,
+`crates/drive/aep-driver` — 1,577 source lines over `run.rs`, `approval.rs`, `executor.rs`, `lock.rs`,
 `route.rs` and `tool.rs`: the three-valued router, the `LlmStepExecutor` / `CommandStepExecutor` /
 `OperatorStepExecutor` traits, and `tool_config` over `CapabilityPolicy::decide`.
 
 **Acceptance — met.**
 
 * the cycle F1 named does not exist: `aep-schema` takes the leaf as a dependency
-  (`crates/aep-schema/src/parse.rs:28`), the fourth sideways edge to a leaf and not a fifth
+  (`crates/edge/aep-schema/src/parse.rs:28`), the fourth sideways edge to a leaf and not a fifth
   mechanism;
 * `tool_config` is a **function**, and it decides by `decide()` and never by `.allow`
-  (`crates/aep-driver/src/tool.rs:82-90`), with `TOOL_CANDIDATES` asking about
+  (`crates/drive/aep-driver/src/tool.rs:82-90`), with `TOOL_CANDIDATES` asking about
   `deployment.create:production` in its scoped form because coverage widens outwards and never
   inwards;
 * **27 tests** in `aep-driver-spec` and **34** in `aep-driver`, package-scoped;
@@ -256,14 +256,14 @@ allowlist. § 4.8 row 3 stays open and now says so.
   and invariant 9's list in [`AGENTS.md`](../../AGENTS.md) names both crates in the same change —
   a purity claim stronger than `aep-engine`'s, which is why the lock, the pid probe and the run
   directory are `protocol-cli`'s (F19);
-* `crates/aep-driver/tests/evidence_scan.rs` (216 lines) is invariant 7 one layer out: the driver
+* `crates/drive/aep-driver/tests/evidence_scan.rs` (216 lines) is invariant 7 one layer out: the driver
   constructs no `Evidence` value of its own.
 
 ### W3.2 — step maps are the fifth document kind
 
 `drivers/development/default.yaml` over `adp/default/1`, seven states; `DocumentKind::StepMap`
-(`crates/aep-schema/src/parse.rs:53`, directory `drivers` at `:102`); `drivers` as the **last** row
-of `load_tree`'s `TREE` (`crates/aep-engine/src/load.rs:33`, with the ordering argued in place);
+(`crates/edge/aep-schema/src/parse.rs:53`, directory `drivers` at `:102`); `drivers` as the **last** row
+of `load_tree`'s `TREE` (`crates/govern/aep-engine/src/load.rs:33`, with the ordering argued in place);
 `schemas/generated/driver-steps.schema.json`, generated by `cargo xtask schema` and drift-checked by
 the gate's `schema-check`.
 
@@ -272,20 +272,20 @@ the gate's `schema-check`.
 * the pin is **mandatory** and is a `WorkflowRef` spelled `adp/default/1` — § 4.2's `@1` stays
   standing as a recorded mistake, and nothing parses it;
 * the committed map loads and is **refused when a state is renamed**
-  (`crates/protocol-cli/tests/drive_cli.rs:387`) — a step map for a state that moved is an
+  (`crates/edge/protocol-cli/tests/drive_cli.rs:387`) — a step map for a state that moved is an
   instruction sheet for a state graph it was not written against;
 * every `cargo` line in it is a `command` step **the driver runs**, and no `llm` step has an
   `evidence:` key, because the `Llm` variant has no field for one.
 
 ### W3.3 — `protocol drive`
 
-`protocol drive run | status | resume` (`crates/protocol-cli/src/drive.rs`, wired at
-`crates/protocol-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
+`protocol drive run | status | resume` (`crates/edge/protocol-cli/src/drive.rs`, wired at
+`crates/edge/protocol-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
 the run directory under `.engineering/runs/<task>/<ordinal>/`, the store lock at the one fixed path
 `.engineering/runs/lock.json`, and the pid-liveness probe — all in `protocol-cli`, per F19.
 
-**Acceptance — met**, asserted by the fixture run in `crates/protocol-cli/tests/drive_cli.rs`
-(8 tests) and by `crates/aep-driver/tests/driving.rs` (9 tests):
+**Acceptance — met**, asserted by the fixture run in `crates/edge/protocol-cli/tests/drive_cli.rs`
+(8 tests) and by `crates/drive/aep-driver/tests/driving.rs` (9 tests):
 
 * **the run advances on evidence a verifier produced.** The fixture map buys six moves —
   `receive → specify → decompose → establish_verifiers → implement → verify → adversarial_verify` —
@@ -322,7 +322,7 @@ reader, the context reader and the decision writer.
   without the driver ships no per-state enforcement;
 * **the decision log is the F14 channel.** Both hooks append to
   `<run-dir>/hook-decisions.jsonl`, located from the step context the driver rewrites before
-  **every** `llm` step (`crates/protocol-cli/src/drive.rs:899-926`, format
+  **every** `llm` step (`crates/edge/protocol-cli/src/drive.rs:899-926`, format
   `aep.drive-step-context/1`) — rewritten per step and not per run, because `effective_policy`
   grants the state's capabilities on top of the plan's;
 * **fail-closed without a parser.** With neither `jq` nor `python3` on `PATH`, a call that mentions
@@ -331,7 +331,7 @@ reader, the context reader and the decision writer.
 
 ### W3.5 — the seam, proved without a model
 
-`crates/aep-driver/tests/shell_echo.rs`, 839 lines, **6 tests**, inside `cargo test --workspace` and
+`crates/drive/aep-driver/tests/shell_echo.rs`, 839 lines, **6 tests**, inside `cargo test --workspace` and
 therefore inside `task check`: a second `LlmStepExecutor` that is a **real subprocess** reading the
 prompt on stdin, and a second transcript reader for a dialect of its own returning `TraceIr`.
 
@@ -383,7 +383,7 @@ other than the `protocol` CLI, so under `development.standard` a driven `llm` st
 write a specification as an artifact and has no way to create one — the guard on
 `artifact.specification.exists` never fails, it simply never moves. The narrow fix does not exist:
 `command.execute:protocol` is a **parse error**, because scoping is for `Environment` on
-`deployment.create` and `deployment.rollback` alone (`crates/aep-domain/src/capability.rs:272-280`).
+`deployment.create` and `deployment.rollback` alone (`crates/govern/aep-domain/src/capability.rs:272-280`).
 So the grant takes § 4.8's own shape for this class of rule — **a capability grant with a hook
 constraint** — and the two properties that make it survivable are stated in the profile's own header
 and hold in the tree:
@@ -398,7 +398,7 @@ and hold in the tree:
   reason.
 
 The document tree now holds **six** profiles, asserted at
-`crates/aep-engine/tests/documents.rs:46-50`.
+`crates/govern/aep-engine/tests/documents.rs:46-50`.
 
 ### W3.7 — the workflow renderer (operator-added, outside the reviewed breakdown)
 
@@ -406,8 +406,8 @@ The document tree now holds **six** profiles, asserted at
 operator asked for it after W3.6 landed; it is recorded here because a wave whose delivered set
 quietly exceeds its reviewed set is a wave nobody can check.
 
-`crates/aep-render` — 2,933 source lines — plus `protocol workflow render`
-(`crates/protocol-cli/src/render.rs`). One `Scene` resolves the layout, the overlay and every piece
+`crates/drive/aep-render` — 2,933 source lines — plus `protocol workflow render`
+(`crates/edge/protocol-cli/src/render.rs`). One `Scene` resolves the layout, the overlay and every piece
 of text exactly once; `svg`, `html` and `ansi` answer only *how do I write this out*, and PNG is the
 SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
 
@@ -420,17 +420,17 @@ SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
   write a document once and refused without a run, because there would be nothing to follow. The
   poll and its clock live in `protocol-cli`; the crate reads no clock, no terminal and no file;
 * **byte-stable.** The same workflow and the same `RunView` render to the same bytes twice
-  (`crates/aep-render/tests/determinism.rs`, `crates/protocol-cli/tests/render_cli.rs:170`), so a
+  (`crates/drive/aep-render/tests/determinism.rs`, `crates/edge/protocol-cli/tests/render_cli.rs:170`), so a
   committed figure does not turn up in a diff. Every committed workflow renders (`render_cli.rs:444`);
 * **it evaluates nothing.** The overlay arrives as a plain `RunView` and the crate depends on
   `aep-domain` alone — not on `aep-engine`, not on `aep-driver` — so a renderer cannot become a
-  second protocol implementation with no suites behind it. `crates/aep-render/tests/boundary.rs`
+  second protocol implementation with no suites behind it. `crates/drive/aep-render/tests/boundary.rs`
   holds that line;
 * **the reasons are verbatim.** `RunView::reasons` are the engine's own sentences, never
   paraphrased, truncated or re-ordered by any emitter;
 * **three dependencies weighed and refused**, in the crate's own documentation: `graphviz`/`dot`,
   `ratatui` and `resvg`/`usvg`;
-* **37 tests** in `aep-render`, **13** in `crates/protocol-cli/tests/render_cli.rs`
+* **37 tests** in `aep-render`, **13** in `crates/edge/protocol-cli/tests/render_cli.rs`
   (`cargo test -p aep-render` = 37, `cargo test -p protocol-cli` = 198).
 
 **What it showed about the run directory, and what that owes.** Building an overlay from a run is
@@ -450,9 +450,9 @@ identical a month later.
 
 | finding | disposition |
 |---|---|
-| **(1) `tool_config` admits what `authorize`'s floor later refuses.** `aep_engine::policy::authorize` re-applies the protocol's approval floor on top of the policy's answer, and this function is specified as *admits iff `decide(..) == Allowed`*. So a floor-gated capability that a profile allows outright is offered as a tool and then refused at `authorize` | **documented, not changed.** The refusal still happens, so nothing ungoverned occurs; what the model sees is a tool it cannot successfully use. Closing it means handing the function the `Protocol` as well, which changes the **published adapter surface** (§ 4.9 point 2) — not a thing to take unilaterally inside a build wave. Recorded where somebody will meet it: `crates/aep-driver/src/tool.rs:25-34` |
+| **(1) `tool_config` admits what `authorize`'s floor later refuses.** `aep_engine::policy::authorize` re-applies the protocol's approval floor on top of the policy's answer, and this function is specified as *admits iff `decide(..) == Allowed`*. So a floor-gated capability that a profile allows outright is offered as a tool and then refused at `authorize` | **documented, not changed.** The refusal still happens, so nothing ungoverned occurs; what the model sees is a tool it cannot successfully use. Closing it means handing the function the `Protocol` as well, which changes the **published adapter surface** (§ 4.9 point 2) — not a thing to take unilaterally inside a build wave. Recorded where somebody will meet it: `crates/drive/aep-driver/src/tool.rs:25-34` |
 | **(2) a driven `llm` step under `development.standard` cannot reach the planning store at all.** Every verb of the store's vocabulary is a shell command, and no development profile granted `command.execute` | **resolved, in the shape § 4.8 already uses for this class**: the `development.driven` profile grants the capability as its outer bound, `hooks/driven-surface.sh` is the inner one, and the profile's header says the grant exists so the `protocol` CLI is reachable and for no other reason. Pattern-based and best-effort, and both documents say so |
-| **(3) the loop transitions when a state's steps are done, not after every step.** § 4.4's diagram put `transition` after every step, which is not what a step map means: a state's steps are an ordered list and the transition is attempted when the list is exhausted (`crates/aep-driver/src/route.rs:30-35`, `next_step` at `:50-63`) | **the semantic is the code's; § 4.4 is corrected** in the design, with the diagram left standing beside the correction rather than redrawn — the rule this page already applies to § 4.2's `@1` |
+| **(3) the loop transitions when a state's steps are done, not after every step.** § 4.4's diagram put `transition` after every step, which is not what a step map means: a state's steps are an ordered list and the transition is attempted when the list is exhausted (`crates/drive/aep-driver/src/route.rs:30-35`, `next_step` at `:50-63`) | **the semantic is the code's; § 4.4 is corrected** in the design, with the diagram left standing beside the correction rather than redrawn — the rule this page already applies to § 4.2's `@1` |
 
 ### What wave 3 deliberately did not do
 

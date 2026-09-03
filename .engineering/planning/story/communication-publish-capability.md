@@ -16,16 +16,16 @@ scope:
 - confidence: cited
   path: CHANGELOG.md
 - confidence: cited
-  path: crates/aep-domain/src/capability.rs
+  path: crates/govern/aep-domain/src/capability.rs
 - confidence: cited
-  path: crates/aep-domain/src/protocol.rs
+  path: crates/govern/aep-domain/src/protocol.rs
 - confidence: cited
   path: docs/guide/open-vocabulary.md
 - confidence: cited
   path: protocols/aep/1.yaml
 - confidence: cited
   path: website/docs/reference/vocabulary.md
-revision: 10
+revision: 12
 ---
 # Story: The irreversible act in a corpus pipeline has no capability under it
 
@@ -64,12 +64,12 @@ $ protocol validate --root <scratch>
 ```
 
 **Everything except the name is already built, which is why this row is cheap.** A profile declares
-`capabilities.require_approval:` (`CapabilityPolicy`, `crates/aep-domain/src/capability.rs:482-498`);
+`capabilities.require_approval:` (`CapabilityPolicy`, `crates/govern/aep-domain/src/capability.rs:482-498`);
 a workflow **state** carries the same policy — `RawState.capabilities`, *"Capability adjustments while
-here"* (`crates/aep-domain/src/workflow.rs:296-298`) — so the gate can sit on the publishing state
+here"* (`crates/govern/aep-domain/src/workflow.rs:296-298`) — so the gate can sit on the publishing state
 itself; and `approval_floor` is inherited by every extension on purpose, *"a derived protocol that
 forgot to restate it would silently let a profile grant production access outright"*
-(`crates/aep-domain/src/protocol.rs:145-149`). One name is the whole distance between the adopter's
+(`crates/govern/aep-domain/src/protocol.rs:145-149`). One name is the whole distance between the adopter's
 document and a gate the engine enforces.
 
 Worth recording because it will be met again: the adopter's workflow marks its publishing state

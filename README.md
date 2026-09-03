@@ -33,18 +33,20 @@ Other workflows remain named profiles until they establish distinct semantics.
 
 The workspace includes:
 
-| Component | Responsibility |
-|---|---|
-| `aep-domain`, `adp-domain`, `aop-domain` | protocol and profile vocabularies |
-| `aep-engine` | deterministic resolution, evaluation, and transitions |
-| `aep-contract` | storage-independent commands and queries |
-| `aep-backend-*` | memory, markdown, SQLite, PostgreSQL, entity, and hybrid backends |
-| `aep-driver`, `aep-driver-spec` | reference workflow driver and step maps |
-| `trace-domain`, `trace-spec` | typed transcript normalization and conformance checking |
-| `aep-conformance` | backend contract suites |
-| `aep-schema` | standalone schemas for AEP documents |
-| `aep-ess-evidence` | optional conversion of a standalone ESS report into AEP evidence |
-| `protocol-cli` | the canonical `aep` command and `protocol` alias |
+| Area | Component | Responsibility |
+|---|---|---|
+| `crates/govern/` | `aep-domain`, `aep-engine` | protocol vocabulary, and deterministic resolution, evaluation, and transitions |
+| `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client` | storage-independent commands and queries, the black-box suites a provider is held to, and the official client |
+| `crates/plan/` | `aep-backend-*` | memory, markdown, SQLite, PostgreSQL, entity, and hybrid backends |
+| `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow driver, and workflow rendering |
+| `crates/observe/` | `trace-domain`, `trace-spec` | typed transcript normalization and conformance checking |
+| `crates/observe/` | `aep-ess-evidence` | optional conversion of a standalone ESS report into AEP evidence |
+| `crates/profile/` | `adp-domain`, `aop-domain` | development and operations vocabulary over the substrate |
+| `crates/edge/` | `aep-schema`, `aep-project` | standalone schemas for AEP documents, and the filesystem and Git acquisition edge |
+| `crates/edge/` | `protocol-cli` | the canonical `aep` command and `protocol` alias |
+
+The directory is the claim: a crate depends on its own area and on the ones below it, `edge` →
+`{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. `AGENTS.md` records the one exception.
 
 The document trees under `protocols/`, `principles/`, `workflows/`, `profiles/`, `artifacts/`, and
 `drivers/` are data. Teams may vendor them and add their own validated definitions.

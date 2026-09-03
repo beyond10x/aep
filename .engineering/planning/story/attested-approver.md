@@ -8,16 +8,16 @@ relations:
 - decomposes: epic:reference-driver
 scope:
 - confidence: cited
-  path: crates/aep-driver/src/attest.rs
+  path: crates/drive/aep-driver/src/attest.rs
 - confidence: cited
-  path: crates/aep-driver/src/run.rs
+  path: crates/drive/aep-driver/src/run.rs
 - confidence: cited
-  path: crates/aep-driver/tests/attested.rs
+  path: crates/drive/aep-driver/tests/attested.rs
 - confidence: inferred
-  path: crates/protocol-cli/src/drive.rs
+  path: crates/edge/protocol-cli/src/drive.rs
 - confidence: cited
-  path: crates/protocol-cli/src/planning.rs
-revision: 11
+  path: crates/edge/protocol-cli/src/planning.rs
+revision: 14
 ---
 # Story: An operator step can be answered by an independent agent, not only by a person
 
@@ -99,7 +99,7 @@ refuse the one arrangement that makes this useful.
 
 **The symptom the story was written for was wrong, and the cause was right.** Read back before
 implementing: the driver does not stop for the night. `--pause-on-approval` is a one-shot stop —
-the pause advances the cursor past the `operator` step (`crates/aep-driver/src/run.rs`, *the pause
+the pause advances the cursor past the `operator` step (`crates/drive/aep-driver/src/run.rs`, *the pause
 is this step's completion*) and a resume walks on. `NATIVE-1/1` moved
 `establish_verifiers -> implement` holding **zero** `approval` records; the guard it met,
 `spec-driven.before_implementation`, is an artifact requirement (`kind: specification`,
@@ -114,8 +114,8 @@ resume reads what arrived (`DriverCursor::owed` remembers how much record existe
 A person's approval is admissible unnamed; the named agent's is admissible unless it is the run's
 own actor — the task, the execution, the harness its `llm` steps run under — and an agent nobody
 named is refused naming the flag. The cursor records who answered (`DriverCursor::answers`;
-`protocol drive status` prints `answered …`). Rule and refusals: `crates/aep-driver/src/attest.rs`.
-Tests: `crates/aep-driver/tests/attested.rs`.
+`protocol drive status` prints `answered …`). Rule and refusals: `crates/drive/aep-driver/src/attest.rs`.
+Tests: `crates/drive/aep-driver/tests/attested.rs`.
 
 **The asymmetry, stated.** With an approver named, a resume that finds no admissible approval stops
 again and says who would be admissible. With none named, a resume that finds nothing walks on as it
@@ -137,7 +137,7 @@ routes, because walking past a self-approval is the case the step exists to prev
 **What this does not do, named.** The approver is whatever `producer` the record carries: a
 declared identity, as strong as the rest of the evidence model. D-3, attestation by signature, stays proposed on purpose: it is a key-management design (who signs, what a verifier holds, how a revoked key reads in an old record), not a fix, and it gets a design document before it gets code. And the
 store's own provenance could not tell an agent's `protocol artifact move` from a person's:
-`command_actor()` (`crates/protocol-cli/src/planning.rs`) stamped `human:<USER>` on every move,
+`command_actor()` (`crates/edge/protocol-cli/src/planning.rs`) stamped `human:<USER>` on every move,
 which is the *accepts any caller* gap this story's Context names from the other side. That is
 `story:the-store-knows-who-wrote-it`, taken up the same day: `AEP_ACTOR` declares the actor and the
 driver sets it to `agent:<execution id>` — the same string `attest` refuses an approval from — on

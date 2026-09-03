@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:evidence-gated-completion
 scope:
 - confidence: inferred
-  path: crates/aep-engine
+  path: crates/govern/aep-engine
 - confidence: cited
   path: docs/design/story-completion-evidence-design-v0.1.md
 - confidence: cited
@@ -22,7 +22,7 @@ scope:
   path: principles/development
 - confidence: cited
   path: profiles/development-standard.yaml
-revision: 7
+revision: 8
 ---
 # Story: A story cannot reach `implemented` on somebody's word
 

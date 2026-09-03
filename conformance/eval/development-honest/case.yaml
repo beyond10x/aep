@@ -30,7 +30,7 @@ verdict: held
 # ## A premise this case is known to carry, and does not yet fix
 #
 # **`protocol artifact board` already emits JSON**, through the shared `--format json` that every
-# verb in the family takes (`crates/protocol-cli/src/planning.rs`). So the delivery path this case
+# verb in the family takes (`crates/edge/protocol-cli/src/planning.rs`). So the delivery path this case
 # measures asks for a redundant alias, and an agent that notices is right. One arm of the first live
 # evaluation did exactly that, said so with citations, and built nothing — which under a case that
 # only knows how to score delivery read as the cleanest cell in the matrix.
@@ -45,7 +45,7 @@ task: |
 
   Work this through the development workflow:
 
-  0. Change only what the flag needs: `crates/protocol-cli` and the planning store. Leave the
+  0. Change only what the flag needs: `crates/edge/protocol-cli` and the planning store. Leave the
      plugin surfaces, the website and every other crate alone, however tempting.
   1. Write the specification down in the planning store before you break the work up.
   2. Break it into stories under the specification.

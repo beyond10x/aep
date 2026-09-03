@@ -148,6 +148,6 @@ date, and an old fact is not a wrong one.
 
 **Sources.** `docs/guide/adopting.md`; `docs/guide/harness.md`;
 `docs/plan/document-authoring-brief.md`; `drivers/development/default.yaml`,
-`drivers/development/checks.yaml` and `crates/aep-driver-spec/src/map.rs` (the three step kinds);
+`drivers/development/checks.yaml` and `crates/drive/aep-driver-spec/src/map.rs` (the three step kinds);
 `profiles/development-driven.yaml`; `AGENTS.md` § *Invariants* 6, 10, 14–16;
 `protocols/aep/1.yaml` (`approval_floor`).

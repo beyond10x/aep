@@ -7,7 +7,7 @@ title: 'W4-3: operator-resume-ux, driven as a governed run'
 summary: 'The request recorded at intake: task W4-3 (kind feature, objective operator-resume-ux) asks for story:operator-resume-ux under protocol adp/1 and profile development.driven.'
 relations:
 - derived_from: story:operator-resume-ux
-revision: 3
+revision: 4
 ---
 # Task: W4-3 — operator-resume-ux
 
@@ -36,7 +36,7 @@ The requester's stated reason for choosing this story, verbatim: "`story:operato
 chosen against `story:governed-dogfood-run`'s own stated default — *one whose acceptance is already
 mechanical and whose blast radius is one crate* — after the 2026-08-28 audit of
 `epic:reference-driver` closed the previous candidate. `story:retry-budgets` was the candidate this
-plan named; it turned out to be shipped and closed that day on `crates/aep-driver/tests/driving.rs`
+plan named; it turned out to be shipped and closed that day on `crates/drive/aep-driver/tests/driving.rs`
 and `routing.rs`."
 
 The requester states what it believes is left, verbatim: "What is left in `operator-resume-ux` is one
@@ -122,14 +122,14 @@ declared so the plan demands the evidence kinds a code change owes — which is 
 
 `constraints.notes`, the three that are not the story pointer already quoted above:
 
-- "Implementation surface is `crates/aep-driver/` and `crates/protocol-cli/src/drive.rs`. Do not
+- "Implementation surface is `crates/drive/aep-driver/` and `crates/edge/protocol-cli/src/drive.rs`. Do not
   modify anything under `website/`, `integrations/`, `drivers/`, `.engineering/planning/`, or the
   workspace `Cargo.toml`."
 - "The defect to fix first is the one with a user-visible consequence — a stolen lock leaves no
   record that it was stolen. Thread the `StolenLock` into the cursor and read it back from the run
   directory in a test."
-- "The tests belong in `crates/aep-driver/tests/routing.rs` and
-  `crates/protocol-cli/tests/drive_cli.rs`; both already hold the neighbouring cases."
+- "The tests belong in `crates/drive/aep-driver/tests/routing.rs` and
+  `crates/edge/protocol-cli/tests/drive_cli.rs`; both already hold the neighbouring cases."
 
 The story's Open Questions section, quoted unedited: "None. The age-threshold question was asked and
 answered: there is deliberately no threshold." So this intake records no unanswered question.

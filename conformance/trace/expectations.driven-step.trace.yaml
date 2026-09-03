@@ -17,7 +17,7 @@ expectations:
     statement: the harness's tool inventory contains `Bash`, so a refused shell call is a refusal and not an absence
     # **Read this before adding a row here that gates on the allowlist.** `SessionStart.tools` is the
     # harness's **inventory**, not the session's allow rules. The committed fixture at
-    # `crates/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl` was produced by a run launched with
+    # `crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl` was produced by a run launched with
     # `--allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Task,TodoWrite"` and its init event lists
     # 32 tools, `Monitor` and `WebFetch` among them. So `env.tool_available` cannot audit a per-state
     # allowlist: it answers "does this harness have such a tool", not "was this session allowed it".
@@ -90,7 +90,7 @@ expectations:
   - id: no-subagents
     statement: nothing routed around the per-state allowlist through a subagent
     # § 4.9 point 2 names this as the audit for "`Task` is never offered". It was written advisory
-    # because neither committed fixture at `crates/trace-spec/tests/fixtures/` carries
+    # because neither committed fixture at `crates/observe/trace-spec/tests/fixtures/` carries
     # `subagents_spawned`, which would make it `unk`. The first real driven run (Claude Code 2.1.238)
     # reported `subagents_spawned = 0`, so the field exists in the harness this eval runs against and
     # the row is gating. If a future run answers `unk`, that is a fact about the harness worth a red

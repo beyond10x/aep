@@ -15,14 +15,14 @@ relations:
 - informed_by: story:retry-budgets
 scope:
 - confidence: cited
-  path: crates/aep-driver
+  path: crates/drive/aep-driver
 - confidence: cited
-  path: crates/aep-driver-spec
+  path: crates/drive/aep-driver-spec
 - confidence: inferred
-  path: crates/protocol-cli
+  path: crates/edge/protocol-cli
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 7
+revision: 10
 ---
 # Story: Retry, circuit-break, and a third party simulated from its own spec
 
@@ -83,7 +83,7 @@ the half this repository is unusually placed to do: the simulated external.
 
 | line | state | what remains |
 |---|---|---|
-| a retry-wrapped step and a circuit-broken step, both validated before the run, malformed **refused** | **holds** — `crates/aep-driver-spec/src/map.rs:374-382` (`retries`, `depends_on`, `circuit_breaker`), `deny_unknown_fields` at `:364`, `validate_circuit_breaker` at `:1047-1080`; `a_circuit_breaker_that_cannot_work_is_refused_at_load` (`map.rs:1423`), `a_well_formed_circuit_breaker_loads` (`:1452`), `a_dependency_that_keeps_failing_stops_being_attempted` (`crates/aep-driver/tests/driving.rs:1105`) | **no shipped map uses either.** `grep "retries\|circuit_breaker\|depends_on" drivers/development/*.yaml` returns nothing; the only user is the `test/flaky` fixture. A declared decorator nobody has declared in a real map is a construct, not a workflow |
+| a retry-wrapped step and a circuit-broken step, both validated before the run, malformed **refused** | **holds** — `crates/drive/aep-driver-spec/src/map.rs:374-382` (`retries`, `depends_on`, `circuit_breaker`), `deny_unknown_fields` at `:364`, `validate_circuit_breaker` at `:1047-1080`; `a_circuit_breaker_that_cannot_work_is_refused_at_load` (`map.rs:1423`), `a_well_formed_circuit_breaker_loads` (`:1452`), `a_dependency_that_keeps_failing_stops_being_attempted` (`crates/drive/aep-driver/tests/driving.rs:1105`) | **no shipped map uses either.** `grep "retries\|circuit_breaker\|depends_on" drivers/development/*.yaml` returns nothing; the only user is the `test/flaky` fixture. A declared decorator nobody has declared in a real map is a construct, not a workflow |
 | a step map declares an external dependency simulated against a named specification | **missing** — `grep simulat` over `aep-driver-spec`, `aep-driver`, `drivers/` → 0 hits | all of it |
 | one `drive` run exercises retry **and** the simulated external, offline | **missing** | all of it |
 | an injected fault is observable in the run, and the record says which | **missing** | all of it |

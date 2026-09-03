@@ -6,12 +6,12 @@ status: draft
 title: Three published patterns still disagree with the constructors they are published for
 scope:
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/drive/aep-driver-spec
 - confidence: cited
-  path: crates/aep-driver-spec
+  path: crates/govern/aep-domain
 - confidence: cited
   path: schemas/generated/protocol.schema.json
-revision: 5
+revision: 7
 ---
 # Story: Three published patterns still disagree with the constructors they are published for
 
@@ -28,9 +28,9 @@ Found by the second adversarial pass of the wave of 2026-08-30, against `4f2dd4e
 `aep-driver-spec` from one body per charset — fourteen identifiers and references. **These four were
 measured and deliberately not fixed**, because each is a second change hiding inside that one. Every
 count below is pinned by an exact assertion in
-`crates/aep-driver-spec/tests/published_pattern_evaluated.rs`, so a case goes red the day one moves.
+`crates/drive/aep-driver-spec/tests/published_pattern_evaluated.rs`, so a case goes red the day one moves.
 
-**1. `crates/aep-domain/src/facts.rs:488` — `FactPattern::PATTERN` puts `*` inside the character
+**1. `crates/govern/aep-domain/src/facts.rs:488` — `FactPattern::PATTERN` puts `*` inside the character
 class.** The published pattern is `^([A-Za-z0-9_*-]+)(\.[A-Za-z0-9_*-]+)*$`. `FactPattern::new`
 allows `*` only as a whole segment and `**` only last. Measured: **96 divergences over the shape
 corpus, 287,967 over 955,206 strings, all schema-looser** — `a*`, `*a`, `***`, `**.a` and
@@ -44,7 +44,7 @@ author, not the current tree. That is what makes this a story rather than an inc
 This is the exact shape `story:workflow-id-pattern-numeric-tail` fixed for `-` in four vocabularies:
 a separator inside a character class where the constructor requires it between segments.
 
-**2. `crates/aep-domain/src/entity.rs:282` and `crates/aep-domain/src/domain_event.rs:213` — same
+**2. `crates/govern/aep-domain/src/entity.rs:282` and `crates/govern/aep-domain/src/domain_event.rs:213` — same
 class.** `[a-z0-9.-]*` and `[a-z0-9-]+` accept a segment that is bare `-`, an empty segment and a
 trailing `-`. Measured: **66 and 49 divergences, all schema-looser** — `a.-/v1`, `a..a/v1`,
 `a-b.-.-/v1`.
@@ -53,7 +53,7 @@ trailing `-`. Measured: **66 and 49 divergences, all schema-looser** — `a.-/v1
 so today the wrong rule exists only in `json_schema()`. Recorded because it is the same defect and
 will be published the day either type reaches a schema.
 
-**3. `crates/aep-domain/src/artifact.rs:102` — `ArtifactId::PATTERN` refuses a leading separator its
+**3. `crates/govern/aep-domain/src/artifact.rs:102` — `ArtifactId::PATTERN` refuses a leading separator its
 constructor takes.** The pattern anchors **both** halves on `[A-Za-z0-9]`; `ArtifactId::new`
 (`:57`) allows `-_./` anywhere in either. Measured: **601 divergences over 56,594 + 4,687 strings,
 all schema-stricter** — `_a:b`, `.a:b`, and in the second half `a:.`, `a:-`, `a:_`, `a:/`.

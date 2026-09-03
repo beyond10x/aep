@@ -13,16 +13,16 @@ relations:
 - decomposes: epic:reference-driver
 scope:
 - confidence: cited
-  path: crates/aep-domain
+  path: crates/drive/aep-driver-spec
 - confidence: cited
-  path: crates/aep-driver-spec
+  path: crates/edge/protocol-cli
 - confidence: cited
-  path: crates/aep-engine
+  path: crates/govern/aep-domain
 - confidence: cited
-  path: crates/protocol-cli
+  path: crates/govern/aep-engine
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 9
+revision: 11
 ---
 # Story: A rule about this task's specification stops accepting somebody else's
 
@@ -96,7 +96,7 @@ the artifact graph, the evidence log and the clock; nothing on it answered *what
 
 **The declaration.** `relation: {kind: specifies, target: task}`. `target` is a new closed vocabulary
 on `RelationRequirement` with one member, beside the existing `target_kind`
-(`crates/aep-domain/src/requirement.rs`, `RelationTarget`). A vocabulary rather than a `for_task:
+(`crates/govern/aep-domain/src/requirement.rs`, `RelationTarget`). A vocabulary rather than a `for_task:
 true` flag because it answers the question `target_kind` already asks — *which thing is at the other
 end* — and two ways to constrain one edge is how the two come to disagree. It composes:
 `{kind: specifies, target_kind: story, target: task}` is *specifies a story of this task*, and **one**
@@ -133,7 +133,7 @@ somebody else's story. A tool that is looser than its own gate is worse than one
 the record looks like evidence and is about the wrong work.
 
 **One rule, shared by construction.** The set is `Task::declared_work`
-(`crates/aep-domain/src/task.rs`) — `derived_from` plus the task's own id as `task:<id>`, `context:`
+(`crates/govern/aep-domain/src/task.rs`) — `derived_from` plus the task's own id as `task:<id>`, `context:`
 still excluded. It was the body of `Execution::task_artifacts`; the engine now calls it and so does
 the verb, so *whose specification is this* has one answer and one place to change. The match is
 `ArtifactRequirement::matches`, the engine's own function, over the requirement
@@ -164,7 +164,7 @@ vocabulary change.* It was, and that is all it was: `--task` already existed on 
 consumer was only ever waiting for a way to be told.
 
 **`{task}` is the third and last name in the closed vocabulary**
-(`crates/aep-driver-spec/src/map.rs`, `CommandStep::PLACEHOLDERS`). The driver expands it to the
+(`crates/drive/aep-driver-spec/src/map.rs`, `CommandStep::PLACEHOLDERS`). The driver expands it to the
 **absolute** path of the task document the run was started from — the one `--task` named, or the one
 discovery found when no flag did. Absolute because a `command` step is spawned with the project
 directory as its working directory while `--task` is relative to wherever the operator typed it, and
@@ -184,13 +184,13 @@ and discovery is what answers a person running the verb by hand outside a run.
 Three tests hold it, each verified by the mutation it exists to catch:
 
 - `the_task_document_can_be_named_and_a_misspelling_is_offered_all_three_names`
-  (`crates/aep-driver-spec/src/map.rs`) — the vocabulary, and the hint that has to grow with it, read
+  (`crates/drive/aep-driver-spec/src/map.rs`) — the vocabulary, and the hint that has to grow with it, read
   out of `PLACEHOLDERS` rather than spelled again.
 - `the_task_placeholder_is_the_document_this_run_was_started_from`
-  (`crates/protocol-cli/src/drive.rs`) — the expansion, alone and inside a word, and the refusal for
+  (`crates/edge/protocol-cli/src/drive.rs`) — the expansion, alone and inside a word, and the refusal for
   a run whose task was never read out of a file.
 - `a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from`
-  (`crates/protocol-cli/tests/drive_cli.rs`) — a driven project holding two stories, two approved
+  (`crates/edge/protocol-cli/tests/drive_cli.rs`) — a driven project holding two stories, two approved
   specifications and two tasks, asserting **both** halves: the map without the placeholder writes a
   record about the *project's* story, and the map with it writes one about the task the run was
   started from. Without the first half this would pass in any store with one specification in it.

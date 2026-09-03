@@ -33,10 +33,10 @@ into the story's own body. Every one is **high** confidence.
 
 | # | story | epic | serves | surface | branch |
 |---|---|---|---|---|---|
-| 1 | `story:unreadable-lock-refuses-its-own-escape-hatch` | `reference-driver` | **O3** *(edge added today)* | `crates/protocol-cli/src/drive.rs`, `tests/drive_cli.rs` | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
-| 2 | `story:workflow-id-pattern-numeric-tail` | `reference-driver` | **O3** *(edge added today)* | `crates/aep-domain/src/ids.rs`, `crates/aep-driver-spec/src/pin.rs` + `tests/published_pattern_evaluated.rs`, `schemas/generated/*.json` (4) | `impl/workflow-id-pattern-numeric-tail` |
-| 3 | `story:prose-that-the-tree-contradicts` | `reference-driver` | **O3** *(edge added today)* | `crates/aep-engine/src/load.rs`, `crates/aep-engine/tests/adopting_guide.rs`, `crates/aep-driver/tests/shell_echo.rs`, `drivers/development/default.yaml`, `conformance/eval/development-honest/expectations.trace.yaml`, 2 docs | `impl/prose-that-the-tree-contradicts` |
-| 4 | `story:skill-text-cannot-instruct-a-direct-store-write` | `adopter-feedback-round-1` | **O2** *(already declared)* | one **new** file under `crates/protocol-cli/tests/` | `impl/skill-text-cannot-instruct-a-direct-store-write` |
+| 1 | `story:unreadable-lock-refuses-its-own-escape-hatch` | `reference-driver` | **O3** *(edge added today)* | `crates/edge/protocol-cli/src/drive.rs`, `tests/drive_cli.rs` | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
+| 2 | `story:workflow-id-pattern-numeric-tail` | `reference-driver` | **O3** *(edge added today)* | `crates/govern/aep-domain/src/ids.rs`, `crates/drive/aep-driver-spec/src/pin.rs` + `tests/published_pattern_evaluated.rs`, `schemas/generated/*.json` (4) | `impl/workflow-id-pattern-numeric-tail` |
+| 3 | `story:prose-that-the-tree-contradicts` | `reference-driver` | **O3** *(edge added today)* | `crates/govern/aep-engine/src/load.rs`, `crates/govern/aep-engine/tests/adopting_guide.rs`, `crates/drive/aep-driver/tests/shell_echo.rs`, `drivers/development/default.yaml`, `conformance/eval/development-honest/expectations.trace.yaml`, 2 docs | `impl/prose-that-the-tree-contradicts` |
+| 4 | `story:skill-text-cannot-instruct-a-direct-store-write` | `adopter-feedback-round-1` | **O2** *(already declared)* | one **new** file under `crates/edge/protocol-cli/tests/` | `impl/skill-text-cannot-instruct-a-direct-store-write` |
 
 Integration branch: `wave/what-the-last-wave-found`, forked from `main` at `3d86d5b`.
 
@@ -53,8 +53,8 @@ Integration branch: `wave/what-the-last-wave-found`, forked from `main` at `3d86
 
 **Caveat on 1 × 3 and 3 × 4 — a read is not a write, and this is where it could still bite.**
 Unit 3 edits `#` comments in two *shipped* artefacts: `drivers/development/default.yaml:11` and
-`conformance/eval/development-honest/expectations.trace.yaml:125`. `crates/protocol-cli/src/drive.rs`,
-`crates/aep-driver/tests/coverage.rs` and `crates/protocol-cli/tests/eval_*` **read** both files. No
+`conformance/eval/development-honest/expectations.trace.yaml:125`. `crates/edge/protocol-cli/src/drive.rs`,
+`crates/drive/aep-driver/tests/coverage.rs` and `crates/edge/protocol-cli/tests/eval_*` **read** both files. No
 merge conflict is possible — nothing else writes them — but a byte-comparing assertion in
 `protocol-cli` would go red on the integration branch and not in unit 3's own package gate. Named
 here so the first red on the integration branch is recognised rather than investigated.
@@ -69,35 +69,35 @@ Implementors are told not to.
 ## 4. What each unit owes
 
 **1 — `story:unreadable-lock-refuses-its-own-escape-hatch`.** `read_lock`
-(`crates/protocol-cli/src/drive.rs:1448`) propagates the serde error with `?`, and `take_lock`
+(`crates/edge/protocol-cli/src/drive.rs:1448`) propagates the serde error with `?`, and `take_lock`
 (`:1462`) calls it at `:1510` — **before** it consults `force` at `:1512`. So `--take-lock`, the
 route the refusal itself advertises, is refused by the thing that exists to override it. Four call
 sites are affected, not the three the acceptance names: `start` (`:754`), `resume` (`:889`) and
 `status` (`:950`) all read the lock.
 
 **The red case is not on `main`.** `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error`
-lives only on `impl/protocol-drive-verb`, at `crates/protocol-cli/tests/drive_cli.rs:2695`. `b216ce7`
+lives only on `impl/protocol-drive-verb`, at `crates/edge/protocol-cli/tests/drive_cli.rs:2695`. `b216ce7`
 removed it from `main` deliberately and its message names this story as the owner. The implementor
 restores it from that branch rather than looking for it in place.
 
 **Why this one first:** `story:protocol-drive-verb` is `active` and `depends_on` it. Nothing else in
 the backlog is on an active story's critical path.
 
-**2 — `story:workflow-id-pattern-numeric-tail`.** `WorkflowId::PATTERN` (`crates/aep-domain/src/ids.rs:235`)
+**2 — `story:workflow-id-pattern-numeric-tail`.** `WorkflowId::PATTERN` (`crates/govern/aep-domain/src/ids.rs:235`)
 is looser than `WorkflowId::new`: the constructor refuses an id whose last `.`- or `/`-separated
 component is a bare integer (`ids.rs:97-108`), the published pattern does not, so `adp/2/1`,
 `adp.2/1` and `adp/22/1` pass the schema and fail to load. `ProfileId` (`:227`) shares the rule.
 
 The replacement pattern body **already exists and is corpus-checked** —
-`the_numeric_tail_rule_is_expressible_as_a_pattern`, `crates/aep-driver-spec/tests/published_pattern_evaluated.rs:537`.
+`the_numeric_tail_rule_is_expressible_as_a_pattern`, `crates/drive/aep-driver-spec/tests/published_pattern_evaluated.rs:537`.
 
 Two corrections to the story, both in its Scope now: `PinnedWorkflowRef::PATTERN`
-(`crates/aep-driver-spec/src/pin.rs:73`) is a hand-written literal, **not** composed from
+(`crates/drive/aep-driver-spec/src/pin.rs:73`) is a hand-written literal, **not** composed from
 `aep-domain`, so *one line in `aep-domain`* understates the change; and four generated schemas carry
 the definitions, not the one the acceptance names.
 
 **3 — `story:prose-that-the-tree-contradicts`.** Three claims, all re-verified unchanged at `3d86d5b`.
-- `crates/aep-engine/src/load.rs:29` says the `drivers` row is last because *"the workflows are
+- `crates/govern/aep-engine/src/load.rs:29` says the `drivers` row is last because *"the workflows are
   filled in by the row above this one"*. The row above is `artifacts/lifecycles` (`:27`); `workflows`
   is `:25`. `:30-32` then explains that `Registry::validate` runs after the whole tree is read, so
   the ordering is not what makes cross-validation work — the comment argues against itself.
@@ -113,16 +113,16 @@ the definitions, not the one the acceptance names.
   same passage, and 2 in this page itself. All 7 uncorrected ones are fixed by unit 3. The story's
   *seven copies* counts 5 uncorrected files plus `story:driver-router`'s 2; by file the uncorrected
   set was 6, by line 7.
-- `VENDORED` (`crates/aep-engine/tests/adopting_guide.rs:19-27`) either derives from the loader's
+- `VENDORED` (`crates/govern/aep-engine/tests/adopting_guide.rs:19-27`) either derives from the loader's
   table or says in one line why it does not. **Which of the two is an open decision** — deriving adds
   a third copy of the same source parser, because integration tests are separate binaries. The
   implementor decides and states the reason; it is not a question for the operator.
 
 **4 — `story:skill-text-cannot-instruct-a-direct-store-write`.** Nothing in this repository reads a
 `SKILL.md`'s content; the only code that touches one joins its path and asserts it exists
-(`crates/protocol-cli/src/drive.rs:7838`). The prohibition on hand-editing planning artifacts is
+(`crates/edge/protocol-cli/src/drive.rs:7838`). The prohibition on hand-editing planning artifacts is
 prose guarded by nothing — the same shape as the defect it was written to fix. One new test under
-`crates/protocol-cli/tests/`, modelled on `workflow_coverage.rs`, enumerating the five shipped
+`crates/edge/protocol-cli/tests/`, modelled on `workflow_coverage.rs`, enumerating the five shipped
 `SKILL.md` files and refusing text that instructs a direct store write. The shipped skills must pass
 unmodified.
 
@@ -134,8 +134,8 @@ is a `const` in the test file or a committed document under `integrations/`.
 
 | story | why |
 |---|---|
-| `story:a-story-records-where-it-lands` | scoped, **medium** confidence. Two unresolved forks decide whether it is one crate or four: which population the report covers (the acceptance says *non-draft*, 73 stories; the rationale describes the *draft* set, 44), and whether `validate` must genuinely load `artifacts/kinds/story.yaml` — which does not exist, and which **nothing in the tree reads**: `crates/aep-engine/src/load.rs:22-34` has no `artifacts/kinds` row and `required_sections` appears in no `.rs` file. On the deep path it edits `load.rs`, which is unit 3's file |
-| `story:evidence-subject-binding` | scoped 2026-08-30, high confidence for the remaining increment (`crates/aep-domain/src/requirement.rs:377-382`, gap-register finding **F26**) — but the fix is an undecided fork between a behaviour change and a parse-time refusal, and F26 explicitly declines to require `subject` alongside `horizon`. A wave unit that has to pick a semantics for evidence gating is a decision, not an implementation |
+| `story:a-story-records-where-it-lands` | scoped, **medium** confidence. Two unresolved forks decide whether it is one crate or four: which population the report covers (the acceptance says *non-draft*, 73 stories; the rationale describes the *draft* set, 44), and whether `validate` must genuinely load `artifacts/kinds/story.yaml` — which does not exist, and which **nothing in the tree reads**: `crates/govern/aep-engine/src/load.rs:22-34` has no `artifacts/kinds` row and `required_sections` appears in no `.rs` file. On the deep path it edits `load.rs`, which is unit 3's file |
+| `story:evidence-subject-binding` | scoped 2026-08-30, high confidence for the remaining increment (`crates/govern/aep-domain/src/requirement.rs:377-382`, gap-register finding **F26**) — but the fix is an undecided fork between a behaviour change and a parse-time refusal, and F26 explicitly declines to require `subject` alongside `horizon`. A wave unit that has to pick a semantics for evidence gating is a decision, not an implementation |
 | `story:recurrence-key` | its own Scope section says outright it is **not ready to dispatch**: no referent for *where the workflow's other outputs are declared*, an undecided store, and no incident instances in this tree to roll up |
 | `story:advisory-enforcement-tier` | `docs/plan/gap-register.md` records it **closed by code 2026-08-26 — the protocol layer has the tier**, with four tests named, while the story is still `draft`. Verify-and-close, not implement |
 | `story:completion-needs-evidence` | its own body marks two acceptance lines **Shipped** and carries a *Verdict — accepted in part, 2026-08-28*. What remains is a decision that was deliberately taken (report, do not refuse), not code |
