@@ -16,6 +16,23 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- **`aep eval run` refuses to spawn against a stale child `aep`** (`EVAL-RUN-017`). The session
+  metaharness launches runs on a constructed `PATH` — `$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`
+  — so the `aep` a case's task executes is whatever sits in `~/.local/bin`, not the one that launched
+  the run. On 2026-09-03 a 0.40.1 copy there, beside the 0.44.0 that launched, made step 8 of the
+  golden path stop at `unrecognized subcommand 'doctor'` after $10.96 had been spent. Before a live
+  spawn the runner now resolves `aep` the way the child will and compares its `--version` with its
+  own; a mismatch is refused with both paths and both versions, an absence is a printed warning (the
+  child may not need it), and `--stream` ingestion is untouched. `task install` refreshes a real
+  `~/.local/bin/aep` and `~/.local/bin/protocol` after the cargo install for the same reason.
+- **A case whose `subject.skills` names `ess-schema:*` needs `ess` on the child's `PATH`**
+  (`EVAL-RUN-018`), or its step is drafted by hand and never validated — which is what the same
+  recording showed.
+- **`aep eval run --budget-usd` is now also the session's own ceiling.** Each spawned Claude run
+  receives `metaharness run claude --max-budget-usd <what is left of the cap>`, which the vendor
+  enforces during the run; the runner's between-runs check stays. Until now the cap was a receipt:
+  the golden-path case stated $10.96 against `--budget-usd 5` and the only thing the number did was
+  appear in the report. Claude Code only, on `--model`'s reasoning; needs metaharness 0.6.1.
 - **`aep eval run --model <MODEL>`**, forwarded **verbatim** to the `metaharness run claude --model`
   invocation. The flag states and the harness resolves: nothing here normalises an alias or picks a
   model, and an invocation that pins none produces the argv it produced before the flag existed. It

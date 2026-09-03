@@ -145,8 +145,21 @@ tasks:
       install that would have prevented it was nowhere in the procedure.
     cmds:
       - cargo install --path crates/protocol-cli --locked --force
+      # `~/.local/bin` is the one directory a metaharness-spawned session has on its PATH
+      # (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`, constructed, never inherited). A copy left
+      # there is the `aep` every eval and every driven run actually executes: on 2026-09-03 a 0.40.1
+      # copy beside a 0.44.0 cargo install made the golden path stop at `unrecognized subcommand
+      # 'doctor'`. Refresh a real file; leave a symlink alone, it already points at the install.
+      - |
+        for name in aep protocol; do
+          ambient="$HOME/.local/bin/$name"
+          if [ -e "$ambient" ] && [ ! -L "$ambient" ]; then
+            install -m 0755 "$HOME/.cargo/bin/$name" "$ambient" && echo "refreshed $ambient"
+          fi
+        done
       - aep --version
       - protocol --version
+      - PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" aep --version
 
   release-check:
     desc: >-

@@ -526,6 +526,23 @@ experiment varying two things.
 |---|---|
 | `EVAL-RUN-016` | `--model` on `codex` or `b10x`, whose adapters take no model flag at metaharness 0.5.0. Refused by name rather than accepted and dropped, because a run that silently used the default would enter the matrix as a run that pinned one |
 
+### The cap, and the child's `PATH`
+
+`--budget-usd` is checked between runs **and** handed to each Claude run as
+`metaharness run claude --max-budget-usd <what is left of the cap>`, which the vendor enforces while
+the session runs. A cap only compared against the bill afterwards is a receipt: one golden-path run
+stated $10.96 against `--budget-usd 5`. Needs metaharness 0.6.1; Claude Code only.
+
+The session metaharness spawns runs on a **constructed** `PATH` — `$HOME/.local/bin:/usr/local/bin:
+/usr/bin:/bin` — so the `aep` a case's task executes is the one in `~/.local/bin`, never the one that
+launched the run. Before a live spawn the runner resolves `aep` the way the child will and compares
+versions; `task install` refreshes that copy.
+
+| refusal | when |
+|---|---|
+| `EVAL-RUN-017` | the child's `aep` is not this binary's version. Both paths and both versions are named; an absent child `aep` is a printed warning, since a case may not need it |
+| `EVAL-RUN-018` | the case's `subject.skills` names `ess-schema:*` and the child's `PATH` has no `ess` — the step it runs would be drafted by hand and never validated |
+
 The manifest records **both** facts and keeps them apart: `model` is what the attestation reported
 and `model_requested` is what the run asked for, written immediately after it and only where the run
 asked for something. So a manifest from before `--model` existed keeps its bytes, and `eval matrix`

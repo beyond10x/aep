@@ -2053,6 +2053,24 @@ enum RunRefusal {
     DrivenIsNotLaunchedHere,
     /// Arm `native` is not launched from here either, and for a different reason.
     NativeIsNotLaunchedHere,
+    /// The `aep` the spawned session would run is not this binary's version.
+    ChildAepMismatch {
+        /// The binary the child's `PATH` resolves.
+        child: String,
+        /// What it reported.
+        found: String,
+        /// What this runner is.
+        own: String,
+        /// The `PATH` the child gets.
+        child_path: String,
+    },
+    /// A case's subject names an `ess-schema` skill and the child's `PATH` has no `ess`.
+    ChildEssMissing {
+        /// The case.
+        case: String,
+        /// The `PATH` the child gets.
+        child_path: String,
+    },
     /// A live spawn was asked for with no tree for the session to work in.
     NoWorkingTree,
     /// The cap would be exceeded by the next run.
@@ -2113,6 +2131,8 @@ impl RunRefusal {
             Self::InstructionsMissing { .. } => "EVAL-RUN-009",
             Self::SpawnFailed { .. } => "EVAL-RUN-010",
             Self::NativeIsNotLaunchedHere => "EVAL-RUN-011",
+            Self::ChildAepMismatch { .. } => "EVAL-RUN-017",
+            Self::ChildEssMissing { .. } => "EVAL-RUN-018",
         }
     }
 }
@@ -2185,6 +2205,28 @@ impl fmt::Display for RunRefusal {
                  \n\
                  `--model` is Claude Code only. When the other adapters take it, this refusal is \
                  what has to be removed for them, one harness at a time"
+            ),
+            Self::ChildAepMismatch {
+                child,
+                found,
+                own,
+                child_path,
+            } => write!(
+                f,
+                "the `aep` the session will run is not this one. metaharness gives the child a \
+                 constructed PATH ({child_path}), never the runner's own, and the first `aep` on it \
+                 is {child}, version {found}; this runner is {own}. A case's task runs that binary, \
+                 so a live spawn now would pay for a run against a stale CLI — on 2026-09-03 a 0.40.1 \
+                 there stopped the golden path at `unrecognized subcommand 'doctor'` after $10.96. \
+                 Refresh it (`task install` in the aep checkout rewrites a real ~/.local/bin/aep), or \
+                 point ~/.local/bin/aep at this binary, then run again"
+            ),
+            Self::ChildEssMissing { case, child_path } => write!(
+                f,
+                "case `{case}` names an `ess-schema` skill in its subject, and the child's PATH \
+                 ({child_path}) has no `ess`: the step that skill runs would be drafted by hand and \
+                 never validated, which is what the 2026-09-03 recording showed. Put `ess` on \
+                 ~/.local/bin (a symlink to ~/.cargo/bin/ess is enough) and run again"
             ),
             Self::PluginOnRawArm { plugin } => write!(
                 f,
@@ -2551,6 +2593,16 @@ struct RawCase {
     task: Option<String>,
     /// The `trace-spec/1` document it is judged by, relative to the case directory.
     expectations: Option<String>,
+    /// What the case is a case about. Only `skills` is read here, and only to ask what the child's
+    /// `PATH` has to hold (`preflight_child_path`); the corpus test owns the rest of the shape.
+    subject: Option<RawSubject>,
+}
+
+/// The `subject:` block of a case, as far as this runner reads it.
+#[derive(Debug, Deserialize)]
+struct RawSubject {
+    /// The skills the case is about, `<plugin>:<skill>`.
+    skills: Option<Vec<String>>,
 }
 
 /// A case, once read.
@@ -2564,6 +2616,8 @@ struct Case {
     task: String,
     /// The document it is judged by.
     expectations: PathBuf,
+    /// Whether the case's subject names an `ess-schema` skill, whose step runs `ess` in the session.
+    needs_ess: bool,
 }
 
 /// Reads the case in a directory.
@@ -2581,6 +2635,11 @@ fn read_case(directory: &Path) -> Result<Case> {
         .with_context(|| format!("reading the case at {}", manifest.display()))?;
     let raw: RawCase = serde_yaml::from_str(&text)
         .with_context(|| format!("{} is not an `{CASE_FORMAT}` document", manifest.display()))?;
+    let needs_ess = raw
+        .subject
+        .as_ref()
+        .and_then(|subject| subject.skills.as_ref())
+        .is_some_and(|skills| skills.iter().any(|skill| skill.starts_with("ess-schema:")));
 
     let mut refusals = Vec::new();
     if raw.format.as_deref() != Some(CASE_FORMAT) {
@@ -2608,6 +2667,7 @@ fn read_case(directory: &Path) -> Result<Case> {
         workflow: workflow.expect("a workflow was read"),
         task: task.expect("a task was read"),
         expectations: directory.join(expectations.expect("a document was named")),
+        needs_ess,
     })
 }
 
@@ -3498,6 +3558,106 @@ fn prompt_for(plan: &Plan, instructions: &Path) -> Result<String> {
 /// every run is spawned by the same instrument into the same hermetic scratch home with the same
 /// recording, and only the treatment varies. The mode allows everything and records everything —
 /// nothing here decides a tool call, which is arm c's whole difference and `protocol drive`'s job.
+/// The base of the `PATH` metaharness constructs for the session it spawns.
+const CHILD_BASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
+
+/// The `PATH` the spawned session gets: `$HOME/.local/bin` in front of [`CHILD_BASE_PATH`], as both
+/// metaharness vendor adapters build it (`metaharness-claude/src/launch.rs`, `child_path`), and never
+/// this process's own. Written out here rather than asked of metaharness, because the runner has to
+/// look where the child will look before it pays for the child to look there.
+fn child_path_for(home: Option<&str>) -> String {
+    match home {
+        Some(home) if !home.is_empty() => format!("{home}/.local/bin:{CHILD_BASE_PATH}"),
+        _ => CHILD_BASE_PATH.to_owned(),
+    }
+}
+
+/// The first executable named `program` on `path`, in `path`'s own order — a hand-rolled walk, so
+/// that it is exactly the child's resolution and not a resolver with opinions of its own.
+fn resolve_on_path(program: &str, path: &str) -> Option<PathBuf> {
+    path.split(':')
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| Path::new(dir).join(program))
+        .find(|candidate| is_executable(candidate))
+}
+
+#[cfg(unix)]
+fn is_executable(candidate: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::metadata(candidate)
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable(candidate: &Path) -> bool {
+    candidate.is_file()
+}
+
+/// The version out of what a binary printed for `--version`: `protocol 0.44.0` → `0.44.0`. The first
+/// token that starts with a digit, because the product name in front of it is prose.
+fn version_token(reported: &str) -> Option<String> {
+    reported
+        .split_whitespace()
+        .find(|token| token.starts_with(|c: char| c.is_ascii_digit()))
+        .map(ToOwned::to_owned)
+}
+
+/// Before a live spawn: the `aep` the session will run is this one, and `ess` is there if a case
+/// needs it.
+///
+/// The session's `PATH` is constructed by metaharness and does not include wherever this binary was
+/// launched from, so the two can disagree without anything saying so. On 2026-09-03 they did — a
+/// 0.40.1 in `~/.local/bin` beside the 0.44.0 that launched — and the golden path spent $10.96
+/// before stopping at `aep doctor: unrecognized subcommand`. A mismatch is refused; an absence is a
+/// warning, since a case may not run `aep` at all and the child's own failure is then cheap.
+fn preflight_child_path(cases: &[Case], out: &Path) -> Result<()> {
+    let child_path = child_path_for(std::env::var("HOME").ok().as_deref());
+    match resolve_on_path("aep", &child_path) {
+        None => eprintln!(
+            "warning: no `aep` on the child's PATH ({child_path}); a case whose task runs it will \
+             fail inside the session. `task install` in the aep checkout writes one to ~/.local/bin"
+        ),
+        Some(child) => {
+            let reported = std::process::Command::new(&child)
+                .arg("--version")
+                .output()
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+                .unwrap_or_default();
+            let found = version_token(&reported).unwrap_or_else(|| format!("unreadable: {reported:?}"));
+            let own = env!("CARGO_PKG_VERSION");
+            if found != own {
+                return Err(refused_run(
+                    out,
+                    &[RunRefusal::ChildAepMismatch {
+                        child: child.display().to_string(),
+                        found,
+                        own: own.to_owned(),
+                        child_path,
+                    }],
+                ));
+            }
+        }
+    }
+    if let Some(case) = cases.iter().find(|case| case.needs_ess) {
+        if resolve_on_path("ess", &child_path).is_none() {
+            return Err(refused_run(
+                out,
+                &[RunRefusal::ChildEssMissing {
+                    case: case.id.clone(),
+                    child_path,
+                }],
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Micro-dollars as the plain decimal a vendor flag takes: `12500000` → `12.500000`. Not
+/// [`crate::money::dollars`], which is for a person and carries the sign.
+fn usd_plain(micro: u64) -> String {
+    format!("{}.{:06}", micro / 1_000_000, micro % 1_000_000)
+}
+
 fn spawn_argv(
     plan: &Plan,
     binary: &str,
@@ -3505,6 +3665,7 @@ fn spawn_argv(
     prompt: &str,
     plugin_directory: Option<&Path>,
     model: Option<&str>,
+    max_budget_usd: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         binary.to_owned(),
@@ -3515,9 +3676,21 @@ fn spawn_argv(
         working_directory.display().to_string(),
         "--decisions".to_owned(),
         "observe".to_owned(),
-        "-p".to_owned(),
-        prompt.to_owned(),
     ];
+    // What is left of `--budget-usd`, handed to the session as the vendor's own stop, and placed
+    // with the run options rather than after the prompt: every reader of this argv that takes the
+    // prompt as the tail keeps working. Claude Code only, on `--model`'s reasoning — metaharness
+    // 0.6.1 refuses the flag for codex by name, and a flag accepted and dropped would be a cap that
+    // exists on paper. Before this the cap was checked between runs and nowhere else: a receipt, and
+    // one golden-path run stated $10.96 against 5.
+    if plan.harness == Harness::Claude {
+        if let Some(cap) = max_budget_usd {
+            argv.push("--max-budget-usd".to_owned());
+            argv.push(cap.to_owned());
+        }
+    }
+    argv.push("-p".to_owned());
+    argv.push(prompt.to_owned());
     // Before the treatment, and on every arm: the model is the *condition* a phase holds fixed
     // across its arms, so an argv where it moved with the arm would be an experiment varying two
     // things. Absent where the operator named none, which is metaharness's default and this
@@ -3851,6 +4024,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
     let Some(budget) = &args.budget_usd else {
         return Err(refused_run(&args.out, &[RunRefusal::NoBudget]));
     };
+    preflight_child_path(&cases, &args.out)?;
     let cap = micro_usd(budget)?;
     let assumed = micro_usd(&args.assume_usd_per_run)?;
     let Some(working_directory) = &args.cwd else {
@@ -3886,6 +4060,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             model_requested: args.model.clone(),
         };
         let prompt = prompt_for(&plan, &args.instructions)?;
+        let remaining = usd_plain(cap.saturating_sub(spent));
         let invocation = spawn_argv(
             &plan,
             &binary,
@@ -3893,6 +4068,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             &prompt,
             args.plugin_dir.as_deref(),
             args.model.as_deref(),
+            Some(&remaining),
         );
         let stream_path = args.out.join(format!("{}{EVENTS_SUFFIX}", plan.name()));
 
@@ -4718,6 +4894,96 @@ observed_at: 2026-08-23
     }
 
     /// A plan over a case, for the argv tests.
+    // --- the cap on the argv, and the child's PATH ---------------------------------------------
+
+    #[test]
+    fn what_is_left_of_the_cap_travels_to_a_claude_run_and_to_no_other() {
+        let mut plan = plan_of(Arm::Raw, Harness::Claude);
+        let argv = spawn_argv(
+            &plan,
+            "metaharness",
+            Path::new("/work/subject"),
+            "do the thing",
+            None,
+            None,
+            Some("4.200000"),
+        );
+        let at = argv
+            .iter()
+            .position(|word| word == "--max-budget-usd")
+            .expect("the cap is on the argv");
+        assert_eq!(argv[at + 1], "4.200000");
+        assert!(
+            at < argv.iter().position(|word| word == "-p").expect("a prompt"),
+            "the cap is a run option, placed before the prompt: {argv:?}"
+        );
+
+        plan.harness = Harness::Codex;
+        let codex = spawn_argv(
+            &plan,
+            "metaharness",
+            Path::new("/work/subject"),
+            "do the thing",
+            None,
+            None,
+            Some("4.200000"),
+        );
+        assert!(
+            !codex.iter().any(|word| word == "--max-budget-usd"),
+            "codex takes no cap and metaharness would refuse it: {codex:?}"
+        );
+    }
+
+    #[test]
+    fn micro_dollars_render_as_the_plain_decimal_a_vendor_flag_takes() {
+        assert_eq!(usd_plain(0), "0.000000");
+        assert_eq!(usd_plain(5_000_000), "5.000000");
+        assert_eq!(usd_plain(4_200_000), "4.200000");
+        assert_eq!(usd_plain(10_962_418), "10.962418");
+    }
+
+    #[test]
+    fn the_childs_path_is_the_one_metaharness_constructs() {
+        assert_eq!(
+            child_path_for(Some("/home/ada")),
+            "/home/ada/.local/bin:/usr/local/bin:/usr/bin:/bin"
+        );
+        assert_eq!(child_path_for(None), "/usr/local/bin:/usr/bin:/bin");
+        assert_eq!(child_path_for(Some("")), "/usr/local/bin:/usr/bin:/bin");
+    }
+
+    #[test]
+    fn the_version_is_the_first_token_that_starts_with_a_digit() {
+        assert_eq!(version_token("protocol 0.44.0").as_deref(), Some("0.44.0"));
+        assert_eq!(version_token("aep 0.45.0\n").as_deref(), Some("0.45.0"));
+        assert_eq!(version_token("").as_deref(), None);
+        assert_eq!(version_token("error: no such flag").as_deref(), None);
+    }
+
+    #[test]
+    fn a_case_whose_subject_names_the_ess_skill_says_it_needs_ess() {
+        let directory = std::env::temp_dir().join("aep-eval-case-needs-ess");
+        std::fs::remove_dir_all(&directory).ok();
+        std::fs::create_dir_all(&directory).expect("scratch");
+        std::fs::write(
+            directory.join("case.yaml"),
+            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
+             task: draft the domain\nexpectations: expectations.trace.yaml\n\
+             subject:\n  skills: [aep-planning:planning, ess-schema:ess-schema]\n",
+        )
+        .expect("written");
+        let case = read_case(&directory).expect("a case");
+        assert!(case.needs_ess);
+
+        std::fs::write(
+            directory.join("case.yaml"),
+            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
+             task: draft the domain\nexpectations: expectations.trace.yaml\n",
+        )
+        .expect("written");
+        assert!(!read_case(&directory).expect("a case").needs_ess);
+    }
+
     fn plan_of(arm: Arm, harness: Harness) -> Plan {
         Plan {
             case: Case {
@@ -4727,6 +4993,7 @@ observed_at: 2026-08-23
                 expectations: PathBuf::from(
                     "conformance/eval/development-honest/expectations.trace.yaml",
                 ),
+                needs_ess: false,
             },
             arm,
             harness,
@@ -4756,7 +5023,8 @@ observed_at: 2026-08-23
             "do the thing",
             Some(Path::new("/plugins/aep-planning")),
             None,
-        );
+        None,
+    );
         let forwarded: Vec<&String> = argv
             .iter()
             .zip(argv.iter().skip(1))
@@ -4791,7 +5059,8 @@ observed_at: 2026-08-23
             "do it",
             None,
             Some("claude-sonnet-4-6"),
-        );
+        None,
+    );
         assert_eq!(
             raw,
             vec![
@@ -4816,7 +5085,8 @@ observed_at: 2026-08-23
             "do it",
             Some(Path::new("/plugins/aep-planning")),
             Some("claude-sonnet-4-6"),
-        );
+        None,
+    );
         assert_eq!(
             plugin[..raw.len()],
             raw[..],
@@ -4831,7 +5101,8 @@ observed_at: 2026-08-23
                 "do it",
                 None,
                 None,
-            )
+            None,
+        )
             .iter()
             .any(|word| word == "--model"),
             "an invocation that pins no model keeps the argv it had before the flag existed"
@@ -4869,7 +5140,8 @@ observed_at: 2026-08-23
             "do it",
             None,
             None,
-        );
+        None,
+    );
         let plugin = spawn_argv(
             &plan_of(Arm::Plugin, Harness::Claude),
             "metaharness",
@@ -4877,7 +5149,8 @@ observed_at: 2026-08-23
             "do it",
             Some(Path::new("/plugins/aep-planning")),
             None,
-        );
+        None,
+    );
 
         assert_eq!(
             raw,
@@ -4914,7 +5187,8 @@ observed_at: 2026-08-23
                 "do it",
                 Some(Path::new("/plugins/aep-planning")),
                 None,
-            )
+            None,
+        )
             .last()
             .expect("a plugin directory"),
             "/plugins/aep-planning",

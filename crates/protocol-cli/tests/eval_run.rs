@@ -39,6 +39,12 @@ fn protocol_with(args: &[&str], env: &[(&str, &str)]) -> Output {
     // this suite into one, and a test that asserts the *absence* of the flag has to control it.
     command.env_remove("METAHARNESS_LIVE");
     command.env_remove("METAHARNESS_BIN");
+    // A scratch `HOME` unless the test names one: the live-spawn preflight resolves `aep` on the
+    // child's `$HOME/.local/bin`, and a developer's own copy there — older, newer, absent — must not
+    // decide what this suite reports.
+    if !env.iter().any(|(key, _)| *key == "HOME") {
+        command.env("HOME", scratch("aep-eval-run-home"));
+    }
     for (key, value) in env {
         command.env(key, value);
     }
@@ -610,6 +616,45 @@ fn a_spawn_without_the_live_flag_is_refused_by_name_and_nothing_is_started() {
         !argv.exists(),
         "and the tool was never started: it would have written its arguments here"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stale_aep_on_the_childs_path_is_refused_before_anything_is_spent() {
+    // The session runs on a PATH metaharness constructs — `$HOME/.local/bin` first — so the `aep` a
+    // case's task executes can be a different binary from the one launching the run. It was, on
+    // 2026-09-03: 0.40.1 there, 0.44.0 here, $10.96 spent before `aep doctor` failed.
+    use std::os::unix::fs::PermissionsExt as _;
+    let out = scratch("aep-eval-run-stale-child");
+    let cwd = scratch("aep-eval-run-stale-child-tree");
+    let home = scratch("aep-eval-run-stale-child-home");
+    let bin = home.join(".local/bin");
+    std::fs::create_dir_all(&bin).expect("the scratch home is writable");
+    let stale = bin.join("aep");
+    std::fs::write(&stale, "#!/bin/sh\necho 'protocol 0.1.0'\n").expect("written");
+    std::fs::set_permissions(&stale, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let binary = stub(&out);
+    let argv = out.join("argv");
+
+    let refused = protocol_with(
+        &spawn_args(&out, &cwd, &["--arm", "raw", "--budget-usd", "1.00"]),
+        &[
+            ("METAHARNESS_BIN", printable(&binary)),
+            ("METAHARNESS_LIVE", "1"),
+            ("STUB_ARGV", printable(&argv)),
+            ("HOME", printable(&home)),
+        ],
+    );
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let reason = stderr(&refused);
+    assert!(
+        reason.contains("EVAL-RUN-017")
+            && reason.contains("0.1.0")
+            && reason.contains(env!("CARGO_PKG_VERSION"))
+            && reason.contains(printable(&stale)),
+        "{reason}"
+    );
+    assert!(!argv.exists(), "and nothing was started");
 }
 
 #[cfg(unix)]
