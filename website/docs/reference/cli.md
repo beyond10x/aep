@@ -482,7 +482,7 @@ there is one, so a manifest from before `--plugin` existed keeps its bytes. A de
 attestation does not list is refused (`EVAL-STREAM-013`) rather than written down: the runner
 declares, the instrument attests, and the manifest records what both said.
 
-```console
+```bash
 aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
     --plugin-dir ../agentplugins/aep-planning \
     --plugin bdfinst/agentic-dev-team@dev-team@1.4.0 \
