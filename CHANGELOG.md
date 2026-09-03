@@ -22,6 +22,12 @@ belongs in the commit message or in `docs/design/`.
   stated, summed across sessions. The largest and not the last, because the stopping record
   restates the cost and zeroes its `usage`.
 
+### Changed
+
+- Reworked the Design principles guide into a failure-first, runnable walkthrough that maps the
+  passkey example to AEP's validation, evidence, capability, approval, command, driver, ESS adapter,
+  and compatibility boundaries.
+
 ## [0.45.0] — 2026-09-03
 
 ### Fixed

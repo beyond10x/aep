@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:design-principles-concrete-failure-and-code-example
 kind: story
-status: draft
+status: implemented
 title: Show how vague principles doom an agent—and how AEP enforces them
 summary: Turn the Design principles page into one concrete failure-and-recovery walkthrough backed by AEP types, commands, and evidence.
 tags:
@@ -15,7 +15,12 @@ refs:
   reference: https://beyond10x.github.io/docs/aep/concepts/design-principles/
 relations:
 - serves: vision:O2
-revision: 1
+scope:
+- confidence: cited
+  path: CHANGELOG.md
+- confidence: cited
+  path: website/docs/concepts/design-principles.md
+revision: 5
 ---
 ## Problem
 
