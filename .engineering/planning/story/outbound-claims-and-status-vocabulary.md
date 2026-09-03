@@ -15,14 +15,14 @@ scope:
 - confidence: cited
   path: artifacts/lifecycles
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: crates/govern/aep-domain
 - confidence: inferred
   path: crates/govern/aep-engine
 - confidence: inferred
   path: crates/plan/aep-backend-markdown
-revision: 8
+revision: 9
 ---
 # Story: A claim that has left the building, and a rung for it to land on
 

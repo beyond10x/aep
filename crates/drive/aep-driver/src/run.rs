@@ -160,7 +160,7 @@ pub struct DriverOptions {
     /// The lock this call superseded on its way in, when it superseded one.
     ///
     /// An **input**, for the same reason this crate is handed a [`crate::lock::LockState`] rather
-    /// than probing for one: `lock.json` belongs to `protocol-cli`, along with the run directory it
+    /// than probing for one: `lock.json` belongs to `aep-cli`, along with the run directory it
     /// grants, and a driver that opened the lock file would be a driver reading ambient OS state
     /// (review finding **F19**). What arrives here is the three values the caller already read out
     /// of the lock it took.
@@ -228,7 +228,7 @@ pub enum DriveError {
 
 /// One run's directory: a path, plus the committed generations that live in it.
 ///
-/// Never allocated here — `protocol-cli` allocates it after taking the store lock, and never
+/// Never allocated here — `aep-cli` allocates it after taking the store lock, and never
 /// deletes or reuses one. `--restart` allocates a new run id, because a run directory that could be
 /// reused is a history that can be overwritten.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1357,7 +1357,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     /// strong as the record and no stronger — see [`crate::attest`].
     ///
     /// The execution's actor comes from [`attest::session_actor`] rather than being spelled again
-    /// here, because that is the same function `protocol-cli` hands to each `llm` step's session
+    /// here, because that is the same function `aep-cli` hands to each `llm` step's session
     /// in `AEP_ACTOR`. The two have to agree or a run could approve its own work under the very
     /// name it writes to the store under.
     fn own_actors(&self, execution: &Execution) -> Vec<ActorRef> {

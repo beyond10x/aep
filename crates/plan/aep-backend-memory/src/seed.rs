@@ -284,7 +284,7 @@ mod tests {
 
     /// The actor every test seeds as.
     fn actor() -> ActorRef {
-        "service:protocol-cli".parse().expect("actor")
+        "service:aep-cli".parse().expect("actor")
     }
 
     /// An artifact at an inline location, which keeps the fixtures about the graph.

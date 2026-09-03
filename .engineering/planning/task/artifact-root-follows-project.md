@@ -11,7 +11,7 @@ tags:
 - bug
 relations:
 - derived_from: story:adopter-bugs
-revision: 2
+revision: 3
 ---
 # Task: Planning documents follow the project's configured protocol tree
 
@@ -47,7 +47,7 @@ distinct reproduced defect rather than A3's question about merging project-local
 
 ## Notes
 
-The original split was in `crates/edge/protocol-cli/src/planning.rs`: `StoreLocation::store()` discovered
+The original split was in `crates/edge/aep-cli/src/planning.rs`: `StoreLocation::store()` discovered
 the project while `StoreLocation::lifecycles()` and `create()` used `StoreLocation.root` directly.
 The lightweight resolver belongs in `aep-engine::project`; using the full `project::load` would
 incorrectly couple source lookup to validation of unrelated project documents. Repository locators

@@ -12,16 +12,16 @@ relations:
 - serves: vision:O2
 scope:
 - confidence: inferred
+  path: crates/edge/aep-cli/src/planning.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/src/reverse.rs
+- confidence: inferred
   path: crates/edge/aep-project/src/load.rs
-- confidence: inferred
-  path: crates/edge/protocol-cli/src/planning.rs
-- confidence: inferred
-  path: crates/edge/protocol-cli/src/reverse.rs
 - confidence: cited
   path: crates/govern/aep-domain/src/artifact.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 12
+revision: 13
 ---
 # Story: Six small refusals that each cost a session one retry
 

@@ -67,7 +67,7 @@ duplicate-applies a replay, merges a stale write, drops the audit record for a r
 own tests assert that each fault is caught by the suite that exists to catch it. This is what stops
 the suite from quietly becoming a smoke test.
 
-## W3.5 `adp-domain` and `aop-domain`
+## W3.5 `aep-profile-development` and `aep-profile-operations`
 
 The development and operations entity types and commands (§4.2, §4.3): `adp.test-plan/v1`,
 `adp.specification/v1`; `aop.incident/v1`, `aop.runbook/v1`, `aop.release/v1`, with the commands

@@ -7,7 +7,7 @@ description: Every subcommand of the AEP reference CLI, grouped by protocol, pla
 # CLI reference
 
 The canonical CLI is `aep`; `protocol` is an exact compatibility alias. Building
-`protocol-cli` leaves both under `target/release/`. Current examples use `aep`; existing automation
+`aep-cli` leaves both under `target/release/`. Current examples use `aep`; existing automation
 may keep `protocol` because both names produce identical standard output, standard error and exit
 status. `--help` on any subcommand carries the full flag list — this page is the map.
 

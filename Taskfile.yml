@@ -119,7 +119,7 @@ tasks:
       does not fail on them, deliberately: refusing those would stop anybody closing a story on the
       day a runner is down, which is the day it matters most.
     cmds:
-      - cargo run -q -p protocol-cli --bin protocol -- artifact validate
+      - cargo run -q -p aep-cli --bin protocol -- artifact validate
 
   guard-check:
     desc: >-
@@ -144,7 +144,7 @@ tasks:
       got a wrong `validate` or `history` answer from a binary older than the store it read, and the
       install that would have prevented it was nowhere in the procedure.
     cmds:
-      - cargo install --path crates/edge/protocol-cli --locked --force
+      - cargo install --path crates/edge/aep-cli --locked --force
       # `~/.local/bin` is the one directory a metaharness-spawned session has on its PATH
       # (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin`, constructed, never inherited). A copy left
       # there is the `aep` every eval and every driven run actually executes: on 2026-09-03 a 0.40.1
@@ -197,7 +197,7 @@ tasks:
     # failed` reads as "the gate failed", and `docs-check` reads as "the CLI reference is stale".
     # The verb list comes from clap, not from parsing `--help`, so a rendering change cannot move it.
     cmds:
-      - cargo test -q -p protocol-cli --bin protocol cli_reference
+      - cargo test -q -p aep-cli --bin protocol cli_reference
 
   clippy:
     desc: Lint every target, warnings are errors.

@@ -19,10 +19,10 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver-spec
 - confidence: inferred
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 10
+revision: 11
 ---
 # Story: Retry, circuit-break, and a third party simulated from its own spec
 

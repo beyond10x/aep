@@ -34,7 +34,7 @@ serde_yaml.workspace = true
 
 # The `regex:` matcher. Taken rather than refused because it is **already in this workspace's
 # dependency graph** and in the shipped binary's: `jsonschema` takes it as a runtime dependency
-# (`crates/schema-contract/Cargo.toml`), so `cargo tree -i regex` reaches `protocol-cli` today and
+# (`crates/schema-contract/Cargo.toml`), so `cargo tree -i regex` reaches `aep-cli` today and
 # adopting it here adds no crate, no compile unit and no audit surface — it changes which crates
 # may call the one that is already linked. Considered and refused: `fancy-regex`, which is a
 # backtracking engine and would give up the property the glob matcher was written to keep (a

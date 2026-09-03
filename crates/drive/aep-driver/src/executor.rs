@@ -45,7 +45,7 @@ use aep_engine::EvidenceSubmission;
 /// Which attempt of which step ran, so a harness can find what that step wrote.
 ///
 /// A pair rather than a path: what an `llm` step leaves behind is named by whoever writes it —
-/// `protocol-cli` puts a transcript at `<run>/transcripts/<state>-<index>-<attempt>.jsonl` — and a
+/// `aep-cli` puts a transcript at `<run>/transcripts/<state>-<index>-<attempt>.jsonl` — and a
 /// second harness names its own. This crate says *which* step, and never where its output went.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StepAttempt {
@@ -81,7 +81,7 @@ pub struct StepContext<'a> {
     /// <file>` binds its selection to a task document, and a step map had no way to name one — so
     /// a run driven with `--task <a path that is not the project's>` reached that verb through
     /// discovery and bound to the project's task instead. `{task}` in a `command` step's `run`
-    /// words or `record:` path expands to this, and `protocol-cli` resolves it to an absolute path
+    /// words or `record:` path expands to this, and `aep-cli` resolves it to an absolute path
     /// because a `command` step runs in the project directory rather than wherever the operator
     /// typed the flag.
     ///
@@ -98,7 +98,7 @@ pub struct StepContext<'a> {
     ///
     /// The task says *what* is being worked on and this says *which attempt at it is working*, so
     /// two runs of one task are two actors rather than one. An executor that starts a session
-    /// declares it to that session — `protocol-cli` sets `AEP_ACTOR` from
+    /// declares it to that session — `aep-cli` sets `AEP_ACTOR` from
     /// [`crate::attest::session_actor`] — so a store write made from inside the run is attributed
     /// to the run rather than to whoever launched it, and the same actor is the one
     /// [`crate::attest::admit`] refuses an approval from.

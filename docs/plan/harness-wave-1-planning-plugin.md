@@ -20,9 +20,9 @@ For the person adopting this: your backlog stops being a wiki page and a tool th
 of your lifecycles, and becomes markdown in your repository that refuses an illegal move and tells
 you which moves are legal instead.
 
-For the machinery: the third of `is_planning`'s six kinds gets a store, the four `adp-domain`
-commands get entities they could eventually address, and the driver of harness wave 3 gets the
-artifact source it cannot be built without.
+For the machinery: the third of `is_planning`'s six kinds gets a store, the four
+`aep-profile-development` commands get entities they could eventually address, and the driver of
+harness wave 3 gets the artifact source it cannot be built without.
 
 ## Decisions, taken
 
@@ -32,7 +32,7 @@ artifact source it cannot be built without.
 | how deep the backend goes | a **plain store**, not a contract implementation. `CommandService`/`QueryService` come at **P3** | building the envelope surface first means building the journal first, and the store would not exist for three milestones. The cost is recorded as deviation **D-P1**, with the mitigation that every write funnels through two functions P3 reroutes |
 | domain purity | the frontmatter format `aep.planning-md/1` is **owned by `aep-backend-markdown`**; `aep-domain` gains zero types for it | the format is one backend's, and no other backend is obliged to store anything this way. It is owned, not hidden: the file is *authored* — somebody types into it — and every authored document here has a generated schema, so `RawPlanningFrontmatter` is published as `schemas/generated/planning-document.schema.json` and held to its type by `schema-check`. The seam between backends stays the contract traits (design open decision **D1**) |
 | the id scheme | declared `id` = `<kind>:<slug>`, checked against the path; **no counters, no allocator** | two branches both allocate `18`, both merge cleanly, and the store holds two artifacts with one id — a corruption git cannot see because nothing was in conflict. A slug collides only when two people meant the same thing, and then git conflicts on the path. External ticket names (`story:dev-399`) stay legal because nothing parses an id |
-| timestamps | none in the file | git carries authorship and time and cannot be edited by writing a number into a file; a stale `updated:` reads as an observation; and `SEED_AT: Timestamp::EPOCH` (`crates/edge/protocol-cli/src/app.rs:51`) is the standing precedent — a wall clock in diffable output is diff noise. The cost, "how long has this been in draft", is answered by `git log` until P3's journal |
+| timestamps | none in the file | git carries authorship and time and cannot be edited by writing a number into a file; a stale `updated:` reads as an observation; and `SEED_AT: Timestamp::EPOCH` (`crates/edge/aep-cli/src/app.rs:51`) is the standing precedent — a wall clock in diffable output is diff noise. The cost, "how long has this been in draft", is answered by `git log` until P3's journal |
 | new lifecycles | `epic`, `task`, `initiative`, mirroring `story.yaml`'s ladder | every word is an existing `ArtifactStatus` variant, so it is four documents and zero domain changes. One ladder across the four planning kinds means an operator learns it once |
 | where the plugin lives | `integrations/claude-code/`, plus `.claude-plugin/marketplace.json` at the repository root | a consumer-named deliverable, the shape `website/` already has: built beside the specification, consuming only its public surface. Plural `integrations/` because the first one should not sit at a path that moves when the second arrives |
 | one skill, not three | exactly one skill, `planning` | a skill is a decision about *when instructions load*, and there is one moment: the operator is planning. Three skills would triple the trigger surface and let a session load the one missing the guardrail it was about to break |
@@ -49,7 +49,7 @@ artifact source it cannot be built without.
 through `create` and `update` so there is exactly one place inside the crate where validation,
 revision bumping and serialisation happen.
 
-`protocol artifact` in `protocol-cli`: `new`, `move`, `relate`, `list`, `board`, `graph`, `validate`,
+`protocol artifact` in `aep-cli`: `new`, `move`, `relate`, `list`, `board`, `graph`, `validate`,
 `kinds`, `relations`, `lifecycle`. `move` is validated against the kind's lifecycle document; a
 refusal names the legal set. `new` writes its body from `artifacts/templates/` where the kind has a
 template.

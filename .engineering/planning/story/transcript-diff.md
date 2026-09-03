@@ -12,10 +12,10 @@ relations:
 - decomposes: epic:cross-harness-portability
 scope:
 - confidence: inferred
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: crates/observe/trace-spec
-revision: 4
+revision: 5
 ---
 # Story: `protocol trace diff` — two runs of one specification, compared
 

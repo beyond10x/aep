@@ -7,7 +7,7 @@ title: 'W4-3: operator-resume-ux, driven as a governed run'
 summary: 'The request recorded at intake: task W4-3 (kind feature, objective operator-resume-ux) asks for story:operator-resume-ux under protocol adp/1 and profile development.driven.'
 relations:
 - derived_from: story:operator-resume-ux
-revision: 4
+revision: 5
 ---
 # Task: W4-3 — operator-resume-ux
 
@@ -122,14 +122,14 @@ declared so the plan demands the evidence kinds a code change owes — which is 
 
 `constraints.notes`, the three that are not the story pointer already quoted above:
 
-- "Implementation surface is `crates/drive/aep-driver/` and `crates/edge/protocol-cli/src/drive.rs`. Do not
+- "Implementation surface is `crates/drive/aep-driver/` and `crates/edge/aep-cli/src/drive.rs`. Do not
   modify anything under `website/`, `integrations/`, `drivers/`, `.engineering/planning/`, or the
   workspace `Cargo.toml`."
 - "The defect to fix first is the one with a user-visible consequence — a stolen lock leaves no
   record that it was stolen. Thread the `StolenLock` into the cursor and read it back from the run
   directory in a test."
 - "The tests belong in `crates/drive/aep-driver/tests/routing.rs` and
-  `crates/edge/protocol-cli/tests/drive_cli.rs`; both already hold the neighbouring cases."
+  `crates/edge/aep-cli/tests/drive_cli.rs`; both already hold the neighbouring cases."
 
 The story's Open Questions section, quoted unedited: "None. The age-threshold question was asked and
 answered: there is deliberately no threshold." So this intake records no unanswered question.

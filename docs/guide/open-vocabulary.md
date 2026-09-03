@@ -87,8 +87,8 @@ happens when a table like this one is acted on. Its two rows read:
   Two things it deliberately does **not** buy. An invented rung is never `approved` and never
   `retired` — this repository cannot know what a rung it has never seen means, and reading an
   unknown name as *agreed and relied on* is the one mistake an open vocabulary must not make. And a
-  descriptor document under `adp-`/`aop-domain` still takes named statuses only, because it has no
-  ladder in scope to check an invented one against.
+  descriptor document under the development or operations profile crate still takes named
+  statuses only, because it has no ladder in scope to check an invented one against.
 
 Both layers are open now. The pair is kept as two rows anyway, because the *reason* they are open
 differs — one is a document you write, the other is a value that document may carry, and a single
@@ -162,7 +162,7 @@ change to the evaluator and a story in this store, not a key you can add to your
 | A status ladder under `artifacts/lifecycles/` | `docs/guide/adopting.md:94` — "what statuses each artifact kind may hold" | open | `artifacts/lifecycles/story.yaml:transitions` | — | — | — |
 | A relation document under `artifacts/relations/` | `website/docs/reference/documents.md:233` — "`artifacts/relations/` and" | open | `artifacts/relations/relations.yaml:relations` | — | — | — |
 | An artifact template under `artifacts/templates/` | `website/docs/reference/documents.md:233` — "and `artifacts/templates/`" | open | `artifacts/templates/story.md:1` | — | — | — |
-| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:89` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/govern/aep-domain/src/artifact.rs:781` — the `Other(String)` variant, gated by the kind's ladder at `crates/edge/protocol-cli/src/planning.rs:parse_status_in` | — | — | — |
+| Artifact status values a lifecycle document may name | `website/docs/reference/vocabulary.md:89` — "draft proposed in_review approved accepted rejected active implemented superseded" | open | `crates/govern/aep-domain/src/artifact.rs:781` — the `Other(String)` variant, gated by the kind's ladder at `crates/edge/aep-cli/src/planning.rs:parse_status_in` | — | — | — |
 | Relation names a relations document may use | `website/docs/reference/documents.md:246` — "artifact must have a successor declaring" | closed | `crates/govern/aep-domain/src/artifact.rs:1147` | a relation name is something the engine *acts on*, not only records: `supersedes` gates a status, `reviews` is mandatory on a review-result, and cycles are checked per relation kind. An invented name would be an edge that looks like it should mean something and that no rule will ever read | docs/guide/adopting.md#relation-names | — |
 | Capability value names the engine accepts | `docs/plan/document-authoring-brief.md:13` — "nothing else may be mentioned in any" | closed | `crates/govern/aep-domain/src/capability.rs:222` | a capability name resolves to the same authorisation decision in every harness, which is what lets a profile be read by one and enforced by another | website/docs/reference/vocabulary.md#capabilities | — |
 | Evidence kind names the engine accepts | `docs/plan/document-authoring-brief.md:38` — "**Evidence kinds**:" | closed | `crates/govern/aep-domain/src/evidence.rs:1196` | an evidence kind carries fixed semantics and a fixed set of verifiers that may establish it, so a requirement for one cannot be satisfied by a record that means something else | website/docs/reference/vocabulary.md#evidence-kinds | — |

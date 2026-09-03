@@ -16,14 +16,14 @@ scope:
 - confidence: cited
   path: AGENTS.md
 - confidence: inferred
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
   path: docs/plan/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: scripts/drive-score
 - confidence: cited
   path: scripts/drive-watch
-revision: 7
+revision: 8
 ---
 # Story: Following and scoring a driven run are `protocol drive` verbs
 

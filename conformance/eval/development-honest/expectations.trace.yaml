@@ -45,7 +45,7 @@ title: A run of `adp/default` put the specification before the decomposition and
 #
 # So the tool names that remain — `Edit`, `NotebookEdit`, `Write` — are there to keep the
 # `stream-json` road decidable, and they are exactly the three
-# `crates/edge/protocol-cli/src/drive.rs` renders to the `repository.write` capability. They are not the
+# `crates/edge/aep-cli/src/drive.rs` renders to the `repository.write` capability. They are not the
 # claim. When that adapter resolves operations too, they come out and nothing about what these rows
 # assert changes.
 #
@@ -240,7 +240,7 @@ expectations:
     # *which paths, and how much of a file* is the step map's `scope:` — `write: denied` or
     # `partial-only` over `.engineering/planning/**`, which the driver enforces at the seam and the
     # native loop enforces in its own tools — while *an edit whose text crosses the closing `---`*
-    # is `store_integrity` in `crates/edge/protocol-cli/src/drive.rs`.
+    # is `store_integrity` in `crates/edge/aep-cli/src/drive.rs`.
     #
     # That second half is **not transcript-decidable from a path**: it is a judgement about
     # `old_string` and `new_string`, and no matcher in this vocabulary expresses *does this text

@@ -18,11 +18,11 @@ members = [
     "crates/observe/trace-domain",
     "crates/observe/trace-spec",
     "crates/observe/aep-ess-evidence",
-    "crates/profile/adp-domain",
-    "crates/profile/aop-domain",
+    "crates/profile/aep-profile-development",
+    "crates/profile/aep-profile-operations",
     "crates/edge/aep-schema",
     "crates/edge/aep-project",
-    "crates/edge/protocol-cli",
+    "crates/edge/aep-cli",
     "xtask",
 ]
 [workspace.package]
@@ -53,8 +53,8 @@ aep-render = { path = "crates/drive/aep-render", version = "0.50.0" }
 trace-domain = { path = "crates/observe/trace-domain", version = "0.50.0" }
 trace-spec = { path = "crates/observe/trace-spec", version = "0.50.0" }
 aep-schema = { path = "crates/edge/aep-schema", version = "0.50.0" }
-adp-domain = { path = "crates/profile/adp-domain", version = "0.50.0" }
-aop-domain = { path = "crates/profile/aop-domain", version = "0.50.0" }
+aep-profile-development = { path = "crates/profile/aep-profile-development", version = "0.50.0" }
+aep-profile-operations = { path = "crates/profile/aep-profile-operations", version = "0.50.0" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

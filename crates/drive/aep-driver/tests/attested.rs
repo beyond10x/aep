@@ -490,7 +490,7 @@ fn with_an_approver_named_a_resume_that_found_nothing_recorded_stops_again() {
 
 /// The run's two names for itself are one name, end to end.
 ///
-/// A step is told which execution it belongs to; `protocol-cli` turns that into the `AEP_ACTOR`
+/// A step is told which execution it belongs to; `aep-cli` turns that into the `AEP_ACTOR`
 /// its session writes to the planning store under; and `own_actors` turns the *same* value into
 /// the actor an approval may not come from. If any link spelled it differently, a driven run could
 /// approve its own specification under the very identity it wrote it with — which is the one

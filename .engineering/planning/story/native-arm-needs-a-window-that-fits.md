@@ -8,12 +8,12 @@ relations:
 - decomposes: epic:cross-harness-portability
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: docs/plan/eval-program-three-arms.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 6
+revision: 7
 ---
 # Story: The native arm needs a model whose window holds a driven state
 

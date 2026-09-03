@@ -826,7 +826,7 @@ mod tests {
     fn a_scope_round_trips_and_keeps_the_confidence_each_entry_was_written_with() {
         let front = PlanningFrontmatter::try_from(raw(&format!(
             "{MINIMAL}scope:\n  - path: crates/govern/aep-domain/src/artifact.rs\n    \
-             confidence: cited\n  - path: crates/edge/protocol-cli/src/planning.rs\n    \
+             confidence: cited\n  - path: crates/edge/aep-cli/src/planning.rs\n    \
              confidence: inferred\n"
         )))
         .expect("both entries are accepted");
@@ -840,7 +840,7 @@ mod tests {
             // the other way round above.
             vec![
                 (
-                    "crates/edge/protocol-cli/src/planning.rs",
+                    "crates/edge/aep-cli/src/planning.rs",
                     aep_domain::artifact::ScopeConfidence::Inferred
                 ),
                 (

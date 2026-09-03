@@ -29,7 +29,7 @@
 #
 #   * this document grants `command.execute`, and says here that the grant exists so that the
 #     `protocol` CLI is reachable and for no other reason;
-#   * the driver's own per-call policy is the constraint (`decide_tool` in protocol-cli's
+#   * the driver's own per-call policy is the constraint (`decide_tool` in aep-cli's
 #     drive.rs, answering the metaharness seam in ask mode — formerly the plugin's
 #     `driven-surface.sh` hook, retired under `epic:metaharness-migration`). It denies any `Bash`
 #     call that is not one simple invocation of `aep artifact …` or `aep trace …` — no

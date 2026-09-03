@@ -130,7 +130,7 @@ unrepresentable — the shape `infra-spec` uses, for its reason.
 
 ## W1.3 — `protocol trace check|inspect`, and the published schema
 
-`crates/edge/protocol-cli/src/trace.rs`, the binary's second module split, on the criterion the first
+`crates/edge/aep-cli/src/trace.rs`, the binary's second module split, on the criterion the first
 one set.
 
 ```console
@@ -227,7 +227,7 @@ submission whose kind the protocol does not declare
 carrying the verdict, the three counts, every gapped expectation's id, the ids downgraded on the
 command line, and the digest pair; `CheckReport::to_evidence` in `crates/observe/trace-spec/src/evidence.rs`
 converting on the producing side; and `protocol trace evidence --spec … --transcript … [--out]
-[--format] [--advisory]` in `crates/edge/protocol-cli/src/trace.rs`.
+[--format] [--advisory]` in `crates/edge/aep-cli/src/trace.rs`.
 
 The record is a **summary and not the report**: an expectation's citation quotes the transcript —
 the most sensitive input this repository consumes — and an evidence record is a thing people paste
@@ -239,7 +239,7 @@ into pull requests. Counts, ids and two digests survive the handoff; the rows do
 |---|---|
 | the record is minted in the **same process that ran the check**, so no caller can author its own verdict | `mint_evidence` runs `perform` and hands the report straight to `to_evidence`; there is no `--report` input, and `perform` is shared with `trace check` so the record cannot come from a different evaluation than the one a reader was shown |
 | its producer is `Producer::Verifier`, because the checker observed a file and did not ask an agent how it went | `TraceEvidence::PRODUCER` is a constant, not a parameter — `the_record_names_the_trace_checker_and_never_the_caller` |
-| the record the checker writes is one the engine reads | `crates/edge/protocol-cli/tests/trace_cli.rs` writes the document with `--out` and feeds the file to `protocol evaluate --evidence`, in both renderings the verb offers |
+| the record the checker writes is one the engine reads | `crates/edge/aep-cli/tests/trace_cli.rs` writes the document with `--out` and feeds the file to `protocol evaluate --evidence`, in both renderings the verb offers |
 | a run that gapped is written down rather than exited on | `a_run_that_gapped_is_written_down_rather_than_exited_on`: `trace check` exits 1 on the same pair of files, `trace evidence` exits 0 and the record says `status: failed` and names the expectation |
 | a `--advisory` downgrade cannot satisfy a protocol requirement | the record names every downgraded id, and `trace_conformance.passed` counts all gaps — `a_command_line_downgrade_is_recorded_and_does_not_make_the_record_pass` |
 

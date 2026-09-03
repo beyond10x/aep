@@ -167,6 +167,6 @@ artifact moves past it.
 
 **Sources.** `examples/development-passkeys/` (`task.yaml`, `evidence/`, and the transcripts in its
 `README.md`, replayed by `crates/govern/aep-engine/tests/end_to_end.rs` and
-`crates/edge/protocol-cli/tests/cli.rs`); `crates/govern/aep-engine/src/policy.rs` (the rule name);
+`crates/edge/aep-cli/tests/cli.rs`); `crates/govern/aep-engine/src/policy.rs` (the rule name);
 `crates/govern/aep-domain/src/requirement.rs` (the different-version message);
 `crates/govern/aep-domain/src/audit.rs`.

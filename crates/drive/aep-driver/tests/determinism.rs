@@ -11,7 +11,7 @@
 //! from, which no snapshot records and no replay can reproduce.
 //!
 //! What the scan cannot see is placed rather than banned: a pid-liveness probe reads ambient OS
-//! state and uses none of these tokens, which is why the probe lives in `protocol-cli` and this
+//! state and uses none of these tokens, which is why the probe lives in `aep-cli` and this
 //! crate is handed a `LockState` (review finding **F19**). A scan is a floor, not the claim.
 //!
 //! The run directory is the one impurity Acceptance concedes, and the fourth bullet names the price

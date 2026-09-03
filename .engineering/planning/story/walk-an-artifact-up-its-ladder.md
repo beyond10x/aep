@@ -7,10 +7,10 @@ title: One command walks the rungs, and reports what each one cost
 summary: Reaching a rung two moves away means two hand-written moves, and the alternative a caller reaches for is a jump the ladder should refuse.
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 5
+revision: 7
 ---
 ## Context
 
@@ -37,6 +37,6 @@ and a wrong one.
 
 ## Evidence for the gap
 
-`crates/edge/protocol-cli/src/planning.rs` — `move` takes one `--to` and validates it against the
+`crates/edge/aep-cli/src/planning.rs` — `move` takes one `--to` and validates it against the
 lifecycle. On `sbf/acd`, `story:presence-sync-race` needed two invocations to reach `active`, and
 the third to `implemented` was refused for want of a `test_result`.

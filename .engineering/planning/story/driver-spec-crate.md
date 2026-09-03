@@ -20,10 +20,10 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver-spec/src/map.rs
 - confidence: cited
-  path: crates/edge/protocol-cli/tests/drive_cli.rs
+  path: crates/edge/aep-cli/tests/drive_cli.rs
 - confidence: cited
   path: crates/govern/aep-engine/src/registry.rs
-revision: 12
+revision: 14
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs
 
@@ -78,7 +78,7 @@ tests are not these. Line numbers have drifted; the state has not.
   the registry.
 - `UndeclaredEvidenceKind`: appears once, at `crates/drive/aep-driver-spec/src/map.rs:913`, in production
   code only. The sole `check_run` test asserts `refusals.is_empty()`
-  (`crates/edge/protocol-cli/tests/drive_cli.rs:921`) — a green path.
+  (`crates/edge/aep-cli/tests/drive_cli.rs:921`) — a green path.
 - `[lints] workspace = true` is present at `crates/drive/aep-driver-spec/Cargo.toml:35`, and the
   invariant-9 row at `AGENTS.md:300`. Both are still unasserted; the clippy gate step catches the
   first only indirectly, as 2026-08-28 said.

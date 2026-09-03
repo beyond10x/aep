@@ -17,14 +17,14 @@ scope:
 - confidence: cited
   path: AGENTS.md
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: crates/govern/aep-domain
 - confidence: cited
   path: crates/govern/aep-engine
 - confidence: cited
   path: examples/evidence-horizons-corpus/distribution.json
-revision: 10
+revision: 12
 ---
 # Story: Twelve horizons in one corpus, and one number the engine will hold
 
@@ -113,7 +113,7 @@ record's horizon past the requirement's is a refusal, not a slower gate.
 
 ### What exists already and is one flag short
 
-`protocol evidence inspect --horizon` (`crates/edge/protocol-cli/src/main.rs:4818-4894`) already renders a
+`protocol evidence inspect --horizon` (`crates/edge/aep-cli/src/main.rs:4818-4894`) already renders a
 per-record `ok`/`expired` column, and already reports a future observation per record rather than
 refusing the file. But its horizon is a single value on the command line, applied to every record —
 its own help says *"report only … a what-if applied to a printed table"*. So it answers *which of

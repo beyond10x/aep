@@ -5,7 +5,7 @@ would submit — plus the exact commands to run against it. The integration test
 so it cannot drift from what the engine actually does.
 
 ```console
-$ cargo build -p protocol-cli
+$ cargo build -p aep-cli
 $ B=target/debug/aep
 ```
 

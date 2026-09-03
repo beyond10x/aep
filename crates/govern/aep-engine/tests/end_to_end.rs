@@ -1017,7 +1017,7 @@ fn completion_is_refused_with_the_missing_requirements_named() {
 // the project actually makes — that a *real run* of a specification's own suite is what decides a
 // task. These two replay `examples/billing-conformance/`, whose two conformance records are
 // produced by `protocol ess conform evidence` and drift-checked against the runner in
-// `crates/edge/protocol-cli/tests/cli.rs`. The engine only ever reads them, which is invariant 7: the
+// `crates/edge/aep-cli/tests/cli.rs`. The engine only ever reads them, which is invariant 7: the
 // conversion happened in the crate that ran the suite, and nothing here could have written it.
 
 /// The worked example that requires conformance.

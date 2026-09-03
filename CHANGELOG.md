@@ -18,6 +18,16 @@ belongs in the commit message or in `docs/design/`.
   was, `aep` and `protocol` remain the two names of the one command, and nothing a consumer pins by
   name changes. Only paths moved — the workspace member list, the `[workspace.dependencies]` paths,
   and the references that named a file by its old path.
+- **Three crates are named after the protocol.** `adp-domain` is now
+  `aep-profile-development`, `aop-domain` is `aep-profile-operations`, and `protocol-cli` — which
+  built the `aep` command under the retired command's name — is `aep-cli`. The two profile crates
+  are vocabulary over `aep/1`, not sibling products, and their old three-letter names said
+  otherwise. **The binaries are unchanged**: `aep` and `protocol` are still the two names of the one
+  command, built by the renamed crate, and still byte-equivalent (`AGENTS.md` invariant 10). **The
+  protocol ids are unchanged**: `adp/1`, `aop/1` and the workflow id `adp/default` are wire ids, not
+  crate names. `cargo install --path crates/edge/protocol-cli` becomes
+  `cargo install --path crates/edge/aep-cli`, and `cargo build -p protocol-cli` becomes
+  `cargo build -p aep-cli`.
 
 ## [0.50.0] — 2026-09-03
 

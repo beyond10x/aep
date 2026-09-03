@@ -10,10 +10,10 @@ scope:
 - confidence: inferred
   path: crates/drive/aep-driver/src/run.rs
 - confidence: inferred
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: inferred
   path: crates/observe/trace-spec/src/report.rs
-revision: 6
+revision: 7
 ---
 # Story: A driven arm on an autoscaled endpoint holds its request instead of paying for the boot every step
 

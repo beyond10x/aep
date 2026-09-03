@@ -16,7 +16,7 @@ that walks `drivers/development/default.yaml` (the cargo map) rather than `devel
 | map | `drivers/development/default.yaml` |
 | profile | `development.driven` |
 | the work | one real defect — `--take-lock` builds a `StolenLock`, prints it and never persists it, so `protocol drive status` has a printer for a field that is always `None` and **the theft is not in the record** — plus the holder's cursor state in the lock refusal, and three assertions |
-| blast radius | `crates/drive/aep-driver/` and `crates/edge/protocol-cli/src/drive.rs` |
+| blast radius | `crates/drive/aep-driver/` and `crates/edge/aep-cli/src/drive.rs` |
 
 The candidate changed on the day: this plan named `story:retry-budgets`, and the audit found it
 shipped and closed it. `story:operator-resume-ux` is what now fits `story:governed-dogfood-run`'s own
@@ -39,7 +39,7 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
 
    ```console
    cd ~/beyond10x/aep
-   cargo build -p protocol-cli --bin protocol
+   cargo build -p aep-cli --bin protocol
    ./target/debug/protocol drive run \
      --task .engineering/task-w4-3.yaml \
      --map drivers/development/default.yaml \

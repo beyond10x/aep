@@ -385,7 +385,7 @@ fn the_lock_module_still_reads_nothing_about_the_machine_it_runs_on() {
 
 /// **S1 of `task:orx-theft-in-the-record`.** The driver learns the stolen lock from its caller.
 ///
-/// `lock.json` belongs to `protocol-cli`, along with the run directory it grants. Threading the
+/// `lock.json` belongs to `aep-cli`, along with the run directory it grants. Threading the
 /// superseded lock through `DriverOptions` or an argument satisfies R14; opening the lock file here
 /// does not, and this is what says so — the crate never names the file at all outside its prose.
 #[test]
@@ -412,7 +412,7 @@ fn the_driver_crate_never_opens_the_lock_file_it_is_told_about() {
     );
     assert!(
         found.is_empty(),
-        "the lock file belongs to `protocol-cli`, and this crate is told about it rather than \
+        "the lock file belongs to `aep-cli`, and this crate is told about it rather than \
          reading it:\n{}",
         found.join("\n")
     );

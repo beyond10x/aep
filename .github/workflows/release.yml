@@ -53,7 +53,7 @@ jobs:
           version="${TAG#v}"
           test "$(git cat-file -t "refs/tags/${TAG}")" = tag
           test "$(git rev-parse HEAD)" = "$(git rev-parse "${TAG}^{commit}")"
-          cargo_version="$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "protocol-cli") | .version')"
+          cargo_version="$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aep-cli") | .version')"
           test "$version" = "$cargo_version"
           grep -Eq "^## \[$version\] — [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -101,7 +101,7 @@ jobs:
           key: release-${{ matrix.target }}
 
       - name: Build both command names from the locked release
-        run: cargo build --release --locked -p protocol-cli --target ${{ matrix.target }}
+        run: cargo build --release --locked -p aep-cli --target ${{ matrix.target }}
 
       - name: Verify and package
         shell: bash

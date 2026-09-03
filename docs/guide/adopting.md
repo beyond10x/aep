@@ -6,7 +6,7 @@ For a team that already has rules — in a wiki, a `CONTRIBUTING.md`, or in one 
 (every capability, evidence kind, fact path, predicate operator) and this page holds the order to do
 things in.
 
-Every command below assumes `B=target/debug/protocol` after `cargo build -p protocol-cli`, run from
+Every command below assumes `B=target/debug/protocol` after `cargo build -p aep-cli`, run from
 the root of the tree being checked.
 
 ## What you bring
@@ -512,8 +512,8 @@ one failed assertion inside a test log:
 ```yaml
 - name: Documents
   run: |
-    cargo run -p protocol-cli -- validate --root .
-    cargo run -p protocol-cli -- resolve --root . --task examples/typical-task.yaml
+    cargo run -p aep-cli -- validate --root .
+    cargo run -p aep-cli -- resolve --root . --task examples/typical-task.yaml
 ```
 
 Keep at least one representative task per profile you ship. `validate` alone will not tell you that a

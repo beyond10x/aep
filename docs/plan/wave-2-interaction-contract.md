@@ -138,7 +138,7 @@ Acceptance: ~8 integration tests.
 ## Out of scope for this wave
 
 `aep-conformance` and its fixtures (§78, §104 as a *reusable* suite rather than one test),
-`adp-domain` and `aop-domain` types, any persistent backend. Wave 3.
+`aep-profile-development` and `aep-profile-operations` types, any persistent backend. Wave 3.
 
 ## Risks
 

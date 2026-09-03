@@ -21,14 +21,14 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver/src/run.rs
 - confidence: cited
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
   path: docs/plan/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: drivers/development/checks.yaml
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 10
+revision: 12
 ---
 # Story: One story from this backlog, driven end to end
 
@@ -77,7 +77,7 @@ wedges is a recorded result* holding:
 | no state entered except through a `Moved`; refusals carry one reason per unmet requirement | **holds** — `crates/drive/aep-driver/src/run.rs:695-711`; `W4-1/1` `cursor.json` carries both unmet reasons; `W4-2/1` 25 events, 2 blocked | — |
 | the gate is green before the review step; the `test_result` and `static_analysis` submitted are the ones the run produced | **partial** — `drivers/development/checks.yaml:195-225` mints all three from `command` steps and `W4-2/1` produced them, but **`review` was never entered**. The "gate" is `.engineering/checks/run.sh`, not `task check` | reach the review step; and say which gate the line means |
 | each `llm` step's transcript is checked and submitted as `trace_conformance`, and the completion gate **reads** it | **missing on the gate half** — `checks.yaml:59-65` says so itself: *"it does not block the run, because nothing gates on `trace_conformance` yet"*. Only `implement`'s transcript is checked; `W4-2/1` submitted one record | the completion gate that reads it — the thing that makes this line more than a submission |
-| every status move went through `protocol artifact move`, with the write-guard hook as enforcement and `validate` as audit | **partial, and the mechanism changed** — the audit half runs (`checks.yaml:220-225`); the *hook* named as enforcement no longer exists. It is the metaharness policy seam (`decide_tool`, `store_integrity` in `crates/edge/protocol-cli/src/drive.rs`), and `W4-2/1` ran with **0 hook decisions** | reword to the seam that enforces today, and assert the store afterwards |
+| every status move went through `protocol artifact move`, with the write-guard hook as enforcement and `validate` as audit | **partial, and the mechanism changed** — the audit half runs (`checks.yaml:220-225`); the *hook* named as enforcement no longer exists. It is the metaharness policy seam (`decide_tool`, `store_integrity` in `crates/edge/aep-cli/src/drive.rs`), and `W4-2/1` ran with **0 hook decisions** | reword to the seam that enforces today, and assert the store afterwards |
 | a run that wedges is a recorded result | **holds**, twice | — |
 
 **The story to drive next is no longer `story:retry-budgets`.** That story closed on 2026-08-28

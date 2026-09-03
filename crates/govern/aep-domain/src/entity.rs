@@ -938,7 +938,8 @@ pub trait EntityBody: Sized {
 
 /// Reads a required string field from a body mapping.
 ///
-/// Shared by the typed bodies in `adp-domain` and `aop-domain`, so their error messages agree.
+/// Shared by the typed bodies in `aep-profile-development` and `aep-profile-operations`, so their
+/// error messages agree.
 pub fn required_text(
     node: &crate::node::Node,
     field: &str,

@@ -15,10 +15,10 @@ scope:
 - confidence: inferred
   path: crates/drive/aep-driver-spec/src/map.rs
 - confidence: cited
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
   path: crates/observe/trace-domain/src/ir.rs
-revision: 6
+revision: 7
 ---
 # Story: the vendor arms get the same boundary
 

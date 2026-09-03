@@ -270,9 +270,9 @@ const DIALECT: &str = "shell-echo/lines/1";
 // Adapter point 2: the shared decision, rendered into a second vocabulary
 // ---------------------------------------------------------------------------------------------
 
-/// Claude Code's table, as `protocol-cli` renders it, for the disjointness assertion.
+/// Claude Code's table, as `aep-cli` renders it, for the disjointness assertion.
 ///
-/// Duplicated here rather than imported: `aep-driver` does not depend on `protocol-cli` and must
+/// Duplicated here rather than imported: `aep-driver` does not depend on `aep-cli` and must
 /// not start to. The point of the assertion is that two harnesses genuinely name their tools
 /// differently, and a copy of the names is enough to establish that.
 const CLAUDE_CODE_NAMES: &[&str] = &[

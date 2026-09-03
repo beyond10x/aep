@@ -20,7 +20,7 @@ scope:
   path: docs/plan/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 13
+revision: 14
 ---
 # Story: Three statements the tree makes about itself that are false
 
@@ -103,7 +103,7 @@ none has been fixed.**
 - **Not touched:** `crates/drive/aep-driver-spec/src/tool.rs:13`, `crates/drive/aep-driver/tests/tool_config.rs:72` — cited, `story:driver-router`'s two already-corrected copies
 - **Not touched:** `crates/govern/aep-engine/tests/document_tree_order.rs`, `document_tree_order_adversarial.rs` — cited, both parse `load.rs` for `TREE`'s rows and both skip lines whose trimmed form starts `//`, so rewriting the comment cannot redden them
 - **Confidence:** **high** — the story cites every file and line, and each was read at `3d86d5b` and found unchanged; the only drift is one line on `VENDORED`'s extent
-- **Would collide with:** any unit touching `crates/govern/aep-engine/src/load.rs` or `crates/govern/aep-engine/tests/adopting_guide.rs`; any unit touching `crates/drive/aep-driver/tests/shell_echo.rs`; any unit editing `drivers/development/default.yaml` or `conformance/eval/development-honest/expectations.trace.yaml` — note `crates/edge/protocol-cli/src/drive.rs`, `crates/drive/aep-driver/tests/coverage.rs` and `crates/edge/protocol-cli/tests/eval_*` **read** those two files without editing them; any unit editing `docs/plan/harness-wave-4-governed-dogfood.md` or `docs/reviews/2026-08-21-driver-feasibility-review.md`
+- **Would collide with:** any unit touching `crates/govern/aep-engine/src/load.rs` or `crates/govern/aep-engine/tests/adopting_guide.rs`; any unit touching `crates/drive/aep-driver/tests/shell_echo.rs`; any unit editing `drivers/development/default.yaml` or `conformance/eval/development-honest/expectations.trace.yaml` — note `crates/edge/aep-cli/src/drive.rs`, `crates/drive/aep-driver/tests/coverage.rs` and `crates/edge/aep-cli/tests/eval_*` **read** those two files without editing them; any unit editing `docs/plan/harness-wave-4-governed-dogfood.md` or `docs/reviews/2026-08-21-driver-feasibility-review.md`
 
 **Not established.** The story says *seven copies* and accounts for seven, but `git grep -n "no development profile"` outside `.engineering/planning` returns twelve hits. `docs/plan/harness-wave-2-driver-decision.md:204` states the claim flatly in a *consequence* cell with no local correction, and it is unclear whether the story counted it as covered by the same document's corrected `:78`. `docs/design/harness-planning-and-driver-design-v0.1.md:1467` and `:1490` also state it; `:1490` is corrected a few lines below and `:1467` defers, so both were judged out of scope — inferred, not cited. Acceptance bullet 3 asks `VENDORED` to *derive from the loader's table or say in one line why it does not*, and which of the two is undecided: deriving would add a source-parsing helper to `adopting_guide.rs` duplicating `tree_directories()` in `document_tree_order.rs`, a third copy of the same parser, since integration tests are separate binaries. The story's *"moving `workflows` after `drivers` leaves the repository's own tree loading clean"* is a claim about a run the scoper did not reproduce.
 

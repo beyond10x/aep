@@ -45,7 +45,7 @@
 //!   suites behind it. Everything the overlay shows was decided elsewhere and handed in as a
 //!   [`RunView`].
 //! * **It does not read a clock, a terminal or a file.** `--watch` polls, and that poll lives in
-//!   `protocol-cli` where a clock is allowed. `tests/determinism.rs` scans these sources for the
+//!   `aep-cli` where a clock is allowed. `tests/determinism.rs` scans these sources for the
 //!   tokens that would break that.
 //! * **It does not depend on `aep-engine` or `aep-driver`.** See [`run`] for why the overlay
 //!   arrives as a plain struct instead.

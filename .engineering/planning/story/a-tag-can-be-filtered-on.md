@@ -7,8 +7,8 @@ title: list and board filter on a tag
 summary: 'Tags are writable and unqueryable: --tag exists on new and set, and no read verb takes one.'
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli/src/planning.rs
-revision: 4
+  path: crates/edge/aep-cli/src/planning.rs
+revision: 6
 ---
 ## Context
 
@@ -30,5 +30,5 @@ two set-valued frontmatter fields, one queryable.
 
 ## Evidence for the gap
 
-`crates/edge/protocol-cli/src/planning.rs` — the `List` variant declares `kind`, `status` and (since
+`crates/edge/aep-cli/src/planning.rs` — the `List` variant declares `kind`, `status` and (since
 0.41.0) `reference`; `select()` filters on those three. `Board` declares `kind` alone.

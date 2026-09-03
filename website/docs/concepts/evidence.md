@@ -110,7 +110,7 @@ a gate nobody has ever met.
 **The horizon lives on the requirement and nowhere else.** A record has no horizon field, so there
 is nothing on a submitted fact to extend; there is no operation anywhere that mutates one; and a
 source scan over the five crates a horizon can be reached from — `aep-domain`, `aep-engine`,
-`aep-backend-markdown`, `aep-driver`, `protocol-cli` — refuses both `.horizon =` and any `fn` taking
+`aep-backend-markdown`, `aep-driver`, `aep-cli` — refuses both `.horizon =` and any `fn` taking
 `&mut self` with `horizon` in its name. The reason is behavioural rather than architectural: if
 `extend` is as easy to call as `re-check`, `extend` is the one that gets called at six on a Friday.
 

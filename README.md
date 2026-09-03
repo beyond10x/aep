@@ -41,9 +41,9 @@ The workspace includes:
 | `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow driver, and workflow rendering |
 | `crates/observe/` | `trace-domain`, `trace-spec` | typed transcript normalization and conformance checking |
 | `crates/observe/` | `aep-ess-evidence` | optional conversion of a standalone ESS report into AEP evidence |
-| `crates/profile/` | `adp-domain`, `aop-domain` | development and operations vocabulary over the substrate |
+| `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary over the substrate |
 | `crates/edge/` | `aep-schema`, `aep-project` | standalone schemas for AEP documents, and the filesystem and Git acquisition edge |
-| `crates/edge/` | `protocol-cli` | the canonical `aep` command and `protocol` alias |
+| `crates/edge/` | `aep-cli` | the canonical `aep` command and `protocol` alias |
 
 The directory is the claim: a crate depends on its own area and on the ones below it, `edge` →
 `{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. `AGENTS.md` records the one exception.

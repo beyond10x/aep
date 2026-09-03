@@ -8,7 +8,7 @@ description: Put a task of your own under a profile — the task file, the artif
 
 This guide takes a team that already has rules — in a wiki, a `CONTRIBUTING.md`, or one senior
 engineer's head — and puts a real task under the protocol. Commands assume
-`B=target/debug/aep` after `cargo build -p protocol-cli`, the convention
+`B=target/debug/aep` after `cargo build -p aep-cli`, the convention
 [Getting started](../getting-started.md) sets.
 
 ## What you write
@@ -198,7 +198,7 @@ and who has to sign.
 `development.driven`'s grant is the one place in this directory where a profile widens what an agent
 may reach, and the profile's own header says so rather than leaving it to be discovered. The
 narrowing is a hook, not a capability:
-the driver's own per-call policy (`decide_tool` in `crates/edge/protocol-cli/src/drive.rs`,
+the driver's own per-call policy (`decide_tool` in `crates/edge/aep-cli/src/drive.rs`,
 answering the metaharness seam) denies any `Bash` call that is not one simple
 invocation of `aep artifact …` or `aep trace …`. That constraint is pattern-based and
 best-effort — granting `command.execute` grants a superset of the shell's reach, and a hook narrows
@@ -352,8 +352,8 @@ principle is timed against a phase your workflow does not have:
 ```yaml
 - name: Documents
   run: |
-    cargo run -p protocol-cli -- validate --root .
-    cargo run -p protocol-cli -- resolve --root . --task examples/development-passkeys/task.yaml
+    cargo run -p aep-cli -- validate --root .
+    cargo run -p aep-cli -- resolve --root . --task examples/development-passkeys/task.yaml
 ```
 
 If your repository keeps a planning store as well, `aep artifact validate` belongs in the same

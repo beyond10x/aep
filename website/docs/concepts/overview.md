@@ -33,8 +33,8 @@ Each layer is a directory under `crates/`, so the tree says which crate is which
 | storage contract and providers | `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | provider-independent commands, queries and black-box suites; memory, markdown, SQLite, PostgreSQL, Entity Runtime, and hybrid edges |
 | driving | `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow caller, and drawing a run |
 | observation | `crates/observe/` | `trace-domain`, `trace-spec`, `aep-ess-evidence` | normalized transcript IR, typed expectations, and the optional ESS report adapter |
-| profiles | `crates/profile/` | `adp-domain`, `aop-domain` | development and operations vocabulary over the substrate |
-| shell | `crates/edge/` | `aep-schema`, `aep-project`, `protocol-cli` | published document schemas, the filesystem and Git acquisition edge, and the canonical `aep` command with its exact `protocol` alias |
+| profiles | `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary over the substrate |
+| shell | `crates/edge/` | `aep-schema`, `aep-project`, `aep-cli` | published document schemas, the filesystem and Git acquisition edge, and the canonical `aep` command with its exact `protocol` alias |
 
 A crate depends on its own directory and the ones under it — `edge` → `{profile, drive, observe}` →
 `{govern, plan}` → `aep-domain`. The repository's `AGENTS.md` records the one compiled exception.

@@ -15,14 +15,14 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver-spec
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: crates/govern/aep-domain
 - confidence: cited
   path: crates/govern/aep-engine
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 11
+revision: 13
 ---
 # Story: A rule about this task's specification stops accepting somebody else's
 
@@ -187,10 +187,10 @@ Three tests hold it, each verified by the mutation it exists to catch:
   (`crates/drive/aep-driver-spec/src/map.rs`) — the vocabulary, and the hint that has to grow with it, read
   out of `PLACEHOLDERS` rather than spelled again.
 - `the_task_placeholder_is_the_document_this_run_was_started_from`
-  (`crates/edge/protocol-cli/src/drive.rs`) — the expansion, alone and inside a word, and the refusal for
+  (`crates/edge/aep-cli/src/drive.rs`) — the expansion, alone and inside a word, and the refusal for
   a run whose task was never read out of a file.
 - `a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from`
-  (`crates/edge/protocol-cli/tests/drive_cli.rs`) — a driven project holding two stories, two approved
+  (`crates/edge/aep-cli/tests/drive_cli.rs`) — a driven project holding two stories, two approved
   specifications and two tasks, asserting **both** halves: the map without the placeholder writes a
   record about the *project's* story, and the map with it writes one about the task the run was
   started from. Without the first half this would pass in any store with one specification in it.

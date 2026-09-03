@@ -35,10 +35,10 @@ does not create additional protocol acronyms.
 
 ### AEP
 
-AEP retains every `aep-*`, `adp-domain` and `aop-domain` crate; provider-backed planning; the
-reference driver; trace checking and evaluation; artifact definitions; protocols, profiles,
-principles and workflows; and governance documents. It owns the generic planning substrate. ADP
-and AOP supply profile-specific workflow and vocabulary.
+AEP retains every `aep-*` crate, including the development and operations profile crates;
+provider-backed planning; the reference driver; trace checking and evaluation; artifact
+definitions; protocols, profiles, principles and workflows; and governance documents. It owns the
+generic planning substrate. ADP and AOP supply profile-specific workflow and vocabulary.
 
 `aep` becomes canonical. `protocol` is not a deprecation stub: for every retained operation it must
 produce the same stdout, stderr and exit status as `aep`. The compatibility test executes both

@@ -14,10 +14,10 @@ scope:
 - confidence: inferred
   path: crates/drive/aep-driver
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 12
+revision: 14
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 
@@ -36,7 +36,7 @@ Found by the adversarial pass on `story:protocol-drive-verb`, 2026-08-30, by wri
 error: reading .../.engineering/runs/lock.json: EOF while parsing a value at line 1 column 0
 ```
 
-`run`, `run --take-lock` **and** `status`. `read_lock` (`crates/edge/protocol-cli/src/drive.rs:1418`)
+`run`, `run --take-lock` **and** `status`. `read_lock` (`crates/edge/aep-cli/src/drive.rs:1418`)
 propagates the serde error with `?`, and `take_lock` (`:1444-1452`) calls it **before** it consults
 `force` — so `--take-lock`, the route the refusal itself advertises, is refused by the thing it
 exists to override. There is no verb that clears the state and nothing tells the operator to delete
@@ -63,7 +63,7 @@ is the half that makes the residue unrecoverable.
   failing whole.
 - The red case that exists is
   `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error`
-  (`crates/edge/protocol-cli/tests/drive_cli.rs:2621`), delivered red on purpose by the wave of
+  (`crates/edge/aep-cli/tests/drive_cli.rs:2621`), delivered red on purpose by the wave of
   2026-08-30 and merged in that state.
 
 ## Out of Scope
@@ -81,17 +81,17 @@ otherwise open. Folding it in would have closed a story on a surface nobody plan
 Derived 2026-08-30 by `story-scoper`. Every line is **cited** (read from the story or the tree) or
 **inferred** (a reading that could be wrong).
 
-- **Primary surface:** `crates/edge/protocol-cli` — cited, the story names `drive.rs` and `drive_cli.rs`, and every lock call site is in that crate
-- **Files:** `crates/edge/protocol-cli/src/drive.rs` — `read_lock` (`:1448`), `take_lock` (`:1462`, its `read_lock` at `:1510` and the `force` consult at `:1512`), `start` (`:688`, `take_lock` at `:754`), `resume` (`:820`, `take_lock` at `:889`), `status` (`:939`, `read_lock` at `:950`) — cited. **The story's own citations have drifted**: it names `:1418` and `:1444-1452`; at `3d86d5b` they are `:1448` and `:1462-1512`
-- **Files:** `crates/edge/protocol-cli/tests/drive_cli.rs` — cited, all three acceptance assertions (`run`, `run --take-lock`, `status`) are CLI cases and this is the only drive CLI suite
+- **Primary surface:** `crates/edge/aep-cli` — cited, the story names `drive.rs` and `drive_cli.rs`, and every lock call site is in that crate
+- **Files:** `crates/edge/aep-cli/src/drive.rs` — `read_lock` (`:1448`), `take_lock` (`:1462`, its `read_lock` at `:1510` and the `force` consult at `:1512`), `start` (`:688`, `take_lock` at `:754`), `resume` (`:820`, `take_lock` at `:889`), `status` (`:939`, `read_lock` at `:950`) — cited. **The story's own citations have drifted**: it names `:1418` and `:1444-1452`; at `3d86d5b` they are `:1448` and `:1462-1512`
+- **Files:** `crates/edge/aep-cli/tests/drive_cli.rs` — cited, all three acceptance assertions (`run`, `run --take-lock`, `status`) are CLI cases and this is the only drive CLI suite
 - **Symbols:** `read_lock`, `take_lock`, `Holder`, `LOCK_FILE` (`drive.rs:106`), `LockState::refusal`, `Liveness` — cited
 - **Also likely:** `crates/drive/aep-driver/src/lock.rs` — inferred. `LockState::refusal` (`:105`) is where every other lock refusal is worded, so a *damaged* arm could land there; but `LockState` requires `run`/`pid`/`host`, which a damaged file has none of, and `crates/drive/aep-driver/tests/routing.rs:390` forbids the string `lock.json` anywhere in that crate's code lines — so a refusal that **names the file** cannot live there and probably stays in `drive.rs`
 - **Also likely:** `crates/drive/aep-driver/tests/routing.rs` — inferred, only if the refusal arm is added in `aep-driver`; the purity scan (`the_driver_crate_never_opens_the_lock_file_it_is_told_about`) is the test that would fail first
 - **Documents:** `CHANGELOG.md` — inferred, `AGENTS.md:561` routes *what a user of the protocol sees change* there and a new refusal message is user-visible. `website/docs/reference/cli.md:195-198` only if a clearing verb or flag is added, which the acceptance does not require
 - **Confidence:** **high** — the story names the defect site, the tree confirms `read_lock`'s `?` and `take_lock`'s parse-before-`force` ordering, and all four affected functions are in one file
-- **Would collide with:** any unit touching `crates/edge/protocol-cli/src/drive.rs` (its lock, `start`, `resume` or `status` paths) or `crates/edge/protocol-cli/tests/drive_cli.rs`; secondarily anything editing `crates/drive/aep-driver/src/lock.rs`
+- **Would collide with:** any unit touching `crates/edge/aep-cli/src/drive.rs` (its lock, `start`, `resume` or `status` paths) or `crates/edge/aep-cli/tests/drive_cli.rs`; secondarily anything editing `crates/drive/aep-driver/src/lock.rs`
 
-**Not established.** **The red case named in the acceptance is not on `main`.** `crates/edge/protocol-cli/tests/drive_cli.rs:2621` at `3d86d5b` is inside `adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_it` (starts `:2627`); `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error` exists only on branch `impl/protocol-drive-verb`, at `:2695`. `b216ce7` removed it from `main` deliberately and its message names this story as the owner — so it is restored from that branch, not found in place. The story says three verbs are wedged; the tree shows **four** call sites — `resume` (`drive.rs:820`, `take_lock` at `:889`) reads the lock too and the acceptance does not name it. Where the refusal wording lands is genuinely open: the `aep-driver` purity test blocks naming the file there, but a file-less *damaged lock* arm on `LockState::refusal` is still possible. The sibling precedent is a solution, not a location — `a_holder_cursor_that_will_not_parse_is_a_refusal_and_never_a_crash` (`drive_cli.rs:1593`) is handled inside `Holder::holder_state` by `.ok()?`, a swallow rather than a refusal message.
+**Not established.** **The red case named in the acceptance is not on `main`.** `crates/edge/aep-cli/tests/drive_cli.rs:2621` at `3d86d5b` is inside `adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_it` (starts `:2627`); `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error` exists only on branch `impl/protocol-drive-verb`, at `:2695`. `b216ce7` removed it from `main` deliberately and its message names this story as the owner — so it is restored from that branch, not found in place. The story says three verbs are wedged; the tree shows **four** call sites — `resume` (`drive.rs:820`, `take_lock` at `:889`) reads the lock too and the acceptance does not name it. Where the refusal wording lands is genuinely open: the `aep-driver` purity test blocks naming the file there, but a file-less *damaged lock* arm on `LockState::refusal` is still possible. The sibling precedent is a solution, not a location — `a_holder_cursor_that_will_not_parse_is_a_refusal_and_never_a_crash` (`drive_cli.rs:1593`) is handled inside `Holder::holder_state` by `.ok()?`, a swallow rather than a refusal message.
 
 ## Left the wave of 2026-08-30 — the work is on a branch, unmerged
 

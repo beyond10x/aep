@@ -9,7 +9,7 @@ what it still owes, which transition is permitted, and whether the task is compl
 Nothing in this wave needs the entity layer, the command/query contract or conformance (waves 2–4).
 It builds only on `aep-domain` and `aep-schema`, which are done.
 
-Projected status after the wave: **≈30% → ≈62%** (`aep-engine` 15% + documents 10% + `protocol-cli`
+Projected status after the wave: **≈30% → ≈62%** (`aep-engine` 15% + documents 10% + `aep-cli`
 7%, using the README's weights).
 
 ## Dependency order
@@ -159,7 +159,7 @@ Acceptance: the loader test from W1.2 passes over the whole tree, and `test-driv
 obligation is expressed as a checkable ordering fact
 (`evidence.first_seq.test_result < evidence.first_seq.diff`) rather than as a comment.
 
-## W1.8 `protocol-cli`
+## W1.8 `aep-cli`
 
 | Command | Behaviour |
 |---|---|
@@ -173,7 +173,7 @@ obligation is expressed as a checkable ordering fact
 `--format text|yaml|json`; exit codes `0` ok, `1` invalid, `2` usage. Tests drive the real binary
 through `env!("CARGO_BIN_EXE_protocol")`, so no new dependency.
 
-Deliverable: `protocol-cli`, ~10 integration tests.
+Deliverable: `aep-cli`, ~10 integration tests.
 
 ## W1.9 Examples and the end-to-end test
 
@@ -200,7 +200,8 @@ GitHub Actions running `task check` on push and pull request, plus a job asserti
 ## Out of scope for this wave
 
 Deliberately deferred, in order: the entity layer (§13–18), `aep-contract` (§34–47), an in-memory
-reference backend, `aep-conformance` (§78, §104), `adp-domain` and `aop-domain` types.
+reference backend, `aep-conformance` (§78, §104), `aep-profile-development` and
+`aep-profile-operations` types.
 
 ## Risks
 

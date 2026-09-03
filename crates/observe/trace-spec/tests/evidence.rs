@@ -130,7 +130,7 @@ fn the_record_names_the_trace_checker_and_never_the_caller() {
     );
 
     // JSON rather than YAML: this crate deliberately carries no YAML, and the document a person
-    // reads is the CLI's rendering — `crates/edge/protocol-cli/tests/trace_cli.rs` asserts that shape.
+    // reads is the CLI's rendering — `crates/edge/aep-cli/tests/trace_cli.rs` asserts that shape.
     let document = serde_json::to_string(&[&record]).expect("the record serialises");
     assert!(
         document.contains(r#""verifier":"trace-checker""#),

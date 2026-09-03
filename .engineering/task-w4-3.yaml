@@ -43,7 +43,7 @@ constraints:
     - The story is `story:operator-resume-ux` in `.engineering/planning/story/`; its Acceptance
       section, as re-scoped on 2026-08-28, is the specification this run is measured against. The
       re-scoping table in its body names exactly which lines are already held and by which test.
-    - Implementation surface is `crates/drive/aep-driver/` and `crates/edge/protocol-cli/src/drive.rs`. Do not
+    - Implementation surface is `crates/drive/aep-driver/` and `crates/edge/aep-cli/src/drive.rs`. Do not
       modify anything under `website/`, `integrations/`, `drivers/`, `.engineering/planning/`, or
       the workspace `Cargo.toml`.
     - >-
@@ -51,4 +51,4 @@ constraints:
       record that it was stolen. Thread the `StolenLock` into the cursor and read it back from the
       run directory in a test.
     - The tests belong in `crates/drive/aep-driver/tests/routing.rs` and
-      `crates/edge/protocol-cli/tests/drive_cli.rs`; both already hold the neighbouring cases.
+      `crates/edge/aep-cli/tests/drive_cli.rs`; both already hold the neighbouring cases.

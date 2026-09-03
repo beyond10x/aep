@@ -392,7 +392,7 @@ store: { postgres: "postgres://user:secret@db.internal/plans" }
 ```
 
 Nothing else about the project changes. `--store <dir>` stays the override for the markdown form.
-The verbs answer alike whichever store is named — `crates/edge/protocol-cli/tests/store_selection.rs`
+The verbs answer alike whichever store is named — `crates/edge/aep-cli/tests/store_selection.rs`
 runs every one of them, each as its own process, over `examples/planning-passkeys/` on files and on
 `project.sqlite.yaml`, and compares the output — with one difference recorded rather than hidden:
 
@@ -455,7 +455,7 @@ would be a second and worse `explain`; and an id the plan does not hold is refus
 way `explain` and `history` refuse one. It reads through the contract like every other read, so the
 markdown, SQLite, Postgres and hybrid answers are one answer — held to that by
 `show_prints_one_artifact_with_its_body_verbatim_in_every_store` in
-`crates/edge/protocol-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
+`crates/edge/aep-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
 keys this format does not name: they are a markdown document's own, and a plan that keeps no
 documents has never been told about them.
 

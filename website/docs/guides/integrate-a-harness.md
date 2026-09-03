@@ -21,7 +21,7 @@ Install the three local binaries from source checkouts and verify what will be r
 `PATH` before crossing a model boundary:
 
 ```shell-session
-$ cargo install --locked --path crates/edge/protocol-cli
+$ cargo install --locked --path crates/edge/aep-cli
 $ cargo install --locked --path ../metaharness/crates/metaharness-cli
 $ cargo install --locked --path ../harness/crates/harness-cli
 $ aep --version
@@ -64,7 +64,7 @@ environment opt-in `METAHARNESS_LIVE=1`, an outer `--budget-usd`, and a conserva
 `--assume-usd-per-run` charge that it reserves before every launch. `drive status` reads the run
 directory and needs nothing. `--map` is not optional in this tree: two step maps are written
 against `adp/default/1`, so a `drive run` given neither is refused, naming both ids rather than picking the first
-(`crates/edge/protocol-cli/src/drive.rs:401-411`).
+(`crates/edge/aep-cli/src/drive.rs:401-411`).
 
 It evaluates no gate itself. A driver that could evaluate a gate would be a second protocol
 implementation with none of the conformance suites behind it, and the first time the two disagreed

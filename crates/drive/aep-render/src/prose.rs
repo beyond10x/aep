@@ -506,7 +506,7 @@ mod tests {
     // There is deliberately **no whole-document snapshot in `fixtures/` here**, which is where the
     // other three emitters keep theirs. Theirs is the only committed copy of what they draw; this
     // one's committed copy is the artifact itself, `generated/instructions/adp/default.md`, held
-    // byte-identical by `crates/edge/protocol-cli/tests/instructions.rs`. A fixture beside it would be a
+    // byte-identical by `crates/edge/aep-cli/tests/instructions.rs`. A fixture beside it would be a
     // second copy of one five-hundred-line document with nothing asserting the two agree — the
     // drift this repository writes drift checks to avoid. What is asserted here is what the prose
     // has to *say*; that it says it in exactly those bytes is asserted where the bytes are shipped.

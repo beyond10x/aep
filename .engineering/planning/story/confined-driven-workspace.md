@@ -10,10 +10,10 @@ scope:
 - confidence: inferred
   path: crates/drive/aep-driver/src/run.rs
 - confidence: inferred
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
   path: scripts/drive-score
-revision: 6
+revision: 7
 ---
 # Story: A driven run on the native harness can write, so the two arms are comparable
 

@@ -23,10 +23,10 @@ implemented at once and merged onto one branch closed by one gate run.**
 | 40 draft stories, 36 dependency-ready | `protocol artifact graph --format json`, `depends_on` closure over `implemented`/`archived` |
 | so `depends_on` prunes 4 of 40 | selection is judgement, not a query — which is why this page exists to be approved |
 | 24 of 40 draft stories cite no source path | grep for `crates/…` over each body |
-| of the 16 that do, 9 name `aep-domain`, 8 name `protocol-cli` | same scan — the two crates a naive wave would collide on |
+| of the 16 that do, 9 name `aep-domain`, 8 name `aep-cli` | same scan — the two crates a naive wave would collide on |
 | 1 of 40 draft stories carries a `serves:` edge | `graph --format json`; every story this wave moves needs one added first |
 | free disk 66 G; the operator's `target/debug` 28 G | `df`, `du` |
-| **a package-scoped build in a fresh worktree: 30 s wall, 1.6 G target** | measured 2026-08-30 — `cargo test -p protocol-cli --no-run` in a detached worktree at `a8b139b`, own target dir, 258 compile requests |
+| **a package-scoped build in a fresh worktree: 30 s wall, 1.6 G target** | measured 2026-08-30 — `cargo test -p aep-cli --no-run` in a detached worktree at `a8b139b`, own target dir, 258 compile requests |
 | **so N=5 costs ~8 G, not ~140 G** | 5 × 1.6 G. The fear that bounded N was the *workspace* target; package-scoped gating is what makes it wrong |
 | `sccache` wired in for the measurement: **0.00 % Rust hit rate** | `sccache --show-stats` — this workspace has never been built through it, so it buys nothing on the first wave and pays from the second |
 
@@ -34,9 +34,9 @@ implemented at once and merged onto one branch closed by one gate run.**
 
 | # | story | serves | surface | confidence | verdict |
 |---|---|---|---|---|---|
-| 1 | `story:board-columns-come-from-the-ladders` | O2 | `crates/edge/protocol-cli/src/planning.rs:2132-2177` | **high** — only column build in the tree | **in** |
+| 1 | `story:board-columns-come-from-the-ladders` | O2 | `crates/edge/aep-cli/src/planning.rs:2132-2177` | **high** — only column build in the tree | **in** |
 | 2 | `story:usage-series-assertions` | O3 | `crates/observe/trace-domain` + `crates/observe/trace-spec`, one enum behind an exhaustive dispatch | **high** — two precedent commits show the exact file set | **in, with a caveat** |
-| — | `story:recurrence-key` | — | `aop-domain` + `aep-domain/src/workflow.rs` + generated schema | **medium** | **out** |
+| — | `story:recurrence-key` | — | `aep-profile-operations` + `aep-domain/src/workflow.rs` + generated schema | **medium** | **out** |
 | — | `story:evidence-subject-binding` | — | `crates/govern/aep-domain/src/requirement.rs:374-382` | high on the remainder | **out — verify first** |
 
 **A wave of two, not three.** Every scope section is now in the story it describes, so the next
@@ -71,7 +71,7 @@ Kept deliberately: it is the argument for § *Scope the candidates* existing at 
 | first pass, by grep | after scoping |
 |---|---|
 | 3 units, all "surface-disjoint" | 2 units; one dropped as not ready |
-| `recurrence-key`: "workflows + maybe aop-domain", radius cited | needs `aep-domain/src/workflow.rs` and a regenerated schema; names a declaration site that does not exist |
+| `recurrence-key`: "workflows + maybe aep-profile-operations", radius cited | needs `aep-domain/src/workflow.rs` and a regenerated schema; names a declaration site that does not exist |
 | `usage-series-assertions`: "trace crates", radius inferred | correct — and it also edits `README.md`, which a crate-level view cannot see |
 | `evidence-subject-binding`: excluded, radius unknown | correctly excluded, for a different and better reason: it may already be done |
 

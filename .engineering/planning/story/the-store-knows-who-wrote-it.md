@@ -16,10 +16,10 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: crates/plan/aep-backend-markdown
-revision: 7
+revision: 8
 ---
 # Story: The planning store records who made a write, so a driven move is not the operator's
 

@@ -1699,7 +1699,7 @@ impl fmt::Display for ScopeConfidence {
 /// scope:
 ///   - path: crates/govern/aep-domain/src/artifact.rs
 ///     confidence: cited
-///   - crates/edge/protocol-cli/src/planning.rs   # the same thing, cited by default
+///   - crates/edge/aep-cli/src/planning.rs   # the same thing, cited by default
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScopeEntry {
@@ -1826,7 +1826,7 @@ impl schemars::JsonSchema for ScopeEntry {
         );
         schema.metadata().examples = vec![
             serde_json::json!({ "path": "crates/govern/aep-domain/src/artifact.rs", "confidence": "cited" }),
-            serde_json::json!("crates/edge/protocol-cli/src/planning.rs"),
+            serde_json::json!("crates/edge/aep-cli/src/planning.rs"),
         ];
         schema.into()
     }

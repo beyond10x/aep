@@ -14,7 +14,7 @@ it. This guide encodes a real rule end to end:
 
 For the full syntax, see the [document reference](../reference/documents.md).
 
-Commands assume `B=target/debug/aep` after `cargo build -p protocol-cli`. The tree they run
+Commands assume `B=target/debug/aep` after `cargo build -p aep-cli`. The tree they run
 against is this repository's `protocols/`, `principles/`, `workflows/`, `profiles/` and `artifacts/`
 with the two documents below added to it — which is what every count in the output lines is a count
 of.

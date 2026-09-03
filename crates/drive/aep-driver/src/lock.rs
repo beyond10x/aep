@@ -7,7 +7,7 @@
 //! finding **F19**). It also makes the refusal testable without spawning a second process.
 //!
 //! The lock itself is one fixed path per **project** — `.engineering/runs/lock.json`, created with
-//! `create_new` **before** any run id is allocated — and it belongs to `protocol-cli`, along with
+//! `create_new` **before** any run id is allocated — and it belongs to `aep-cli`, along with
 //! the run directory it grants. The first draft of D6 put the lock *inside* the directory the lock
 //! was allocating, which has no order in which it can execute: two invocations count the existing
 //! directories, get `3` and `4`, and **both** `create_new` succeed. That is D6's own rejected

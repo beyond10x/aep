@@ -13,18 +13,18 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 scope:
 - confidence: inferred
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: crates/govern/aep-domain
 - confidence: inferred
-  path: crates/profile/aop-domain
+  path: crates/profile/aep-profile-operations
 - confidence: inferred
   path: protocols/aop/1.yaml
 - confidence: inferred
   path: schemas/generated/workflow.schema.json
 - confidence: cited
   path: workflows/incidents/standard.yaml
-revision: 10
+revision: 12
 ---
 # Story: Two incidents with one root-cause shape, countable
 
@@ -81,16 +81,16 @@ Derived 2026-08-30 by `story-scoper`. Every line is **cited** or **inferred**.
 `#[serde(deny_unknown_fields)]` (`crates/govern/aep-domain/src/workflow.rs:246`, `:280`), so a recurrence
 key *declared in the workflow YAML* is impossible without a Rust field and a regenerated schema.
 
-- **Primary surface:** `crates/profile/aop-domain` — inferred, the only typed incident in the tree (`Incident`, `IncidentStatus`) and so the only thing a cross-incident key can hang on
+- **Primary surface:** `crates/profile/aep-profile-operations` — inferred, the only typed incident in the tree (`Incident`, `IncidentStatus`) and so the only thing a cross-incident key can hang on
 - **Files:** `workflows/incidents/standard.yaml:63` — cited, the `learn` state the story names
-- **Files:** `crates/profile/aop-domain/src/body.rs:406` — inferred, `Incident` has no recurrence field and `to_node`/`from_node` (`:434`, `:459`) enumerate every field, so carrying one is a field plus two arms
+- **Files:** `crates/profile/aep-profile-operations/src/body.rs:406` — inferred, `Incident` has no recurrence field and `to_node`/`from_node` (`:434`, `:459`) enumerate every field, so carrying one is a field plus two arms
 - **Files:** `crates/govern/aep-domain/src/workflow.rs:279-280` — inferred, the `deny_unknown_fields` line that decides this story is not document-only
 - **Files:** `schemas/generated/workflow.schema.json` — inferred, generated from those types, gated by `cargo xtask schema --check`
-- **Files:** `crates/edge/protocol-cli/src/planning.rs:2183` — inferred, `blocked` is the tree's only group-and-count read verb and the nearest precedent for a rollup
+- **Files:** `crates/edge/aep-cli/src/planning.rs:2183` — inferred, `blocked` is the tree's only group-and-count read verb and the nearest precedent for a rollup
 - **Symbols:** `Incident`, `IncidentStatus`, `RawState`, `RawWorkflow` — cited from the tree; `incident/standard`, `learn` — cited from the story
 - **Also likely:** `protocols/aop/1.yaml:25` — inferred; `incident.**` already declares the observable, so if the key is modelled as a **fact** rather than a YAML key, `aep-domain/src/workflow.rs` drops out and only `learn.requires.predicates` moves. That is the cheaper shape and nobody has chosen between them.
 - **Confidence:** **medium** — the story cites the workflow file and the `learn` state, but the declaration site it names does not exist in the tree, and the rollup surface does not exist either. Both placements are reasoned, not read.
-- **Would collide with:** any unit touching `workflows/incidents/standard.yaml`, the workflow document model (`RawWorkflow`/`RawState`) or the generated `workflow.schema.json`; and any unit adding a read verb to `crates/edge/protocol-cli/src/planning.rs`. It would **not** collide through `crates/profile/aop-domain`, which no other workspace crate depends on.
+- **Would collide with:** any unit touching `workflows/incidents/standard.yaml`, the workflow document model (`RawWorkflow`/`RawState`) or the generated `workflow.schema.json`; and any unit adding a read verb to `crates/edge/aep-cli/src/planning.rs`. It would **not** collide through `crates/profile/aep-profile-operations`, which no other workspace crate depends on.
 
 **Not established, and enough of it that this story is not ready to dispatch.** *"Where the
 workflow's other outputs are declared"* has no referent — `git grep outputs` over `crates/`,

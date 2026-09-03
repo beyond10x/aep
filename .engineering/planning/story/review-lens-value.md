@@ -8,10 +8,10 @@ relations:
 - decomposes: epic:adopter-feedback-round-2
 scope:
 - confidence: inferred
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: crates/govern/aep-domain
-revision: 4
+revision: 5
 ---
 # Story: Each review lens reports whether it earned its cost
 

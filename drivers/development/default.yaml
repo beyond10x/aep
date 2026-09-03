@@ -29,7 +29,7 @@
 # verifies by running the checks the story itself carries, and names no compiler anywhere.
 #
 # **Two maps now fit `adp/default/1`, so `aep drive run` refuses to choose between them** and
-# `--map` says which one. That refusal names both ids (`crates/edge/protocol-cli/src/drive.rs:376-388`)
+# `--map` says which one. That refusal names both ids (`crates/edge/aep-cli/src/drive.rs:376-388`)
 # and is the same position `aep artifact move` takes on an illegal transition: the driver does
 # not guess which document the run is under.
 format: aep.driver-steps/1
@@ -251,7 +251,7 @@ states:
       # four kinds where that is honest: `contract_result` is in `EvidenceMapping::MINTABLE`
       # because *did the runner produce a verdict, and was it yes or no* is the whole of what the
       # counts need here. The committed records under
-      # `crates/edge/protocol-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
+      # `crates/edge/aep-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
       # used: they are the provider's captured bytes from 2026-08-23, they describe metaharness's
       # adapters rather than the change under review, and `protocol contract evidence` requires an
       # `--observed-at` that a committed map could only supply as a literal — a map claiming a fresh
@@ -263,7 +263,7 @@ states:
           - cargo
           - test
           - -p
-          - protocol-cli
+          - aep-cli
           - --test
           - metaharness_frame_contract
           - --test

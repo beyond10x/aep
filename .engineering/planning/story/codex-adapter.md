@@ -16,12 +16,12 @@ scope:
 - confidence: inferred
   path: crates/drive/aep-driver/tests/shell_echo.rs
 - confidence: inferred
-  path: crates/edge/protocol-cli/src/drive.rs
+  path: crates/edge/aep-cli/src/drive.rs
 - confidence: inferred
   path: crates/observe/trace-spec/src/adapter.rs
 - confidence: cited
   path: crates/observe/trace-spec/src/codex.rs
-revision: 7
+revision: 8
 ---
 # Story: A real second harness — the Codex adapter
 

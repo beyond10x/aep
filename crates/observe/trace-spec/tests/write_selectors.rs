@@ -4,7 +4,7 @@
 //!
 //! The first live pilot of the eval programme, 2026-08-23, asked Claude Code to write a failing
 //! test before the code. It did: `git status` in the run's working clone shows
-//! `crates/edge/protocol-cli/tests/planning_cli.rs` and `crates/edge/protocol-cli/src/planning.rs` both
+//! `crates/edge/aep-cli/tests/planning_cli.rs` and `crates/edge/aep-cli/src/planning.rs` both
 //! modified. The corpus reported `the-test-came-before-the-code` as **undecidable**, reason
 //! `never_occurred`, selector `Write(file_path glob "*/tests/*")` — because the run used **`Edit`**
 //! on files that already existed, and no `Write` event ever occurred.
@@ -42,7 +42,7 @@ use trace_spec::report::Verdict;
 
 /// The verbs Claude Code puts bytes in a file with.
 ///
-/// Not invented here: `crates/edge/protocol-cli/src/drive.rs` renders exactly `Edit`, `Write` and
+/// Not invented here: `crates/edge/aep-cli/src/drive.rs` renders exactly `Edit`, `Write` and
 /// `NotebookEdit` to the `repository.write` capability, and this repository's own driver is the
 /// authority on what a write is. Keeping one list means a fourth verb is added in one place.
 const WRITE_TOOLS: [&str; 3] = ["Edit", "NotebookEdit", "Write"];
@@ -102,12 +102,8 @@ fn an_edit_witnesses_a_write_the_way_a_write_does() {
     // The pilot's exact shape, in miniature: two `Edit` calls, the test file first. Under the old
     // one-name selector this stream produced `never_occurred`; it must now decide, and decide `ok`.
     let ir = stream(&[
-        call(
-            1,
-            "Edit",
-            "/w/crates/edge/protocol-cli/tests/planning_cli.rs",
-        ),
-        call(2, "Edit", "/w/crates/edge/protocol-cli/src/planning.rs"),
+        call(1, "Edit", "/w/crates/edge/aep-cli/tests/planning_cli.rs"),
+        call(2, "Edit", "/w/crates/edge/aep-cli/src/planning.rs"),
     ]);
     assert_eq!(
         verdict(&ordering("*/tests/*", "*/src/*"), &ir),
@@ -122,12 +118,8 @@ fn the_order_is_contradicted_when_the_code_came_first() {
     // tool, same two paths — swapped. A selector that answered `ok` here would have turned an
     // ordering assertion into a statement that two files exist.
     let ir = stream(&[
-        call(1, "Edit", "/w/crates/edge/protocol-cli/src/planning.rs"),
-        call(
-            2,
-            "Edit",
-            "/w/crates/edge/protocol-cli/tests/planning_cli.rs",
-        ),
+        call(1, "Edit", "/w/crates/edge/aep-cli/src/planning.rs"),
+        call(2, "Edit", "/w/crates/edge/aep-cli/tests/planning_cli.rs"),
     ]);
     assert_eq!(
         verdict(&ordering("*/tests/*", "*/src/*"), &ir),
@@ -143,8 +135,8 @@ fn every_verb_in_the_set_witnesses_the_claim_and_a_read_does_not() {
     // of the test file satisfy "the test was written first", which is a different sentence.
     for verb in WRITE_TOOLS {
         let ir = stream(&[
-            call(1, verb, "/w/crates/edge/protocol-cli/tests/planning_cli.rs"),
-            call(2, verb, "/w/crates/edge/protocol-cli/src/planning.rs"),
+            call(1, verb, "/w/crates/edge/aep-cli/tests/planning_cli.rs"),
+            call(2, verb, "/w/crates/edge/aep-cli/src/planning.rs"),
         ]);
         assert_eq!(
             verdict(&ordering("*/tests/*", "*/src/*"), &ir),
@@ -154,12 +146,8 @@ fn every_verb_in_the_set_witnesses_the_claim_and_a_read_does_not() {
     }
 
     let read_then_edit = stream(&[
-        call(
-            1,
-            "Read",
-            "/w/crates/edge/protocol-cli/tests/planning_cli.rs",
-        ),
-        call(2, "Edit", "/w/crates/edge/protocol-cli/src/planning.rs"),
+        call(1, "Read", "/w/crates/edge/aep-cli/tests/planning_cli.rs"),
+        call(2, "Edit", "/w/crates/edge/aep-cli/src/planning.rs"),
     ]);
     assert_eq!(
         verdict(&ordering("*/tests/*", "*/src/*"), &read_then_edit),

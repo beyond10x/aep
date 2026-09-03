@@ -33,10 +33,10 @@ into the story's own body. Every one is **high** confidence.
 
 | # | story | epic | serves | surface | branch |
 |---|---|---|---|---|---|
-| 1 | `story:unreadable-lock-refuses-its-own-escape-hatch` | `reference-driver` | **O3** *(edge added today)* | `crates/edge/protocol-cli/src/drive.rs`, `tests/drive_cli.rs` | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
+| 1 | `story:unreadable-lock-refuses-its-own-escape-hatch` | `reference-driver` | **O3** *(edge added today)* | `crates/edge/aep-cli/src/drive.rs`, `tests/drive_cli.rs` | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
 | 2 | `story:workflow-id-pattern-numeric-tail` | `reference-driver` | **O3** *(edge added today)* | `crates/govern/aep-domain/src/ids.rs`, `crates/drive/aep-driver-spec/src/pin.rs` + `tests/published_pattern_evaluated.rs`, `schemas/generated/*.json` (4) | `impl/workflow-id-pattern-numeric-tail` |
 | 3 | `story:prose-that-the-tree-contradicts` | `reference-driver` | **O3** *(edge added today)* | `crates/govern/aep-engine/src/load.rs`, `crates/govern/aep-engine/tests/adopting_guide.rs`, `crates/drive/aep-driver/tests/shell_echo.rs`, `drivers/development/default.yaml`, `conformance/eval/development-honest/expectations.trace.yaml`, 2 docs | `impl/prose-that-the-tree-contradicts` |
-| 4 | `story:skill-text-cannot-instruct-a-direct-store-write` | `adopter-feedback-round-1` | **O2** *(already declared)* | one **new** file under `crates/edge/protocol-cli/tests/` | `impl/skill-text-cannot-instruct-a-direct-store-write` |
+| 4 | `story:skill-text-cannot-instruct-a-direct-store-write` | `adopter-feedback-round-1` | **O2** *(already declared)* | one **new** file under `crates/edge/aep-cli/tests/` | `impl/skill-text-cannot-instruct-a-direct-store-write` |
 
 Integration branch: `wave/what-the-last-wave-found`, forked from `main` at `3d86d5b`.
 
@@ -44,19 +44,19 @@ Integration branch: `wave/what-the-last-wave-found`, forked from `main` at `3d86
 
 | pair | packages | verdict |
 |---|---|---|
-| 1 × 2 | `protocol-cli` vs `aep-domain` + `aep-driver-spec` | **disjoint**. 2 rebuilds 1 through the dependency graph; no file is shared |
-| 1 × 3 | `protocol-cli` vs `aep-engine` + `aep-driver` | **disjoint by file**, with one caveat below |
-| 1 × 4 | **both `protocol-cli`** | **disjoint by file.** 1 edits `src/drive.rs` and `tests/drive_cli.rs`; 4 adds a new file under `tests/` and touches neither `src/` nor `Cargo.toml` (no `[[test]]` targets are declared, so the file is auto-discovered) |
+| 1 × 2 | `aep-cli` vs `aep-domain` + `aep-driver-spec` | **disjoint**. 2 rebuilds 1 through the dependency graph; no file is shared |
+| 1 × 3 | `aep-cli` vs `aep-engine` + `aep-driver` | **disjoint by file**, with one caveat below |
+| 1 × 4 | **both `aep-cli`** | **disjoint by file.** 1 edits `src/drive.rs` and `tests/drive_cli.rs`; 4 adds a new file under `tests/` and touches neither `src/` nor `Cargo.toml` (no `[[test]]` targets are declared, so the file is auto-discovered) |
 | 2 × 3 | `aep-domain` + `aep-driver-spec` vs `aep-engine` + `aep-driver` | **disjoint.** Only 2 regenerates `schemas/generated/`, and `xtask schema` rewrites that directory as a set — a second unit doing so would be a whole-directory collision. None does |
 | 2 × 4 | — | **disjoint** |
 | 3 × 4 | — | **disjoint by file**, with one caveat below |
 
 **Caveat on 1 × 3 and 3 × 4 — a read is not a write, and this is where it could still bite.**
 Unit 3 edits `#` comments in two *shipped* artefacts: `drivers/development/default.yaml:11` and
-`conformance/eval/development-honest/expectations.trace.yaml:125`. `crates/edge/protocol-cli/src/drive.rs`,
-`crates/drive/aep-driver/tests/coverage.rs` and `crates/edge/protocol-cli/tests/eval_*` **read** both files. No
-merge conflict is possible — nothing else writes them — but a byte-comparing assertion in
-`protocol-cli` would go red on the integration branch and not in unit 3's own package gate. Named
+`conformance/eval/development-honest/expectations.trace.yaml:125`. `crates/edge/aep-cli/src/drive.rs`,
+`crates/drive/aep-driver/tests/coverage.rs` and `crates/edge/aep-cli/tests/eval_*` **read** both
+files. No merge conflict is possible — nothing else writes them — but a byte-comparing assertion in
+`aep-cli` would go red on the integration branch and not in unit 3's own package gate. Named
 here so the first red on the integration branch is recognised rather than investigated.
 
 **Unit 4's collision is semantic, not textual.** Its new guard reads every `SKILL.md` under
@@ -69,14 +69,14 @@ Implementors are told not to.
 ## 4. What each unit owes
 
 **1 — `story:unreadable-lock-refuses-its-own-escape-hatch`.** `read_lock`
-(`crates/edge/protocol-cli/src/drive.rs:1448`) propagates the serde error with `?`, and `take_lock`
+(`crates/edge/aep-cli/src/drive.rs:1448`) propagates the serde error with `?`, and `take_lock`
 (`:1462`) calls it at `:1510` — **before** it consults `force` at `:1512`. So `--take-lock`, the
 route the refusal itself advertises, is refused by the thing that exists to override it. Four call
 sites are affected, not the three the acceptance names: `start` (`:754`), `resume` (`:889`) and
 `status` (`:950`) all read the lock.
 
 **The red case is not on `main`.** `adversary_a_lock_file_that_will_not_parse_is_a_refusal_and_never_a_parse_error`
-lives only on `impl/protocol-drive-verb`, at `crates/edge/protocol-cli/tests/drive_cli.rs:2695`. `b216ce7`
+lives only on `impl/protocol-drive-verb`, at `crates/edge/aep-cli/tests/drive_cli.rs:2695`. `b216ce7`
 removed it from `main` deliberately and its message names this story as the owner. The implementor
 restores it from that branch rather than looking for it in place.
 
@@ -120,9 +120,9 @@ the definitions, not the one the acceptance names.
 
 **4 — `story:skill-text-cannot-instruct-a-direct-store-write`.** Nothing in this repository reads a
 `SKILL.md`'s content; the only code that touches one joins its path and asserts it exists
-(`crates/edge/protocol-cli/src/drive.rs:7838`). The prohibition on hand-editing planning artifacts is
+(`crates/edge/aep-cli/src/drive.rs:7838`). The prohibition on hand-editing planning artifacts is
 prose guarded by nothing — the same shape as the defect it was written to fix. One new test under
-`crates/edge/protocol-cli/tests/`, modelled on `workflow_coverage.rs`, enumerating the five shipped
+`crates/edge/aep-cli/tests/`, modelled on `workflow_coverage.rs`, enumerating the five shipped
 `SKILL.md` files and refusing text that instructs a direct store write. The shipped skills must pass
 unmodified.
 

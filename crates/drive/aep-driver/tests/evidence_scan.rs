@@ -20,7 +20,7 @@
 //!
 //! Counted rather than banned: `Producer::Verifier`, which is legitimate in **at most one** place —
 //! a command-step evidence builder filling it from the verifier the step map named. Today this
-//! crate builds no evidence at all (the `command` executor is `protocol-cli`'s and hands over a
+//! crate builds no evidence at all (the `command` executor is `aep-cli`'s and hands over a
 //! finished `EvidenceSubmission`), so the count is zero and the bound is what keeps it from
 //! becoming several.
 //!

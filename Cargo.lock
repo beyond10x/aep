@@ -3,17 +3,6 @@
 version = 4
 
 [[package]]
-name = "adp-domain"
-version = "0.50.0"
-dependencies = [
- "aep-contract",
- "aep-domain",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "aep-backend-entity"
 version = "0.50.0"
 dependencies = [
@@ -98,6 +87,39 @@ dependencies = [
  "aep-domain",
  "entity-sqlite",
  "entity-store",
+]
+
+[[package]]
+name = "aep-cli"
+version = "0.50.0"
+dependencies = [
+ "aep-backend-entity",
+ "aep-backend-hybrid",
+ "aep-backend-markdown",
+ "aep-backend-memory",
+ "aep-backend-postgres",
+ "aep-backend-sqlite",
+ "aep-conformance",
+ "aep-contract",
+ "aep-domain",
+ "aep-driver",
+ "aep-driver-spec",
+ "aep-engine",
+ "aep-project",
+ "aep-render",
+ "aep-schema",
+ "anyhow",
+ "clap",
+ "entity-core",
+ "entity-postgres",
+ "entity-sqlite",
+ "entity-store",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "trace-domain",
+ "trace-spec",
 ]
 
 [[package]]
@@ -196,6 +218,28 @@ name = "aep-ess-evidence"
 version = "0.50.0"
 dependencies = [
  "aep-domain",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aep-profile-development"
+version = "0.50.0"
+dependencies = [
+ "aep-contract",
+ "aep-domain",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aep-profile-operations"
+version = "0.50.0"
+dependencies = [
+ "aep-contract",
+ "aep-domain",
+ "schemars",
  "serde",
  "serde_json",
 ]
@@ -323,17 +367,6 @@ name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
-
-[[package]]
-name = "aop-domain"
-version = "0.50.0"
-dependencies = [
- "aep-contract",
- "aep-domain",
- "schemars",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "async-trait"
@@ -1224,39 +1257,6 @@ dependencies = [
  "rand_xorshift",
  "regex-syntax",
  "unarray",
-]
-
-[[package]]
-name = "protocol-cli"
-version = "0.50.0"
-dependencies = [
- "aep-backend-entity",
- "aep-backend-hybrid",
- "aep-backend-markdown",
- "aep-backend-memory",
- "aep-backend-postgres",
- "aep-backend-sqlite",
- "aep-conformance",
- "aep-contract",
- "aep-domain",
- "aep-driver",
- "aep-driver-spec",
- "aep-engine",
- "aep-project",
- "aep-render",
- "aep-schema",
- "anyhow",
- "clap",
- "entity-core",
- "entity-postgres",
- "entity-sqlite",
- "entity-store",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "trace-domain",
- "trace-spec",
 ]
 
 [[package]]

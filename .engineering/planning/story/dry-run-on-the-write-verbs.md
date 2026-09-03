@@ -7,10 +7,10 @@ title: A write verb can say what it would do without doing it
 summary: No verb has --dry-run, so the only way to find out what a bulk write does is to do it.
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli/src/planning.rs
+  path: crates/edge/aep-cli/src/planning.rs
 - confidence: cited
-  path: crates/edge/protocol-cli/src/reverse.rs
-revision: 5
+  path: crates/edge/aep-cli/src/reverse.rs
+revision: 7
 ---
 ## Context
 
@@ -33,6 +33,6 @@ runs. That is a dry run implemented in prose because the CLI has none.
 
 ## Evidence for the gap
 
-`crates/edge/protocol-cli/src/planning.rs` — no verb declares the flag. The nearest existing precedent
+`crates/edge/aep-cli/src/planning.rs` — no verb declares the flag. The nearest existing precedent
 for verify-then-commit is `reverse init` (`reverse.rs`), which verifies its protocol source before
 writing `project.yaml` and cleans up only the directory it created.

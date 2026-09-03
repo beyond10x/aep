@@ -26,7 +26,7 @@ const BANNED: &[&str] = &[
     "rand::",
     "getrandom",
     "thread_rng",
-    // The loop, the poll interval and the terminal belong to `protocol-cli`, and this is what
+    // The loop, the poll interval and the terminal belong to `aep-cli`, and this is what
     // keeps them there rather than merely asking.
     "sleep",
     // Ambient reads. `env!` is a compile-time macro and is spelled differently, so it survives.

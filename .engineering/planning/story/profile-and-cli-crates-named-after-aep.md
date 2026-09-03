@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:profile-and-cli-crates-named-after-aep
 kind: story
-status: draft
+status: implemented
 title: The profile crates and the CLI crate are named after AEP
 summary: Rename adp-domain to aep-profile-development, aop-domain to aep-profile-operations and protocol-cli to aep-cli; binaries and YAML protocol ids unchanged.
 relations:
@@ -19,16 +19,16 @@ scope:
 - confidence: cited
   path: README.md
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
-  path: crates/profile/adp-domain
+  path: crates/profile/aep-profile-development
 - confidence: cited
-  path: crates/profile/aop-domain
+  path: crates/profile/aep-profile-operations
 - confidence: cited
   path: website/docs/concepts/overview.md
 - confidence: cited
   path: xtask/src/main.rs
-revision: 2
+revision: 6
 ---
 # Story: The profile crates and the CLI crate are named after AEP
 

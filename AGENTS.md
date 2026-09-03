@@ -32,9 +32,9 @@ under the area that says what it is for; `xtask` is the build tool and has no ar
   deterministic driving, and drawing a workflow and a run over it.
 - `crates/observe/` — `trace-domain`, `trace-spec` and `aep-ess-evidence`: normalizing and checking
   recorded harness activity, and the optional ESS report adapter at the AEP boundary.
-- `crates/profile/` — `adp-domain` and `aop-domain`: development and operations vocabulary over the
-  substrate.
-- `crates/edge/` — `aep-schema`, `aep-project` and `protocol-cli`: the published document schemas,
+- `crates/profile/` — `aep-profile-development` and `aep-profile-operations`: development and
+  operations vocabulary over the substrate.
+- `crates/edge/` — `aep-schema`, `aep-project` and `aep-cli`: the published document schemas,
   the filesystem and Git acquisition edge, and canonical `aep` with the exact `protocol`
   compatibility alias.
 

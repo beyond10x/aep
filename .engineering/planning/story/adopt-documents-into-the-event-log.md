@@ -8,12 +8,12 @@ relations:
 - informed_by: story:skill-text-cannot-instruct-a-direct-store-write
 scope:
 - confidence: inferred
-  path: crates/edge/protocol-cli/src/reverse.rs
+  path: crates/edge/aep-cli/src/reverse.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/drift.rs
 - confidence: inferred
   path: crates/plan/aep-backend-markdown/src/journal.rs
-revision: 8
+revision: 9
 ---
 # Story: A store adopted into the event log has no documents the drift check must ignore
 

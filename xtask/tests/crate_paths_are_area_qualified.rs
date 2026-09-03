@@ -3,7 +3,22 @@
 //! `story:crates-under-area-directories` moved twenty-two crates from `crates/<crate>` to
 //! `crates/<area>/<crate>`. Nothing in the workspace decides whether the rest of the tree followed,
 //! because every remaining path is prose or store data and no compiler reads it — so `task check`
-//! was green with the claim false. These two tests are that claim, made checkable and kept.
+//! was green with the claim false. These tests are that claim, made checkable and kept.
+//!
+//! # Two halves of one rule
+//!
+//! A crate path can be wrong in two ways and only one of them is a *pre-move* spelling.
+//! `crates/aep-domain/src/lib.rs` never gained its area — that is
+//! [`no_tracked_file_spells_a_crate_path_the_pre_move_way`]. `crates/edge/protocol-cli/src/app.rs`
+//! has an area and still names nothing, because
+//! `story:profile-and-cli-crates-named-after-aep` renamed that directory to `crates/edge/aep-cli` —
+//! that is [`no_tracked_file_names_a_crate_this_tree_does_not_have`], and the first predicate is
+//! blind to it by construction (`edge` is an area, so the path reads as already qualified).
+//!
+//! Neither test carries a list of what a crate *used* to be called. Both read the crate set off the
+//! tree, so a rename, a deletion or a merge lands in them without an edit here — which is the point:
+//! a list somebody has to extend after the fact is the defect, and the entry missing from it is only
+//! the symptom.
 //!
 //! # What a *pre-move* path is, and why it is not "a path that does not exist"
 //!
@@ -75,6 +90,70 @@ fn crate_directory_names(root: &Path) -> BTreeSet<String> {
     names
 }
 
+/// Paths that are `crates/<area>/…` and name no crate of this tree on purpose.
+///
+/// `crates/govern/group/aep-nested` is `layout_tests`' own mutation proof (`xtask/src/main.rs`): a
+/// manifest one level *below* an area, written under `target/` and asserted not to read as
+/// `crates/<area>/<crate>`. Reporting it would be reporting the check that proves the rule.
+///
+/// A list, because nothing in the text tells a deliberate counterexample from a stale path — but a
+/// list whose failure direction is safe: an entry missing from it is a **false positive**, red and
+/// named, not a finding this rule lets through.
+const SYNTHETIC_PATHS: &[&str] = &["crates/govern/group/aep-nested"];
+
+/// Every `(area, crate)` pair the tree actually has, read off `crates/<area>/<crate>/Cargo.toml`.
+fn area_crate_directories(root: &Path) -> BTreeSet<(String, String)> {
+    let mut pairs = BTreeSet::new();
+    let crates = root.join("crates");
+    for area in std::fs::read_dir(&crates).expect("crates/ is readable") {
+        let area = area.expect("a crates/ entry").path();
+        if !area.is_dir() {
+            continue;
+        }
+        let area_name = area
+            .file_name()
+            .expect("a directory has a name")
+            .to_string_lossy()
+            .into_owned();
+        for entry in std::fs::read_dir(&area)
+            .unwrap_or_else(|error| panic!("{} is readable: {error}", area.display()))
+        {
+            let entry = entry.expect("an area entry").path();
+            if entry.join("Cargo.toml").is_file() {
+                pairs.insert((
+                    area_name.clone(),
+                    entry
+                        .file_name()
+                        .expect("a directory has a name")
+                        .to_string_lossy()
+                        .into_owned(),
+                ));
+            }
+        }
+    }
+    assert!(
+        pairs.len() >= 20,
+        "only {} crate directories found, so the predicate below is reading the wrong tree",
+        pairs.len()
+    );
+    pairs
+}
+
+/// The `(area, crate)` `token` names, when it is `crates/<area>/<crate>` with a known area.
+///
+/// `None` for `crates/<area>` on its own — prose names an area directory without naming a crate in
+/// it — and `None` for anything whose first component is not an area, which
+/// [`pre_move_path`] already decides on.
+fn area_and_crate(token: &str) -> Option<(&str, &str)> {
+    let rest = token.strip_prefix("crates/")?;
+    let (area, rest) = rest.split_once('/')?;
+    if !AREAS.contains(&area) {
+        return None;
+    }
+    let name = rest.split('/').next().unwrap_or(rest);
+    (!name.is_empty()).then_some((area, name))
+}
+
 /// The pre-move path `token` names, when it names one.
 fn pre_move_path<'a>(token: &'a str, names: &BTreeSet<String>) -> Option<&'a str> {
     let rest = token.strip_prefix("crates/")?;
@@ -139,7 +218,7 @@ const EXCLUDED_PREFIXES: &[&str] = &[
     "docs/design/",
     "docs/reviews/",
     // Recorded `metaharness.event/1` streams and the matrices assembled from them byte for byte.
-    "crates/edge/protocol-cli/fixtures/eval-",
+    "crates/edge/aep-cli/fixtures/eval-",
     // The store: written by `aep artifact`, never by an editor. See the module documentation.
     ".engineering/planning/",
 ];
@@ -226,7 +305,7 @@ const TERMINAL: &[&str] = &[
 ///
 /// `aep artifact waves` decides which stories may be implemented at once by comparing `scope:` path
 /// strings, and it says in its own documentation that "**Nothing is normalised**… nothing here
-/// normalises `crates/x/src/lib.rs` to `crates/x`" (`crates/edge/protocol-cli/src/planning.rs`). So
+/// normalises `crates/x/src/lib.rs` to `crates/x`" (`crates/edge/aep-cli/src/planning.rs`). So
 /// a draft that still says `crates/aep-domain/src/artifact.rs` cannot collide with a story written
 /// after the move that lands on `crates/govern/aep-domain/src/artifact.rs` — the same file, two
 /// spellings, no collision reported, both placed in one wave. That is the exact failure the verb
@@ -353,5 +432,124 @@ fn no_tracked_file_spells_a_crate_path_the_pre_move_way() {
          sits in:\n{}",
         findings.len(),
         report.join("\n")
+    );
+}
+
+/// No tracked file names a crate this tree does not have.
+///
+/// The sibling above catches a path that never gained its area. This one catches the other half:
+/// `crates/edge/aep-cli/src/planning.rs` is area-qualified and reads as correct, and after
+/// `story:profile-and-cli-crates-named-after-aep` it names a directory that is not there. Neither
+/// the compiler nor the sibling sees it — `edge` is an area, so the sibling's predicate says the
+/// path is fine, and no crate builds a comment.
+///
+/// **The crate set is read off the tree, so this is not a list of retired names.** A rename, a
+/// deletion, a merge of two crates and a typo all land here the same way, and nothing has to be
+/// added to this file when one happens. That is the whole point: the list that would need
+/// extending by hand is the defect, and a missing entry in it is only the symptom.
+///
+/// The corpus and its exclusions are the sibling's, for the same reasons the module documentation
+/// gives. `examples/` naming `crates/auth/src/passkey.rs` is not a finding here either: `auth` is
+/// not an area, so the token never reaches the crate check.
+#[test]
+fn no_tracked_file_names_a_crate_this_tree_does_not_have() {
+    let root = repo_root();
+    let pairs = area_crate_directories(&root);
+    let mut findings: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut scanned = 0usize;
+    let mut checked = 0usize;
+
+    for relative in acceptance_corpus(&root) {
+        let Ok(text) = std::fs::read_to_string(root.join(&relative)) else {
+            continue;
+        };
+        scanned += 1;
+        for token in crate_tokens(&text) {
+            let Some((area, name)) = area_and_crate(token) else {
+                continue;
+            };
+            if SYNTHETIC_PATHS
+                .iter()
+                .any(|synthetic| token.starts_with(synthetic))
+            {
+                continue;
+            }
+            checked += 1;
+            if !pairs.contains(&(area.to_owned(), name.to_owned())) {
+                findings
+                    .entry(relative.clone())
+                    .or_default()
+                    .insert(token.to_owned());
+            }
+        }
+    }
+
+    assert!(
+        scanned > 500,
+        "only {scanned} files were read, so this test is asserting nothing"
+    );
+    assert!(
+        checked > 0,
+        "the scan reached no `crates/<area>/<crate>` path at all, so it has stopped looking at \
+         the right files"
+    );
+
+    let total: usize = findings.values().map(BTreeSet::len).sum();
+    let report: Vec<String> = findings
+        .iter()
+        .map(|(file, paths)| {
+            format!(
+                "  {file}: {}",
+                paths.iter().cloned().collect::<Vec<_>>().join(", ")
+            )
+        })
+        .collect();
+    assert!(
+        findings.is_empty(),
+        "{total} path(s) in {} tracked file(s) name a crate directory that is not in this tree:\n{}",
+        findings.len(),
+        report.join("\n")
+    );
+}
+
+/// The guard of the guard: a retired crate's path is a finding, and a live one is not.
+///
+/// `AGENTS.md` invariant 15 — break the guarded condition, observe the named failure. Written
+/// against the predicate rather than the corpus so it says what the rule decides, on both sides.
+#[test]
+fn a_path_naming_a_crate_the_tree_lacks_is_refused_and_a_live_one_is_not() {
+    let pairs = area_crate_directories(&repo_root());
+    let live = pairs
+        .iter()
+        .find(|(area, _)| area == "edge")
+        .expect("`edge` holds at least one crate")
+        .clone();
+    let live_path = format!("crates/{}/{}/src/lib.rs", live.0, live.1);
+
+    assert_eq!(
+        area_and_crate(&live_path),
+        Some((live.0.as_str(), live.1.as_str())),
+        "the predicate has to read the area and the crate out of a live path"
+    );
+    assert!(
+        pairs.contains(&live),
+        "and a live crate must not be reported"
+    );
+
+    let absent = "crates/edge/aep-crate-this-tree-does-not-have/src/planning.rs";
+    let (area, name) = area_and_crate(absent).expect("an absent crate's path still parses");
+    assert_eq!((area, name), ("edge", "aep-crate-this-tree-does-not-have"));
+    assert!(
+        !pairs.contains(&(area.to_owned(), name.to_owned())),
+        "a crate name this tree does not have must not be found in the tree"
+    );
+
+    assert!(
+        area_and_crate("crates/auth/src/passkey.rs").is_none(),
+        "`auth` is not an area, so a crate this repository never had is not this rule's finding"
+    );
+    assert!(
+        area_and_crate("crates/edge").is_none(),
+        "an area named without a crate in it names no crate"
     );
 }

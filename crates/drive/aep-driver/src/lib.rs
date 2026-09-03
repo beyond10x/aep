@@ -18,8 +18,8 @@
 //!
 //! It follows that this crate is **pure**: clock-free, randomness-free, and free of the three
 //! things that touch the world — running a program, calling a model, and pausing for a person.
-//! Those are [`executor`] traits, implemented in `protocol-cli`. The store lock, the pid-liveness
-//! probe and the run-directory allocator are `protocol-cli`'s too, per review finding **F19**: a
+//! Those are [`executor`] traits, implemented in `aep-cli`. The store lock, the pid-liveness
+//! probe and the run-directory allocator are `aep-cli`'s too, per review finding **F19**: a
 //! liveness probe reads ambient OS state and uses neither `SystemTime::now` nor `rand`, so
 //! `tests/determinism.rs` would not catch it and **placement** is the only thing keeping the purity
 //! claim true. This crate is *handed* a [`lock::LockState`] and probes nothing.

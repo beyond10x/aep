@@ -81,7 +81,7 @@ resolved policy denies. Correct-looking YAML does not bypass those checks.
 Build the CLI and resolve the committed task:
 
 ```shell-session
-$ cargo build --locked -p protocol-cli
+$ cargo build --locked -p aep-cli
 $ AEP=target/debug/aep
 $ "$AEP" resolve --root . --task examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
@@ -418,7 +418,7 @@ harness integration, read [Integrate an agent harness](../guides/integrate-a-har
 ---
 
 **Executable sources.** `examples/development-passkeys/`;
-`crates/edge/protocol-cli/tests/cli.rs`; `crates/govern/aep-engine/tests/end_to_end.rs`;
+`crates/edge/aep-cli/tests/cli.rs`; `crates/govern/aep-engine/tests/end_to_end.rs`;
 `crates/plan/aep-backend-memory/tests/failure_atomicity.rs`; `crates/edge/aep-schema/tests/published.rs`;
-`crates/edge/protocol-cli/tests/command_equivalence.rs`; `crates/observe/aep-ess-evidence/src/lib.rs`;
+`crates/edge/aep-cli/tests/command_equivalence.rs`; `crates/observe/aep-ess-evidence/src/lib.rs`;
 `drivers/development/default.yaml`.

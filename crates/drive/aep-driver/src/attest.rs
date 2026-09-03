@@ -46,7 +46,7 @@ use aep_domain::ids::ExecutionId;
 ///
 /// **One spelling, in one place, because two readers need the same answer.** [`crate::run`] puts
 /// it in the set of actors an approval may not come from — a run cannot approve what it produced —
-/// and `protocol-cli` hands the same string to every `llm` step's session in `AEP_ACTOR`, so a
+/// and `aep-cli` hands the same string to every `llm` step's session in `AEP_ACTOR`, so a
 /// `protocol artifact move` made from inside the run is journalled as the run's own act rather
 /// than as the operator's. If the two spellings could drift, a run would be able to approve its
 /// own work under a name its own refusal did not recognise, which is the one failure this module

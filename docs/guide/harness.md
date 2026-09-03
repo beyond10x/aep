@@ -117,7 +117,7 @@ pass this check and still block at completion, and the shipped cargo map carries
 
 Enforcement is one policy with one enforcer, since `epic:metaharness-migration` (2026-08-22):
 every `llm` step is spawned through `metaharness run claude` in ask mode, and the driver's own
-per-call policy — `decide_tool` in `crates/edge/protocol-cli/src/drive.rs`, the retired shell hooks
+per-call policy — `decide_tool` in `crates/edge/aep-cli/src/drive.rs`, the retired shell hooks
 ported to Rust plus the per-state allowlist — answers each `tool.requested` event before the call
 runs. It is the only layer that sees a call's **arguments**, and its decisions are `tool.decided`
 events in the run's own event stream rather than a side-channel log. Afterwards the record says

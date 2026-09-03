@@ -19,8 +19,8 @@ scope:
 - confidence: cited
   path: crates/drive/aep-driver
 - confidence: cited
-  path: crates/edge/protocol-cli
-revision: 11
+  path: crates/edge/aep-cli
+revision: 13
 ---
 # Story: `protocol drive` — the run that touches the world
 
@@ -66,7 +66,7 @@ The verb ships and two real runs have used it (`W4-1/1`, `W4-2/1`). `cargo test 
 
 | line | state | what remains |
 |---|---|---|
-| the lock is taken with `create_new` before a run id is allocated | **holds** — `crates/edge/protocol-cli/src/drive.rs:923`, order at `:474-475`; `a_second_driver_is_refused_by_name_and_writes_nothing` | note: the lock is one path per **project** (`.engineering/runs/lock.json`), not per store — `--store` does not move it. Either the story says project, or the path follows the store |
+| the lock is taken with `create_new` before a run id is allocated | **holds** — `crates/edge/aep-cli/src/drive.rs:923`, order at `:474-475`; `a_second_driver_is_refused_by_name_and_writes_nothing` | note: the lock is one path per **project** (`.engineering/runs/lock.json`), not per store — `--store` does not move it. Either the story says project, or the path follows the store |
 | a second `drive` exits non-zero and prints run id, pid, host **and the cursor's state**, writing nothing | **partial** — the refusal names run id, pid and both routes; it can**not** name the state, because `LockState` has no state field (`crates/drive/aep-driver/src/lock.rs:66-75`) and `take_lock` bails before reading a cursor. Host is unasserted | read the holder's cursor and put its state in the refusal; assert host |
 | an unclean store report stops the run, errors verbatim, fact store unchanged | **holds** — `crates/drive/aep-driver/src/run.rs:858-866`; `a_store_with_one_unparseable_file_stops_the_run_with_its_fact_base_unchanged` | — |
 | an artifact created by a step changes `artifact.<kind>.count` in the next evaluation | **partial** — the graph is rebuilt at the top of every loop iteration (`run.rs:498-500`) and one iteration is one step, so the behaviour is there; no test has a step **create** an artifact and re-read the count | one test that does exactly that |
@@ -85,19 +85,19 @@ never reused.
 
 | row | 2026-08-30 |
 |---|---|
-| the refusal names the holder's **cursor state** | **shipped.** `LockState` now carries `state: Option<String>` (`crates/drive/aep-driver/src/lock.rs:78-84`), supplied and never discovered, with `state unknown` as the worded absence; asserted by `a_refusal_names_what_the_holding_run_is_doing` (`crates/edge/protocol-cli/tests/drive_cli.rs:1422`) |
-| `--pause-on-approval` **releases the lock** | **shipped.** `a_pause_is_the_lock_released_and_the_pointer_kept` (`crates/edge/protocol-cli/tests/drive_cli.rs:1806`) asserts released lock, kept `current` pointer and `awaiting_operator` in one test, for the reason its doc comment gives |
+| the refusal names the holder's **cursor state** | **shipped.** `LockState` now carries `state: Option<String>` (`crates/drive/aep-driver/src/lock.rs:78-84`), supplied and never discovered, with `state unknown` as the worded absence; asserted by `a_refusal_names_what_the_holding_run_is_doing` (`crates/edge/aep-cli/tests/drive_cli.rs:1422`) |
+| `--pause-on-approval` **releases the lock** | **shipped.** `a_pause_is_the_lock_released_and_the_pointer_kept` (`crates/edge/aep-cli/tests/drive_cli.rs:1806`) asserts released lock, kept `current` pointer and `awaiting_operator` in one test, for the reason its doc comment gives |
 
 Three rows are what this story now owes, and none is more than a test:
 
 | row | state on 2026-08-30 | what remains |
 |---|---|---|
-| the refusal asserts **host** | still unasserted. `a_second_driver_is_refused_by_name_and_writes_nothing` (`crates/edge/protocol-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and then asserts only the run id, the pid and `--take-lock` | one `contains` on the host it wrote |
+| the refusal asserts **host** | still unasserted. `a_second_driver_is_refused_by_name_and_writes_nothing` (`crates/edge/aep-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and then asserts only the run id, the pid and `--take-lock` | one `contains` on the host it wrote |
 | an artifact **created by a step** changes `artifact.<kind>.count` in the next evaluation | still no test. `artifact.story.count` is read only through `story_count` (`crates/drive/aep-driver/tests/driving.rs:393`), and its three call sites (`:727`, `:755`, `:800`) are the F7 shrink assertions — a store that got *smaller* outside the run, never a step that made it bigger | one test whose `command` step creates an artifact and whose next evaluation reads the higher count |
 | two `Engine` values in one process do not collide on a run directory | still no test. A tree-wide search for `collide`, `collision`, `two engine`, `concurrent` over `crates/drive/aep-driver/tests/` and `drive_cli.rs` returns nothing | one test that constructs two |
 
 The lock-path wording is unchanged and still owed: `crates/drive/aep-driver/src/lock.rs:9` documents *one
-fixed path per store*, and `crates/edge/protocol-cli/src/drive.rs:99` puts `lock.json` under the
+fixed path per store*, and `crates/edge/aep-cli/src/drive.rs:99` puts `lock.json` under the
 project's `.engineering/runs/`, which `--store` does not move. One line of prose, in whichever
 direction the driver owner picks.
 
@@ -113,18 +113,18 @@ proposition about `Engine`. Established by the adversarial pass rather than argu
 - There is no process-global state in the drive path — the one `OnceLock` at `drive.rs:4711` is
   inside `#[cfg(test)]`.
 - No in-process multi-run caller exists: `eval` refuses to launch a driven arm itself and spawns
-  `protocol drive run` (`crates/edge/protocol-cli/src/eval.rs:1783`, `:2842`).
+  `protocol drive run` (`crates/edge/aep-cli/src/eval.rs:1783`, `:2842`).
 
 So *in one process* distinguished nothing, and a test written to it could only have asserted that
 two values can be constructed. The implementor deleted such a test in correction round 1 and was
 right to; the line is now what it always meant, and what it means is `allocate_run`.
 
-**And what it means is not yet true.** `crates/edge/protocol-cli/src/drive.rs:1258-1276` reads
+**And what it means is not yet true.** `crates/edge/aep-cli/src/drive.rs:1258-1276` reads
 `highest + 1` off a directory listing, so "never reused" holds only while nothing is deleted — its
 own doc comment states the property as a fact rather than enforcing it. Remove the highest run
 directory and its id is handed to a different run **while `current` still names it**. Red case:
 `adversary_a_run_directory_that_was_removed_is_not_handed_out_to_a_second_run`
-(`crates/edge/protocol-cli/tests/drive_cli.rs:2670`).
+(`crates/edge/aep-cli/tests/drive_cli.rs:2670`).
 
 ## Out of Scope
 

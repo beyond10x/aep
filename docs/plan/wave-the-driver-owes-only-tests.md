@@ -24,7 +24,7 @@ written. Four surfaces, no two on one file, merged onto one branch and closed by
 | **14 G still standing from a wave that never cleaned up** | `~/.cache/claude-tmp/claude-1000/-home-operator-projects-aep/ba00d8e0-…/scratchpad/eval/ws_eval`, last written 2026-08-24, under a repo path this tree no longer occupies. Left standing — it is the operator's to delete, and it is the evidence behind `story:wave-skill-defects-found-by-running-it` § 8 |
 | `git worktree list` — one entry, the main tree | no previous wave's trees are standing |
 | `sccache` at `/usr/bin/sccache`, wired at `~/.cargo/config.toml:60` | `RUSTC_WRAPPER` unset in the shell; the cargo config carries it |
-| a package-scoped build in a fresh worktree: **30 s wall, 1.6 G target** | measured 2026-08-30 for the previous wave, same tree, `a8b139b` — `cargo test -p protocol-cli --no-run` |
+| a package-scoped build in a fresh worktree: **30 s wall, 1.6 G target** | measured 2026-08-30 for the previous wave, same tree, `a8b139b` — `cargo test -p aep-cli --no-run` |
 | **so N=4 costs ~6.4 G** | 4 × 1.6 G against 75 G free |
 
 ## 2. The units
@@ -36,7 +36,7 @@ read out of each story's own re-verification table, which names `file:line` for 
 |---|---|---|---|---|
 | 1 | `story:driver-spec-crate` | active | `crates/govern/aep-engine/src/registry.rs` (new `mod tests`), `crates/drive/aep-driver-spec/src/map.rs` (tests) | none |
 | 2 | `story:driver-router` | active | `crates/drive/aep-driver/tests/determinism.rs`, `crates/drive/aep-driver/tests/tool_config.rs` | none |
-| 3 | `story:protocol-drive-verb` | proposed → active | `crates/edge/protocol-cli/tests/drive_cli.rs`, `crates/drive/aep-driver/tests/driving.rs` | none |
+| 3 | `story:protocol-drive-verb` | proposed → active | `crates/edge/aep-cli/tests/drive_cli.rs`, `crates/drive/aep-driver/tests/driving.rs` | none |
 | 4 | `story:default-step-map` | proposed → active | `crates/govern/aep-engine/tests/` (new file) | none |
 
 **Pairwise, by file.** 1×2 disjoint. 1×3 disjoint **only because of a routing decision taken here**
@@ -45,7 +45,7 @@ adds a file under `tests/`. 2×3 share the `aep-driver` package and no file — 
 `tool_config.rs` against `driving.rs`. 3×4 disjoint. 2×4 disjoint.
 
 **The one routing decision.** `story:driver-spec-crate`'s `UndeclaredEvidenceKind` red-path test
-would naturally have gone into `crates/edge/protocol-cli/tests/drive_cli.rs`, beside the green-path
+would naturally have gone into `crates/edge/aep-cli/tests/drive_cli.rs`, beside the green-path
 `check_run` test at `:921` — which is the file unit 3 adds three tests to, and the only real
 collision in the set. It is sent to `crates/drive/aep-driver-spec/src/map.rs`'s own `mod tests` instead,
 which is reachable because `check_run` is `pub fn` (`crates/drive/aep-driver-spec/src/map.rs:899`) and is
@@ -70,7 +70,7 @@ the better home anyway: the refusal is produced twelve lines below it, at `:913`
 
 **3 — `story:protocol-drive-verb`.** Three tests and one line of prose.
 - Assert the host in the lock refusal. `a_second_driver_is_refused_by_name_and_writes_nothing`
-  (`crates/edge/protocol-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and asserts only the
+  (`crates/edge/aep-cli/tests/drive_cli.rs:360`) writes `host()` into the lock and asserts only the
   run id, the pid and `--take-lock`.
 - A `command` step that **creates** an artifact, with the next evaluation reading the higher
   `artifact.<kind>.count`. The three existing call sites of `story_count`
@@ -95,7 +95,7 @@ That rewrites one acceptance line in `story:default-step-map` and builds nothing
 write and stays with the coordinator.
 
 **The lock-path wording, same reason.** `crates/drive/aep-driver/src/lock.rs:9` documents *one fixed path
-per store*; `crates/edge/protocol-cli/src/drive.rs:99` puts `lock.json` under the project's
+per store*; `crates/edge/aep-cli/src/drive.rs:99` puts `lock.json` under the project's
 `.engineering/runs/`, which `--store` does not move. One line of prose in whichever direction the
 driver owner picks — not an implementor's call.
 
@@ -130,7 +130,7 @@ previous wave's non-discriminating `one_ladders_column_order_…` case, caught o
 The coordinator placed each build directory **outside** its worktree, following the skill's
 `references/branch-and-merge.md` — *"one per worktree, usually outside it"*. `AGENTS.md:499-502`
 says the opposite in as many words. The first gate of `impl/protocol-drive-verb` exited **101** with
-**11 failures, every one of them `crates/edge/protocol-cli/tests/store_selection.rs:77` — `the scratch
+**11 failures, every one of them `crates/edge/aep-cli/tests/store_selection.rs:77` — `the scratch
 tree is under the repository: StripPrefixError(())`** — none touching the unit's change. Because
 cargo stops at the first failing target, `drive_cli` and `driving`, the two suites the unit
 actually owed, **never ran**: the gate was not noisy, it was empty.
@@ -138,16 +138,16 @@ actually owed, **never ran**: the gate was not noisy, it was empty.
 Re-run with the target inside the worktree, `--no-fail-fast`:
 
 ```
-cargo test -p protocol-cli -p aep-driver --no-fail-fast   EXIT 0
+cargo test -p aep-cli -p aep-driver --no-fail-fast   EXIT 0
 609 passed across 36 suites, 0 failed
   tests/driving.rs           14 passed  (baseline 12)
   tests/drive_cli.rs         47 passed  (baseline 47 — the host assertion extends an existing test)
   tests/store_selection.rs   11 passed  (the 11 that had failed)
-cargo clippy -p protocol-cli -p aep-driver --all-targets -- -D warnings   EXIT 0
+cargo clippy -p aep-cli -p aep-driver --all-targets -- -D warnings   EXIT 0
 cargo fmt --check                                                        EXIT 0
 ```
 
-The other three units are unaffected: only `protocol-cli` carries that assert. Filed as
+The other three units are unaffected: only `aep-cli` carries that assert. Filed as
 `story:wave-skill-defects-found-by-running-it` § 9, whose fix reverses the skill's wording rather
 than qualifying it — **inside the worktree, always, unless an adopting repository says otherwise**,
 which also answers § 8, since a build directory inside the tree is removed with it.

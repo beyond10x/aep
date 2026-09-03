@@ -69,7 +69,7 @@ three adapter points — invoke-the-agent, capabilities-to-tool-config, and a tr
 | D5, the ambiguous ones | one question — **did a verifier produce a verdict?** timeout, OOM, network error ⇒ Unknown; a suite that completed with failures ⇒ False | a partial suite is not a failing suite. `trace check` exit 3 is the one Unknown that is still *recorded*, because `trace evidence` writes `status: inconclusive` and `trace_conformance.passed` stays false (`crates/observe/trace-spec/src/evidence.rs:43-54`) |
 | D5, retries | budget **per step kind** — `command` retries, `llm` once, `operator` never — spent and not reset, counted in the cursor | a person is not a flaky dependency. A retried success does not erase the first attempt: there is no evidence to erase, but the attempt count stays and the run report names it |
 | **D6 concurrency** | **F2, INFEASIBLE:** one fixed path, `.engineering/runs/lock.json`, `create_new` **before** any run-id allocation; run directories hold no lock; `--resume` **re-takes** it | the reviewed version put the lock inside the directory the lock was allocating. Two invocations counting at slightly different moments get `3` and `4` and **both `create_new` succeed** — D6's own rejected option, *"no lock, last writer wins"*, reached by accident. The holder's run id now lives inside the lock, so a refusal prints it without a second read. One atomic syscall, no advisory locking, and its failure mode is the one we want |
-| D6, placement | **F19:** the lock file, the pid-liveness probe and the run directory are `protocol-cli`'s; `aep-driver` is handed a `LockState` | a liveness probe reads ambient OS state and uses neither `SystemTime::now` nor `rand`, so a banned-token scan would not catch it. Placement is the only thing keeping the pure crate's claim true — and it makes the lock testable without a second process |
+| D6, placement | **F19:** the lock file, the pid-liveness probe and the run directory are `aep-cli`'s; `aep-driver` is handed a `LockState` | a liveness probe reads ambient OS state and uses neither `SystemTime::now` nor `rand`, so a banned-token scan would not catch it. Placement is the only thing keeping the pure crate's claim true — and it makes the lock testable without a second process |
 | D6, invariant 16 | **F17, overturned in our favour:** a removable lockfile is **not** a breach; two adjacent rules adopted anyway | invariant 16's subject is the entity command vocabulary (`AGENTS.md:239-242`), not the filesystem. Adopted regardless: a run directory is never deleted or reused, and `--take-lock` **supersedes** — the stolen lock's contents go into the new run's cursor, so *"this run took the lock from pid 4711"* is in the record |
 | D6, the run id | the run id is the **driver's**, allocated after taking the lock; the engine's `ExecutionId` goes *inside* the cursor | `ExecutionId` is `<task>.<ordinal>` where the counter starts at zero **in each `Engine` value** — **F10** sharpens this: it is a field (`engine.rs:173`, `:186-190`, `:210-213`), so two `Engine`s in **one** process collide too, which is the shape a test harness builds. The hazard is confined to `initialize`; `Execution::restore` preserves the id (`execution.rs:277`) |
 | D6, stale locks | liveness, **never age**: pid alive ⇒ held; same host and dead ⇒ stale but still refused without `--take-lock`; another host ⇒ never stale | any age threshold must exceed the longest legitimate step, and that is *an operator step waiting for a person*, which has no bound. A two-hour timeout would break exactly the runs that paused correctly |
@@ -255,7 +255,7 @@ allowlist. § 4.8 row 3 stays open and now says so.
 * W3.1c held: both manifests carry `[lints] workspace = true`, `tests/determinism.rs` ships in each,
   and invariant 9's list in [`AGENTS.md`](../../AGENTS.md) names both crates in the same change —
   a purity claim stronger than `aep-engine`'s, which is why the lock, the pid probe and the run
-  directory are `protocol-cli`'s (F19);
+  directory are `aep-cli`'s (F19);
 * `crates/drive/aep-driver/tests/evidence_scan.rs` (216 lines) is invariant 7 one layer out: the driver
   constructs no `Evidence` value of its own.
 
@@ -272,19 +272,19 @@ the gate's `schema-check`.
 * the pin is **mandatory** and is a `WorkflowRef` spelled `adp/default/1` — § 4.2's `@1` stays
   standing as a recorded mistake, and nothing parses it;
 * the committed map loads and is **refused when a state is renamed**
-  (`crates/edge/protocol-cli/tests/drive_cli.rs:387`) — a step map for a state that moved is an
+  (`crates/edge/aep-cli/tests/drive_cli.rs:387`) — a step map for a state that moved is an
   instruction sheet for a state graph it was not written against;
 * every `cargo` line in it is a `command` step **the driver runs**, and no `llm` step has an
   `evidence:` key, because the `Llm` variant has no field for one.
 
 ### W3.3 — `protocol drive`
 
-`protocol drive run | status | resume` (`crates/edge/protocol-cli/src/drive.rs`, wired at
-`crates/edge/protocol-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
+`protocol drive run | status | resume` (`crates/edge/aep-cli/src/drive.rs`, wired at
+`crates/edge/aep-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
 the run directory under `.engineering/runs/<task>/<ordinal>/`, the store lock at the one fixed path
-`.engineering/runs/lock.json`, and the pid-liveness probe — all in `protocol-cli`, per F19.
+`.engineering/runs/lock.json`, and the pid-liveness probe — all in `aep-cli`, per F19.
 
-**Acceptance — met**, asserted by the fixture run in `crates/edge/protocol-cli/tests/drive_cli.rs`
+**Acceptance — met**, asserted by the fixture run in `crates/edge/aep-cli/tests/drive_cli.rs`
 (8 tests) and by `crates/drive/aep-driver/tests/driving.rs` (9 tests):
 
 * **the run advances on evidence a verifier produced.** The fixture map buys six moves —
@@ -322,7 +322,7 @@ reader, the context reader and the decision writer.
   without the driver ships no per-state enforcement;
 * **the decision log is the F14 channel.** Both hooks append to
   `<run-dir>/hook-decisions.jsonl`, located from the step context the driver rewrites before
-  **every** `llm` step (`crates/edge/protocol-cli/src/drive.rs:899-926`, format
+  **every** `llm` step (`crates/edge/aep-cli/src/drive.rs:899-926`, format
   `aep.drive-step-context/1`) — rewritten per step and not per run, because `effective_policy`
   grants the state's capabilities on top of the plan's;
 * **fail-closed without a parser.** With neither `jq` nor `python3` on `PATH`, a call that mentions
@@ -407,7 +407,7 @@ operator asked for it after W3.6 landed; it is recorded here because a wave whos
 quietly exceeds its reviewed set is a wave nobody can check.
 
 `crates/drive/aep-render` — 2,933 source lines — plus `protocol workflow render`
-(`crates/edge/protocol-cli/src/render.rs`). One `Scene` resolves the layout, the overlay and every piece
+(`crates/edge/aep-cli/src/render.rs`). One `Scene` resolves the layout, the overlay and every piece
 of text exactly once; `svg`, `html` and `ansi` answer only *how do I write this out*, and PNG is the
 SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
 
@@ -418,9 +418,9 @@ SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
   the program and what to install rather than failing obscurely;
 * **`--watch` is live and bounded**: `--format tui` with `--run` only, refused on the formats that
   write a document once and refused without a run, because there would be nothing to follow. The
-  poll and its clock live in `protocol-cli`; the crate reads no clock, no terminal and no file;
+  poll and its clock live in `aep-cli`; the crate reads no clock, no terminal and no file;
 * **byte-stable.** The same workflow and the same `RunView` render to the same bytes twice
-  (`crates/drive/aep-render/tests/determinism.rs`, `crates/edge/protocol-cli/tests/render_cli.rs:170`), so a
+  (`crates/drive/aep-render/tests/determinism.rs`, `crates/edge/aep-cli/tests/render_cli.rs:170`), so a
   committed figure does not turn up in a diff. Every committed workflow renders (`render_cli.rs:444`);
 * **it evaluates nothing.** The overlay arrives as a plain `RunView` and the crate depends on
   `aep-domain` alone — not on `aep-engine`, not on `aep-driver` — so a renderer cannot become a
@@ -430,8 +430,8 @@ SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
   paraphrased, truncated or re-ordered by any emitter;
 * **three dependencies weighed and refused**, in the crate's own documentation: `graphviz`/`dot`,
   `ratatui` and `resvg`/`usvg`;
-* **37 tests** in `aep-render`, **13** in `crates/edge/protocol-cli/tests/render_cli.rs`
-  (`cargo test -p aep-render` = 37, `cargo test -p protocol-cli` = 198).
+* **37 tests** in `aep-render`, **13** in `crates/edge/aep-cli/tests/render_cli.rs`
+  (`cargo test -p aep-render` = 37, `cargo test -p aep-cli` = 198).
 
 **What it showed about the run directory, and what that owes.** Building an overlay from a run is
 the first thing that ever read `.engineering/runs/<run>/` from outside the driver, and it found

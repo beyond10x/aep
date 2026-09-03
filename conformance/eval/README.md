@@ -8,7 +8,7 @@ One directory per case. A case is three things and no others:
 | the expectations | `expectations.trace.yaml` | a `trace-spec/1` document — what the run must have looked like |
 | the transcript | `transcript.jsonl` | a committed run, replayed through the checker in the gate |
 
-`crates/edge/protocol-cli/tests/eval_corpus.rs` enumerates this directory and replays every case. Nothing
+`crates/edge/aep-cli/tests/eval_corpus.rs` enumerates this directory and replays every case. Nothing
 registers a case anywhere: a new directory with a `case.yaml` in it **is** a new case, and one whose
 transcript stops satisfying its own document turns `task check` red naming the expectation that
 stopped holding.
@@ -70,7 +70,7 @@ expect:
     before: {tools: [Edit, NotebookEdit, Write], args: {file_path: {glob: "*/src/*"}}}
 ```
 
-The list is `crates/edge/protocol-cli/src/drive.rs`'s — exactly the three verbs it renders to the
+The list is `crates/edge/aep-cli/src/drive.rs`'s — exactly the three verbs it renders to the
 `repository.write` capability — so this repository's own driver stays the authority on what a write
 is and a fourth verb is added in one place.
 
@@ -109,7 +109,7 @@ $ mkdir conformance/eval/<slug>
 $ $EDITOR conformance/eval/<slug>/case.yaml
 $ $EDITOR conformance/eval/<slug>/expectations.trace.yaml
 $ $EDITOR conformance/eval/<slug>/transcript.jsonl
-$ cargo test -p protocol-cli --test eval_corpus
+$ cargo test -p aep-cli --test eval_corpus
 ```
 
 `case.yaml` must declare a `workflow:` that a document under `workflows/` declares, and `states:` that

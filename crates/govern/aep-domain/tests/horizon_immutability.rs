@@ -38,7 +38,7 @@ const SCANNED: &[&str] = &[
     "../../govern/aep-engine/src",
     "../../plan/aep-backend-markdown/src",
     "../../drive/aep-driver/src",
-    "../../edge/protocol-cli/src",
+    "../../edge/aep-cli/src",
 ];
 
 /// Every line of shipped Rust under `SCANNED`, as `(path, line number, text)`.

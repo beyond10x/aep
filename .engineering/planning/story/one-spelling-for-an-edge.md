@@ -13,14 +13,14 @@ relations:
 - serves: vision:O2
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: crates/govern/aep-domain
 - confidence: cited
   path: crates/plan/aep-backend-markdown
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 10
+revision: 11
 ---
 # Story: One spelling for an edge, and a way to take one back
 

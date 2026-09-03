@@ -24,7 +24,7 @@ task against evidence, and asking how old that evidence is.
 ```shell-session
 $ git clone https://github.com/beyond10x/aep
 $ cd aep
-$ cargo build -p protocol-cli
+$ cargo build -p aep-cli
 $ B=target/debug/aep
 ```
 

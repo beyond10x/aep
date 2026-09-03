@@ -87,7 +87,7 @@ epic:evidence-gated-completion  epic  draft  Done is a claim with evidence behin
 
 * `protocol artifact list` run from a subdirectory, **with no `--store`**, answers from
   `.engineering/planning/` — the discovery path, not a flag
-  (`crates/edge/protocol-cli/src/planning.rs:90-106`);
+  (`crates/edge/aep-cli/src/planning.rs:90-106`);
 * `protocol artifact validate` is green over 33 artifacts, exit 0;
 * the store holds **this wave's own stories**, so the first thing the repository governs with it is
   the plan that governs it — see the mapping below;
@@ -221,7 +221,7 @@ grant opens.
 | quantity | value | where it is |
 |---|---|---|
 | model sessions | 4, `is_error: false` in every one | `.engineering/runs/W4-1/1/transcripts/*.jsonl` |
-| resolved model | `claude-opus-5[1m]` — the CLI's default; the driver passes no `--model` | `claude_argv`, `crates/edge/protocol-cli/src/drive.rs:1178-1211` |
+| resolved model | `claude-opus-5[1m]` — the CLI's default; the driver passes no `--model` | `claude_argv`, `crates/edge/aep-cli/src/drive.rs:1178-1211` |
 | turns / wall clock / cost | 224 turns, 34 m 39 s of session time, **$15.42** | terminal `result` events |
 | hook decisions | **80** — 69 allow, 11 deny | `hook-decisions.jsonl` |
 | … by hook | `driven-surface` 48 allow / 10 deny; `store-integrity` 21 allow / 1 deny | same |
@@ -278,7 +278,7 @@ in the order they cost the run:
 4. **`diff.exists` is satisfied by `git diff` exiting zero, not by a diff existing.** Every file this
    run produced is new, so `git --no-pager diff --stat HEAD` would have printed nothing and exited 0,
    and `mint` writes a `ChangeSet` with all-zero counts on any zero exit
-   (`crates/edge/protocol-cli/src/drive.rs:1274-1281`, which says so in its own comment). The run never
+   (`crates/edge/aep-cli/src/drive.rs:1274-1281`, which says so in its own comment). The run never
    reached `implement`, so this one is a reading of the code rather than an observation of the run —
    labelled as such deliberately.
 5. **The driver never checks a transcript, so this item's third acceptance bullet is not met by the
@@ -305,7 +305,7 @@ this was found by reading a transcript rather than by a gate.
 four states and every `attempts` entry is 1, so the three numbers stay guesses and W4.2's acceptance
 line about them is untouched by this run. And it says nothing about `--pause-on-approval`'s resume
 line, which was printed as `resume with: protocol drive resume W4-1/1` by the **blocked** path
-(`crates/edge/protocol-cli/src/drive.rs:611-613`) rather than by an `operator` pause, so W4.2's third item
+(`crates/edge/aep-cli/src/drive.rs:611-613`) rather than by an `operator` pause, so W4.2's third item
 — *"nobody has read that line"* — is still true of the line it means.
 
 **Resuming it changes nothing on its own.** The cursor sits in `establish_verifiers` with both its
@@ -451,7 +451,7 @@ exactly the shape `development/default` could never drive. The task is `.enginee
 | # | finding | evidence |
 |---|---|---|
 | **F-W4.2-3** | **A raw launch leaves hermeticity to the caller, and the two things that fix it fight each other.** The first two `receive` sessions loaded **6 plugins — 5 of them the operator's, nothing to do with this run** (`rust-analyzer-lsp`, `gopls-lsp`, `typescript-lsp`, `track`, `flux-agent`), 26 skills instead of 16, and billed against **`apiKeySource: ANTHROPIC_API_KEY`** rather than the intended subscription: both died on *"Credit balance is too low"*. Pointing `CLAUDE_CONFIG_DIR` at a clean home fixed the leak — and removed the **`aep` plugin too**, so the eight sessions that then succeeded ran with `plugins: 0` and **no enforcement hooks at all**. `development.driven` grants `command.execute` on the stated understanding that `driven-surface.sh` narrows it; for this entire run that hook was absent | `init` events of all ten transcripts; the missing `hook-decisions.jsonl`; `profiles/development-driven.yaml` header |
-| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: protocol drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/edge/protocol-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
+| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: protocol drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/edge/aep-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
 | **F-W4.2-5** | **A copied OAuth credential expires mid-run and cannot refresh.** Two `implement` sessions returned *"Failed to authenticate: OAuth session expired and could not be refreshed"*. The SDK reported them as `subtype: "success"` with `is_error: true` in the same frame, which is worth knowing before trusting a summary field | `transcripts/implement-0-1.jsonl`, `-0-2.jsonl` |
 | **F-W4.2-6** | **The applicability gap**, above. Closed in part | the design note |
 | **F-W4.2-7** | **A step map is never checked against the plan it will drive, and this is the expensive one.** `StepMap::check_run` validates map → protocol — every evidence kind a step declares is one the protocol declares — and **never the converse** (`crates/drive/aep-driver-spec/src/map.rs:710-750`). `development/checks` submits four kinds; the plan requires `specification` and `verification` as well, and **no step of the map produces either**, for a code task or a documentation one. So the map loads, the run walks six states, and the mismatch surfaces at the guard — **after $31.46 and 76 minutes of model time**. A load-time check had every fact it needed | the map's seven `evidence:` blocks; `evidence.missing = 2` after the fix |
@@ -508,7 +508,7 @@ that it was** — a `trace_conformance` record for the run that did the work, an
 It carries three things this wave needs decided rather than assumed: the `delivers` relation
 formalised (`RelationKind::Delivers` exists in Rust at `crates/govern/aep-domain/src/artifact.rs:957` and
 `artifacts/relations/relations.yaml` declares twelve relations without it — the CLI already says so
-in a doc comment at `crates/edge/protocol-cli/src/planning.rs:855-861`); the lifecycle question weighed
+in a doc comment at `crates/edge/aep-cli/src/planning.rs:855-861`); the lifecycle question weighed
 both ways (a new `released` rung against an evidence gate on the existing terminal move); and the
 enforcement mechanism named honestly, because today a status move consults a
 `LifecycleRegistry` and nothing else (`crates/plan/aep-backend-markdown/src/document.rs:115-142`).

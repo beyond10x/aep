@@ -12,12 +12,12 @@ relations:
 - serves: vision:O2
 scope:
 - confidence: cited
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: inferred
   path: crates/govern/aep-domain
 - confidence: cited
   path: crates/plan/aep-backend-markdown
-revision: 6
+revision: 7
 ---
 # Story: The journal records a body by digest and diff, and refuses a home directory
 

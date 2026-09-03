@@ -26,7 +26,7 @@
 # last one because two of the three `verify` steps are this repository's own verbs.
 # the migrated driven eval (metaharness `evals/aep/run-driven.sh`) is how a
 # driven run gets it: build
-# `protocol-cli`, then put `target/debug` on `PATH`. A missing program is D5's `Unknown` and submits
+# `aep-cli`, then put `target/debug` on `PATH`. A missing program is D5's `Unknown` and submits
 # nothing, so the run stops rather than recording a suite that never ran.
 #
 # The runner's **absence is a red result and not an error**, deliberately. `bash` exits 127 on a

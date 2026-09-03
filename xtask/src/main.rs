@@ -606,7 +606,7 @@ fn release_asset_text(release: &str) -> Result<()> {
     for required in [
         "workflow_dispatch:",
         "always() && needs.provenance.result == 'success' && needs.build.result == 'success'",
-        "cargo build --release --locked -p protocol-cli --target ${{ matrix.target }}",
+        "cargo build --release --locked -p aep-cli --target ${{ matrix.target }}",
         "target/${TARGET}/release/aep",
         "target/${TARGET}/release/protocol",
         "actions/upload-artifact@",
@@ -875,15 +875,19 @@ fn guards(root: &Path) -> Result<()> {
     /// A body shorter than this says too little to be worth comparing.
     const FLOOR: usize = 120;
 
-    // The three parallel command vocabularies. `adp`, `aep` and `aop` each define their own
-    // `Command` enum and each carries the same structural tests over it — round-trips through JSON,
-    // the sample set covering every kind. The bodies are identical because the *shape* is identical
-    // and the type is reached through a `use` at the top of each file; they are three tests of
-    // three different types, not one test cited twice.
+    // The three parallel command vocabularies. The substrate and the two profile crates each define
+    // their own `Command` enum and each carries the same structural tests over it — round-trips
+    // through JSON, the sample set covering every kind. The bodies are identical because the
+    // *shape* is identical and the type is reached through a `use` at the top of each file; they
+    // are three tests of three different types, not one test cited twice.
     //
     // Allowlisted rather than silently skipped: a reader of this list can see what was excused and
     // argue with it, which is the difference between an exception and a blind spot.
-    const PARALLEL_VOCABULARIES: &[&str] = &["adp-domain", "aep-domain", "aop-domain"];
+    const PARALLEL_VOCABULARIES: &[&str] = &[
+        "aep-domain",
+        "aep-profile-development",
+        "aep-profile-operations",
+    ];
 
     let mut bodies: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
 
@@ -2500,6 +2504,133 @@ mod layout_tests {
              would pass it"
         );
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// The `[package] name` a member manifest declares, when it declares one.
+    fn package_name(manifest: &str) -> Option<&str> {
+        let (_, rest) = manifest.split_once("[package]")?;
+        rest.lines()
+            .take_while(|line| !line.trim_start().starts_with('['))
+            .find_map(|line| {
+                let (key, value) = line.split_once('=')?;
+                (key.trim() == "name").then(|| value.trim().trim_matches('"'))
+            })
+    }
+
+    /// A crate's directory name and its package name are one name, for every member.
+    ///
+    /// The two are separate declarations of the same thing and nothing else compares them, so a
+    /// rename that moved the directory and left `[package] name` behind — or the other way — would
+    /// leave `cargo build -p <name>` and `cargo install --path crates/<area>/<name>` disagreeing
+    /// about what a crate is called, and both would work. Derived from the member list rather than
+    /// listed, so it covers a crate added after this was written.
+    #[test]
+    fn every_member_package_is_named_after_its_directory() {
+        let root = workspace_root();
+        let members = workspace_members(&manifest());
+        assert!(
+            members.len() > 20,
+            "the member list parse found only {members:?}, so it is reading the wrong block"
+        );
+        let mut findings = Vec::new();
+        for member in &members {
+            let Some((_, directory)) = area_and_crate(member) else {
+                continue;
+            };
+            let text = std::fs::read_to_string(root.join(member).join("Cargo.toml"))
+                .unwrap_or_else(|error| panic!("reading {member}/Cargo.toml: {error}"));
+            match package_name(&text) {
+                Some(name) if name == directory => {}
+                other => findings.push(format!("{member} declares {other:?}")),
+            }
+        }
+        assert!(
+            findings.is_empty(),
+            "a crate's directory and its `[package] name` are one name: {findings:?}"
+        );
+    }
+
+    /// The two profile crates and the CLI crate carry the protocol's name.
+    ///
+    /// `story:profile-and-cli-crates-named-after-aep`: the two profile crates were named after the
+    /// three-letter acronyms of the protocols they profile, which read as sibling products, and the
+    /// CLI crate carried the retired command's name. What the rename does **not** touch is asserted
+    /// here beside it, because that is the half a rename gets wrong: the crate builds two binaries
+    /// called `aep` and `protocol`, and `command_equivalence.rs` (invariant 10) compares them byte
+    /// for byte. The YAML protocol ids `adp/1` and `aop/1` are wire ids and are not crate names, so
+    /// nothing here looks at them.
+    ///
+    /// The retired names are listed because nothing in a tree can derive what a crate used to be
+    /// called. The list is not what enforces the rename, though: the general rules are
+    /// `every_member_package_is_named_after_its_directory` above, which refuses a half-applied
+    /// rename, and `no_tracked_file_names_a_crate_this_tree_does_not_have` in
+    /// `xtask/tests/crate_paths_are_area_qualified.rs`, which refuses a path naming any crate the
+    /// tree no longer has — this one or the next one.
+    #[test]
+    fn the_profile_and_cli_crates_are_named_after_the_protocol() {
+        const RENAMED: &[&str] = &[
+            "crates/profile/aep-profile-development",
+            "crates/profile/aep-profile-operations",
+            "crates/edge/aep-cli",
+        ];
+        // Spelled in two pieces each, so a repository-wide rename of the retired names cannot
+        // rewrite the list that exists to refuse them. It did, while this test was being written:
+        // the substitution turned every entry into its replacement and the test went green on a
+        // tree that had not been renamed at all.
+        const RETIRED: &[&str] = &[
+            concat!("adp", "-domain"),
+            concat!("aop", "-domain"),
+            concat!("protocol", "-cli"),
+        ];
+
+        let root = workspace_root();
+        let manifest = manifest();
+        let members: BTreeSet<String> = workspace_members(&manifest).into_iter().collect();
+
+        for member in RENAMED {
+            assert!(
+                members.contains(*member),
+                "`{member}` is not a workspace member; members are {members:?}"
+            );
+            assert!(
+                root.join(member).join("Cargo.toml").is_file(),
+                "`{member}` is a member with no manifest on disk"
+            );
+        }
+
+        let mut findings = Vec::new();
+        for name in RETIRED {
+            for member in &members {
+                if area_and_crate(member).is_some_and(|(_, krate)| krate == *name) {
+                    findings.push(format!("member `{member}`"));
+                }
+            }
+            for (dependency, path) in workspace_dependency_paths(&manifest) {
+                if dependency == *name {
+                    findings.push(format!("workspace dependency `{dependency} = {path}`"));
+                }
+            }
+            assert!(
+                !root.join("crates/profile").join(name).is_dir()
+                    && !root.join("crates/edge").join(name).is_dir(),
+                "`{name}` is still a directory under `crates/`"
+            );
+        }
+        assert!(
+            findings.is_empty(),
+            "these name a crate the rename retired: {findings:?}"
+        );
+
+        // What the rename must not have changed: the two binaries, at the renamed crate.
+        let cli = std::fs::read_to_string(root.join("crates/edge/aep-cli/Cargo.toml"))
+            .expect("reading the CLI manifest");
+        for binary in ["protocol", "aep"] {
+            assert!(
+                cli.contains(&format!("name = \"{binary}\"")),
+                "`crates/edge/aep-cli` no longer builds `{binary}`, and both binaries are a \
+                 published surface (`AGENTS.md` invariant 10)"
+            );
+        }
     }
 
     #[test]

@@ -12,12 +12,12 @@ scope:
 - confidence: cited
   path: conformance/eval/development-honest/expectations.trace.yaml
 - confidence: inferred
-  path: crates/edge/protocol-cli
+  path: crates/edge/aep-cli
 - confidence: cited
   path: docs/plan/eval-program-three-arms.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 9
+revision: 11
 ---
 # Story: Pilot 2 — every cell re-run on the frozen corpus, with the streams committed
 
@@ -42,8 +42,8 @@ independent reasons, both recorded on
   held-count over 10 rows and one over 12 are different measurements.
 - **its streams are gone.** They were written to a session scratchpad (`…/scratchpad/r4/`), which
   no longer exists — searched 2026-08-28. The only committed streams are **synthetic**
-  (`crates/edge/protocol-cli/fixtures/eval-run/`, stated in that README's first line), so the free
-  re-ingest path `crates/edge/protocol-cli/tests/eval_dry_run.rs` exists and has nothing live to point
+  (`crates/edge/aep-cli/fixtures/eval-run/`, stated in that README's first line), so the free
+  re-ingest path `crates/edge/aep-cli/tests/eval_dry_run.rs` exists and has nothing live to point
   at.
 
 **The arm nobody has ever measured is now runnable.** Pilot 1's arm `c` cost $0 because it was
