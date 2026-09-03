@@ -9,10 +9,41 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.50.0] — 2026-09-03
+
+### Added
+
+- **A lifecycle for `executable-system-specification`.** `draft → validated → conforming`, with
+  `superseded` and `archived` beside them. `conforming` costs one `ess_conformance` record, so a
+  specification is conforming because a suite ran and its report says so, never because somebody
+  moved it there.
+- **`model_digest` on a specification artifact**, written by `aep artifact set --model-digest`.
+  It ties a conformance report to the exact model the suite ran against. Only a kind
+  `ArtifactKind::carries_model_digest` names may carry one; on any other kind the key is refused by
+  name rather than kept as text a reader would take for a guarantee.
+- **`cargo xtask release` checks that the tag's commit is on `origin/main`** — a sixth step beside
+  the five it already ran. See *Fixed*.
+
 ### Fixed
 
+- **A model digest survives the round trip through an instance.** `aep artifact set
+  --model-digest` printed `model_digest set (revision 2)` and left the document at revision 1 with
+  no digest: `instance_of` did not carry the field, so the value was applied to a document and
+  dropped on the way back out to the store. Anyone who ran the command against 0.48.0 has a
+  specification with no digest on it and was told otherwise.
+- **A release could be tagged on a branch that never reached `main`.** Every check `cargo xtask
+  release` ran was computed from `HEAD`, so a tag on a feature branch satisfied all five and
+  reported the release complete. 0.48.0 was cut that way, and 0.49.0 was then cut from a `main`
+  that had never seen it — the newer version shipping without the lifecycle the older one added.
+  0.50.0 carries both, and the new check refuses the shape that caused it.
 - Rewrite the Design principles stale-approval example around the fields AEP actually checks: the
   review's subject identifies the design, while `reviewed_version` identifies the version Ada saw.
+
+### Note on 0.48.0
+
+`0.48.0` is a published tag whose commit is not on `main`. Its content — the lifecycle and
+`model_digest` above — reaches the released line here, with the round-trip defect fixed. Nothing
+needs `0.48.0`; the tag is left in place rather than deleted.
 
 ## [0.49.0] — 2026-09-03
 
