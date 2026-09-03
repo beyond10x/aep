@@ -12,7 +12,16 @@ tags:
 - workflow
 relations:
 - decomposes: epic:ingestion-vocabulary
-revision: 4
+scope:
+- confidence: cited
+  path: docs/guide/adopting.md
+- confidence: cited
+  path: examples
+- confidence: cited
+  path: principles
+- confidence: cited
+  path: protocols
+revision: 8
 ---
 # Story: Six ingestion states flatten onto three phases, and nothing told the adopter they could declare their own
 

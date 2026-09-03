@@ -8,7 +8,16 @@ relations:
 - decomposes: epic:reference-driver
 - informed_by: story:protocol-drive-verb
 - serves: vision:O3
-revision: 5
+scope:
+- confidence: inferred
+  path: CHANGELOG.md
+- confidence: inferred
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: inferred
+  path: website/docs/reference/cli.md
+revision: 9
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 

@@ -12,7 +12,12 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - serves: vision:O3
-revision: 1
+scope:
+- confidence: cited
+  path: crates/protocol-cli/src/eval.rs
+- confidence: inferred
+  path: crates/protocol-cli/tests/eval_run.rs
+revision: 3
 ---
 # Story: `aep eval run --arm plugin` passes a marketplace plugin through to metaharness
 

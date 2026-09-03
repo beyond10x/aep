@@ -6,7 +6,16 @@ status: draft
 title: The harness refuses a direct write to the planning store, so no prose has to ask it not to
 relations:
 - informed_by: story:skill-text-cannot-instruct-a-direct-store-write
-revision: 2
+scope:
+- confidence: inferred
+  path: .claude
+- confidence: cited
+  path: AGENTS.md
+- confidence: cited
+  path: crates/protocol-cli/tests
+- confidence: cited
+  path: crates/protocol-cli/tests/store_selection.rs
+revision: 6
 ---
 # Story: The harness refuses a direct write to the planning store, so no prose has to ask it not to
 

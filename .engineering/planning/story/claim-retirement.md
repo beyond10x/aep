@@ -7,7 +7,12 @@ title: An answered question must not leave a permanent re-check obligation behin
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
-revision: 3
+scope:
+- confidence: cited
+  path: crates/aep-backend-markdown/src/claim.rs
+- confidence: inferred
+  path: crates/aep-domain/src/evidence.rs
+revision: 5
 ---
 # Story: An answered question must not leave a permanent re-check obligation behind it
 

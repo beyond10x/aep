@@ -11,7 +11,16 @@ tags:
 relations:
 - decomposes: epic:declared-configuration-invariants
 - serves: vision:O2
-revision: 2
+scope:
+- confidence: cited
+  path: AGENTS.md
+- confidence: cited
+  path: Taskfile.yml
+- confidence: inferred
+  path: crates/aep-backend-markdown/src/journal.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/planning.rs
+revision: 6
 ---
 # Story: A stale `protocol` refuses the store it cannot read correctly
 

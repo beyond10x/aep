@@ -12,7 +12,20 @@ tags:
 relations:
 - decomposes: epic:ingestion-vocabulary
 - informed_by: story:outbound-claims-and-status-vocabulary
-revision: 4
+scope:
+- confidence: cited
+  path: CHANGELOG.md
+- confidence: cited
+  path: crates/aep-domain/src/capability.rs
+- confidence: cited
+  path: crates/aep-domain/src/protocol.rs
+- confidence: cited
+  path: docs/guide/open-vocabulary.md
+- confidence: cited
+  path: protocols/aep/1.yaml
+- confidence: cited
+  path: website/docs/reference/vocabulary.md
+revision: 10
 ---
 # Story: The irreversible act in a corpus pipeline has no capability under it
 

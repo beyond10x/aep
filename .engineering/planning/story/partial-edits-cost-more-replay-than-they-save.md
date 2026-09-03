@@ -11,7 +11,14 @@ tags:
 - harness
 relations:
 - decomposes: epic:self-evaluation
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/aep-driver-spec
+- confidence: inferred
+  path: docs/reviews/2026-08-24-scope-cache-and-the-native-arm.md
+revision: 4
 ---
 # Story: the cheap way to honour the store rule
 

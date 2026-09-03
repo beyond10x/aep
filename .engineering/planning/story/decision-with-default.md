@@ -12,7 +12,14 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - depends_on: story:time-based-transitions
-revision: 2
+scope:
+- confidence: inferred
+  path: artifacts/kinds
+- confidence: inferred
+  path: artifacts/lifecycles
+- confidence: inferred
+  path: crates/aep-domain/src/artifact.rs
+revision: 5
 ---
 # Story: A decision the calendar answers anyway is a recorded event, not a silence
 

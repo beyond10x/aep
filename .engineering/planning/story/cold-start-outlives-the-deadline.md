@@ -6,7 +6,14 @@ status: draft
 title: A driven arm on an autoscaled endpoint holds its request instead of paying for the boot every step
 relations:
 - decomposes: epic:cross-harness-portability
-revision: 2
+scope:
+- confidence: inferred
+  path: crates/aep-driver/src/run.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/drive.rs
+- confidence: inferred
+  path: crates/trace-spec/src/report.rs
+revision: 5
 ---
 # Story: A driven arm on an autoscaled endpoint holds its request instead of paying for the boot every step
 

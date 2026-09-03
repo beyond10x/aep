@@ -11,7 +11,18 @@ tags:
 relations:
 - decomposes: epic:evidence-gated-completion
 - serves: vision:O6
-revision: 1
+scope:
+- confidence: inferred
+  path: .engineering/checks
+- confidence: cited
+  path: Taskfile.yml
+- confidence: inferred
+  path: conformance
+- confidence: cited
+  path: docs/reviews/2026-08-20-guard-efficacy-review.md
+- confidence: cited
+  path: docs/status.md
+revision: 6
 ---
 # Story: A gate lane reports how many cases ran, and a unit's own contract is run against its code
 

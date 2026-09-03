@@ -5,7 +5,12 @@ kind: story
 status: draft
 title: One command walks the rungs, and reports what each one cost
 summary: Reaching a rung two moves away means two hand-written moves, and the alternative a caller reaches for is a jump the ladder should refuse.
-revision: 1
+scope:
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: inferred
+  path: website/docs/reference/cli.md
+revision: 3
 ---
 ## Context
 

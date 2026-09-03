@@ -5,7 +5,10 @@ kind: story
 status: draft
 title: Many artifacts arrive in one command
 summary: new creates one artifact per call, so every adopter with a backlog writes the same loop and answers partial failure differently.
-revision: 1
+scope:
+- confidence: cited
+  path: crates/protocol-cli/src/planning.rs
+revision: 2
 ---
 ## Context
 

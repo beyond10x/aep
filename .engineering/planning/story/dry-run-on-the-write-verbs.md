@@ -5,7 +5,12 @@ kind: story
 status: draft
 title: A write verb can say what it would do without doing it
 summary: No verb has --dry-run, so the only way to find out what a bulk write does is to do it.
-revision: 1
+scope:
+- confidence: cited
+  path: crates/protocol-cli/src/planning.rs
+- confidence: cited
+  path: crates/protocol-cli/src/reverse.rs
+revision: 3
 ---
 ## Context
 

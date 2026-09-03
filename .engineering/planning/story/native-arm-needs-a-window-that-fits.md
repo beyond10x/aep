@@ -6,7 +6,14 @@ status: draft
 title: The native arm needs a model whose window holds a driven state
 relations:
 - decomposes: epic:cross-harness-portability
-revision: 2
+scope:
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: inferred
+  path: docs/plan/eval-program-three-arms.md
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 5
 ---
 # Story: The native arm needs a model whose window holds a driven state
 

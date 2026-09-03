@@ -11,7 +11,20 @@ tags:
 - evidence
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 2
+scope:
+- confidence: cited
+  path: crates/aep-domain/src/requirement.rs
+- confidence: cited
+  path: crates/aep-engine/src/execution.rs
+- confidence: cited
+  path: docs/plan/gap-register.md
+- confidence: cited
+  path: website/docs/concepts/design-principles.md
+- confidence: cited
+  path: website/docs/concepts/evidence.md
+- confidence: cited
+  path: website/docs/status/limitations.md
+revision: 8
 ---
 # Story: Evidence names its subject, and a guard checks it is the one being moved
 

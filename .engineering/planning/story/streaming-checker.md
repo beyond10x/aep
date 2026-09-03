@@ -10,7 +10,12 @@ tags:
 - trace
 relations:
 - decomposes: epic:checker-vocabulary-depth
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/trace-domain
+- confidence: inferred
+  path: crates/trace-spec
+revision: 3
 ---
 # Story: Checking a run while it is still running
 

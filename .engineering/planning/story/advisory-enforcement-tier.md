@@ -11,7 +11,16 @@ tags:
 - enforcement
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 1
+scope:
+- confidence: inferred
+  path: .engineering/checks/run.sh
+- confidence: cited
+  path: crates/aep-domain/src/requirement.rs
+- confidence: inferred
+  path: crates/aep-engine/src/evaluate.rs
+- confidence: cited
+  path: docs/plan/gap-register.md
+revision: 5
 ---
 # Story: A gate that reports and counts, and its written route back to blocking
 

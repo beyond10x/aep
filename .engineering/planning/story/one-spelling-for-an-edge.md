@@ -11,7 +11,16 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 4
+scope:
+- confidence: cited
+  path: crates/aep-backend-markdown
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: cited
+  path: website/docs/reference/cli.md
+revision: 8
 ---
 # Story: One spelling for an edge, and a way to take one back
 

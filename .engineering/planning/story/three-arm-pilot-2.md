@@ -6,7 +6,18 @@ status: draft
 title: 'Pilot 2: every cell re-run on the frozen corpus, with the streams committed'
 relations:
 - decomposes: epic:self-evaluation
-revision: 2
+scope:
+- confidence: cited
+  path: conformance/eval
+- confidence: cited
+  path: conformance/eval/development-honest/expectations.trace.yaml
+- confidence: inferred
+  path: crates/protocol-cli
+- confidence: cited
+  path: docs/plan/eval-program-three-arms.md
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 7
 ---
 # Story: Pilot 2 — every cell re-run on the frozen corpus, with the streams committed
 

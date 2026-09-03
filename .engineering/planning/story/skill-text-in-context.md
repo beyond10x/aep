@@ -10,7 +10,12 @@ tags:
 - trace
 relations:
 - decomposes: epic:checker-vocabulary-depth
-revision: 1
+scope:
+- confidence: cited
+  path: crates/trace-domain
+- confidence: cited
+  path: crates/trace-spec
+revision: 3
 ---
 # Story: An expectation kind for the skill's text entering context
 

@@ -6,7 +6,14 @@ status: draft
 title: A driven run on the native harness can write, so the two arms are comparable
 relations:
 - decomposes: epic:cross-harness-portability
-revision: 2
+scope:
+- confidence: inferred
+  path: crates/aep-driver/src/run.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/drive.rs
+- confidence: cited
+  path: scripts/drive-score
+revision: 5
 ---
 # Story: A driven run on the native harness can write, so the two arms are comparable
 

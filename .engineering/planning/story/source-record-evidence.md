@@ -12,7 +12,14 @@ tags:
 - protocol
 relations:
 - decomposes: epic:ingestion-vocabulary
-revision: 3
+scope:
+- confidence: cited
+  path: CHANGELOG.md
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: docs/guide/open-vocabulary.md
+revision: 6
 ---
 # Story: Where this sentence came from is not an evidence kind
 

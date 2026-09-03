@@ -2,11 +2,18 @@
 format: aep.planning-md/1
 id: story:waves-derived-from-scope
 kind: story
-status: draft
+status: archived
 title: Waves are derived from scope, not paired by hand
 relations:
 - decomposes: epic:adopter-feedback-round-2
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/aep-backend-markdown
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/protocol-cli
+revision: 5
 ---
 # Story: Waves are derived from scope, not paired by hand
 

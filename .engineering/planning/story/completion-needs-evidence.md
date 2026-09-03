@@ -11,7 +11,18 @@ tags:
 - store
 relations:
 - decomposes: epic:evidence-gated-completion
-revision: 2
+scope:
+- confidence: inferred
+  path: crates/aep-engine
+- confidence: cited
+  path: docs/design/story-completion-evidence-design-v0.1.md
+- confidence: cited
+  path: docs/plan/harness-wave-4-governed-dogfood.md
+- confidence: inferred
+  path: principles/development
+- confidence: cited
+  path: profiles/development-standard.yaml
+revision: 7
 ---
 # Story: A story cannot reach `implemented` on somebody's word
 
