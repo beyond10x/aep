@@ -12,6 +12,11 @@ title: The plan-reviewer read the store and wrote nothing into it
 # `tool.absent` over `Write` or `Edit` is deliberately **not** here — the charter grants
 # `[Read, Grep, Glob, Bash]`, so those tools are never offered and such a row is true of every
 # possible run.
+#
+# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
+# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
+# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
+# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
 
 expectations:
   # --- the agent was reached at all ----------------------------------------------------------
@@ -20,7 +25,7 @@ expectations:
     statement: the plugin loaded and offered the plan-reviewer, so a miss is not "it was not there"
     expect:
       env.agent_available:
-        agent: aep-planning:plan-reviewer
+        agent: aep-planning:plan-reviewer  # recorded-under-this-name
 
   - id: a-subagent-actually-ran
     statement: the review went through a subagent rather than being improvised by the parent session

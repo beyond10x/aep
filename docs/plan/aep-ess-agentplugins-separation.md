@@ -57,11 +57,12 @@ The standalone conformance report is an ESS document; it is not an AEP `Evidence
 
 ### Agent plugins
 
-The initial marketplace contains three focused plugins:
+The initial marketplace contains three focused plugins, named by product and verb since
+`agentplugins@a2077d2` (`CHANGELOG.md` carries the full id map):
 
-- `aep-planning`: planning skill, decomposer, plan reviewer and reverse engineer;
-- `adp`: wave coordination, story scoper, implementor and adversary;
-- `ess-schema`: schema validation and deterministic projection guidance.
+- `aep-plan`: planning skill, decomposer, plan reviewer and reverse engineer;
+- `aep-drive`: wave coordination, story scoper, implementor and adversary;
+- `ess-specify`: schema validation and deterministic projection guidance.
 
 Plugin manifests, skills and agent charters contain no obsolete marketplace id, former
 organization identity, `track@agentplugins`, or mixed `aep` install path.

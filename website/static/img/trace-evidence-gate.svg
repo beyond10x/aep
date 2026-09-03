@@ -71,7 +71,7 @@
     <g class="ev1"><text class="t" x="36" y="88">0  session_start</text>
       <text class="dim" x="52" y="102">plugins: [aep]</text></g>
     <g class="ev2"><text class="t" x="36" y="126">5  tool_call  Skill</text>
-      <text class="dim" x="52" y="140">aep-planning:planning → success</text></g>
+      <text class="dim" x="52" y="140">aep-plan:planning → success</text></g>
     <g class="ev3"><text class="t" x="36" y="164">13 tool_call  Bash</text>
       <text class="dim" x="52" y="178">aep artifact new epic …</text></g>
     <g class="ev4"><text class="t" x="36" y="202">14 tool_result  159B</text>

@@ -28,6 +28,35 @@ belongs in the commit message or in `docs/design/`.
   crate names. `cargo install --path crates/edge/protocol-cli` becomes
   `cargo install --path crates/edge/aep-cli`, and `cargo build -p protocol-cli` becomes
   `cargo build -p aep-cli`.
+- **This repository names the renamed agent plugins.** `agentplugins@a2077d2` renamed them by
+  product and verb, and every reference here follows:
+
+  | was | is |
+  |---|---|
+  | plugin `aep-planning` | plugin `aep-plan` |
+  | plugin `adp` | plugin `aep-drive` |
+  | plugin `ess-schema` | plugin `ess-specify`, whose skill is `specify` |
+  | `aep-planning:{planning,story-migration}` | `aep-plan:{planning,story-migration}` |
+  | `aep-planning:{decomposer,plan-reviewer,reverse-engineer,plan-critic-*}` | `aep-plan:…` |
+  | `adp:{drive,wave}`, `adp:{implementor,adversary,story-scoper}` | `aep-drive:…` |
+  | `ess-schema:ess-schema` | `ess-specify:specify` |
+
+  **The wire ids are not plugin names and do not change**: `adp/1`, `aop/1` and the workflow id
+  `adp/default` are what they were.
+- **`EVAL-RUN-018` fires on either spelling of the ESS plugin.** The `ess`-on-`PATH` preflight was
+  keyed on `ess-schema:` alone, so a case whose `subject.skills` named the renamed
+  `ess-specify:specify` sailed past it and a labelled live run would spawn and pay on a runner with
+  no `ess` — its step drafted by hand and never validated. Both prefixes are accepted, for one
+  release, so a case written or recorded under either name still refuses; the refusal names both.
+- **The recordings keep their recorded ids, and say so.** A committed transcript is evidence and is
+  not rewritten, so every expectation row and task statement judged against one keeps the id the run
+  was actually offered, marked `# recorded-under-this-name`:
+  `conformance/trace/expectations.{trace,driven-step}.trace.yaml`,
+  `conformance/eval/{decomposer,plan-reviewer}-charter/{case.yaml,expectations.trace.yaml}`,
+  `crates/observe/trace-spec/tests/{adapter.rs,event_stream.rs}` and `src/check.rs`. One more
+  coordinate is kept deliberately old: `beyond10x/agentplugins@aep-planning@0.4.0` in
+  `crates/edge/aep-cli/tests/eval_run.rs` is a **released** pin, and that release really is named
+  that.
 
 ## [0.50.0] — 2026-09-03
 

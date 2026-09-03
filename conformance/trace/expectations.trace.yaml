@@ -20,6 +20,11 @@ title: The planning plugin behaves as its skill says it does
 # two runs it was written from are committed at `crates/observe/trace-spec/tests/fixtures/`, and
 # `cargo test -p trace-spec` checks this document against both of them — so a bound that stops
 # holding is caught by the gate rather than by a paid eval run.
+#
+# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
+# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
+# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
+# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
 
 expectations:
   # --- the experiment: the environment the run actually got --------------------------------
@@ -73,13 +78,13 @@ expectations:
     statement: the harness offered the plugin's skill — available is not invoked
     expect:
       env.skill_available:
-        skill: aep-planning:planning
+        skill: aep-planning:planning  # recorded-under-this-name
 
   - id: the-decomposer-loaded
     statement: the plugin's agents loaded under the names W1.3's acceptance refers to
     expect:
       env.agent_available:
-        agent: aep-planning:decomposer
+        agent: aep-planning:decomposer  # recorded-under-this-name
 
   # --- what the agent did ---------------------------------------------------------------
 
@@ -88,7 +93,7 @@ expectations:
     # run.sh assertion 3.5, and the strongest claim in the eval.
     expect:
       skill.completed:
-        skill: aep-planning:planning
+        skill: aep-planning:planning  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: consulted-the-skill-before-touching-the-store

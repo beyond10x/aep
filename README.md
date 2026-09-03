@@ -82,10 +82,10 @@ In Claude Code, add the marketplace and install a plugin from it:
 
 ```text
 /plugin marketplace add beyond10x/agentplugins
-/plugin install aep-planning@beyond10x
+/plugin install aep-plan@beyond10x
 ```
 
-`adp@beyond10x` and `ess-schema@beyond10x` install the same way. In Codex, add the same GitHub
+`aep-drive@beyond10x` and `ess-specify@beyond10x` install the same way. In Codex, add the same GitHub
 repository as a marketplace from the Plugins surface and select the plugin there. The install page
 carries the current plugin list and how to pin a release tag.
 

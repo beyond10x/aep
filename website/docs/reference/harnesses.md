@@ -55,7 +55,7 @@ supports:
 
 ```shell-session
 $ METAHARNESS_LIVE=1 aep drive run --project . --map development/default \
-    --plugin-dir /path/to/agentplugins/plugins/aep-planning --pause-on-approval \
+    --plugin-dir /path/to/agentplugins/plugins/aep-plan --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
 ```
 

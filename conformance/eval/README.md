@@ -102,6 +102,17 @@ row would still not decide while now *looking* cross-harness. A selector cannot 
 or `command` there* — design decision D2 keeps boolean combinators out of the matcher language — so
 closing this is a Codex-side case with its own rows, not a wider set.
 
+## A recorded id is not renamed with the plugin
+
+`agentplugins@a2077d2` renamed the plugins by product and verb — `aep-planning` → `aep-plan`, `adp`
+→ `aep-drive`, `ess-schema` → `ess-specify`. A case's `task:` and its expectation rows were **not**
+rewritten wherever the run they describe was recorded before that: `transcript.jsonl` is evidence,
+the ids in it are the ids that session was actually offered, and a row renamed away from them stops
+matching and reports a gap — which reads as a finding about the run and is a finding about nothing.
+Each such line carries `# recorded-under-this-name` and the document says why at its head. A case
+written from here on names the current plugin; a case whose transcript is re-recorded renames with
+it, in the same commit as the recording.
+
 ## Adding a case
 
 ```console

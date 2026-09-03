@@ -35,6 +35,9 @@ verdict: held
 # of `adp/default`, and it is this one. The map and the case agree by construction: if the map's
 # claim is ever edited away, this case's `states:` stops matching what covers it.
 
+# The task statement names `aep-planning:decomposer` because that is the agent id the session in
+# `transcript.jsonl` was actually given, before `agentplugins@a2077d2` renamed the plugin to
+# `aep-plan`. It is what a recording contains, not a sentence a future run is asked: recorded-under-this-name.
 task: |
   Decompose `epic:passkey-sign-in` into the stories that jointly cover it, using the
   `aep-planning:decomposer` agent.

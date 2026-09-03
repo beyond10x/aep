@@ -11,6 +11,11 @@ title: The decomposer stayed inside its charter, read off the run rather than of
 # green against a transcript that carries none of the agent's calls at all. If a harness stops
 # surfacing a subagent's tool calls in the session transcript, the control goes red and this case
 # fails loudly instead of reporting a green wall of vacuous absences.
+#
+# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
+# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
+# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
+# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
 
 expectations:
   # --- the agent was reached at all ----------------------------------------------------------
@@ -19,7 +24,7 @@ expectations:
     statement: the plugin loaded and offered the decomposer, so a miss is not "it was not there"
     expect:
       env.agent_available:
-        agent: aep-planning:decomposer
+        agent: aep-planning:decomposer  # recorded-under-this-name
 
   - id: a-subagent-actually-ran
     statement: the work went through a subagent rather than being done inline by the parent session

@@ -507,7 +507,7 @@ declares, the instrument attests, and the manifest records what both said.
 
 ```bash
 aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
-    --plugin-dir ../agentplugins/aep-planning \
+    --plugin-dir ../agentplugins/aep-plan \
     --plugin bdfinst/agentic-dev-team@dev-team@1.4.0 \
     --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
 ```
@@ -542,7 +542,7 @@ versions; `task install` refreshes that copy.
 | refusal | when |
 |---|---|
 | `EVAL-RUN-017` | the child's `aep` is not this binary's version. Both paths and both versions are named; an absent child `aep` is a printed warning, since a case may not need it |
-| `EVAL-RUN-018` | the case's `subject.skills` names `ess-schema:*` and the child's `PATH` has no `ess` — the step it runs would be drafted by hand and never validated |
+| `EVAL-RUN-018` | the case's `subject.skills` names `ess-specify:*` (or the pre-rename `ess-schema:*`) and the child's `PATH` has no `ess` — the step it runs would be drafted by hand and never validated |
 
 The manifest records **both** facts and keeps them apart: `model` is what the attestation reported
 and `model_requested` is what the run asked for, written immediately after it and only where the run
@@ -552,7 +552,7 @@ folded them into one would have thrown away the only evidence that the pin was h
 
 ```bash
 aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
-    --plugin-dir ../agentplugins/aep-planning --model claude-sonnet-4-6 \
+    --plugin-dir ../agentplugins/aep-plan --model claude-sonnet-4-6 \
     --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
 ```
 

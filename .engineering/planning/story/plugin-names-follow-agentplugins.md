@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:plugin-names-follow-agentplugins
 kind: story
-status: draft
+status: implemented
 title: This repository names the renamed plugins
 summary: Replace every aep-planning, adp and ess-schema reference — the eval.rs ess-on-PATH prefix, eval and trace fixtures, conformance cases, website guides — with aep-plan, aep-drive and ess-specify.
 relations:
@@ -26,7 +26,7 @@ scope:
   path: website/docs/guides
 - confidence: cited
   path: website/docs/reference/harnesses.md
-revision: 3
+revision: 7
 ---
 # Story: This repository names the renamed plugins
 
@@ -47,8 +47,13 @@ names that must follow:
 
 ## Acceptance
 
-`rg 'aep-planning|ess-schema|adp:(wave|drive|implementor|adversary|story-scoper)' --glob '!CHANGELOG.md' --glob '!.engineering' --glob '!docs/plan'`
-returns nothing, and `task check` exits 0 with the eval-run tests passing against the new prefix.
+Every authored reference names the new plugin, skill and agent ids; `EVAL-RUN-018` fires on either
+`ess-specify:` or `ess-schema:` and a test pins both; `task check` exits 0. Recorded
+`metaharness.event/1` transcripts are not rewritten, and every expectation row, task statement or
+quoted report line judged against or describing a recording keeps the recorded spelling under a
+`# recorded-under-this-name` marker (or a prose note in docs), so that `aep trace check` over every
+touched recording pair is byte-identical before and after. The released pin
+`beyond10x/agentplugins@aep-planning@0.4.0` in `tests/eval_run.rs` keeps its name.
 
 ## Notes
 

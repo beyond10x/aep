@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: epic:area-layout
 kind: epic
-status: active
+status: implemented
 title: Crates grouped by bounded context, profiles and CLI named after AEP
 summary: Group the 22 crates into govern, plan, drive, observe, profile and edge; rename adp-domain, aop-domain and protocol-cli after AEP; keep crate names stable in the first step so no consumer re-pins.
 relations:
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 # Epic: Crates grouped by bounded context, profiles and CLI named after AEP
 

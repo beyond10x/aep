@@ -131,7 +131,9 @@ unrepresentable — the shape `infra-spec` uses, for its reason.
 ## W1.3 — `protocol trace check|inspect`, and the published schema
 
 `crates/edge/aep-cli/src/trace.rs`, the binary's second module split, on the criterion the first
-one set.
+one set. The report below is quoted from a 2026-08-21 recording, so the skill it names is
+`aep-planning:planning` — the id that run was offered, before `agentplugins@a2077d2` renamed the
+plugin to `aep-plan`. Recorded under this name; the recording is evidence and is not rewritten.
 
 ```console
 $ protocol trace check --spec …/expectations.trace.yaml --transcript "$WORK/result.jsonl"

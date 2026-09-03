@@ -1886,7 +1886,12 @@ mod tests {
     /// The committed transcript of eval run `7hTYjT`: 36 events, 2026-08-21.
     const SEVEN_H: &[u8] = include_bytes!("../tests/fixtures/plugin-eval-7hTYjT.jsonl");
 
-    /// The skill the eval is about.
+    /// The skill the eval is about, spelled as run `7hTYjT` recorded it.
+    ///
+    /// recorded-under-this-name: `agentplugins@a2077d2` renamed the plugin to `aep-plan`, and this
+    /// is a 2026-08-21 recording. Every id below is the recorded one for the same reason — including
+    /// the `:nonesuch` misses, which are the *recorded* plugin with a skill that is not in it, so
+    /// that a gap proves the matcher reads the skill half and not just the plugin half.
     const SKILL: &str = "aep-planning:planning";
 
     /// The plugin the eval is about.
@@ -2024,7 +2029,7 @@ mod tests {
             ),
             case(
                 ExpectationKind::EnvAgentAvailable {
-                    agent: "aep-planning:decomposer".to_owned(),
+                    agent: "aep-planning:decomposer".to_owned(), // recorded-under-this-name
                 },
                 Verdict::Ok,
             ),

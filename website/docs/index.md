@@ -42,7 +42,7 @@ this repository. They come from the sibling repository `beyond10x/agentplugins`,
 `beyond10x` marketplace, and they are supplied explicitly.
 
 In Claude Code that is `/plugin marketplace add beyond10x/agentplugins` followed by
-`/plugin install aep-planning@beyond10x` (also `adp@beyond10x` and `ess-schema@beyond10x`). In Codex,
+`/plugin install aep-plan@beyond10x` (also `aep-drive@beyond10x` and `ess-specify@beyond10x`). In Codex,
 add the same GitHub repository as a marketplace from the Plugins surface. The
 [agent plugins install page](https://beyond10x.github.io/agentplugins/) carries the current list.
 

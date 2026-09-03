@@ -220,7 +220,7 @@ fn every_verb_can_be_built_and_asked_for_help() {
 
 #[test]
 fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
-    let store = scratch("aep-planning-new");
+    let store = scratch("aep-plan-new");
 
     let created = protocol(&[
         "artifact",
@@ -266,7 +266,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     // reach the file leaves a specification nothing can tie a report to, and a digest accepted on
     // a kind with no model writes a document the frontmatter validator then refuses to read.
     const DIGEST: &str = "8aee51b644a97580e2603ea3c9f57d22ca24d765643f2e0a4e0e6410dbfd1fef";
-    let store = scratch("aep-planning-model-digest");
+    let store = scratch("aep-plan-model-digest");
 
     for (kind, slug) in [
         ("executable-system-specification", "acd-v3"),
@@ -365,7 +365,7 @@ fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_s
     // templates had nothing at all. The seeded section has to name both classes, because an entry
     // nobody can settle from the tree is a `decision-blocker` and an entry somebody can is a
     // citation — and a template that says "undecided" without saying which gets improvised later.
-    let store = scratch("aep-planning-ambiguities");
+    let store = scratch("aep-plan-ambiguities");
     for (kind, name) in [
         ("epic", "seeded-epic"),
         ("story", "seeded-story"),
@@ -422,7 +422,7 @@ fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_s
 
 #[test]
 fn creating_the_same_artifact_twice_is_refused_rather_than_overwriting_it() {
-    let store = scratch("aep-planning-twice");
+    let store = scratch("aep-plan-twice");
     let arguments = [
         "artifact",
         "new",
@@ -459,7 +459,7 @@ fn creating_the_same_artifact_twice_is_refused_rather_than_overwriting_it() {
 
 #[test]
 fn a_legal_move_rewrites_the_document_and_bumps_the_revision() {
-    let store = scratch("aep-planning-move-legal");
+    let store = scratch("aep-plan-move-legal");
     assert_eq!(
         code(&protocol(&[
             "artifact",
@@ -495,11 +495,11 @@ fn a_legal_move_rewrites_the_document_and_bumps_the_revision() {
 
 #[test]
 fn a_body_replacement_preserves_machine_owned_frontmatter() {
-    let store = scratch("aep-planning-body");
+    let store = scratch("aep-plan-body");
     let body = store
         .parent()
         .expect("scratch has a parent")
-        .join("aep-planning-body.md");
+        .join("aep-plan-body.md");
     write(&body, "# Deliberate body\n\nExact bytes.\n");
     assert_eq!(
         code(&protocol(&[
@@ -541,7 +541,7 @@ fn a_body_replacement_preserves_machine_owned_frontmatter() {
 
 #[test]
 fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
-    let store = scratch("aep-planning-body-identical");
+    let store = scratch("aep-plan-body-identical");
     assert_eq!(
         code(&protocol(&[
             "artifact",
@@ -564,7 +564,7 @@ fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
     let source = store
         .parent()
         .expect("scratch has a parent")
-        .join("aep-planning-same-body.md");
+        .join("aep-plan-same-body.md");
     write(&source, body);
 
     let replaced = protocol(&[
@@ -592,7 +592,7 @@ fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
 fn an_illegal_move_exits_one_and_names_every_legal_target() {
     // The refusal has to answer the question it creates. A reader told only "no" goes and opens
     // `artifacts/lifecycles/story.yaml`; a reader told what is legal types the next command.
-    let store = scratch("aep-planning-move-illegal");
+    let store = scratch("aep-plan-move-illegal");
     assert_eq!(
         code(&protocol(&[
             "artifact",
@@ -644,7 +644,7 @@ fn an_illegal_move_exits_one_and_names_every_legal_target() {
 
 #[test]
 fn an_edge_to_an_artifact_the_store_does_not_hold_is_refused() {
-    let store = scratch("aep-planning-dangling");
+    let store = scratch("aep-plan-dangling");
     assert_eq!(
         code(&protocol(&[
             "artifact",
@@ -687,7 +687,7 @@ fn validate_lists_every_problem_in_a_broken_store() {
     // Three problems of three different classes, and an exact count: "some problems" would pass
     // with a validator that reported the first and stopped, which is the failure this whole
     // accumulate-everything shape exists to prevent.
-    let store = scratch("aep-planning-broken");
+    let store = scratch("aep-plan-broken");
     write(
         &store.join("story/good.md"),
         &story("story:good", "draft", ""),
@@ -728,7 +728,7 @@ fn a_store_that_cannot_be_read_whole_is_never_written_to() {
     // The rule that makes the refusal above more than a report: two files claiming one id means
     // whichever one a mutation picked, the other would still be there afterwards saying something
     // different.
-    let store = scratch("aep-planning-unclean-write");
+    let store = scratch("aep-plan-unclean-write");
     write(
         &store.join("story/demo.md"),
         &story("story:demo", "draft", ""),
@@ -980,7 +980,7 @@ fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
 /// fifteen sites assert that store's counts verbatim.
 #[test]
 fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
-    let store = scratch("aep-planning-board-columns");
+    let store = scratch("aep-plan-board-columns");
     let repository = root();
     copy_tree(&repository.join(FIXTURE), &store);
     let at = printable(&store);
@@ -1101,8 +1101,8 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
 /// `credential-blocker` at `open` still has nowhere to go.
 #[test]
 fn every_artifact_the_board_lists_lands_in_a_column() {
-    let store = scratch("aep-planning-board-totality");
-    let bare = scratch("aep-planning-board-bare-root");
+    let store = scratch("aep-plan-board-totality");
+    let bare = scratch("aep-plan-board-bare-root");
     let repository = root();
     let at = printable(&store);
     let tree = printable(&repository);
@@ -1160,7 +1160,7 @@ fn every_artifact_the_board_lists_lands_in_a_column() {
 /// other rung, so shortest-distance-from-`initial` puts the end of the ladder third.
 #[test]
 fn the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it() {
-    let store = scratch("aep-planning-board-terminal-rung");
+    let store = scratch("aep-plan-board-terminal-rung");
     let repository = root();
     let at = printable(&store);
     let tree = printable(&repository);
@@ -1214,8 +1214,8 @@ fn the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it() {
 fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store() {
     let repository = root();
     let tree = printable(&repository);
-    let alone = scratch("aep-planning-board-adrs-alone");
-    let shared = scratch("aep-planning-board-adrs-and-a-story");
+    let alone = scratch("aep-plan-board-adrs-alone");
+    let shared = scratch("aep-plan-board-adrs-and-a-story");
 
     for store in [&alone, &shared] {
         let at = printable(store);
@@ -1301,8 +1301,8 @@ fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store()
 /// pretending the store is smaller than it is, is not.
 #[test]
 fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
-    let store = scratch("aep-planning-board-broken-ladder-store");
-    let tree = scratch("aep-planning-board-broken-ladder-root");
+    let store = scratch("aep-plan-board-broken-ladder-store");
+    let tree = scratch("aep-plan-board-broken-ladder-root");
     let repository = root();
     let at = printable(&store);
     copy_tree(&repository.join("artifacts"), &tree.join("artifacts"));
@@ -1365,8 +1365,8 @@ fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
 /// one.
 #[test]
 fn a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it() {
-    let tree = scratch("aep-planning-board-cycle-without-initial-root");
-    let store = scratch("aep-planning-board-cycle-without-initial-store");
+    let tree = scratch("aep-plan-board-cycle-without-initial-root");
+    let store = scratch("aep-plan-board-cycle-without-initial-store");
     let at = printable(&store);
     write(
         &tree.join("artifacts/lifecycles/charter.yaml"),
@@ -1448,7 +1448,7 @@ fn a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
-    let tree = scratch("aep-planning-board-shared-rungs-root");
+    let tree = scratch("aep-plan-board-shared-rungs-root");
     write(
         &tree.join("artifacts/lifecycles/checklist.yaml"),
         "kind: checklist\n\
@@ -1470,8 +1470,8 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
     );
     let tree = printable(&tree);
 
-    let alone = scratch("aep-planning-board-checklist-alone");
-    let shared = scratch("aep-planning-board-checklist-and-escalation");
+    let alone = scratch("aep-plan-board-checklist-alone");
+    let shared = scratch("aep-plan-board-checklist-and-escalation");
     for store in [&alone, &shared] {
         let at = printable(store);
         for name in ["one", "two", "three", "four"] {
@@ -1583,7 +1583,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
 /// the compiled list, and the compiled list is the thing the acceptance says decides it.
 #[test]
 fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_ladder() {
-    let store = scratch("aep-planning-board-undeclared-kind-order");
+    let store = scratch("aep-plan-board-undeclared-kind-order");
     let repository = root();
     let at = printable(&store);
     let tree = printable(&repository);
@@ -1773,7 +1773,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
     // The store and its governing documents are one project configuration. Before this regression,
     // store discovery honored `project.yaml` while lifecycle and template discovery silently used
     // the working directory instead.
-    let fixture = scratch("aep-planning-configured-tree");
+    let fixture = scratch("aep-plan-configured-tree");
     let project = fixture.join("project");
     let nested = project.join("crates/example");
     let configured = fixture.join("tree");
@@ -1863,7 +1863,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
 
 #[test]
 fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() {
-    let fixture = scratch("aep-planning-git-source");
+    let fixture = scratch("aep-plan-git-source");
     let remote = fixture.join("remote");
     let project = fixture.join("project");
     let cache = fixture.join("cache");
@@ -1957,7 +1957,7 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
 
 #[test]
 fn outside_a_project_the_missing_store_says_what_to_pass() {
-    let elsewhere = scratch("aep-planning-not-a-project");
+    let elsewhere = scratch("aep-plan-not-a-project");
     let output = protocol_in(&elsewhere, &["artifact", "list"]);
     assert_eq!(code(&output), 1);
     let said = stderr(&output);
@@ -1969,7 +1969,7 @@ fn outside_a_project_the_missing_store_says_what_to_pass() {
 fn the_vocabulary_verbs_answer_without_a_store() {
     // `kinds` and `relations` are questions about the vocabulary. Refusing them because the working
     // directory is not a project would be refusing for a reason unrelated to the question.
-    let elsewhere = scratch("aep-planning-vocabulary");
+    let elsewhere = scratch("aep-plan-vocabulary");
 
     let kinds = protocol_in(&elsewhere, &["artifact", "kinds"]);
     assert_eq!(code(&kinds), 0, "{}", stderr(&kinds));
@@ -2115,7 +2115,7 @@ fn the_command_only_scan_sees_a_write_it_should_refuse() {
 /// serves — and `serves` points at an objective and nothing else.
 #[test]
 fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
-    let store = scratch("aep-planning-serves");
+    let store = scratch("aep-plan-serves");
     // No objective declared: an active story that serves nothing is not a problem.
     write(
         &store.join("story/agreed.md"),
@@ -2187,10 +2187,10 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
     // `body` was refused as immutable, and `move --to archived` — the one transition the kind's
     // lifecycle declares — was refused by the same guard. Three refusals, no legal path, and the
     // review ended up in a `docs/reviews/` directory the kind exists to replace.
-    let store = scratch("aep-planning-review-result");
+    let store = scratch("aep-plan-review-result");
     // Beside the store, not in it: a loose markdown file inside the tree is a document that cannot
     // be read, and `new` refuses to write into a store it cannot read whole.
-    let drafts = scratch("aep-planning-review-result-drafts");
+    let drafts = scratch("aep-plan-review-result-drafts");
     let review = drafts.join("review.md");
     write(
         &review,
@@ -2308,7 +2308,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
 
 #[test]
 fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
-    let store = scratch("aep-planning-new-stdin");
+    let store = scratch("aep-plan-new-stdin");
     let created = protocol_with_stdin(
         &[
             "artifact",
@@ -2354,7 +2354,7 @@ fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
-    let store = scratch("aep-planning-blocked");
+    let store = scratch("aep-plan-blocked");
     let at = printable(&store);
     let root = root();
     let root = printable(&root);
@@ -2551,7 +2551,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
 /// through the document — which is the part the domain's unit test cannot show.
 #[test]
 fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
-    let store = scratch("aep-planning-withholds");
+    let store = scratch("aep-plan-withholds");
     let at = printable(&store);
     let root = root();
     let root = printable(&root);
@@ -2677,8 +2677,8 @@ fn last_journal_line(store: &Path) -> String {
 fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
     let repository = root();
     let tree = printable(&repository);
-    let one_word = scratch("aep-planning-relate-one-word");
-    let three_words = scratch("aep-planning-relate-three-words");
+    let one_word = scratch("aep-plan-relate-one-word");
+    let three_words = scratch("aep-plan-relate-three-words");
     copy_tree(&repository.join(FIXTURE), &one_word);
     copy_tree(&repository.join(FIXTURE), &three_words);
 
@@ -2771,12 +2771,12 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
 fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
     let repository = root();
     let tree = printable(&repository);
-    let store = scratch("aep-planning-body-parts");
+    let store = scratch("aep-plan-body-parts");
     copy_tree(&repository.join(FIXTURE), &store);
     let at = printable(&store);
     let scratch_root = store.parent().expect("scratch has a parent").to_path_buf();
 
-    let addition = scratch_root.join("aep-planning-body-append.md");
+    let addition = scratch_root.join("aep-plan-body-append.md");
     write(
         &addition,
         "## Risks\n\nThe authenticator may lie about its sign count.\n",
@@ -2823,7 +2823,7 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
         last_journal_line(&store)
     );
 
-    let replacement = scratch_root.join("aep-planning-body-section.md");
+    let replacement = scratch_root.join("aep-plan-body-section.md");
     write(&replacement, "Verify the signature, and nothing else.\n");
     let sectioned = protocol(&[
         "artifact",
@@ -2954,7 +2954,7 @@ fn show_body_only_prints_the_bytes_body_from_would_write_back() {
 fn a_reference_reaches_the_file_and_a_query_finds_it() {
     let repository = root();
     let tree = printable(&repository);
-    let store = scratch("aep-planning-refs");
+    let store = scratch("aep-plan-refs");
     copy_tree(&repository.join(FIXTURE), &store);
     let at = printable(&store);
     let document = store.join("task/assertion-verification.md");
@@ -3059,7 +3059,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
 fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
     let repository = root();
     let tree = printable(&repository);
-    let store = scratch("aep-planning-set");
+    let store = scratch("aep-plan-set");
     copy_tree(&repository.join(FIXTURE), &store);
     let at = printable(&store);
     let document = store.join("task/assertion-verification.md");
@@ -3217,7 +3217,7 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
 fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
     let repository = root();
     let tree = printable(&repository);
-    let store = scratch("aep-planning-move-grounding");
+    let store = scratch("aep-plan-move-grounding");
     let at = printable(&store);
 
     write(
@@ -3297,7 +3297,7 @@ fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
 /// moved.
 #[test]
 fn strict_validate_fails_on_what_plain_validate_only_reports() {
-    let store = scratch("aep-planning-strict");
+    let store = scratch("aep-plan-strict");
     let at = printable(&store);
     let make = |args: &[&str]| {
         let output = protocol_in(&root(), args);
@@ -3375,7 +3375,7 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
 /// somebody meant that.
 #[test]
 fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
-    let store = scratch("aep-planning-empty-body");
+    let store = scratch("aep-plan-empty-body");
     let at = printable(&store);
     assert_eq!(
         code(&protocol(&[
@@ -3405,7 +3405,7 @@ fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
     let blank = store
         .parent()
         .expect("scratch has a parent")
-        .join("aep-planning-blank-body.md");
+        .join("aep-plan-blank-body.md");
     write(&blank, "\n  \n\t\n");
     let from_file = protocol(&[
         "artifact",
@@ -3493,8 +3493,8 @@ fn kinds_lists_the_ladders_a_store_declares_and_the_open_blocker_family() {
 #[test]
 fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
     let repository = root();
-    let store = scratch("aep-planning-blocked-no-ladder");
-    let bare = scratch("aep-planning-blocked-bare-tree");
+    let store = scratch("aep-plan-blocked-no-ladder");
+    let bare = scratch("aep-plan-blocked-bare-tree");
     copy_tree(&repository.join(FIXTURE), &store);
     let at = printable(&store);
 
@@ -3570,7 +3570,7 @@ fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
 /// workaround you have to already know. One retry per session, in three sessions.
 #[test]
 fn a_title_and_a_summary_may_begin_with_a_dash() {
-    let store = scratch("aep-planning-hyphen-values");
+    let store = scratch("aep-plan-hyphen-values");
     let at = printable(&store);
     let created = protocol(&[
         "artifact",
@@ -3671,8 +3671,8 @@ fn a_listing_says_no_relations_with_an_empty_list_rather_than_by_omission() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
-    let tree = scratch("aep-planning-via-root");
-    let store = scratch("aep-planning-via-store");
+    let tree = scratch("aep-plan-via-root");
+    let store = scratch("aep-plan-via-store");
     let at = printable(&store);
     write(
         &tree.join("artifacts/lifecycles/charter.yaml"),
@@ -3850,8 +3850,8 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
 /// a store that does not exist. The moves come first, then the reason.
 #[test]
 fn a_walk_refused_at_its_last_rung_still_reports_the_hop_it_made() {
-    let tree = scratch("aep-planning-partial-root");
-    let store = scratch("aep-planning-partial-store");
+    let tree = scratch("aep-plan-partial-root");
+    let store = scratch("aep-plan-partial-store");
     let at = printable(&store);
     // The gate is on the **last** rung, so the pre-walk crosses `triage` and the refusal lands
     // after a hop has already been written.
@@ -3917,7 +3917,7 @@ fn a_walk_refused_at_its_last_rung_still_reports_the_hop_it_made() {
 /// line in a lifecycle document; there is no reason to be refused to see it.
 #[test]
 fn explain_ends_with_what_each_legal_next_rung_costs() {
-    let store = scratch("aep-planning-explain-next");
+    let store = scratch("aep-plan-explain-next");
     let at = printable(&store);
     let run = |args: &[&str]| {
         let output = protocol(args);
@@ -4001,7 +4001,7 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
 /// someone who does not have the word.
 #[test]
 fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
-    let store = scratch("aep-planning-evidence-kind-hint");
+    let store = scratch("aep-plan-evidence-kind-hint");
     let at = printable(&store);
     assert_eq!(
         code(&protocol(&[
@@ -4128,8 +4128,8 @@ fn subject_epic(store: &Path) {
 
 #[test]
 fn a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_array() {
-    let store = scratch("aep-planning-findings-parsed");
-    let drafts = scratch("aep-planning-findings-parsed-drafts");
+    let store = scratch("aep-plan-findings-parsed");
+    let drafts = scratch("aep-plan-findings-parsed-drafts");
     subject_epic(&store);
     review_of(
         &store,
@@ -4191,8 +4191,8 @@ fn a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_a
 
 #[test]
 fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
-    let store = scratch("aep-planning-findings-malformed");
-    let drafts = scratch("aep-planning-findings-malformed-drafts");
+    let store = scratch("aep-plan-findings-malformed");
+    let drafts = scratch("aep-plan-findings-malformed-drafts");
     subject_epic(&store);
 
     // `severity: catastrophic` is not in the vocabulary. The fence opens on body line 5, so the
@@ -4235,8 +4235,8 @@ fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
 
 #[test]
 fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
-    let store = scratch("aep-planning-findings-absent");
-    let drafts = scratch("aep-planning-findings-absent-drafts");
+    let store = scratch("aep-plan-findings-absent");
+    let drafts = scratch("aep-plan-findings-absent-drafts");
     subject_epic(&store);
     review_of(
         &store,
@@ -4263,8 +4263,8 @@ fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
 
 #[test]
 fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
-    let store = scratch("aep-planning-findings-ledger");
-    let drafts = scratch("aep-planning-findings-ledger-drafts");
+    let store = scratch("aep-plan-findings-ledger");
+    let drafts = scratch("aep-plan-findings-ledger-drafts");
     subject_epic(&store);
 
     // The first attack: two findings.
@@ -4354,8 +4354,8 @@ fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
 
 #[test]
 fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_review() {
-    let store = scratch("aep-planning-findings-chosen");
-    let drafts = scratch("aep-planning-findings-chosen-drafts");
+    let store = scratch("aep-plan-findings-chosen");
+    let drafts = scratch("aep-plan-findings-chosen-drafts");
     subject_epic(&store);
     review_of(
         &store,
@@ -4421,8 +4421,8 @@ fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_re
 
 #[test]
 fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
-    let store = scratch("aep-planning-findings-unrelated");
-    let drafts = scratch("aep-planning-findings-unrelated-drafts");
+    let store = scratch("aep-plan-findings-unrelated");
+    let drafts = scratch("aep-plan-findings-unrelated-drafts");
     subject_epic(&store);
     let other = protocol(&[
         "artifact",
@@ -4504,7 +4504,7 @@ fn a_store_with_two_reviews(name: &str) -> (PathBuf, PathBuf) {
 
 #[test]
 fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the_review() {
-    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome");
+    let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome");
 
     let recorded = protocol(&[
         "artifact",
@@ -4579,7 +4579,7 @@ fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the
 
 #[test]
 fn a_review_outcome_naming_a_review_of_something_else_is_refused() {
-    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-unrelated");
+    let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome-unrelated");
 
     let refused = protocol(&[
         "artifact",
@@ -4625,7 +4625,7 @@ fn a_review_outcome_naming_a_review_of_something_else_is_refused() {
 
 #[test]
 fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
-    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-flags");
+    let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome-flags");
     let at = printable(&store);
 
     // The kind without the two things it is made of.
@@ -4698,7 +4698,7 @@ fn the_evidence_help_names_the_review_outcome_kind_and_what_it_needs() {
 
 #[test]
 fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_flag() {
-    let (store, _drafts) = a_store_with_two_reviews("aep-planning-review-outcome-validate");
+    let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome-validate");
     let at = printable(&store);
 
     // Nothing is old enough at the default, so nothing is said about outcomes.
@@ -4820,8 +4820,8 @@ fn review_by(
 #[allow(clippy::too_many_lines)]
 #[test]
 fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_cost() {
-    let store = scratch("aep-planning-review-value");
-    let drafts = scratch("aep-planning-review-value-drafts");
+    let store = scratch("aep-plan-review-value");
+    let drafts = scratch("aep-plan-review-value-drafts");
     subject_epic(&store);
 
     let manifest = drafts.join("attack.manifest.yaml");
@@ -4994,8 +4994,8 @@ fn review_value_says_in_eval_matrixs_own_words_why_it_computes_no_score() {
 
 #[test]
 fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
-    let store = scratch("aep-planning-review-value-since");
-    let drafts = scratch("aep-planning-review-value-since-drafts");
+    let store = scratch("aep-plan-review-value-since");
+    let drafts = scratch("aep-plan-review-value-since-drafts");
     subject_epic(&store);
     review_by(
         &store,
@@ -5055,7 +5055,7 @@ fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
 /// reference names, and every cost it could report was `unknown` because of this.
 #[test]
 fn a_reference_given_at_new_is_written_to_the_document() {
-    let store = scratch("aep-planning-new-ref");
+    let store = scratch("aep-plan-new-ref");
     let created = protocol(&[
         "artifact",
         "new",
@@ -5101,7 +5101,7 @@ fn a_reference_given_at_new_is_written_to_the_document() {
 /// produced most of its rows.
 #[test]
 fn review_value_falls_back_to_a_reviewer_key_when_the_review_has_no_owner() {
-    let store = scratch("aep-planning-review-value-reviewer-key");
+    let store = scratch("aep-plan-review-value-reviewer-key");
     write(
         &store.join("epic/e.md"),
         "---\nformat: aep.planning-md/1\nid: epic:e\nkind: epic\nstatus: draft\ntitle: E\n\

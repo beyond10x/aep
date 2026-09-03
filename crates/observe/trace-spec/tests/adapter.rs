@@ -203,12 +203,15 @@ fn the_opening_record_says_which_model_which_permissions_and_which_plugin() {
         .as_ref()
         .expect("skills were recorded")
         .iter()
+        // recorded-under-this-name: the plugin is `aep-plan` since `agentplugins@a2077d2`, and
+        // this is a 2026-08-21 recording, so the id it offered is the one it offered.
         .any(|skill| skill == "aep-planning:planning"));
     assert!(start
         .agents
         .as_ref()
         .expect("agents were recorded")
         .iter()
+        // recorded-under-this-name, for the same reason.
         .any(|agent| agent == "aep-planning:decomposer"));
 }
 
@@ -225,7 +228,7 @@ fn the_skill_call_and_the_result_it_was_answered_with_are_one_pair() {
     // and this is the claim the eval's grep was reaching for and could not state.
     assert_eq!(
         call.argument("skill").and_then(Value::as_str),
-        Some("aep-planning:planning")
+        Some("aep-planning:planning") // recorded-under-this-name
     );
 
     let (_, result) = ir
@@ -233,7 +236,7 @@ fn the_skill_call_and_the_result_it_was_answered_with_are_one_pair() {
         .expect("the call was correlated to its result by TraceIr::new, not by the adapter");
     assert_eq!(
         result.field("commandName").and_then(Value::as_str),
-        Some("aep-planning:planning")
+        Some("aep-planning:planning") // recorded-under-this-name
     );
     assert_eq!(
         result.field("success").and_then(Value::as_bool),

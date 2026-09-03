@@ -525,7 +525,7 @@ fn spawn_args<'a>(out: &'a Path, cwd: &'a Path, extra: &[&'a str]) -> Vec<&'a st
         "--cwd",
         printable(cwd),
         "--plugin-dir",
-        "/plugins/aep-planning",
+        "/plugins/aep-plan",
         "--out",
         printable(out),
         "--redact",
@@ -819,7 +819,7 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
     assert!(
         words
             .windows(2)
-            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-plan"]),
         "arm b's treatment is the explicitly named plugin: {words:?}"
     );
     let prompt = words.last().expect("the prompt is the last argument");
@@ -1036,7 +1036,7 @@ fn the_cap_stops_the_sweep_before_the_run_that_would_pass_it() {
             "--cwd",
             printable(&cwd),
             "--plugin-dir",
-            "/plugins/aep-planning",
+            "/plugins/aep-plan",
             "--out",
             printable(&out),
             "--budget-usd",
@@ -1091,6 +1091,13 @@ fn synthetic_digest(pair: &str) -> String {
 const DIRECTORY_DIGEST: &str = "7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332";
 
 /// The two marketplace spellings these tests declare, in the order they are declared.
+///
+/// `aep-planning@0.4.0` keeps the old plugin name deliberately: it is a **released** pin, and
+/// `beyond10x/agentplugins` really did publish `aep-planning` at `0.4.0` — the rename to `aep-plan`
+/// landed at `agentplugins@a2077d2`, long after. Rewriting this to `aep-plan@0.4.0` would name a
+/// release that was never cut, and the whole point of these tests is that a declared pin matches
+/// what metaharness attests byte for byte. A pin an operator would type *today* is exercised in
+/// `src/eval.rs`'s `a_pinned_plugin_reaches_the_argv_with_the_bytes_the_operator_wrote`.
 const AEP_PLANNING: &str = "beyond10x/agentplugins@aep-planning@0.4.0";
 const DEV_TEAM: &str = "bdfinst/agentic-dev-team@dev-team@1.4.0";
 
@@ -1139,7 +1146,7 @@ fn stream_attesting(directory: &Path, name: &str, entries: serde_json::Value) ->
 fn directory_entry() -> serde_json::Value {
     serde_json::json!({
         "name": "aep",
-        "source": "/plugins/aep-planning",
+        "source": "/plugins/aep-plan",
         "installed_at": "/plugins/aep",
         "loaded_by": "--plugin-dir /plugins/aep",
         "digest": DIRECTORY_DIGEST,
@@ -1211,7 +1218,7 @@ fn a_spawn_forwards_every_pinned_plugin_verbatim_and_the_manifest_keeps_them_apa
     assert!(
         words
             .windows(2)
-            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-plan"]),
         "the two mechanisms combine rather than exclude each other: {words:?}"
     );
     let forwarded: Vec<&String> = words
@@ -1264,7 +1271,7 @@ fn an_unpinned_plugin_is_refused_before_anything_is_spawned_in_metaharness_own_w
                 "--budget-usd",
                 "1.00",
                 "--plugin",
-                "beyond10x/agentplugins@aep-planning",
+                "beyond10x/agentplugins@aep-plan",
             ],
         ),
         &[

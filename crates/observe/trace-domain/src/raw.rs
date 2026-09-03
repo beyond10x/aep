@@ -2416,7 +2416,7 @@ expectations:
   - id: skill-completed
     expect:
       skill.completed:
-        skill: "aep-planning:planning"
+        skill: "aep-plan:planning"
         count: {at_least: 1}
 
   - id: created-through-the-cli
@@ -2483,7 +2483,7 @@ expectations:
     { "id": "billed-to-the-session",
       "expect": { "env.api_key_source": { "equals": "none" } } },
     { "id": "skill-completed",
-      "expect": { "skill.completed": { "skill": "aep-planning:planning",
+      "expect": { "skill.completed": { "skill": "aep-plan:planning",
                                        "count": { "at_least": 1 } } } },
     { "id": "created-through-the-cli",
       "expect": { "tool.called": { "tool": "Bash",

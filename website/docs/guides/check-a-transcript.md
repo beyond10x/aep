@@ -127,7 +127,11 @@ there is — `{contains: ""}`, `{glob: "*"}`, `{regex: ".*"}` — is refused und
 expectation that can only report `ok` is a check that stopped checking.
 
 The report is one row per expectation and this specification declares forty-two, so the command
-below takes the first twelve lines rather than abridging by hand:
+below takes the first twelve lines rather than abridging by hand. The rows name
+`aep-planning:planning` and `aep-planning:decomposer`: the plugin is `aep-plan` since
+`agentplugins@a2077d2`, and this is the output of checking a transcript recorded before the rename,
+quoted as it was printed. The recording is evidence and is not rewritten, so the specification's own
+rows keep the recorded ids too, each marked `# recorded-under-this-name`.
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
@@ -296,7 +300,7 @@ format is published as `schemas/generated/trace-spec.schema.json`; the worked sp
 against two committed transcripts by the ordinary test suite. Design and acceptance:
 `docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
 The driver is `crates/drive/aep-driver` behind `aep drive`, its enforcement arm is the plugin's
-hooks (`/path/to/agentplugins/plugins/aep-planning/README.md` § *The hooks, and what changed about "no hooks"*), and
+hooks (`/path/to/agentplugins/plugins/aep-plan/README.md` § *The hooks, and what changed about "no hooks"*), and
 the governed-run record is `docs/plan/harness-wave-4-governed-dogfood.md`. For building a driver of
 your own against the same engine calls, see [Integrate an agent
 harness](./integrate-a-harness.md).

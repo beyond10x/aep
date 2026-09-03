@@ -2064,7 +2064,8 @@ enum RunRefusal {
         /// The `PATH` the child gets.
         child_path: String,
     },
-    /// A case's subject names an `ess-schema` skill and the child's `PATH` has no `ess`.
+    /// A case's subject names an `ess-specify` (or `ess-schema`) skill and the child's `PATH` has
+    /// no `ess`.
     ChildEssMissing {
         /// The case.
         case: String,
@@ -2223,10 +2224,11 @@ impl fmt::Display for RunRefusal {
             ),
             Self::ChildEssMissing { case, child_path } => write!(
                 f,
-                "case `{case}` names an `ess-schema` skill in its subject, and the child's PATH \
+                "case `{case}` names an {spellings} skill in its subject, and the child's PATH \
                  ({child_path}) has no `ess`: the step that skill runs would be drafted by hand and \
                  never validated, which is what the 2026-09-03 recording showed. Put `ess` on \
-                 ~/.local/bin (a symlink to ~/.cargo/bin/ess is enough) and run again"
+                 ~/.local/bin (a symlink to ~/.cargo/bin/ess is enough) and run again",
+                spellings = ess_skill_prefixes_phrase()
             ),
             Self::PluginOnRawArm { plugin } => write!(
                 f,
@@ -2573,6 +2575,26 @@ impl fmt::Display for StreamRefusal {
 /// The format claim an eval case carries.
 const CASE_FORMAT: &str = "eval-case/1";
 
+/// The `subject.skills` prefixes whose skill runs `ess` inside the session.
+///
+/// Two spellings for one plugin, and both are load-bearing. `ess-specify:` is the current id;
+/// `ess-schema:` is what the plugin was called before `agentplugins@a2077d2` renamed it, and every
+/// case authored or recorded under the old name still spells it that way. `EVAL-RUN-018` exists to
+/// stop a live spawn paying for a session whose `ess` step would be drafted by hand and never
+/// validated, so it has to fire on whichever spelling the case in front of it happens to use —
+/// dropping the old one would silently switch the preflight off for the corpus that already exists.
+///
+/// The matcher, the refusal a person reads, and the test that holds them together all read this
+/// list, so a third spelling is one edit and cannot be added to one of the three alone.
+const ESS_SKILL_PREFIXES: [&str; 2] = ["ess-specify:", "ess-schema:"];
+
+/// Every spelling in [`ESS_SKILL_PREFIXES`], as a phrase for the refusal message.
+fn ess_skill_prefixes_phrase() -> String {
+    ESS_SKILL_PREFIXES
+        .map(|prefix| format!("`{prefix}`"))
+        .join(" or ")
+}
+
 // --- the case ------------------------------------------------------------------------------------
 
 /// An eval case as it is written down.
@@ -2616,7 +2638,8 @@ struct Case {
     task: String,
     /// The document it is judged by.
     expectations: PathBuf,
-    /// Whether the case's subject names an `ess-schema` skill, whose step runs `ess` in the session.
+    /// Whether the case's subject names a skill under one of [`ESS_SKILL_PREFIXES`], whose step
+    /// runs `ess` in the session.
     needs_ess: bool,
 }
 
@@ -2639,7 +2662,13 @@ fn read_case(directory: &Path) -> Result<Case> {
         .subject
         .as_ref()
         .and_then(|subject| subject.skills.as_ref())
-        .is_some_and(|skills| skills.iter().any(|skill| skill.starts_with("ess-schema:")));
+        .is_some_and(|skills| {
+            skills.iter().any(|skill| {
+                ESS_SKILL_PREFIXES
+                    .iter()
+                    .any(|prefix| skill.starts_with(prefix))
+            })
+        });
 
     let mut refusals = Vec::new();
     if raw.format.as_deref() != Some(CASE_FORMAT) {
@@ -4901,7 +4930,7 @@ observed_at: 2026-08-23
             directory.join("case.yaml"),
             "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
              task: draft the domain\nexpectations: expectations.trace.yaml\n\
-             subject:\n  skills: [aep-planning:planning, ess-schema:ess-schema]\n",
+             subject:\n  skills: [aep-plan:planning, ess-specify:specify]\n",
         )
         .expect("written");
         let case = read_case(&directory).expect("a case");
@@ -4914,6 +4943,69 @@ observed_at: 2026-08-23
         )
         .expect("written");
         assert!(!read_case(&directory).expect("a case").needs_ess);
+    }
+
+    #[test]
+    fn both_spellings_of_the_ess_plugin_trip_the_preflight() {
+        // The plugin was renamed `ess-schema` → `ess-specify` in `agentplugins@a2077d2`. A
+        // preflight keyed on one spelling is a preflight that stops firing the day a case is
+        // written under the other, and the case that stops firing is the one that spawns and pays
+        // on a runner with no `ess` — which is the hazard the agentplugins adversary recorded
+        // against this exact line on 2026-09-03. Both spellings, one loop, so a third never gets
+        // added to the matcher without a case here.
+        let directory = std::env::temp_dir().join("aep-eval-case-needs-ess-both-spellings");
+        std::fs::remove_dir_all(&directory).ok();
+        std::fs::create_dir_all(&directory).expect("scratch");
+        assert!(
+            ESS_SKILL_PREFIXES.contains(&"ess-specify:")
+                && ESS_SKILL_PREFIXES.contains(&"ess-schema:"),
+            "the current id and the one the corpus was authored under, both: {ESS_SKILL_PREFIXES:?}"
+        );
+        for prefix in ESS_SKILL_PREFIXES {
+            let skill = format!("{prefix}a-skill");
+            std::fs::write(
+                directory.join("case.yaml"),
+                format!(
+                    "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
+                     task: draft the domain\nexpectations: expectations.trace.yaml\n\
+                     subject:\n  skills: [aep-plan:planning, {skill}]\n"
+                ),
+            )
+            .expect("written");
+            assert!(
+                read_case(&directory).expect("a case").needs_ess,
+                "`{skill}` names the plugin whose step runs `ess`, so the case needs `ess`"
+            );
+        }
+
+        // A skill whose plugin merely starts with the same letters is not that plugin.
+        std::fs::write(
+            directory.join("case.yaml"),
+            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
+             task: draft the domain\nexpectations: expectations.trace.yaml\n\
+             subject:\n  skills: [ess-specifier:specify]\n",
+        )
+        .expect("written");
+        assert!(
+            !read_case(&directory).expect("a case").needs_ess,
+            "the prefix is `<plugin>:`, not a bare stem"
+        );
+
+        // The person who reads the refusal has to be able to tell which spelling tripped it, so
+        // the message names every spelling the matcher accepts.
+        let refusal = RunRefusal::ChildEssMissing {
+            case: "a-case".to_owned(),
+            child_path: "/usr/bin".to_owned(),
+        }
+        .to_string();
+        assert!(refusal.starts_with("EVAL-RUN-018"), "{refusal}");
+        for spelling in ESS_SKILL_PREFIXES {
+            assert!(
+                refusal.contains(spelling),
+                "the refusal names `{spelling}`, which is one of the spellings that trips it: \
+                 {refusal}"
+            );
+        }
     }
 
     fn plan_of(arm: Arm, harness: Harness) -> Plan {
@@ -4940,10 +5032,17 @@ observed_at: 2026-08-23
         // last two `@` and [`fmt::Display`] rejoins on them, which round-trips exactly — including
         // a repository spelling that is not `owner/repo` and a commit pin, neither of which this
         // runner interprets.
+        //
+        // The pin is a plugin an operator could install today: `aep-plan` at `agentplugins@a2077d2`,
+        // the commit that renamed it. A coordinate naming the old `aep-planning` would still
+        // round-trip — this runner resolves nothing — but it would model an install nobody can
+        // make, and the only such coordinate in the suite is the released `@0.4.0` pin in
+        // `tests/eval_run.rs`, which is kept old on purpose because that release really is named
+        // that.
         let mut plan = plan_of(Arm::Plugin, Harness::Claude);
         for given in [
             "bdfinst/agentic-dev-team@dev-team@1.4.0",
-            "beyond10x/agentplugins@aep-planning@21147b7667dfaefcfa45a094e9542891b1783541",
+            "beyond10x/agentplugins@aep-plan@a2077d25a7d56fd34a4d8a0f37b0a152c39ad7ab",
         ] {
             plan.plugins
                 .push(MarketplacePlugin::parse(given).expect("a pinned spelling"));
@@ -4953,7 +5052,7 @@ observed_at: 2026-08-23
             "metaharness",
             Path::new("/work/subject"),
             "do the thing",
-            Some(Path::new("/plugins/aep-planning")),
+            Some(Path::new("/plugins/aep-plan")),
             None,
         None,
     );
@@ -4967,13 +5066,13 @@ observed_at: 2026-08-23
             forwarded,
             vec![
                 "bdfinst/agentic-dev-team@dev-team@1.4.0",
-                "beyond10x/agentplugins@aep-planning@21147b7667dfaefcfa45a094e9542891b1783541"
+                "beyond10x/agentplugins@aep-plan@a2077d25a7d56fd34a4d8a0f37b0a152c39ad7ab"
             ],
             "the operator's bytes, in the operator's order: {argv:?}"
         );
         assert!(
             argv.windows(2)
-                .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+                .any(|pair| pair == ["--plugin-dir", "/plugins/aep-plan"]),
             "beside the directory rather than instead of it: {argv:?}"
         );
     }
@@ -5015,7 +5114,7 @@ observed_at: 2026-08-23
             "metaharness",
             &tree,
             "do it",
-            Some(Path::new("/plugins/aep-planning")),
+            Some(Path::new("/plugins/aep-plan")),
             Some("claude-sonnet-4-6"),
         None,
     );
@@ -5046,14 +5145,14 @@ observed_at: 2026-08-23
         // Two segments name a plugin whose contents can change between two runs that both claim to
         // have used it. metaharness refuses it at parse; this refuses it before the spawn, with the
         // same sentence, so an operator does not read two different explanations of one mistake.
-        let refusal = MarketplacePlugin::parse("beyond10x/agentplugins@aep-planning")
+        let refusal = MarketplacePlugin::parse("beyond10x/agentplugins@aep-plan")
             .expect_err("two segments name no pin");
         assert!(
             refusal.contains("names no pin")
                 && refusal.contains("<repo>@<name>@<version-or-commit>"),
             "{refusal}"
         );
-        let blank = MarketplacePlugin::parse("beyond10x/agentplugins@aep-planning@")
+        let blank = MarketplacePlugin::parse("beyond10x/agentplugins@aep-plan@")
             .expect_err("an empty pin names everything");
         assert!(blank.contains("empty pin"), "{blank}");
     }
@@ -5079,7 +5178,7 @@ observed_at: 2026-08-23
             "metaharness",
             &tree,
             "do it",
-            Some(Path::new("/plugins/aep-planning")),
+            Some(Path::new("/plugins/aep-plan")),
             None,
         None,
     );
@@ -5108,7 +5207,7 @@ observed_at: 2026-08-23
             &plugin[raw.len()..],
             &[
                 "--plugin-dir".to_owned(),
-                "/plugins/aep-planning".to_owned()
+                "/plugins/aep-plan".to_owned()
             ]
         );
         assert_eq!(
@@ -5117,13 +5216,13 @@ observed_at: 2026-08-23
                 "metaharness",
                 &tree,
                 "do it",
-                Some(Path::new("/plugins/aep-planning")),
+                Some(Path::new("/plugins/aep-plan")),
                 None,
             None,
         )
             .last()
             .expect("a plugin directory"),
-            "/plugins/aep-planning",
+            "/plugins/aep-plan",
             "the caller-selected plugin is independent of the harness"
         );
     }

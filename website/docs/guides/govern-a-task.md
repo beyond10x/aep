@@ -285,7 +285,7 @@ itself, which is the point: a driver that could evaluate a gate would be a secon
 implementation with none of the conformance suites behind it.
 
 ```shell-session
-$ $B drive run --project . --plugin-dir /path/to/agentplugins/plugins/aep-planning --map development/default \
+$ $B drive run --project . --plugin-dir /path/to/agentplugins/plugins/aep-plan --map development/default \
     --pause-on-approval
 $ $B drive status
 $ $B drive resume W4-1/1
