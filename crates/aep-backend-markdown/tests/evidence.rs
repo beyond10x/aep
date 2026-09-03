@@ -185,6 +185,9 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
     assert_eq!(
         guarded,
         vec![
+            // A specification is `conforming` because a suite ran against an implementation and
+            // the report says so, never because somebody moved it there.
+            "executable-system-specification: conforming needs 1 ess_conformance".to_owned(),
             // Nothing leaves the boundary unapproved.
             "outbound-claim: cleared needs 1 approval".to_owned(),
             // Two: one to send it, one to correct it. See the ladder's own note — at one, the

@@ -45,11 +45,14 @@ type Edge = (String, String);
 /// The ladders that have no definition on the other side, and why one is allowed to.
 ///
 /// `outbound-claim` landed here (`bba1a15`, `4d331a0`) after the commit their fixture pins, so no
-/// definition for it exists there yet. Naming it as a constant rather than filtering by absence is
-/// the point: a *thirteenth* ladder growing here without a definition there fails
+/// definition for it exists there yet. `executable-system-specification` is the same case: the
+/// kind had no ladder at all until this one, so their 0.13.0 fixture cannot hold a definition for
+/// it. Naming them as a constant rather than filtering by absence is the point: a *fourteenth*
+/// ladder growing here without a definition there fails
 /// [`every_ladder_we_ship_has_a_definition_there_except_the_ones_named_here`] by name, instead of
 /// being quietly skipped the way their fixture once skipped `vision`.
-const LADDERS_WITHOUT_A_DEFINITION: &[&str] = &["outbound-claim"];
+const LADDERS_WITHOUT_A_DEFINITION: &[&str] =
+    &["outbound-claim", "executable-system-specification"];
 
 /// Every `(from, to)` pair the eleven compared ladders declare, summed.
 ///
