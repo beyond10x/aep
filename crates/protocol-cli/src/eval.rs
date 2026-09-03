@@ -2756,15 +2756,27 @@ struct Session {
     /// until 2026-08-23, when the first live driven run reported `$1.135363` for a walk that had
     /// cost `$15.014604` across six sessions — the sixth session's figure, presented as the run's.
     ///
-    /// [`accumulate`] holds the absence rule: a session stating nothing adds nothing and never a
-    /// zero, so a total is over the sessions that stated one.
+    /// It then summed **every** terminal record until 2026-09-03, when a golden-path recording
+    /// reported `$30.002816` for a session that spent `$15.00140784`. One session had written two
+    /// terminal records: the `result` for the work, and a second one saying
+    /// `subtype: error_max_budget_usd` because `--max-budget-usd` had stopped it. Both restate the
+    /// same running total, so summing them charged the run twice — and the row that read the figure
+    /// called a $15 run a $30 one against a $15 cap.
+    ///
+    /// So the fold is per session: [`highest`] within one, [`accumulate`] across them. Both runs
+    /// above now report what they spent. [`accumulate`] holds the absence rule: a session stating
+    /// nothing adds nothing and never a zero, which is the same rule [`add`] applies one level up
+    /// when a cell totals over its runs.
     cost_micro_usd: Option<u64>,
     /// How many tokens it used, totalled over every session that said.
+    ///
+    /// Same fold as [`Self::cost_micro_usd`], and the reason [`highest`] takes the larger rather
+    /// than the last: the budget-exhausted record restates the cost but zeroes its `usage`.
     tokens: Option<u64>,
     /// How long it took, totalled over every session that said.
     ///
     /// A sum and not a span: the driver runs its sessions one after another, and nothing here reads
-    /// a clock to find out (invariant 9).
+    /// a clock to find out (invariant 9). Within one session it is the same fold as the other two.
     wall_time_ms: Option<u64>,
 }
 
@@ -2799,7 +2811,10 @@ impl Session {
     ) -> Result<Self, Vec<StreamRefusal>> {
         let text = String::from_utf8_lossy(events);
         let mut started: Option<serde_json::Value> = None;
-        let mut ended: Vec<serde_json::Value> = Vec::new();
+        // One bucket per session, in stream order, each holding that session's terminal records.
+        // A stream that opens with a terminal record before any `session.started` gets the leading
+        // bucket, so nothing is dropped on the way to `NoTerminalEvent`.
+        let mut sessions: Vec<Vec<serde_json::Value>> = vec![Vec::new()];
         let mut refusals = Vec::new();
 
         for (offset, line) in text.lines().enumerate() {
@@ -2811,8 +2826,16 @@ impl Session {
                 continue;
             };
             match value.get("event").and_then(serde_json::Value::as_str) {
-                Some("session.started") if started.is_none() => started = Some(value),
-                Some("session.ended") => ended.push(value),
+                Some("session.started") => {
+                    if started.is_none() {
+                        started = Some(value);
+                    }
+                    sessions.push(Vec::new());
+                }
+                Some("session.ended") => sessions
+                    .last_mut()
+                    .expect("the leading bucket is never popped")
+                    .push(value),
                 _ => {}
             }
         }
@@ -2861,27 +2884,18 @@ impl Session {
         let (plugin_digest, plugins) =
             plugin_attestation(&mut refusals, &started, arm, declared);
 
-        if ended.is_empty() {
+        if sessions.iter().all(Vec::is_empty) {
             refusals.push(StreamRefusal::NoTerminalEvent);
             return Err(refusals);
         }
 
         // Read before the emptiness check, so an unreadable cost joins the other refusals rather
         // than being discovered after them (invariant 3: validation accumulates).
-        let mut cost = None;
-        let mut tokens = None;
-        let mut wall_time_ms = None;
-        for ended in &ended {
-            match cost_of(ended) {
-                Ok(figure) => accumulate(&mut cost, figure),
-                Err(reason) => refusals.push(StreamRefusal::CostUnreadable { reason }),
-            }
-            accumulate(&mut tokens, tokens_of(ended));
-            accumulate(
-                &mut wall_time_ms,
-                ended.get("duration_ms").and_then(serde_json::Value::as_u64),
-            );
-        }
+        let Totals {
+            cost,
+            tokens,
+            wall_time_ms,
+        } = totals_of(&sessions, &mut refusals);
 
         if !refusals.is_empty() {
             return Err(refusals);
@@ -2914,6 +2928,62 @@ fn accumulate(total: &mut Option<u64>, stated: Option<u64>) {
     let Some(value) = stated else { return };
     let running = total.get_or_insert(0);
     *running = running.saturating_add(value);
+}
+
+/// The three quantities [`Session`] totals off a stream's terminal records.
+struct Totals {
+    cost: Option<u64>,
+    tokens: Option<u64>,
+    wall_time_ms: Option<u64>,
+}
+
+/// Totals a stream's terminal records: [`highest`] within a session, [`accumulate`] across them.
+///
+/// The buckets arrive in stream order, one per `session.started`, and an empty one totals nothing.
+/// An unreadable cost is pushed as a refusal and the rest of the fold continues, because validation
+/// accumulates (invariant 3) rather than stopping at the first thing it cannot read.
+fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamRefusal>) -> Totals {
+    let mut totals = Totals {
+        cost: None,
+        tokens: None,
+        wall_time_ms: None,
+    };
+    for terminal in sessions {
+        let mut cost = None;
+        let mut tokens = None;
+        let mut wall_time_ms = None;
+        for ended in terminal {
+            match cost_of(ended) {
+                Ok(figure) => highest(&mut cost, figure),
+                Err(reason) => refusals.push(StreamRefusal::CostUnreadable { reason }),
+            }
+            highest(&mut tokens, tokens_of(ended));
+            highest(
+                &mut wall_time_ms,
+                ended.get("duration_ms").and_then(serde_json::Value::as_u64),
+            );
+        }
+        accumulate(&mut totals.cost, cost);
+        accumulate(&mut totals.tokens, tokens);
+        accumulate(&mut totals.wall_time_ms, wall_time_ms);
+    }
+    totals
+}
+
+/// Keeps the larger of one session's terminal records, where the record stated one.
+///
+/// [`accumulate`]'s sibling, and the split between them is which axis is being crossed. That one
+/// crosses **sessions**, where two figures are two spends. This one crosses the terminal records of
+/// **one** session, where two figures are one spend counted twice: `total_cost_usd`, `usage` and
+/// `duration_ms` are all running counters the harness restates in full every time it writes one.
+///
+/// The larger and not the last, because the records are not ordered by completeness: Claude Code's
+/// budget-exhausted record restates the cost and the wall clock but zeroes its `usage`, so *last*
+/// would report a run of no tokens. Absent stays absent, as in [`accumulate`].
+fn highest(total: &mut Option<u64>, stated: Option<u64>) {
+    let Some(value) = stated else { return };
+    let running = total.get_or_insert(value);
+    *running = (*running).max(value);
 }
 
 /// Where the instrument attests what it installed, as against what a vendor happened to echo.
@@ -5324,6 +5394,52 @@ observed_at: 2026-08-23
                 single.plugin_digest.clone()
             ),
             "and nothing else moved: the opening record is still the first one"
+        );
+    }
+
+    #[test]
+    fn one_session_that_wrote_two_terminal_records_is_charged_once() {
+        // The budget-kill shape, and the other half of the fold. `--max-budget-usd` stops a session
+        // *after* it has written its `result`, so the stream carries a second terminal record
+        // saying `error_max_budget_usd` — and both restate the same running counters. Summing them
+        // reported `$30.002816` for the golden-path run of 2026-09-03, which spent `$15.00140784`.
+        //
+        // The second record also zeroes its `usage` while restating the cost and a shorter wall
+        // clock, which is why the fold takes the larger of the two rather than the last.
+        let one = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/eval-run/claude-driven-attested.jsonl"),
+        )
+        .expect("the committed driven fixture");
+        let mut killed = one.clone();
+        killed.extend_from_slice(
+            concat!(
+                r#"{"format":"metaharness.event/1","seq":47,"run":"R3-4/claude-driven","#,
+                r#""event":"session.ended","is_error":true,"subtype":"error_max_budget_usd","#,
+                r#""terminal_reason":"budget_exhausted","num_turns":1,"duration_ms":12532,"#,
+                r#""total_cost_usd":0.5216,"usage":{"input_tokens":0,"output_tokens":0,"#,
+                r#""cache_read_input_tokens":0,"cache_creation_input_tokens":0}}"#,
+                "\n"
+            )
+            .as_bytes(),
+        );
+
+        let single =
+            Session::read(&one, Arm::Driven, Harness::Claude, &[]).expect("a readable stream");
+        let stopped = Session::read(&killed, Arm::Driven, Harness::Claude, &[])
+            .expect("the same session, stopped at its cap");
+
+        assert_eq!(
+            stopped.cost_micro_usd, single.cost_micro_usd,
+            "one session spent one figure, however many times it stated it"
+        );
+        assert_eq!(
+            stopped.tokens, single.tokens,
+            "and used what it used: the stopping record's zeroed usage is not the session's"
+        );
+        assert_eq!(
+            stopped.wall_time_ms, single.wall_time_ms,
+            "and ran as long as its longest statement, not the sum of two"
         );
     }
 

@@ -7,6 +7,21 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.46.0] — 2026-09-03
+
+### Fixed
+
+- **A run whose session wrote two terminal records is no longer charged twice.** `aep eval run`
+  totalled `total_cost_usd`, `usage` and `duration_ms` over every `session.ended` in a stream. That
+  is right across the sessions of a driven run, where each states its own spend, and wrong within
+  one session: `--max-budget-usd` stops a session after it has written its `result`, so the stream
+  carries a second terminal record saying `error_max_budget_usd`, and both restate the same running
+  counters. A golden-path recording on 2026-09-03 reported `cost_micro_usd: 30002816` for a session
+  that spent `$15.00140784`, and the manifest's cost row read a $15 run as a $30 one against its
+  $15 cap. The fold is now per session — the largest figure any of that session's terminal records
+  stated, summed across sessions. The largest and not the last, because the stopping record
+  restates the cost and zeroes its `usage`.
+
 ## [0.45.0] — 2026-09-03
 
 ### Fixed
