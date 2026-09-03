@@ -7,6 +7,23 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.48.0] — 2026-09-03
+
+### Added
+
+- **A lifecycle for `executable-system-specification`.** The kind existed and had no ladder, which
+  the engine reads as *every status is legal and so is every move* — the one kind whose purpose is
+  to be held to a generated suite was the one kind nothing held to anything. It now walks
+  `draft -> validated -> conforming -> superseded -> archived`, and `conforming` costs one
+  `ess_conformance` record so it cannot be asserted into.
+- **`model_digest` on a planning artifact, written by `aep artifact set --model-digest <hex>`.**
+  `ess-conformance` already bound a run to the specification revision — a report counts only where
+  its `spec_digest` is the digest the specification records — and the field it reads had nowhere to
+  be written, so the requirement failed closed for every adopter and `conforming` was unreachable.
+  Accepted only on a kind that carries a compiled model; refused on any other, by the CLI and by
+  the frontmatter validator both, because a write the validator then rejects leaves a document the
+  store cannot read.
+
 ## [0.47.0] — 2026-09-03
 
 ### Fixed
