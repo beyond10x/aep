@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-preflights-the-child-path
 kind: story
-status: draft
+status: implemented
 title: aep eval run refuses to spawn against a stale child aep
 summary: Resolve aep and ess on the PATH metaharness constructs for the session, compare versions, refuse a mismatch before any spend (EVAL-RUN-017/018).
 owner: eval
@@ -11,7 +11,8 @@ tags:
 - eval
 relations:
 - decomposes: epic:self-evaluation
-revision: 1
+- serves: vision:O3
+revision: 4
 ---
 # Story: `aep eval run` refuses to spawn against a stale child `aep`
 

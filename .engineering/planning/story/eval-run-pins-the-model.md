@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-pins-the-model
 kind: story
-status: draft
+status: implemented
 title: aep eval run --model pins the model a paid arm asks for
 summary: Forward metaharness --model from aep eval run and record model_requested on the manifest; the bench plan fixes claude-sonnet-4-6 and the default is opus at $7.52 per planning run.
 owner: eval
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - serves: vision:O3
-revision: 1
+revision: 4
 ---
 # Story: `aep eval run --model` pins the model a paid arm asks for
 

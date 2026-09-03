@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:absent-rows-decide-on-a-closed-stream
 kind: story
-status: draft
+status: implemented
 title: A negative expectation is decided when the stream is closed
 summary: aep trace check answers tool.absent / never_occurred rows as ok or gap when metaharness marks the stream complete; eight P1 cases ended undecided on exactly those rows.
 owner: eval
@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:checker-vocabulary-depth
 - serves: vision:O3
-revision: 1
+revision: 4
 ---
 # Story: A negative expectation is decided when the stream is closed
 

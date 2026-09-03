@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-caps-the-run
 kind: story
-status: draft
+status: implemented
 title: aep eval run --budget-usd is the session's own ceiling
 summary: Pass what is left of the cap to each Claude run as metaharness run claude --max-budget-usd; the between-runs check stays.
 owner: eval
@@ -11,7 +11,8 @@ tags:
 - eval
 relations:
 - decomposes: epic:self-evaluation
-revision: 1
+- serves: vision:O3
+revision: 4
 ---
 # Story: `aep eval run --budget-usd` is the session's own ceiling
 

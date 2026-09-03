@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:redact-covers-home-and-user
 kind: story
-status: draft
+status: implemented
 title: --redact covers the home directory and the user name
 summary: Recorded streams carried /home/<user> and the user name 18–51 times each; redact them and digest after, so a stream can be committed to a public recorded/ directory.
 owner: eval
@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - serves: vision:O3
-revision: 1
+revision: 4
 ---
 # Story: `--redact` covers the home directory and the user name
 
