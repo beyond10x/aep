@@ -30,6 +30,7 @@ architecture-decision-record
 blocker
 design
 epic
+executable-system-specification
 initiative
 obligation
 outbound-claim
