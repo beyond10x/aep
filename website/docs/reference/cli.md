@@ -395,6 +395,28 @@ so takes the shared `text|yaml|json` with `yaml` the default.
 opt-in, and the un-redacted rendering carries a footer naming what it contains, so pasting a report
 somewhere public is a decision rather than an accident.
 
+#### A negative expectation needs a closed stream
+
+`tool.absent` — *"this never happened"* — can only be falsified by an event, so it can only be
+answered `ok` over a record somebody vouched for: a transcript cut off at any point looks exactly
+like a run that stopped there. The checker reads the producer's own statement that the transcript is
+the whole run, and answers `unk` naming the missing marker when there is none.
+
+| wire | what closes a stream |
+|---|---|
+| `metaharness.event/1` | a terminal `stream.closed` event as the **last** line — its `events` count and its `reason` (`completed`, `budget`, `killed`, `error`, `steer-halt`) are carried into the verdict — or `session.started.hermetic.stream_complete: true` |
+| Claude Code `stream-json` | the run's terminal `result` record as the transcript's **last** line: the vendor writes it and stops |
+| Codex rollout | nothing. A rollout is an append log and says nothing about its own end, so an absence over one stays `unk` |
+
+`session.ended` is **not** read as the metaharness wire's closing record: that wire carries one
+terminal record per *session* and a driven run is a concatenation of sessions, so a subagent's
+`session.ended` would close a stream in the middle of the run that wrote it.
+
+A **gap** needs none of this. A call that is in the record contradicts an absence whatever else is
+missing, because reading more of a transcript can only add calls. An event the reader could not
+understand no longer vetoes a decided absence either — the producer has said what the record is —
+but the verdict's citation says how many there were.
+
 `--advisory <id>` downgrades one named expectation for this run: still evaluated, still printed,
 gating nothing, and every downgraded id named in the report. An id the specification does not
 declare is a usage error, not a silent no-op. In an evidence record, `trace_conformance.passed`
@@ -445,7 +467,7 @@ and a machine without it is told so by name and exits `2` rather than reddening 
 | Command | Does |
 |---|---|
 | `aep eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
-| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing |
+| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--model <model>] [--stream <file>] [--budget-usd <usd>] [--redact]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing |
 
 `eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
 an exit code that moved with the counts would be the single number it refuses to compute — there is
@@ -488,6 +510,71 @@ aep eval run --arm plugin --harness claude --case conformance/eval/development-h
     --plugin bdfinst/agentic-dev-team@dev-team@1.4.0 \
     --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
 ```
+
+### Pinning the model
+
+`--model <MODEL>` is forwarded **verbatim** to `metaharness run claude --model`, which passes it to
+the vendor to resolve. The flag states and the harness resolves: nothing here normalises an alias,
+picks a model for the caller, or fills one in when the flag is absent — an invocation that pins none
+gets the argv it had before the flag existed, and the harness default.
+
+It is placed before the arm's treatment in the invocation, on every arm, because a model is a
+condition a phase holds fixed *across* its arms; an argv where it moved with the arm would be an
+experiment varying two things.
+
+| refusal | when |
+|---|---|
+| `EVAL-RUN-016` | `--model` on `codex` or `b10x`, whose adapters take no model flag at metaharness 0.5.0. Refused by name rather than accepted and dropped, because a run that silently used the default would enter the matrix as a run that pinned one |
+
+The manifest records **both** facts and keeps them apart: `model` is what the attestation reported
+and `model_requested` is what the run asked for, written immediately after it and only where the run
+asked for something. So a manifest from before `--model` existed keeps its bytes, and `eval matrix`
+gains no column — a phase that fixed a model checks it by reading the two fields, and a runner that
+folded them into one would have thrown away the only evidence that the pin was honoured.
+
+```bash
+aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
+    --plugin-dir ../agentplugins/aep-planning --model claude-sonnet-4-6 \
+    --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
+```
+
+### What `--redact` removes
+
+Two documents, one flag.
+
+| document | what goes |
+|---|---|
+| the **record** (`*.report.json`) | every quoted command, path and text, replaced by a digest — the same rule `trace check --redact` applies |
+| the **stream** (`*.events.jsonl`) | the operator's home directory (`$HOME` **and** its realpath) becomes `~`, and the operator's user name (`$USER`, `$LOGNAME`, and the last segment of `$HOME`) becomes `<user>` |
+
+The stream substitution is over the whole file's bytes rather than over a list of fields, because a
+home path turns up in an event text, a tool argument, a `cwd`, a transcript path and a shell command
+alike, and a reader that enumerated the fields it knew about would miss the one added next release.
+Two rules keep it from corrupting a run: the home directories are replaced **longest first**, so a
+path never degrades to `/home/<user>`; and a user name is replaced **at word boundaries only**, so
+an operator called `tim` does not rewrite `runtime`. Neither placeholder needs escaping inside a
+JSON string, so a redacted stream is still a stream this runner reads.
+
+Repository names, commit ids and branch names are **not** touched: they are the run's subject, and a
+stream without them is one nobody can check anything against.
+
+The manifest's `transcript_digest` is taken over the **redacted** bytes, so the file the runner
+wrote is the file the manifest names and re-ingesting it with `--stream` produces the same manifest.
+That is what makes a recorded stream committable to a public `recorded/` directory:
+
+```bash
+# the paid run, recorded clean
+aep eval run --arm plugin --harness claude --case evals/adversary-tests-only --redact \
+    --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
+
+# or an already-recorded stream, re-ingested to get a committable one
+aep eval run --arm plugin --harness claude --case evals/adversary-tests-only --redact \
+    --stream ~/runs/claude-plugin-adversary-tests-only.events.jsonl \
+    --out evals/adversary-tests-only/recorded/ --observed-at 2026-09-03
+```
+
+Without `--redact` on the `--stream` path nothing is rewritten and no stream is written: the
+caller's file is the record.
 
 ### Reading a native cell
 

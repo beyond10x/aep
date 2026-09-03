@@ -229,6 +229,16 @@ pub enum UnknownReason {
         /// The types they declared, where they declared one.
         types: Vec<String>,
     },
+    /// A negative expectation, and no producer said the transcript is the whole run.
+    ///
+    /// The one shape that needs the statement. *"The tool was never called"* can only be falsified
+    /// by an event, so a record that might be missing events cannot report one absent — and a
+    /// transcript cut off at any point looks exactly like a run that stopped there. The producer
+    /// owns the stream and closes it; until it says so, this is `unk` rather than a green row.
+    StreamNotClosed {
+        /// The witnesses that would have decided it, in the order the reader looks for them.
+        markers: Vec<String>,
+    },
     /// An expectation was scoped to a model the run never used.
     ///
     /// `unk`, not `ok`: an expectation must not be able to pass by selecting nothing.
@@ -331,6 +341,12 @@ impl fmt::Display for UnknownReason {
             Self::TimestampAbsent { event } => write!(
                 f,
                 "no duration can be derived around event {event}: a timestamp was not recorded"
+            ),
+            Self::StreamNotClosed { markers } => write!(
+                f,
+                "nothing states that this transcript is the whole run, so an absence cannot be \
+                 told from a hole — the run's producer closes the stream and says so with {}",
+                markers.join(" or ")
             ),
             Self::OpaqueEvents { events, types } => {
                 let rendered: Vec<String> = events.iter().map(ToString::to_string).collect();

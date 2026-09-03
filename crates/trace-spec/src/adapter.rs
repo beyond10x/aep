@@ -78,8 +78,9 @@ use serde_json::Value;
 use trace_domain::code::{TraceCode, ValidationErrors};
 use trace_domain::digest::digest_of_bytes;
 use trace_domain::ir::{
-    AdapterRef, AssistantRequest, EventKind, ModelUsage, OpaqueEvent, RateLimitState, Recorded,
-    RunOutcome, RunUsage, SessionStart, ToolCall, ToolResult, TraceEvent, TraceIr,
+    AdapterRef, AssistantRequest, ClosureWitness, EventKind, ModelUsage, OpaqueEvent,
+    RateLimitState, Recorded, RunOutcome, RunUsage, SessionStart, StreamClose, ToolCall,
+    ToolResult, TraceEvent, TraceIr, VENDOR_CLOSURE_MARKERS,
 };
 
 use crate::json::{
@@ -171,12 +172,32 @@ fn read_text(bytes: &[u8], text: &str) -> Result<TraceIr, ValidationErrors> {
         return Err(errors);
     }
 
+    // The vendor writes its terminal record and then stops, so a file whose **last** event is one
+    // ends where the run ended. That is this wire's whole statement about its own completeness —
+    // there is no marker to read — and it is what lets a negative expectation be decided over a
+    // recorded transcript. A capture cut off anywhere else does not end with it and stays `unk`.
+    let closed = matches!(
+        events.last().map(|event| &event.kind),
+        Some(EventKind::RunOutcome(_))
+    )
+    .then(|| StreamClose {
+        witness: ClosureWitness::TerminalRecord,
+        // The vendor states no event count, and inventing one from what this reader parsed
+        // would be the reader attesting to itself.
+        events: None,
+        reason: match events.last().map(|event| &event.kind) {
+            Some(EventKind::RunOutcome(outcome)) => outcome.subtype.clone(),
+            _ => None,
+        },
+    });
+
     Ok(TraceIr::new(
         digest_of_bytes(bytes),
         CLAUDE_CODE_STREAM_JSON,
         events,
         requests,
-    ))
+    )
+    .closes_with(VENDOR_CLOSURE_MARKERS, closed))
 }
 
 /// Normalizes one transcript event into zero or more IR events.

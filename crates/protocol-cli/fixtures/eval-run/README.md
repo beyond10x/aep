@@ -15,6 +15,12 @@ Arm **a** needs no file here: the eval corpus's own
 `conformance/eval/development-tests-after-the-code/transcript.jsonl` attests no plugin, which is
 exactly what arm a is, and it is ingested unchanged.
 
+Every one of these ends with a `stream.closed` line — metaharness's statement that the stream it
+wrote is the whole run, carrying its event count and the reason it ended. It is what lets
+`tool.absent` be answered `ok` rather than `unk` (`trace-spec`'s `check::tool_absent`); a fixture
+without it is a fixture whose negative rows nobody can decide. The line is the last one, always: a
+file with lines after it is a file somebody concatenated, and the claim is not about those bytes.
+
 ## Crossing #4, and which half of it this is
 
 `--plugin-dir` copies a plugin into metaharness's hermetic scratch home and attests what it

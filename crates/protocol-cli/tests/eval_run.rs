@@ -261,9 +261,12 @@ fn a_stream_that_stops_before_the_session_ends_is_refused_rather_than_reported_a
     let stream = out.join("truncated.jsonl");
     let whole = std::fs::read_to_string(root().join(ATTESTED_STREAM)).expect("readable");
     let lines: Vec<&str> = whole.lines().collect();
+    // Two lines: the closing marker and the terminal record under it. Cutting only the marker
+    // would produce a stream that still ends a session — a run whose *record* is whole and whose
+    // *stream* nobody vouched for, which is a different refusal from this one.
     std::fs::write(
         &stream,
-        format!("{}\n", lines[..lines.len() - 1].join("\n")),
+        format!("{}\n", lines[..lines.len() - 2].join("\n")),
     )
     .expect("the scratch tree is writable");
 
@@ -803,13 +806,17 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
 fn stream_costing(directory: &Path, name: &str, cost: &str) -> PathBuf {
     let attested = std::fs::read_to_string(root().join(ATTESTED_STREAM)).expect("readable");
     let mut lines: Vec<String> = attested.lines().map(ToOwned::to_owned).collect();
-    let last = lines.len() - 1;
+    // The terminal record and not the last line: metaharness closes the stream with its own
+    // `stream.closed` marker after it, and the cost is on the session's record.
+    let last = lines
+        .iter()
+        .rposition(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .is_ok_and(|value| value["event"] == "session.ended")
+        })
+        .expect("the stream ends a session");
     let mut ended: serde_json::Value =
         serde_json::from_str(&lines[last]).expect("the stream ends a session");
-    assert_eq!(
-        ended["event"], "session.ended",
-        "the last line is the terminal event"
-    );
     ended["total_cost_usd"] =
         serde_json::from_str(cost).expect("the cost is JSON — a number or `null`");
     lines[last] = serde_json::to_string(&ended).expect("it serialises");
@@ -1404,5 +1411,314 @@ fn arm_plugin_may_be_a_marketplace_plugin_alone_and_the_manifest_says_so() {
             "plugins:\n  - plugin: {DEV_TEAM}\n    digest: {digest}\n"
         )),
         "and the marketplace plugin is what the arm measured: {written}"
+    );
+}
+
+// --- `--redact` takes the operator out of the stream, not only out of the record ---------------
+
+/// The attested stream with an operator's home and user name written into it.
+///
+/// Injected rather than found, because the committed fixtures are already clean: the eight paid
+/// streams that motivated this carried `/home/<operator>` between 18 and 49 times each, and a test
+/// that waited for a dirty fixture to be committed would be waiting for the failure it prevents.
+fn stream_naming_the_operator(directory: &Path, home: &str, user: &str) -> PathBuf {
+    let attested = std::fs::read_to_string(root().join(ATTESTED_STREAM)).expect("readable");
+    let dirty = attested.replace(
+        "\"event\":\"session.started\"",
+        &format!(
+            "\"event\":\"session.started\",\"cwd\":\"{home}/work/subject\",\
+             \"operator_note\":\"{user} ran this from {home}, as {user}-scratch\"",
+        ),
+    );
+    assert!(dirty.contains(home), "the injection reached the stream");
+    let path = directory.join("names-the-operator.jsonl");
+    std::fs::write(&path, dirty).expect("the scratch tree is writable");
+    path
+}
+
+#[test]
+fn redact_takes_the_operators_home_and_name_out_of_the_stream_it_writes() {
+    // The story's first acceptance line. A stream carrying both loses both, and what is written is
+    // what the manifest's digest names — a manifest whose digest was taken over the bytes before
+    // redaction would name a file that does not exist anywhere.
+    let out = scratch("aep-eval-run-redact-stream");
+    let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
+
+    let ingested = protocol_with(
+        &[
+            "eval",
+            "run",
+            "--case",
+            HONEST_CASE,
+            "--arm",
+            "plugin",
+            "--harness",
+            "claude",
+            "--stream",
+            printable(&dirty),
+            "--observed-at",
+            "2026-08-23",
+            "--out",
+            printable(&out),
+            "--redact",
+        ],
+        &[("HOME", "/home/ada"), ("USER", "ada")],
+    );
+    assert_eq!(code(&ingested), 0, "{}", stderr(&ingested));
+
+    let written = out.join("claude-plugin-development-honest.events.jsonl");
+    let redacted = std::fs::read_to_string(&written).expect("the redacted stream was written");
+    assert!(
+        !redacted.contains("/home/ada"),
+        "no absolute home survives redaction"
+    );
+    assert!(
+        !redacted.contains("\"ada\"") && !redacted.contains("ada ran this"),
+        "and neither does the user name: {}",
+        redacted
+            .lines()
+            .find(|line| line.contains("ada"))
+            .unwrap_or("<none>")
+    );
+    assert!(
+        redacted.contains("~/work/subject") && redacted.contains("<user> ran this from ~"),
+        "the placeholders are the documented ones"
+    );
+    // Still a stream, and still the same run: redaction rewrites text inside JSON strings and
+    // nothing about the shape.
+    assert_eq!(
+        redacted.lines().count(),
+        std::fs::read_to_string(&dirty)
+            .expect("readable")
+            .lines()
+            .count()
+    );
+}
+
+#[test]
+fn the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays() {
+    // The story's second and third acceptance lines in one test: the digest is taken after
+    // redaction, so re-ingesting the file the runner wrote produces the same manifest — which is
+    // what makes a redacted stream committable to a public `recorded/` directory and re-derivable
+    // from there.
+    let out = scratch("aep-eval-run-redact-replays");
+    let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
+    let first = protocol_with(
+        &[
+            "eval",
+            "run",
+            "--case",
+            HONEST_CASE,
+            "--arm",
+            "plugin",
+            "--harness",
+            "claude",
+            "--stream",
+            printable(&dirty),
+            "--observed-at",
+            "2026-08-23",
+            "--out",
+            printable(&out),
+            "--redact",
+        ],
+        &[("HOME", "/home/ada"), ("USER", "ada")],
+    );
+    assert_eq!(code(&first), 0, "{}", stderr(&first));
+    let written = out.join("claude-plugin-development-honest.events.jsonl");
+    let manifest_once = manifest(&out, "claude-plugin-development-honest");
+    let digest = |path: &Path| {
+        trace_domain::digest::digest_of_bytes(&std::fs::read(path).expect("readable"))
+    };
+    assert!(
+        manifest_once.contains(&format!("transcript_digest: {}", digest(&written))),
+        "the manifest names the bytes that were written:\n{manifest_once}"
+    );
+    assert!(
+        !manifest_once.contains(&digest(&dirty)),
+        "and not the bytes it was handed, which is the whole of \"digested after redaction\""
+    );
+
+    let replay = scratch("aep-eval-run-redact-replays-again");
+    let second = protocol_with(
+        &[
+            "eval",
+            "run",
+            "--case",
+            HONEST_CASE,
+            "--arm",
+            "plugin",
+            "--harness",
+            "claude",
+            "--stream",
+            printable(&written),
+            "--observed-at",
+            "2026-08-23",
+            "--out",
+            printable(&replay),
+            "--redact",
+        ],
+        &[("HOME", "/home/ada"), ("USER", "ada")],
+    );
+    assert_eq!(
+        code(&second),
+        0,
+        "the redacted stream is a stream this runner ingests: {}",
+        stderr(&second)
+    );
+    assert_eq!(
+        manifest(&replay, "claude-plugin-development-honest"),
+        manifest_once,
+        "byte for byte, which is what \"the digest is over the redacted bytes\" means"
+    );
+}
+
+#[test]
+fn without_redact_the_operators_own_stream_is_left_exactly_as_it_was() {
+    // The other half of the switch. `--redact` is opt-in on the record for a reason this repository
+    // has written down — a report is most useful with its evidence visible — and the stream follows
+    // the same flag rather than acquiring a second one.
+    let out = scratch("aep-eval-run-no-redaction");
+    let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
+    let ingested = protocol_with(
+        &[
+            "eval",
+            "run",
+            "--case",
+            HONEST_CASE,
+            "--arm",
+            "plugin",
+            "--harness",
+            "claude",
+            "--stream",
+            printable(&dirty),
+            "--observed-at",
+            "2026-08-23",
+            "--out",
+            printable(&out),
+        ],
+        &[("HOME", "/home/ada"), ("USER", "ada")],
+    );
+    assert_eq!(code(&ingested), 0, "{}", stderr(&ingested));
+    assert!(
+        std::fs::read_to_string(&dirty)
+            .expect("readable")
+            .contains("/home/ada"),
+        "the caller's file is untouched"
+    );
+    assert!(
+        !out.join("claude-plugin-development-honest.events.jsonl")
+            .exists(),
+        "and no stream is written: without --redact the caller's file is the record"
+    );
+}
+
+// --- `--model` pins the model a paid arm asks for ---------------------------------------------
+
+#[test]
+fn a_model_is_refused_by_name_on_the_harnesses_whose_adapters_take_none() {
+    // Refused rather than accepted and dropped, which is `--plugin`'s rule for the same reason: a
+    // run that silently used the default model would enter the matrix as a run that pinned one.
+    for harness in ["codex", "b10x"] {
+        let out = scratch(&format!("aep-eval-run-model-{harness}"));
+        let refused = protocol(&[
+            "eval",
+            "run",
+            "--case",
+            HONEST_CASE,
+            "--arm",
+            "plugin",
+            "--harness",
+            harness,
+            "--model",
+            "claude-sonnet-4-6",
+            "--stream",
+            ATTESTED_STREAM,
+            "--observed-at",
+            "2026-08-23",
+            "--out",
+            printable(&out),
+        ]);
+        assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+        let reason = stderr(&refused);
+        assert!(
+            reason.contains("EVAL-RUN-016") && reason.contains(harness),
+            "{reason}"
+        );
+        assert!(
+            std::fs::read_dir(&out)
+                .expect("the scratch tree is readable")
+                .next()
+                .is_none(),
+            "and nothing was written"
+        );
+    }
+}
+
+#[test]
+fn the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported() {
+    // Two fields, kept apart. The flag states and the vendor resolves, so a phase that fixed a
+    // model checks it by reading both — and a manifest that folded them into one would have thrown
+    // away the only evidence that the pin was honoured.
+    let out = scratch("aep-eval-run-model-requested");
+    let ingested = protocol(&[
+        "eval",
+        "run",
+        "--case",
+        HONEST_CASE,
+        "--arm",
+        "plugin",
+        "--harness",
+        "claude",
+        "--model",
+        "claude-sonnet-4-6",
+        "--stream",
+        ATTESTED_STREAM,
+        "--observed-at",
+        "2026-08-23",
+        "--out",
+        printable(&out),
+        "--redact",
+    ]);
+    assert_eq!(code(&ingested), 0, "{}", stderr(&ingested));
+    let written = manifest(&out, "claude-plugin-development-honest");
+    assert!(
+        written.contains("model: claude-sonnet-5\nmodel_requested: claude-sonnet-4-6\n"),
+        "beside the attested model and immediately after it:\n{written}"
+    );
+
+    // And the matrix reads that manifest without gaining a column for it.
+    let table = protocol(&["eval", "matrix", printable(&out)]);
+    assert_eq!(code(&table), 0, "{}", stderr(&table));
+    assert!(
+        !stdout(&table).contains("model_requested"),
+        "no column is added by accident: {}",
+        stdout(&table)
+    );
+    let json = protocol(&["eval", "matrix", printable(&out), "--format", "json"]);
+    assert!(
+        !stdout(&json).contains("model_requested"),
+        "not in the JSON either: {}",
+        stdout(&json)
+    );
+}
+
+#[test]
+fn a_run_that_pins_no_model_writes_no_model_requested_key() {
+    // The bytes of every manifest assembled before `--model` existed, unchanged, so two waves still
+    // diff against each other.
+    let out = scratch("aep-eval-run-model-unpinned");
+    assert_eq!(
+        code(&ingest(
+            &out,
+            HONEST_CASE,
+            "plugin",
+            "claude",
+            ATTESTED_STREAM
+        )),
+        0
+    );
+    assert!(
+        !manifest(&out, "claude-plugin-development-honest").contains("model_requested"),
+        "an absent flag writes no key"
     );
 }

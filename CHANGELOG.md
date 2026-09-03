@@ -11,6 +11,21 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- **`aep eval run --model <MODEL>`**, forwarded **verbatim** to the `metaharness run claude --model`
+  invocation. The flag states and the harness resolves: nothing here normalises an alias or picks a
+  model, and an invocation that pins none produces the argv it produced before the flag existed. It
+  is placed before the arm's treatment, on every arm, because a model is a condition a phase holds
+  fixed across its arms.
+  - **The manifest records `model_requested` beside `model`.** `model` stays what the attestation
+    reported; `model_requested` is what the run asked for, written immediately after it and **only**
+    where the run asked for something — so every manifest assembled before this keeps its bytes.
+    `eval matrix` reads the manifest and gains no column: a phase that fixed a model checks it by
+    reading both fields, and a runner that folded them into one would have thrown away the only
+    evidence that the pin was honoured.
+  - **`--model` on `codex` or `b10x` is refused by name** (`EVAL-RUN-016`) rather than accepted and
+    dropped: their adapters take no model flag at metaharness 0.5.0, and a run that silently used
+    the default would enter the matrix as a run that pinned one.
+
 - **`aep eval run --plugin <repo>@<name>@<version-or-commit>`**, repeatable, forwarded **verbatim**
   to the `metaharness run claude` invocation. metaharness 0.5.0 places a pinned third-party
   marketplace plugin into its scratch config home and attests it; this runner names one and resolves
@@ -31,6 +46,55 @@ belongs in the commit message or in `docs/design/`.
   - **A declared plugin the attestation does not list is refused** (`EVAL-STREAM-013`). The runner
     declares, the instrument attests, and the manifest records what both said; a declaration nothing
     attested would enter the matrix as a plugin the run never had.
+
+### Changed
+
+- **`aep trace check` decides a negative expectation only over a stream its producer closed.**
+  `tool.absent` — *"this never happened"* — can be falsified only by an event, so it can be answered
+  `ok` only over a record somebody vouched for; a transcript cut off at any point looks exactly like
+  a run that stopped there. The checker now reads the producer's own statement that the transcript is
+  the whole run and answers `unk` naming the missing marker when there is none.
+  - **What closes a stream, per wire.** On `metaharness.event/1`: a terminal `stream.closed` event
+    as the **last** line, carrying its `events` count and its `reason`
+    (`completed|budget|killed|error|steer-halt`) into the verdict, or
+    `session.started.hermetic.stream_complete: true`. On Claude Code `stream-json`: the run's
+    terminal `result` record as the transcript's last line. A Codex rollout carries neither and an
+    absence over one stays `unk`, which is the honest answer for an append log that says nothing
+    about its own end.
+  - **`session.ended` is not read as the metaharness wire's closing record.** That wire carries one
+    terminal record per *session* and a driven run is a concatenation of sessions, so a subagent's
+    `session.ended` would close a stream in the middle of the run that wrote it. This is the reason
+    metaharness grew a marker of its own.
+  - **An unread event no longer vetoes a decided absence**, and still poisons every count it could
+    change. A closing statement says the record is whole; it does not say what an unread record was,
+    so `tool.called {exactly: 0}` over one is still `unk` — but a `tool.absent` row over a closed
+    stream is decided, and its citation names how many unread events the verdict was reached over.
+    Eight paid runs on 2026-09-03 ended "undecided" on exactly those rows while carrying
+    twenty-three unread vendor lines apiece.
+  - **A gap is unaffected.** A call that is in the record contradicts an absence whatever else is
+    missing, because reading more of a transcript can only add calls.
+  - The committed metaharness fixtures under `crates/trace-spec/tests/fixtures/`,
+    `crates/protocol-cli/fixtures/` and `conformance/eval/` gain the closing line, so their transcript
+    digests moved and `dry-run.matrix.json` moved with them.
+- **`aep eval run --redact` now redacts the stream as well as the record.** The operator's home
+  directory — `$HOME` **and** its realpath — becomes `~`, and the operator's user name (`$USER`,
+  `$LOGNAME`, and the last segment of `$HOME`) becomes `<user>`, in every event text and path field.
+  The eight streams recorded on 2026-09-03 under `--redact` carried `/home/<operator>` between 18 and
+  49 times each and the user name between 20 and 51 times, so none of them could be committed to the
+  public `recorded/` directory its case was written for.
+  - **The substitution is over the file's bytes**, not over a list of fields: a home path turns up in
+    an event text, a tool argument, a `cwd`, a transcript path and a shell command alike. Home
+    directories are replaced **longest first**, so a path never degrades to `/home/<user>`; a user
+    name is replaced **at word boundaries only**, so an operator called `tim` does not rewrite
+    `runtime`. Neither placeholder needs escaping inside a JSON string.
+  - **The manifest's `transcript_digest` is taken over the redacted bytes**, so the file the runner
+    wrote is the file the manifest names and `--stream` re-ingests it to the same manifest, byte for
+    byte. On the spawn path the redaction happens before the stream reaches the disk.
+  - **`--stream --redact` writes the redacted stream into `--out`** as `<run>.events.jsonl`, which is
+    how an already-recorded paid run becomes a committable one. Without `--redact` nothing is
+    rewritten and no stream is written: the caller's file is the record. A refused ingest still
+    writes nothing at all.
+  - Repository names, commit ids and branch names are **not** redacted: they are the run's subject.
 
 ## [0.44.0] — 2026-09-03
 

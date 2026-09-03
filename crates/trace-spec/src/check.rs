@@ -807,14 +807,44 @@ fn tool_called(ir: &TraceIr, selector: &CallSelector, count: CountBound) -> Outc
 }
 
 /// No call matches.
+///
+/// # The one kind that needs the stream to be closed
+///
+/// A gap needs nothing: a call that is in the record contradicts the absence whatever else the
+/// record is missing, because reading more of a transcript can only add calls. An `ok` is the
+/// asymmetric half — it is a claim about *the whole run*, and a transcript that might be missing
+/// events cannot support one. So the witness is the producer's own statement that the stream is
+/// whole ([`TraceIr::stream_close`]), and without it the row is `unk` naming the marker that would
+/// have decided it rather than a green verdict nobody earned.
+///
+/// The unread events stay on the record. On a closed stream they no longer decide the row — the
+/// producer has said what the record is, and a checker that answered `unk` for every run carrying
+/// one vendor line it could not map has stopped checking — but the citation names how many there
+/// were, so a reader can see what the verdict was reached over.
 fn tool_absent(ir: &TraceIr, selector: &CallSelector) -> Outcome {
     let calls = selected(ir, selector);
     if calls.is_empty() {
-        return if has_unread(ir) {
-            Outcome::Undecidable(opaque_reason(ir))
-        } else {
-            Outcome::Ok(Citation::run(format!("no call matches {selector}")))
+        let Some(close) = &ir.stream_close else {
+            return Outcome::Undecidable(UnknownReason::StreamNotClosed {
+                markers: ir
+                    .closure_markers
+                    .iter()
+                    .map(|marker| (*marker).to_owned())
+                    .collect(),
+            });
         };
+        let reason = close
+            .reason
+            .as_ref()
+            .map_or_else(String::new, |reason| format!(", {reason}"));
+        let unread = match ir.opaque_events().len() {
+            0 => String::new(),
+            unread => format!(", over {unread} unread event(s) the producer accounted for"),
+        };
+        return Outcome::Ok(Citation::run(format!(
+            "no call matches {selector}, and the run closed the stream ({}{reason}){unread}",
+            close.witness.as_str()
+        )));
     }
     Outcome::Gap(Citation::new(
         calls.iter().map(|(at, _)| *at).collect(),
@@ -1818,6 +1848,19 @@ mod tests {
 
     fn ir(events: Vec<TraceEvent>) -> TraceIr {
         TraceIr::new("digest".to_owned(), adapter(), events, Vec::new())
+            .closes_with(trace_domain::ir::VENDOR_CLOSURE_MARKERS, None)
+    }
+
+    /// The same IR with the producer's statement that it is the whole run.
+    fn closed_ir(events: Vec<TraceEvent>) -> TraceIr {
+        TraceIr::new("digest".to_owned(), adapter(), events, Vec::new()).closes_with(
+            trace_domain::ir::VENDOR_CLOSURE_MARKERS,
+            Some(trace_domain::ir::StreamClose {
+                witness: trace_domain::ir::ClosureWitness::TerminalRecord,
+                events: None,
+                reason: Some("success".to_owned()),
+            }),
+        )
     }
 
     fn bash(command: &str) -> CallSelector {
@@ -2880,30 +2923,57 @@ mod tests {
     }
 
     #[test]
-    fn an_event_the_adapter_could_not_read_makes_this_must_never_happen_undecidable() {
-        let with_unread = ir(vec![opaque_event(1)]);
+    fn this_must_never_happen_needs_the_producer_to_say_the_record_is_whole() {
+        // The asymmetry `tool_absent` documents, as an assertion. A transcript nobody vouched for
+        // cannot support *"it never happened"* — the run may have gone on past the last line — so
+        // the row is `unk` and names what would have decided it.
+        let selector = || ExpectationKind::ToolAbsent {
+            selector: bash("rm -rf"),
+        };
+        let outcome = evaluate(&selector(), &ir(Vec::new()));
+        let Outcome::Undecidable(UnknownReason::StreamNotClosed { markers }) = &outcome else {
+            panic!("an unvouched transcript decides no absence: {outcome:?}");
+        };
+        assert_eq!(
+            markers,
+            &vec![trace_domain::ir::TERMINAL_RECORD_MARKER.to_owned()]
+        );
+
+        // With the statement, the same transcript decides — including one carrying an event this
+        // build could not read. The unread record is named in the citation rather than made to
+        // veto the row: a checker that answered `unk` for every run with one vendor line it could
+        // not map has stopped checking, and the producer has said what the record is.
+        assert_eq!(
+            evaluate(&selector(), &closed_ir(Vec::new())).verdict(),
+            Verdict::Ok
+        );
+        let over_unread = evaluate(&selector(), &closed_ir(vec![opaque_event(1)]));
+        assert_eq!(over_unread.verdict(), Verdict::Ok);
+        let Outcome::Ok(citation) = &over_unread else {
+            unreachable!("asserted above")
+        };
+        assert!(
+            citation.note.contains("1 unread event"),
+            "the unread record stays on the verdict: {}",
+            citation.note
+        );
+    }
+
+    #[test]
+    fn an_event_the_adapter_could_not_read_still_poisons_a_count_that_it_could_change() {
+        // The rule that did **not** move. A closing statement says the record is whole; it does
+        // not say what an unread record was, so a bound an unseen call could break is still `unk`.
         let outcome = evaluate(
-            &ExpectationKind::ToolAbsent {
+            &ExpectationKind::ToolCalled {
                 selector: bash("rm -rf"),
+                count: CountBound::exactly(0),
             },
-            &with_unread,
+            &closed_ir(vec![opaque_event(1)]),
         );
         assert_eq!(
             outcome.verdict(),
             Verdict::Unknown,
-            "reporting `ok` here would be the checker saying \"the tool was never called\" when \
-             it had stopped being able to see tool calls"
-        );
-        let clean = ir(Vec::new());
-        assert_eq!(
-            evaluate(
-                &ExpectationKind::ToolAbsent {
-                    selector: bash("rm -rf"),
-                },
-                &clean,
-            )
-            .verdict(),
-            Verdict::Ok
+            "an unread event could be the call this bound forbids: {outcome:?}"
         );
     }
 

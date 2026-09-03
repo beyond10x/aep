@@ -104,8 +104,9 @@ use serde_json::Value;
 use trace_domain::code::{TraceCode, ValidationErrors};
 use trace_domain::digest::digest_of_bytes;
 use trace_domain::ir::{
-    AdapterRef, AssistantRequest, EventKind, ModelUsage, OpaqueEvent, RateLimitState, Recorded,
-    RunOutcome, RunUsage, SessionStart, ToolCall, ToolResult, TraceEvent, TraceIr,
+    AdapterRef, AssistantRequest, ClosureWitness, EventKind, ModelUsage, OpaqueEvent,
+    RateLimitState, Recorded, RunOutcome, RunUsage, SessionStart, StreamClose, ToolCall,
+    ToolResult, TraceEvent, TraceIr, EVENT_STREAM_CLOSURE_MARKERS, STREAM_CLOSED_EVENT,
 };
 
 use crate::json::{
@@ -267,12 +268,48 @@ fn read_text(bytes: &[u8], text: &str) -> Result<TraceIr, ValidationErrors> {
         read_event(line, &seam, &mut events, &mut requests, &mut unattributed);
     }
 
-    Ok(TraceIr::new(
+    let ir = TraceIr::new(
         digest_of_bytes(bytes),
         METAHARNESS_EVENT_STREAM,
         events,
         requests,
-    ))
+    );
+    Ok(ir.closes_with(EVENT_STREAM_CLOSURE_MARKERS, stream_closure(&lines)))
+}
+
+/// The producer's statement that this stream is whole, where it made one.
+///
+/// Two witnesses, tried in that order:
+///
+/// * **`stream.closed` as the last line.** *Last* is the assertion, not an incidental: the marker
+///   is a claim that nothing follows it, and a file with lines after one is a file somebody
+///   concatenated or a producer that kept writing. Either way the claim is not about these bytes,
+///   so it is not read as one — the same rule the per-line format tag exists for.
+/// * **`session.started.hermetic.stream_complete`.** The same statement made in the attestation,
+///   for a run whose stream was assembled rather than streamed. `false` is a statement too, and it
+///   is not this one: only `true` closes a stream.
+///
+/// A stream carrying both is closed by the event, and the counts come from it.
+fn stream_closure(lines: &[Line]) -> Option<StreamClose> {
+    let last = lines.last()?;
+    if str_at(&last.value, "event") == Some(STREAM_CLOSED_EVENT) {
+        return Some(StreamClose {
+            witness: ClosureWitness::ClosingEvent,
+            events: u64_at(&last.value, "events"),
+            reason: text_at(&last.value, "reason"),
+        });
+    }
+    lines
+        .iter()
+        .filter(|line| str_at(&line.value, "event") == Some("session.started"))
+        .find_map(|line| {
+            let hermetic = line.value.get("hermetic")?;
+            (hermetic.get("stream_complete")?.as_bool()?).then(|| StreamClose {
+                witness: ClosureWitness::Attestation,
+                events: u64_at(hermetic, "stream_events"),
+                reason: text_at(hermetic, "stream_reason"),
+            })
+        })
 }
 
 /// Every call the seam refused, and whether it decided anything at all.
@@ -380,6 +417,12 @@ fn read_event(
                 events: std::mem::take(unattributed),
             });
         }
+        // The producer closing its own stream. Read in [`stream_closure`] rather than here, and
+        // deliberately **not** an IR event: it is a statement *about* the record and not a thing
+        // that happened in the run, so an event family for it would make it show up in every
+        // census and every count. Routing it through the opaque arm instead would be the worst
+        // available outcome — the marker would poison exactly the rows it exists to decide.
+        Some(STREAM_CLOSED_EVENT) => {}
         Some(known) if CONTROL_PLANE_EVENTS.contains(&known) => {}
         // An event name this build does not know. Unknown, and therefore opaque: it may have been
         // a tool call, and reading it as absent is the lie this whole design exists to prevent.

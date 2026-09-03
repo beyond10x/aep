@@ -609,6 +609,15 @@ struct RawRunManifest {
     /// verb can honestly describe. The key is still required.
     #[serde(default, deserialize_with = "written_down")]
     model: Written,
+    /// The model the run **asked** for, where it asked for one.
+    ///
+    /// A plain `Option` and not a [`Written`], which is the asymmetry with the field above rather
+    /// than an inconsistency: `model`'s two absences are different facts (*nobody recorded it*
+    /// against *the harness never said*), and this one's are not — a manifest with no
+    /// `model_requested` key and one that asked for nothing are the same run. So the key is written
+    /// only where there is something to write, and every manifest assembled before `--model`
+    /// existed keeps its bytes.
+    model_requested: Option<String>,
     /// The harness version the arm is pinned to.
     harness_version: Option<String>,
     /// The transcript the record beside it was judged over.
@@ -715,6 +724,11 @@ struct RunManifest {
     plugins: Vec<ManifestPlugin>,
     /// The model, where the harness said which.
     model: Option<String>,
+    /// The model the run asked for, where it asked for one.
+    ///
+    /// Read and kept apart from [`Self::model`]; nothing here reconciles the two, and `eval matrix`
+    /// groups on neither. A phase that fixed a model checks it by reading both.
+    model_requested: Option<String>,
     /// The harness version pin.
     harness_version: String,
     /// The transcript this manifest claims to describe.
@@ -790,6 +804,7 @@ impl TryFrom<RawRunManifest> for RunManifest {
             plugin_digest,
             plugins,
             model,
+            model_requested: raw.model_requested,
             harness_version: harness_version.expect("a harness version was read"),
             transcript_digest: transcript_digest.expect("a transcript digest was read"),
             observed_at: observed_at.expect("an observation time was read"),
@@ -2022,6 +2037,13 @@ enum RunRefusal {
         /// The harness with none.
         harness: Harness,
     },
+    /// `--model` was given for a harness whose adapter does not take one.
+    ModelHarnessTakesNoModel {
+        /// The harness that does not.
+        harness: Harness,
+        /// What was asked for, so the operator can move it to the right invocation.
+        model: String,
+    },
     /// Arm `raw` is the arm with no plugin in it, and a `--plugin` names one.
     PluginOnRawArm {
         /// What was named.
@@ -2082,6 +2104,7 @@ impl RunRefusal {
             Self::PluginSpelling { .. } => "EVAL-RUN-013",
             Self::PluginHarnessHasNoMarketplace { .. } => "EVAL-RUN-014",
             Self::PluginOnRawArm { .. } => "EVAL-RUN-015",
+            Self::ModelHarnessTakesNoModel { .. } => "EVAL-RUN-016",
             Self::DrivenIsNotLaunchedHere => "EVAL-RUN-004",
             Self::NoWorkingTree => "EVAL-RUN-005",
             Self::BudgetWouldBeExceeded { .. } => "EVAL-RUN-006",
@@ -2152,6 +2175,16 @@ impl fmt::Display for RunRefusal {
                  \n\
                  `--plugin` is Claude Code only. A checked-out plugin directory is not: \
                  `--plugin-dir DIR` is offered on every harness metaharness drives"
+            ),
+            Self::ModelHarnessTakesNoModel { harness, model } => write!(
+                f,
+                "`--model {model}` is forwarded to `metaharness run <harness> --model`, and \
+                 `{harness}` has no adapter that takes one at metaharness 0.5.0 — it is refused by \
+                 name rather than accepted and dropped, because a run that silently used the \
+                 default model would enter the matrix as a run that pinned one.\n\
+                 \n\
+                 `--model` is Claude Code only. When the other adapters take it, this refusal is \
+                 what has to be removed for them, one harness at a time"
             ),
             Self::PluginOnRawArm { plugin } => write!(
                 f,
@@ -3045,6 +3078,171 @@ fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
     stated.then_some(total)
 }
 
+// --- redacting the operator out of a recorded stream ---------------------------------------------
+
+/// What replaces the operator's home directory in a redacted stream.
+const HOME_PLACEHOLDER: &str = "~";
+
+/// What replaces the operator's user name.
+const USER_PLACEHOLDER: &str = "<user>";
+
+/// The operator's own identity, as `--redact` removes it from a stream before anything is digested.
+///
+/// # Why this exists beside the report's redaction and not inside it
+///
+/// `--redact` on the *report* replaces every quoted command and path with a digest, which is what
+/// makes a **record** publishable. It does nothing for the **stream** beside it, and the stream is
+/// the document a case's `recorded/` directory is for. Eight streams recorded on 2026-09-03 carried
+/// `/home/<operator>` between 18 and 49 times each and the operator's user name between 20 and 51
+/// times, so none of them could be committed anywhere public.
+///
+/// # What is replaced, and what is deliberately not
+///
+/// * the home directory — `$HOME` **and** its realpath, because a home reached through a symlink
+///   is the same home and only one of the two spellings is in the environment — becomes `~`;
+/// * the user name — `$USER`, and the last segment of `$HOME`, because a machine where those differ
+///   still has both strings in its transcripts — becomes `<user>`.
+///
+/// Repository names, commit ids and branch names are **not** touched: they are the run's subject,
+/// and a redaction that removed them would leave a stream nobody can check anything against.
+///
+/// # Two rules that keep this from corrupting a stream
+///
+/// * **Longest first.** `/home/ada` is replaced before `ada` can be, so a path never degrades to
+///   `/home/<user>`.
+/// * **The user name is replaced at word boundaries only**, where a boundary is anything outside
+///   `[A-Za-z0-9_]`. A user named `tim` must not rewrite `multimodal`'s neighbours or a base64
+///   payload that happens to contain the three letters, and a substring replacement of a short name
+///   would do exactly that.
+///
+/// The substitution is over the **bytes of the whole stream** rather than over parsed fields, which
+/// is the same decision for the same reason: an event text, a tool argument, a `cwd`, a transcript
+/// path and a shell command are all places a home path appears, and a reader that enumerated the
+/// fields it knew about would miss the one added next release. Neither replacement can produce
+/// invalid JSON — `~`, `<` and `>` need no escaping inside a JSON string — so a redacted stream is
+/// still a stream this runner reads.
+#[derive(Debug, Default)]
+struct Operator {
+    /// Absolute paths that are this operator's home, longest first.
+    homes: Vec<String>,
+    /// Spellings of this operator's user name, longest first.
+    names: Vec<String>,
+}
+
+impl Operator {
+    /// Reads the operator's identity out of the environment.
+    ///
+    /// The environment and not a flag: the thing being removed is *whoever is running this*, and an
+    /// operator who had to name their own home would forget on the run that mattered.
+    fn from_environment() -> Self {
+        let mut homes = Vec::new();
+        let mut names = Vec::new();
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = PathBuf::from(home);
+            if let Some(segment) = home.file_name().and_then(|name| name.to_str()) {
+                names.push(segment.to_owned());
+            }
+            // The realpath as well as the spelling, because `$HOME` reached through a symlink and
+            // the directory it lands on are the same home and a stream carries whichever one the
+            // tool that wrote the line happened to resolve.
+            if let Ok(real) = std::fs::canonicalize(&home) {
+                homes.push(real.display().to_string());
+            }
+            homes.push(home.display().to_string());
+        }
+        for key in ["USER", "LOGNAME"] {
+            if let Some(name) = std::env::var_os(key).and_then(|value| value.into_string().ok()) {
+                names.push(name);
+            }
+        }
+        Self::new(homes, names)
+    }
+
+    /// Builds one from explicit values. Ordered and deduplicated here, so `scrub` cannot be wrong
+    /// about precedence whatever order a caller supplied.
+    fn new(homes: Vec<String>, names: Vec<String>) -> Self {
+        let order = |values: Vec<String>| {
+            let mut values: Vec<String> = values.into_iter().filter(|v| !v.is_empty()).collect();
+            values.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+            values.dedup();
+            values
+        };
+        Self {
+            homes: order(homes),
+            names: order(names),
+        }
+    }
+
+    /// The stream with this operator taken out of it.
+    ///
+    /// Returns the bytes unchanged when there is nothing to remove, so a machine with no `HOME` in
+    /// the environment produces a stream identical to the one it recorded rather than a mangled
+    /// one.
+    fn scrub(&self, bytes: &[u8]) -> Vec<u8> {
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            // Not text; there are no paths in it this could find, and rewriting bytes it cannot
+            // read would corrupt whatever it is.
+            return bytes.to_vec();
+        };
+        let mut scrubbed = text.to_owned();
+        for home in &self.homes {
+            scrubbed = scrubbed.replace(home.as_str(), HOME_PLACEHOLDER);
+        }
+        for name in &self.names {
+            scrubbed = replace_word(&scrubbed, name, USER_PLACEHOLDER);
+        }
+        scrubbed.into_bytes()
+    }
+
+    /// Whether this operator has anything to remove.
+    fn is_empty(&self) -> bool {
+        self.homes.is_empty() && self.names.is_empty()
+    }
+}
+
+/// Replaces `needle` with `replacement` where it stands as a word.
+///
+/// A word boundary is anything outside `[A-Za-z0-9_]`, so `ada` in `/home/ada`, `"user":"ada"` and
+/// `ada-scratch` is replaced and `ada` inside `adapter` is not. Written out rather than reached for
+/// with a regular expression because the pattern is one literal and a dependency here would be a
+/// dependency for the whole binary.
+fn replace_word(haystack: &str, needle: &str, replacement: &str) -> String {
+    if needle.is_empty() {
+        return haystack.to_owned();
+    }
+    let word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+    let bytes = haystack.as_bytes();
+    let mut out = String::with_capacity(haystack.len());
+    let mut cursor = 0;
+    while let Some(hit) = haystack[cursor..].find(needle) {
+        let start = cursor + hit;
+        let end = start + needle.len();
+        let bounded = (start == 0 || !word(bytes[start - 1]))
+            && (end == bytes.len() || !word(bytes[end]));
+        out.push_str(&haystack[cursor..start]);
+        out.push_str(if bounded { replacement } else { &haystack[start..end] });
+        cursor = end;
+    }
+    out.push_str(&haystack[cursor..]);
+    out
+}
+
+/// The stream as it goes to disk and into the digest: redacted when the caller asked for it.
+///
+/// One function, called on both paths, because the manifest's `transcript_digest` is taken over
+/// whatever this returns — a runner that wrote redacted bytes and digested the raw ones would
+/// publish a manifest naming a file that does not exist.
+fn stream_for(events: Vec<u8>, redact: bool) -> Vec<u8> {
+    if !redact {
+        return events;
+    }
+    let operator = Operator::from_environment();
+    if operator.is_empty() {
+        return events;
+    }
+    operator.scrub(&events)
+}
+
 // --- assembling one run's three documents ---------------------------------------------------------
 
 /// The three documents one run leaves behind.
@@ -3075,6 +3273,14 @@ struct Plan {
     /// *this run asked for these* — and the stream's job is to say whether they arrived. The two
     /// are joined in [`plugin_attestation`], and a declaration nothing attested is refused there.
     plugins: Vec<MarketplacePlugin>,
+    /// The model this run asked for, where it named one.
+    ///
+    /// The runner's own fact for the same reason the plugins are, and kept **apart** from the model
+    /// the attestation reports rather than reconciled with it: the flag states and the vendor
+    /// resolves, so `claude-sonnet-4-6` asked for and `claude-sonnet-4-6-20260814` attested is a
+    /// run that went as planned, and a runner that folded the two into one field would have thrown
+    /// away the only evidence that it did.
+    model_requested: Option<String>,
 }
 
 impl Plan {
@@ -3187,6 +3393,18 @@ fn manifest_text(
     // one names the bytes of a directory the operator checked out, the other names a pinned
     // third-party plugin and the pin it was resolved at. Written only where there is one, so every
     // manifest assembled before `--plugin` existed keeps its bytes and two waves still diff.
+    // Immediately after the model the attestation reported, because that is the field a reader
+    // compares it against. Written **only** where the run named one, on the `plugins:` block's
+    // reasoning: every manifest assembled before `--model` existed keeps its bytes, so two waves
+    // still diff and no golden churns for a column nobody added.
+    if let Some(requested) = &plan.model_requested {
+        let after_model = lines
+            .iter()
+            .position(|line| line.starts_with("model:"))
+            .expect("the manifest always writes a model line")
+            + 1;
+        lines.insert(after_model, format!("model_requested: {requested}"));
+    }
     if !session.plugins.is_empty() {
         let block = std::iter::once("plugins:".to_owned())
             .chain(session.plugins.iter().map(|plugin| {
@@ -3286,6 +3504,7 @@ fn spawn_argv(
     working_directory: &Path,
     prompt: &str,
     plugin_directory: Option<&Path>,
+    model: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         binary.to_owned(),
@@ -3299,6 +3518,14 @@ fn spawn_argv(
         "-p".to_owned(),
         prompt.to_owned(),
     ];
+    // Before the treatment, and on every arm: the model is the *condition* a phase holds fixed
+    // across its arms, so an argv where it moved with the arm would be an experiment varying two
+    // things. Absent where the operator named none, which is metaharness's default and this
+    // runner's until 0.44.0 — so an invocation that does not pin one keeps the argv it had.
+    if let Some(model) = model {
+        argv.push("--model".to_owned());
+        argv.push(model.to_owned());
+    }
     if plan.arm == Arm::Plugin {
         if let Some(directory) = plugin_directory {
             argv.push("--plugin-dir".to_owned());
@@ -3322,7 +3549,7 @@ fn spawn_argv(
 /// The stream is captured whatever the tool exits with, and written down before anything is read
 /// out of it: a run that was paid for and then discarded because its last event was missing is the
 /// worst outcome this verb has.
-fn spawn(plan: &Plan, argv: &[String], stream_path: &Path) -> Result<Vec<u8>> {
+fn spawn(plan: &Plan, argv: &[String], stream_path: &Path, redact: bool) -> Result<Vec<u8>> {
     let spawned = std::process::Command::new(&argv[0])
         .args(&argv[1..])
         .stdin(std::process::Stdio::null())
@@ -3332,7 +3559,11 @@ fn spawn(plan: &Plan, argv: &[String], stream_path: &Path) -> Result<Vec<u8>> {
         Err(error) => bail!("`{}` could not be run: {error}", argv.join(" ")),
     };
 
-    std::fs::write(stream_path, &output.stdout)
+    // Redacted **before** the write and not after it, so the operator's home never reaches the
+    // disk. The substitution is a pure byte transform that cannot fail, so nothing about the "write
+    // the paid run down before anything is read out of it" rule is given up by doing it here.
+    let stream = stream_for(output.stdout, redact);
+    std::fs::write(stream_path, &stream)
         .with_context(|| format!("writing {}", stream_path.display()))?;
 
     if !output.status.success() {
@@ -3350,7 +3581,7 @@ fn spawn(plan: &Plan, argv: &[String], stream_path: &Path) -> Result<Vec<u8>> {
             }],
         ));
     }
-    Ok(output.stdout)
+    Ok(stream)
 }
 
 // --- the verb -------------------------------------------------------------------------------------
@@ -3432,6 +3663,21 @@ pub(crate) struct RunArgs {
     /// The rendered instruction documents arm `raw` is given.
     #[arg(long, value_name = "DIR", default_value = "generated/instructions")]
     instructions: PathBuf,
+    /// The model the harness is asked to use, forwarded to `metaharness run <harness> --model`.
+    ///
+    /// **Verbatim, and resolved never.** metaharness 0.5.0 passes the string through to the vendor,
+    /// which resolves it; a runner that normalised an alias here would be pinning something other
+    /// than what the operator wrote down, and the manifest would say the wrong thing about what a
+    /// bench phase asked for.
+    ///
+    /// Claude Code only, on `--plugin`'s reasoning: the other adapters take no model flag at
+    /// metaharness 0.5.0, and a flag accepted and dropped is worse than one refused.
+    ///
+    /// The manifest records this beside the `model` the attestation reports. The two are different
+    /// facts — *what was asked for* and *what ran* — and a phase that fixes a model is checked by
+    /// comparing them.
+    #[arg(long, value_name = "MODEL")]
+    model: Option<String>,
     /// Cite event indices and digests only in the record beside each run.
     ///
     /// Opt-in, exactly as `protocol trace check --redact` is and for the same reason — a report is
@@ -3463,11 +3709,27 @@ fn ingest_recorded(
         arm: args.arm,
         harness: args.harness,
         plugins,
+        model_requested: args.model.clone(),
     };
-    let events = std::fs::read(stream)
+    let raw = std::fs::read(stream)
         .with_context(|| format!("reading the stream at {}", stream.display()))?;
+    let events = stream_for(raw, args.redact);
+    // Judged **before** anything is written, so a refused ingest leaves the output directory as it
+    // found it (invariant 7). The runner already assembles every document before writing one; the
+    // redacted stream joins them rather than getting a head start.
     let products = ingest(&plan, &events, &args.observed_at, args.redact)?;
-    write_products(&args.out, &plan, None, &products)?;
+    // Under `--redact` the redacted stream is a **product**, and this is the path that produces it:
+    // a paid run recorded on the operator's machine is re-ingested here to get the documents a
+    // public `recorded/` directory takes, with the manifest's digest over the bytes that were
+    // written. Without `--redact` the caller's file is the record and nothing is rewritten.
+    let recorded = if args.redact {
+        let path = args.out.join(format!("{}{EVENTS_SUFFIX}", plan.name()));
+        std::fs::write(&path, &events).with_context(|| format!("writing {}", path.display()))?;
+        Some(path)
+    } else {
+        None
+    };
+    write_products(&args.out, &plan, recorded.as_deref(), &products)?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -3501,7 +3763,10 @@ fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Re
     Ok(())
 }
 
-/// Reads every `--plugin` value, and refuses the ones that name nothing this runner may forward.
+/// Reads the flags this runner forwards to `metaharness` verbatim, and refuses what it may not.
+///
+/// `--plugin`, whose spelling must be pinned and whose harness must have a marketplace, and
+/// `--model`, whose harness must have an adapter that takes one.
 ///
 /// **Before the tool is looked for and before the live flag is read**, so a spelling mistake costs
 /// nothing to find and does not depend on what is installed. Every refusal is collected rather than
@@ -3517,6 +3782,17 @@ fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
                 given: given.clone(),
                 detail,
             }),
+        }
+    }
+    // Refused by name on the harnesses whose adapters take no model, and on **both** paths: a
+    // `--stream` re-ingest records `model_requested` in the manifest, so a flag this runner would
+    // not have been able to forward must not be able to enter the record either.
+    if let Some(model) = &args.model {
+        if args.harness != Harness::Claude {
+            refusals.push(RunRefusal::ModelHarnessTakesNoModel {
+                harness: args.harness,
+                model: model.clone(),
+            });
         }
     }
     if !args.plugins.is_empty() {
@@ -3607,6 +3883,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             arm: args.arm,
             harness: args.harness,
             plugins: plugins.clone(),
+            model_requested: args.model.clone(),
         };
         let prompt = prompt_for(&plan, &args.instructions)?;
         let invocation = spawn_argv(
@@ -3615,10 +3892,11 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             working_directory,
             &prompt,
             args.plugin_dir.as_deref(),
+            args.model.as_deref(),
         );
         let stream_path = args.out.join(format!("{}{EVENTS_SUFFIX}", plan.name()));
 
-        let events = spawn(&plan, &invocation, &stream_path)?;
+        let events = spawn(&plan, &invocation, &stream_path, args.redact)?;
         let products = ingest(&plan, &events, &args.observed_at, args.redact)?;
         // The stream's own stated cost, and the assumption **only** where it stated none — a cost
         // this reader could not convert never arrives here as `None`, because `ingest` refuses it
@@ -4158,6 +4436,7 @@ observed_at: 2026-08-23
             plugin_digest: None,
             plugins: Vec::new(),
             model: Some("claude-sonnet-5".to_owned()),
+            model_requested: None,
             harness_version: "claude 2.1.239".to_owned(),
             transcript_digest: transcript.to_owned(),
             observed_at: "2026-08-23".to_owned(),
@@ -4452,6 +4731,7 @@ observed_at: 2026-08-23
             arm,
             harness,
             plugins: Vec::new(),
+            model_requested: None,
         }
     }
 
@@ -4475,6 +4755,7 @@ observed_at: 2026-08-23
             Path::new("/work/subject"),
             "do the thing",
             Some(Path::new("/plugins/aep-planning")),
+            None,
         );
         let forwarded: Vec<&String> = argv
             .iter()
@@ -4494,6 +4775,66 @@ observed_at: 2026-08-23
             argv.windows(2)
                 .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
             "beside the directory rather than instead of it: {argv:?}"
+        );
+    }
+
+    #[test]
+    fn the_model_is_forwarded_verbatim_and_before_the_treatment() {
+        // The dry run of `--model`: the argv, with nothing spawned. *Verbatim* is a claim about
+        // bytes, so it is asserted on bytes — a runner that normalised `claude-sonnet-4-6` to a
+        // dated id would be pinning something other than what the operator wrote down.
+        let tree = PathBuf::from("/work/scratch");
+        let raw = spawn_argv(
+            &plan_of(Arm::Raw, Harness::Claude),
+            "metaharness",
+            &tree,
+            "do it",
+            None,
+            Some("claude-sonnet-4-6"),
+        );
+        assert_eq!(
+            raw,
+            vec![
+                "metaharness",
+                "run",
+                "claude",
+                "--hermetic",
+                "--cwd",
+                "/work/scratch",
+                "--decisions",
+                "observe",
+                "-p",
+                "do it",
+                "--model",
+                "claude-sonnet-4-6",
+            ]
+        );
+        let plugin = spawn_argv(
+            &plan_of(Arm::Plugin, Harness::Claude),
+            "metaharness",
+            &tree,
+            "do it",
+            Some(Path::new("/plugins/aep-planning")),
+            Some("claude-sonnet-4-6"),
+        );
+        assert_eq!(
+            plugin[..raw.len()],
+            raw[..],
+            "the model is a condition both arms are held at, so it sits before the treatment and \
+             not inside it"
+        );
+        assert!(
+            !spawn_argv(
+                &plan_of(Arm::Raw, Harness::Claude),
+                "metaharness",
+                &tree,
+                "do it",
+                None,
+                None,
+            )
+            .iter()
+            .any(|word| word == "--model"),
+            "an invocation that pins no model keeps the argv it had before the flag existed"
         );
     }
 
@@ -4527,6 +4868,7 @@ observed_at: 2026-08-23
             &tree,
             "do it",
             None,
+            None,
         );
         let plugin = spawn_argv(
             &plan_of(Arm::Plugin, Harness::Claude),
@@ -4534,6 +4876,7 @@ observed_at: 2026-08-23
             &tree,
             "do it",
             Some(Path::new("/plugins/aep-planning")),
+            None,
         );
 
         assert_eq!(
@@ -4570,12 +4913,64 @@ observed_at: 2026-08-23
                 &tree,
                 "do it",
                 Some(Path::new("/plugins/aep-planning")),
+                None,
             )
             .last()
             .expect("a plugin directory"),
             "/plugins/aep-planning",
             "the caller-selected plugin is independent of the harness"
         );
+    }
+
+    #[test]
+    fn redaction_removes_both_spellings_of_the_home_and_then_the_name() {
+        // Longest first, which is the rule that keeps `/home/ada` from degrading to `/home/<user>`,
+        // and both spellings of the home because a symlinked `$HOME` and its realpath are the same
+        // home and a stream carries whichever one the tool that wrote the line resolved.
+        let operator = Operator::new(
+            vec!["/home/ada".to_owned(), "/mnt/users/ada".to_owned()],
+            vec!["ada".to_owned()],
+        );
+        let stream = concat!(
+            r#"{"cwd":"/home/ada/work","transcript":"/mnt/users/ada/.cache/t.jsonl","#,
+            r#""text":"ada ran it from /home/ada as ada-scratch","user":"ada"}"#
+        );
+        let scrubbed = String::from_utf8(operator.scrub(stream.as_bytes())).expect("still text");
+        assert!(!scrubbed.contains("/home/ada") && !scrubbed.contains("/mnt/users/ada"));
+        assert!(!scrubbed.contains("ada\""), "{scrubbed}");
+        assert!(
+            scrubbed.contains(r#""cwd":"~/work""#)
+                && scrubbed.contains(r#""transcript":"~/.cache/t.jsonl""#)
+                && scrubbed.contains("<user> ran it from ~ as <user>-scratch")
+                && scrubbed.contains(r#""user":"<user>""#),
+            "{scrubbed}"
+        );
+        // Still JSON: neither placeholder needs escaping inside a JSON string.
+        serde_json::from_str::<serde_json::Value>(&scrubbed).expect("a redacted line is JSON");
+    }
+
+    #[test]
+    fn a_user_name_is_replaced_as_a_word_and_never_inside_another_one() {
+        // A short user name is the case that would corrupt a stream: `tim` as a substring occurs in
+        // `runtime`, `estimate` and any base64 payload that happens to contain the three letters,
+        // and a checker reading a stream with those rewritten would be reading a different run.
+        let operator = Operator::new(Vec::new(), vec!["tim".to_owned()]);
+        let stream = r#"{"text":"tim measured the runtime estimate; tim-2 did not","who":"tim"}"#;
+        let scrubbed = String::from_utf8(operator.scrub(stream.as_bytes())).expect("still text");
+        assert_eq!(
+            scrubbed,
+            r#"{"text":"<user> measured the runtime estimate; <user>-2 did not","who":"<user>"}"#
+        );
+    }
+
+    #[test]
+    fn an_operator_with_nothing_to_remove_leaves_the_stream_byte_identical() {
+        // A machine with no `HOME` in the environment records the stream it recorded, rather than a
+        // mangled one — and the digest in the manifest is over exactly those bytes.
+        let stream = b"{\"text\":\"nothing here\"}";
+        assert!(Operator::default().is_empty());
+        assert_eq!(Operator::default().scrub(stream), stream.to_vec());
+        assert_eq!(stream_for(stream.to_vec(), false), stream.to_vec());
     }
 
     #[test]

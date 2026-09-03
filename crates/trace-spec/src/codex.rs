@@ -62,7 +62,7 @@ use trace_domain::code::{TraceCode, ValidationErrors};
 use trace_domain::digest::digest_of_bytes;
 use trace_domain::ir::{
     AdapterRef, EventKind, OpaqueEvent, Recorded, SessionStart, ToolCall, ToolResult, TraceEvent,
-    TraceIr,
+    TraceIr, VENDOR_CLOSURE_MARKERS,
 };
 
 /// This adapter, and the harness versions it was written against.
@@ -139,12 +139,14 @@ fn read_text(bytes: &[u8], text: &str) -> Result<TraceIr, ValidationErrors> {
         return Err(errors);
     }
 
-    Ok(TraceIr::new(
-        digest_of_bytes(bytes),
-        CODEX_ROLLOUT,
-        events,
-        Vec::new(),
-    ))
+    // A rollout carries no terminal record at all — this reader lifts none — so it states nothing
+    // about its own completeness and a negative expectation over one stays `unk`. That is the
+    // honest answer rather than a gap in this reader: a rollout file is an append log a session
+    // wrote as it went, and nothing in it says the session finished writing.
+    Ok(
+        TraceIr::new(digest_of_bytes(bytes), CODEX_ROLLOUT, events, Vec::new())
+            .closes_with(VENDOR_CLOSURE_MARKERS, None),
+    )
 }
 
 /// One rollout line into zero or more IR events, never zero in the end.

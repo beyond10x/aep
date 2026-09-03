@@ -680,6 +680,89 @@ pub struct TraceIr {
     pub events: Vec<TraceEvent>,
     /// One record per API-bearing assistant event, in order.
     pub requests: Vec<AssistantRequest>,
+    /// The producer's own statement that this transcript is the whole run, where it made one.
+    ///
+    /// [`None`] is not *"the stream was truncated"*; it is *"nobody said"*, which is the third
+    /// value this whole crate is built on. A negative expectation — *"the tool was never called"* —
+    /// is the one shape that needs the statement, because the only thing that can falsify it is an
+    /// event, and a record that might be missing events cannot report one absent.
+    pub stream_close: Option<StreamClose>,
+    /// Which statements this transcript's wire is able to carry, so a report that says one is
+    /// missing can name the ones that would have decided it.
+    ///
+    /// Set by the adapter, because *what closes a stream* is a fact about a wire and the adapter is
+    /// the only thing here that knows which wire it read.
+    pub closure_markers: &'static [&'static str],
+}
+
+/// Where a statement about a stream's wholeness came from.
+///
+/// Two witnesses and no third: both are the producer's own, made on purpose. Nothing here is
+/// inferred from the shape of a file, because a capture cut off mid-run looks exactly like a run
+/// that stopped early, and a reader that guessed between them would be manufacturing the fact the
+/// statement exists to supply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClosureWitness {
+    /// The terminal event the producer writes as it closes a run — metaharness's `stream.closed`.
+    ClosingEvent,
+    /// The run's attestation, which states completeness as a field.
+    Attestation,
+    /// A vendor transcript whose **last** record is the run's terminal record.
+    ///
+    /// The vendor writes it and then stops, so a file that ends with it ends where the run did.
+    /// This is the only witness the vendor wires have, and it is deliberately *not* accepted on
+    /// metaharness's: that wire carries one terminal record **per session**, and a driven run is a
+    /// concatenation of sessions — a subagent's `session.ended` says a session ended and says
+    /// nothing at all about the stream, which is why metaharness grew a marker of its own.
+    TerminalRecord,
+}
+
+impl ClosureWitness {
+    /// The field or event name a report prints for it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ClosingEvent => STREAM_CLOSED_EVENT,
+            Self::Attestation => STREAM_COMPLETE_ATTESTATION,
+            Self::TerminalRecord => TERMINAL_RECORD_MARKER,
+        }
+    }
+}
+
+/// The event name a producer closes a stream with.
+pub const STREAM_CLOSED_EVENT: &str = "stream.closed";
+
+/// The attestation field that states the same thing.
+pub const STREAM_COMPLETE_ATTESTATION: &str = "hermetic.stream_complete";
+
+/// How a vendor transcript says the same thing, having no marker of its own.
+pub const TERMINAL_RECORD_MARKER: &str = "the run's terminal record as the transcript's last line";
+
+/// What metaharness's own wire accepts, in the order a reader looks for them.
+pub const EVENT_STREAM_CLOSURE_MARKERS: &[&str] =
+    &[STREAM_CLOSED_EVENT, STREAM_COMPLETE_ATTESTATION];
+
+/// What a vendor transcript accepts.
+pub const VENDOR_CLOSURE_MARKERS: &[&str] = &[TERMINAL_RECORD_MARKER];
+
+/// The producer's statement that the transcript is the whole run.
+///
+/// The counts are the producer's and are carried rather than checked here: `trace-domain` decides
+/// nothing about IO, and a reader that refused a stream whose declared count disagreed with what it
+/// parsed would be turning a reporting question into a refusal. What the checker uses is the fact
+/// that the statement was made; what a person reads is the rest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StreamClose {
+    /// Which of the two producers' statements this is.
+    pub witness: ClosureWitness,
+    /// How many events the producer says the stream carried, where it said.
+    pub events: Option<u64>,
+    /// Why it ended — `completed`, `budget`, `killed`, `error`, `steer-halt` — where it said.
+    ///
+    /// A [`String`] and not an enum: the vocabulary is metaharness's, a reason this build has not
+    /// heard of is still a closed stream, and an enum here would refuse a run for a word.
+    pub reason: Option<String>,
 }
 
 /// Which adapter read the transcript.
@@ -734,7 +817,26 @@ impl TraceIr {
             adapter,
             events,
             requests,
+            stream_close: None,
+            closure_markers: &[],
         }
+    }
+
+    /// Declares which completeness statements this transcript's wire can carry, and whether one
+    /// was made.
+    ///
+    /// A builder step rather than two more arguments to [`Self::new`], so an IR assembled in a test
+    /// from a list of events stays a one-line construction and states nothing about a wire it does
+    /// not have.
+    #[must_use]
+    pub fn closes_with(
+        mut self,
+        markers: &'static [&'static str],
+        close: Option<StreamClose>,
+    ) -> Self {
+        self.closure_markers = markers;
+        self.stream_close = close;
+        self
     }
 
     /// The run's opening record, where the transcript has one.
