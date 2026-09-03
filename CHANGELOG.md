@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the AEP 0.43.0 rendered-plan change summary within the shared `b10x-change/v1` limit so the
+  deterministic organization documentation snapshot can ingest it.
+
 ### Added
 
 - **`aep eval run --plugin <repo>@<name>@<version-or-commit>`**, repeatable, forwarded **verbatim**

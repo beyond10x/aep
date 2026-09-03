@@ -3,7 +3,7 @@ id: aep/rendered-plans-0.43.0
 repository: aep
 publishedAt: 2026-09-03T00:00:00Z
 title: The plan renders itself, and a conformance report becomes evidence without being retyped
-summary: AEP 0.43.0 lets a documentation site publish a plan without rebuilding it — `artifact board --format markdown` writes the page and `artifact graph --format mermaid` writes the diagram, with each column's blurb coming from `descriptions:` on its own ladder rather than a hard-coded map beside the renderer. `artifact evidence --from` reads an `ess-conformance-report/1` into the record it implies, taking the run's own instant rather than one the caller chose.
+summary: AEP 0.43.0 lets a documentation site publish plans directly — `artifact board --format markdown` renders the page, `artifact graph --format mermaid` renders the diagram, and each column reads its own ladder `descriptions:`. `artifact evidence --from` converts an `ess-conformance-report/1` into evidence using the report's recorded run instant.
 kind: capability
 impact: significant
 source:
