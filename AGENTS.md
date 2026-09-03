@@ -75,9 +75,11 @@ must refuse unknown fields and contradictory totals.
 Harness-specific skills, agents, and marketplace manifests live in the sibling `agentplugins`
 repository. This repository carries no plugin source and no marketplace manifest.
 
-`aep eval run --arm plugin` requires an explicit `--plugin-dir`. `aep drive run` accepts repeatable
-`--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR` fallback. Neither command guesses a path under
-this checkout.
+`aep eval run --arm plugin` requires the treatment to be named explicitly: `--plugin-dir` for a tree
+checked out on this machine, or `--plugin <repo>@<name>@<version-or-commit>` for a pinned plugin the
+operator installed from a marketplace, which is forwarded to `metaharness` verbatim and resolved
+here never. `aep drive run` accepts repeatable `--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR`
+fallback. Neither command guesses a path under this checkout.
 
 ### Metaharness
 

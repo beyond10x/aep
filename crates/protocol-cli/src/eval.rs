@@ -273,8 +273,14 @@ enum Refusal {
     },
     /// Arm `raw` is the arm with no plugin in it, and this manifest names one.
     PluginDigestOnRawArm,
-    /// Arm `plugin` is the arm whose subject is the plugin, and this manifest has no digest for it.
+    /// Arm `plugin` is the arm whose subject is the plugin, and this manifest names no plugin at
+    /// all — neither a directory digest nor a marketplace plugin.
     PluginDigestAbsentOnPluginArm,
+    /// Arm `raw` is the arm with no plugin in it, and this manifest lists a marketplace plugin.
+    MarketplacePluginOnRawArm {
+        /// The first one it lists.
+        plugin: String,
+    },
     /// A digest field is not a digest.
     DigestMalformed {
         /// Which field.
@@ -362,6 +368,7 @@ impl Refusal {
             Self::FieldEmpty { .. } => "EVAL-MANIFEST-004",
             Self::PluginDigestOnRawArm => "EVAL-MANIFEST-005",
             Self::PluginDigestAbsentOnPluginArm => "EVAL-MANIFEST-006",
+            Self::MarketplacePluginOnRawArm { .. } => "EVAL-MANIFEST-008",
             Self::DigestMalformed { .. } => "EVAL-MANIFEST-007",
             Self::NotARecord { .. } => "EVAL-RECORD-001",
             Self::RowWithoutId { .. } => "EVAL-RECORD-002",
@@ -381,6 +388,10 @@ impl Refusal {
 }
 
 impl fmt::Display for Refusal {
+    // One arm per refusal, each carrying the whole sentence a person reads. The same reasoning
+    // `RunRefusal`'s own `Display` gives below: splitting it would put half the sentences somewhere
+    // else without making any of them shorter, and reading them together is the point.
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ", self.code())?;
         match self {
@@ -412,8 +423,18 @@ impl fmt::Display for Refusal {
             Self::PluginDigestAbsentOnPluginArm => write!(
                 f,
                 "arm `plugin` is the arm whose subject is the plugin, and this manifest writes \
-                 `plugin_digest: null`. A matrix row that cannot say which plugin was measured \
-                 measures nothing"
+                 `plugin_digest: null` and lists no `plugins`. A matrix row that cannot say which \
+                 plugin was measured measures nothing.\n\
+                 \n\
+                 Either mechanism answers this: a directory copied in with `--plugin-dir` writes \
+                 the digest, and a pinned marketplace plugin installed with `--plugin` writes a \
+                 `plugins` entry. What is refused is a treated arm naming neither"
+            ),
+            Self::MarketplacePluginOnRawArm { plugin } => write!(
+                f,
+                "arm `raw` is the arm with no plugin in it, and this manifest lists the \
+                 marketplace plugin `{plugin}`. Either the run had it — in which case it is arm \
+                 `plugin` — or the list belongs to another run"
             ),
             Self::DigestMalformed { field, written } => write!(
                 f,
@@ -570,6 +591,16 @@ struct RawRunManifest {
     /// apart.
     #[serde(default, deserialize_with = "written_down")]
     plugin_digest: Written,
+    /// The pinned marketplace plugins the run declared and the attestation confirmed.
+    ///
+    /// An `Option`-free `Vec` and **not** a [`Written`], which is the asymmetry with the field
+    /// above rather than an inconsistency: `plugin_digest`'s two absences are different facts
+    /// (*nobody recorded which plugin* against *there was no plugin*), and this list's are not —
+    /// a manifest with no `plugins` key and one with an empty list both say the run installed
+    /// nothing from a marketplace. So the key is written only where there is something to write,
+    /// and every manifest committed before `--plugin` existed keeps its bytes.
+    #[serde(default)]
+    plugins: Vec<RawManifestPlugin>,
     /// The model, as the harness resolved it, or an explicit `null`.
     ///
     /// A [`Written`] for `plugin_digest`'s reason, and it earned it the same way — on a live run.
@@ -590,6 +621,28 @@ struct RawRunManifest {
     tokens: Option<u64>,
     /// How long it took, in milliseconds.
     wall_time_ms: Option<u64>,
+}
+
+/// One marketplace plugin as a manifest writes it down.
+///
+/// `deny_unknown_fields` for [`RawRunManifest`]'s reason: the document is ours, so a misspelled key
+/// here is a typo to refuse and not another producer's field to tolerate.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawManifestPlugin {
+    /// The spelling the run declared: `<repo>@<name>@<pin>`.
+    plugin: Option<String>,
+    /// The digest the instrument attested for it.
+    digest: Option<String>,
+}
+
+/// One marketplace plugin, once it has been read through the rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ManifestPlugin {
+    /// The spelling the run declared.
+    plugin: String,
+    /// The digest the instrument attested.
+    digest: String,
 }
 
 /// What one run manifest says the run cost, in millionths of a US dollar.
@@ -658,6 +711,8 @@ struct RunManifest {
     case: String,
     /// The plugin the run was given, where it had one.
     plugin_digest: Option<String>,
+    /// The pinned marketplace plugins it was given, where it had any.
+    plugins: Vec<ManifestPlugin>,
     /// The model, where the harness said which.
     model: Option<String>,
     /// The harness version pin.
@@ -718,7 +773,8 @@ impl TryFrom<RawRunManifest> for RunManifest {
             check_digest(&mut refusals, "transcript_digest", digest);
         }
 
-        let plugin_digest = plugin_digest(&mut refusals, arm, &raw.plugin_digest);
+        let plugins = manifest_plugins(&mut refusals, arm, &raw.plugins);
+        let plugin_digest = plugin_digest(&mut refusals, arm, &raw.plugin_digest, &plugins);
 
         if !refusals.is_empty() {
             return Err(refusals);
@@ -732,6 +788,7 @@ impl TryFrom<RawRunManifest> for RunManifest {
             workflow: workflow.expect("a workflow was read"),
             case: case.expect("a case was read"),
             plugin_digest,
+            plugins,
             model,
             harness_version: harness_version.expect("a harness version was read"),
             transcript_digest: transcript_digest.expect("a transcript digest was read"),
@@ -800,16 +857,55 @@ fn check_digest(refusals: &mut Vec<Refusal>, field: &'static str, written: &str)
     }
 }
 
-/// The `plugin_digest` rule: written always, `null` exactly on arm `raw`.
+/// The `plugins` rule: every entry names a plugin and a digest, and arm `raw` lists none.
+///
+/// The list is the marketplace half of the treatment, and it is validated **before** the digest
+/// rule below because that rule now reads it: arm `plugin` is satisfied by either mechanism, and
+/// only a manifest naming neither is refused.
+fn manifest_plugins(
+    refusals: &mut Vec<Refusal>,
+    arm: Option<Arm>,
+    written: &[RawManifestPlugin],
+) -> Vec<ManifestPlugin> {
+    let mut plugins = Vec::new();
+    for entry in written {
+        let Some(plugin) = required(refusals, "plugins[].plugin", entry.plugin.as_deref()) else {
+            continue;
+        };
+        let Some(digest) = required(refusals, "plugins[].digest", entry.digest.as_deref()) else {
+            continue;
+        };
+        check_digest(refusals, "plugins[].digest", &digest);
+        plugins.push(ManifestPlugin { plugin, digest });
+    }
+    if arm == Some(Arm::Raw) {
+        if let Some(first) = plugins.first() {
+            refusals.push(Refusal::MarketplacePluginOnRawArm {
+                plugin: first.plugin.clone(),
+            });
+        }
+    }
+    plugins
+}
+
+/// The `plugin_digest` rule: written always, and `null` on arm `raw` or where the treatment came
+/// from a marketplace instead of a directory.
 ///
 /// Arm `driven` may answer either way, and that is a decision rather than an oversight. What
 /// enforces a driven run is the driver at the seam; whether the plugin was *also* installed is a
 /// fact about that run, so both answers describe a run that could have happened — and the key is
 /// still required, so the manifest has to state which.
+///
+/// **The two mechanisms stay apart.** `plugin_digest` is the digest of a directory metaharness
+/// copied in with `--plugin-dir`; `plugins` is what it placed into the scratch config home from a
+/// marketplace with `--plugin`. Arm `plugin` needs one of the two and not a particular one, so a
+/// bench arm whose whole treatment is a pinned third-party plugin writes `plugin_digest: null`
+/// honestly rather than being refused for having no directory to hash.
 fn plugin_digest(
     refusals: &mut Vec<Refusal>,
     arm: Option<Arm>,
     written: &Written,
+    plugins: &[ManifestPlugin],
 ) -> Option<String> {
     match (arm, written) {
         (_, Written::Absent) => {
@@ -822,7 +918,7 @@ fn plugin_digest(
             refusals.push(Refusal::PluginDigestOnRawArm);
             None
         }
-        (Some(Arm::Plugin), Written::Null) => {
+        (Some(Arm::Plugin), Written::Null) if plugins.is_empty() => {
             refusals.push(Refusal::PluginDigestAbsentOnPluginArm);
             None
         }
@@ -1820,6 +1916,84 @@ impl fmt::Display for Harness {
     }
 }
 
+/// A marketplace plugin, spelled the way metaharness 0.5.0 spells one: `<repo>@<name>@<pin>`.
+///
+/// **Forwarded verbatim, resolved never.** metaharness `run claude --plugin` reads the operator's
+/// own `known_marketplaces.json` and `installed_plugins.json`, matches the pin against an entry's
+/// `version` or its `gitCommitSha`, and copies the tree into the scratch config home. None of that
+/// is this runner's: a second resolver here would be a second thing to get wrong and a second
+/// place for the two builds to disagree about what a pin means.
+///
+/// What this side owns is the spelling. A `--plugin` that names no pin is refused **before**
+/// anything is spawned, because the run underneath would refuse it anyway — at parse, before a
+/// `RunSpec` exists — and an operator should meet that refusal once rather than after paying for a
+/// process to start and stop. The sentence is metaharness's own, quoted rather than reworded:
+/// `docs/design/runs-side-by-side-v0.1.md` § 3.2 and `MarketplacePluginError` in
+/// `metaharness-protocol`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MarketplacePlugin {
+    /// The marketplace's **source repository**, as the caller named it — never its name.
+    repo: String,
+    /// The plugin's own name inside that marketplace.
+    name: String,
+    /// The pin: a version or a commit, and which of the two it is, is metaharness's to decide.
+    pin: String,
+}
+
+impl MarketplacePlugin {
+    /// Reads one `--plugin` value, or the sentence metaharness refuses it with.
+    ///
+    /// Split on the **last two** `@`, which is metaharness's own rule and the reason [`fmt::Display`]
+    /// below reproduces the caller's bytes exactly: a repository spelling never contains one and a
+    /// plugin name never does, while a pin might.
+    ///
+    /// # Errors
+    ///
+    /// The refusal's own words, for the two spellings that name nothing reproducible: fewer than
+    /// three segments, and a segment that is there and empty.
+    fn parse(given: &str) -> Result<Self, String> {
+        let unpinned = || {
+            format!(
+                "`{given}` names no pin. Write `<repo>@<name>@<version-or-commit>`: an unpinned \
+                 plugin can change between two runs that both claim to have used it, which makes \
+                 the two arms of a comparison incomparable and neither of them reproducible"
+            )
+        };
+        let (head, pin) = given.rsplit_once('@').ok_or_else(unpinned)?;
+        let (repo, name) = head.rsplit_once('@').ok_or_else(unpinned)?;
+        for (segment, value) in [("repo", repo), ("name", name), ("pin", pin)] {
+            if value.is_empty() {
+                return Err(format!(
+                    "`{given}` has an empty {segment}. Write \
+                     `<repo>@<name>@<version-or-commit>`; a blank segment names nothing and would \
+                     be resolved against everything"
+                ));
+            }
+        }
+        Ok(Self {
+            repo: repo.to_owned(),
+            name: name.to_owned(),
+            pin: pin.to_owned(),
+        })
+    }
+
+    /// Whether the instrument's attestation row is about this plugin.
+    ///
+    /// The match is on `source`, which is the instrument's own identifier for what it placed —
+    /// `<repo>@<name>@<pin> (marketplace <name>)` — and deliberately not on `loaded_by`, which is a
+    /// sentence written for a person, or on `name`, which two marketplaces may share.
+    fn attested_by(&self, source: &str) -> bool {
+        let spelling = self.to_string();
+        source == spelling || source.starts_with(&format!("{spelling} "))
+    }
+}
+
+impl fmt::Display for MarketplacePlugin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}@{}", self.repo, self.name, self.pin)
+    }
+}
+
 // --- what the runner refuses before anything is spawned -----------------------------------------
 
 /// Every way the runner refuses to start, by name.
@@ -1834,8 +2008,25 @@ enum RunRefusal {
     NotLive,
     /// A live spawn was asked for with no cap on what it may spend.
     NoBudget,
-    /// The plugin arm was asked for without naming the external plugin directory.
-    NoPluginDirectory,
+    /// The plugin arm was asked for and no plugin was named, by either mechanism.
+    NoPluginTreatment,
+    /// A `--plugin` value names nothing that can be reproduced.
+    PluginSpelling {
+        /// What was written.
+        given: String,
+        /// metaharness's own sentence for it.
+        detail: String,
+    },
+    /// `--plugin` was given for a harness that has no marketplace.
+    PluginHarnessHasNoMarketplace {
+        /// The harness with none.
+        harness: Harness,
+    },
+    /// Arm `raw` is the arm with no plugin in it, and a `--plugin` names one.
+    PluginOnRawArm {
+        /// What was named.
+        plugin: String,
+    },
     /// Arm `driven` is not launched from here.
     DrivenIsNotLaunchedHere,
     /// Arm `native` is not launched from here either, and for a different reason.
@@ -1887,7 +2078,10 @@ impl RunRefusal {
             Self::ToolMissing { .. } => "EVAL-RUN-001",
             Self::NotLive => "EVAL-RUN-002",
             Self::NoBudget => "EVAL-RUN-003",
-            Self::NoPluginDirectory => "EVAL-RUN-012",
+            Self::NoPluginTreatment => "EVAL-RUN-012",
+            Self::PluginSpelling { .. } => "EVAL-RUN-013",
+            Self::PluginHarnessHasNoMarketplace { .. } => "EVAL-RUN-014",
+            Self::PluginOnRawArm { .. } => "EVAL-RUN-015",
             Self::DrivenIsNotLaunchedHere => "EVAL-RUN-004",
             Self::NoWorkingTree => "EVAL-RUN-005",
             Self::BudgetWouldBeExceeded { .. } => "EVAL-RUN-006",
@@ -1934,10 +2128,38 @@ impl fmt::Display for RunRefusal {
                  out of its own stream and stops launching when the next one would exceed what you \
                  named"
             ),
-            Self::NoPluginDirectory => write!(
+            Self::NoPluginTreatment => write!(
                 f,
-                "arm `plugin` needs `--plugin-dir DIR`. AEP does not bundle agent plugins; name \
-                 the installed plugin from the `beyond10x` marketplace explicitly"
+                "arm `plugin` needs a plugin: `--plugin-dir DIR` for one checked out on this \
+                 machine, or `--plugin <repo>@<name>@<version-or-commit>` for one installed from a \
+                 marketplace. AEP does not bundle agent plugins and guesses no path; name the \
+                 treatment explicitly, and the launch record will say which mechanism delivered it"
+            ),
+            Self::PluginSpelling { given, detail } => write!(
+                f,
+                "`--plugin {given}` is refused before anything is spawned, and this is \
+                 metaharness 0.5.0's own sentence for it: {detail}.\n\
+                 \n\
+                 This runner forwards `--plugin` verbatim and resolves nothing, so the spelling is \
+                 checked here rather than after a process has been started to be refused"
+            ),
+            Self::PluginHarnessHasNoMarketplace { harness } => write!(
+                f,
+                "`--plugin` names a marketplace plugin and `{harness}` has no marketplace \
+                 metaharness 0.5.0 can resolve one from — it refuses the pair by name rather than \
+                 accepting and ignoring it, and so does this. An operator who declared a plugin \
+                 would otherwise believe the run had one.\n\
+                 \n\
+                 `--plugin` is Claude Code only. A checked-out plugin directory is not: \
+                 `--plugin-dir DIR` is offered on every harness metaharness drives"
+            ),
+            Self::PluginOnRawArm { plugin } => write!(
+                f,
+                "arm `raw` is the arm with no plugin in it, and `--plugin {plugin}` names one. \
+                 Either the run is arm `plugin`, or the flag belongs to another invocation.\n\
+                 \n\
+                 The same contradiction is refused after a run too, off the stream's own \
+                 attestation (`EVAL-STREAM-007`) — this is the half that costs nothing to find"
             ),
             Self::NativeIsNotLaunchedHere => write!(
                 f,
@@ -2139,6 +2361,13 @@ enum StreamRefusal {
         /// Why.
         reason: String,
     },
+    /// A `--plugin` was declared and the instrument attests nothing that is it.
+    MarketplacePluginUnattested {
+        /// What was declared.
+        plugin: String,
+        /// What the attestation does name, so the reader can see the near miss.
+        attested: Vec<String>,
+    },
 }
 
 impl StreamRefusal {
@@ -2157,6 +2386,7 @@ impl StreamRefusal {
             Self::NoTerminalEvent => "EVAL-STREAM-010",
             Self::CostUnreadable { .. } => "EVAL-STREAM-011",
             Self::ManifestUnreadable { .. } => "EVAL-STREAM-012",
+            Self::MarketplacePluginUnattested { .. } => "EVAL-STREAM-013",
         }
     }
 }
@@ -2245,6 +2475,21 @@ impl fmt::Display for StreamRefusal {
                 f,
                 "the runner assembled a manifest its own reader refuses, which is a defect here \
                  and not in anything you passed: {reason}"
+            ),
+            Self::MarketplacePluginUnattested { plugin, attested } => write!(
+                f,
+                "this run declared `--plugin {plugin}` and \
+                 `session.started.{INSTALLED_PLUGINS}` attests nothing whose `source` is it. \
+                 The attestation names: {}.\n\
+                 \n\
+                 The runner declares and the instrument attests; the manifest records what **both** \
+                 said. A declaration nothing attested would enter the matrix as a plugin the run \
+                 never had, which is the one thing this document exists to make impossible",
+                if attested.is_empty() {
+                    "nothing".to_owned()
+                } else {
+                    attested.join(", ")
+                }
             ),
         }
     }
@@ -2401,8 +2646,13 @@ struct Session {
     /// `model: null`. Inventing `gpt-5-codex` there because it is the likely answer would be
     /// writing the one document the matrix trusts.
     model: Option<String>,
-    /// The plugin that was installed, where one was.
+    /// The plugin that was installed from a directory, where one was.
     plugin_digest: Option<String>,
+    /// The pinned marketplace plugins the run declared, with the digests the instrument attested.
+    ///
+    /// In the order they were declared, which is the order they reached the argv: a manifest whose
+    /// list order moved between two ingests of the same stream would diff against itself.
+    plugins: Vec<AttestedPlugin>,
     /// What the run cost, in millionths of a US dollar, totalled over every session that said.
     ///
     /// # Every session, and the run that made that matter
@@ -2425,6 +2675,15 @@ struct Session {
     wall_time_ms: Option<u64>,
 }
 
+/// One marketplace plugin, as the run declared it and the instrument attested it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AttestedPlugin {
+    /// The spelling the run declared, `<repo>@<name>@<pin>`.
+    plugin: String,
+    /// The digest the attestation stated for it, byte for byte.
+    digest: String,
+}
+
 /// The four token counts a `usage` object carries, which is what the manifest's `tokens` totals.
 const TOKEN_KEYS: [&str; 4] = [
     "input_tokens",
@@ -2439,7 +2698,12 @@ impl Session {
     /// Fail-closed throughout, and the arm is an input because two of the rules are about the
     /// experiment rather than about the document: the treated arm without its treatment and the
     /// control arm with one are both refused here, which is crossing #4 arriving on this side.
-    fn read(events: &[u8], arm: Arm, harness: Harness) -> Result<Self, Vec<StreamRefusal>> {
+    fn read(
+        events: &[u8],
+        arm: Arm,
+        harness: Harness,
+        declared: &[MarketplacePlugin],
+    ) -> Result<Self, Vec<StreamRefusal>> {
         let text = String::from_utf8_lossy(events);
         let mut started: Option<serde_json::Value> = None;
         let mut ended: Vec<serde_json::Value> = Vec::new();
@@ -2501,7 +2765,8 @@ impl Session {
             }
         }
 
-        let plugin_digest = plugin_attestation(&mut refusals, &started, arm);
+        let (plugin_digest, plugins) =
+            plugin_attestation(&mut refusals, &started, arm, declared);
 
         if ended.is_empty() {
             refusals.push(StreamRefusal::NoTerminalEvent);
@@ -2540,6 +2805,7 @@ impl Session {
             ),
             model,
             plugin_digest,
+            plugins,
             cost_micro_usd: cost,
             tokens,
             wall_time_ms,
@@ -2587,7 +2853,8 @@ fn plugin_attestation(
     refusals: &mut Vec<StreamRefusal>,
     started: &serde_json::Value,
     arm: Arm,
-) -> Option<String> {
+    declared: &[MarketplacePlugin],
+) -> (Option<String>, Vec<AttestedPlugin>) {
     let Some(entries) = started
         .get("hermetic")
         .and_then(|hermetic| hermetic.get("installed_plugins"))
@@ -2596,42 +2863,90 @@ fn plugin_attestation(
         refusals.push(StreamRefusal::SessionSaysNothing {
             field: INSTALLED_PLUGINS,
         });
-        return None;
-    };
-
-    if entries.len() > 1 {
-        refusals.push(StreamRefusal::SeveralPluginsAttested {
-            names: entries.iter().map(plugin_name).collect(),
-        });
-        return None;
-    }
-
-    let Some(entry) = entries.first() else {
-        if arm == Arm::Plugin {
-            refusals.push(StreamRefusal::PluginUnattestedOnPluginArm);
-        }
-        return None;
+        return (None, Vec::new());
     };
 
     if arm == Arm::Raw {
-        refusals.push(StreamRefusal::PluginAttestedOnRawArm {
-            source: entry
-                .get("source")
-                .and_then(serde_json::Value::as_str)
-                .map_or_else(|| plugin_name(entry), ToOwned::to_owned),
-        });
-        return None;
+        if let Some(entry) = entries.first() {
+            refusals.push(StreamRefusal::PluginAttestedOnRawArm {
+                source: plugin_source(entry),
+            });
+        }
+        return (None, Vec::new());
     }
 
+    // The split, and the whole of *keeping the two apart*: the run said which marketplace plugins
+    // it asked metaharness to place, and the instrument's rows say what arrived. A row claimed by a
+    // declaration is the marketplace treatment; every row left over is what `--plugin-dir` copied,
+    // and it goes on being the single `plugin_digest` the matrix has always read. Nothing here
+    // parses `loaded_by`, which is a sentence for a person and not an identifier.
+    let mut claimed = vec![false; entries.len()];
+    let mut plugins = Vec::new();
+    for wanted in declared {
+        let found = entries.iter().enumerate().find(|(position, entry)| {
+            !claimed[*position] && wanted.attested_by(&plugin_source(entry))
+        });
+        let Some((position, entry)) = found else {
+            refusals.push(StreamRefusal::MarketplacePluginUnattested {
+                plugin: wanted.to_string(),
+                attested: entries.iter().map(plugin_source).collect(),
+            });
+            continue;
+        };
+        claimed[position] = true;
+        match entry.get("digest").and_then(serde_json::Value::as_str) {
+            Some(digest) if !digest.trim().is_empty() => plugins.push(AttestedPlugin {
+                plugin: wanted.to_string(),
+                digest: digest.to_owned(),
+            }),
+            _ => refusals.push(StreamRefusal::PluginWithoutDigest {
+                name: wanted.to_string(),
+            }),
+        }
+    }
+
+    let directories: Vec<&serde_json::Value> = entries
+        .iter()
+        .enumerate()
+        .filter(|(position, _)| !claimed[*position])
+        .map(|(_, entry)| entry)
+        .collect();
+
+    if entries.is_empty() && arm == Arm::Plugin {
+        refusals.push(StreamRefusal::PluginUnattestedOnPluginArm);
+        return (None, plugins);
+    }
+
+    if directories.len() > 1 {
+        refusals.push(StreamRefusal::SeveralPluginsAttested {
+            names: directories.iter().map(|entry| plugin_name(entry)).collect(),
+        });
+        return (None, plugins);
+    }
+
+    let Some(entry) = directories.first() else {
+        return (None, plugins);
+    };
+
     match entry.get("digest").and_then(serde_json::Value::as_str) {
-        Some(digest) if !digest.trim().is_empty() => Some(digest.to_owned()),
+        Some(digest) if !digest.trim().is_empty() => (Some(digest.to_owned()), plugins),
         _ => {
             refusals.push(StreamRefusal::PluginWithoutDigest {
                 name: plugin_name(entry),
             });
-            None
+            (None, plugins)
         }
     }
+}
+
+/// An entry's `source`, which is the instrument's own identifier for what it placed.
+///
+/// Falls back to the name where a row states none, so a refusal still says which row it is about.
+fn plugin_source(entry: &serde_json::Value) -> String {
+    entry
+        .get("source")
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| plugin_name(entry), ToOwned::to_owned)
 }
 
 /// A plugin entry's name, however the attestation spelled it.
@@ -2754,6 +3069,12 @@ struct Plan {
     arm: Arm,
     /// The harness.
     harness: Harness,
+    /// The pinned marketplace plugins this run declared, in the order they were declared.
+    ///
+    /// On the plan rather than read back off the stream, because they are the runner's own fact —
+    /// *this run asked for these* — and the stream's job is to say whether they arrived. The two
+    /// are joined in [`plugin_attestation`], and a declaration nothing attested is refused there.
+    plugins: Vec<MarketplacePlugin>,
 }
 
 impl Plan {
@@ -2782,7 +3103,7 @@ fn ingest(plan: &Plan, events: &[u8], observed_at: &str, redact: bool) -> Result
             }],
         )
     })?;
-    let session = Session::read(events, plan.arm, plan.harness)
+    let session = Session::read(events, plan.arm, plan.harness, &plan.plugins)
         .map_err(|refusals| refused_run(Path::new(&plan.name()), &refusals))?;
 
     let spec = crate::trace::load_spec(&plan.case.expectations)?;
@@ -2862,6 +3183,27 @@ fn manifest_text(
         format!("transcript_digest: {transcript_digest}"),
         format!("observed_at: {observed_at}"),
     ];
+    // Beside `plugin_digest` and never merged into it, because the two answer different questions:
+    // one names the bytes of a directory the operator checked out, the other names a pinned
+    // third-party plugin and the pin it was resolved at. Written only where there is one, so every
+    // manifest assembled before `--plugin` existed keeps its bytes and two waves still diff.
+    if !session.plugins.is_empty() {
+        let block = std::iter::once("plugins:".to_owned())
+            .chain(session.plugins.iter().map(|plugin| {
+                format!("  - plugin: {}\n    digest: {}", plugin.plugin, plugin.digest)
+            }))
+            .collect::<Vec<_>>()
+            .join("\n");
+        // Immediately after `plugin_digest`, which is the field it is a companion to and the one a
+        // reader compares it against. Found rather than counted, so a later field added above it
+        // cannot silently move the block somewhere else.
+        let after_digest = lines
+            .iter()
+            .position(|line| line.starts_with("plugin_digest:"))
+            .expect("the manifest always writes a plugin_digest line")
+            + 1;
+        lines.insert(after_digest, block);
+    }
     // Absent and never zero. A run whose stream stated no cost did not cost nothing, and the matrix
     // reports every resource total over the runs that stated one for exactly this case.
     if let Some(cost) = session.cost_micro_usd {
@@ -2958,13 +3300,19 @@ fn spawn_argv(
         prompt.to_owned(),
     ];
     if plan.arm == Arm::Plugin {
-        argv.push("--plugin-dir".to_owned());
-        argv.push(
-            plugin_directory
-                .expect("the plugin arm is validated before argv construction")
-                .display()
-                .to_string(),
-        );
+        if let Some(directory) = plugin_directory {
+            argv.push("--plugin-dir".to_owned());
+            argv.push(directory.display().to_string());
+        }
+    }
+    // Forwarded verbatim, once per declaration, and after `--plugin-dir` rather than instead of it:
+    // metaharness 0.5.0 loads a marketplace plugin through the scratch config home and a directory
+    // through the vendor's own flag, so the two combine and the attestation lists both. Nothing is
+    // resolved, normalised or deduplicated here — a runner that rewrote a pin would be forwarding
+    // something other than what the operator wrote down.
+    for plugin in &plan.plugins {
+        argv.push("--plugin".to_owned());
+        argv.push(plugin.to_string());
     }
     argv
 }
@@ -3063,6 +3411,18 @@ pub(crate) struct RunArgs {
     /// explicitly so the launch record identifies the treatment the run received.
     #[arg(long, value_name = "DIR")]
     plugin_dir: Option<PathBuf>,
+    /// A pinned marketplace plugin to install, forwarded to `metaharness run claude` verbatim.
+    ///
+    /// `<repo>@<name>@<version-or-commit>`, repeatable, and combinable with `--plugin-dir` — the
+    /// two mechanisms place a plugin differently, the attestation lists both, and the manifest
+    /// keeps them apart. An unpinned spelling is refused before anything is spawned, in
+    /// metaharness's own words: a plugin that can change between two runs that both name it makes
+    /// the two arms of a comparison incomparable.
+    ///
+    /// Claude Code only, because that is the only harness metaharness 0.5.0 can resolve a
+    /// marketplace for. The other kinds are refused by name rather than accepted and ignored.
+    #[arg(long = "plugin", value_name = "REPO@NAME@PIN")]
+    plugins: Vec<String>,
     /// The cap on what this invocation may spend, in US dollars. Required for a spawn.
     #[arg(long, value_name = "USD")]
     budget_usd: Option<String>,
@@ -3086,7 +3446,12 @@ pub(crate) struct RunArgs {
 /// Split out of [`run_arm`] because it shares none of that function's machinery — no binary, no
 /// live flag, no cap, no working tree — and because a reader looking for *what happens for free*
 /// should find it in one piece.
-fn ingest_recorded(args: &RunArgs, cases: Vec<Case>, stream: &Path) -> Result<ExitCode> {
+fn ingest_recorded(
+    args: &RunArgs,
+    cases: Vec<Case>,
+    stream: &Path,
+    plugins: Vec<MarketplacePlugin>,
+) -> Result<ExitCode> {
     if cases.len() != 1 {
         return Err(refused_run(
             stream,
@@ -3097,6 +3462,7 @@ fn ingest_recorded(args: &RunArgs, cases: Vec<Case>, stream: &Path) -> Result<Ex
         case: cases.into_iter().next().expect("exactly one case"),
         arm: args.arm,
         harness: args.harness,
+        plugins,
     };
     let events = std::fs::read(stream)
         .with_context(|| format!("reading the stream at {}", stream.display()))?;
@@ -3105,15 +3471,71 @@ fn ingest_recorded(args: &RunArgs, cases: Vec<Case>, stream: &Path) -> Result<Ex
     Ok(ExitCode::SUCCESS)
 }
 
-/// Refuses a plugin arm whose curated plugin directory was not selected explicitly.
-fn require_plugin_directory(args: &RunArgs) -> Result<()> {
-    if args.arm == Arm::Plugin && args.plugin_dir.is_none() {
-        return Err(refused_run(
+/// Refuses the two arms this verb reads and does not launch, each naming the verb that does.
+///
+/// A second way to launch either one would be a second policy to forget, which is the mistake
+/// `epic:metaharness-migration` retired.
+fn launched_elsewhere(args: &RunArgs) -> Result<()> {
+    match args.arm {
+        Arm::Driven => Err(refused_run(
             &args.out,
-            &[RunRefusal::NoPluginDirectory],
-        ));
+            &[RunRefusal::DrivenIsNotLaunchedHere],
+        )),
+        Arm::Native => Err(refused_run(
+            &args.out,
+            &[RunRefusal::NativeIsNotLaunchedHere],
+        )),
+        Arm::Raw | Arm::Plugin => Ok(()),
+    }
+}
+
+/// Refuses a plugin arm whose treatment was not named explicitly, by either mechanism.
+///
+/// Invariant 12 unchanged and widened by one word: no repository-local fallback chooses a plugin,
+/// and *a plugin* is now either a directory on this machine or a pinned marketplace coordinate.
+/// Both are the operator's explicit authority; neither is guessed from a path under this checkout.
+fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Result<()> {
+    if args.arm == Arm::Plugin && args.plugin_dir.is_none() && plugins.is_empty() {
+        return Err(refused_run(&args.out, &[RunRefusal::NoPluginTreatment]));
     }
     Ok(())
+}
+
+/// Reads every `--plugin` value, and refuses the ones that name nothing this runner may forward.
+///
+/// **Before the tool is looked for and before the live flag is read**, so a spelling mistake costs
+/// nothing to find and does not depend on what is installed. Every refusal is collected rather than
+/// the first returned (invariant 3: validation accumulates) — an operator fixing two spellings
+/// should be told about two.
+fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
+    let mut refusals = Vec::new();
+    let mut plugins = Vec::new();
+    for given in &args.plugins {
+        match MarketplacePlugin::parse(given) {
+            Ok(plugin) => plugins.push(plugin),
+            Err(detail) => refusals.push(RunRefusal::PluginSpelling {
+                given: given.clone(),
+                detail,
+            }),
+        }
+    }
+    if !args.plugins.is_empty() {
+        if args.harness != Harness::Claude {
+            refusals.push(RunRefusal::PluginHarnessHasNoMarketplace {
+                harness: args.harness,
+            });
+        }
+        if args.arm == Arm::Raw {
+            refusals.push(RunRefusal::PluginOnRawArm {
+                plugin: args.plugins.join("`, `"),
+            });
+        }
+    }
+    if refusals.is_empty() {
+        Ok(plugins)
+    } else {
+        Err(refused_run(&args.out, &refusals))
+    }
 }
 
 /// `protocol eval run`
@@ -3122,12 +3544,13 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
     // and a date this binary cannot read is one the next reader cannot either.
     crate::observation_time(Some(&args.observed_at))?;
 
+    let plugins = declared_plugins(args)?;
     let cases = select_cases(args)?;
     std::fs::create_dir_all(&args.out)
         .with_context(|| format!("creating {}", args.out.display()))?;
 
     if let Some(stream) = &args.stream {
-        return ingest_recorded(args, cases, stream);
+        return ingest_recorded(args, cases, stream, plugins);
     }
 
     // --- everything from here spends money -------------------------------------------------------
@@ -3147,19 +3570,8 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
     if !live() {
         return Err(refused_run(&args.out, &[RunRefusal::NotLive]));
     }
-    if args.arm == Arm::Driven {
-        return Err(refused_run(
-            &args.out,
-            &[RunRefusal::DrivenIsNotLaunchedHere],
-        ));
-    }
-    if args.arm == Arm::Native {
-        return Err(refused_run(
-            &args.out,
-            &[RunRefusal::NativeIsNotLaunchedHere],
-        ));
-    }
-    require_plugin_directory(args)?;
+    launched_elsewhere(args)?;
+    require_plugin_treatment(args, &plugins)?;
     let Some(budget) = &args.budget_usd else {
         return Err(refused_run(&args.out, &[RunRefusal::NoBudget]));
     };
@@ -3194,6 +3606,7 @@ fn run_arm(args: &RunArgs) -> Result<ExitCode> {
             case,
             arm: args.arm,
             harness: args.harness,
+            plugins: plugins.clone(),
         };
         let prompt = prompt_for(&plan, &args.instructions)?;
         let invocation = spawn_argv(
@@ -3475,6 +3888,72 @@ observed_at: 2026-08-23
         assert_eq!(codes(&refusals), ["EVAL-MANIFEST-006"]);
     }
 
+    /// The same fixture with the directory treatment removed and a marketplace plugin named.
+    ///
+    /// Written out rather than patched with `replace`, because the two treatments differ by two
+    /// keys at once and a patch that changed one of them would be testing a manifest nothing
+    /// writes.
+    const MARKETPLACE: &str = "\
+format: eval.run-manifest/1
+arm: plugin
+harness: claude
+workflow: adp/default
+case: case:create-a-story
+plugin_digest: null
+plugins:
+  - plugin: bdfinst/agentic-dev-team@dev-team@1.4.0
+    digest: c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3
+model: claude-sonnet-5
+harness_version: claude 2.1.239
+transcript_digest: 6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
+observed_at: 2026-08-23
+";
+
+    #[test]
+    fn a_marketplace_plugin_is_a_treatment_and_a_run_with_one_needs_no_directory_digest() {
+        // The arm `plugin` rule is about the **treatment**, not about one of the two mechanisms
+        // that deliver it. A run whose plugin came from a marketplace has no directory to digest,
+        // and `plugin_digest: null` there is a stated absence rather than a hole.
+        let manifest = read(MARKETPLACE).expect("a marketplace plugin is a plugin");
+        assert_eq!(manifest.plugin_digest, None);
+        assert_eq!(
+            manifest.plugins.first().map(|plugin| plugin.plugin.as_str()),
+            Some("bdfinst/agentic-dev-team@dev-team@1.4.0")
+        );
+    }
+
+    #[test]
+    fn arm_plugin_that_names_neither_mechanism_is_still_refused() {
+        // The boundary of the rule above: it widened what counts as a plugin, and it must not have
+        // widened it to nothing.
+        let refusals = read(&MARKETPLACE.replace(
+            "plugins:\n  - plugin: bdfinst/agentic-dev-team@dev-team@1.4.0\n    digest: \
+             c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3\n",
+            "",
+        ))
+        .expect_err("arm plugin must say which plugin");
+        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-006"]);
+    }
+
+    #[test]
+    fn a_marketplace_plugin_on_arm_raw_is_refused_for_the_reason_a_digest_is() {
+        let refusals = read(&MARKETPLACE.replace("arm: plugin", "arm: raw"))
+            .expect_err("arm raw is the arm with no plugin in it");
+        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-008"]);
+    }
+
+    #[test]
+    fn a_marketplace_plugin_whose_digest_is_not_one_is_refused_by_the_field_that_is_wrong() {
+        let refusals = read(
+            &MARKETPLACE.replace(
+                "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                "0.4.0",
+            ),
+        )
+        .expect_err("a version is not a digest");
+        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-007"]);
+    }
+
     #[test]
     fn arm_driven_may_answer_either_way_because_the_enforcer_is_not_the_plugin() {
         // The boundary of the two rules above. Without this test they could have been written as
@@ -3677,6 +4156,7 @@ observed_at: 2026-08-23
             workflow: "adp/default".to_owned(),
             case: "case:create-a-story".to_owned(),
             plugin_digest: None,
+            plugins: Vec::new(),
             model: Some("claude-sonnet-5".to_owned()),
             harness_version: "claude 2.1.239".to_owned(),
             transcript_digest: transcript.to_owned(),
@@ -3971,7 +4451,67 @@ observed_at: 2026-08-23
             },
             arm,
             harness,
+            plugins: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_pinned_plugin_reaches_the_argv_with_the_bytes_the_operator_wrote() {
+        // *Verbatim* is a claim about bytes, so it is asserted on bytes. The parse splits on the
+        // last two `@` and [`fmt::Display`] rejoins on them, which round-trips exactly — including
+        // a repository spelling that is not `owner/repo` and a commit pin, neither of which this
+        // runner interprets.
+        let mut plan = plan_of(Arm::Plugin, Harness::Claude);
+        for given in [
+            "bdfinst/agentic-dev-team@dev-team@1.4.0",
+            "beyond10x/agentplugins@aep-planning@21147b7667dfaefcfa45a094e9542891b1783541",
+        ] {
+            plan.plugins
+                .push(MarketplacePlugin::parse(given).expect("a pinned spelling"));
+        }
+        let argv = spawn_argv(
+            &plan,
+            "metaharness",
+            Path::new("/work/subject"),
+            "do the thing",
+            Some(Path::new("/plugins/aep-planning")),
+        );
+        let forwarded: Vec<&String> = argv
+            .iter()
+            .zip(argv.iter().skip(1))
+            .filter(|(flag, _)| *flag == "--plugin")
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(
+            forwarded,
+            vec![
+                "bdfinst/agentic-dev-team@dev-team@1.4.0",
+                "beyond10x/agentplugins@aep-planning@21147b7667dfaefcfa45a094e9542891b1783541"
+            ],
+            "the operator's bytes, in the operator's order: {argv:?}"
+        );
+        assert!(
+            argv.windows(2)
+                .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+            "beside the directory rather than instead of it: {argv:?}"
+        );
+    }
+
+    #[test]
+    fn an_unpinned_plugin_is_refused_in_metaharness_own_words_and_never_defaulted() {
+        // Two segments name a plugin whose contents can change between two runs that both claim to
+        // have used it. metaharness refuses it at parse; this refuses it before the spawn, with the
+        // same sentence, so an operator does not read two different explanations of one mistake.
+        let refusal = MarketplacePlugin::parse("beyond10x/agentplugins@aep-planning")
+            .expect_err("two segments name no pin");
+        assert!(
+            refusal.contains("names no pin")
+                && refusal.contains("<repo>@<name>@<version-or-commit>"),
+            "{refusal}"
+        );
+        let blank = MarketplacePlugin::parse("beyond10x/agentplugins@aep-planning@")
+            .expect_err("an empty pin names everything");
+        assert!(blank.contains("empty pin"), "{blank}");
     }
 
     #[test]
@@ -4047,6 +4587,7 @@ observed_at: 2026-08-23
             harness_version: "claude 2.1.239".to_owned(),
             model: Some("claude-sonnet-5".to_owned()),
             plugin_digest: Some("a".repeat(DIGEST_WIDTH)),
+            plugins: Vec::new(),
             cost_micro_usd: Some(521_600),
             tokens: Some(116_546),
             wall_time_ms: Some(22_320),
@@ -4082,9 +4623,10 @@ observed_at: 2026-08-23
         let mut two = one.clone();
         two.extend_from_slice(&one);
 
-        let single = Session::read(&one, Arm::Driven, Harness::Claude).expect("a readable stream");
-        let doubled =
-            Session::read(&two, Arm::Driven, Harness::Claude).expect("two of them, concatenated");
+        let single =
+            Session::read(&one, Arm::Driven, Harness::Claude, &[]).expect("a readable stream");
+        let doubled = Session::read(&two, Arm::Driven, Harness::Claude, &[])
+            .expect("two of them, concatenated");
 
         assert_eq!(
             doubled.cost_micro_usd,
@@ -4123,6 +4665,7 @@ observed_at: 2026-08-23
             harness_version: "codex 0.144.0".to_owned(),
             model: None,
             plugin_digest: None,
+            plugins: Vec::new(),
             cost_micro_usd: None,
             tokens: None,
             wall_time_ms: None,

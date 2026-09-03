@@ -7,6 +7,31 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Added
+
+- **`aep eval run --plugin <repo>@<name>@<version-or-commit>`**, repeatable, forwarded **verbatim**
+  to the `metaharness run claude` invocation. metaharness 0.5.0 places a pinned third-party
+  marketplace plugin into its scratch config home and attests it; this runner names one and resolves
+  nothing — no marketplace is read here, no pin is rewritten, and nothing is fetched. It is what a
+  bench arm needs to put a third-party plugin beside a checked-out one through one driver.
+  - **`--plugin` and `--plugin-dir` combine**, and arm `plugin` is satisfied by either — so a run
+    whose whole treatment is a marketplace plugin no longer has to name a directory it does not
+    have. A `plugin` arm naming neither is still refused (`EVAL-RUN-012`).
+  - **The manifest keeps them apart.** `plugin_digest` stays the digest of what `--plugin-dir`
+    copied, `null` where there was no directory; a new `plugins` list beside it names each declared
+    marketplace plugin with the digest the attestation stated for it. The key is written only where
+    there is one, so every manifest assembled before this keeps its bytes.
+  - **An unpinned value is refused before anything is spawned** (`EVAL-RUN-013`), in metaharness's
+    own words: an unpinned plugin can change between two runs that both claim to have used it, which
+    makes the two arms of a comparison incomparable and neither of them reproducible. `--plugin` on
+    `codex` or `b10x` is refused by name (`EVAL-RUN-014`) rather than accepted and ignored, and on
+    arm `raw` (`EVAL-RUN-015`), which is the arm with no plugin in it.
+  - **A declared plugin the attestation does not list is refused** (`EVAL-STREAM-013`). The runner
+    declares, the instrument attests, and the manifest records what both said; a declaration nothing
+    attested would enter the matrix as a plugin the run never had.
+
 ## [0.44.0] — 2026-09-03
 
 ### Added

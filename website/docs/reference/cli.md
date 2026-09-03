@@ -445,13 +445,49 @@ and a machine without it is told so by name and exits `2` rather than reddening 
 | Command | Does |
 |---|---|
 | `aep eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
-| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires an external plugin directory; `--stream` ingests a recorded run and spends nothing |
+| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--stream <file>] [--budget-usd <usd>]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing |
 
 `eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
 an exit code that moved with the counts would be the single number it refuses to compute — there is
 no score, no ranking and no percentage in the output. Nothing spawns without `METAHARNESS_LIVE=1`
 and `--budget-usd`. Arms `driven` and `native` are not launched from here and the refusal says what
 launches each: `aep drive run` and `b10x-harness`.
+
+### Naming the plugin arm's treatment
+
+Two mechanisms, and they combine rather than exclude each other. Nothing is guessed from a path
+under this checkout, and a `plugin` arm that names neither is refused (`EVAL-RUN-012`).
+
+| flag | what it names | forwarded as |
+|---|---|---|
+| `--plugin-dir <dir>` | a plugin tree checked out on this machine | `metaharness run <harness> --plugin-dir <dir>` |
+| `--plugin <repo>@<name>@<pin>` | a **pinned** plugin the operator has already installed from a marketplace, repeatable | `metaharness run claude --plugin <repo>@<name>@<pin>`, verbatim |
+
+`--plugin` is forwarded and nothing more: this command resolves no marketplace, fetches nothing and
+rewrites no pin — metaharness 0.5.0 reads the operator's own registry, matches the pin against an
+entry's `version` or its `gitCommitSha`, and places the tree in its scratch config home. Three
+refusals happen here, before anything is spawned, and each is the same one the tool underneath would
+give after a process had already been started:
+
+| refusal | when |
+|---|---|
+| `EVAL-RUN-013` | the value names no pin, or has a blank segment — in metaharness's own words, because an unpinned plugin can change between two runs that both claim to have used it |
+| `EVAL-RUN-014` | `--plugin` on `codex` or `b10x`, which have no marketplace this build can resolve one from. Refused by name rather than accepted and ignored |
+| `EVAL-RUN-015` | `--plugin` on arm `raw`, which is the arm with no plugin in it |
+
+The run manifest keeps the two apart. `plugin_digest` stays the digest of what `--plugin-dir`
+copied — `null` where there was no directory — and a `plugins` list beside it names each declared
+marketplace plugin with the digest the attestation stated for it. The key is written only where
+there is one, so a manifest from before `--plugin` existed keeps its bytes. A declared plugin the
+attestation does not list is refused (`EVAL-STREAM-013`) rather than written down: the runner
+declares, the instrument attests, and the manifest records what both said.
+
+```console
+aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
+    --plugin-dir ../agentplugins/aep-planning \
+    --plugin bdfinst/agentic-dev-team@dev-team@1.4.0 \
+    --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
+```
 
 ### Reading a native cell
 

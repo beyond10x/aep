@@ -1020,3 +1020,389 @@ fn the_cap_stops_the_sweep_before_the_run_that_would_pass_it() {
         "and the one that did not fit was never started"
     );
 }
+
+// --- a pinned marketplace plugin, forwarded --------------------------------------------------
+//
+// metaharness 0.5.0 gained `run claude --plugin <marketplace-repo>@<name>@<version-or-commit>`,
+// which places a pinned third-party plugin into the scratch config home and attests it beside
+// whatever `--plugin-dir` copied. This runner **forwards it verbatim and resolves nothing**: the
+// marketplace's layout on disk is metaharness's business, and a second resolver here would be a
+// second thing to get wrong. What this side owns is refusing a spelling nobody can reproduce
+// before a run is paid for, and keeping the two treatments apart in the manifest.
+
+/// A digest that is obviously synthetic and is the right shape: 64 lowercase hex characters.
+fn synthetic_digest(pair: &str) -> String {
+    pair.repeat(32)
+}
+
+/// The digest `ATTESTED_STREAM` already attests for the plugin `--plugin-dir` copied.
+const DIRECTORY_DIGEST: &str = "7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332";
+
+/// The two marketplace spellings these tests declare, in the order they are declared.
+const AEP_PLANNING: &str = "beyond10x/agentplugins@aep-planning@0.4.0";
+const DEV_TEAM: &str = "bdfinst/agentic-dev-team@dev-team@1.4.0";
+
+/// One `hermetic.installed_plugins` entry as metaharness writes it for a **marketplace** plugin.
+///
+/// `source` is the instrument's own spelling — the declared `<repo>@<name>@<pin>` followed by the
+/// marketplace it resolved against — and that is what this reader matches a declaration to. It is
+/// not the `loaded_by` prose, which is a sentence and not an identifier.
+fn marketplace_entry(spelling: &str, marketplace: &str, digest: &str) -> serde_json::Value {
+    let name = spelling
+        .split('@')
+        .nth(1)
+        .expect("a three-segment spelling")
+        .to_owned();
+    serde_json::json!({
+        "name": name,
+        "source": format!("{spelling} (marketplace {marketplace})"),
+        "installed_at": format!("/scratch/claude-home/plugins/cache/{marketplace}/{name}"),
+        "loaded_by": "placed in the scratch config home's plugin registry",
+        "digest": digest,
+    })
+}
+
+/// `ATTESTED_STREAM` with its instrument row replaced, written into a scratch file.
+///
+/// The same shape as `stream_costing`: whatever the committed fixture happens to attest is not what
+/// a rule about *two* attested plugins can be tested against, so the test hands the reader the row
+/// it is about.
+fn stream_attesting(directory: &Path, name: &str, entries: serde_json::Value) -> PathBuf {
+    let attested = std::fs::read_to_string(root().join(ATTESTED_STREAM)).expect("readable");
+    let mut lines: Vec<String> = attested.lines().map(ToOwned::to_owned).collect();
+    let mut started: serde_json::Value =
+        serde_json::from_str(&lines[0]).expect("the stream opens with a session");
+    assert_eq!(
+        started["event"], "session.started",
+        "the instrument's row is on the opening event"
+    );
+    started["hermetic"]["installed_plugins"] = entries;
+    lines[0] = serde_json::to_string(&started).expect("it serialises");
+    let path = directory.join(name);
+    std::fs::write(&path, format!("{}\n", lines.join("\n"))).expect("the scratch tree is writable");
+    path
+}
+
+/// The entry `ATTESTED_STREAM` already carries for the directory plugin.
+fn directory_entry() -> serde_json::Value {
+    serde_json::json!({
+        "name": "aep",
+        "source": "/plugins/aep-planning",
+        "installed_at": "/plugins/aep",
+        "loaded_by": "--plugin-dir /plugins/aep",
+        "digest": DIRECTORY_DIGEST,
+    })
+}
+
+#[cfg(unix)]
+#[test]
+fn a_spawn_forwards_every_pinned_plugin_verbatim_and_the_manifest_keeps_them_apart() {
+    // The story's two load-bearing lines in one run: `--plugin` reaches the `metaharness run
+    // claude` argv **verbatim and repeatably**, beside `--plugin-dir` rather than instead of it;
+    // and the manifest that comes back says which digest belonged to which mechanism, because a
+    // matrix row that merged them could not say what was measured.
+    let out = scratch("aep-eval-run-marketplace");
+    let cwd = scratch("aep-eval-run-marketplace-tree");
+    let binary = stub(&out);
+    let argv = out.join("argv");
+    let planning = synthetic_digest("a1");
+    let dev_team = synthetic_digest("b2");
+    let stream = stream_attesting(
+        &out,
+        "three-plugins.jsonl",
+        serde_json::json!([
+            directory_entry(),
+            marketplace_entry(AEP_PLANNING, "beyond10x", &planning),
+            marketplace_entry(DEV_TEAM, "bdfinst", &dev_team),
+        ]),
+    );
+    let extra = [
+        "--arm",
+        "plugin",
+        "--budget-usd",
+        "1.00",
+        "--plugin",
+        AEP_PLANNING,
+        "--plugin",
+        DEV_TEAM,
+    ];
+
+    // --- the free half: without the live flag nothing is spawned at all ----------------------
+    let refused = protocol_with(
+        &spawn_args(&out, &cwd, &extra),
+        &[
+            ("METAHARNESS_BIN", printable(&binary)),
+            ("STUB_ARGV", printable(&argv)),
+        ],
+    );
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    assert!(
+        stderr(&refused).contains("EVAL-RUN-002"),
+        "a declared plugin does not make a spawn free: {}",
+        stderr(&refused)
+    );
+    assert!(!argv.exists(), "and the tool was never started");
+
+    // --- the invocation, as a real process received it ---------------------------------------
+    let owned = stub_env(&binary, &argv, "");
+    let mut environment = as_pairs(&owned);
+    let stream_path = printable(&stream).to_owned();
+    for pair in &mut environment {
+        if pair.0 == "STUB_STREAM" {
+            pair.1 = &stream_path;
+        }
+    }
+    let spawned = protocol_with(&spawn_args(&out, &cwd, &extra), &environment);
+    assert_eq!(code(&spawned), 0, "{}", stderr(&spawned));
+
+    let words = recorded_argv(&argv);
+    assert!(
+        words
+            .windows(2)
+            .any(|pair| pair == ["--plugin-dir", "/plugins/aep-planning"]),
+        "the two mechanisms combine rather than exclude each other: {words:?}"
+    );
+    let forwarded: Vec<&String> = words
+        .iter()
+        .zip(words.iter().skip(1))
+        .filter(|(flag, _)| *flag == "--plugin")
+        .map(|(_, value)| value)
+        .collect();
+    assert_eq!(
+        forwarded,
+        vec![AEP_PLANNING, DEV_TEAM],
+        "every `--plugin` is forwarded verbatim, in the order it was declared. The whole \
+         invocation was: {words:?}"
+    );
+
+    // --- and the manifest keeps the two apart -------------------------------------------------
+    let written = manifest(&out, "claude-plugin-development-honest");
+    assert!(
+        written.contains(&format!("plugin_digest: {DIRECTORY_DIGEST}")),
+        "`plugin_digest` stays the directory treatment's: {written}"
+    );
+    assert!(
+        written.contains(&format!(
+            "plugins:\n  - plugin: {AEP_PLANNING}\n    digest: {planning}\n  - plugin: \
+             {DEV_TEAM}\n    digest: {dev_team}\n"
+        )),
+        "and the marketplace plugins are a list beside it, each with the digest the attestation \
+         stated: {written}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unpinned_plugin_is_refused_before_anything_is_spawned_in_metaharness_own_words() {
+    // metaharness refuses this spelling at parse, before a `RunSpec` exists. This runner refuses
+    // it before the spawn, with metaharness's own sentence, so an operator meets one refusal
+    // rather than paying for a run to be told the same thing by the tool underneath.
+    let out = scratch("aep-eval-run-unpinned");
+    let cwd = scratch("aep-eval-run-unpinned-tree");
+    let binary = stub(&out);
+    let argv = out.join("argv");
+
+    let refused = protocol_with(
+        &spawn_args(
+            &out,
+            &cwd,
+            &[
+                "--arm",
+                "plugin",
+                "--budget-usd",
+                "1.00",
+                "--plugin",
+                "beyond10x/agentplugins@aep-planning",
+            ],
+        ),
+        &[
+            ("METAHARNESS_BIN", printable(&binary)),
+            ("METAHARNESS_LIVE", "1"),
+            ("STUB_ARGV", printable(&argv)),
+        ],
+    );
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let reason = stderr(&refused);
+    assert!(
+        reason.contains("EVAL-RUN-013") && reason.contains("names no pin"),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("<repo>@<name>@<version-or-commit>"),
+        "and the refusal shows the shape, which is metaharness's own wording: {reason}"
+    );
+    assert!(
+        !argv.exists(),
+        "and nothing was started to be refused afterwards"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_marketplace_plugin_is_refused_by_name_on_a_harness_that_has_none() {
+    // `--plugin` is Claude Code only, and metaharness refuses it by name on the other kinds rather
+    // than accepting and ignoring it. Accepting it here and dropping it at the seam would be the
+    // failure that refusal exists to prevent: an operator who declared a plugin believing the run
+    // had one.
+    for harness in ["codex", "b10x"] {
+        let out = scratch(&format!("aep-eval-run-no-marketplace-{harness}"));
+        let cwd = scratch(&format!("aep-eval-run-no-marketplace-{harness}-tree"));
+        let binary = stub(&out);
+        let argv = out.join("argv");
+        let mut invocation = spawn_args(
+            &out,
+            &cwd,
+            &[
+                "--arm",
+                "plugin",
+                "--budget-usd",
+                "1.00",
+                "--plugin",
+                AEP_PLANNING,
+            ],
+        );
+        let harness_at = invocation
+            .iter()
+            .position(|word| *word == "--harness")
+            .expect("the arguments name a harness");
+        invocation[harness_at + 1] = harness;
+
+        let refused = protocol_with(
+            &invocation,
+            &[
+                ("METAHARNESS_BIN", printable(&binary)),
+                ("METAHARNESS_LIVE", "1"),
+                ("STUB_ARGV", printable(&argv)),
+            ],
+        );
+        assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+        let reason = stderr(&refused);
+        assert!(
+            reason.contains("EVAL-RUN-014") && reason.contains("marketplace"),
+            "{harness}: {reason}"
+        );
+        assert!(!argv.exists(), "{harness}: and nothing was started");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn arm_raw_with_a_marketplace_plugin_is_refused_before_the_run_and_not_after_it() {
+    // Arm `raw` is the arm with no plugin in it. A stream attesting one is already refused
+    // (`EVAL-STREAM-007`) — after the money was spent. The same contradiction is visible before
+    // the spawn when it is written on the command line, so that is where it is refused.
+    let out = scratch("aep-eval-run-raw-plugin");
+    let cwd = scratch("aep-eval-run-raw-plugin-tree");
+    let binary = stub(&out);
+    let argv = out.join("argv");
+
+    let refused = protocol_with(
+        &spawn_args(
+            &out,
+            &cwd,
+            &[
+                "--arm",
+                "raw",
+                "--budget-usd",
+                "1.00",
+                "--plugin",
+                AEP_PLANNING,
+            ],
+        ),
+        &[
+            ("METAHARNESS_BIN", printable(&binary)),
+            ("METAHARNESS_LIVE", "1"),
+            ("STUB_ARGV", printable(&argv)),
+        ],
+    );
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let reason = stderr(&refused);
+    assert!(
+        reason.contains("EVAL-RUN-015") && reason.contains("no plugin in it"),
+        "{reason}"
+    );
+    assert!(!argv.exists(), "and nothing was started");
+}
+
+#[test]
+fn a_declared_plugin_the_attestation_does_not_list_is_refused_rather_than_written_down() {
+    // The fail-closed half of forwarding. The runner declares, the instrument attests, and the
+    // manifest records what **both** said. A declaration nothing attested would otherwise enter
+    // the matrix as a plugin the run never had.
+    let out = scratch("aep-eval-run-plugin-unattested");
+    let stream = stream_attesting(
+        &out,
+        "directory-only.jsonl",
+        serde_json::json!([directory_entry()]),
+    );
+    let refused = protocol(&[
+        "eval",
+        "run",
+        "--case",
+        HONEST_CASE,
+        "--arm",
+        "plugin",
+        "--harness",
+        "claude",
+        "--stream",
+        printable(&stream),
+        "--plugin",
+        AEP_PLANNING,
+        "--observed-at",
+        "2026-08-23",
+        "--out",
+        printable(&out),
+        "--redact",
+    ]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let reason = stderr(&refused);
+    assert!(
+        reason.contains("EVAL-STREAM-013") && reason.contains(AEP_PLANNING),
+        "{reason}"
+    );
+}
+
+#[test]
+fn arm_plugin_may_be_a_marketplace_plugin_alone_and_the_manifest_says_so() {
+    // What `beyond10x/bench` needs: a third-party arm with no checked-out directory anywhere. The
+    // manifest writes `plugin_digest: null` — there was no directory treatment, and that is a
+    // fact rather than a hole — and names the marketplace plugin that *was* the treatment.
+    let out = scratch("aep-eval-run-marketplace-only");
+    let digest = synthetic_digest("c3");
+    let stream = stream_attesting(
+        &out,
+        "marketplace-only.jsonl",
+        serde_json::json!([marketplace_entry(DEV_TEAM, "bdfinst", &digest)]),
+    );
+    let ingested = protocol(&[
+        "eval",
+        "run",
+        "--case",
+        HONEST_CASE,
+        "--arm",
+        "plugin",
+        "--harness",
+        "claude",
+        "--stream",
+        printable(&stream),
+        "--plugin",
+        DEV_TEAM,
+        "--observed-at",
+        "2026-08-23",
+        "--out",
+        printable(&out),
+        "--redact",
+    ]);
+    assert_eq!(code(&ingested), 0, "{}", stderr(&ingested));
+    let written = manifest(&out, "claude-plugin-development-honest");
+    assert!(
+        written.contains("plugin_digest: null"),
+        "no directory treatment is a stated absence, not an omitted key: {written}"
+    );
+    assert!(
+        written.contains(&format!(
+            "plugins:\n  - plugin: {DEV_TEAM}\n    digest: {digest}\n"
+        )),
+        "and the marketplace plugin is what the arm measured: {written}"
+    );
+}
