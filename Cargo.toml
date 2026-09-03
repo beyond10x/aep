@@ -71,12 +71,12 @@ anyhow = "1"
 # `git` rather than a version because these crates are not on crates.io; a tag rather than `main`
 # because a ladder's verdicts are a published surface here and must not move under us — the pin is
 # the reversible half of `atlas/architecture/adr/0002`.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.5" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
