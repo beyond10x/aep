@@ -7,6 +7,13 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Fixed
+
+- Rewrite the Design principles stale-approval example around the fields AEP actually checks: the
+  review's subject identifies the design, while `reviewed_version` identifies the version Ada saw.
+
 ## [0.49.0] — 2026-09-03
 
 ### Fixed

@@ -38,7 +38,7 @@ That report can be sincere and still leave every important question unanswered:
 | “Tests pass” is accepted as completion evidence. | Nobody knows which command ran, which revision it observed, whether regression and contract suites ran, or whether the agent merely restated an expectation. |
 | Missing results and failing results are both treated as “not green” — or both as “probably fine.” | The next actor either edits code nobody tested or advances work with no observation at all. |
 | A later prompt or tool configuration grants broad production access. | An earlier denial silently disappears, and the agent can deploy before an approval exists. |
-| The version-3 review is attached to the version-7 design by title. | A reviewer's name authorizes security decisions they never saw. |
+| The approval records “design approved” but not which design version Ada reviewed. | After the design changes from version 3 to version 7, Ada's old approval is still treated as current. |
 | A provider updates the ADR, then discovers that the ADR it should supersede does not exist. | The caller receives an error after entity state or relations have already changed. Retrying makes the state harder to reconstruct. |
 | Model, plugin, time, report, and wire-format assumptions remain implicit. | Nobody can replay which rules ran, which external system produced a claim, or whether today's parser gives yesterday's bytes the same meaning. |
 
@@ -231,7 +231,8 @@ $ "$AEP" evaluate --root . \
       the approved review of design:passkeys-auth was given against a different version
 ```
 
-Chronology and matching titles do not make approval fresh. A new review that names version 7 does.
+The subject ID identifies the design; `reviewed_version` identifies the version Ada saw. Because
+3 does not equal 7, the fresh-review requirement remains unsatisfied until version 7 is reviewed.
 
 **Responsible boundary:** revision-bound artifact and `ReviewResult` types in `aep-domain`; the
 engine's requirement matcher. The external review provider must preserve the reviewed revision when
