@@ -7,6 +7,14 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Changed
+
+- Reworked the Design principles guide into a failure-first, runnable walkthrough that maps the
+  passkey example to AEP's validation, evidence, capability, approval, command, driver, ESS adapter,
+  and compatibility boundaries.
+
 ## [0.45.0] — 2026-09-03
 
 ### Fixed
