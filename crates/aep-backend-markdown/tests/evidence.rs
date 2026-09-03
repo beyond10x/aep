@@ -200,6 +200,65 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
     );
 }
 
+/// The one rung this repository added for ESS, decided against the shipped document.
+///
+/// `the_shipped_ladders_cost_what_this_repository_thinks_they_cost` above records that the cost is
+/// declared. It does not run the rung. A requirement nothing decides against is a line of YAML, and
+/// the kind shipped in 0.48.0 with only that line asserted.
+#[test]
+fn a_specification_reaches_conforming_only_on_a_report_that_a_suite_actually_ran() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../artifacts/lifecycles/executable-system-specification.yaml");
+    let ladder: ArtifactLifecycle =
+        serde_yaml::from_str(&std::fs::read_to_string(&path).expect("the shipped ladder is there"))
+            .expect("it parses");
+
+    let decide = |evidence: &OnHand| {
+        kernel::decide(
+            Some(&ArtifactKind::ExecutableSystemSpecification),
+            &ladder,
+            &ArtifactStatus::parse("validated").expect("a status"),
+            &ArtifactStatus::parse("conforming").expect("a status"),
+            evidence,
+        )
+    };
+
+    // Nobody ran a suite. The refusal names the address nothing supplied, which is the third
+    // outcome this module exists for — not "the requirement failed".
+    match decide(&on_hand(&[])) {
+        Verdict::Unobservable {
+            unobserved,
+            message,
+        } => {
+            assert_eq!(
+                unobserved,
+                vec!["$args.evidence.ess_conformance".to_owned()]
+            );
+            assert!(message.contains("conforming"), "{message}");
+        }
+        other => panic!("expected the unobserved verdict, got {other:?}"),
+    }
+
+    // One report is what the ladder asks for, and one report is enough.
+    assert!(
+        matches!(
+            decide(&on_hand(&[(EvidenceKind::EssConformance, 1)])),
+            Verdict::Permitted
+        ),
+        "one ess_conformance record pays for the rung"
+    );
+
+    // A test result is not a conformance report. The kinds are not interchangeable, and a rung
+    // that accepted any evidence would be the unchecked claim this module replaced.
+    assert!(
+        !matches!(
+            decide(&on_hand(&[(EvidenceKind::TestResult, 3)])),
+            Verdict::Permitted
+        ),
+        "three test results do not pay for a conformance rung"
+    );
+}
+
 // --- Time --------------------------------------------------------------------------------------
 
 /// A rung that opens on a date the artifact itself records. Gap-register `:73`: time-based

@@ -344,6 +344,14 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
     if let Some(withholds) = frontmatter.withholds {
         fields.insert("withholds".to_owned(), Value::from(withholds.as_str()));
     }
+    // The model digest, and it is here because it was missing here. `document_of` read the key and
+    // `apply_body` wrote it, so a digest set by `aep artifact set --model-digest` was applied to a
+    // document and then dropped on the way back out to the instance the store commits: the command
+    // reported `model_digest set (revision 2)` and the file kept revision 1 with no digest. A field
+    // this function does not name does not survive a round trip, whatever the other two do.
+    if let Some(digest) = &frontmatter.model_digest {
+        fields.insert("model_digest".to_owned(), Value::from(digest.as_str()));
+    }
     for (key, node) in &frontmatter.extra {
         fields.insert(
             key.clone(),

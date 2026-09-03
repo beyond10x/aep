@@ -261,6 +261,104 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
 }
 
 #[test]
+fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story() {
+    // The flag arrived in 0.48.0 with nothing driving it. Both ends matter: a digest that does not
+    // reach the file leaves a specification nothing can tie a report to, and a digest accepted on
+    // a kind with no model writes a document the frontmatter validator then refuses to read.
+    const DIGEST: &str = "8aee51b644a97580e2603ea3c9f57d22ca24d765643f2e0a4e0e6410dbfd1fef";
+    let store = scratch("aep-planning-model-digest");
+
+    for (kind, slug) in [
+        ("executable-system-specification", "acd-v3"),
+        ("story", "not-compiled"),
+    ] {
+        let created = protocol(&[
+            "artifact",
+            "new",
+            kind,
+            slug,
+            "--title",
+            "Demo",
+            "--store",
+            printable(&store),
+        ]);
+        assert_eq!(code(&created), 0, "{}", stderr(&created));
+    }
+
+    let written = protocol(&[
+        "artifact",
+        "set",
+        "executable-system-specification:acd-v3",
+        "--model-digest",
+        DIGEST,
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&written), 0, "{}", stderr(&written));
+    let text = std::fs::read_to_string(store.join("executable-system-specification/acd-v3.md"))
+        .expect("readable");
+    assert!(
+        text.contains(&format!("model_digest: {DIGEST}")),
+        "the digest reaches the document: {text}"
+    );
+
+    // Idempotent: writing the value the document already holds is not a revision.
+    let again = protocol(&[
+        "artifact",
+        "set",
+        "executable-system-specification:acd-v3",
+        "--model-digest",
+        DIGEST,
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&again), 0, "{}", stderr(&again));
+    assert_eq!(
+        std::fs::read_to_string(store.join("executable-system-specification/acd-v3.md"))
+            .expect("readable"),
+        text,
+        "a second write of the same digest changes no byte"
+    );
+
+    // On a story it is refused, and the refusal names the kind rather than reporting a parse
+    // failure the author cannot act on.
+    let refused = protocol(&[
+        "artifact",
+        "set",
+        "story:not-compiled",
+        "--model-digest",
+        DIGEST,
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let message = stderr(&refused);
+    assert!(message.contains("story"), "{message}");
+    assert!(message.contains("no compiled model"), "{message}");
+    assert!(
+        !std::fs::read_to_string(store.join("story/not-compiled.md"))
+            .expect("readable")
+            .contains("model_digest"),
+        "a refused write leaves the document alone"
+    );
+
+    // A value that is not a digest is refused before it reaches the file.
+    let garbage = protocol(&[
+        "artifact",
+        "set",
+        "executable-system-specification:acd-v3",
+        "--model-digest",
+        "billing/v3",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&garbage), 1, "{}", stdout(&garbage));
+
+    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stderr(&validated));
+}
+
+#[test]
 fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_section() {
     // `story:templates-hold-ambiguities`. A gap an author found had nowhere to go but prose: the
     // story template had `## Open Questions` with no classification, and the epic and specification

@@ -603,6 +603,69 @@ mod tests {
     }
 
     #[test]
+    fn a_model_digest_is_kept_on_a_compiled_kind_and_refused_by_name_on_every_other() {
+        // The key exists so a conformance report can be tied to the exact model it ran against.
+        // That tie is only a tie where there is a model: `carries_model_digest` decides which
+        // kinds have one, and this asserts both sides of that predicate rather than the branch
+        // that happens to be exercised elsewhere.
+        const DIGEST: &str = "8aee51b644a97580e2603ea3c9f57d22ca24d765643f2e0a4e0e6410dbfd1fef";
+        let front = PlanningFrontmatter::try_from(raw(&format!(
+            "id: executable-system-specification:acd-v3\n\
+             kind: executable-system-specification\n\
+             status: draft\n\
+             model_digest: {DIGEST}\n"
+        )))
+        .expect("a compiled kind carries a digest");
+        assert_eq!(
+            front.model_digest.as_ref().map(SpecDigest::as_str),
+            Some(DIGEST)
+        );
+        assert_eq!(
+            front
+                .to_artifact("executable-system-specification/acd-v3.md")
+                .model_digest
+                .as_ref()
+                .map(SpecDigest::as_str),
+            Some(DIGEST),
+            "and it reaches the artifact the graph validates"
+        );
+
+        // Round-trip, because this key is written by `aep artifact set --model-digest` and read
+        // back by the next command that touches the file.
+        let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
+        assert!(
+            written.contains(&format!("model_digest: {DIGEST}")),
+            "{written}"
+        );
+        let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
+        assert_eq!(again.model_digest, front.model_digest);
+        assert!(
+            !again.extra.contains_key("model_digest"),
+            "a named key must not also land in `extra`: {:?}",
+            again.extra
+        );
+
+        // On a story it binds nothing, so it is refused here rather than kept as text a reader
+        // would take for a guarantee.
+        let errors =
+            PlanningFrontmatter::try_from(raw(&format!("{MINIMAL}model_digest: {DIGEST}\n")))
+                .expect_err("a kind with no compiled model is refused");
+        assert_eq!(
+            errors
+                .as_slice()
+                .iter()
+                .map(|error| error.code)
+                .collect::<Vec<_>>(),
+            vec![ValidationCode::UnsupportedConstruct],
+            "{errors}"
+        );
+        assert!(
+            errors.to_string().contains("binds nothing"),
+            "the refusal says why, not just that: {errors}"
+        );
+    }
+
+    #[test]
     fn both_written_forms_of_a_reference_read_and_only_the_mapping_is_written_back() {
         // The shorthand exists because it is what a person types and what `--ref` takes; the
         // mapping is what the file carries, so a document written by hand and one written by the
