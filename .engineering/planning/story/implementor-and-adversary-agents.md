@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - informed_by: story:workflow-plugin-coverage
-revision: 2
+revision: 3
 ---
 # Story: The plugin ships an implementor and an adversary, and the reasons it did not are answered
 
@@ -76,7 +76,7 @@ succeeds at its actual job sends the work back rather than forward. The agent's 
 
 ## Acceptance
 
-`cargo test -p protocol-cli --test workflow_coverage` passes with `implement`,
+`cargo test -p aep-cli --test workflow_coverage` passes with `implement`,
 `establish_verifiers` and `adversarial_verify` claimed by a shipped agent file rather than named in
 a gap, and with `verify` still named in one — coverage is total, and a state claimed twice is an
 error, so the test passing is the assertion that the gap edit is honest.

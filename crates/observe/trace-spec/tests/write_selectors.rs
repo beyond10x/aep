@@ -4,8 +4,13 @@
 //!
 //! The first live pilot of the eval programme, 2026-08-23, asked Claude Code to write a failing
 //! test before the code. It did: `git status` in the run's working clone shows
-//! `crates/edge/aep-cli/tests/planning_cli.rs` and `crates/edge/aep-cli/src/planning.rs` both
-//! modified. The corpus reported `the-test-came-before-the-code` as **undecidable**, reason
+//! `crates/protocol-cli/tests/planning_cli.rs` and `crates/protocol-cli/src/planning.rs` both
+//! modified — the paths that run saw, before the crate moved to `crates/edge/aep-cli` and was
+//! renamed. A quoted observation is not restated in a spelling the observer never printed, so these
+//! two stay as recorded. Neither guard in `xtask/tests/crate_paths_are_area_qualified.rs` reports
+//! them and no exclusion was added for them: `protocol-cli` is not a crate directory this tree has,
+//! so it is not a *pre-move* spelling, and it is not an area, so the area-qualified predicate never
+//! reaches it. The corpus reported `the-test-came-before-the-code` as **undecidable**, reason
 //! `never_occurred`, selector `Write(file_path glob "*/tests/*")` — because the run used **`Edit`**
 //! on files that already existed, and no `Write` event ever occurred.
 //!

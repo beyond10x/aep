@@ -20,7 +20,7 @@ scope:
   path: crates/drive/aep-driver
 - confidence: cited
   path: crates/edge/aep-cli
-revision: 13
+revision: 14
 ---
 # Story: `protocol drive` — the run that touches the world
 
@@ -60,8 +60,8 @@ evaluate against a store one write behind.
 
 ## Re-scoped on evidence — 2026-08-28
 
-The verb ships and two real runs have used it (`W4-1/1`, `W4-2/1`). `cargo test -p protocol-cli
---test drive_cli` → 11 passed; `cargo test -p protocol-cli --bin protocol drive::` → 24 passed;
+The verb ships and two real runs have used it (`W4-1/1`, `W4-2/1`). `cargo test -p aep-cli
+--test drive_cli` → 11 passed; `cargo test -p aep-cli --bin protocol drive::` → 24 passed;
 `cargo test -p aep-driver --test driving` → 12 passed.
 
 | line | state | what remains |
@@ -78,7 +78,7 @@ never reused.
 
 ### Re-verified — 2026-08-30
 
-`cargo test -p protocol-cli --test drive_cli` → **47 passed**, exit 0 (11 on 2026-08-28);
+`cargo test -p aep-cli --test drive_cli` → **47 passed**, exit 0 (11 on 2026-08-28);
 `cargo test -p aep-driver --test driving` → 12 passed; `--test routing` → 12 passed (7 on
 2026-08-28). **Two of the five open rows closed** — both by work that landed under
 `story:operator-resume-ux`, which is now `implemented`, rather than by anything filed here.

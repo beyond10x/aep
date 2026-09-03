@@ -50,7 +50,7 @@ const CORPUS: &str = "conformance/eval";
 
 /// One case as written. Its own types, for the reason `workflow_coverage.rs` gives: this is not a
 /// protocol document kind and publishing a schema for it would say otherwise.
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
     format: String,
@@ -75,6 +75,29 @@ struct Case {
     /// a declared one that stops gapping fails this test.
     #[serde(default)]
     advisory_gaps: Vec<Violation>,
+    /// What the case is a case *about*, when it says.
+    ///
+    /// Optional, and here so that a case may declare it at all: `aep eval run` reads
+    /// `subject.skills` to decide whether the child's `PATH` has to hold `ess` before a live spawn
+    /// (`EVAL-RUN-018`, `crates/edge/aep-cli/src/eval.rs`). That reader deliberately does **not**
+    /// `deny_unknown_fields`, on the stated grounds that this one owns the shape — so a block it
+    /// keys on that this one refuses is the two readers disagreeing about one document, which is
+    /// the failure `deny_unknown_fields` is for.
+    #[serde(default)]
+    subject: Option<Subject>,
+}
+
+/// The `subject:` block of a case.
+///
+/// Closed, so a misspelled key inside it is refused here rather than silently read as *no skills*
+/// by the preflight — an `EVAL-RUN-018` that stops firing is a live run that spawns and pays on a
+/// runner with no `ess`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Subject {
+    /// The skills the case is about, `<plugin>:<skill>`.
+    #[serde(default)]
+    skills: Vec<String>,
 }
 
 /// What the case says the check must report.
@@ -88,7 +111,7 @@ enum DeclaredVerdict {
 }
 
 /// One expectation a violation case expects to be contradicted, and why.
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Violation {
     expectation: String,
@@ -418,6 +441,49 @@ fn the_two_development_cases_are_judged_by_one_document() {
         find("development-honest"),
         find("development-tests-after-the-code"),
         "the honest development case and its violation must resolve to the same document"
+    );
+}
+
+#[test]
+fn a_case_may_declare_what_it_is_about_and_a_typo_inside_it_is_refused() {
+    // Two readers, one document. `aep eval run`'s preflight decides whether the child's `PATH`
+    // needs `ess` from `subject.skills` (`EVAL-RUN-018`), and `src/eval.rs` deliberately does not
+    // `deny_unknown_fields` because *this* reader owns the shape. So the block the runner keys on
+    // has to be a block this reader accepts — otherwise a case that declared it would be refused
+    // here and the corpus would reject exactly the cases the preflight was written for.
+    let base = "format: eval-case/1\nid: a-case\ntitle: A case\nworkflow: adp/default\n\
+                states: [decompose]\narm: plugin\nverdict: held\ntask: do it\n\
+                expectations: expectations.trace.yaml\ntranscript: transcript.jsonl\n";
+
+    let declared: Case = serde_yaml::from_str(&format!(
+        "{base}subject:\n  skills: [ess-specify:specify]\n"
+    ))
+    .expect("a case may say what it is about");
+    assert_eq!(
+        declared
+            .subject
+            .expect("the block was declared")
+            .skills
+            .as_slice(),
+        ["ess-specify:specify"],
+        "and the skills reach the reader as written"
+    );
+
+    let absent: Case = serde_yaml::from_str(base).expect("and it stays optional");
+    assert!(
+        absent.subject.is_none(),
+        "a case that says nothing about its subject declares no skills"
+    );
+
+    // The point of accepting the block is to keep denying what is inside it. A typo here is a
+    // preflight that silently stops firing, which is the shape `EVAL-RUN-018` exists to prevent.
+    let error =
+        serde_yaml::from_str::<Case>(&format!("{base}subject:\n  skils: [ess-specify:specify]\n"))
+            .expect_err("a misspelled key inside `subject` is refused rather than ignored");
+    let reason = error.to_string();
+    assert!(
+        reason.contains("skils"),
+        "and the refusal names the key nobody reads: {reason}"
     );
 }
 

@@ -2599,10 +2599,15 @@ fn ess_skill_prefixes_phrase() -> String {
 
 /// An eval case as it is written down.
 ///
-/// Only the four fields the runner needs, and deliberately **not** `deny_unknown_fields`: the
-/// corpus's shape has an owner already — `crates/edge/aep-cli/tests/eval_corpus.rs` reads every
-/// field and denies the unknown — and a second denier would be a second place to update when a case
-/// grows a key, which is how two readers of one document start disagreeing.
+/// Only the fields the runner needs, and deliberately **not** `deny_unknown_fields`: the corpus's
+/// shape has an owner already — `crates/edge/aep-cli/tests/eval_corpus.rs` reads every field and
+/// denies the unknown — and a second denier would be a second place to update when a case grows a
+/// key, which is how two readers of one document start disagreeing.
+///
+/// That deference is only sound while the owner accepts what this reader keys on. It did not: the
+/// corpus reader had no `subject` and refused a case declaring the block `EVAL-RUN-018` reads. Both
+/// halves are now asserted there, by
+/// `a_case_may_declare_what_it_is_about_and_a_typo_inside_it_is_refused`.
 #[derive(Debug, Deserialize)]
 struct RawCase {
     /// The format claim.

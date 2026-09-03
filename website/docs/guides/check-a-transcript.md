@@ -42,15 +42,15 @@ $B trace inspect --transcript crates/observe/trace-spec/tests/fixtures/plugin-ev
 ```
 
 ```text
-transcript   sha256:53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
+transcript   sha256:143702946b4bf35d3f764a78bee5bac5f530b775f378911352b7c32ecf09dc30
 events       36 total — 6 assistant_text, 2 assistant_thinking, 1 rate_limit, 1 run_outcome, 1 session_start, 1 synthetic_injection, 2 thinking_estimate, 11 tool_call, 11 tool_result
 unread       0 event(s) the adapter could not read
 requests     19 assistant events, 8 api requests
 tool         Bash: 4 call(s), 0 error(s), in 1116B, results 2755B
 tool         Edit: 3 call(s), 0 error(s), in 6875B, results 649B
 tool         Read: 3 call(s), 0 error(s), in 373B, results 4656B
-tool         Skill: 1 call(s), 0 error(s), in 423B, results 47B
-tools-total  11 call(s), results 8107B into context
+tool         Skill: 1 call(s), 0 error(s), in 414B, results 38B
+tools-total  11 call(s), results 8098B into context
 repeated     0 identical call group(s)
 step         1. Skill (event 5): gen 1486ms, exec 35ms
 step         2. Bash (event 10): gen 1290ms, exec 187ms
@@ -87,14 +87,15 @@ cache use, per-step timing), each `gate` or `advisory`:
   expect:
     order:
       first: {tool: Skill}
-      before: {tool: Bash, args: {command: {contains: "aep artifact"}}}
+      before: {tool: Bash, args: {command: {contains: "protocol artifact"}}}
 
 - id: created-through-the-cli
   statement: artifacts were created with the CLI, not with hand-written frontmatter
   expect:
     tool.called:
       tool: Bash
-      args: {command: {contains: "aep artifact new"}}
+      args: {command: {contains: "protocol artifact new"}}
+      count: {at_least: 1}
 ```
 
 ### The five matchers, and the one difference that catches people
@@ -126,12 +127,13 @@ glob. Reach for `glob` for paths, which is what it is good at. A matcher that ho
 there is — `{contains: ""}`, `{glob: "*"}`, `{regex: ".*"}` — is refused under `text.matches`: an
 expectation that can only report `ok` is a check that stopped checking.
 
-The report is one row per expectation and this specification declares forty-two, so the command
+The report is one row per expectation and this specification declares forty-three, so the command
 below takes the first twelve lines rather than abridging by hand. The rows name
-`aep-planning:planning` and `aep-planning:decomposer`: the plugin is `aep-plan` since
-`agentplugins@a2077d2`, and this is the output of checking a transcript recorded before the rename,
-quoted as it was printed. The recording is evidence and is not rewritten, so the specification's own
-rows keep the recorded ids too, each marked `# recorded-under-this-name`.
+`aep-planning:planning` and `aep-planning:decomposer`, and the plugin has been `aep-plan` since
+`agentplugins@a2077d2`: the transcript was recorded before that rename, so those are the ids that
+session was actually offered, and the block below is what the command prints today. The recording is
+evidence and is not rewritten, so the specification's own rows keep the recorded ids as well, each
+marked `# recorded-under-this-name`.
 
 ```bash
 $B trace check --spec conformance/trace/expectations.trace.yaml \
@@ -139,7 +141,7 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```
 
 ```text
-planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
+planning-plugin/eval against transcript sha256:143702946b4b… — 43 ok, 0 gap, 0 unk
   The planning plugin behaves as its skill says it does
   ok        our-plugin-loaded                              aep 0.1.0 from aep@inline is loaded at event 0
   ok        nothing-else-loaded                            exactly aep loaded at event 0
@@ -149,8 +151,8 @@ planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap,
   ok        the-skill-was-offered                          skill aep-planning:planning is among 17 offered at event 0
   ok        the-decomposer-loaded                          agent aep-planning:decomposer is among 7 offered at event 0
   ok        skill-completed                                aep-planning:planning completed 1 time(s) with success=true, at least 1 at events 5, 6
-  ok        consulted-the-skill-before-touching-the-store  first Skill at 5, first Bash(command ~ "aep artifact") at 10 at events 5, 10
-  ok        created-through-the-cli                        Bash(command ~ "aep artifact new") called 2 time(s), at least 1 at events 13, 15
+  ok        consulted-the-skill-before-touching-the-store  first Skill at 5, first Bash(command ~ "protocol artifact") at 10 at events 5, 10
+  ok        created-through-the-cli                        Bash(command ~ "protocol artifact new") called 2 time(s), at least 1 at events 13, 15
 ```
 
 The rows in between are the resource-shaped ones, each marked `ok (adv)`: an advisory expectation
@@ -164,8 +166,8 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 
 ```text
   ok (adv)  served-at-standard-speed                       usage.speed = standard at event 35
-spec sha256:8eca7c40a57e…  adapter claude-code/stream-json
-note: this report quotes command strings and file paths read out of the transcript; `--redact` replaces them with digests. Transcript sha256:53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
+spec sha256:a140611aa53c…  adapter claude-code/stream-json
+note: this report quotes command strings and file paths read out of the transcript; `--redact` replaces them with digests. Transcript sha256:143702946b4bf35d3f764a78bee5bac5f530b775f378911352b7c32ecf09dc30
 conformant: the run satisfies every expectation the specification states (exit 0)
 ```
 
@@ -187,10 +189,10 @@ $B trace check --spec conformance/trace/expectations.trace.yaml \
 ```
 
 ```text
-planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
+planning-plugin/eval against transcript sha256:143702946b4b… — 43 ok, 0 gap, 0 unk
   The planning plugin behaves as its skill says it does
-  ok        our-plugin-loaded                              sha256:254fa2a0a580 at event 0
-  ok        nothing-else-loaded                            sha256:90325e36d98d at event 0
+  ok        our-plugin-loaded                              sha256:85a7a8506642 at event 0
+  ok        nothing-else-loaded                            sha256:86839ae06868 at event 0
   ok        billed-to-the-session                          sha256:bf73c5c38808 at event 0
   ok        the-run-did-not-ask                            sha256:a8ea2249bf47 at event 0
 ```
@@ -229,10 +231,10 @@ $B trace evidence --spec conformance/trace/expectations.trace.yaml \
 ```yaml
 - kind: trace_conformance
   specification: planning-plugin/eval
-  spec_digest: 8eca7c40a57e3f45d311c9499102980cb8846c3045ca407e6a3148abc3b8f74f
-  transcript_digest: 53cdb852be82b35c6e401b32c027c1f430f4f3e98098e5a769dc778055166404
+  spec_digest: a140611aa53c55cfe96a8b2267b598889f62124bc4939473ce64d855e7ec3fc8
+  transcript_digest: 143702946b4bf35d3f764a78bee5bac5f530b775f378911352b7c32ecf09dc30
   status: passed
-  expectations_total: 41
+  expectations_total: 43
   expectations_gapped: 0
   expectations_unknown: 0
   adapter: claude-code/stream-json (written against 2.1.238)
@@ -241,7 +243,7 @@ $B trace evidence --spec conformance/trace/expectations.trace.yaml \
     producer: verifier
     verifier: trace-checker
   provenance:
-    command: aep trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+    command: protocol trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
     inputs:
     - conformance/trace/expectations.trace.yaml
     - crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
@@ -296,7 +298,7 @@ what it cost and what broke, is `docs/plan/harness-wave-4-governed-dogfood.md` �
 
 The checker and IR live in `crates/observe/trace-domain` and `crates/observe/trace-spec`; the specification
 format is published as `schemas/generated/trace-spec.schema.json`; the worked specification is
-`conformance/trace/expectations.trace.yaml`, whose forty-two expectations are checked
+`conformance/trace/expectations.trace.yaml`, whose forty-three expectations are checked
 against two committed transcripts by the ordinary test suite. Design and acceptance:
 `docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
 The driver is `crates/drive/aep-driver` behind `aep drive`, its enforcement arm is the plugin's

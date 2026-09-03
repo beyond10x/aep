@@ -57,6 +57,15 @@ belongs in the commit message or in `docs/design/`.
   coordinate is kept deliberately old: `beyond10x/agentplugins@aep-planning@0.4.0` in
   `crates/edge/aep-cli/tests/eval_run.rs` is a **released** pin, and that release really is named
   that.
+- **The console blocks in *Check a transcript* are regenerated from the commands above them**, and a
+  test now holds them there: the page quoted a transcript digest, a spec digest and a row count from
+  a run predating three changes to the tree, while telling the reader it was quoting what the command
+  printed. Its declared expectation count follows the specification's own forty-three.
+- **A `conformance/eval` case may declare `subject.skills`.** The corpus reader denied it as an
+  unknown field, so the one block `aep eval run`'s `EVAL-RUN-018` preflight keys on could not be
+  written in a case at all; the block is accepted and closed, so a typo inside it is still refused.
+  A live artifact's `scope:` is now also checked for an area-qualified path naming a crate this tree
+  does not have, not only for a pre-move spelling.
 
 ## [0.50.0] — 2026-09-03
 

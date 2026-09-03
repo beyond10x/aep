@@ -17,7 +17,7 @@ scope:
   path: crates/edge/aep-cli
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 14
+revision: 15
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 
@@ -103,7 +103,7 @@ Nothing here is lost — the branch holds every commit and every case.
 |---|---|
 | branch | `impl/unreadable-lock-refuses-its-own-escape-hatch` |
 | commits | `ce2d1da` (first implementation), `97d7bcf` (correction after attack 1) |
-| suite at `97d7bcf` | `cargo test -p protocol-cli --no-fail-fast` → 25 suites, 557 passed, exit 0 |
+| suite at `97d7bcf` | `cargo test -p aep-cli --no-fail-fast` → 25 suites, 557 passed, exit 0 |
 | suite with attack 2's cases | exit 101, 558 passed, 4 failed |
 | adversarial cases on the branch | 9 — 5 from pass 1 (all now green), 4 from pass 2 (red) |
 

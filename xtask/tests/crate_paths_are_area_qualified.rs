@@ -45,7 +45,7 @@
 //! | `docs/design/`, `docs/reviews/` | dated record. `docs/plan/` is **not** here: `AGENTS.md` § *Normative documents* makes accepted pages under it live, and `gap-register.md` cites current code by `file:line` |
 //! | recorded `metaharness.event/1` streams | a session in a `/work/aep` sandbox, each `tool.result` carrying a `bytes` count over its own string; rewriting a path there falsifies the count, and one of the files they name never existed in this repository at all |
 //! | the two lines that quote those streams | `conformance/eval/development-tests-after-the-code/case.yaml` narrates a transcript, and the blog post quotes a `churn` run from 2026-08-25 |
-//! | `.engineering/planning/` | the store is written by `aep artifact`, never by an editor. Its machine-read half — `scope:`, which `aep artifact waves` compares — is asserted by `no_live_planning_artifact_scopes_a_file_by_its_pre_move_path` below. Its prose half is 298 citations across 111 documents, 190 of them in artifacts that are already implemented or archived, and rewriting those would be rewriting a finished record |
+//! | `.engineering/planning/` | the store is written by `aep artifact`, never by an editor. Its machine-read half — `scope:`, which `aep artifact waves` compares — is asserted by `no_live_planning_artifact_scopes_a_file_by_its_pre_move_path` below, on both predicates — a path that never gained its area, and one that has an area and names a crate this tree does not have. Its prose half is 298 citations across 111 documents, 190 of them in artifacts that are already implemented or archived, and rewriting those would be rewriting a finished record |
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -301,24 +301,29 @@ const TERMINAL: &[&str] = &[
     "done",
 ];
 
-/// A live planning artifact whose machine-read `scope:` still names a file by its pre-move path.
+/// Every live artifact whose `scope:` names a crate path this tree cannot resolve, and how many
+/// documents were read to find them.
 ///
-/// `aep artifact waves` decides which stories may be implemented at once by comparing `scope:` path
-/// strings, and it says in its own documentation that "**Nothing is normalised**… nothing here
-/// normalises `crates/x/src/lib.rs` to `crates/x`" (`crates/edge/aep-cli/src/planning.rs`). So
-/// a draft that still says `crates/aep-domain/src/artifact.rs` cannot collide with a story written
-/// after the move that lands on `crates/govern/aep-domain/src/artifact.rs` — the same file, two
-/// spellings, no collision reported, both placed in one wave. That is the exact failure the verb
-/// exists to prevent, and the move introduced it into fifty-one artifacts at once.
-#[test]
-fn no_live_planning_artifact_scopes_a_file_by_its_pre_move_path() {
-    let root = repo_root();
-    let names = crate_directory_names(&root);
-    let store = root.join(".engineering/planning");
+/// **Two predicates, because a path can be unresolvable in two ways and the first one is blind to
+/// the second.** `crates/aep-domain/src/artifact.rs` never gained its area
+/// ([`pre_move_path`]); `crates/edge/protocol-cli/src/planning.rs` has an area and names a crate
+/// this tree does not have ([`area_and_crate`] against the pair set). The second is exactly the
+/// shape `story:profile-and-cli-crates-named-after-aep` left behind, and keying the store-side rule
+/// on pre-move spellings alone would have reported none of it — which is the defect this predicate
+/// is, not the artifacts that carried it.
+///
+/// Takes the store as an argument so the mutation below can run it against a scratch copy without
+/// an environment switch on the gating test: a check that can be pointed elsewhere by a variable is
+/// a check that can be switched off by one.
+fn stale_live_scopes(
+    store: &Path,
+    names: &BTreeSet<String>,
+    pairs: &BTreeSet<(String, String)>,
+) -> (BTreeMap<String, Vec<String>>, usize) {
     let mut findings: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut scanned = 0usize;
 
-    let mut pending = vec![store.clone()];
+    let mut pending = vec![store.to_path_buf()];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(&directory)
             .unwrap_or_else(|error| panic!("{} is readable: {error}", directory.display()))
@@ -344,7 +349,18 @@ fn no_live_planning_artifact_scopes_a_file_by_its_pre_move_path() {
                 .lines()
                 .filter_map(|line| line.trim().trim_start_matches("- ").strip_prefix("path:"))
                 .map(str::trim)
-                .filter_map(|value| pre_move_path(value, &names).map(str::to_owned))
+                .filter(|value| {
+                    !SYNTHETIC_PATHS
+                        .iter()
+                        .any(|synthetic| value.starts_with(synthetic))
+                })
+                .filter(|value| {
+                    pre_move_path(value, names).is_some()
+                        || area_and_crate(value).is_some_and(|(area, name)| {
+                            !pairs.contains(&(area.to_owned(), name.to_owned()))
+                        })
+                })
+                .map(str::to_owned)
                 .collect();
             if !stale.is_empty() {
                 let id = field(block, "id").unwrap_or("<no id>");
@@ -352,24 +368,155 @@ fn no_live_planning_artifact_scopes_a_file_by_its_pre_move_path() {
             }
         }
     }
+    (findings, scanned)
+}
+
+/// The findings of [`stale_live_scopes`], rendered for an assertion message.
+fn scope_report(findings: &BTreeMap<String, Vec<String>>) -> String {
+    findings
+        .iter()
+        .map(|(artifact, paths)| format!("  {artifact}: {}", paths.join(", ")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A live planning artifact whose machine-read `scope:` names a crate path this tree does not have.
+///
+/// `aep artifact waves` decides which stories may be implemented at once by comparing `scope:` path
+/// strings, and it says in its own documentation that "**Nothing is normalised**… nothing here
+/// normalises `crates/x/src/lib.rs` to `crates/x`" (`crates/edge/aep-cli/src/planning.rs`). So
+/// a draft that still says `crates/aep-domain/src/artifact.rs` cannot collide with a story written
+/// after the move that lands on `crates/govern/aep-domain/src/artifact.rs` — the same file, two
+/// spellings, no collision reported, both placed in one wave. That is the exact failure the verb
+/// exists to prevent, and the move introduced it into fifty-one artifacts at once.
+///
+/// A rename does the same damage without leaving a pre-move spelling behind:
+/// `crates/edge/protocol-cli/src/planning.rs` reads as area-qualified and collides with nothing
+/// either. Both are one predicate here — see [`stale_live_scopes`] — because `waves` cannot tell
+/// them apart and neither should this.
+#[test]
+fn no_live_planning_artifact_scopes_a_file_by_its_pre_move_path() {
+    let root = repo_root();
+    let names = crate_directory_names(&root);
+    let pairs = area_crate_directories(&root);
+    let (findings, scanned) =
+        stale_live_scopes(&root.join(".engineering/planning"), &names, &pairs);
 
     assert!(
         scanned > 100,
         "only {scanned} planning documents were read, so this test is asserting nothing"
     );
     let entries: usize = findings.values().map(Vec::len).sum();
-    let report: Vec<String> = findings
-        .iter()
-        .map(|(artifact, paths)| format!("  {artifact}: {}", paths.join(", ")))
-        .collect();
     assert!(
         findings.is_empty(),
-        "{} live planning artifact(s) carry {entries} `scope:` path(s) that name a crate by the \
-         directory it no longer sits in, so `aep artifact waves` cannot collide them with any \
-         story scoped after the move:\n{}",
+        "{} live planning artifact(s) carry {entries} `scope:` path(s) that name a crate this tree \
+         does not have at that path, so `aep artifact waves` cannot collide them with any story \
+         scoped after the move:\n{}",
         findings.len(),
-        report.join("\n")
+        scope_report(&findings)
     );
+}
+
+/// Everything under `from`, copied into `to`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the scratch tree is writable");
+    for entry in std::fs::read_dir(from).expect("the source tree is readable") {
+        let entry = entry.expect("a source entry").path();
+        let target = to.join(entry.file_name().expect("an entry has a name"));
+        if entry.is_dir() {
+            copy_tree(&entry, &target);
+        } else {
+            std::fs::copy(&entry, &target).expect("a readable source and a writable target");
+        }
+    }
+}
+
+/// The guard of the store-side guard: a scope the tree cannot resolve is reported, live only.
+///
+/// `AGENTS.md` invariant 15 — break the guarded condition, observe the named failure. Run against a
+/// **copy of the real store** rather than a two-file fixture, so the mutation is measured on the
+/// document shapes the gating test actually reads: a scanner that stopped parsing frontmatter would
+/// pass a synthetic corpus written to suit it. The real store is never written.
+///
+/// The planted path is `crates/edge/protocol-cli/src/planning.rs` — area-qualified, so the pre-move
+/// predicate is blind to it by construction, which is the half this test exists to prove is covered.
+#[test]
+fn a_live_scope_naming_a_crate_this_tree_lacks_is_reported_and_a_finished_one_is_not() {
+    let root = repo_root();
+    let names = crate_directory_names(&root);
+    let pairs = area_crate_directories(&root);
+
+    let scratch = std::env::temp_dir().join("aep-xtask-scope-guard-mutation");
+    std::fs::remove_dir_all(&scratch).ok();
+    copy_tree(&root.join(".engineering/planning"), &scratch);
+
+    let (clean, scanned) = stale_live_scopes(&scratch, &names, &pairs);
+    assert!(
+        scanned > 100,
+        "only {scanned} documents were copied, so the mutation below proves nothing"
+    );
+    assert!(
+        clean.is_empty(),
+        "the copy has to start where the store is — green:\n{}",
+        scope_report(&clean)
+    );
+
+    // One live artifact, one retired path, in the shape `aep artifact` writes a scope.
+    let document = |id: &str, status: &str, path: &str| {
+        format!(
+            "---\nformat: aep.planning-md/1\nid: story:{id}\nkind: story\nstatus: {status}\n\
+             title: A planted scope\nscope:\n- confidence: cited\n  path: {path}\nrevision: 1\n\
+             ---\n\n# Story: A planted scope\n"
+        )
+    };
+    let retired = "crates/edge/protocol-cli/src/planning.rs";
+    assert!(
+        pre_move_path(retired, &names).is_none(),
+        "the planted path must be invisible to the pre-move predicate, or this proves the wrong half"
+    );
+
+    std::fs::write(
+        scratch.join("story/planted-live.md"),
+        document("planted-live", "active", retired),
+    )
+    .expect("the scratch store is writable");
+    let (mutated, _) = stale_live_scopes(&scratch, &names, &pairs);
+    assert_eq!(
+        mutated
+            .get("story:planted-live (active)")
+            .map(Vec::as_slice),
+        Some(&[retired.to_owned()][..]),
+        "a live scope naming a crate this tree does not have is the finding: {mutated:?}"
+    );
+
+    // The same path in a finished artifact is a record of where work landed, not a stale predicate.
+    std::fs::write(
+        scratch.join("story/planted-live.md"),
+        document("planted-done", "implemented", retired),
+    )
+    .expect("the scratch store is writable");
+    // …and a path this tree does have is never a finding, at any status.
+    let live_pair = pairs
+        .iter()
+        .find(|(area, _)| area == "edge")
+        .expect("`edge` holds at least one crate");
+    std::fs::write(
+        scratch.join("story/planted-good.md"),
+        document(
+            "planted-good",
+            "active",
+            &format!("crates/{}/{}/src/lib.rs", live_pair.0, live_pair.1),
+        ),
+    )
+    .expect("the scratch store is writable");
+    let (settled, _) = stale_live_scopes(&scratch, &names, &pairs);
+    assert!(
+        settled.is_empty(),
+        "a finished artifact's scope and a path this tree has are both silent:\n{}",
+        scope_report(&settled)
+    );
+
+    std::fs::remove_dir_all(&scratch).ok();
 }
 
 /// No tracked file spells a crate path the way the tree spelled it before the move.

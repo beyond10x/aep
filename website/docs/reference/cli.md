@@ -507,7 +507,7 @@ declares, the instrument attests, and the manifest records what both said.
 
 ```bash
 aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
-    --plugin-dir ../agentplugins/aep-plan \
+    --plugin-dir ../agentplugins/plugins/aep-plan \
     --plugin bdfinst/agentic-dev-team@dev-team@1.4.0 \
     --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
 ```
@@ -552,7 +552,7 @@ folded them into one would have thrown away the only evidence that the pin was h
 
 ```bash
 aep eval run --arm plugin --harness claude --case conformance/eval/development-honest \
-    --plugin-dir ../agentplugins/aep-plan --model claude-sonnet-4-6 \
+    --plugin-dir ../agentplugins/plugins/aep-plan --model claude-sonnet-4-6 \
     --out runs/ --observed-at 2026-09-03 --cwd /work/subject --budget-usd 2.00
 ```
 

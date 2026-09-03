@@ -7,7 +7,7 @@ title: 'W4-3: operator-resume-ux, driven as a governed run'
 summary: 'The request recorded at intake: task W4-3 (kind feature, objective operator-resume-ux) asks for story:operator-resume-ux under protocol adp/1 and profile development.driven.'
 relations:
 - derived_from: story:operator-resume-ux
-revision: 5
+revision: 6
 ---
 # Task: W4-3 — operator-resume-ux
 
@@ -92,7 +92,7 @@ The requester defers this to the story. Its Acceptance section, quoted unedited:
 
 The story's "Re-scoped on evidence — 2026-08-28" section is the one the requester points at for which
 of those lines are already held. It records the observation it was re-scoped from, quoted unedited:
-"`cargo test -p aep-driver --test routing` → 7 passed; `cargo test -p protocol-cli --test drive_cli`
+"`cargo test -p aep-driver --test routing` → 7 passed; `cargo test -p aep-cli --test drive_cli`
 → 11 passed, 2026-08-28. Staleness and host rules hold exactly as written." Its per-line table is in
 the story body at `.engineering/planning/story/operator-resume-ux.md`; it is not copied here, because
 the story is the record of it. The section closes: "One of these is code (`took_lock_from`), the rest
