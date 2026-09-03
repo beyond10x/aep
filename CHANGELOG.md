@@ -7,6 +7,27 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.47.0] — 2026-09-03
+
+### Fixed
+
+- **`--redact` now removes the operator's git identity too.** It read `$HOME`, `$USER` and
+  `$LOGNAME`, which is not what a stream carries when a recorded run commits inside its own
+  fixture: `git log` prints an author, and that is a person's real name and their address. The
+  golden-path recording of 2026-09-03 went to disk redacted and still carried the operator's name
+  four times — twice as a commit author, twice as an argument the agent had read out of
+  `git config` and typed back. `user.name` and `user.email` are now read the way the child would
+  read them, and a machine with no git, or a directory that is not a repository, has nothing to
+  remove and is left alone.
+
+### Added
+
+- **`protocol trace redact --transcript <path> [--out <path>]`** applies that same removal to a
+  stream already on disk. It is idempotent, which is the point of having it: a stream an older
+  `--redact` wrote is missing only what that build did not know to remove. It does not re-digest
+  anything — a manifest's `transcript_digest` names the bytes its run wrote, and a verb that
+  rewrote both would leave a manifest attesting a file nobody can check against the run.
+
 ## [0.46.0] — 2026-09-03
 
 ### Fixed

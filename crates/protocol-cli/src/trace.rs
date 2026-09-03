@@ -36,6 +36,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::io::Write as _;
 
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
@@ -106,6 +107,29 @@ pub(crate) enum TraceCommand {
     /// that it consulted the CLI before editing; a deterministic checker reads the transcript the
     /// model produced and establishes it.
     Evidence(EvidenceArgs),
+    /// Take the operator out of a transcript that is already on disk.
+    ///
+    /// The same removal `protocol eval run --redact` applies as it writes, offered as a verb for
+    /// the stream it did not catch. What counts as the operator is read from the environment —
+    /// `$HOME`, `$USER`, and the `user.name` and `user.email` git would author with — because the
+    /// thing being removed is *whoever ran it*, and an operator who had to name their own name
+    /// would forget on the run that mattered.
+    ///
+    /// Idempotent, which is the point of having it: a stream a `--redact` run wrote is missing
+    /// only what that build did not know to remove, and this removes the rest without disturbing
+    /// the placeholders already there.
+    ///
+    /// It does **not** re-digest anything. A manifest's `transcript_digest` names the bytes its
+    /// run wrote, and a verb that quietly rewrote both would leave a manifest attesting a file
+    /// nobody can check against the run. Redact, then check what the digest now says.
+    Redact {
+        /// The stream to read.
+        #[arg(long)]
+        transcript: PathBuf,
+        /// Where to write it. Without it the redacted stream goes to standard output.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The arguments of `protocol trace check`.
@@ -199,7 +223,31 @@ pub(crate) fn run(command: TraceCommand) -> Result<ExitCode> {
         TraceCommand::Check(args) => check_transcript(&args),
         TraceCommand::Inspect { transcript, format } => inspect(&transcript, format),
         TraceCommand::Evidence(args) => mint_evidence(&args),
+        TraceCommand::Redact { transcript, out } => redact_transcript(&transcript, out.as_deref()),
     }
+}
+
+/// Writes the transcript with this operator removed, and says how many bytes moved.
+fn redact_transcript(transcript: &Path, out: Option<&Path>) -> Result<ExitCode> {
+    let events = std::fs::read(transcript)
+        .with_context(|| format!("reading the transcript at {}", transcript.display()))?;
+    let before = events.len();
+    let scrubbed = crate::eval::redacted(events);
+    if let Some(path) = out {
+        std::fs::write(path, &scrubbed)
+            .with_context(|| format!("writing the redacted stream to {}", path.display()))?;
+        // The byte counts and not a diff: a redaction that removed nothing and one that removed
+        // everything both write a file, and the operator asked which happened.
+        println!(
+            "{} -> {} ({before} bytes in, {} out)",
+            transcript.display(),
+            path.display(),
+            scrubbed.len()
+        );
+    } else {
+        std::io::stdout().write_all(&scrubbed)?;
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Reads a specification through its validation. One reader, so a harness and this cannot

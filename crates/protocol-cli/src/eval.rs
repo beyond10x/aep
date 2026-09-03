@@ -3285,6 +3285,7 @@ impl Operator {
                 names.push(name);
             }
         }
+        names.extend(git_identity());
         Self::new(homes, names)
     }
 
@@ -3336,6 +3337,34 @@ impl Operator {
 /// `ada-scratch` is replaced and `ada` inside `adapter` is not. Written out rather than reached for
 /// with a regular expression because the pattern is one literal and a dependency here would be a
 /// dependency for the whole binary.
+/// The operator's git identity: the `user.name` and `user.email` git would author a commit with.
+///
+/// Read for the same reason `$HOME` and `$USER` are, and found the same way the child would find
+/// it. A recorded run commits inside its fixture, so the stream carries `git log` output, and
+/// `git log` prints the author — which is a person's real name and their address, neither of which
+/// is `$USER`. The golden-path recording of 2026-09-03 went to disk redacted and still carried
+/// `Timo Friedl` four times, twice as a commit author and twice as an argument the agent had read
+/// out of `git config` and typed back.
+///
+/// A failure to read git is silence, not a refusal: a machine with no git, or a directory that is
+/// not a repository, has no identity to remove and a stream from it is already clean of one.
+fn git_identity() -> Vec<String> {
+    ["user.name", "user.email"]
+        .into_iter()
+        .filter_map(|key| {
+            let output = std::process::Command::new("git")
+                .args(["config", "--get", key])
+                .output()
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let value = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+            (!value.is_empty()).then_some(value)
+        })
+        .collect()
+}
+
 fn replace_word(haystack: &str, needle: &str, replacement: &str) -> String {
     if needle.is_empty() {
         return haystack.to_owned();
@@ -3366,6 +3395,16 @@ fn stream_for(events: Vec<u8>, redact: bool) -> Vec<u8> {
     if !redact {
         return events;
     }
+    redacted(events)
+}
+
+/// This operator taken out of a stream, wherever the bytes came from.
+///
+/// `pub(crate)` because `protocol trace redact` applies the same removal to a stream already on
+/// disk, and a second implementation would be a second answer to *who is the operator*. Idempotent:
+/// a stream redacted by an older build carries whatever that build did not know to remove, and
+/// running this over it removes the rest without disturbing what is already a placeholder.
+pub(crate) fn redacted(events: Vec<u8>) -> Vec<u8> {
     let operator = Operator::from_environment();
     if operator.is_empty() {
         return events;
@@ -5291,6 +5330,41 @@ observed_at: 2026-08-23
         );
         // Still JSON: neither placeholder needs escaping inside a JSON string.
         serde_json::from_str::<serde_json::Value>(&scrubbed).expect("a redacted line is JSON");
+    }
+
+    #[test]
+    fn a_git_author_is_removed_where_the_user_name_would_not_have_been() {
+        // What the golden-path recording of 2026-09-03 carried after `--redact`: a real name and an
+        // address, four times, none of them `$USER`. Two came out of `git log` inside the fixture
+        // the run committed in, two out of an argument the agent read from `git config` and typed
+        // back. `$HOME` and `$USER` cannot reach either.
+        let operator = Operator::new(
+            vec!["/home/ada".to_owned()],
+            vec![
+                "ada".to_owned(),
+                "Ada Lovelace".to_owned(),
+                "17+ada@users.noreply.github.com".to_owned(),
+            ],
+        );
+        let stream = concat!(
+            r#"{"content":"Author: Ada Lovelace <17+ada@users.noreply.github.com>","#,
+            r#""command":"git -c user.name=\"Ada Lovelace\" commit -q -m x"}"#
+        );
+        let scrubbed = String::from_utf8(operator.scrub(stream.as_bytes())).expect("still text");
+        assert!(!scrubbed.contains("Ada Lovelace"), "{scrubbed}");
+        assert!(!scrubbed.contains("noreply.github.com"), "{scrubbed}");
+        assert!(scrubbed.contains("Author: <user> <<user>>"), "{scrubbed}");
+        serde_json::from_str::<serde_json::Value>(&scrubbed).expect("a redacted line is JSON");
+    }
+
+    #[test]
+    fn redaction_is_idempotent_so_a_stream_can_be_cleaned_twice() {
+        // `protocol trace redact` exists to finish a stream an older `--redact` wrote. Applying the
+        // removal to its own output must be a no-op, or the verb would eat placeholders.
+        let operator = Operator::new(vec!["/home/ada".to_owned()], vec!["ada".to_owned()]);
+        let once = operator.scrub(r#"{"cwd":"/home/ada/work","who":"ada"}"#.as_bytes());
+        let twice = operator.scrub(&once);
+        assert_eq!(once, twice, "a second pass changes nothing");
     }
 
     #[test]

@@ -390,6 +390,7 @@ so takes the shared `text|yaml|json` with `yaml` the default.
 | `aep trace inspect --transcript <file>` | the transcript's census from the typed event IR: event families, per-tool traffic in both directions, per-step `gen`/`exec` timing |
 | `aep trace check --spec <file> --transcript <file> [--redact] [--advisory <id>]` | judges the run against a `trace-spec/1` document: `ok` / `gap` / `unk` per expectation, every verdict citing event indices — exit 0 conformant, 1 contradicted, 3 unknown |
 | `aep trace evidence --spec <file> --transcript <file> [--advisory <id>] [--observed-at date] [--out <file>]` | mints the verdict as a `trace_conformance` evidence record (producer `trace-checker`, digest pair binding it to one transcript and one spec) that `aep evaluate --evidence` accepts |
+| `aep trace redact --transcript <file> [--out <file>]` | takes the operator out of a stream already on disk — `$HOME`, `$USER`, and the `user.name` and `user.email` git would author with — the same removal `aep eval run --redact` applies as it writes. Idempotent, and it re-digests nothing |
 
 `--redact` cites event indices and digests only — no command strings, no file paths, no text. It is
 opt-in, and the un-redacted rendering carries a footer naming what it contains, so pasting a report
