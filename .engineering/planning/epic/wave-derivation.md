@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: epic:wave-derivation
 kind: epic
-status: active
+status: implemented
 title: A wave is derived from the store, not read from prose
 summary: A typed scope on stories and an aep artifact waves verb that derives waves, names collisions and lists the unassessed, replacing pairwise prose in the wave skill.
 owner: protocol
@@ -13,7 +13,7 @@ relations:
 - serves: vision:O2
 - informed_by: story:a-story-records-where-it-lands
 - informed_by: story:wave-as-a-surface
-revision: 3
+revision: 4
 ---
 # Epic: A wave is derived from the store, not read from prose
 

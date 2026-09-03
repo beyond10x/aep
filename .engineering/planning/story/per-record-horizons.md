@@ -13,7 +13,18 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
-revision: 3
+scope:
+- confidence: cited
+  path: AGENTS.md
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/aep-engine
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: cited
+  path: examples/evidence-horizons-corpus/distribution.json
+revision: 8
 ---
 # Story: Twelve horizons in one corpus, and one number the engine will hold
 

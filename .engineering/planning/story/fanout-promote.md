@@ -11,7 +11,14 @@ tags:
 - workflow
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/aep-domain/src/workflow.rs
+- confidence: inferred
+  path: crates/aep-engine/src/execution.rs
+- confidence: cited
+  path: workflows/releases/progressive.yaml
+revision: 4
 ---
 # Story: A promotion is a set of targets, each with its own guard
 

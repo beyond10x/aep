@@ -12,7 +12,14 @@ tags:
 relations:
 - informed_by: story:wave-as-a-surface
 - decomposes: epic:self-evaluation
-revision: 1
+scope:
+- confidence: cited
+  path: artifacts/kinds
+- confidence: inferred
+  path: crates/aep-domain/src/artifact.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/planning.rs
+revision: 4
 ---
 # Story: A story records where it lands, so a wave can be sequenced
 

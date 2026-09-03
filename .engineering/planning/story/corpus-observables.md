@@ -11,7 +11,14 @@ tags:
 - protocol
 relations:
 - decomposes: epic:ingestion-vocabulary
-revision: 4
+scope:
+- confidence: cited
+  path: docs/guide/adopting.md
+- confidence: cited
+  path: examples
+- confidence: cited
+  path: protocols
+revision: 7
 ---
 # Story: Freshness is what an ingestion pipeline exists to provide, and it cannot appear in a completion condition
 

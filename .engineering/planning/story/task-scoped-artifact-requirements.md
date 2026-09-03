@@ -11,7 +11,18 @@ tags:
 - protocol
 relations:
 - decomposes: epic:reference-driver
-revision: 4
+scope:
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/aep-driver-spec
+- confidence: cited
+  path: crates/aep-engine
+- confidence: cited
+  path: crates/protocol-cli
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 9
 ---
 # Story: A rule about this task's specification stops accepting somebody else's
 

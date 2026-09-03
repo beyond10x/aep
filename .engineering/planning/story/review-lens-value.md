@@ -6,7 +6,12 @@ status: draft
 title: Each review lens reports whether it earned its cost
 relations:
 - decomposes: epic:adopter-feedback-round-2
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/aep-domain
+- confidence: inferred
+  path: crates/protocol-cli
+revision: 3
 ---
 # Story: Each review lens reports whether it earned its cost
 

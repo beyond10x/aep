@@ -15,7 +15,20 @@ relations:
 - depends_on: story:protocol-drive-verb
 - depends_on: story:driven-eval-acceptance
 - supersedes: story:driven-eval-acceptance
-revision: 2
+scope:
+- confidence: cited
+  path: .engineering/checks/run.sh
+- confidence: cited
+  path: crates/aep-driver/src/run.rs
+- confidence: cited
+  path: crates/protocol-cli/src/drive.rs
+- confidence: cited
+  path: docs/plan/harness-wave-4-governed-dogfood.md
+- confidence: cited
+  path: drivers/development/checks.yaml
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 8
 ---
 # Story: One story from this backlog, driven end to end
 

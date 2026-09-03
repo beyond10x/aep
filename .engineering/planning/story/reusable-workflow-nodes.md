@@ -13,7 +13,16 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:default-step-map
 - informed_by: story:retry-budgets
-revision: 3
+scope:
+- confidence: cited
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/aep-driver-spec
+- confidence: inferred
+  path: crates/protocol-cli
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 7
 ---
 # Story: Retry, circuit-break, and a third party simulated from its own spec
 

@@ -11,7 +11,18 @@ tags:
 - lifecycle
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 1
+scope:
+- confidence: cited
+  path: artifacts/lifecycles
+- confidence: inferred
+  path: crates/aep-backend-markdown
+- confidence: cited
+  path: crates/aep-domain
+- confidence: inferred
+  path: crates/aep-engine
+- confidence: cited
+  path: crates/protocol-cli
+revision: 6
 ---
 # Story: A claim that has left the building, and a rung for it to land on
 

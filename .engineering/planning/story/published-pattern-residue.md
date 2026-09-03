@@ -4,7 +4,14 @@ id: story:published-pattern-residue
 kind: story
 status: draft
 title: Three published patterns still disagree with the constructors they are published for
-revision: 2
+scope:
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/aep-driver-spec
+- confidence: cited
+  path: schemas/generated/protocol.schema.json
+revision: 5
 ---
 # Story: Three published patterns still disagree with the constructors they are published for
 

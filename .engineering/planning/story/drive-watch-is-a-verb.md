@@ -12,7 +12,18 @@ relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
 - informed_by: story:protocol-drive-verb
-revision: 1
+scope:
+- confidence: cited
+  path: AGENTS.md
+- confidence: inferred
+  path: crates/protocol-cli/src/drive.rs
+- confidence: cited
+  path: docs/plan/harness-wave-4-governed-dogfood.md
+- confidence: cited
+  path: scripts/drive-score
+- confidence: cited
+  path: scripts/drive-watch
+revision: 6
 ---
 # Story: Following and scoring a driven run are `protocol drive` verbs
 

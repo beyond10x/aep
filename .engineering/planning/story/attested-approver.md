@@ -6,7 +6,18 @@ status: draft
 title: An operator step can be answered by an independent agent, not only by a person
 relations:
 - decomposes: epic:reference-driver
-revision: 6
+scope:
+- confidence: cited
+  path: crates/aep-driver/src/attest.rs
+- confidence: cited
+  path: crates/aep-driver/src/run.rs
+- confidence: cited
+  path: crates/aep-driver/tests/attested.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/drive.rs
+- confidence: cited
+  path: crates/protocol-cli/src/planning.rs
+revision: 11
 ---
 # Story: An operator step can be answered by an independent agent, not only by a person
 

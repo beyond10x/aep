@@ -12,7 +12,18 @@ relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
 - depends_on: story:workflow-id-pattern-numeric-tail
-revision: 5
+scope:
+- confidence: cited
+  path: AGENTS.md
+- confidence: cited
+  path: crates/aep-driver-spec/Cargo.toml
+- confidence: cited
+  path: crates/aep-driver-spec/src/map.rs
+- confidence: cited
+  path: crates/aep-engine/src/registry.rs
+- confidence: cited
+  path: crates/protocol-cli/tests/drive_cli.rs
+revision: 10
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs
 

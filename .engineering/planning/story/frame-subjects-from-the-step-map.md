@@ -11,7 +11,14 @@ tags:
 - metaharness
 relations:
 - decomposes: epic:self-evaluation
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/aep-driver-spec/src/map.rs
+- confidence: cited
+  path: crates/protocol-cli/src/drive.rs
+- confidence: cited
+  path: crates/trace-domain/src/ir.rs
+revision: 4
 ---
 # Story: the vendor arms get the same boundary
 

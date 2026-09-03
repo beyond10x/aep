@@ -13,6 +13,7 @@ relations:
 - decomposes: epic:wave-derivation
 - depends_on: story:scope-as-a-typed-field
 - serves: vision:O2
+- supersedes: story:waves-derived-from-scope
 revision: 4
 ---
 # Story: `aep artifact waves` derives waves and names collisions, and exits 2 on a cycle

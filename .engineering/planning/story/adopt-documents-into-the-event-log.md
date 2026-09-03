@@ -6,7 +6,14 @@ status: draft
 title: A store adopted into the event log has no documents the drift check must ignore
 relations:
 - informed_by: story:skill-text-cannot-instruct-a-direct-store-write
-revision: 2
+scope:
+- confidence: cited
+  path: crates/aep-backend-markdown/src/drift.rs
+- confidence: inferred
+  path: crates/aep-backend-markdown/src/journal.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/reverse.rs
+revision: 5
 ---
 # Story: A store adopted into the event log has no documents the drift check must ignore
 

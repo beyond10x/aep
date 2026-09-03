@@ -12,7 +12,16 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:time-based-transitions
-revision: 2
+scope:
+- confidence: cited
+  path: artifacts/kinds/obligation.yaml
+- confidence: cited
+  path: artifacts/lifecycles/obligation.yaml
+- confidence: inferred
+  path: crates/aep-backend-markdown/tests/evidence.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/planning.rs
+revision: 6
 ---
 # Story: An obligation never gates a transition — it raises
 

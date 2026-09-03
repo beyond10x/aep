@@ -10,7 +10,14 @@ tags:
 relations:
 - decomposes: epic:evidence-gated-completion
 - serves: vision:O2
-revision: 1
+scope:
+- confidence: cited
+  path: crates/aep-backend-markdown
+- confidence: inferred
+  path: crates/aep-domain
+- confidence: cited
+  path: crates/protocol-cli
+revision: 4
 ---
 # Story: The journal records a body by digest and diff, and refuses a home directory
 

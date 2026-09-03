@@ -12,7 +12,14 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 - informed_by: story:attested-approver
-revision: 2
+scope:
+- confidence: inferred
+  path: crates/aep-backend-markdown
+- confidence: cited
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/protocol-cli
+revision: 5
 ---
 # Story: The planning store records who made a write, so a driven move is not the operator's
 

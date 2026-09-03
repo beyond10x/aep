@@ -7,7 +7,20 @@ title: Three statements the tree makes about itself that are false
 relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
-revision: 5
+scope:
+- confidence: cited
+  path: conformance/eval/development-honest/expectations.trace.yaml
+- confidence: cited
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/aep-engine
+- confidence: cited
+  path: crates/aep-project
+- confidence: cited
+  path: docs/plan/harness-wave-4-governed-dogfood.md
+- confidence: cited
+  path: drivers/development/default.yaml
+revision: 11
 ---
 # Story: Three statements the tree makes about itself that are false
 

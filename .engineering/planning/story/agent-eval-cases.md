@@ -11,7 +11,16 @@ tags:
 - plugin
 relations:
 - decomposes: epic:self-evaluation
-revision: 1
+scope:
+- confidence: cited
+  path: conformance/eval/decomposer-charter
+- confidence: cited
+  path: conformance/eval/plan-reviewer-charter
+- confidence: cited
+  path: conformance/trace/expectations.trace.yaml
+- confidence: inferred
+  path: crates/trace-spec
+revision: 5
 ---
 # Story: The two planning agents, held to their charters by a run
 

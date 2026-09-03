@@ -10,7 +10,18 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
-revision: 4
+scope:
+- confidence: cited
+  path: crates/aep-domain/src/artifact.rs
+- confidence: inferred
+  path: crates/aep-project/src/load.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/planning.rs
+- confidence: inferred
+  path: crates/protocol-cli/src/reverse.rs
+- confidence: cited
+  path: website/docs/reference/cli.md
+revision: 9
 ---
 # Story: Six small refusals that each cost a session one retry
 

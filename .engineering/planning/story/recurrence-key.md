@@ -11,7 +11,20 @@ tags:
 - workflow
 relations:
 - decomposes: epic:adopter-feedback-round-1
-revision: 2
+scope:
+- confidence: inferred
+  path: crates/aep-domain
+- confidence: inferred
+  path: crates/aop-domain
+- confidence: inferred
+  path: crates/protocol-cli
+- confidence: inferred
+  path: protocols/aop/1.yaml
+- confidence: inferred
+  path: schemas/generated/workflow.schema.json
+- confidence: cited
+  path: workflows/incidents/standard.yaml
+revision: 8
 ---
 # Story: Two incidents with one root-cause shape, countable
 

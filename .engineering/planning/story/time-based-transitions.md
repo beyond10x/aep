@@ -12,7 +12,14 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 - informed_by: story:evidence-horizons
-revision: 2
+scope:
+- confidence: inferred
+  path: artifacts/lifecycles
+- confidence: cited
+  path: crates/aep-domain
+- confidence: inferred
+  path: crates/aep-engine
+revision: 5
 ---
 # Story: A transition the clock can trigger
 

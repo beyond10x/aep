@@ -15,7 +15,12 @@ relations:
 - depends_on: story:default-step-map
 - serves: vision:O3
 - depends_on: story:unreadable-lock-refuses-its-own-escape-hatch
-revision: 7
+scope:
+- confidence: cited
+  path: crates/aep-driver
+- confidence: cited
+  path: crates/protocol-cli
+revision: 9
 ---
 # Story: `protocol drive` — the run that touches the world
 

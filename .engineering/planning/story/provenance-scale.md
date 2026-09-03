@@ -14,7 +14,14 @@ relations:
 - decomposes: epic:ingestion-vocabulary
 - depends_on: story:corpus-observables
 - depends_on: story:source-record-evidence
-revision: 4
+scope:
+- confidence: cited
+  path: crates/aep-domain
+- confidence: cited
+  path: docs/guide/open-vocabulary.md
+- confidence: inferred
+  path: protocols/aep/1.yaml
+revision: 7
 ---
 # Story: 5,503 records ordered by how they were known, and a predicate that can only ever read Unknown
 

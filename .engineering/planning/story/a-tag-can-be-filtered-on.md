@@ -5,7 +5,10 @@ kind: story
 status: draft
 title: list and board filter on a tag
 summary: 'Tags are writable and unqueryable: --tag exists on new and set, and no read verb takes one.'
-revision: 1
+scope:
+- confidence: cited
+  path: crates/protocol-cli/src/planning.rs
+revision: 2
 ---
 ## Context
 
