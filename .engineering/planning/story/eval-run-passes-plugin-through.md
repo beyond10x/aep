@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-passes-plugin-through
 kind: story
-status: draft
+status: implemented
 title: aep eval run --arm plugin passes a marketplace plugin through to metaharness
 summary: Forward metaharness 0.5.0 --plugin <repo>@<name>@<pin> from aep eval run, record the attested plugins in the manifest; what bench needs for a third-party arm.
 owner: eval
@@ -17,7 +17,7 @@ scope:
   path: crates/protocol-cli/src/eval.rs
 - confidence: inferred
   path: crates/protocol-cli/tests/eval_run.rs
-revision: 3
+revision: 6
 ---
 # Story: `aep eval run --arm plugin` passes a marketplace plugin through to metaharness
 
