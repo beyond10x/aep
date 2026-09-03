@@ -715,6 +715,7 @@ mod contract;
 // about its own output lives: counts of facts, never a score.
 mod eval;
 mod money;
+mod redaction;
 mod workspace;
 
 // The seventh, and the only one whose output is another component's input. It reads the same

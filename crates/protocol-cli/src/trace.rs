@@ -232,7 +232,12 @@ fn redact_transcript(transcript: &Path, out: Option<&Path>) -> Result<ExitCode> 
     let events = std::fs::read(transcript)
         .with_context(|| format!("reading the transcript at {}", transcript.display()))?;
     let before = events.len();
-    let scrubbed = crate::eval::redacted(events);
+    // Both directories that could hold a git identity: where the command was typed, and where the
+    // transcript sits. A recorded stream is normally beside the repository whose commits it
+    // quotes, and that repository's `user.name` is the one in the stream.
+    let here = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let beside = transcript.parent().unwrap_or(Path::new("."));
+    let scrubbed = crate::redaction::redacted(events, &[here.as_path(), beside]);
     if let Some(path) = out {
         std::fs::write(path, &scrubbed)
             .with_context(|| format!("writing the redacted stream to {}", path.display()))?;

@@ -7,6 +7,34 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.49.0] — 2026-09-03
+
+### Fixed
+
+- **The git identity is read where the run happened, not where the runner was typed.** 0.47.0 read
+  `user.name` at this process's working directory. A git identity is per repository: the runner's
+  own checkout can carry a bot override while the fixture the session committed in carries the
+  operator's real name, and reading only the first scrubbed the bot and left the person — silently,
+  because a redaction that removed something looks exactly like one that removed the right thing.
+  Both callers now read every directory that could hold one: `eval run` its own `--cwd`, and
+  `trace redact` the transcript's directory, each beside the process's own.
+- **A one-word git `user.name` is no longer taken on trust.** `$USER` is a login name the system
+  constrains; `user.name` is free text, and in a container it is routinely `root`, `CI` or `Bot`.
+  Replacing one of those everywhere would rewrite `root cause` to `<user> cause` and digest the
+  result into a manifest — corrupting a stream to hide a name that identifies nobody. A single
+  token is removed only from eight characters up; an address or anything with a space always is.
+- **An operator named `user` no longer breaks idempotence.** `<` and `>` are both outside
+  `[A-Za-z0-9_]`, so the `<user>` placeholder was a word-bounded match for the name `user` and a
+  second pass produced `<<user>>` — on exactly the second pass `trace redact` exists to perform.
+
+### Changed
+
+- **Redaction is its own module.** `Operator`, `redacted` and `replace_word` moved out of
+  `eval.rs` into `redaction.rs`, beside `money.rs` and for the same reason: one value read once and
+  applied at two unrelated boundaries. `trace.rs` called into `eval.rs` for it while `eval.rs`
+  already called into `trace.rs` for `load_spec`, so two verb families whose module docs both say
+  they share no state with the rest of the binary had a cycle between them.
+
 ## [0.47.0] — 2026-09-03
 
 ### Fixed
