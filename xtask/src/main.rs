@@ -404,6 +404,50 @@ fn changelog_top_version(root: &Path) -> Result<String> {
 /// a coordinator that had conflated it with a merge. Five checks, one line each, every one a
 /// fact somebody would otherwise look up in three places. Two of them reach the network, which
 /// is why this is `task release-check` and not a step of `task check`.
+/// Whether `commit` is reachable from the `main` branch on `origin`.
+///
+/// A release is a claim about the line everybody else builds on, and until this check existed
+/// nothing in the gate looked at that line. `0.48.0` was tagged on a feature branch, read **5 of 5
+/// complete** because every other check is computed from `HEAD`, and `0.49.0` was then cut from a
+/// `main` that had never seen it — so the newer version silently dropped a lifecycle the older one
+/// shipped. Both facts were true for a day and no command could report either.
+///
+/// The remote is asked rather than `refs/remotes/origin/main`, which is only as fresh as the last
+/// fetch. When the remote's commit is not in the local object store the answer is `false` with the
+/// fetch named, because *cannot tell* and *is on main* must not report the same.
+fn tag_is_on_main(root: &Path, commit: &str) -> (bool, String) {
+    let remote = std::process::Command::new("git")
+        .args(["ls-remote", "origin", "refs/heads/main"])
+        .current_dir(root)
+        .output();
+    let Some(head) = remote
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .split_whitespace()
+                .next()
+                .map(ToOwned::to_owned)
+        })
+    else {
+        return (false, "origin/main could not be read".to_owned());
+    };
+    let reachable = std::process::Command::new("git")
+        .args(["merge-base", "--is-ancestor", commit, &head])
+        .current_dir(root)
+        .output()
+        .is_ok_and(|out| out.status.success());
+    let short = &head[..head.len().min(7)];
+    if reachable {
+        (true, format!("origin/main {short}"))
+    } else {
+        (
+            false,
+            format!("origin/main is {short}; fetch, then merge the branch before tagging"),
+        )
+    }
+}
+
 fn release_check(root: &Path) -> Result<()> {
     let tag = newest_release_tag(root)?;
     let version = workspace_version(root)?;
@@ -437,12 +481,15 @@ fn release_check(root: &Path) -> Result<()> {
         line.contains("\"test_result\"") && (line.contains(&commit) || line.contains(short))
     });
 
-    let checks: [(&str, bool, String); 5] = [
+    let (on_main, main_detail) = tag_is_on_main(root, &commit);
+
+    let checks: [(&str, bool, String); 6] = [
         (
             "workspace version matches the tag",
             version == tag,
             format!("Cargo.toml `{version}`, tag `{tag}`"),
         ),
+        ("the tag's commit is on origin/main", on_main, main_detail),
         (
             "CHANGELOG.md heading matches the tag",
             heading == tag,

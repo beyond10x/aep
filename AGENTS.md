@@ -211,6 +211,12 @@ Bare semantic-version tags are the organization convention. The full gate passes
 changelog is cut and the annotated tag is created. Tag, workspace version, and dated changelog
 heading must agree.
 
+**The tag goes on a commit that is on `origin/main`** — merge the branch first, then tag. Every
+other release check is computed from `HEAD`, so a tag on a feature branch passes all of them while
+naming a line nobody builds on. `0.48.0` was cut that way and read complete; `0.49.0` was then cut
+from a `main` that had never seen it, and the newer version shipped without the older one's
+lifecycle. `cargo xtask release` checks this now.
+
 This public repository contains no delivery credential machinery. Commit and publication are
 performed through the organization delivery boundary maintained by Atlas. Do not copy that
 machinery here for convenience.
