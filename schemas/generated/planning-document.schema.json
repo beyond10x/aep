@@ -30,6 +30,14 @@
         }
       ]
     },
+    "model_digest": {
+      "description": "The content identity of the compiled model, as text until the kind says it may carry one.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "owner": {
       "description": "Who owns it.",
       "default": null,

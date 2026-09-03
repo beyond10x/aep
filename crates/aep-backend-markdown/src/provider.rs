@@ -426,6 +426,19 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
         }
     };
 
+    let model_digest = match fields.remove("model_digest") {
+        None => None,
+        Some(Value::String(value)) => Some(
+            aep_domain::evidence::SpecDigest::new(value)
+                .map_err(|error| refuse(format!("the `model_digest` field: {error}")))?,
+        ),
+        Some(other) => {
+            return Err(refuse(format!(
+                "the `model_digest` field is {other}, not a digest"
+            )))
+        }
+    };
+
     if instance.revision == 0 {
         return Err(refuse(
             "revision 0 names a state before the document was written".to_owned(),
@@ -452,6 +465,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             relations,
             scope,
             withholds,
+            model_digest,
             revision: instance.revision,
             extra,
         },

@@ -1017,6 +1017,12 @@ pub(crate) enum ArtifactCommand {
         /// A record of the same work elsewhere to remove, written `<provider>:<reference>`.
         #[arg(long = "unref", value_name = "PROVIDER:REFERENCE")]
         unreference: Vec<String>,
+        /// The digest of the compiled model an executable system specification is at — the value
+        /// `ess compile` prints. A conformance run counts for the specification only when its
+        /// `spec_digest` is this, and no run counts while there is none. Refused on every other
+        /// kind, which has no compiled model to be the digest of.
+        #[arg(long = "model-digest", value_name = "HEX")]
+        model_digest: Option<String>,
         /// Not a field this verb changes; `move` does, and records why.
         #[arg(long, hide = true, allow_hyphen_values = true)]
         status: Option<String>,
@@ -1573,6 +1579,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             untag,
             reference,
             unreference,
+            model_digest,
             status,
             revision,
             identity,
@@ -1588,6 +1595,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
                 untag,
                 reference,
                 unreference,
+                model_digest,
             },
             &[
                 ("status", status),
@@ -3004,6 +3012,8 @@ struct Fields {
     reference: Vec<String>,
     /// External references to remove.
     unreference: Vec<String>,
+    /// The compiled model's digest, on the one kind that has one.
+    model_digest: Option<String>,
 }
 
 impl Fields {
@@ -3016,6 +3026,7 @@ impl Fields {
             && self.untag.is_empty()
             && self.reference.is_empty()
             && self.unreference.is_empty()
+            && self.model_digest.is_none()
     }
 }
 
@@ -3044,6 +3055,61 @@ fn not_a_field_set_changes(name: &str) -> String {
     }
 }
 
+/// The `refs` change `set` should make, or `None` when the document already reads that way.
+///
+/// Lifted out of [`set`] beside [`model_digest_change`]. Every reference is parsed before any is
+/// written, so a command naming one malformed value changes nothing rather than half the set.
+fn refs_change(
+    front: &PlanningFrontmatter,
+    fields: &Fields,
+) -> Result<Option<(String, aep_domain::node::Node)>> {
+    let mut refs = front.refs.clone();
+    for value in &fields.reference {
+        refs.insert(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
+    }
+    for value in &fields.unreference {
+        refs.remove(&ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
+    }
+    if refs == front.refs {
+        return Ok(None);
+    }
+    Ok(Some((
+        "refs".to_owned(),
+        aep_domain::node::Node::Seq(
+            refs.iter()
+                .map(aep_domain::artifact::ExternalRef::to_node)
+                .collect(),
+        ),
+    )))
+}
+
+/// The `model_digest` change `set` should make, or `None` when the document already reads that way.
+///
+/// Refused here as well as by the frontmatter validator, because a write the validator then
+/// refuses leaves a document the store cannot read, which is worse than a refusal.
+fn model_digest_change(
+    id: &ArtifactId,
+    front: &PlanningFrontmatter,
+    digest: &str,
+) -> Result<Option<(String, aep_domain::node::Node)>> {
+    if !front.kind.carries_model_digest() {
+        anyhow::bail!(
+            "`{id}` is {}, which has no compiled model to be the digest of; only an \
+             executable-system-specification carries `model_digest`",
+            front.kind.as_str()
+        );
+    }
+    let parsed = aep_domain::evidence::SpecDigest::new(digest.to_owned())
+        .map_err(|error| anyhow::anyhow!("--model-digest: {error}"))?;
+    if front.model_digest.as_ref() == Some(&parsed) {
+        return Ok(None);
+    }
+    Ok(Some((
+        "model_digest".to_owned(),
+        aep_domain::node::Node::from(parsed.as_str()),
+    )))
+}
+
 /// `protocol artifact set`
 ///
 /// Frontmatter through the same door as prose. `refused` carries the flags this verb accepts only
@@ -3062,7 +3128,7 @@ fn set(
     if fields.nothing_named() {
         anyhow::bail!(
             "nothing to set; name a field, such as `--title`, `--summary`, `--owner`, `--tag` or \
-             `--untag`, `--ref` or `--unref`"
+             `--untag`, `--ref` or `--unref`, or `--model-digest`"
         );
     }
     let id = artifact_id(id)?;
@@ -3118,21 +3184,16 @@ fn set(
     }
 
     if !fields.reference.is_empty() || !fields.unreference.is_empty() {
-        let mut refs = front.refs.clone();
-        for value in &fields.reference {
-            refs.insert(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
-        }
-        for value in &fields.unreference {
-            refs.remove(&ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
-        }
-        if refs != front.refs {
-            changes.push((
-                "refs".to_owned(),
-                aep_domain::node::Node::Seq(
-                    refs.iter().map(aep_domain::artifact::ExternalRef::to_node).collect(),
-                ),
-            ));
+        if let Some(change) = refs_change(front, fields)? {
+            changes.push(change);
             named.push("refs".to_owned());
+        }
+    }
+
+    if let Some(digest) = &fields.model_digest {
+        if let Some(change) = model_digest_change(&id, front, digest)? {
+            changes.push(change);
+            named.push("model_digest".to_owned());
         }
     }
 

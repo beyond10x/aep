@@ -734,6 +734,13 @@ fn apply_body(frontmatter: &mut PlanningFrontmatter, body: &Node) {
             frontmatter.withholds = Some(kind);
         }
     }
+    // The model digest, same rule and same reason as `withholds`: a value that is not a digest is
+    // left off rather than written through.
+    if let Some(Node::Text(digest)) = fields.get("model_digest") {
+        if let Ok(parsed) = aep_domain::evidence::SpecDigest::new(digest.clone()) {
+            frontmatter.model_digest = Some(parsed);
+        }
+    }
     // Tags, same rule as everything else here: present replaces, absent leaves alone. A command
     // that says nothing about tags is not a command that removed them.
     if let Some(Node::Seq(tags)) = fields.get("tags") {

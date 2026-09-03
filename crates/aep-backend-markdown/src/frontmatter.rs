@@ -33,7 +33,7 @@ use aep_domain::artifact::{
     ArtifactStatus, ArtifactVersion, ExternalRef, RelationKind, ScopeEntry,
 };
 use aep_domain::error::{ValidationCode, ValidationError, ValidationErrors};
-use aep_domain::evidence::EvidenceKind;
+use aep_domain::evidence::{EvidenceKind, SpecDigest};
 use aep_domain::node::Node;
 
 /// The frontmatter format version this build reads and writes.
@@ -107,6 +107,9 @@ pub struct RawPlanningFrontmatter {
     /// every other defect in the document rather than aborting the parse of the whole file.
     #[serde(default)]
     pub withholds: Option<String>,
+    /// The content identity of the compiled model, as text until the kind says it may carry one.
+    #[serde(default)]
+    pub model_digest: Option<String>,
     /// Which revision of this document this is. Bumped by every mutating operation.
     #[serde(default = "default_revision")]
     pub revision: u64,
@@ -165,6 +168,12 @@ pub struct PlanningFrontmatter {
     ///
     /// Only meaningful beside a `blocks` edge, and graph validation says so.
     pub withholds: Option<EvidenceKind>,
+    /// The digest of the compiled model this document is at.
+    ///
+    /// Only on a kind [`ArtifactKind::carries_model_digest`] says has one. It is what binds a
+    /// conformance run to this revision of the specification: `ess-conformance` counts a run only
+    /// when its `spec_digest` is this value, and fails closed when there is none.
+    pub model_digest: Option<SpecDigest>,
     /// Which revision of this document this is.
     pub revision: u64,
     /// Every key this format does not name, kept so a round trip loses nothing.
@@ -199,6 +208,7 @@ impl PlanningFrontmatter {
             relations: Vec::new(),
             scope: Vec::new(),
             withholds: None,
+            model_digest: None,
             revision: default_revision(),
             extra: BTreeMap::new(),
         }
@@ -259,6 +269,9 @@ impl PlanningFrontmatter {
         artifact.version = Some(ArtifactVersion::new(self.revision.to_string()));
         artifact.relations.clone_from(&self.relations);
         artifact.withholds = self.withholds;
+        // The one field here that *is* a digest, on the one kind that has a compiled model to
+        // hash. `version` above stays the document revision for every kind.
+        artifact.model_digest.clone_from(&self.model_digest);
         artifact.metadata = ArtifactMetadata {
             title: self.title.clone(),
             summary: self.summary.clone(),
@@ -291,6 +304,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(!self.relations.is_empty())
             + usize::from(!self.scope.is_empty())
             + usize::from(self.withholds.is_some())
+            + usize::from(self.model_digest.is_some())
             + self.extra.len();
 
         let mut map = serializer.serialize_map(Some(length))?;
@@ -321,6 +335,9 @@ impl serde::Serialize for PlanningFrontmatter {
         }
         if let Some(withholds) = &self.withholds {
             map.serialize_entry("withholds", withholds.as_str())?;
+        }
+        if let Some(digest) = &self.model_digest {
+            map.serialize_entry("model_digest", digest.as_str())?;
         }
         map.serialize_entry("revision", &self.revision)?;
         // Last, and in `BTreeMap` order: an unrecognised key keeps its value and loses only its
@@ -416,6 +433,8 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
 
         let scope = validated_scope(&raw.scope, &mut errors);
 
+        let model_digest = validated_model_digest(&raw, &mut errors);
+
         errors.into_result(Self {
             id: raw.id,
             kind: raw.kind,
@@ -428,9 +447,59 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             relations: raw.relations,
             scope,
             withholds,
+            model_digest,
             revision: raw.revision,
             extra: raw.extra,
         })
+    }
+}
+
+/// The model digest a document declares, validated, with every defect accumulated into `errors`.
+///
+/// Lifted out of [`TryFrom`] beside [`validated_scope`], and for the same reason. A digest only
+/// where there is a compiled model to be the digest of: on any other kind the key is refused
+/// rather than kept as text, because a reader would take it for a binding and the engine's
+/// revision check would then be looking at a value nothing computed.
+fn validated_model_digest(
+    raw: &RawPlanningFrontmatter,
+    errors: &mut ValidationErrors,
+) -> Option<SpecDigest> {
+    match raw.model_digest.as_deref() {
+        None => None,
+        Some(value) if !raw.kind.carries_model_digest() => {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedConstruct,
+                    "planning.model_digest",
+                    format!(
+                        "`{}` has no compiled model, so `model_digest: {value}` binds nothing",
+                        raw.kind.as_str()
+                    ),
+                )
+                .with_hint(
+                    "only an executable-system-specification carries a model digest; drop the \
+                     key, or file the artifact as that kind",
+                ),
+            );
+            None
+        }
+        Some(value) => match SpecDigest::new(value) {
+            Ok(digest) => Some(digest),
+            Err(error) => {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        "planning.model_digest",
+                        format!("`model_digest: {value}` is not a digest: {error}"),
+                    )
+                    .with_hint(
+                        "copy the model digest `ess compile` prints, whole; a run is bound to \
+                         it byte for byte",
+                    ),
+                );
+                None
+            }
+        },
     }
 }
 
