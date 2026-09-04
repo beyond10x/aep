@@ -182,6 +182,7 @@ const VERBS: &[&str] = &[
     "new",
     "move",
     "relate",
+    "unrelate",
     "body",
     "set",
     "show",
@@ -2847,6 +2848,208 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
         stderr(&bare).contains("<relation>:<artifact-id>"),
         "{}",
         stderr(&bare)
+    );
+}
+
+/// **One spelling for an edge, in both directions.** `unrelate` takes back exactly what `relate`
+/// made, written either as three words or as `<relation>:<target>`, and leaves every other edge —
+/// including the hand-written one the backend never authored — where it was.
+///
+/// `9da4f51c#495`: "`protocol artifact` has `relate` and no `unrelate` — the stale `depends_on`
+/// edge from phase 1 to phase 0 cannot be removed". A wrong edge was permanent, so the store it
+/// was written into is still wrong.
+///
+/// `decomposes: story:passkey-login` is in the fixture's own frontmatter and was written by hand.
+/// It has to survive the removal of the edge beside it, because the markdown projection's rule is
+/// that it adds and does not remove — and a removal that rewrote the list from the contract's view
+/// would take out every edge nobody issued a command for.
+#[test]
+fn an_edge_is_taken_back_by_the_words_that_made_it_and_leaves_the_others_alone() {
+    let repository = root();
+    let tree = printable(&repository);
+    let three_words = scratch("aep-plan-unrelate-three-words");
+    let one_word = scratch("aep-plan-unrelate-one-word");
+
+    let edge = |store: &Path, spelling: &[&str]| {
+        copy_tree(&repository.join(FIXTURE), store);
+        let made = protocol(&[
+            "plan",
+            "artifact",
+            "relate",
+            "task:assertion-verification",
+            "depends_on",
+            "task:webauthn-ceremony",
+            "--store",
+            printable(store),
+            "--root",
+            tree,
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+        let mut arguments = vec!["plan", "artifact", "unrelate"];
+        arguments.extend_from_slice(spelling);
+        arguments.extend_from_slice(&["--store", printable(store), "--root", tree]);
+        protocol(&arguments)
+    };
+
+    let split = edge(
+        &three_words,
+        &[
+            "task:assertion-verification",
+            "depends_on",
+            "task:webauthn-ceremony",
+        ],
+    );
+    assert_eq!(code(&split), 0, "{}", stderr(&split));
+    let joined = edge(
+        &one_word,
+        &[
+            "task:assertion-verification",
+            "depends_on:task:webauthn-ceremony",
+        ],
+    );
+    assert_eq!(code(&joined), 0, "{}", stderr(&joined));
+
+    // 1. The same answer, naming the edge the same way whichever spelling asked for it.
+    assert_eq!(stdout(&split), stdout(&joined));
+    assert!(
+        stdout(&split).contains("task:assertion-verification depends_on task:webauthn-ceremony"),
+        "{}",
+        stdout(&split)
+    );
+
+    // 2. The edge is gone from the document and the hand-written one beside it is not.
+    let document = |store: &Path| {
+        std::fs::read_to_string(store.join("task/assertion-verification.md")).expect("readable")
+    };
+    assert_eq!(document(&three_words), document(&one_word));
+    assert!(
+        !document(&three_words).contains("depends_on: task:webauthn-ceremony"),
+        "the edge is still in the document: {}",
+        document(&three_words)
+    );
+    assert!(
+        document(&three_words).contains("decomposes: story:passkey-login"),
+        "the edge nobody asked to remove was removed too: {}",
+        document(&three_words)
+    );
+
+    // 3. The journal says an edge was taken back, in its own word for it — not `body_replaced`,
+    //    which is what a record describing something that did not happen would read as.
+    assert_eq!(
+        without_the_clock(&last_journal_line(&three_words)),
+        without_the_clock(&last_journal_line(&one_word))
+    );
+    assert!(
+        last_journal_line(&three_words).contains(
+            r#""change":{"change":"unrelated","relation":"depends_on","target":"task:webauthn-ceremony"}"#
+        ),
+        "{}",
+        last_journal_line(&three_words)
+    );
+}
+
+/// **The relation kind is part of what is removed, not decoration on it.** Two edges may point at
+/// one artifact, and taking back one of them must leave the other.
+///
+/// `task:assertion-verification decomposes story:passkey-login` is the edge that puts the task
+/// under its story, and it is in the fixture's own frontmatter. A removal matching on the target
+/// alone would take it out while answering about `depends_on`, and the plan would lose a
+/// decomposition nobody asked about.
+#[test]
+fn only_the_named_kind_goes_when_two_edges_point_at_one_artifact() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-plan-unrelate-same-target");
+    copy_tree(&repository.join(FIXTURE), &store);
+
+    let doubled = protocol(&[
+        "plan",
+        "artifact",
+        "relate",
+        "task:assertion-verification",
+        "depends_on:story:passkey-login",
+        "--store",
+        printable(&store),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&doubled), 0, "{}", stderr(&doubled));
+    let halved = protocol(&[
+        "plan",
+        "artifact",
+        "unrelate",
+        "task:assertion-verification",
+        "depends_on",
+        "story:passkey-login",
+        "--store",
+        printable(&store),
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&halved), 0, "{}", stderr(&halved));
+
+    let text =
+        std::fs::read_to_string(store.join("task/assertion-verification.md")).expect("readable");
+    assert!(
+        !text.contains("depends_on: story:passkey-login"),
+        "the edge that was named is still there: {text}"
+    );
+    assert!(
+        text.contains("decomposes: story:passkey-login"),
+        "the other kind of edge to the same artifact went with it: {text}"
+    );
+}
+
+/// **A refusal names the edges that are there.** Invariant 7: it changes nothing — not the
+/// document, not the journal.
+///
+/// An `unrelate` that answered "no such edge" and stopped sends the reader back to the file to
+/// find out what the artifact actually declares, which is the round trip the verb exists to save.
+#[test]
+fn unrelating_an_edge_that_is_not_declared_is_refused_naming_the_ones_that_are() {
+    let repository = root();
+    let tree = printable(&repository);
+    let store = scratch("aep-plan-unrelate-absent");
+    copy_tree(&repository.join(FIXTURE), &store);
+
+    let document = store.join("task/assertion-verification.md");
+    let before = std::fs::read_to_string(&document).expect("readable");
+    let journal = store.join("journal.jsonl");
+    let journal_before = std::fs::read_to_string(&journal).unwrap_or_default();
+
+    let refused = protocol(&[
+        "plan",
+        "artifact",
+        "unrelate",
+        "task:assertion-verification",
+        "blocks",
+        "task:webauthn-ceremony",
+        "--store",
+        printable(&store),
+        "--root",
+        tree,
+    ]);
+
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let said = stderr(&refused);
+    assert!(
+        said.contains("blocks task:webauthn-ceremony"),
+        "the refusal does not name the edge that was asked for: {said}"
+    );
+    assert!(
+        said.contains("decomposes story:passkey-login"),
+        "the refusal does not name the edges that are there: {said}"
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(&document).expect("readable"),
+        before,
+        "a refused unrelate rewrote the document"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&journal).unwrap_or_default(),
+        journal_before,
+        "a refused unrelate wrote to the journal"
     );
 }
 

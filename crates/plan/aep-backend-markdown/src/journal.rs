@@ -106,6 +106,18 @@ pub enum Change {
         /// Where it points.
         target: String,
     },
+    /// An edge was taken back.
+    ///
+    /// A separate variant rather than a `Related` with a flag, for the reason the whole enum is
+    /// closed: a reader of the history asks *what happened*, and "related, negated" is a sentence
+    /// that has to be decoded before it can be read. The pair is written down as append-only means
+    /// it — the `related` entry stays exactly where it was, and this one says it was undone.
+    Unrelated {
+        /// What the edge meant.
+        relation: RelationKind,
+        /// Where it pointed.
+        target: String,
+    },
     /// Its markdown body was replaced.
     BodyReplaced,
     /// Evidence was recorded **about** this artifact.
@@ -199,6 +211,7 @@ impl fmt::Display for Change {
                 Ok(())
             }
             Self::Related { relation, target } => write!(f, "{relation} {target}"),
+            Self::Unrelated { relation, target } => write!(f, "no longer {relation} {target}"),
             Self::BodyReplaced => f.write_str("body replaced"),
             Self::Evidence {
                 kind,

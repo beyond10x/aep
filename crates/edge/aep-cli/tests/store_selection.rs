@@ -501,6 +501,100 @@ fn every_verb_answers_alike_over_markdown_and_sqlite() {
     assert_eq!(markdown.code, Some(0), "{}", markdown.stdout);
 }
 
+/// **An edge can be taken back in every store, and every store says the same thing about it.**
+///
+/// The markdown projection is the half that had to change — it adds to frontmatter and did not
+/// remove — so running `unrelate` only there would prove exactly the half that was written. A verb
+/// an adopter on SQLite meets as a refusal is a verb that did not ship for them.
+///
+/// The third call is the refusal, and it is compared too: two stores that refuse differently about
+/// the same absent edge are two stores, not one plan kept in two shapes.
+#[test]
+fn an_edge_is_taken_back_alike_in_every_store() {
+    let pair = Pair::new("unrelate");
+    let edge = [
+        "plan",
+        "artifact",
+        "relate",
+        "task:assertion-verification",
+        "depends_on",
+        "task:webauthn-ceremony",
+    ];
+    pair.alike_with(&edge, 0);
+    pair.alike_with(
+        &[
+            "plan",
+            "artifact",
+            "unrelate",
+            "task:assertion-verification",
+            "depends_on:task:webauthn-ceremony",
+        ],
+        0,
+    );
+    let gone = pair.alike(&["plan", "artifact", "show", "task:assertion-verification"]);
+    assert!(
+        !gone.stdout.contains("depends_on task:webauthn-ceremony"),
+        "the edge is still declared after it was taken back: {}",
+        gone.stdout
+    );
+    assert!(
+        gone.stdout.contains("decomposes story:passkey-login"),
+        "the edge nobody asked to remove went with it: {}",
+        gone.stdout
+    );
+
+    let refused = pair.alike(&[
+        "plan",
+        "artifact",
+        "unrelate",
+        "task:assertion-verification",
+        "depends_on",
+        "task:webauthn-ceremony",
+    ]);
+    assert_eq!(
+        refused.code,
+        Some(1),
+        "{}{}",
+        refused.stdout,
+        refused.stderr
+    );
+    assert!(
+        refused.stderr.contains("decomposes story:passkey-login"),
+        "the refusal does not name the edges that are there: {}",
+        refused.stderr
+    );
+
+    // And the same three words make the edge again. A store that answered "already applied" here
+    // would be one whose idempotency key remembers the edge rather than the attempt — which is
+    // exactly what SQLite did while this was being written, because it keeps applied commands and
+    // markdown does not.
+    pair.alike_with(&edge, 0);
+    // Checked in each store rather than compared between them. A re-made edge lands where its new
+    // relation id falls in a store that keeps relations by id, and at the end of the list in a
+    // document that appends a line — so the two disagree about the **order** of an artifact's
+    // relations after a removal. That is a real divergence and it is not this story's to decide, so
+    // it is written down here instead of being hidden behind a comparison of one store with itself.
+    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+        let back = Answer::of(
+            project,
+            &["plan", "artifact", "show", "task:assertion-verification"],
+        );
+        assert_eq!(back.code, Some(0), "{}{}", back.stdout, back.stderr);
+        assert!(
+            back.stdout.contains("depends_on task:webauthn-ceremony"),
+            "the edge did not come back in {}: {}",
+            project.display(),
+            back.stdout
+        );
+        assert!(
+            back.stdout.contains("decomposes story:passkey-login"),
+            "the edge nobody touched is missing in {}: {}",
+            project.display(),
+            back.stdout
+        );
+    }
+}
+
 /// The prose `show` is asked to print back, spacing and blank line included.
 ///
 /// Deliberately not tidy: two spaces inside a line and a trailing blank one are exactly what a

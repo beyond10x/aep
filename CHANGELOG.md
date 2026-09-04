@@ -7,6 +7,36 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Added
+
+- **`aep plan artifact unrelate <id> <relation> <target>` takes an edge back.** `relate` had no
+  opposite, so an edge asserted in error was permanent: `9da4f51c#495` found a stale `depends_on`
+  from phase 1 to phase 0 and left it in the store because there was nothing to type. Both of
+  `relate`'s spellings work — three positionals, or `<relation>:<target>` split at the first colon —
+  which is the same one spelling for an edge, now in both directions. The flat `aep artifact
+  unrelate` and the `protocol` alias reach the same leaf, byte for byte.
+
+  **Exactly the edge named goes.** The markdown backend's rule has always been that frontmatter is
+  added to and not rewritten, because rewriting it from the contract's view would delete every edge
+  somebody wrote into a document by hand; a removal therefore takes out the one `(relation, target)`
+  pair on the one artifact and leaves the rest of the `relations:` list alone.
+
+  **An edge that is not there is refused, naming the ones that are**, and the refusal writes
+  nothing — not the document, not the journal. The journal gains an `unrelated` change of its own
+  rather than recording the write as a body replacement, so `history` reads `no longer <relation>
+  <target>` and the earlier `related` entry stays exactly where it was.
+
+### Fixed
+
+- **`relate` making an edge that had been taken back is no longer a silent replay.** The
+  idempotency key was derived from the edge alone, so a store that keeps applied commands — SQLite
+  and Postgres do, markdown does not — recognised the second `relate story:x depends_on story:y` as
+  the first one being retried and wrote nothing. Unreachable until `unrelate` existed, and reachable
+  the moment it did. The key now names the attempt as well as the edge, which is what `move`, `body`
+  and `evidence` already did.
+
 ## [0.52.0] — 2026-09-04
 
 ### Changed

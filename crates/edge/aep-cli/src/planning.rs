@@ -952,6 +952,32 @@ pub(crate) enum ArtifactCommand {
         /// The artifact the edge points at, when the relation does not already name it.
         target: Option<String>,
     },
+    /// Take one edge back, in the same words that made it.
+    ///
+    /// **One spelling for an edge, in both directions.** `unrelate <id> <relation> <target>` and
+    /// `unrelate <id> <relation>:<target>` are the two forms `relate` takes, split at the first
+    /// colon by the same code, and either removes exactly the one edge it names — nothing else in
+    /// the document's `relations:` moves, including an edge somebody wrote there by hand.
+    ///
+    /// An edge the artifact does not declare is **refused, naming the ones it does**: `9da4f51c#495`
+    /// is a session that found a stale `depends_on` and had no verb to remove it, and a refusal that
+    /// only said "no such edge" would send the next reader back to the file to find out what is
+    /// there.
+    Unrelate {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact the edge starts at.
+        id: String,
+        /// What the edge means, such as `depends_on`. `protocol artifact show <id>` lists the ones
+        /// an artifact declares.
+        ///
+        /// May carry the target after a colon — `depends_on:task:webauthn-ceremony` — in which case
+        /// the third positional is left off.
+        relation: String,
+        /// The artifact the edge points at, when the relation does not already name it.
+        target: Option<String>,
+    },
     /// Replace, extend or re-section a plan item's markdown body, preserving CLI-owned frontmatter.
     ///
     /// Three ways to arrive at a body and one door to write it. Without a flag `--from` is the
@@ -1557,6 +1583,12 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             relation,
             target,
         } => relate(&store, &id, &relation, target.as_deref()),
+        ArtifactCommand::Unrelate {
+            store,
+            id,
+            relation,
+            target,
+        } => unrelate(&store, &id, &relation, target.as_deref()),
         ArtifactCommand::Body {
             store,
             id,
@@ -2641,19 +2673,28 @@ fn relate_through_a_command(
             .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))
     };
 
+    let at = clock_at_the_edge();
     let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
     let context = CommandContext::new(
         format!("req-{name}")
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
-        format!("rel-{name}")
+        // **The instant is in the idempotency key and nowhere else**, as it is for `move`, `body`
+        // and `evidence`. A key naming only the edge names the edge and not the attempt: a store
+        // that keeps applied commands — SQLite and Postgres do, markdown does not — then reads the
+        // second `relate story:x depends_on story:y` as the first one being retried and writes
+        // nothing. Unreachable until `unrelate` made re-asserting an edge a thing anybody would do;
+        // reachable the moment it did, and the edge did not come back. The command id stays derived
+        // from the edge alone, because that field is what a genuine retry reuses and it is written
+        // into the journal, where a millisecond would make two identical writes read as different.
+        format!("rel-{name}-{}", at.epoch_millis())
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
         command_actor()?,
         "protocol-artifact-relate"
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
-        clock_at_the_edge(),
+        at,
     );
     block_on(
         backend.execute(CommandEnvelope::new(
@@ -2736,6 +2777,176 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
         ),
         Format::Yaml | Format::Json => crate::print_serialised(
             &Related {
+                id: id.to_string(),
+                relation: relation.as_str(),
+                target: target.to_string(),
+                revision: document.frontmatter.revision,
+            },
+            args.format,
+        )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Issues the `RemoveRelation` command that takes one edge back.
+///
+/// The command names an edge by its **id**, and nothing outside the store knows one — so the id is
+/// looked up from the contract's own record of the edges leaving `source`, and a `(kind, target)`
+/// the contract does not hold is refused here rather than turned into a guess.
+///
+/// The journal entry comes from `MarkdownBackend`, as it does for `relate`, which is what makes the
+/// record and the write one act rather than two things a verb has to remember to do in order.
+fn unrelate_through_a_command(
+    backend: &PlanBackend,
+    source: &ArtifactId,
+    relation: RelationKind,
+    target: &ArtifactId,
+) -> Result<()> {
+    use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
+    use aep_contract::query::{QueryService, RelationQuery};
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, RemoveRelation};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let address = |id: &ArtifactId| {
+        EntityLocator::new(
+            aep_backend_markdown::backend::ORGANISATION,
+            aep_backend_markdown::backend::SPACE,
+            id.namespace(),
+            id.name(),
+        )
+        .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))
+    };
+    let resolve = |id: &ArtifactId| -> Result<aep_domain::entity::EntityId> {
+        block_on(QueryService::resolve(backend, &address(id)?))
+            .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))
+    };
+
+    let edges = block_on(QueryService::relations(
+        backend,
+        &RelationQuery {
+            source: Some(EntityRef::new(resolve(source)?)),
+            target: Some(EntityRef::new(resolve(target)?)),
+            kind: Some(relation),
+            limit: None,
+            after: None,
+            consistency: aep_contract::QueryConsistency::Current,
+        },
+    ))
+    .map_err(|error| anyhow::anyhow!("the edges leaving `{source}` could not be read: {error}"))?;
+    let edge = edges.items.first().with_context(|| {
+        format!(
+            "`{source}` declares `{relation} {target}` in its document and the store holds no such \
+             edge, so there is nothing a command can remove"
+        )
+    })?;
+
+    let at = clock_at_the_edge();
+    let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
+    let context = CommandContext::new(
+        format!("req-unrel-{name}")
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        // Its own key, distinct from the one `relate` mints for the same three words, and carrying
+        // the instant for the reason `relate`'s does: a key naming only the edge names no
+        // particular attempt, so removing an edge that was made again would be replayed rather
+        // than run.
+        format!("unrel-{name}-{}", at.epoch_millis())
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        command_actor()?,
+        "protocol-artifact-unrelate"
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
+        at,
+    );
+    block_on(
+        backend.execute(CommandEnvelope::new(
+            format!("cmd-unrel-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "aep.relation.remove/v1",
+            Command::RemoveRelation(RemoveRelation {
+                relation: edge.id.clone(),
+            }),
+            context,
+        )),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
+}
+
+/// `protocol artifact unrelate`
+///
+/// The other direction of [`relate`], and deliberately its mirror: the same two spellings, split by
+/// the same [`parse_relation`], the same command path, the same line printed.
+///
+/// The refusal is the part worth reading. An edge the artifact does not declare is refused **naming
+/// the ones it does**, because the question "then what does it declare?" is the whole reason the
+/// reader is at the command line rather than in the file — `9da4f51c#495` is a session that found a
+/// stale `depends_on` from phase 1 to phase 0, had no verb for it, and left it in the store.
+fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> Result<ExitCode> {
+    let id = artifact_id(id)?;
+    let (relation, target) = match target {
+        Some(target) => (
+            RelationKind::parse(relation).map_err(|error| anyhow::anyhow!("{error}"))?,
+            ArtifactRef::parse(target).map_err(|error| anyhow::anyhow!("{error}"))?,
+        ),
+        None => parse_relation(relation)?,
+    };
+
+    let mut opened = open(&args.location, true)?;
+
+    let not_here = opened.missing(&id);
+    let stored = opened
+        .report
+        .documents
+        .get_mut(&id)
+        .with_context(|| not_here)?;
+
+    // Refused before anything is issued, and refused with the answer to the question it raises.
+    // Invariant 7: a refusal changes nothing, so this comes before the command and before any
+    // write, and the document is left exactly as it was found.
+    if !stored.document.remove_relation(relation, target.id()) {
+        let declared = &stored.document.frontmatter.relations;
+        let listed = if declared.is_empty() {
+            "  (it declares none)".to_owned()
+        } else {
+            declared
+                .iter()
+                .map(|edge| format!("  - {} {}", edge.kind, edge.target))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        bail!("{id} does not declare `{relation} {target}`; it declares:\n{listed}");
+    }
+    let document = stored.document.clone();
+
+    // Checked before it is written, for the reason `relate` checks it: what a plan must still be
+    // after a write is a property of the whole graph, and a store repaired by hand afterwards is a
+    // store people stop using.
+    if let Err(errors) = opened
+        .report
+        .graph_in_workspace(declared_members(&args.repository_root()))
+    {
+        outln!("taking back `{id} {relation} {target}` would not build a graph:");
+        for error in errors.as_slice() {
+            outln!("  - {error}");
+        }
+        return Ok(crate::exit_code(false));
+    }
+
+    // Through a command. The edge the contract removes is what `MarkdownBackend` takes out of the
+    // frontmatter, so the document above is what this verb had to check a graph against — not what
+    // gets written.
+    unrelate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    match args.format {
+        Format::Text => outln!(
+            "{id} {relation} {target} removed (revision {})",
+            document.frontmatter.revision
+        ),
+        Format::Yaml | Format::Json => crate::print_serialised(
+            &Unrelated {
                 id: id.to_string(),
                 relation: relation.as_str(),
                 target: target.to_string(),
@@ -6214,7 +6425,10 @@ fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Ve
                     on_nothing_recorded,
                 });
             }
-            Change::Created { .. } | Change::Related { .. } | Change::BodyReplaced => {}
+            Change::Created { .. }
+            | Change::Related { .. }
+            | Change::Unrelated { .. }
+            | Change::BodyReplaced => {}
         }
     }
     (reached, since)
@@ -7100,6 +7314,19 @@ pub(crate) struct Need {
 /// What `relate` did.
 #[derive(Debug, serde::Serialize)]
 struct Related {
+    id: String,
+    relation: &'static str,
+    target: String,
+    revision: u64,
+}
+
+/// What `unrelate` took back.
+///
+/// A type of its own rather than a `Related` with a flag, for the reason the journal's own change
+/// vocabulary has two variants: a reader of `--format json` asks what happened, and "related, but
+/// negated" is a sentence that has to be decoded before it can be read.
+#[derive(Debug, serde::Serialize)]
+struct Unrelated {
     id: String,
     relation: &'static str,
     target: String,

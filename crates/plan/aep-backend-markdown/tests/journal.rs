@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use aep_backend_markdown::journal::{self, Change, Entry, Provenance};
-use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus};
+use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, RelationKind};
 use aep_domain::evidence::EvidenceKind;
 
 /// Under `target/`, never the system temp directory: this machine's tmpfs drops writes under
@@ -154,6 +154,13 @@ fn one_unreadable_line_does_not_cost_the_history() {
 }
 
 /// Every kind of change survives a write and a read unchanged.
+///
+/// **The list is held to the enum by the compiler.** It used to be four of the five variants there
+/// were, hand-maintained, and `Change::Related` — the one variant added because an edge had been
+/// journalled as `body_replaced` — was never in it. A variant that no test round-trips is a line
+/// this crate can write and cannot read back, which is the one thing a closed vocabulary is closed
+/// to prevent. The `match` below has no wildcard, so a sixth variant stops this file compiling
+/// until it is represented above.
 #[test]
 fn every_change_round_trips() {
     let root = scratch("roundtrip");
@@ -170,6 +177,14 @@ fn every_change_round_trips() {
                 asserted: BTreeMap::from([(EvidenceKind::Approval, 2)]),
             },
         },
+        Change::Related {
+            relation: RelationKind::DependsOn,
+            target: "story:the-other-one".to_owned(),
+        },
+        Change::Unrelated {
+            relation: RelationKind::DependsOn,
+            target: "story:the-other-one".to_owned(),
+        },
         Change::BodyReplaced,
         Change::Evidence {
             kind: EvidenceKind::Approval,
@@ -179,6 +194,27 @@ fn every_change_round_trips() {
             outcome: None,
         },
     ];
+    // One of every variant, and one **only**: the compiler catches a variant the list has never
+    // heard of, and the tag count catches one written down twice in place of the one that is
+    // missing.
+    let mut tags: Vec<&'static str> = changes
+        .iter()
+        .map(|change| match change {
+            Change::Created { .. } => "created",
+            Change::Moved { .. } => "moved",
+            Change::Related { .. } => "related",
+            Change::Unrelated { .. } => "unrelated",
+            Change::BodyReplaced => "body_replaced",
+            Change::Evidence { .. } => "evidence",
+        })
+        .collect();
+    tags.sort_unstable();
+    tags.dedup();
+    assert_eq!(
+        tags.len(),
+        changes.len(),
+        "every variant is written down once: {tags:?}"
+    );
     for change in &changes {
         journal::append(
             &root,

@@ -35,7 +35,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use aep_domain::artifact::{
-    ArtifactKind, ArtifactLifecycle, ArtifactRef, ArtifactRelation, ArtifactStatus,
+    ArtifactId, ArtifactKind, ArtifactLifecycle, ArtifactRef, ArtifactRelation, ArtifactStatus,
     LifecycleRegistry, RelationKind,
 };
 use aep_domain::error::ValidationErrors;
@@ -206,6 +206,28 @@ impl PlanningDocument {
             return false;
         }
         self.frontmatter.relations.push(relation);
+        self.bump();
+        true
+    }
+
+    /// Takes one outgoing edge back, and says whether anything changed.
+    ///
+    /// `false` means the document does not declare this edge, which is a refusal for the caller to
+    /// make rather than a no-op to write: a revision spent removing nothing is a revision nobody
+    /// can explain, exactly as [`Self::add_relation`] says of adding one twice. Exactly the one
+    /// `(kind, target)` pair goes; every other edge, including one written by hand into a document
+    /// this crate never authored, stays where it was.
+    ///
+    /// The pair is `(kind, target id)`, and the pinned version is deliberately not part of it: the
+    /// projection's own removal matches on the id alone, and a caller made to type `@v2` to undo an
+    /// edge would be typing a second spelling for one edge.
+    pub fn remove_relation(&mut self, kind: RelationKind, target: &ArtifactId) -> bool {
+        let declares =
+            |declared: &ArtifactRelation| declared.kind == kind && declared.target.id() == target;
+        if !self.frontmatter.relations.iter().any(declares) {
+            return false;
+        }
+        self.frontmatter.relations.retain(|held| !declares(held));
         self.bump();
         true
     }

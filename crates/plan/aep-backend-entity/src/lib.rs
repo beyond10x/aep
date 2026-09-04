@@ -344,11 +344,20 @@ pub trait Projection<S: Store> {
 
     /// Notes what a command is before the contract consumes it.
     ///
+    /// `inner` is the contract's state **as it stands before the command runs**, and that is the
+    /// whole reason it is a parameter: a `RemoveRelation` names an edge by its id alone, so the
+    /// only moment its source, kind and target can be read is before it is applied. Afterwards the
+    /// edge is gone and the projection has nothing to re-project the source document from.
+    ///
     /// # Errors
     ///
     /// If the command carries something the projection cannot write — a move's account that is not
     /// a provenance, say.
-    fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError>;
+    fn before(
+        &mut self,
+        envelope: &CommandEnvelope<Command>,
+        inner: &MemoryBackend,
+    ) -> Result<(), CommandError>;
 
     /// Where an accepted command's result lands: one placement per instance to write.
     ///
@@ -471,7 +480,11 @@ impl<S: Store> Projection<S> for Identity {
         Ok(())
     }
 
-    fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
+    fn before(
+        &mut self,
+        envelope: &CommandEnvelope<Command>,
+        _inner: &MemoryBackend,
+    ) -> Result<(), CommandError> {
         self.observing = match &envelope.payload {
             Command::CreateRelation(create) => Some(create.source.id.clone()),
             Command::RecordEvidence(record) => Some(record.target.id.clone()),
@@ -1203,7 +1216,7 @@ impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBac
                 provenance.optimistic = Some((coordinate, Expect::Revision(expected.get())));
             }
         }
-        projection.before(&envelope)?;
+        projection.before(&envelope, &self.inner)?;
         let before = self.snapshot(&provenance.key);
         let outcome = block_on(candidate.execute(envelope));
         if outcome

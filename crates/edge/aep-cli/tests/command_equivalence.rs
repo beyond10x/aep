@@ -114,6 +114,37 @@ fn the_canonical_command_and_alias_match_on_a_domain_refusal_at_the_grouped_spel
     assert_eq!(output.status.code(), Some(1));
 }
 
+/// A verb added after the grouping, at both spellings: `unrelate` is reached through the `artifact`
+/// group, so its hidden flat alias is built rather than written, and invariant 10 covers it the day
+/// it ships rather than the day somebody notices.
+///
+/// A refusal, because it needs no store to be prepared and the refusal path is where two binaries
+/// most easily print different bytes.
+#[test]
+fn the_canonical_command_and_alias_match_on_unrelate_at_both_spellings() {
+    let grouped = assert_equivalent(&[
+        "plan",
+        "artifact",
+        "unrelate",
+        "story:no-such-artifact",
+        "decomposes",
+        "epic:no-such-epic",
+    ]);
+    assert_eq!(grouped.status.code(), Some(1));
+    let flat = assert_equivalent(&[
+        "artifact",
+        "unrelate",
+        "story:no-such-artifact",
+        "decomposes",
+        "epic:no-such-epic",
+    ]);
+    assert_eq!(flat.status.code(), Some(1));
+    assert_eq!(
+        grouped.stderr, flat.stderr,
+        "the grouped path and its hidden flat spelling refuse in the same words"
+    );
+}
+
 /// A mistyped verb inside an area.
 #[test]
 fn the_canonical_command_and_alias_match_on_a_usage_error_inside_an_area() {

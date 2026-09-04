@@ -17,9 +17,11 @@
 //! * **The prose is the document.** An entity carries no prose, so a document is re-read and only
 //!   the frontmatter fields the entity body carries are touched; the body changes only when a
 //!   command carries it under [`BODY_KEY`]. Absent is not empty.
-//! * **Relations are added and never removed** from frontmatter. Rewriting the list from the
-//!   contract's view would delete, on the first status move, every edge written by hand into a
-//!   document this backend has never been the author of.
+//! * **Relations are added, and removed only by name.** Rewriting the list from the contract's
+//!   view would delete, on the first status move, every edge written by hand into a document this
+//!   backend has never been the author of. A `RemoveRelation` therefore takes out exactly the one
+//!   `(kind, target)` pair the command named on the source it named, and leaves every other line
+//!   of the frontmatter where it was.
 //! * **The document's revision is the document's own count.** A backend is opened per invocation
 //!   and every artifact is seeded at revision 1, so an entity's revision after one command is
 //!   always 2 — taking it would clamp every document to 2 for ever. The placement carries the
@@ -82,8 +84,25 @@ struct Current {
     decided_on: Option<journal::Provenance>,
     /// Sources whose document a relation command changes without changing the entity.
     touched: Vec<EntityId>,
+    /// The edge a `RemoveRelation` names, read before the contract consumed it.
+    removed: Option<Removed>,
     /// An observation about an artifact, as the command stated it.
     observation: Option<Observation>,
+}
+
+/// One `RemoveRelation` in flight, resolved to the words the frontmatter spells it in.
+///
+/// Read in [`Projection::before`] and nowhere else: the command names an edge by its id, and the
+/// id is meaningless the moment the edge is gone. What survives it is this — which document to
+/// rewrite, and which single line of its `relations:` to take out.
+#[derive(Debug, Clone)]
+struct Removed {
+    /// The entity whose document declares the edge.
+    source: EntityId,
+    /// What the edge means.
+    kind: aep_domain::artifact::RelationKind,
+    /// The artifact it points at, as the frontmatter names it.
+    target: ArtifactId,
 }
 
 /// One `RecordEvidence` in flight, as the journal will spell it.
@@ -408,7 +427,12 @@ impl MarkdownProjection {
         })
     }
 
-    /// Writes the entity's outgoing relations into its frontmatter — adding, never removing.
+    /// Writes the entity's outgoing relations into its frontmatter: adding every edge the contract
+    /// holds, and taking out the one — and only the one — a `RemoveRelation` named.
+    ///
+    /// The removal is by `(kind, target)` on the named source, not by rewriting the list from the
+    /// contract's view. A planning document may declare an edge this backend never authored, and a
+    /// rewrite would delete it on the first command that touched the file.
     fn apply_relations(
         &self,
         inner: &MemoryBackend,
@@ -445,6 +469,13 @@ impl MarkdownProjection {
                         relation.kind,
                         aep_domain::artifact::ArtifactRef::new(target, None),
                     ));
+            }
+        }
+        if let Some(removed) = &self.current.removed {
+            if &removed.source == id {
+                frontmatter.relations.retain(|edge| {
+                    edge.kind != removed.kind || edge.target.id() != &removed.target
+                });
             }
         }
         Ok(())
@@ -528,15 +559,53 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
         Ok(())
     }
 
-    fn before(&mut self, envelope: &CommandEnvelope<Command>) -> Result<(), CommandError> {
+    fn before(
+        &mut self,
+        envelope: &CommandEnvelope<Command>,
+        inner: &MemoryBackend,
+    ) -> Result<(), CommandError> {
+        // The edge a `RemoveRelation` names, resolved **here** and nowhere later. The command
+        // carries a `RelationId` and nothing else, and by the time `placements` runs the edge is
+        // gone from the contract — so this is the only moment its source, kind and target can be
+        // read at all. `inner` is the contract as it stands before the command, which is what
+        // makes reading it possible.
+        let removed = match &envelope.payload {
+            Command::RemoveRelation(remove) => {
+                let found = inner.with_store(|store| {
+                    store
+                        .relations()
+                        .find(|relation| relation.id == remove.relation)
+                        .map(|relation| {
+                            (
+                                relation.source.id.clone(),
+                                relation.kind,
+                                relation.target.id.clone(),
+                            )
+                        })
+                });
+                // `None` for an edge the contract does not hold, and that is not a hole: the
+                // contract refuses it a moment later by name, and a projection that guessed a
+                // document here would rewrite a file for a command that was about to be refused.
+                match found {
+                    Some((source, kind, target)) => {
+                        Self::artifact_for(inner, &target)?.map(|(target, _)| Removed {
+                            source,
+                            kind,
+                            target,
+                        })
+                    }
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         // The endpoints a relation command changes the *document* of. The contract reports no
         // affected entity for one — an edge is a thing in its own right and neither endpoint's
         // revision moves — but the source's document does change, because a planning document
-        // carries its edges in frontmatter. `RemoveRelation` is deliberately absent: the frontmatter
-        // adds and does not remove, so re-projecting the source after one would journal a change
-        // that did not happen.
-        let touched = match &envelope.payload {
-            Command::CreateRelation(create) => vec![create.source.id.clone()],
+        // carries its edges in frontmatter.
+        let touched = match (&envelope.payload, &removed) {
+            (Command::CreateRelation(create), _) => vec![create.source.id.clone()],
+            (Command::RemoveRelation(_), Some(removed)) => vec![removed.source.clone()],
             _ => Vec::new(),
         };
         // The account the move arrived with, carried into the journal's change because a status
@@ -580,6 +649,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
             decided: matches!(&envelope.payload, Command::MoveStatus(_)),
             decided_on,
             touched,
+            removed,
             observation,
         };
         Ok(())
@@ -690,15 +760,31 @@ fn change_for(
             decided_on,
         };
     }
-    match updated
+    if let Some(added) = updated
         .frontmatter
         .relations
         .iter()
         .find(|edge| !existing.frontmatter.relations.contains(edge))
     {
-        Some(added) => journal::Change::Related {
+        return journal::Change::Related {
             relation: added.kind,
             target: added.target.to_string(),
+        };
+    }
+    // The other direction, and it has to be read the same way round: an edge in the document
+    // before and not after is one this write took out. Without this arm a removal journalled as
+    // `body_replaced`, which is the same defect `Change::Related` was added to close — a record
+    // describing something that did not happen, in the one place a reader goes to find out what
+    // did.
+    match existing
+        .frontmatter
+        .relations
+        .iter()
+        .find(|edge| !updated.frontmatter.relations.contains(edge))
+    {
+        Some(taken) => journal::Change::Unrelated {
+            relation: taken.kind,
+            target: taken.target.to_string(),
         },
         None => journal::Change::BodyReplaced,
     }
