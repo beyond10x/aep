@@ -1262,7 +1262,7 @@ fn a_resume_refuses_every_moved_pin_on_a_snapshot_the_engine_would_have_accepted
             panic!("a moved {what} is a refusal, not another kind of failure: {refusal:?}");
         };
         assert!(
-            message.contains("--restart"),
+            message.contains("`drive run`"),
             "the refusal names both routes out: {message}"
         );
 

@@ -381,8 +381,8 @@ impl DriverCursor {
 
     /// Why a resume would be refused, or nothing when the three pins still hold.
     ///
-    /// Fail closed, and name both values: the routes out are `--restart`, which allocates a new run
-    /// id and re-observes the evidence, or reverting the document that moved.
+    /// Fail closed, and name both values: the routes out are `drive run`, which starts the task
+    /// again under a new run id and re-observes the evidence, or reverting the document that moved.
     pub fn resume_refusal(
         &self,
         workflow: &str,

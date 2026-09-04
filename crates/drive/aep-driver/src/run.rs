@@ -113,8 +113,20 @@ pub enum InFlightResolution {
 }
 
 /// The two ways out of a refused resume, named in the refusal.
-const ROUTES_OUT: &str = "the routes out are `--restart`, which allocates a new run id and \
-                          re-observes the evidence, or reverting the document that moved";
+///
+/// Named as commands somebody can type. This sentence used to offer `--restart`, which no verb
+/// accepts: `drive` takes `run`, `status`, `resume`, `transition` and `eval`, and none of them
+/// parses that flag. A reader following the advice got a second refusal, a bare clap usage error,
+/// which reads as their own mistake rather than the message's — two refusals to learn one fact.
+/// The refusal's advice, readable from outside so a test can hold it to the command surface.
+#[must_use]
+pub fn routes_out() -> &'static str {
+    ROUTES_OUT
+}
+
+const ROUTES_OUT: &str = "the routes out are `drive run`, which starts the task again under a new \
+                          run id and re-observes the evidence, or reverting the document that \
+                          moved";
 
 /// How a run is bounded, what it may do without a person, and where its task was read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,8 +241,8 @@ pub enum DriveError {
 /// One run's directory: a path, plus the committed generations that live in it.
 ///
 /// Never allocated here — `aep-cli` allocates it after taking the store lock, and never
-/// deletes or reuses one. `--restart` allocates a new run id, because a run directory that could be
-/// reused is a history that can be overwritten.
+/// deletes or reuses one. Starting the task again allocates a new run id, because a run directory
+/// that could be reused is a history that can be overwritten.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunDirectory {
     path: PathBuf,

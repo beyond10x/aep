@@ -5190,6 +5190,53 @@ mod tests {
         ToolConfig::new(capabilities.iter().cloned().collect())
     }
 
+    /// Every long flag a `drive` refusal names is a flag some `drive` verb parses.
+    ///
+    /// The defect this retires: a refused resume advised `--restart`, which no verb accepts, so the
+    /// reader typed it and got a second refusal — a bare clap usage error that reads as their
+    /// mistake rather than the message's. One test over the whole surface, because the failure is
+    /// a sentence drifting from a command and that can happen to any of them.
+    #[test]
+    fn a_flag_a_refusal_names_is_a_flag_a_drive_verb_parses() {
+        use clap::CommandFactory as _;
+
+        let mut parsed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut collect = |command: &clap::Command| {
+            for argument in command.get_arguments() {
+                if let Some(long) = argument.get_long() {
+                    parsed.insert(format!("--{long}"));
+                }
+            }
+        };
+        let root = crate::Cli::command();
+        for command in root.get_subcommands() {
+            collect(command);
+            for nested in command.get_subcommands() {
+                collect(nested);
+                for deeper in nested.get_subcommands() {
+                    collect(deeper);
+                }
+            }
+        }
+        assert!(
+            parsed.contains("--root"),
+            "the walk found no flags at all, so it is not testing anything: {parsed:?}"
+        );
+
+        let named: std::collections::BTreeSet<String> = aep_driver::run::routes_out()
+            .split_whitespace()
+            .map(|word| word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-'))
+            .filter(|word| word.starts_with("--"))
+            .map(str::to_owned)
+            .collect();
+        for flag in &named {
+            assert!(
+                parsed.contains(flag),
+                "the refusal names `{flag}`, which no `drive` verb parses"
+            );
+        }
+    }
+
     /// The execution every fixture below belongs to: the first run of task `T-1`.
     ///
     /// `'static` because two of the helpers here *return* a [`StepContext`], and a context borrows
