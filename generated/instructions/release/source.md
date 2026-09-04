@@ -1,4 +1,4 @@
-<!-- Rendered from `release/source/1` by `protocol workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
+<!-- Rendered from `release/source/1` by `protocol govern workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
 
 # Source release
 

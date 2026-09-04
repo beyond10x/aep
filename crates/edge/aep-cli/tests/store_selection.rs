@@ -326,16 +326,16 @@ const AT: &str = "2026-08-28T12:00:00Z";
 
 /// The reads, before anything was written.
 const READS_BEFORE: &[&[&str]] = &[
-    &["artifact", "list"],
-    &["artifact", "list", "--format", "json"],
-    &["artifact", "list", "--kind", "story"],
-    &["artifact", "board"],
-    &["artifact", "graph"],
-    &["artifact", "graph", "--format", "json"],
-    &["artifact", "validate", "--format", "json"],
-    &["artifact", "lifecycle", "story"],
-    &["artifact", "kinds"],
-    &["artifact", "relations"],
+    &["plan", "artifact", "list"],
+    &["plan", "artifact", "list", "--format", "json"],
+    &["plan", "artifact", "list", "--kind", "story"],
+    &["plan", "artifact", "board"],
+    &["plan", "artifact", "graph"],
+    &["plan", "artifact", "graph", "--format", "json"],
+    &["plan", "artifact", "validate", "--format", "json"],
+    &["plan", "artifact", "lifecycle", "story"],
+    &["plan", "artifact", "kinds"],
+    &["plan", "artifact", "relations"],
 ];
 
 /// The reads, after: the writes landed the same way, and the history says the same things.
@@ -345,37 +345,40 @@ const READS_BEFORE: &[&[&str]] = &[
 /// manifest does not carry — so before the writes the markdown project would print a body the
 /// other two have never been told about, and the difference would be the seed's, not the verb's.
 const READS_AFTER: &[&[&str]] = &[
-    &["artifact", "list"],
-    &["artifact", "list", "--format", "json"],
-    &["artifact", "board"],
-    &["artifact", "graph"],
-    &["artifact", "show", "story:passkey-audit-trail"],
+    &["plan", "artifact", "list"],
+    &["plan", "artifact", "list", "--format", "json"],
+    &["plan", "artifact", "board"],
+    &["plan", "artifact", "graph"],
+    &["plan", "artifact", "show", "story:passkey-audit-trail"],
     &[
+        "plan",
         "artifact",
         "show",
         "story:passkey-audit-trail",
         "--format",
         "json",
     ],
-    &["artifact", "history", "story:passkey-audit-trail"],
+    &["plan", "artifact", "history", "story:passkey-audit-trail"],
     &[
+        "plan",
         "artifact",
         "history",
         "story:passkey-audit-trail",
         "--format",
         "json",
     ],
-    &["artifact", "history", "story:passkey-login"],
-    &["artifact", "explain", "story:passkey-login"],
+    &["plan", "artifact", "history", "story:passkey-login"],
+    &["plan", "artifact", "explain", "story:passkey-login"],
     &[
+        "plan",
         "artifact",
         "explain",
         "story:passkey-login",
         "--format",
         "json",
     ],
-    &["artifact", "explain", "story:passkey-audit-trail"],
-    &["artifact", "validate"],
+    &["plan", "artifact", "explain", "story:passkey-audit-trail"],
+    &["plan", "artifact", "validate"],
 ];
 
 /// Every verb that changes the plan, each once, each its own process. `body` is the file the
@@ -383,6 +386,7 @@ const READS_AFTER: &[&[&str]] = &[
 fn writes(body: &str) -> Vec<Vec<&str>> {
     vec![
         vec![
+            "plan",
             "artifact",
             "new",
             "story",
@@ -395,6 +399,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             "webauthn",
         ],
         vec![
+            "plan",
             "artifact",
             "relate",
             "story:passkey-audit-trail",
@@ -402,6 +407,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             "epic:passkey-sign-in",
         ],
         vec![
+            "plan",
             "artifact",
             "body",
             "story:passkey-audit-trail",
@@ -409,6 +415,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             body,
         ],
         vec![
+            "plan",
             "artifact",
             "evidence",
             "story:passkey-login",
@@ -422,6 +429,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             AT,
         ],
         vec![
+            "plan",
             "artifact",
             "evidence",
             "story:passkey-login",
@@ -435,6 +443,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             AT,
         ],
         vec![
+            "plan",
             "artifact",
             "move",
             "--to",
@@ -444,6 +453,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
             AT,
         ],
         vec![
+            "plan",
             "artifact",
             "move",
             "--to",
@@ -454,6 +464,7 @@ fn writes(body: &str) -> Vec<Vec<&str>> {
         ],
         // A move the ladder refuses is refused the same way.
         vec![
+            "plan",
             "artifact",
             "move",
             "--to",
@@ -486,7 +497,7 @@ fn every_verb_answers_alike_over_markdown_and_sqlite() {
     for args in READS_AFTER {
         pair.alike_with(args, 0);
     }
-    let (markdown, _) = pair.both(&["artifact", "validate"]);
+    let (markdown, _) = pair.both(&["plan", "artifact", "validate"]);
     assert_eq!(markdown.code, Some(0), "{}", markdown.stdout);
 }
 
@@ -512,6 +523,7 @@ fn a_story_carrying_prose(pair: &Pair) {
 
     for args in [
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -524,6 +536,7 @@ fn a_story_carrying_prose(pair: &Pair) {
             "webauthn",
         ][..],
         &[
+            "plan",
             "artifact",
             "relate",
             "story:passkey-audit-trail",
@@ -531,6 +544,7 @@ fn a_story_carrying_prose(pair: &Pair) {
             "epic:passkey-sign-in",
         ][..],
         &[
+            "plan",
             "artifact",
             "body",
             "story:passkey-audit-trail",
@@ -548,7 +562,7 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
     a_story_carrying_prose(&pair);
 
     // Text: the frontmatter fields the reader asked for, then the body, unaltered and last.
-    let shown = pair.alike(&["artifact", "show", "story:passkey-audit-trail"]);
+    let shown = pair.alike(&["plan", "artifact", "show", "story:passkey-audit-trail"]);
     assert_eq!(shown.code, Some(0), "{}{}", shown.stdout, shown.stderr);
     for expected in [
         "story:passkey-audit-trail",
@@ -573,6 +587,7 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
 
     // YAML and JSON carry the same artifact, and the body byte for byte.
     let yaml = pair.alike(&[
+        "plan",
         "artifact",
         "show",
         "story:passkey-audit-trail",
@@ -581,6 +596,7 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
     ]);
     assert_eq!(yaml.code, Some(0), "{}{}", yaml.stdout, yaml.stderr);
     let json = pair.alike(&[
+        "plan",
         "artifact",
         "show",
         "story:passkey-audit-trail",
@@ -611,7 +627,10 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
         ("sqlite", &pair.sqlite),
         ("hybrid", &pair.hybrid),
     ] {
-        let output = protocol_in(project, &["artifact", "show", "story:not-in-this-plan"]);
+        let output = protocol_in(
+            project,
+            &["plan", "artifact", "show", "story:not-in-this-plan"],
+        );
         assert_eq!(
             output.status.code(),
             Some(1),
@@ -634,7 +653,7 @@ fn the_sqlite_plan_is_read_from_the_database_and_not_from_files() {
         !pair.sqlite.join(".engineering/planning").exists(),
         "the SQLite project keeps no markdown"
     );
-    let output = protocol_in(&pair.sqlite, &["artifact", "list"]);
+    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "list"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(
         text(&output.stdout).lines().count(),
@@ -661,8 +680,13 @@ fn a_hybrid_missing_a_policy_word_is_refused_naming_the_word() {
     .expect("project.yaml written");
 
     for args in [
-        &["artifact", "list"][..],
-        &["validate", "--root", root().to_str().expect("printable")],
+        &["plan", "artifact", "list"][..],
+        &[
+            "govern",
+            "validate",
+            "--root",
+            root().to_str().expect("printable"),
+        ],
     ] {
         let output = protocol_in(&project, args);
         let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
@@ -691,6 +715,7 @@ fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_sui
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "conformance",
                 "--backend",
                 "project",
@@ -710,13 +735,14 @@ fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_sui
         );
     }
     // The plan itself was not written into: the same seven artifacts, no suite entity among them.
-    let output = protocol_in(&pair.sqlite, &["artifact", "list"]);
+    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "list"]);
     assert_eq!(text(&output.stdout).lines().count(), 7);
 
     // `--store` beside `project` is two answers to one question.
     let output = protocol_in(
         &pair.sqlite,
         &[
+            "plan",
             "conformance",
             "--backend",
             "project",
@@ -737,7 +763,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     let replica = project.join(".engineering/replica.sqlite3");
 
     // Nothing outstanding to begin with, and the verb says so with exit 0.
-    let output = protocol_in(project, &["artifact", "divergences"]);
+    let output = protocol_in(project, &["plan", "artifact", "divergences"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(text(&output.stdout).contains("no divergences recorded; authority: local"));
 
@@ -749,6 +775,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     let output = protocol_in(
         project,
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -767,7 +794,10 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     );
 
     // The next process lists what diverged — and says which side is authoritative.
-    let output = protocol_in(project, &["artifact", "divergences", "--format", "json"]);
+    let output = protocol_in(
+        project,
+        &["plan", "artifact", "divergences", "--format", "json"],
+    );
     assert_eq!(output.status.code(), Some(1), "a divergence is a problem");
     let report: serde_json::Value =
         serde_json::from_str(&text(&output.stdout)).expect("a JSON report");
@@ -783,12 +813,12 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     );
 
     // Every other verb still works over the plan while it is diverged.
-    let output = protocol_in(project, &["artifact", "list"]);
+    let output = protocol_in(project, &["plan", "artifact", "list"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(text(&output.stdout).lines().count(), 8);
 
     // Catch-up replays it at the replica; the replica then holds the story.
-    let output = protocol_in(project, &["artifact", "catch-up"]);
+    let output = protocol_in(project, &["plan", "artifact", "catch-up"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(
         text(&output.stdout).contains("1 divergence(s) found, 1 replayed, 0 outstanding"),
@@ -798,7 +828,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     assert!(!project
         .join(".engineering/planning/divergences.jsonl")
         .exists());
-    let output = protocol_in(project, &["artifact", "divergences"]);
+    let output = protocol_in(project, &["plan", "artifact", "divergences"]);
     assert_eq!(output.status.code(), Some(0));
     let held = {
         use entity_store::StateProvider as _;
@@ -810,7 +840,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     assert!(held.is_some(), "the replica now holds the story");
 
     // A plan that is not a hybrid has no divergences to speak of.
-    let output = protocol_in(&pair.sqlite, &["artifact", "divergences"]);
+    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "divergences"]);
     assert_ne!(output.status.code(), Some(0));
     assert!(text(&output.stderr).contains("not a hybrid plan"));
 }
@@ -824,6 +854,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "artifact",
                 "evidence",
                 "story:passkey-login",
@@ -834,7 +865,10 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
             ],
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-        let history = protocol_in(project, &["artifact", "history", "story:passkey-login"]);
+        let history = protocol_in(
+            project,
+            &["plan", "artifact", "history", "story:passkey-login"],
+        );
         assert!(
             text(&history.stdout).contains("test_result"),
             "{}",
@@ -846,6 +880,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
     let output = protocol_in(
         &pair.markdown,
         &[
+            "plan",
             "artifact",
             "evidence",
             "story:passkey-login",
@@ -874,6 +909,7 @@ fn closed_on_two_records(project: &Path, reference: &str) {
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "artifact",
                 "evidence",
                 "story:passkey-login",
@@ -892,6 +928,7 @@ fn closed_on_two_records(project: &Path, reference: &str) {
     let output = protocol_in(
         project,
         &[
+            "plan",
             "artifact",
             "move",
             "--to",
@@ -917,6 +954,7 @@ fn what_made_a_story_done_names_the_revision_each_record_was_admitted_at() {
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "artifact",
                 "explain",
                 "story:passkey-login",
@@ -993,7 +1031,10 @@ fn a_joined_record_outlives_the_file_its_reference_names() {
     assert!(!log.exists(), "and now names one that does not");
 
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
-        let output = protocol_in(project, &["artifact", "explain", "story:passkey-login"]);
+        let output = protocol_in(
+            project,
+            &["plan", "artifact", "explain", "story:passkey-login"],
+        );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         let said = text(&output.stdout);
         assert!(
@@ -1018,6 +1059,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "artifact",
                 "move",
                 "--to",
@@ -1032,6 +1074,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
         let output = protocol_in(
             project,
             &[
+                "plan",
                 "artifact",
                 "move",
                 "--to",
@@ -1045,7 +1088,10 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
 
-        let output = protocol_in(project, &["artifact", "explain", "story:passkey-login"]);
+        let output = protocol_in(
+            project,
+            &["plan", "artifact", "explain", "story:passkey-login"],
+        );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         let said = text(&output.stdout);
         assert!(
@@ -1053,7 +1099,10 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
             "a move on a bare count is marked as one: {said}"
         );
 
-        let output = protocol_in(project, &["artifact", "explain", "story:passkey-recovery"]);
+        let output = protocol_in(
+            project,
+            &["plan", "artifact", "explain", "story:passkey-recovery"],
+        );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         let said = text(&output.stdout);
         assert!(
@@ -1071,7 +1120,10 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
 fn explaining_an_artifact_no_store_holds_is_refused_naming_it() {
     let pair = Pair::new("explain-unknown");
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
-        let output = protocol_in(project, &["artifact", "explain", "story:no-such-story"]);
+        let output = protocol_in(
+            project,
+            &["plan", "artifact", "explain", "story:no-such-story"],
+        );
         assert_ne!(output.status.code(), Some(0), "{}", text(&output.stdout));
         assert!(
             text(&output.stderr).contains("story:no-such-story"),

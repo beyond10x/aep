@@ -100,6 +100,7 @@ fn protocol_validate_writes_a_verification_record_the_driver_can_submit() {
     let out = directory.join("verification.yaml");
 
     let output = protocol(&[
+        "govern",
         "validate",
         "--root",
         printable(&root()),
@@ -151,6 +152,7 @@ fn a_tree_that_does_not_validate_still_produces_a_record_and_it_says_failed() {
     let out = directory.join("verification.yaml");
 
     let output = protocol(&[
+        "govern",
         "validate",
         "--root",
         printable(&directory),
@@ -191,7 +193,7 @@ fn protocol_property_evidence_writes_a_property_record_with_the_case_count_it_me
     let directory = scratch("property");
     let out = directory.join("property.yaml");
 
-    let output = protocol(&["property", "evidence", "--out", printable(&out)]);
+    let output = protocol(&["observe", "property", "evidence", "--out", printable(&out)]);
     assert_eq!(
         output.status.code(),
         Some(0),
@@ -264,6 +266,7 @@ fn protocol_specification_evidence_writes_the_requirement_by_requirement_verdict
     let task = directory.join("task.yaml");
 
     let output = protocol(&[
+        "observe",
         "specification",
         "evidence",
         "--store",
@@ -331,6 +334,7 @@ fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_
     let task = directory.join("task.yaml");
 
     let output = protocol(&[
+        "observe",
         "specification",
         "evidence",
         "--store",
@@ -364,6 +368,7 @@ fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_
     // through the ambiguity and not through the binding: `--artifact` names one of the two
     // documents that already specify this task's work.
     let named = protocol(&[
+        "observe",
         "specification",
         "evidence",
         "--store",
@@ -402,12 +407,13 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
     let documents = [
         (
             "verification.yaml",
-            vec!["validate", "--root", printable(&tree)],
+            vec!["govern", "validate", "--root", printable(&tree)],
         ),
-        ("property.yaml", vec!["property", "evidence"]),
+        ("property.yaml", vec!["observe", "property", "evidence"]),
         (
             "specification.yaml",
             vec![
+                "observe",
                 "specification",
                 "evidence",
                 "--store",
@@ -420,7 +426,9 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
 
     for (name, verb) in documents {
         let out = directory.join(name);
-        let flag = if verb[0] == "validate" {
+        // `validate` writes its record with `--evidence` and the other two with `--out`. Asked of
+        // the whole path rather than of its first word, which is the area now.
+        let flag = if verb.contains(&"validate") {
             "--evidence"
         } else {
             "--out"

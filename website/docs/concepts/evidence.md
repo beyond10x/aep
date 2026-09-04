@@ -71,7 +71,7 @@ Nothing is clamped. The engine does not move a caller's date to its own clock �
 engine deciding when the observation happened, which is the one thing it may not do. A date that has
 begun nowhere stays refused, and the refusal is not a warning.
 
-**A future record refuses itself, not the file.** `aep evaluate --evidence` submits every other
+**A future record refuses itself, not the file.** `aep govern evaluate --evidence` submits every other
 record in the document, prints its evaluation, and exits `1` with one line per refused record naming
 the file, the position in it, and the date as the writer wrote it:
 
@@ -81,11 +81,11 @@ verify.yaml: record 12: the observation time 2026-08-30 has not happened yet; th
 
 A document whose every record is future-dated still fails.
 
-`aep evidence inspect` reads a record file and reports the ages without evaluating anything. It
+`aep observe evidence inspect` reads a record file and reports the ages without evaluating anything. It
 puts every record to the same comparison, so the two verbs answer identically about one file:
 
 ```shell-session
-$ aep evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
+$ aep observe evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
 ```
@@ -124,14 +124,14 @@ the matcher rather than introduced by horizons — see [Limitations](../status/l
 
 ### Reading horizons in prose documents
 
-Not every dated claim lives in an evidence file. `aep evidence scan` reads human-written
+Not every dated claim lives in an evidence file. `aep observe evidence scan` reads human-written
 markdown for the one-line annotation convention a dated claim is written in, and reports coverage
 beside the classification — how many annotation-shaped occurrences it saw against how many records
 it parsed, per file, because an annotation that is present, correct and legible to a human but
 invisible to the gate is the failure worth catching:
 
 ```shell-session
-$ aep evidence scan examples/evidence-horizons-corpus/corpus --at 2026-09-01 --warn-days 2
+$ aep observe evidence scan examples/evidence-horizons-corpus/corpus --at 2026-09-01 --warn-days 2
 ...
 43 occurrence(s), 43 record(s), 0 unparsed — 16 ok, 17 expiring, 10 expired, 8 malformed (at 2026-09-01)
 ```
@@ -222,9 +222,9 @@ report's completion time becomes the evidence observation time.
 
 ## A second thing that can produce a record: the transcript checker
 
-ESS conformance judges the software. `aep trace check` judges the *run* — it reads an agent
+ESS conformance judges the software. `aep observe trace check` judges the *run* — it reads an agent
 transcript and holds it against a typed specification of what that run was supposed to do, and
-`aep trace evidence` turns the verdict into a record of kind `trace_conformance`, produced by
+`aep observe trace evidence` turns the verdict into a record of kind `trace_conformance`, produced by
 the verifier `trace-checker`.
 
 The record is a summary and not the report: counts, ids and two digests cross the boundary, and the

@@ -28,9 +28,9 @@ description: AEP terms, defined once.
 | **Execution** | One task's run through a workflow: state, evidence order, events, and audit trail. |
 | **Step map** | An `aep.driver-steps/1` document saying what a harness does in each workflow state. |
 | **Driven run** | A workflow walk by `aep drive`; the driver asks the engine and performs only the steps it permits. |
-| **Planning store** | Markdown artifacts and an append-only journal, written only through `aep artifact`. |
+| **Planning store** | Markdown artifacts and an append-only journal, written only through `aep plan artifact`. |
 | **Backend** | An implementation of the AEP storage command and query contracts. |
-| **Contract conformance** | Whether a backend implements the AEP storage contract, checked by `aep conformance`. |
+| **Contract conformance** | Whether a backend implements the AEP storage contract, checked by `aep plan conformance`. |
 | **ESS conformance report** | A standalone report emitted by ESS and optionally converted into AEP evidence by `aep-ess-evidence`. |
-| **Trace specification** | Typed expectations over an agent transcript; `aep trace check` judges the finished run three-valued. |
+| **Trace specification** | Typed expectations over an agent transcript; `aep observe trace check` judges the finished run three-valued. |
 | **Gate** | The repository's authoritative `task check` entry point. |

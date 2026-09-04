@@ -39,6 +39,13 @@ verdict: held
 # committed transcripts this document's expectations are checked against are recordings of runs
 # against *this* text, and changing it would leave them judging a task nobody performed. Recorded
 # rather than patched, because the corpus's own value is that its fixtures were not written to pass.
+#
+# **`protocol artifact board` in the task text is `recorded-under-this-name`.** The CLI's first
+# level became the four area names in 0.52.0 and a person types `protocol plan artifact board`
+# today; the flat spelling still reaches the same command, and the committed transcripts are
+# recordings of runs against *this* text. Rewriting it would change the treatment and leave the
+# recordings judging a task nobody performed, which is the same argument the paragraph above makes
+# about the premise.
 task: |
   Add a `--json` flag to `protocol artifact board`, so a harness can read the board without
   parsing the terminal rendering.

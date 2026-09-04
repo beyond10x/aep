@@ -153,6 +153,7 @@ fn project_with_a_run(name: &str) -> PathBuf {
 #[test]
 fn a_workflow_renders_to_a_standalone_svg_document_on_standard_output() {
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -178,8 +179,8 @@ fn a_workflow_renders_to_a_standalone_svg_document_on_standard_output() {
 
 #[test]
 fn the_same_workflow_renders_to_the_same_bytes_twice() {
-    let first = protocol(&["workflow", "render", "--id", "adp/default"]);
-    let second = protocol(&["workflow", "render", "--id", "adp/default"]);
+    let first = protocol(&["govern", "workflow", "render", "--id", "adp/default"]);
+    let second = protocol(&["govern", "workflow", "render", "--id", "adp/default"]);
     assert_eq!(code(&first), 0, "{}", stderr(&first));
     assert_eq!(
         first.stdout, second.stdout,
@@ -189,7 +190,7 @@ fn the_same_workflow_renders_to_the_same_bytes_twice() {
 
 #[test]
 fn a_workflow_the_tree_does_not_declare_is_refused_by_name() {
-    let output = protocol(&["workflow", "render", "--id", "adp/imaginary"]);
+    let output = protocol(&["govern", "workflow", "render", "--id", "adp/imaginary"]);
     assert_eq!(code(&output), 1);
     let reason = stderr(&output);
     assert!(
@@ -206,6 +207,7 @@ fn a_workflow_the_tree_does_not_declare_is_refused_by_name() {
 fn a_run_directory_paints_the_overlay_and_prints_its_reasons_verbatim() {
     let project = project_with_a_run("render-cli-run");
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -255,6 +257,7 @@ fn a_run_directory_paints_the_overlay_and_prints_its_reasons_verbatim() {
 fn a_run_id_with_no_directory_behind_it_is_refused_by_path() {
     let project = project_with_a_run("render-cli-missing-run");
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -279,6 +282,7 @@ fn a_snapshot_on_its_own_draws_the_path_and_refuses_to_guess_a_status() {
     let path = directory.join("snapshot.json");
     std::fs::write(&path, SNAPSHOT).expect("the snapshot is writable");
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -313,6 +317,7 @@ fn the_html_page_is_written_whole_and_fetches_nothing() {
     let directory = scratch("render-cli-html");
     let page = directory.join("figure.html");
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -341,6 +346,7 @@ fn the_html_page_is_written_whole_and_fetches_nothing() {
 #[test]
 fn png_without_an_output_file_is_refused_and_names_the_flag_that_fixes_it() {
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -366,6 +372,7 @@ fn png_without_the_rasteriser_names_the_program_and_what_to_install() {
     let out = empty.join("figure.png");
     let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
         .args([
+            "govern",
             "workflow",
             "render",
             "--id",
@@ -396,6 +403,7 @@ fn png_without_the_rasteriser_names_the_program_and_what_to_install() {
 #[test]
 fn watch_is_refused_on_a_format_that_writes_a_document_once() {
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -415,6 +423,7 @@ fn watch_is_refused_on_a_format_that_writes_a_document_once() {
 #[test]
 fn watch_without_a_run_is_refused_because_there_would_be_nothing_to_follow() {
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -432,6 +441,7 @@ fn a_frame_written_to_a_file_carries_no_control_characters() {
     let directory = scratch("render-cli-frame");
     let path = directory.join("frame.txt");
     let output = protocol(&[
+        "govern",
         "workflow",
         "render",
         "--id",
@@ -460,7 +470,7 @@ fn every_committed_workflow_renders() {
         "release/progressive",
         "migration/forward-only",
     ] {
-        let output = protocol(&["workflow", "render", "--id", id]);
+        let output = protocol(&["govern", "workflow", "render", "--id", id]);
         assert_eq!(code(&output), 0, "rendering {id}: {}", stderr(&output));
         assert!(
             stdout(&output).starts_with("<svg viewBox="),

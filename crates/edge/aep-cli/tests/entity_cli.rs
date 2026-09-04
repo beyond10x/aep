@@ -49,7 +49,7 @@ const SPECIFICATION: &str = "ep://local/manifest/specification/passkeys-auth";
 
 #[test]
 fn entity_list_shows_one_line_per_artifact_in_the_manifest() {
-    let output = protocol(&["entity", "list", "--artifacts", ARTIFACTS]);
+    let output = protocol(&["plan", "entity", "list", "--artifacts", ARTIFACTS]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -69,6 +69,7 @@ fn entity_list_shows_one_line_per_artifact_in_the_manifest() {
 #[test]
 fn entity_list_narrows_to_one_type() {
     let output = protocol(&[
+        "plan",
         "entity",
         "list",
         "--artifacts",
@@ -84,7 +85,7 @@ fn entity_list_narrows_to_one_type() {
 
 #[test]
 fn entity_get_by_locator_prints_the_design_the_manifest_declares() {
-    let output = protocol(&["entity", "get", "--artifacts", ARTIFACTS, DESIGN]);
+    let output = protocol(&["plan", "entity", "get", "--artifacts", ARTIFACTS, DESIGN]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -104,6 +105,7 @@ fn entity_get_by_locator_prints_the_design_the_manifest_declares() {
 #[test]
 fn entity_get_by_an_unknown_locator_refuses_rather_than_printing_nothing() {
     let output = protocol(&[
+        "plan",
         "entity",
         "get",
         "--artifacts",
@@ -124,7 +126,14 @@ fn entity_get_by_an_unknown_locator_refuses_rather_than_printing_nothing() {
 
 #[test]
 fn entity_history_shows_the_seeding_and_nothing_else() {
-    let output = protocol(&["entity", "history", "--artifacts", ARTIFACTS, DESIGN]);
+    let output = protocol(&[
+        "plan",
+        "entity",
+        "history",
+        "--artifacts",
+        ARTIFACTS,
+        DESIGN,
+    ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -143,7 +152,14 @@ fn entity_history_shows_the_seeding_and_nothing_else() {
 
 #[test]
 fn entity_relations_shows_what_the_design_designs() {
-    let output = protocol(&["entity", "relations", "--artifacts", ARTIFACTS, DESIGN]);
+    let output = protocol(&[
+        "plan",
+        "entity",
+        "relations",
+        "--artifacts",
+        ARTIFACTS,
+        DESIGN,
+    ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -158,6 +174,7 @@ fn entity_relations_shows_what_the_design_designs() {
 #[test]
 fn entity_relations_incoming_answers_what_points_at_this() {
     let output = protocol(&[
+        "plan",
         "entity",
         "relations",
         "--artifacts",
@@ -184,7 +201,7 @@ fn entity_relations_incoming_answers_what_points_at_this() {
 
 #[test]
 fn audit_lists_the_commands_that_seeded_the_manifest() {
-    let output = protocol(&["audit", "--artifacts", ARTIFACTS]);
+    let output = protocol(&["plan", "audit", "--artifacts", ARTIFACTS]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -203,7 +220,7 @@ fn audit_lists_the_commands_that_seeded_the_manifest() {
 
 #[test]
 fn audit_rejected_is_empty_when_nothing_was_refused() {
-    let output = protocol(&["audit", "--artifacts", ARTIFACTS, "--rejected"]);
+    let output = protocol(&["plan", "audit", "--artifacts", ARTIFACTS, "--rejected"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
         stdout(&output).trim().is_empty(),
@@ -214,7 +231,13 @@ fn audit_rejected_is_empty_when_nothing_was_refused() {
 
 #[test]
 fn describe_says_a_design_accepts_an_approval() {
-    let output = protocol(&["describe", "--artifacts", ARTIFACTS, "aep.design/v1"]);
+    let output = protocol(&[
+        "govern",
+        "describe",
+        "--artifacts",
+        ARTIFACTS,
+        "aep.design/v1",
+    ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -229,6 +252,7 @@ fn describe_says_a_design_accepts_an_approval() {
 #[test]
 fn json_output_is_machine_readable() {
     let output = protocol(&[
+        "plan",
         "entity",
         "list",
         "--artifacts",

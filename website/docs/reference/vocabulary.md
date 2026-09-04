@@ -58,7 +58,7 @@ review:
 
 ```text
 ess_conformance     an implementation against an ESS model — imported from a standalone report
-trace_conformance   an agent run against a trace-spec/1 document — aep trace evidence
+trace_conformance   an agent run against a trace-spec/1 document — aep observe trace evidence
 ```
 
 ESS owns the standalone conformance workflow. See
@@ -123,12 +123,12 @@ spelling to converge on rather than six spellings of *waiting on IT*.
 
 Why type at all: five items blocked on one decision is one meeting, five items blocked on five
 different things is five conversations, and a plan that records neither cannot tell them apart.
-`aep artifact blocked` groups by the blocker and prints the type; `list` and `board` mark the
+`aep plan artifact blocked` groups by the blocker and prints the type; `list` and `board` mark the
 blocked artifact with it.
 
 A blocker may also name the evidence it is withholding — `withholds: test_result` — which is the
 join between a blocker and an evidence gate: the rung wants a `test_result`, the job that would
-produce one cannot mint a token, and `aep artifact explain` says so. That value comes from the
+produce one cannot mint a token, and `aep plan artifact explain` says so. That value comes from the
 **closed** evidence vocabulary above, deliberately: the type of blocker is yours, and the kind of
 proof it is stopping is the engine's.
 

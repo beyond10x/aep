@@ -204,7 +204,7 @@ fn every_verb_can_be_built_and_asked_for_help() {
     // during development, because `--format` arrived both from the shared arguments and from the
     // graph's own `dot|json`. `--help` builds every one of them.
     for verb in VERBS {
-        let output = protocol(&["artifact", verb, "--help"]);
+        let output = protocol(&["plan", "artifact", verb, "--help"]);
         assert_eq!(
             code(&output),
             0,
@@ -223,6 +223,7 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
     let store = scratch("aep-plan-new");
 
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "story",
@@ -251,7 +252,7 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
         "the story lifecycle starts at draft: {text}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stderr(&validated));
     assert!(
         stdout(&validated).contains("valid"),
@@ -273,6 +274,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
         ("story", "not-compiled"),
     ] {
         let created = protocol(&[
+            "plan",
             "artifact",
             "new",
             kind,
@@ -286,6 +288,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     }
 
     let written = protocol(&[
+        "plan",
         "artifact",
         "set",
         "executable-system-specification:acd-v3",
@@ -304,6 +307,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
 
     // Idempotent: writing the value the document already holds is not a revision.
     let again = protocol(&[
+        "plan",
         "artifact",
         "set",
         "executable-system-specification:acd-v3",
@@ -323,6 +327,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     // On a story it is refused, and the refusal names the kind rather than reporting a parse
     // failure the author cannot act on.
     let refused = protocol(&[
+        "plan",
         "artifact",
         "set",
         "story:not-compiled",
@@ -344,6 +349,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
 
     // A value that is not a digest is refused before it reaches the file.
     let garbage = protocol(&[
+        "plan",
         "artifact",
         "set",
         "executable-system-specification:acd-v3",
@@ -354,7 +360,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     ]);
     assert_eq!(code(&garbage), 1, "{}", stdout(&garbage));
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stderr(&validated));
 }
 
@@ -372,6 +378,7 @@ fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_s
         ("specification", "seeded-specification"),
     ] {
         let created = protocol(&[
+            "plan",
             "artifact",
             "new",
             kind,
@@ -416,7 +423,7 @@ fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_s
         "the open questions guidance points at the classified section: {questions}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stderr(&validated));
 }
 
@@ -424,6 +431,7 @@ fn a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_s
 fn creating_the_same_artifact_twice_is_refused_rather_than_overwriting_it() {
     let store = scratch("aep-plan-twice");
     let arguments = [
+        "plan",
         "artifact",
         "new",
         "story",
@@ -462,6 +470,7 @@ fn a_legal_move_rewrites_the_document_and_bumps_the_revision() {
     let store = scratch("aep-plan-move-legal");
     assert_eq!(
         code(&protocol(&[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -475,6 +484,7 @@ fn a_legal_move_rewrites_the_document_and_bumps_the_revision() {
     );
 
     let moved = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:demo",
@@ -503,6 +513,7 @@ fn a_body_replacement_preserves_machine_owned_frontmatter() {
     write(&body, "# Deliberate body\n\nExact bytes.\n");
     assert_eq!(
         code(&protocol(&[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -516,6 +527,7 @@ fn a_body_replacement_preserves_machine_owned_frontmatter() {
     );
 
     let replaced = protocol(&[
+        "plan",
         "artifact",
         "body",
         "story:demo",
@@ -544,6 +556,7 @@ fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
     let store = scratch("aep-plan-body-identical");
     assert_eq!(
         code(&protocol(&[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -568,6 +581,7 @@ fn replacing_a_body_with_identical_bytes_does_not_invent_a_revision() {
     write(&source, body);
 
     let replaced = protocol(&[
+        "plan",
         "artifact",
         "body",
         "story:demo",
@@ -595,6 +609,7 @@ fn an_illegal_move_exits_one_and_names_every_legal_target() {
     let store = scratch("aep-plan-move-illegal");
     assert_eq!(
         code(&protocol(&[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -608,6 +623,7 @@ fn an_illegal_move_exits_one_and_names_every_legal_target() {
     );
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:demo",
@@ -647,6 +663,7 @@ fn an_edge_to_an_artifact_the_store_does_not_hold_is_refused() {
     let store = scratch("aep-plan-dangling");
     assert_eq!(
         code(&protocol(&[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -660,6 +677,7 @@ fn an_edge_to_an_artifact_the_store_does_not_hold_is_refused() {
     );
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "story:demo",
@@ -705,7 +723,7 @@ fn validate_lists_every_problem_in_a_broken_store() {
         &story("story:odd", "in_review", ""),
     );
 
-    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&output), 1, "a broken store is not valid");
 
     let text = stdout(&output);
@@ -739,6 +757,7 @@ fn a_store_that_cannot_be_read_whole_is_never_written_to() {
     );
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:demo",
@@ -760,7 +779,7 @@ fn a_store_that_cannot_be_read_whole_is_never_written_to() {
 
 #[test]
 fn the_fixture_store_validates_clean() {
-    let output = protocol(&["artifact", "validate", "--store", FIXTURE]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", FIXTURE]);
     assert_eq!(code(&output), 0, "{}", stdout(&output));
     let text = stdout(&output);
     assert!(
@@ -775,8 +794,12 @@ fn listing_the_fixture_as_json_is_byte_identical_across_two_runs() {
     // Invariant 9 at the command line. Nothing here reads a clock or a hash map, so two runs over
     // one store have to produce one document — otherwise every `--format json` diff is noise and
     // nobody can commit the output of this verb.
-    let once = protocol(&["artifact", "list", "--store", FIXTURE, "--format", "json"]);
-    let twice = protocol(&["artifact", "list", "--store", FIXTURE, "--format", "json"]);
+    let once = protocol(&[
+        "plan", "artifact", "list", "--store", FIXTURE, "--format", "json",
+    ]);
+    let twice = protocol(&[
+        "plan", "artifact", "list", "--store", FIXTURE, "--format", "json",
+    ]);
     assert_eq!(code(&once), 0, "{}", stderr(&once));
     assert_eq!(once.stdout, twice.stdout, "two runs, two documents");
 
@@ -791,12 +814,14 @@ fn listing_the_fixture_as_json_is_byte_identical_across_two_runs() {
 
 #[test]
 fn listing_narrows_by_kind_and_by_status() {
-    let by_kind = protocol(&["artifact", "list", "--store", FIXTURE, "--kind", "task"]);
+    let by_kind = protocol(&[
+        "plan", "artifact", "list", "--store", FIXTURE, "--kind", "task",
+    ]);
     assert_eq!(code(&by_kind), 0, "{}", stderr(&by_kind));
     assert_eq!(stdout(&by_kind).lines().count(), 2, "{}", stdout(&by_kind));
 
     let by_status = protocol(&[
-        "artifact", "list", "--store", FIXTURE, "--status", "proposed",
+        "plan", "artifact", "list", "--store", FIXTURE, "--status", "proposed",
     ]);
     assert_eq!(code(&by_status), 0);
     let text = stdout(&by_status);
@@ -806,7 +831,7 @@ fn listing_narrows_by_kind_and_by_status() {
 
 #[test]
 fn the_board_groups_the_fixture_into_status_columns() {
-    let output = protocol(&["artifact", "board", "--store", FIXTURE]);
+    let output = protocol(&["plan", "artifact", "board", "--store", FIXTURE]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     for column in ["proposed (1)", "active (4)", "implemented (2)"] {
@@ -828,6 +853,7 @@ fn a_conformance_report_is_read_into_the_record_rather_than_typed_at_it() {
         repository.join("crates/edge/aep-cli/tests/fixtures/conformance-reports/passed.json");
 
     let recorded = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "story:passkey-login",
@@ -850,6 +876,7 @@ fn a_conformance_report_is_read_into_the_record_rather_than_typed_at_it() {
     );
 
     let history = stdout(&protocol(&[
+        "plan",
         "artifact",
         "history",
         "story:passkey-login",
@@ -868,6 +895,7 @@ fn a_report_of_no_scenarios_is_refused_because_it_asserts_nothing() {
         repository.join("crates/edge/aep-cli/tests/fixtures/conformance-reports/empty.json");
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "story:passkey-login",
@@ -887,6 +915,7 @@ fn a_report_of_no_scenarios_is_refused_because_it_asserts_nothing() {
 #[test]
 fn reading_a_record_and_typing_one_are_not_combined() {
     let refused = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "story:passkey-login",
@@ -910,7 +939,7 @@ fn reading_a_record_and_typing_one_are_not_combined() {
 #[test]
 fn the_board_renders_as_a_markdown_page_a_site_can_publish_unedited() {
     let output = protocol(&[
-        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+        "plan", "artifact", "board", "--format", "markdown", "--store", FIXTURE,
     ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let page = stdout(&output);
@@ -932,7 +961,7 @@ fn the_board_renders_as_a_markdown_page_a_site_can_publish_unedited() {
 #[test]
 fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
     let output = protocol(&[
-        "artifact", "board", "--format", "markdown", "--kind", "story", "--store", FIXTURE,
+        "plan", "artifact", "board", "--format", "markdown", "--kind", "story", "--store", FIXTURE,
     ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let page = stdout(&output);
@@ -944,7 +973,7 @@ fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
     // Unfiltered, the same column holds kinds whose ladders describe nothing, and a description
     // read off one of them would be a claim about the others.
     let mixed = stdout(&protocol(&[
-        "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+        "plan", "artifact", "board", "--format", "markdown", "--store", FIXTURE,
     ]));
     assert!(
         !mixed.contains("_Being worked on now._"),
@@ -955,7 +984,7 @@ fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
 #[test]
 fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
     let output = protocol(&[
-        "artifact", "graph", "--format", "mermaid", "--store", FIXTURE,
+        "plan", "artifact", "graph", "--format", "mermaid", "--store", FIXTURE,
     ]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let diagram = stdout(&output);
@@ -990,6 +1019,7 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
     // order between them is a claim: alphabetically `cleared` comes first, and the ladder says
     // `open` does.
     let stuck = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -1008,6 +1038,7 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
     assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
 
     let lifted = protocol(&[
+        "plan",
         "artifact",
         "new",
         "decision-blocker",
@@ -1023,6 +1054,7 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
     ]);
     assert_eq!(code(&lifted), 0, "{}", stderr(&lifted));
     let cleared = protocol(&[
+        "plan",
         "artifact",
         "move",
         "decision-blocker:recovery-owner",
@@ -1035,7 +1067,7 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
     ]);
     assert_eq!(code(&cleared), 0, "{}", stderr(&cleared));
 
-    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let text = stdout(&board);
 
@@ -1074,7 +1106,7 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
 
     // 5. `--kind` narrows the columns to that kind's ladder.
     let narrowed = protocol(&[
-        "artifact", "board", "--kind", "blocker", "--store", at, "--root", tree,
+        "plan", "artifact", "board", "--kind", "blocker", "--store", at, "--root", tree,
     ]);
     assert_eq!(code(&narrowed), 0, "{}", stderr(&narrowed));
     let narrowed = stdout(&narrowed);
@@ -1087,7 +1119,9 @@ fn the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names() {
         );
     }
 
-    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    let validated = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", tree,
+    ]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 }
 
@@ -1111,6 +1145,7 @@ fn every_artifact_the_board_lists_lands_in_a_column() {
     // Created against the repository's own ladders, so `open` is a rung a document declared and
     // not a typo: `artifacts/lifecycles/blocker.yaml` starts a blocker there.
     let stuck = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -1124,12 +1159,13 @@ fn every_artifact_the_board_lists_lands_in_a_column() {
     ]);
     assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
     let ordinary = protocol(&[
-        "artifact", "new", "story", "alpha", "--title", "Alpha", "--store", at, "--root", tree,
+        "plan", "artifact", "new", "story", "alpha", "--title", "Alpha", "--store", at, "--root",
+        tree,
     ]);
     assert_eq!(code(&ordinary), 0, "{}", stderr(&ordinary));
 
     // Read back through a root that declares no ladders at all. `list` still prints both rows.
-    let listed = protocol(&["artifact", "list", "--store", at, "--root", bare]);
+    let listed = protocol(&["plan", "artifact", "list", "--store", at, "--root", bare]);
     assert_eq!(code(&listed), 0, "{}", stderr(&listed));
     let listed = stdout(&listed);
     assert!(
@@ -1139,7 +1175,7 @@ fn every_artifact_the_board_lists_lands_in_a_column() {
     assert_eq!(listed.lines().count(), 2, "{listed}");
 
     // So the board has to account for both of them.
-    let board = protocol(&["artifact", "board", "--store", at, "--root", bare]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", bare]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let board = stdout(&board);
     assert!(
@@ -1169,7 +1205,8 @@ fn the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it() {
     // question about column order, not about evidence.
     for (name, title) in [("alpha", "Alpha"), ("beta", "Beta"), ("gamma", "Gamma")] {
         let made = protocol(&[
-            "artifact", "new", "task", name, "--title", title, "--store", at, "--root", tree,
+            "plan", "artifact", "new", "task", name, "--title", title, "--store", at, "--root",
+            tree,
         ]);
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
@@ -1181,13 +1218,13 @@ fn the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it() {
     for (id, rungs) in route {
         for rung in *rungs {
             let moved = protocol(&[
-                "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+                "plan", "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
             ]);
             assert_eq!(code(&moved), 0, "{}", stderr(&moved));
         }
     }
 
-    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let text = stdout(&board);
     let column = |name: &str| {
@@ -1224,6 +1261,7 @@ fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store()
             ("no-decision", "Adopt SMS codes", "rejected"),
         ] {
             let made = protocol(&[
+                "plan",
                 "artifact",
                 "new",
                 "architecture-decision-record",
@@ -1237,6 +1275,7 @@ fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store()
             ]);
             assert_eq!(code(&made), 0, "{}", stderr(&made));
             let moved = protocol(&[
+                "plan",
                 "artifact",
                 "move",
                 &format!("architecture-decision-record:{name}"),
@@ -1251,6 +1290,7 @@ fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store()
         }
     }
     let filed = protocol(&[
+        "plan",
         "artifact",
         "new",
         "story",
@@ -1266,6 +1306,7 @@ fn one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store()
 
     let read = |store: &Path| {
         let output = protocol(&[
+            "plan",
             "artifact",
             "board",
             "--store",
@@ -1309,6 +1350,7 @@ fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
     let tree = printable(&tree);
 
     let stuck = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -1323,7 +1365,7 @@ fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
     assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
 
     // The ladders are intact, so the rung the blocker document declared has a column.
-    let before = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let before = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     assert_eq!(code(&before), 0, "{}", stderr(&before));
     assert!(stdout(&before).contains("open (1)"), "{}", stdout(&before));
 
@@ -1333,7 +1375,7 @@ fn a_malformed_ladder_document_does_not_silently_empty_the_board() {
         "kind: nonsense\ninitial: [not, a, status]\n",
     );
 
-    let after = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let after = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     let text = stdout(&after);
     let named = stderr(&after);
     assert!(
@@ -1382,7 +1424,8 @@ fn a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it() {
 
     for name in ["one", "two", "three", "four"] {
         let made = protocol(&[
-            "artifact", "new", "charter", name, "--title", "Charter", "--store", at, "--root", tree,
+            "plan", "artifact", "new", "charter", name, "--title", "Charter", "--store", at,
+            "--root", tree,
         ]);
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
@@ -1394,13 +1437,13 @@ fn a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it() {
     for (id, rungs) in route {
         for rung in *rungs {
             let moved = protocol(&[
-                "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+                "plan", "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
             ]);
             assert_eq!(code(&moved), 0, "{}", stderr(&moved));
         }
     }
 
-    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let text = stdout(&board);
     let column = |name: &str| {
@@ -1476,6 +1519,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
         let at = printable(store);
         for name in ["one", "two", "three", "four"] {
             let made = protocol(&[
+                "plan",
                 "artifact",
                 "new",
                 "checklist",
@@ -1497,7 +1541,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
         for (id, rungs) in route {
             for rung in *rungs {
                 let moved = protocol(&[
-                    "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
+                    "plan", "artifact", "move", id, "--to", rung, "--store", at, "--root", tree,
                 ]);
                 assert_eq!(code(&moved), 0, "{}", stderr(&moved));
             }
@@ -1505,6 +1549,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
     }
     // One artifact of the second kind, on a rung no `checklist` can ever be on.
     let filed = protocol(&[
+        "plan",
         "artifact",
         "new",
         "escalation",
@@ -1518,6 +1563,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
     ]);
     assert_eq!(code(&filed), 0, "{}", stderr(&filed));
     let raised = protocol(&[
+        "plan",
         "artifact",
         "move",
         "escalation:five",
@@ -1534,6 +1580,7 @@ fn a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names() {
     // ladder names: what the second kind adds is not the question, where it puts them is.
     let checklist_columns = |store: &Path| {
         let output = protocol(&[
+            "plan",
             "artifact",
             "board",
             "--store",
@@ -1590,6 +1637,7 @@ fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_la
 
     // The one built-in ladder that starts at `active`, so it is the whole of what the board reads.
     let recorded = protocol(&[
+        "plan",
         "artifact",
         "new",
         "review-result",
@@ -1604,11 +1652,13 @@ fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_la
     assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
     for name in ["two", "three"] {
         let made = protocol(&[
-            "artifact", "new", "mystery", name, "--title", "Beta", "--store", at, "--root", tree,
+            "plan", "artifact", "new", "mystery", name, "--title", "Beta", "--store", at, "--root",
+            tree,
         ]);
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
     let moved = protocol(&[
+        "plan",
         "artifact",
         "move",
         "mystery:three",
@@ -1621,7 +1671,7 @@ fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_la
     ]);
     assert_eq!(code(&moved), 0, "{}", stderr(&moved));
 
-    let board = protocol(&["artifact", "board", "--store", at, "--root", tree]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", tree]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let text = stdout(&board);
     let column = |name: &str| {
@@ -1642,7 +1692,7 @@ fn the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_la
 
 #[test]
 fn the_graph_draws_every_artifact_and_every_edge() {
-    let output = protocol(&["artifact", "graph", "--store", FIXTURE]);
+    let output = protocol(&["plan", "artifact", "graph", "--store", FIXTURE]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.starts_with("digraph planning {"), "{text}");
@@ -1661,7 +1711,7 @@ fn the_graph_draws_every_artifact_and_every_edge() {
 fn the_entity_surface_counts_the_fixtures_artifacts() {
     // The same seeder the manifest goes through, fed from the store instead. What the entity
     // surface answers must not depend on which of the two sources it came from.
-    let output = protocol(&["entity", "list", "--planning", FIXTURE]);
+    let output = protocol(&["plan", "entity", "list", "--planning", FIXTURE]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert_eq!(text.lines().count(), FIXTURE_ARTIFACTS, "{text}");
@@ -1674,7 +1724,7 @@ fn the_entity_surface_counts_the_fixtures_artifacts() {
 
 #[test]
 fn the_entity_surface_refuses_both_sources_and_neither() {
-    let neither = protocol(&["entity", "list"]);
+    let neither = protocol(&["plan", "entity", "list"]);
     assert_eq!(code(&neither), 2, "a missing source is a usage error");
     assert!(
         stderr(&neither).contains("--artifacts"),
@@ -1688,6 +1738,7 @@ fn the_entity_surface_refuses_both_sources_and_neither() {
     );
 
     let both = protocol(&[
+        "plan",
         "entity",
         "list",
         "--artifacts",
@@ -1702,7 +1753,7 @@ fn the_entity_surface_refuses_both_sources_and_neither() {
 fn the_store_defaults_to_the_planning_directory_of_the_project_it_is_run_in() {
     // The first command an adopting team types should not need a path.
     let project = root().join("examples/planning-passkeys");
-    let output = protocol_in(&project, &["artifact", "list"]);
+    let output = protocol_in(&project, &["plan", "artifact", "list"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output).lines().count(),
@@ -1745,8 +1796,8 @@ fn validate_answers_the_same_from_a_subdirectory_as_it_does_from_the_root() {
          - depends_on: other/story:theirs\nrevision: 1\n---\n# Story\n\nBody.\n",
     );
 
-    let at_root = protocol_in(&project, &["artifact", "validate"]);
-    let from_below = protocol_in(&nested, &["artifact", "validate"]);
+    let at_root = protocol_in(&project, &["plan", "artifact", "validate"]);
+    let from_below = protocol_in(&nested, &["plan", "artifact", "validate"]);
     assert_eq!(
         code(&at_root),
         0,
@@ -1800,7 +1851,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
         "# From the configured project tree\n",
     );
 
-    let lifecycle = protocol_in(&nested, &["artifact", "lifecycle", "story"]);
+    let lifecycle = protocol_in(&nested, &["plan", "artifact", "lifecycle", "story"]);
     assert_eq!(code(&lifecycle), 0, "{}", stderr(&lifecycle));
     assert!(
         stdout(&lifecycle).contains("story starts at proposed"),
@@ -1811,6 +1862,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
     let created = protocol_in(
         &nested,
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -1841,6 +1893,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
     let explicit_lifecycle = protocol_in(
         &nested,
         &[
+            "plan",
             "artifact",
             "lifecycle",
             "--root",
@@ -1896,7 +1949,11 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
         ),
     );
 
-    let lifecycle = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    let lifecycle = protocol_in_with_cache(
+        &project,
+        &cache,
+        &["plan", "artifact", "lifecycle", "story"],
+    );
     assert_eq!(code(&lifecycle), 0, "{}", stderr(&lifecycle));
     assert!(
         stdout(&lifecycle).contains("story starts at proposed"),
@@ -1910,7 +1967,9 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
     let created = protocol_in_with_cache(
         &project,
         &cache,
-        &["artifact", "new", "story", "cached", "--title", "Cached"],
+        &[
+            "plan", "artifact", "new", "story", "cached", "--title", "Cached",
+        ],
     );
     assert_eq!(code(&created), 0, "{}", stderr(&created));
     assert!(
@@ -1942,7 +2001,11 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
     }
     make_writable(snapshot);
     write(&snapshot.join("injected.yaml"), "not in the commit\n");
-    let added = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    let added = protocol_in_with_cache(
+        &project,
+        &cache,
+        &["plan", "artifact", "lifecycle", "story"],
+    );
     assert_eq!(code(&added), 1, "an added cache file moved the pin");
     assert!(stderr(&added).contains("does not match its path, mode and byte manifest"));
 
@@ -1950,7 +2013,11 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
     make_writable(&tracked);
     std::fs::write(&tracked, "kind: story\ninitial: forged\n")
         .expect("the adversary changes tracked bytes");
-    let changed = protocol_in_with_cache(&project, &cache, &["artifact", "lifecycle", "story"]);
+    let changed = protocol_in_with_cache(
+        &project,
+        &cache,
+        &["plan", "artifact", "lifecycle", "story"],
+    );
     assert_eq!(code(&changed), 1, "changed tracked bytes moved the pin");
     assert!(stderr(&changed).contains("does not match its path, mode and byte manifest"));
 }
@@ -1958,7 +2025,7 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
 #[test]
 fn outside_a_project_the_missing_store_says_what_to_pass() {
     let elsewhere = scratch("aep-plan-not-a-project");
-    let output = protocol_in(&elsewhere, &["artifact", "list"]);
+    let output = protocol_in(&elsewhere, &["plan", "artifact", "list"]);
     assert_eq!(code(&output), 1);
     let said = stderr(&output);
     assert!(said.contains("--store"), "{said}");
@@ -1971,7 +2038,7 @@ fn the_vocabulary_verbs_answer_without_a_store() {
     // directory is not a project would be refusing for a reason unrelated to the question.
     let elsewhere = scratch("aep-plan-vocabulary");
 
-    let kinds = protocol_in(&elsewhere, &["artifact", "kinds"]);
+    let kinds = protocol_in(&elsewhere, &["plan", "artifact", "kinds"]);
     assert_eq!(code(&kinds), 0, "{}", stderr(&kinds));
     let text = stdout(&kinds);
     assert!(text.contains("story"), "{text}");
@@ -1996,7 +2063,7 @@ fn the_vocabulary_verbs_answer_without_a_store() {
         "a directory that is not a project declares no lifecycles: {text}"
     );
 
-    let relations = protocol_in(&elsewhere, &["artifact", "relations"]);
+    let relations = protocol_in(&elsewhere, &["plan", "artifact", "relations"]);
     assert_eq!(code(&relations), 0, "{}", stderr(&relations));
     assert_eq!(
         stdout(&relations).lines().count(),
@@ -2008,14 +2075,14 @@ fn the_vocabulary_verbs_answer_without_a_store() {
 
 #[test]
 fn a_lifecycle_is_printed_from_the_documents_the_tree_declares() {
-    let output = protocol(&["artifact", "lifecycle", "story"]);
+    let output = protocol(&["plan", "artifact", "lifecycle", "story"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("story starts at draft"), "{text}");
     assert!(text.contains("draft -> proposed, archived"), "{text}");
 
     // A kind nobody wrote a ladder for says so, rather than printing an empty one.
-    let permissive = protocol(&["artifact", "lifecycle", "runbook"]);
+    let permissive = protocol(&["plan", "artifact", "lifecycle", "runbook"]);
     assert_eq!(code(&permissive), 0);
     assert!(
         stdout(&permissive).contains("declares no lifecycle"),
@@ -2030,7 +2097,7 @@ fn the_new_kinds_have_the_ladder_the_store_needs() {
     // because a kind with no ladder is permissive — which reads exactly like a ladder that permits
     // everything, and is why they had to be written rather than assumed.
     for kind in ["epic", "task", "initiative"] {
-        let output = protocol(&["artifact", "lifecycle", kind]);
+        let output = protocol(&["plan", "artifact", "lifecycle", kind]);
         assert_eq!(code(&output), 0, "{}", stderr(&output));
         let text = stdout(&output);
         assert!(
@@ -2121,7 +2188,7 @@ fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
         &store.join("story/agreed.md"),
         &story("story:agreed", "active", ""),
     );
-    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&output), 0, "{}", stdout(&output));
 
     // An objective appears. Now the active story must say which it serves; the draft need not.
@@ -2133,7 +2200,7 @@ fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
         &store.join("story/thought.md"),
         &story("story:thought", "draft", ""),
     );
-    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     let text = stdout(&output);
     assert_eq!(code(&output), 1, "{text}");
     assert!(text.contains("1 problem(s):"), "{text}");
@@ -2155,7 +2222,7 @@ fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
             "relations:\n- serves: vision:O1\n",
         ),
     );
-    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&output), 0, "{}", stdout(&output));
 
     // `serves` into anything but a vision is refused by name.
@@ -2167,7 +2234,7 @@ fn validate_holds_agreed_work_to_an_objective_once_the_store_declares_one() {
             "relations:\n- serves: story:agreed\n",
         ),
     );
-    let output = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let output = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     let text = stdout(&output);
     assert_eq!(code(&output), 1, "{text}");
     assert!(
@@ -2205,6 +2272,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
 
     // A review says what it reviews, or `validate` refuses it as an empty declaration.
     let subject = protocol(&[
+        "plan",
         "artifact",
         "new",
         "epic",
@@ -2217,6 +2285,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
     assert_eq!(code(&subject), 0, "{}", stderr(&subject));
 
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "review-result",
@@ -2245,6 +2314,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
 
     // Immutable, still: the body that arrived is the body it keeps.
     let edited = protocol(&[
+        "plan",
         "artifact",
         "body",
         "review-result:backlog-vs-objectives",
@@ -2264,6 +2334,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
 
     // The one transition its lifecycle declares, and the move the old guard closed.
     let retired = protocol(&[
+        "plan",
         "artifact",
         "move",
         "review-result:backlog-vs-objectives",
@@ -2287,6 +2358,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
 
     // And the ladder, not the guard, is what refuses the way back.
     let way_back = protocol(&[
+        "plan",
         "artifact",
         "move",
         "review-result:backlog-vs-objectives",
@@ -2302,7 +2374,7 @@ fn a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never() {
         "{said}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 }
 
@@ -2311,6 +2383,7 @@ fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
     let store = scratch("aep-plan-new-stdin");
     let created = protocol_with_stdin(
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -2340,7 +2413,7 @@ fn a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds() {
         "one write, one revision: {text}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 }
 
@@ -2361,7 +2434,8 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
 
     for name in ["ci-evidence", "contract-checks", "unrelated"] {
         let made = protocol(&[
-            "artifact", "new", "story", name, "--title", name, "--store", at, "--root", root,
+            "plan", "artifact", "new", "story", name, "--title", name, "--store", at, "--root",
+            root,
         ]);
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
@@ -2369,6 +2443,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     // The type is the kind, and nothing had to be released for it: `credential-blocker` reaches
     // the one `blocker` ladder by its last hyphen segment.
     let made = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -2394,7 +2469,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     );
 
     // 1. Distinguishable in `list` without opening the file — and by *type*, not by a bare flag.
-    let listed = protocol(&["artifact", "list", "--store", at, "--root", root]);
+    let listed = protocol(&["plan", "artifact", "list", "--store", at, "--root", root]);
     assert_eq!(code(&listed), 0, "{}", stderr(&listed));
     let text = stdout(&listed);
     let line = |id: &str| {
@@ -2414,7 +2489,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     // The machine format carries the same fact, always written so `active` and `active but parked`
     // are two documents to a consumer as well as to a reader.
     let json = protocol(&[
-        "artifact", "list", "--store", at, "--root", root, "--format", "json",
+        "plan", "artifact", "list", "--store", at, "--root", root, "--format", "json",
     ]);
     assert_eq!(code(&json), 0, "{}", stderr(&json));
     let json = stdout(&json);
@@ -2423,7 +2498,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
 
     // 2. The board marks the card, and leaves it in the column its status puts it in: a blocked
     // story is still `draft`, and a column of its own would be a status the ladder does not have.
-    let board = protocol(&["artifact", "board", "--store", at, "--root", root]);
+    let board = protocol(&["plan", "artifact", "board", "--store", at, "--root", root]);
     assert_eq!(code(&board), 0, "{}", stderr(&board));
     let board = stdout(&board);
     assert!(board.contains("draft (3)"), "{board}");
@@ -2433,7 +2508,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     );
 
     // 3. One group per blocker: two stories on one credential are one conversation.
-    let blocked = protocol(&["artifact", "blocked", "--store", at, "--root", root]);
+    let blocked = protocol(&["plan", "artifact", "blocked", "--store", at, "--root", root]);
     assert_eq!(code(&blocked), 0, "{}", stderr(&blocked));
     let blocked = stdout(&blocked);
     assert_eq!(
@@ -2456,7 +2531,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
 
     // Narrowed by type, which is the whole reason the type exists.
     let other = protocol(&[
-        "artifact", "blocked", "--type", "decision", "--store", at, "--root", root,
+        "plan", "artifact", "blocked", "--type", "decision", "--store", at, "--root", root,
     ]);
     assert_eq!(code(&other), 0, "{}", stderr(&other));
     assert!(
@@ -2468,6 +2543,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     // 4. `explain` names it, with the evidence kind nobody can produce. This is the join: the
     // question *why is there no record* is answered out of the store.
     let explained = protocol(&[
+        "plan",
         "artifact",
         "explain",
         "story:ci-evidence",
@@ -2487,6 +2563,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
 
     // 5. Unblocking is a move, and the record survives it.
     let cleared = protocol(&[
+        "plan",
         "artifact",
         "move",
         "credential-blocker:api-token-scope",
@@ -2499,13 +2576,13 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     ]);
     assert_eq!(code(&cleared), 0, "{}", stderr(&cleared));
 
-    let after = protocol(&["artifact", "blocked", "--store", at, "--root", root]);
+    let after = protocol(&["plan", "artifact", "blocked", "--store", at, "--root", root]);
     assert!(
         stdout(&after).contains("nothing is blocked"),
         "a ladder's last rung lifts the edge: {}",
         stdout(&after)
     );
-    let listed = protocol(&["artifact", "list", "--store", at, "--root", root]);
+    let listed = protocol(&["plan", "artifact", "list", "--store", at, "--root", root]);
     assert!(
         !stdout(&listed).contains("blocked: credential"),
         "{}",
@@ -2515,6 +2592,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     // Not an edit that erases it: the journal still says it happened, and the rung is terminal, so
     // being stuck again is a new blocker with its own date rather than this one reopened.
     let history = protocol(&[
+        "plan",
         "artifact",
         "history",
         "credential-blocker:api-token-scope",
@@ -2529,6 +2607,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
     assert!(history.contains("blocks story:ci-evidence"), "{history}");
 
     let reopened = protocol(&[
+        "plan",
         "artifact",
         "move",
         "credential-blocker:api-token-scope",
@@ -2557,6 +2636,7 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
     let root = printable(&root);
 
     let made = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -2572,7 +2652,9 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
     ]);
     assert_eq!(code(&made), 0, "{}", stderr(&made));
 
-    let validated = protocol(&["artifact", "validate", "--store", at, "--root", root]);
+    let validated = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", root,
+    ]);
     let text = stdout(&validated);
     assert_eq!(code(&validated), 1, "{text}");
     assert!(text.contains("[missing_declaration]"), "{text}");
@@ -2583,6 +2665,7 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
 
     // Joined to the work it is stopping, the same record validates.
     let related = protocol(&[
+        "plan",
         "artifact",
         "new",
         "story",
@@ -2596,6 +2679,7 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
     ]);
     assert_eq!(code(&related), 0, "{}", stderr(&related));
     let related = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "credential-blocker:orphan",
@@ -2608,12 +2692,15 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
     ]);
     assert_eq!(code(&related), 0, "{}", stderr(&related));
 
-    let validated = protocol(&["artifact", "validate", "--store", at, "--root", root]);
+    let validated = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", root,
+    ]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 
     // And an evidence kind the engine does not know is refused where it is written, rather than
     // carried through as text a reader would take for a fact something is tracking.
     let refused = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -2683,6 +2770,7 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
     copy_tree(&repository.join(FIXTURE), &three_words);
 
     let joined = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "task:assertion-verification",
@@ -2695,6 +2783,7 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
     assert_eq!(code(&joined), 0, "{}", stderr(&joined));
 
     let split = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "task:assertion-verification",
@@ -2743,6 +2832,7 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
 
     // 4. A relation naming no target at all is still refused, and says what to write.
     let bare = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "task:assertion-verification",
@@ -2782,6 +2872,7 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
         "## Risks\n\nThe authenticator may lie about its sign count.\n",
     );
     let appended = protocol(&[
+        "plan",
         "artifact",
         "body",
         "task:assertion-verification",
@@ -2826,6 +2917,7 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
     let replacement = scratch_root.join("aep-plan-body-section.md");
     write(&replacement, "Verify the signature, and nothing else.\n");
     let sectioned = protocol(&[
+        "plan",
         "artifact",
         "body",
         "task:assertion-verification",
@@ -2868,6 +2960,7 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
     // 4. A heading the document does not have is added at the end rather than refused: a caller
     //    asking for a section that is not there meant to write one.
     let invented = protocol(&[
+        "plan",
         "artifact",
         "body",
         "task:assertion-verification",
@@ -2888,7 +2981,9 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
         "{text}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    let validated = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", tree,
+    ]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 
     std::fs::remove_file(addition).ok();
@@ -2899,6 +2994,7 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
 #[test]
 fn show_body_only_prints_the_bytes_body_from_would_write_back() {
     let printed = protocol(&[
+        "plan",
         "artifact",
         "show",
         "task:assertion-verification",
@@ -2927,6 +3023,7 @@ fn show_body_only_prints_the_bytes_body_from_would_write_back() {
 
     // 2. And it is refused where the promise cannot be kept: a machine format would wrap the bytes.
     let wrapped = protocol(&[
+        "plan",
         "artifact",
         "show",
         "task:assertion-verification",
@@ -2960,6 +3057,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
     let document = store.join("task/assertion-verification.md");
 
     let set = protocol(&[
+        "plan",
         "artifact",
         "set",
         "task:assertion-verification",
@@ -2985,6 +3083,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
     // A second identical write is not a write: the revision the store counts is the count of
     // changes it made, and `--ref` on a reference already held made none.
     let again = protocol(&[
+        "plan",
         "artifact",
         "set",
         "task:assertion-verification",
@@ -3003,6 +3102,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
     );
 
     let found = protocol(&[
+        "plan",
         "artifact",
         "list",
         "--ref",
@@ -3019,6 +3119,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
         stdout(&found)
     );
     let missing = protocol(&[
+        "plan",
         "artifact",
         "list",
         "--ref",
@@ -3038,7 +3139,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
     // A key with no provider is refused rather than matching nothing, because an empty list reads
     // as *this ticket is not in the plan* and that is a different fact.
     let bare = protocol(&[
-        "artifact", "list", "--ref", "DEV-630", "--store", at, "--root", tree,
+        "plan", "artifact", "list", "--ref", "DEV-630", "--store", at, "--root", tree,
     ]);
     assert_ne!(code(&bare), 0, "{}", stdout(&bare));
     assert!(
@@ -3074,6 +3175,7 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
     );
 
     let changed = protocol(&[
+        "plan",
         "artifact",
         "set",
         "task:assertion-verification",
@@ -3129,6 +3231,7 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
 
     // `--untag` removes exactly the label it names, and leaves the one it does not.
     let untagged = protocol(&[
+        "plan",
         "artifact",
         "set",
         "task:assertion-verification",
@@ -3149,6 +3252,7 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
 
     // A write with nothing in it is a revision nobody can explain.
     let again = protocol(&[
+        "plan",
         "artifact",
         "set",
         "task:assertion-verification",
@@ -3174,6 +3278,7 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
         ("--kind", "story", "identity"),
     ] {
         let refused = protocol(&[
+            "plan",
             "artifact",
             "set",
             "task:assertion-verification",
@@ -3202,7 +3307,9 @@ fn set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own() {
         "a refused set wrote anyway: {unchanged}"
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    let validated = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", tree,
+    ]);
     assert_eq!(code(&validated), 0, "{}", stdout(&validated));
 }
 
@@ -3230,10 +3337,13 @@ fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
     );
     // The fixture has reached the state where the rule is load-bearing: a store that declares an
     // objective, and a story that is not yet agreed and therefore not yet held to one.
-    let clean = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    let clean = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", tree,
+    ]);
     assert_eq!(code(&clean), 0, "{}", stdout(&clean));
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:grounded",
@@ -3259,12 +3369,15 @@ fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
         text.contains("status: draft"),
         "a refused move wrote anyway: {text}"
     );
-    let after = protocol(&["artifact", "validate", "--store", at, "--root", tree]);
+    let after = protocol(&[
+        "plan", "artifact", "validate", "--store", at, "--root", tree,
+    ]);
     assert_eq!(code(&after), 0, "{}", stdout(&after));
 
     // With the edge the finding asked for, the same move goes through — the refusal is about the
     // graph the move would leave, not about the rung.
     let related = protocol(&[
+        "plan",
         "artifact",
         "relate",
         "story:grounded",
@@ -3276,6 +3389,7 @@ fn a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding() {
     ]);
     assert_eq!(code(&related), 0, "{}", stderr(&related));
     let moved = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:grounded",
@@ -3304,10 +3418,11 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
         assert_eq!(code(&output), 0, "{}", stderr(&output));
     };
     make(&[
-        "artifact", "new", "story", "asserted", "--title", "Demo", "--store", at,
+        "plan", "artifact", "new", "story", "asserted", "--title", "Demo", "--store", at,
     ]);
     for to in ["proposed", "active"] {
         make(&[
+            "plan",
             "artifact",
             "move",
             "story:asserted",
@@ -3319,6 +3434,7 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
     }
     // The rung that asks for evidence, reached on a bare count nothing can check.
     make(&[
+        "plan",
         "artifact",
         "move",
         "story:asserted",
@@ -3332,7 +3448,7 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
 
     // 1. Plain `validate` reports it and exits 0, which is `story:completion-needs-evidence`'s
     //    recorded position and is not what this flag changes.
-    let plain = protocol(&["artifact", "validate", "--store", at]);
+    let plain = protocol(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(code(&plain), 0, "{}", stdout(&plain));
     assert!(
         stdout(&plain).contains("closed on an assertion"),
@@ -3342,7 +3458,7 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
     assert!(stdout(&plain).contains("valid"), "{}", stdout(&plain));
 
     // 2. `--strict` prints the same lines and exits 1, naming which class decided.
-    let strict = protocol(&["artifact", "validate", "--strict", "--store", at]);
+    let strict = protocol(&["plan", "artifact", "validate", "--strict", "--store", at]);
     assert_eq!(code(&strict), 1, "{}", stdout(&strict));
     assert!(
         stdout(&strict).contains("closed on an assertion"),
@@ -3357,9 +3473,11 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
 
     // 3. A document that predates the event log is the second class, and the committed fixture is
     //    a store made entirely of them — read only, and clean to plain `validate`.
-    let committed = protocol(&["artifact", "validate", "--store", FIXTURE]);
+    let committed = protocol(&["plan", "artifact", "validate", "--store", FIXTURE]);
     assert_eq!(code(&committed), 0, "{}", stdout(&committed));
-    let refused = protocol(&["artifact", "validate", "--strict", "--store", FIXTURE]);
+    let refused = protocol(&[
+        "plan", "artifact", "validate", "--strict", "--store", FIXTURE,
+    ]);
     assert_eq!(code(&refused), 1, "{}", stdout(&refused));
     assert!(
         stdout(&refused).contains(&format!("{FIXTURE_ARTIFACTS} predating the event log")),
@@ -3379,7 +3497,7 @@ fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
     let at = printable(&store);
     assert_eq!(
         code(&protocol(&[
-            "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+            "plan", "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
         ])),
         0
     );
@@ -3388,6 +3506,7 @@ fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
     // A pipe that produced nothing.
     let piped = protocol_with_stdin(
         &[
+            "plan",
             "artifact",
             "body",
             "story:demo",
@@ -3408,6 +3527,7 @@ fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
         .join("aep-plan-blank-body.md");
     write(&blank, "\n  \n\t\n");
     let from_file = protocol(&[
+        "plan",
         "artifact",
         "body",
         "story:demo",
@@ -3438,7 +3558,7 @@ fn a_body_that_is_empty_after_trimming_is_refused_naming_the_flag() {
 /// because it iterated `ArtifactKind::NAMED` and the blocker family is open.
 #[test]
 fn kinds_lists_the_ladders_a_store_declares_and_the_open_blocker_family() {
-    let listed = protocol(&["artifact", "kinds"]);
+    let listed = protocol(&["plan", "artifact", "kinds"]);
     assert_eq!(code(&listed), 0, "{}", stderr(&listed));
     let text = stdout(&listed);
 
@@ -3476,7 +3596,7 @@ fn kinds_lists_the_ladders_a_store_declares_and_the_open_blocker_family() {
     assert!(family.contains("open family"), "{family}");
 
     // 4. And it is the answer `blocked` sends a reader to, so the two verbs agree.
-    let json = protocol(&["artifact", "kinds", "--format", "json"]);
+    let json = protocol(&["plan", "artifact", "kinds", "--format", "json"]);
     assert_eq!(code(&json), 0, "{}", stderr(&json));
     assert!(
         stdout(&json).contains("\"kind\": \"<type>-blocker\""),
@@ -3501,6 +3621,7 @@ fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
     // 1. A tree that declares no blocker ladder: the answer is about the store's vocabulary, and
     //    points at the verb that lists what could be created instead.
     let without = protocol(&[
+        "plan",
         "artifact",
         "blocked",
         "--store",
@@ -3517,6 +3638,7 @@ fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
     // 2. The same store read against a tree that does declare one: nothing is blocked, and that is
     //    now a fact about the plan rather than about the vocabulary.
     let with = protocol(&[
+        "plan",
         "artifact",
         "blocked",
         "--store",
@@ -3529,6 +3651,7 @@ fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
 
     // 3. And with something actually blocked, the ladder-aware answer is the listing itself.
     let stuck = protocol(&[
+        "plan",
         "artifact",
         "new",
         "credential-blocker",
@@ -3544,6 +3667,7 @@ fn blocked_says_when_no_ladder_declares_a_blocker_at_all() {
     ]);
     assert_eq!(code(&stuck), 0, "{}", stderr(&stuck));
     let listed = protocol(&[
+        "plan",
         "artifact",
         "blocked",
         "--store",
@@ -3573,6 +3697,7 @@ fn a_title_and_a_summary_may_begin_with_a_dash() {
     let store = scratch("aep-plan-hyphen-values");
     let at = printable(&store);
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "story",
@@ -3591,6 +3716,7 @@ fn a_title_and_a_summary_may_begin_with_a_dash() {
 
     // `set` takes the same values, for the same reason.
     let changed = protocol(&[
+        "plan",
         "artifact",
         "set",
         "story:dashy",
@@ -3610,7 +3736,9 @@ fn a_title_and_a_summary_may_begin_with_a_dash() {
 /// key a machine format omits is a branch every consumer has to write.
 #[test]
 fn a_listing_says_no_relations_with_an_empty_list_rather_than_by_omission() {
-    let listed = protocol(&["artifact", "list", "--store", FIXTURE, "--format", "json"]);
+    let listed = protocol(&[
+        "plan", "artifact", "list", "--store", FIXTURE, "--format", "json",
+    ]);
     assert_eq!(code(&listed), 0, "{}", stderr(&listed));
     let rows: serde_json::Value =
         serde_json::from_str(&stdout(&listed)).expect("the listing is JSON");
@@ -3649,6 +3777,7 @@ fn a_listing_says_no_relations_with_an_empty_list_rather_than_by_omission() {
     // `show` answers the same way about the same artifact, which is what makes the two verbs one
     // shape a consumer can rely on.
     let shown = protocol(&[
+        "plan",
         "artifact",
         "show",
         "initiative:passwordless-authentication",
@@ -3701,13 +3830,14 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
 
     for (kind, name) in [("charter", "open"), ("warrant", "gated")] {
         let made = protocol(&[
-            "artifact", "new", kind, name, "--title", "X", "--store", at, "--root", tree,
+            "plan", "artifact", "new", kind, name, "--title", "X", "--store", at, "--root", tree,
         ]);
         assert_eq!(code(&made), 0, "{}", stderr(&made));
     }
 
     // 1. Two unguarded rungs, one command, two lines out.
     let walked = protocol(&[
+        "plan",
         "artifact",
         "move",
         "charter:open",
@@ -3747,6 +3877,7 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
 
     // 3. A guarded rung in the middle stops the walk in that rung's own words, and writes nothing.
     let stopped = protocol(&[
+        "plan",
         "artifact",
         "move",
         "warrant:gated",
@@ -3782,6 +3913,7 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
     //    the same evidence, goes through — so the refusal is about the walk and not about the
     //    evidence.
     let laundered = protocol(&[
+        "plan",
         "artifact",
         "move",
         "warrant:gated",
@@ -3807,6 +3939,7 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
         stdout(&laundered)
     );
     let alone = protocol(&[
+        "plan",
         "artifact",
         "move",
         "warrant:gated",
@@ -3823,6 +3956,7 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
 
     // 5. Without `--via`, the two-rung request is the ordinary single-hop refusal it always was.
     let direct = protocol(&[
+        "plan",
         "artifact",
         "move",
         "charter:open",
@@ -3871,11 +4005,12 @@ fn a_walk_refused_at_its_last_rung_still_reports_the_hop_it_made() {
     let tree = printable(&tree);
 
     let made = protocol(&[
-        "artifact", "new", "permit", "site", "--title", "X", "--store", at, "--root", tree,
+        "plan", "artifact", "new", "permit", "site", "--title", "X", "--store", at, "--root", tree,
     ]);
     assert_eq!(code(&made), 0, "{}", stderr(&made));
 
     let walked = protocol(&[
+        "plan",
         "artifact",
         "move",
         "permit:site",
@@ -3925,9 +4060,10 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
         output
     };
     run(&[
-        "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+        "plan", "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
     ]);
     run(&[
+        "plan",
         "artifact",
         "move",
         "story:demo",
@@ -3939,7 +4075,7 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
     ]);
 
     // 1. Held nothing: the rung that asks for something says how much, and that none is held.
-    let explained = run(&["artifact", "explain", "story:demo", "--store", at]);
+    let explained = run(&["plan", "artifact", "explain", "story:demo", "--store", at]);
     let text = stdout(&explained);
     assert!(
         text.contains("next: implemented needs 1 test_result record(s); held: 0"),
@@ -3956,6 +4092,7 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
 
     // 2. The count is the store's own, about this artifact, and moves when a record is admitted.
     run(&[
+        "plan",
         "artifact",
         "evidence",
         "story:demo",
@@ -3966,7 +4103,7 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
         "--store",
         at,
     ]);
-    let explained = run(&["artifact", "explain", "story:demo", "--store", at]);
+    let explained = run(&["plan", "artifact", "explain", "story:demo", "--store", at]);
     assert!(
         stdout(&explained).contains("next: implemented needs 1 test_result record(s); held: 1"),
         "{}",
@@ -3975,6 +4112,7 @@ fn explain_ends_with_what_each_legal_next_rung_costs() {
 
     // 3. And the machine format carries the same three numbers rather than the sentence.
     let json = run(&[
+        "plan",
         "artifact",
         "explain",
         "story:demo",
@@ -4005,7 +4143,7 @@ fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
     let at = printable(&store);
     assert_eq!(
         code(&protocol(&[
-            "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
+            "plan", "artifact", "new", "story", "demo", "--title", "Demo", "--store", at,
         ])),
         0
     );
@@ -4014,6 +4152,7 @@ fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
 
     // The `evidence` verb, with the word one session actually typed.
     let recorded = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "story:demo",
@@ -4033,6 +4172,7 @@ fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
 
     // And `move --evidence`, with the word the other one typed.
     let moved = protocol(&[
+        "plan",
         "artifact",
         "move",
         "story:demo",
@@ -4053,6 +4193,7 @@ fn a_refused_evidence_kind_names_the_nearest_two_that_exist() {
     // Both kinds it names are kinds, which is what makes the advice worth taking.
     for kind in ["health_observation", "artifact"] {
         let output = protocol(&[
+            "plan",
             "artifact",
             "evidence",
             "story:demo",
@@ -4093,6 +4234,7 @@ fn review_of(store: &Path, drafts: &Path, name: &str, subject: &str, body: &str)
     let path = drafts.join(format!("{name}.md"));
     write(&path, body);
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "review-result",
@@ -4114,6 +4256,7 @@ fn review_of(store: &Path, drafts: &Path, name: &str, subject: &str, body: &str)
 /// Creates the epic every review below is about.
 fn subject_epic(store: &Path) {
     let subject = protocol(&[
+        "plan",
         "artifact",
         "new",
         "epic",
@@ -4149,6 +4292,7 @@ fn a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_a
     );
 
     let shown = protocol(&[
+        "plan",
         "artifact",
         "show",
         "review-result:first-attack",
@@ -4204,6 +4348,7 @@ fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
     let path = drafts.join("bad.md");
     write(&path, &body);
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "review-result",
@@ -4246,7 +4391,7 @@ fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
         "# Prose only\n\nEvery epic names an objective.\n",
     );
 
-    let validated = protocol(&["artifact", "validate", "--store", printable(&store)]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", printable(&store)]);
     assert_eq!(
         code(&validated),
         0,
@@ -4294,6 +4439,7 @@ fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
     );
 
     let ledger = protocol(&[
+        "plan",
         "artifact",
         "findings",
         "epic:objectives",
@@ -4317,6 +4463,7 @@ fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
     );
 
     let json = protocol(&[
+        "plan",
         "artifact",
         "findings",
         "epic:objectives",
@@ -4368,6 +4515,7 @@ fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_re
     // One review is not a comparison, and it is still not an error: a first round has nothing to
     // be compared against, which is an answer.
     let alone = protocol(&[
+        "plan",
         "artifact",
         "findings",
         "epic:objectives",
@@ -4394,6 +4542,7 @@ fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_re
 
     // Named explicitly, the pair is the pair asked for and not the newest two.
     let chosen = protocol(&[
+        "plan",
         "artifact",
         "findings",
         "epic:objectives",
@@ -4425,6 +4574,7 @@ fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
     let drafts = scratch("aep-plan-findings-unrelated-drafts");
     subject_epic(&store);
     let other = protocol(&[
+        "plan",
         "artifact",
         "new",
         "epic",
@@ -4451,6 +4601,7 @@ fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
     );
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "findings",
         "epic:objectives",
@@ -4475,6 +4626,7 @@ fn a_store_with_two_reviews(name: &str) -> (PathBuf, PathBuf) {
     let drafts = scratch(&format!("{name}-drafts"));
     subject_epic(&store);
     let other = protocol(&[
+        "plan",
         "artifact",
         "new",
         "epic",
@@ -4507,6 +4659,7 @@ fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the
     let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome");
 
     let recorded = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4531,6 +4684,7 @@ fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the
     // The record is about the reviewed artifact and it is *printed on the review*, because the
     // review is the thing whose worth the question is about.
     let shown = protocol(&[
+        "plan",
         "artifact",
         "show",
         "review-result:attack-1",
@@ -4545,6 +4699,7 @@ fn a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the
     );
 
     let json = protocol(&[
+        "plan",
         "artifact",
         "show",
         "review-result:attack-1",
@@ -4582,6 +4737,7 @@ fn a_review_outcome_naming_a_review_of_something_else_is_refused() {
     let (store, _drafts) = a_store_with_two_reviews("aep-plan-review-outcome-unrelated");
 
     let refused = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4603,6 +4759,7 @@ fn a_review_outcome_naming_a_review_of_something_else_is_refused() {
 
     // And nothing was written: a refusal changes nothing.
     let shown = protocol(&[
+        "plan",
         "artifact",
         "show",
         "review-result:unrelated",
@@ -4630,6 +4787,7 @@ fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
 
     // The kind without the two things it is made of.
     let bare = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4647,6 +4805,7 @@ fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
 
     // And the two things on a kind that is not made of them.
     let misplaced = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4665,6 +4824,7 @@ fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
 
     // A word outside the three.
     let invented = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4687,7 +4847,7 @@ fn the_outcome_flags_and_the_review_outcome_kind_require_each_other() {
 
 #[test]
 fn the_evidence_help_names_the_review_outcome_kind_and_what_it_needs() {
-    let helped = protocol(&["artifact", "evidence", "--help"]);
+    let helped = protocol(&["plan", "artifact", "evidence", "--help"]);
     assert_eq!(code(&helped), 0, "{}", stderr(&helped));
     assert!(
         stdout(&helped).contains("review_outcome"),
@@ -4702,7 +4862,7 @@ fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_fl
     let at = printable(&store);
 
     // Nothing is old enough at the default, so nothing is said about outcomes.
-    let quiet = protocol(&["artifact", "validate", "--store", at]);
+    let quiet = protocol(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(code(&quiet), 0, "{}", stderr(&quiet));
     assert!(
         !stdout(&quiet).contains("no recorded outcome"),
@@ -4713,6 +4873,7 @@ fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_fl
     // At zero days every review that has not been acted on is overdue, and it is still not a
     // failure: an outcome nobody has recorded yet is work outstanding, not a broken store.
     let reported = protocol(&[
+        "plan",
         "artifact",
         "validate",
         "--outcome-within",
@@ -4730,6 +4891,7 @@ fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_fl
 
     // Recording one takes it off the list.
     let recorded = protocol(&[
+        "plan",
         "artifact",
         "evidence",
         "epic:objectives",
@@ -4744,6 +4906,7 @@ fn validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_fl
     ]);
     assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
     let again = protocol(&[
+        "plan",
         "artifact",
         "validate",
         "--outcome-within",
@@ -4862,6 +5025,7 @@ fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_c
         ("review-result:critique-1", "escalated"),
     ] {
         let recorded = protocol(&[
+            "plan",
             "artifact",
             "evidence",
             "epic:objectives",
@@ -4877,7 +5041,13 @@ fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_c
         assert_eq!(code(&recorded), 0, "{}", stderr(&recorded));
     }
 
-    let table = protocol(&["artifact", "review-value", "--store", printable(&store)]);
+    let table = protocol(&[
+        "plan",
+        "artifact",
+        "review-value",
+        "--store",
+        printable(&store),
+    ]);
     assert_eq!(code(&table), 0, "a table is a report: {}", stderr(&table));
     let said = stdout(&table);
     assert!(
@@ -4890,6 +5060,7 @@ fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_c
     );
 
     let json = protocol(&[
+        "plan",
         "artifact",
         "review-value",
         "--format",
@@ -4984,7 +5155,7 @@ fn review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_c
 
 #[test]
 fn review_value_says_in_eval_matrixs_own_words_why_it_computes_no_score() {
-    let helped = protocol(&["artifact", "review-value", "--help"]);
+    let helped = protocol(&["plan", "artifact", "review-value", "--help"]);
     assert_eq!(code(&helped), 0, "{}", stderr(&helped));
     let said = stdout(&helped);
     for word in ["No score", "no ranking", "no percentage"] {
@@ -5007,6 +5178,7 @@ fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
     );
 
     let now = protocol(&[
+        "plan",
         "artifact",
         "review-value",
         "--format",
@@ -5026,6 +5198,7 @@ fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
     );
 
     let later = protocol(&[
+        "plan",
         "artifact",
         "review-value",
         "--since",
@@ -5057,6 +5230,7 @@ fn review_value_since_a_date_leaves_out_what_was_recorded_before_it() {
 fn a_reference_given_at_new_is_written_to_the_document() {
     let store = scratch("aep-plan-new-ref");
     let created = protocol(&[
+        "plan",
         "artifact",
         "new",
         "story",
@@ -5078,6 +5252,7 @@ fn a_reference_given_at_new_is_written_to_the_document() {
 
     // And it is findable by the verb that exists to find it.
     let listed = protocol(&[
+        "plan",
         "artifact",
         "list",
         "--ref",
@@ -5116,6 +5291,7 @@ fn review_value_falls_back_to_a_reviewer_key_when_the_review_has_no_owner() {
     );
 
     let table = protocol(&[
+        "plan",
         "artifact",
         "review-value",
         "--format",

@@ -11,7 +11,7 @@ engine decides what the recorded facts permit.
 produce the same standard output, standard error, and exit status through either name.
 
 ```console
-$ aep explain --task examples/development-passkeys/task.yaml --action production.write
+$ aep govern explain --task examples/development-passkeys/task.yaml --action production.write
 production.write denied
   operation: change production state
   reason:    principle approval-gates rule production-write-requires-approval
@@ -60,7 +60,7 @@ AEP is intentionally separate from two sibling projects:
   conformance report; the optional `aep-ess-evidence` adapter translates that report without core
   AEP compiling against ESS modeling types.
 - [agentplugins](https://github.com/beyond10x/agentplugins) is the curated `beyond10x`
-  marketplace. AEP does not bundle harness-specific skills or agents. `aep eval run` and
+  marketplace. AEP does not bundle harness-specific skills or agents. `aep drive eval run` and
   `aep drive run` accept explicit plugin directories at their execution boundaries. See
   [Agent plugins](#agent-plugins) for how to install them.
 
@@ -89,7 +89,7 @@ In Claude Code, add the marketplace and install a plugin from it:
 repository as a marketplace from the Plugins surface and select the plugin there. The install page
 carries the current plugin list and how to pin a release tag.
 
-Nothing here chooses a plugin for you: `aep eval run --arm plugin` requires an explicit
+Nothing here chooses a plugin for you: `aep drive eval run --arm plugin` requires an explicit
 `--plugin-dir`, and `aep drive run` accepts repeatable `--plugin-dir` values and the
 `AEP_DRIVE_PLUGIN_DIR` fallback. Neither guesses a path under this checkout.
 
@@ -104,7 +104,7 @@ AEP treats evidence as recorded facts with provenance rather than assertions in 
 - Capabilities default to deny, and a denial cannot be granted back by a later document.
 - Refused transitions change nothing and remain in the audit record.
 
-`aep trace check` turns a normalized agent transcript into a typed conformance report. ESS
+`aep observe trace check` turns a normalized agent transcript into a typed conformance report. ESS
 conformance can enter the same evidence system only through the optional report adapter.
 
 ## Start here

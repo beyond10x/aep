@@ -14,4 +14,4 @@ gate, review, merge and post-merge release approval as distinct evidence boundar
 Each one is also rendered as instructions — the states, what opens each move, and the principles that
 time obligations against the phases those states declare — under
 [`generated/instructions/`](../generated/instructions/). Those documents are generated; edit the
-workflow and run `protocol workflow instruct --out generated/instructions`.
+workflow and run `protocol govern workflow instruct --out generated/instructions`.

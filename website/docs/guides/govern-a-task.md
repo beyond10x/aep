@@ -133,12 +133,12 @@ The first line says which it used, and carries the project's absolute path — a
 yourself.
 
 Project-owned JSON contracts live under the configured schema registry and identify themselves by
-absolute `$id`; the path is location, not identity. `aep schema validate <paths>…` discovers
+absolute `$id`; the path is location, not identity. `aep govern schema validate <paths>…` discovers
 the registry from this file, while `--schemas` exists for fixtures and non-project invocations.
 
 ## Seeing the workflow the profile puts you on
 
-The profile picks a workflow, and the workflow is where the guards live. `aep workflow render`
+The profile picks a workflow, and the workflow is where the guards live. `aep govern workflow render`
 draws it without running anything:
 
 ```shell-session
@@ -200,7 +200,7 @@ may reach, and the profile's own header says so rather than leaving it to be dis
 narrowing is a hook, not a capability:
 the driver's own per-call policy (`decide_tool` in `crates/edge/aep-cli/src/drive.rs`,
 answering the metaharness seam) denies any `Bash` call that is not one simple
-invocation of `aep artifact …` or `aep trace …`. That constraint is pattern-based and
+invocation of `aep plan artifact …` or `aep observe trace …`. That constraint is pattern-based and
 best-effort — granting `command.execute` grants a superset of the shell's reach, and a hook narrows
 it rather than making it a function of the capability.
 
@@ -356,7 +356,7 @@ principle is timed against a phase your workflow does not have:
     cargo run -p aep-cli -- resolve --root . --task examples/development-passkeys/task.yaml
 ```
 
-If your repository keeps a planning store as well, `aep artifact validate` belongs in the same
+If your repository keeps a planning store as well, `aep plan artifact validate` belongs in the same
 step: it checks every file, every edge and every status in one run, and it is local, clock-free and
 sub-second.
 

@@ -135,6 +135,7 @@ const CAPTURED: &str = "2026-08-23";
 /// Mints the evidence document for a record, and returns where it was written.
 fn mint(record: &str, into: &Path, format: &str) -> Output {
     protocol(&[
+        "observe",
         "contract",
         "evidence",
         "--record",
@@ -151,6 +152,7 @@ fn mint(record: &str, into: &Path, format: &str) -> Output {
 /// Evaluates the billing task with one evidence document, and returns what the engine printed.
 fn evaluate_with(evidence: &Path) -> String {
     let evaluated = protocol(&[
+        "govern",
         "evaluate",
         "--task",
         TASK,
@@ -286,6 +288,7 @@ fn the_record_can_arrive_on_a_pipe_and_the_loop_still_closes() {
 
     let minted = protocol_with_stdin(
         &[
+            "observe",
             "contract",
             "evidence",
             "--record",
@@ -416,7 +419,7 @@ fn the_observation_time_is_required_because_this_process_did_not_watch_the_run()
     // because the check runs in its own process. The contract run happened elsewhere and the record
     // carries no time of its own, so a default would be a freshness claim nobody made — and a stale
     // record reading as fresh is precisely what evidence horizons exist to catch.
-    let refused = protocol(&["contract", "evidence", "--record", CLAUDE_RECORD]);
+    let refused = protocol(&["observe", "contract", "evidence", "--record", CLAUDE_RECORD]);
     assert_eq!(
         code(&refused),
         2,

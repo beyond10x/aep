@@ -9,6 +9,67 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **`aep --help` offers four words and a preflight instead of twenty-three verbs.** The first level
+  of the command line is now `govern`, `plan`, `drive`, `observe` and `doctor` — the four area
+  directories `crates/` was divided into in 0.51.0, plus the one verb that belongs to no area — so
+  *which command do I want?* and *which crate decides this?* have the same answer.
+
+  **Every spelling that worked before still works, and prints the same bytes.** The older
+  top-level verbs are hidden top-level aliases: identical standard output, identical standard
+  error, identical exit status, and no notice on either stream. Nothing is deprecated and nothing
+  is scheduled for removal; the aliases are hidden from `--help` because they are compatibility
+  rather than a choice being offered. `aep` and `protocol` both carry the whole change, so
+  invariant 10 holds by construction.
+
+  **One exception, and it is clap's rather than a gap in this change: a usage error or `--help`
+  names the path it was invoked by.** `Usage: protocol validate` and `Usage: protocol govern
+  validate` are two different lines because they are two different invocations — the `Usage:` line
+  says how *this* call was spelled, not what the command decided. Everything below it, and every
+  byte of an accepted call, is identical between the two spellings; only that one line is allowed
+  to differ, and it is expected to.
+
+  | was | is |
+  |---|---|
+  | `aep validate` | `aep govern validate` |
+  | `aep resolve` | `aep govern resolve` |
+  | `aep inspect` | `aep govern inspect` |
+  | `aep evaluate` | `aep govern evaluate` |
+  | `aep explain` | `aep govern explain` |
+  | `aep describe` | `aep govern describe` |
+  | `aep schema …` | `aep govern schema …` |
+  | `aep workflow {render,instruct,flow}` | `aep govern workflow {render,instruct,flow}` |
+  | `aep artifact …` | `aep plan artifact …` |
+  | `aep serve` | `aep plan serve` |
+  | `aep entity …` | `aep plan entity …` |
+  | `aep audit` | `aep plan audit` |
+  | `aep workspace …` | `aep plan workspace …` |
+  | `aep conformance` | `aep plan conformance` |
+  | `aep reverse …` | `aep plan reverse …` |
+  | `aep drive {run,status,resume,transition}` | unchanged — `drive` is an area and was already the verb |
+  | `aep eval {matrix,run}` | `aep drive eval {matrix,run}` |
+  | `aep trace …` | `aep observe trace …` |
+  | `aep contract …` | `aep observe contract …` |
+  | `aep property …` | `aep observe property …` |
+  | `aep specification …` | `aep observe specification …` |
+  | `aep evidence …` | `aep observe evidence …` |
+  | `aep doctor` | unchanged — it reports on the installation, not on any area |
+
+  `eval` is the only verb that changed area rather than gaining a prefix, and `aep eval matrix`
+  still reaches it.
+
+- **The driven shell surface admits both spellings.** A driven `llm` step's `Bash` grant is one
+  simple `protocol plan artifact …` or `protocol observe trace …` invocation, by either spelling.
+  The step maps under `drivers/development/` now ask for the grouped one, and a surface that
+  matched on the second word would have refused every call it asked for.
+
+- **The step maps, the driver prompts, the guides, the CLI reference, `README.md`, `AGENTS.md` and
+  this repository's own tests use the grouped spellings.** Recorded transcripts, the
+  `metaharness.event/1` fixtures, the trace-specification rows judged against them and the eval
+  case text handed to an agent keep the flat spellings, marked `# recorded-under-this-name`: a
+  predicate matched against a finished run is a claim about that run's bytes.
+
 ### Fixed
 
 - **`aep eval run --stream` exits with the verdict it prints.** The ingest printed

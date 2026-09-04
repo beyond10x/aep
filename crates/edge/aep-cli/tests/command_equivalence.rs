@@ -1,4 +1,11 @@
 //! The canonical `aep` command and the `protocol` compatibility alias are one interface.
+//!
+//! Invariant 10, and it is checked over **both spellings of every case**. The first level of the
+//! command line is now the four area names, with every verb that reached 0.51.0 kept as a hidden
+//! top-level alias — which is a second surface, and a second surface is where an alias quietly
+//! stops being exact. `aep govern schema` and `aep schema` reach one dispatch arm carrying one
+//! value, and this file is what says so from outside the process, for the accepted, the refused
+//! and the mistyped.
 
 use std::process::{Command, Output};
 
@@ -67,4 +74,73 @@ fn the_canonical_command_and_alias_match_on_a_preflight_rendered_as_json() {
 fn the_canonical_command_and_alias_match_on_a_usage_error() {
     let output = assert_equivalent(&["not-a-command"]);
     assert_eq!(output.status.code(), Some(2));
+}
+
+// ------------------------------------------------------------------------------------------
+// The same three shapes at the grouped spelling, and inside an area.
+//
+// A usage error is included at both levels on purpose. Its text names the path it was invoked by,
+// so the grouped and the flat spelling are *supposed* to print different usage lines — but `aep`
+// and `protocol` must still print the same one as each other, which is the thing this file is for.
+// ------------------------------------------------------------------------------------------
+
+/// The accepted case at both spellings, and the same bytes out of both.
+///
+/// `schema` prints the built-in schema names and needs no project, so it is the cheapest verb that
+/// actually produces output rather than a version string.
+#[test]
+fn the_canonical_command_and_alias_match_on_an_accepted_operation_at_both_spellings() {
+    let grouped = assert_equivalent(&["govern", "schema"]);
+    assert_eq!(grouped.status.code(), Some(0));
+    let flat = assert_equivalent(&["schema"]);
+    assert_eq!(flat.status.code(), Some(0));
+    assert_eq!(
+        grouped.stdout, flat.stdout,
+        "the grouped path and its retained flat spelling print the same schema list"
+    );
+}
+
+/// The refused case at the grouped spelling.
+#[test]
+fn the_canonical_command_and_alias_match_on_a_domain_refusal_at_the_grouped_spelling() {
+    let output = assert_equivalent(&[
+        "plan",
+        "artifact",
+        "move",
+        "story:no-such-artifact",
+        "--to",
+        "active",
+    ]);
+    assert_eq!(output.status.code(), Some(1));
+}
+
+/// A mistyped verb inside an area.
+#[test]
+fn the_canonical_command_and_alias_match_on_a_usage_error_inside_an_area() {
+    let output = assert_equivalent(&["govern", "not-a-command"]);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// A mistyped verb under a retained flat spelling.
+#[test]
+fn the_canonical_command_and_alias_match_on_a_usage_error_under_a_flat_spelling() {
+    let output = assert_equivalent(&["artifact", "not-a-command"]);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// The first level itself, which is the part of the surface this grouping changed.
+///
+/// `--help` is where a rendering difference between the two names would show first, and it is the
+/// one page a reader of either binary is sent to.
+#[test]
+fn the_canonical_command_and_alias_match_on_the_first_level_help() {
+    let output = assert_equivalent(&["--help"]);
+    assert_eq!(output.status.code(), Some(0));
+    let listed = String::from_utf8(output.stdout).expect("the help is text");
+    for area in ["govern", "plan", "drive", "observe", "doctor"] {
+        assert!(
+            listed.contains(area),
+            "both names offer the same first level; `{area}` is missing from:\n{listed}"
+        );
+    }
 }

@@ -1,4 +1,4 @@
-<!-- Rendered from `adp/default/2` by `protocol workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
+<!-- Rendered from `adp/default/2` by `protocol govern workflow instruct`. Do not edit: change the workflow document or the principles timed against its phases, and render again. -->
 
 # Standard development workflow
 

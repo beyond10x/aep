@@ -1,7 +1,7 @@
 //! The committed instruction documents are what the verb writes, byte for byte.
 //!
 //! `generated/instructions/` holds one document per workflow this tree declares, rendered by
-//! `protocol workflow instruct`. They are committed because they are a **treatment**: an evaluation
+//! `protocol govern workflow instruct`. They are committed because they are a **treatment**: an evaluation
 //! of how well a harness follows this methodology hands an agent the rules, and rules typed into a
 //! prompt are a claim about the specification rather than a projection of it. A committed artifact
 //! can be diffed, reviewed and pointed at; a prompt someone wrote once cannot.
@@ -29,7 +29,7 @@ use std::process::Command;
 const COMMITTED: &str = "generated/instructions";
 
 /// The command that rewrites them, named in every failure here.
-const FIX: &str = "protocol workflow instruct --out generated/instructions";
+const FIX: &str = "protocol govern workflow instruct --out generated/instructions";
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -47,10 +47,10 @@ fn scratch(name: &str) -> PathBuf {
     directory
 }
 
-/// Runs `protocol workflow instruct` over the document tree at `tree`, writing into `out`.
+/// Runs `protocol govern workflow instruct` over the document tree at `tree`, writing into `out`.
 fn instruct(tree: &Path, out: &Path) {
     let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
-        .args(["workflow", "instruct", "--root"])
+        .args(["govern", "workflow", "instruct", "--root"])
         .arg(tree)
         .arg("--out")
         .arg(out)

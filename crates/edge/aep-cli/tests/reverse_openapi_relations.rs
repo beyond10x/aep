@@ -34,7 +34,14 @@ const RECORDED: &str = "crates/edge/aep-cli/tests/fixtures/reverse-openapi/expec
 fn the_drafted_domain_is_the_recorded_bytes() {
     let root = root();
     let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
-        .args(["reverse", "openapi", DOCUMENT, "--domain", "acme.order"])
+        .args([
+            "plan",
+            "reverse",
+            "openapi",
+            DOCUMENT,
+            "--domain",
+            "acme.order",
+        ])
         .current_dir(&root)
         .output()
         .expect("the protocol binary runs");
@@ -75,7 +82,14 @@ fn a_schema_with_no_relation_signal_carries_no_relations_block() {
     // nothing but scalars, so a `relations:` key on any of them would be a guess.
     let root = root();
     let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
-        .args(["reverse", "openapi", DOCUMENT, "--domain", "acme.order"])
+        .args([
+            "plan",
+            "reverse",
+            "openapi",
+            DOCUMENT,
+            "--domain",
+            "acme.order",
+        ])
         .current_dir(&root)
         .output()
         .expect("the protocol binary runs");

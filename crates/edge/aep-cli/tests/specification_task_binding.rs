@@ -144,6 +144,7 @@ fn one_store_decides_two_tasks_differently_and_each_record_names_its_own_specifi
         let out = directory.join("specification.yaml");
         std::fs::remove_file(&out).ok();
         let output = protocol(&[
+            "observe",
             "specification",
             "evidence",
             "--store",
@@ -177,6 +178,7 @@ fn a_task_no_specification_in_the_store_is_about_is_refused_and_nothing_is_writt
     let out = directory.join("specification.yaml");
 
     let output = protocol(&[
+        "observe",
         "specification",
         "evidence",
         "--store",
@@ -218,6 +220,7 @@ fn an_artifact_named_on_the_command_line_does_not_lift_the_binding() {
     let out = directory.join("specification.yaml");
 
     let output = protocol(&[
+        "observe",
         "specification",
         "evidence",
         "--store",

@@ -13,7 +13,7 @@ the declared vocabulary (capabilities, evidence kinds, fact families) is in the
 Schemas plus cross-document checks, and indexed by the `id` declared inside the file — never by
 path.
 
-`aep validate` loads six kinds from a tree and says how many of each it found. Each kind has
+`aep govern validate` loads six kinds from a tree and says how many of each it found. Each kind has
 one directory, and a document outside it is not loaded at all — so a misfiled file goes missing
 rather than half-applying:
 
@@ -263,7 +263,7 @@ nothing matched.
 
 ## Evidence records
 
-The document `aep evaluate --evidence` submits, and `aep evidence inspect` reads: a list
+The document `aep govern evaluate --evidence` submits, and `aep observe evidence inspect` reads: a list
 of records, each naming its `kind`, the fields that kind declares, and who produced it.
 
 ```yaml
@@ -351,7 +351,7 @@ and so is a `{transcript}` in a state with no `llm` step before it. `{}` and `{a
 and stay ordinary text, because `find -exec` and `jq` write them.
 
 `{task}` exists because a map is written once and driven many times: a verb that binds to *this
-run's* task — `aep specification evidence --task {task}` is the one that ships — had no way to
+run's* task — `aep observe specification evidence --task {task}` is the one that ships — had no way to
 be told which document that was, and fell back to the task `project.yaml` names. It is absolute
 because a `command` step is spawned with the project directory as its working directory, and a
 relative `--task` is relative to wherever the operator typed it.

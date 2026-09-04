@@ -13,7 +13,7 @@ the latter two extend the former, and extension can only make completion harder.
 
 `development.driven` sits beside that scale rather than on it. It extends `development.standard`
 with exactly one capability — `command.execute` — and is for runs under `aep drive`, where the
-plugin's `driven-surface` hook holds a model's shell to `aep artifact …` and `aep trace
+plugin's `driven-surface` hook holds a model's shell to `aep plan artifact …` and `aep observe trace
 …`. The grant exists because the planning store's whole vocabulary is CLI verbs and a driven step
 that cannot run one cannot create the artifact its transition is guarded on. Do not choose it for
 interactive work, and do not choose it under a harness that cannot constrain a shell to a named

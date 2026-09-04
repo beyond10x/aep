@@ -71,7 +71,7 @@ and a `deny` cannot be granted back by a later document.
 ## A refusal, with the rule attached
 
 ```text
-$ aep explain --task examples/development-passkeys/task.yaml --action production.write
+$ aep govern explain --task examples/development-passkeys/task.yaml --action production.write
 production.write denied
   operation: change production state
   reason:    principle approval-gates rule production-write-requires-approval
@@ -120,7 +120,7 @@ stops the walk early: `test-driven` requires `test.first_result == failed` befor
 ## Where it stops, and why
 
 ```shell-session
-$ aep evaluate --task examples/development-passkeys/task.yaml \
+$ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml --advance
 state       implement (Implement)

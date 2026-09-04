@@ -2456,8 +2456,10 @@ fn surface_lines(harness: Harness, tools: &ToolConfig) -> String {
             lines,
             "\n`run` takes an argv **list** and starts one program. Nothing is composed, \
              redirected or substituted — there is no shell here to do it with — and the only \
-             program it will start is `{DRIVEN_DRIVER}`, and only `{DRIVEN_DRIVER} artifact …` \
-             and `{DRIVEN_DRIVER} trace …`. That is the whole path and it is not on `PATH`; the \
+             program it will start is `{DRIVEN_DRIVER}`, and only `{DRIVEN_DRIVER} plan \
+             artifact …` and `{DRIVEN_DRIVER} observe trace …` — the older `artifact …` and \
+             `trace …` spellings, without the area word, reach the same commands. That is the \
+             whole path and it is not on `PATH`; the \
              bare name `protocol` does not resolve here. Building and testing are `command` steps \
              the driver runs itself, so that their records carry a verifier's provenance instead \
              of yours.\n",
@@ -2467,7 +2469,9 @@ fn surface_lines(harness: Harness, tools: &ToolConfig) -> String {
             "\n`Bash` runs **one simple invocation per call**. No `&&`, no `|`, no `;`, no `$(…)`, \
              no redirect — a composed command is refused whole, so two things you want are two \
              calls.\n\
-             It runs `protocol artifact …`, `protocol trace …`, and the readers `grep`, `rg`, \
+             It runs `protocol plan artifact …` and `protocol observe trace …` — the older \
+             `protocol artifact …` and `protocol trace …` spellings reach the same commands — \
+             and the readers `grep`, `rg`, \
              `ls`, `cat`, `head`, `tail` and `wc` — those only because nothing here can redirect \
              their output into a file. Not `git`, not `cargo`, not `sed`, not `awk`, not `find`, \
              not `xargs`, not `protocol --help`. \
@@ -3103,8 +3107,9 @@ fn declared_write(
         WriteScope::Denied => Err(format!(
             "`{tool}` cannot write `{subject}`: this step's declared write scope answers `denied` \
              for it, on the rule `{matched}`. This step may write {}. Everything else is changed \
-             through the verb that owns it — a planning artifact through `protocol artifact` \
-             (`new`, `body`, `move`, `relate`), which is why a file writer is denied there.",
+             through the verb that owns it — a planning artifact through `protocol plan \
+             artifact` (`new`, `body`, `move`, `relate`), which is why a file writer is denied \
+             there.",
             writable(surface.scope)
         )),
         WriteScope::PartialOnly if tool == "Write" || tool == "NotebookEdit" => Err(format!(
@@ -3569,9 +3574,9 @@ fn store_integrity_at(target: &str, edits: &[(&str, &str)]) -> Result<(), String
         if text.lines().any(|line| line.trim() == "---") {
             return Err(format!(
                 "the edit's `{field}` crosses the `---` frontmatter fence of {target}. Edit only \
-                 below the closing fence; the frontmatter is the CLI's — `protocol artifact move` \
-                 for status, `artifact relate` for relations, `artifact new` for creation, and \
-                 `artifact body <id> --from <path|->` for the prose underneath."
+                 below the closing fence; the frontmatter is the CLI's — `protocol plan \
+                 artifact move` for status, `artifact relate` for relations, `artifact new` for \
+                 creation, and `artifact body <id> --from <path|->` for the prose underneath."
             ));
         }
     }
@@ -3604,7 +3609,15 @@ fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Resul
     }
     let mut words = command.split_whitespace();
     let program = words.next().unwrap_or_default();
-    let verb = words.next().unwrap_or_default();
+    let mut verb = words.next().unwrap_or_default();
+    // The CLI's first level is the four area names, and every verb under them keeps its flat
+    // spelling as a hidden alias — so `protocol plan artifact new` and `protocol artifact new` are
+    // one command and this surface has to admit both. Skipping the area word rather than listing
+    // the grouped spellings keeps the rule about *which verb*, which is what it was always about:
+    // `protocol drive run` is still refused, because after the area word the verb is `run`.
+    if crate::AREAS.contains(&verb) {
+        verb = words.next().unwrap_or_default();
+    }
     let leaf = program.rsplit('/').next().unwrap_or(program);
     if READ_ONLY_PROGRAMS.contains(&leaf) {
         if context.tools.admits(&Capability::RepositoryRead)
@@ -3632,9 +3645,10 @@ fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Resul
     }
     if verb != "artifact" && verb != "trace" {
         return Err(format!(
-            "`protocol {}` is outside the surface this state admits: `protocol artifact …` and \
-             `protocol trace …`. Driving a run from inside a driven step, or moving the store's \
-             own governing documents, is not this step's business.",
+            "`protocol {}` is outside the surface this state admits: `protocol plan artifact …` \
+             and `protocol observe trace …`, by either spelling. Driving a run from inside a \
+             driven step, or moving the store's own governing documents, is not this step's \
+             business.",
             if verb.is_empty() { "(no verb)" } else { verb }
         ));
     }
@@ -6197,6 +6211,46 @@ mod tests {
         );
     }
 
+    /// The same surface at the grouped spelling, which is what the step maps now tell a model.
+    ///
+    /// The CLI's first level became the four area names, and `drivers/development/checks.yaml`
+    /// asks a driven step to write through `aep plan artifact new`. A surface that matched on the
+    /// second word would have refused every one of those calls — the model would have been told to
+    /// run a command the driver then blocked, in the one state whose whole job is writing the plan.
+    /// Nothing else in the gate reaches this pairing: the step map is a document and this is a
+    /// pattern, and the two only meet in a live driven run.
+    #[test]
+    fn the_shell_surface_admits_the_grouped_spelling_of_the_same_two_verbs() {
+        let state: StateId = "implement".parse().expect("a state id");
+        let shell = config(&[Capability::CommandExecution]);
+        let context = policy_context(&state, &shell);
+        let bash = |command: &str| {
+            decide_tool(
+                &context,
+                no_scope(),
+                "Bash",
+                &serde_json::json!({ "command": command }),
+            )
+        };
+
+        assert!(bash("protocol plan artifact list").is_ok());
+        assert!(bash("protocol plan artifact new story x --title t").is_ok());
+        assert!(bash("protocol observe trace check t.jsonl").is_ok());
+        assert!(bash("/usr/local/bin/protocol plan artifact list").is_ok());
+
+        // The area word is skipped, not blessed: what follows it still has to be one of the two.
+        let refusal = bash("protocol plan serve").expect_err("`serve` is outside the surface");
+        assert!(refusal.contains("`protocol serve`"), "{refusal}");
+        assert!(
+            bash("protocol govern validate --root .").is_err(),
+            "an area word does not admit the verbs under it"
+        );
+        assert!(
+            bash("protocol drive run").is_err(),
+            "`drive` is an area name as well as the verb it always was, and neither admits `run`"
+        );
+    }
+
     /// A planning document's frontmatter is the CLI's: an edit may not cross the closing `---`.
     ///
     /// **The half that stayed in code, and the fixture exists to make it load-bearing.** The
@@ -6344,8 +6398,8 @@ mod tests {
             "naming the rule that matched, so the map is where a reader goes: {whole}"
         );
         assert!(
-            whole.contains("protocol artifact"),
-            "and what to use instead: {whole}"
+            whole.contains("protocol plan artifact"),
+            "and what to use instead, spelled as the step maps now spell it: {whole}"
         );
 
         let notebook = decide_tool(

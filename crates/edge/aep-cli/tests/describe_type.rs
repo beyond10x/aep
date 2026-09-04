@@ -120,7 +120,14 @@ fn the_descriptor_edges_are_what_protocol_artifact_lifecycle_prints() {
 
     for kind in described_kinds(&ladders) {
         let printed = Command::new(env!("CARGO_BIN_EXE_protocol"))
-            .args(["artifact", "lifecycle", kind.as_str(), "--format", "json"])
+            .args([
+                "plan",
+                "artifact",
+                "lifecycle",
+                kind.as_str(),
+                "--format",
+                "json",
+            ])
             .arg("--root")
             .arg(root())
             .arg("--store")

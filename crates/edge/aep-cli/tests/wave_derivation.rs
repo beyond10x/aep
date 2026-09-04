@@ -139,12 +139,13 @@ fn store_of(name: &str, stories: &[(&str, &[&str])]) -> PathBuf {
     let at = printable(&store).to_owned();
     for (story, paths) in stories {
         make(&[
-            "artifact", "new", "story", story, "--title", story, "--store", &at,
+            "plan", "artifact", "new", "story", story, "--title", story, "--store", &at,
         ]);
         for path in *paths {
             let id = format!("story:{story}");
             match path.strip_prefix('?') {
                 Some(inferred) => make(&[
+                    "plan",
                     "artifact",
                     "scope",
                     &id,
@@ -154,7 +155,9 @@ fn store_of(name: &str, stories: &[(&str, &[&str])]) -> PathBuf {
                     "--store",
                     &at,
                 ]),
-                None => make(&["artifact", "scope", &id, "--add", path, "--store", &at]),
+                None => make(&[
+                    "plan", "artifact", "scope", &id, "--add", path, "--store", &at,
+                ]),
             };
         }
     }
@@ -171,10 +174,11 @@ fn scope_add_writes_a_typed_entry_and_bumps_the_revision_once() {
     let store = scratch("aep-scope-add");
     let at = printable(&store);
     make(&[
-        "artifact", "new", "story", "surface", "--title", "Surface", "--store", at,
+        "plan", "artifact", "new", "story", "surface", "--title", "Surface", "--store", at,
     ]);
 
     let added = make(&[
+        "plan",
         "artifact",
         "scope",
         "story:surface",
@@ -201,7 +205,14 @@ fn scope_add_writes_a_typed_entry_and_bumps_the_revision_once() {
 
     // The journal records it like any other mutation, which is the whole reason the write goes
     // through a command rather than through a frontmatter splitter.
-    let history = make(&["artifact", "history", "story:surface", "--store", at]);
+    let history = make(&[
+        "plan",
+        "artifact",
+        "history",
+        "story:surface",
+        "--store",
+        at,
+    ]);
     assert!(
         history.lines().count() >= 2,
         "the write is in the journal: {history}"
@@ -209,6 +220,7 @@ fn scope_add_writes_a_typed_entry_and_bumps_the_revision_once() {
 
     // An `--add` of what the document already says is not a write, so it is not a revision.
     let again = make(&[
+        "plan",
         "artifact",
         "scope",
         "story:surface",
@@ -230,9 +242,10 @@ fn scope_records_an_inferred_entry_apart_from_a_cited_one_and_remove_takes_it_ou
     let store = scratch("aep-scope-inferred");
     let at = printable(&store);
     make(&[
-        "artifact", "new", "story", "guessed", "--title", "Guessed", "--store", at,
+        "plan", "artifact", "new", "story", "guessed", "--title", "Guessed", "--store", at,
     ]);
     make(&[
+        "plan",
         "artifact",
         "scope",
         "story:guessed",
@@ -246,6 +259,7 @@ fn scope_records_an_inferred_entry_apart_from_a_cited_one_and_remove_takes_it_ou
     assert!(document.contains("confidence: inferred"), "{document}");
 
     let removed = make(&[
+        "plan",
         "artifact",
         "scope",
         "story:guessed",
@@ -264,7 +278,7 @@ fn scope_records_an_inferred_entry_apart_from_a_cited_one_and_remove_takes_it_ou
     // And the document still agrees with its own log. Taking the last path out writes `scope: []`
     // into the event; a store that then read the document as carrying no `scope` at all would
     // report the command's own write as an edit made outside a command.
-    let validated = protocol(&["artifact", "validate", "--store", at]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(
         code(&validated),
         0,
@@ -286,6 +300,7 @@ fn scope_is_refused_on_a_kind_that_is_not_a_story() {
     let store = scratch("aep-scope-kind");
     let at = printable(&store);
     make(&[
+        "plan",
         "artifact",
         "new",
         "epic",
@@ -296,6 +311,7 @@ fn scope_is_refused_on_a_kind_that_is_not_a_story() {
         at,
     ]);
     let refused = protocol(&[
+        "plan",
         "artifact",
         "scope",
         "epic:elsewhere",
@@ -318,9 +334,10 @@ fn show_prints_the_scope_and_json_carries_it_as_an_array() {
     let store = scratch("aep-scope-show");
     let at = printable(&store);
     make(&[
-        "artifact", "new", "story", "shown", "--title", "Shown", "--store", at,
+        "plan", "artifact", "new", "story", "shown", "--title", "Shown", "--store", at,
     ]);
     make(&[
+        "plan",
         "artifact",
         "scope",
         "story:shown",
@@ -330,6 +347,7 @@ fn show_prints_the_scope_and_json_carries_it_as_an_array() {
         at,
     ]);
     make(&[
+        "plan",
         "artifact",
         "scope",
         "story:shown",
@@ -340,7 +358,7 @@ fn show_prints_the_scope_and_json_carries_it_as_an_array() {
         at,
     ]);
 
-    let text = make(&["artifact", "show", "story:shown", "--store", at]);
+    let text = make(&["plan", "artifact", "show", "story:shown", "--store", at]);
     assert!(
         text.contains("scope") && text.contains("crates/govern/aep-domain/src/artifact.rs"),
         "{text}"
@@ -351,6 +369,7 @@ fn show_prints_the_scope_and_json_carries_it_as_an_array() {
     );
 
     let json = make(&[
+        "plan",
         "artifact",
         "show",
         "story:shown",
@@ -377,12 +396,13 @@ fn validate_reports_a_non_draft_story_with_no_scope_and_still_exits_zero() {
     let store = scratch("aep-scope-validate");
     let at = printable(&store);
     make(&[
-        "artifact", "new", "story", "unscoped", "--title", "Unscoped", "--store", at,
+        "plan", "artifact", "new", "story", "unscoped", "--title", "Unscoped", "--store", at,
     ]);
     make(&[
-        "artifact", "new", "story", "scoped", "--title", "Scoped", "--store", at,
+        "plan", "artifact", "new", "story", "scoped", "--title", "Scoped", "--store", at,
     ]);
     make(&[
+        "plan",
         "artifact",
         "scope",
         "story:scoped",
@@ -392,10 +412,12 @@ fn validate_reports_a_non_draft_story_with_no_scope_and_still_exits_zero() {
         at,
     ]);
     for story in ["story:unscoped", "story:scoped"] {
-        make(&["artifact", "move", story, "--to", "proposed", "--store", at]);
+        make(&[
+            "plan", "artifact", "move", story, "--to", "proposed", "--store", at,
+        ]);
     }
 
-    let validated = protocol(&["artifact", "validate", "--store", at]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(
         code(&validated),
         0,
@@ -418,9 +440,9 @@ fn validate_reports_a_non_draft_story_with_no_scope_and_still_exits_zero() {
     let drafted = scratch("aep-scope-validate-draft");
     let drafted_at = printable(&drafted);
     make(&[
-        "artifact", "new", "story", "early", "--title", "Early", "--store", drafted_at,
+        "plan", "artifact", "new", "story", "early", "--title", "Early", "--store", drafted_at,
     ]);
-    let validated = protocol(&["artifact", "validate", "--store", drafted_at]);
+    let validated = protocol(&["plan", "artifact", "validate", "--store", drafted_at]);
     assert!(
         !stdout(&validated).contains("story:early"),
         "{}",
@@ -441,7 +463,7 @@ fn waves_places_disjoint_stories_together_and_pushes_the_pair_that_collides() {
         ],
     );
     let at = printable(&store);
-    let printed = make(&["artifact", "waves", "--store", at]);
+    let printed = make(&["plan", "artifact", "waves", "--store", at]);
 
     assert!(
         printed.contains("wave 1\n  story:alpha\n  story:beta\n"),
@@ -467,6 +489,7 @@ fn waves_never_point_a_dependency_the_wrong_way() {
     );
     let at = printable(&store);
     make(&[
+        "plan",
         "artifact",
         "relate",
         "story:later",
@@ -476,7 +499,9 @@ fn waves_never_point_a_dependency_the_wrong_way() {
         at,
     ]);
 
-    let json = make(&["artifact", "waves", "--format", "json", "--store", at]);
+    let json = make(&[
+        "plan", "artifact", "waves", "--format", "json", "--store", at,
+    ]);
     let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
     let waves = value["waves"].as_array().expect("waves is an array");
     assert_eq!(waves.len(), 2, "{json}");
@@ -498,7 +523,7 @@ fn a_depends_on_cycle_prints_its_ids_and_exits_two() {
     hand_written(&store, "one", &["crates/one.rs"], Some("story:two"));
     hand_written(&store, "two", &["crates/two.rs"], Some("story:one"));
 
-    let output = protocol(&["artifact", "waves", "--store", at]);
+    let output = protocol(&["plan", "artifact", "waves", "--store", at]);
     assert_eq!(code(&output), 2, "{}{}", stdout(&output), stderr(&output));
     let printed = stdout(&output);
     assert!(printed.contains("cycle:"), "{printed}");
@@ -517,7 +542,9 @@ fn a_story_with_no_scope_is_unassessed_and_never_placed() {
         &[("known", &["crates/known.rs"]), ("unknown", &[])],
     );
     let at = printable(&store);
-    let json = make(&["artifact", "waves", "--format", "json", "--store", at]);
+    let json = make(&[
+        "plan", "artifact", "waves", "--format", "json", "--store", at,
+    ]);
     let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     assert_eq!(
@@ -547,13 +574,15 @@ fn an_inferred_entry_collides_and_is_marked_as_inferred() {
         ],
     );
     let at = printable(&store);
-    let printed = make(&["artifact", "waves", "--store", at]);
+    let printed = make(&["plan", "artifact", "waves", "--store", at]);
     assert!(
         printed.contains("collision: story:guessed story:read crates/shared.rs (inferred)"),
         "{printed}"
     );
 
-    let json = make(&["artifact", "waves", "--format", "json", "--store", at]);
+    let json = make(&[
+        "plan", "artifact", "waves", "--format", "json", "--store", at,
+    ]);
     let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
     assert_eq!(value["collisions"][0]["confidence"], "inferred", "{json}");
 }
@@ -570,6 +599,7 @@ fn waves_answers_about_the_status_it_was_asked_about() {
     );
     let at = printable(&store);
     make(&[
+        "plan",
         "artifact",
         "move",
         "story:ready",
@@ -579,7 +609,9 @@ fn waves_answers_about_the_status_it_was_asked_about() {
         at,
     ]);
 
-    let printed = make(&["artifact", "waves", "--status", "proposed", "--store", at]);
+    let printed = make(&[
+        "plan", "artifact", "waves", "--status", "proposed", "--store", at,
+    ]);
     assert!(printed.contains("story:ready"), "{printed}");
     assert!(!printed.contains("story:early"), "{printed}");
 }
@@ -597,7 +629,7 @@ fn waves_leaves_every_byte_of_the_store_where_it_was() {
     );
     let at = printable(&store);
     let before = bytes_under(&store);
-    let output = protocol(&["artifact", "waves", "--store", at]);
+    let output = protocol(&["plan", "artifact", "waves", "--store", at]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert_eq!(
         bytes_under(&store),
@@ -619,7 +651,9 @@ fn the_fixture_store_prints_the_recorded_answer_byte_for_byte() {
     for (recorded, format) in [("waves.text", "text"), ("waves.json", "json")] {
         let expected = std::fs::read_to_string(fixture().join("reads").join(recorded))
             .expect("the recording is committed");
-        let output = protocol(&["artifact", "waves", "--format", format, "--store", at]);
+        let output = protocol(&[
+            "plan", "artifact", "waves", "--format", format, "--store", at,
+        ]);
         assert_eq!(code(&output), 0, "{}", stderr(&output));
         assert_eq!(
             stdout(&output),

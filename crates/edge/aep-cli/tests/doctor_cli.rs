@@ -278,7 +278,7 @@ fn a_planning_store_that_is_absent_or_invalid_fails_with_the_finding_artifact_va
     assert_eq!(status, "fail", "an edge points at nothing");
 
     let validated = Command::new(env!("CARGO_BIN_EXE_aep"))
-        .args(["artifact", "validate", "--store"])
+        .args(["plan", "artifact", "validate", "--store"])
         .arg(root.join(".engineering/planning"))
         .arg("--root")
         .arg(&root)

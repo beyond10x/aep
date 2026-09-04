@@ -93,7 +93,7 @@ must refuse unknown fields and contradictory totals.
 Harness-specific skills, agents, and marketplace manifests live in the sibling `agentplugins`
 repository. This repository carries no plugin source and no marketplace manifest.
 
-`aep eval run --arm plugin` requires the treatment to be named explicitly: `--plugin-dir` for a tree
+`aep drive eval run --arm plugin` requires the treatment to be named explicitly: `--plugin-dir` for a tree
 checked out on this machine, or `--plugin <repo>@<name>@<version-or-commit>` for a pinned plugin the
 operator installed from a marketplace, which is forwarded to `metaharness` verbatim and resolved
 here never. `aep drive run` accepts repeatable `--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR`
@@ -179,18 +179,18 @@ The planning store is `.engineering/planning/`. Its local skill at
 Before the first planning-store write in a session, run:
 
 ```console
-aep artifact list
+aep plan artifact list
 ```
 
 Rules:
 
 1. Never edit a planning artifact or journal directly.
-2. Create with `aep artifact new`, relate with `relate`, write prose with `body`, and change
+2. Create with `aep plan artifact new`, relate with `relate`, write prose with `body`, and change
    status only with `move`.
 3. A status move is a claim about project state. Propose it unless the operator requested that
    exact move.
 4. A refusal is an answer. Relay the legal moves the command prints; do not route around it.
-5. After a batch, run `aep artifact validate` and relay its output verbatim.
+5. After a batch, run `aep plan artifact validate` and relay its output verbatim.
 6. An already-satisfied or invalid request still gets an artifact recording the finding when the
    operator asked for planning work.
 

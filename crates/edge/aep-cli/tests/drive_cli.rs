@@ -570,7 +570,7 @@ fn status_reports_the_run_and_whether_the_lock_is_free() {
 #[test]
 fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     // The real map, cross-validated against the real workflow by the document loader.
-    let output = protocol(&["validate", "--root", "."]);
+    let output = protocol(&["govern", "validate", "--root", "."]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
         stdout(&output).contains("2 step map(s)"),
@@ -608,7 +608,7 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
          states:\n  polishing:\n    steps: []\n",
     );
 
-    let output = protocol(&["validate", "--root", printable(&tree)]);
+    let output = protocol(&["govern", "validate", "--root", printable(&tree)]);
     let text = stdout(&output);
     assert_eq!(code(&output), 1, "{text}");
     assert!(text.contains("unknown_state"), "{text}");

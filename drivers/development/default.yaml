@@ -30,14 +30,14 @@
 #
 # **Two maps now fit `adp/default/1`, so `aep drive run` refuses to choose between them** and
 # `--map` says which one. That refusal names both ids (`crates/edge/aep-cli/src/drive.rs:376-388`)
-# and is the same position `aep artifact move` takes on an illegal transition: the driver does
+# and is the same position `aep plan artifact move` takes on an illegal transition: the driver does
 # not guess which document the run is under.
 format: aep.driver-steps/1
 id: development/default
 # Pinned, and the pin is mandatory. A step map names states and orders steps inside them, so an
 # unpinned one is an instruction sheet for whatever happens to be in the tree. The refusal this
 # comment used to predict has now happened once and worked exactly as written: `adp/default` went to
-# version 2 and `aep validate` named both maps and both versions rather than applying either to
+# version 2 and `aep govern validate` named both maps and both versions rather than applying either to
 # a state graph it was not written against.
 #
 # **Repinned to version 2, with no new steps.** The bump added a terminal `declined` state and three
@@ -70,7 +70,7 @@ states:
         # a library the model chooses from is the other case.
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -91,7 +91,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -101,7 +101,7 @@ states:
             write: denied
         prompt: >-
           Write the specification for this task as a planning artifact of kind `specification`,
-          through `aep artifact new`. State the required behaviour so that a verifier could
+          through `aep plan artifact new`. State the required behaviour so that a verifier could
           disagree with it: anything left only in the prompt cannot be checked later. The transition
           out of this state is guarded on `artifact.specification.exists`, so the artifact is what
           moves the run, not a description of one.
@@ -114,7 +114,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -124,7 +124,7 @@ states:
             write: denied
         prompt: >-
           Break the specification into tasks that can each be implemented and verified on their own,
-          through `aep artifact new` and `aep artifact relate`. Every task states its own
+          through `aep plan artifact new` and `aep plan artifact relate`. Every task states its own
           acceptance. A unit nobody can verify separately is a unit that will be declared done by
           assertion.
 
@@ -136,7 +136,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -158,7 +158,7 @@ states:
           suite: unit
           verifier: test-runner
       # A person, and the step this map did not have. `spec-driven.before_implementation` wants a
-      # specification whose status is `approved`, `aep artifact new` leaves `draft`, and no
+      # specification whose status is `approved`, `aep plan artifact new` leaves `draft`, and no
       # prompt in this map used to ask for the move — so a run under it walked into `implement`
       # only because nothing had looked, or did not walk in at all. It is an `operator` step and
       # not an `llm` one because approving a specification is a person's act: a run that approved
@@ -172,11 +172,11 @@ states:
         prompt: >-
           Read the specification this run wrote and the suite it just ran red. If it states the
           required behaviour well enough for those tests to decide it, move it to `approved` —
-          `aep artifact move <id> in_review` then `aep artifact move <id> approved`. If
+          `aep plan artifact move <id> in_review` then `aep plan artifact move <id> approved`. If
           it does not, leave it in `draft` and say so: the transition into `implement` is guarded
           on an approved specification, so the run stops here either way and nothing is implemented
           against a specification nobody agreed to. Write each requirement so that a fact decides
-          it — `protocol specification evidence` reads a list item under `## Acceptance` and
+          it — `protocol observe specification evidence` reads a list item under `## Acceptance` and
           resolves the predicate it names in backticks, so `the suite is green` states nothing and
           `` `tests.unit.failed == 0` `` states a requirement.
 
@@ -188,7 +188,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -253,7 +253,7 @@ states:
       # counts need here. The committed records under
       # `crates/edge/aep-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
       # used: they are the provider's captured bytes from 2026-08-23, they describe metaharness's
-      # adapters rather than the change under review, and `protocol contract evidence` requires an
+      # adapters rather than the change under review, and `protocol observe contract evidence` requires an
       # `--observed-at` that a committed map could only supply as a literal — a map claiming a fresh
       # observation of a run made months ago, every day, for ever, which is exactly what evidence
       # horizons exist to catch.
@@ -279,6 +279,7 @@ states:
         description: The three-valued core's algebra, over every input there is.
         run:
           - protocol
+          - observe
           - property
           - evidence
           - --out
@@ -289,7 +290,7 @@ states:
           record: "{run_directory}/property.yaml"
       # `provenance-tracking` owes an independent `verification` record before completion, and the
       # kind is not mintable either: a `verification` names a claim and a verifier, and an exit
-      # status names neither. `aep validate` is the verifier — it reads every protocol,
+      # status names neither. `aep govern validate` is the verifier — it reads every protocol,
       # workflow, profile, lifecycle and step map and cross-validates them against each other — and
       # `--evidence` is it writing down what it found. The claim is `document-tree-valid` and
       # deliberately not `invariant`: `verification.invariant.passed` is read by three shipped
@@ -298,6 +299,7 @@ states:
         description: The document tree still loads and still cross-validates.
         run:
           - protocol
+          - govern
           - validate
           - --root
           - "."
@@ -316,7 +318,7 @@ states:
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
-        # native file writers because `aep artifact` owns every mutation, including bodies.
+        # native file writers because `aep plan artifact` owns every mutation, including bodies.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied
@@ -360,7 +362,7 @@ states:
       # by requirement, what is not met. An exit status names none of them, so the checker writes
       # the document and the driver reads it.
       #
-      # What counts as a requirement is `protocol specification evidence`'s own decision and its
+      # What counts as a requirement is `protocol observe specification evidence`'s own decision and its
       # module documentation states it in full: a list item under a `Requirements` or `Acceptance`
       # heading, satisfied when the predicate it names in backticks is observed `True`. A ticked
       # checkbox is deliberately not the rule — the party that writes the specification is the party
@@ -380,6 +382,7 @@ states:
         description: Decide the specification's requirements against what this run observed.
         run:
           - protocol
+          - observe
           - specification
           - evidence
           - --store

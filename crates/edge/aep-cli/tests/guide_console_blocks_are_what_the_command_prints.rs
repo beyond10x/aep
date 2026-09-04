@@ -70,6 +70,20 @@ fn fences(text: &str) -> Vec<Fence> {
     found
 }
 
+/// The verb an invocation reaches, with a leading area word removed.
+///
+/// The page spells commands by their area — `observe trace check` — and the flat spelling
+/// `trace check` reaches the same leaf. Both have to select the same block, and the day one of
+/// them stopped selecting it, this test would have gone on passing with one fewer block compared:
+/// the `compared >= 3` floor below is the only thing that would have noticed, and only if enough
+/// of them moved at once.
+fn leaf<'a>(arguments: &'a [&'a str]) -> &'a [&'a str] {
+    match arguments {
+        ["govern" | "plan" | "drive" | "observe", rest @ ..] => rest,
+        _ => arguments,
+    }
+}
+
 /// Whether a line of a command block is a shell assignment rather than a command.
 fn is_assignment(line: &str) -> bool {
     let Some((name, _)) = line.split_once('=') else {
@@ -214,7 +228,7 @@ fn every_quoted_trace_report_on_the_transcript_guide_is_what_the_command_prints(
             continue;
         }
         let arguments: Vec<&str> = words.collect();
-        if !matches!(arguments.as_slice(), ["trace", verb, ..] if *verb == "check" || *verb == "inspect")
+        if !matches!(leaf(&arguments), ["trace", verb, ..] if *verb == "check" || *verb == "inspect")
         {
             continue;
         }
@@ -252,10 +266,14 @@ fn every_quoted_trace_report_on_the_transcript_guide_is_what_the_command_prints(
         }
     }
 
+    // Four, which is how many the page currently pairs a command with an output for. A floor and
+    // not an equality so the page may grow, but the floor is the real number rather than a round
+    // one below it: the failure this catches is a *selector* that stops matching — a spelling that
+    // moved, a fence language that changed — and a floor with slack in it absorbs exactly that.
     assert!(
-        compared >= 3,
-        "only {compared} console block(s) were run, so this test is asserting nothing; skipped: \
-         {skipped:?}"
+        compared >= 4,
+        "only {compared} console block(s) were run, so this test is asserting less than it did; \
+         skipped: {skipped:?}"
     );
     assert!(
         findings.is_empty(),

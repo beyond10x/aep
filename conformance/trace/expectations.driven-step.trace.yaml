@@ -1,3 +1,14 @@
+# **The `protocol artifact …` command strings below are `# recorded-under-this-name`.** The CLI's
+# first level became the four area names in 0.52.0 and the spelling a person types today is
+# `protocol plan artifact …`; the flat spelling still reaches the same command and is what the
+# recordings these rows are judged against actually contain. A substring predicate matched against
+# a finished transcript is a claim about *that* transcript, so it is spelled the way the bytes are.
+#
+# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
+# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
+# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
+# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
+
 format: trace-spec/1
 id: driven-eval/honest-step
 title: A driven `llm` step reached the planning store the way the skill says to
@@ -10,10 +21,6 @@ title: A driven `llm` step reached the planning store the way the skill says to
 # The enforcement is `--allowedTools` at launch and the plugin's hooks during the session; this is
 # the record that says whether it held. Enforce and verify — neither replaces the other.
 #
-# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
-# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
-# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
-# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
 
 expectations:
   # --- what the driver handed the session ---------------------------------------------------
@@ -26,7 +33,6 @@ expectations:
     # `--allowedTools "Bash,Read,Write,Edit,Glob,Grep,Skill,Task,TodoWrite"` and its init event lists
     # 32 tools, `Monitor` and `WebFetch` among them. So `env.tool_available` cannot audit a per-state
     # allowlist: it answers "does this harness have such a tool", not "was this session allowed it".
-    #
     # What it *can* do is the attribution this eval needs. A `Bash` call that came back refused in a
     # session whose harness has no `Bash` would say nothing about enforcement; in one that has it, the
     # refusal came from a layer that chose to refuse.
@@ -50,13 +56,11 @@ expectations:
     # init event — in a run whose config home held no `mcpServers` key and whose tree held no
     # `.mcp.json`. No directory the runner controls can exclude them, so the only thing that can
     # catch them is an assertion over the transcript.
-    #
     # **Why a count and not a tool assertion.** All three were `status: needs-auth`, so they
     # exposed no tool at all: the inventory was 28 in every one of the four sessions, with servers
     # and without. `env.tool_available` is blind to this by construction, and one
     # re-authentication between two runs is all it would take to turn a silent row into a
     # reachable network surface that no expectation stands in the way of.
-    #
     # Gating, and gating at zero. A driven step's whole claim is that it did the work through the
     # `protocol` verbs the state permits; a server it could have reached instead is the same class
     # of defect as a tool it should not have been offered. A `unk` here means the harness stopped
@@ -81,7 +85,7 @@ expectations:
     expect:
       tool.called:
         tool: Bash
-        args: {command: {contains: "protocol artifact new"}}
+        args: {command: {contains: "protocol artifact new"}}  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: validated-its-own-work
@@ -89,7 +93,7 @@ expectations:
     expect:
       tool.called:
         tool: Bash
-        args: {command: {contains: "protocol artifact validate"}}
+        args: {command: {contains: "protocol artifact validate"}}  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: no-subagents
@@ -112,7 +116,6 @@ expectations:
     # is two commands wearing one name — and a model habitually batches shell calls that way. The
     # first real run was refused once for exactly that and then ran the commands singly, which is a
     # guard teaching rather than a guard failing. Observed 1; the bound is 2.
-    #
     # What must be zero here is a **store** refusal, and that is asserted on disk from the hook
     # decision log rather than from this counter, which cannot say which rule refused what.
     expect:

@@ -198,10 +198,10 @@ them:
   ahead of the clock is refused rather than recorded:
 
   ```shell-session
-  $ aep evaluate --task task.yaml --artifacts artifacts.yaml --evidence no-observed-at.yaml
+  $ aep govern evaluate --task task.yaml --artifacts artifacts.yaml --evidence no-observed-at.yaml
   error: evidence document (no-observed-at.yaml): .[0]: missing field `observed_at` at line 1 column 3   # exit 1
 
-  $ aep evaluate --task task.yaml --artifacts artifacts.yaml --evidence dated-2099.yaml
+  $ aep govern evaluate --task task.yaml --artifacts artifacts.yaml --evidence dated-2099.yaml
   error: submitting evidence from dated-2099.yaml: the observation time 4070908800000ms is in the
   future; it is 1787352723812ms                                                                          # exit 1
   ```
@@ -310,7 +310,7 @@ how a hook — a separate process, holding no execution — learns which state i
 
 (Two absolute paths — the run directory and the store — are dropped, and the arrays are broken
 across lines to fit the page; the rest is the file's, except the `reaching` lines, which are what
-`aep evaluate --advance` prints under `transitions` for that transition — the driver and the
+`aep govern evaluate --advance` prints under `transitions` for that transition — the driver and the
 CLI both read `TransitionEvaluation::unmet()`.) `reaching` is one line per requirement that does not
 hold yet on a way *out* of the state, each prefixed with where that transition goes. What must hold
 *while in* it is a different list and is passed separately, because a step given only the second can
@@ -337,7 +337,7 @@ Three limits worth knowing before you copy the shape:
   `ActionRequest` it is, and every call reaching the engine lands in the execution's own event
   stream as `action_requested` plus `action_allowed` or `action_denied`. The order is **policy
   first** — it is the only layer that sees arguments, and no `ActionRequest` tells
-  `aep artifact list` from `aep artifact list | tee out` — and the **engine's deny wins**
+  `aep plan artifact list` from `aep plan artifact list | tee out` — and the **engine's deny wins**
   over the policy's allow. Two offered tools reach the engine as nothing at all: a skill loader
   takes no action, and a web *search* names no URL, so inventing a request for either would record
   an act nobody performed. What the engine still cannot see is a call the driver's own policy
@@ -388,10 +388,10 @@ serialises; show text to people and JSON to programs, and do not invent a third 
 
 `aep drive` asks the engine before every step. The b10x harness can also walk a workflow by
 itself — `b10x-harness workflow run` takes a flow document and runs one model turn per step, one
-session per section — and `aep workflow flow` writes that document from a workflow here:
+session per section — and `aep govern workflow flow` writes that document from a workflow here:
 
 ```shell-session
-$ aep workflow flow --id adp/default --map development/default --out adp.flow.yaml
+$ aep govern workflow flow --id adp/default --map development/default --out adp.flow.yaml
 $ b10x-harness workflow plan --flow adp.flow.yaml          # no endpoint: is the shape sound?
 $ b10x-harness workflow run  --flow adp.flow.yaml --input "AUTH-142" --hooks hooks.json …
 ```
@@ -422,8 +422,8 @@ walk: the loop moves the sequencer, and a run that needs the engine to move it i
 
 ## Checking the run afterwards
 
-A harness that reports its own conformance is a harness reporting on itself. `aep trace check`
+A harness that reports its own conformance is a harness reporting on itself. `aep observe trace check`
 reads the transcript the harness wrote and decides it against a typed specification, so *"the agent
-consulted the CLI before touching the store"* becomes a verdict a program produced. `aep trace
+consulted the CLI before touching the store"* becomes a verdict a program produced. `aep observe trace
 evidence` mints that verdict as a `trace_conformance` record the engine accepts, with
 `producer: verifier / trace-checker` — see [Check what an agent run did](./check-a-transcript.md).

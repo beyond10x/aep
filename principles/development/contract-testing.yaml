@@ -57,7 +57,7 @@ requires:
   # It also reads the one fact a `contract_result` alone projects. `tests.contract.failed` — which
   # the workflow's `verify -> adversarial_verify` guard reads — is an alias any test runner satisfies
   # with a suite it happened to name `contract`, and `drivers/development/checks.yaml` fills it from
-  # `protocol validate`. `contracts.breaking_changes` has exactly one producer, so this is the first
+  # `protocol govern validate`. `contracts.breaking_changes` has exactly one producer, so this is the first
   # point in the workflow where a contract *runner* must have spoken. Nothing observing it leaves the
   # fact Unknown, and Unknown does not permit a transition (invariant 5): a run with no contract
   # record does not enter review by saying nothing.

@@ -119,7 +119,7 @@ tasks:
       does not fail on them, deliberately: refusing those would stop anybody closing a story on the
       day a runner is down, which is the day it matters most.
     cmds:
-      - cargo run -q -p aep-cli --bin protocol -- artifact validate
+      - cargo run -q -p aep-cli --bin protocol -- plan artifact validate
 
   guard-check:
     desc: >-

@@ -111,7 +111,7 @@ non-zero — which is what happened the first time it was pointed at a real stor
 A driven run needs a shell to reach the planning store, which is why `development.driven` exists: it
 extends `development.standard` with exactly one capability, `command.execute`, and says in the
 document why. The narrowing back down is a `PreToolUse` hook that refuses any shell call that is not
-one simple `aep artifact` or `aep trace` invocation. The profile states plainly that this
+one simple `aep plan artifact` or `aep observe trace` invocation. The profile states plainly that this
 is pattern-based and best-effort rather than claiming the capability is fully enforced.
 
 ## Everything is recorded, including refusals

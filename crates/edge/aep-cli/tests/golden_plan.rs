@@ -126,6 +126,7 @@ fn the_write_verbs_leave_exactly_the_documents_recorded() {
     let body = body.to_str().expect("a printable path");
     let steps: [&[&str]; 5] = [
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -136,15 +137,31 @@ fn the_write_verbs_leave_exactly_the_documents_recorded() {
             "decomposes:epic:golden",
         ],
         &[
+            "plan",
             "artifact",
             "relate",
             "story:golden-three",
             "depends_on",
             "story:golden-one",
         ],
-        &["artifact", "body", "story:golden-two", "--from", body],
-        &["artifact", "move", "--to", "proposed", "story:golden-one"],
         &[
+            "plan",
+            "artifact",
+            "body",
+            "story:golden-two",
+            "--from",
+            body,
+        ],
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "--to",
+            "proposed",
+            "story:golden-one",
+        ],
+        &[
+            "plan",
             "artifact",
             "evidence",
             "story:golden-one",
@@ -205,26 +222,44 @@ fn the_read_verbs_print_exactly_what_was_recorded() {
     let expected = fixture().join("expected");
     let store_path = expected.to_string_lossy().into_owned();
     let reads: [(&[&str], &str); 10] = [
-        (&["artifact", "list", "--format", "text"], "list.text"),
-        (&["artifact", "list", "--format", "json"], "list.json"),
-        (&["artifact", "board", "--format", "text"], "board.text"),
-        (&["artifact", "board", "--format", "json"], "board.json"),
-        (&["artifact", "graph", "--format", "text"], "graph.text"),
-        (&["artifact", "graph", "--format", "json"], "graph.json"),
         (
-            &["artifact", "validate", "--format", "text"],
+            &["plan", "artifact", "list", "--format", "text"],
+            "list.text",
+        ),
+        (
+            &["plan", "artifact", "list", "--format", "json"],
+            "list.json",
+        ),
+        (
+            &["plan", "artifact", "board", "--format", "text"],
+            "board.text",
+        ),
+        (
+            &["plan", "artifact", "board", "--format", "json"],
+            "board.json",
+        ),
+        (
+            &["plan", "artifact", "graph", "--format", "text"],
+            "graph.text",
+        ),
+        (
+            &["plan", "artifact", "graph", "--format", "json"],
+            "graph.json",
+        ),
+        (
+            &["plan", "artifact", "validate", "--format", "text"],
             "validate.text",
         ),
         (
-            &["artifact", "validate", "--format", "json"],
+            &["plan", "artifact", "validate", "--format", "json"],
             "validate.json",
         ),
         (
-            &["artifact", "lifecycle", "story", "--format", "text"],
+            &["plan", "artifact", "lifecycle", "story", "--format", "text"],
             "lifecycle.text",
         ),
         (
-            &["artifact", "lifecycle", "story", "--format", "json"],
+            &["plan", "artifact", "lifecycle", "story", "--format", "json"],
             "lifecycle.json",
         ),
     ];
@@ -251,6 +286,7 @@ fn the_read_verbs_print_exactly_what_was_recorded() {
     let output = protocol(
         &expected,
         &[
+            "plan",
             "artifact",
             "history",
             "story:golden-one",

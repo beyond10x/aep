@@ -33,7 +33,7 @@ The rest of this page uses `$B` for the binary.
 ## 1. Validate the document tree
 
 ```shell-session
-$ $B validate
+$ $B govern validate
 45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
 valid
 ```
@@ -52,7 +52,7 @@ The worked example is a feature task — adding passkey authentication — gover
 development profile. The task file names exactly two things: an objective and a profile.
 
 ```shell-session
-$ $B resolve --task examples/development-passkeys/task.yaml
+$ $B govern resolve --task examples/development-passkeys/task.yaml
 inputs      . and examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
 objective   add-passkey-support
@@ -82,7 +82,7 @@ profile. Nothing in the task restates them, so nothing in the task can drift out
 ## 3. Ask whether an action is allowed
 
 ```shell-session
-$ $B explain --task examples/development-passkeys/task.yaml --action production.write
+$ $B govern explain --task examples/development-passkeys/task.yaml --action production.write
 production.write denied
   operation: change production state
   reason:    principle approval-gates rule production-write-requires-approval
@@ -102,7 +102,7 @@ workflow the question was asked. Nobody wrote this denial into the task or the p
 Evidence is submitted as records — here, a test run that produced one failing test:
 
 ```shell-session
-$ $B evaluate --task examples/development-passkeys/task.yaml \
+$ $B govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --advance
@@ -147,7 +147,7 @@ refusal is per record and names the file and the position in it; the rest of the
 submitted.
 
 ```shell-session
-$ $B evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
+$ $B observe evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
 ```
@@ -163,17 +163,17 @@ Everything above is a terminal answering one question at a time. A plan is a sha
 verb that draws it:
 
 ```shell-session
-$ $B serve
+$ $B plan serve
 aep serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
 http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27
 ```
 
-Open the URL it prints. You get the status columns `aep artifact board` prints, and clicking a
+Open the URL it prints. You get the status columns `aep plan artifact board` prints, and clicking a
 card shows what `show` and `explain` print — the artifact's fields, its body, and the rungs it may
 take next **with what each costs**, so a rung you have not earned says `needs 1 test_result, held 0`
 rather than waiting to refuse you.
 
-Clicking a rung moves the artifact, through the same decision `aep artifact move` makes. If the
+Clicking a rung moves the artifact, through the same decision `aep plan artifact move` makes. If the
 ladder refuses, the refusal comes back with every status it *would* have permitted, each one a
 button — so the answer to the question a refusal creates is one click away.
 

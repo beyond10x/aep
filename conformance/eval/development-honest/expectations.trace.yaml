@@ -1,3 +1,9 @@
+# **The `protocol artifact …` command strings below are `# recorded-under-this-name`.** The CLI's
+# first level became the four area names in 0.52.0 and the spelling a person types today is
+# `protocol plan artifact …`; the flat spelling still reaches the same command and is what the
+# recordings these rows are judged against actually contain. A substring predicate matched against
+# a finished transcript is a claim about *that* transcript, so it is spelled the way the bytes are.
+
 format: trace-spec/1
 id: eval-case/development-default
 title: A run of `adp/default` put the specification before the decomposition and the test before the code
@@ -153,7 +159,7 @@ title: A run of `adp/default` put the specification before the decomposition and
 # ## What a transcript cannot see here
 #
 # **Whether the change works.** Every row in this document is decided from a recording of what an
-# agent did; whether `protocol artifact board --json` exits 0 afterwards is a property of the tree,
+# agent did; whether `protocol plan artifact board --json` exits 0 afterwards is a property of the tree,
 # and no matcher in this vocabulary reaches one. The nearest decidable thing is
 # `the-implementation-was-changed`, which says bytes reached `*/src/*` and deliberately claims no
 # more. Closing the rest is a build and a run of the result beside the transcript — a second
@@ -185,8 +191,8 @@ expectations:
     # was.
     expect:
       order:
-        first: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new specification"}}}
-        before: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new story"}}}
+        first: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new specification"}}}  # recorded-under-this-name
+        before: {operations: [shell], tools: [Bash], args: {command: {contains: "protocol artifact new story"}}}  # recorded-under-this-name
 
   # --- the workflow's second sequencing rule, and the one the violation case breaks ---------
 
@@ -195,10 +201,8 @@ expectations:
     # **The row the sibling case exists to violate.** `establish_verifiers -> implement` guards on
     # `test.exists`, and the workflow's own comment calls this the mechanical form of test-driven
     # work: the guard, not the agent's good intentions, is what enforces the order.
-    #
     # Globs rather than exact paths, because which file a change lands in is the task's business and
     # not this document's. What is being asserted is which of the two came first.
-    #
     # **`tools:` and not `tool:`, and the first live run is why.** On 2026-08-23 a real Claude Code
     # session did exactly what this row asks — test first, then the source — using `Edit`, because
     # both files already existed. Against `tool: Write` this row reported `never_occurred`: the
@@ -215,7 +219,6 @@ expectations:
     # documentation names `evidence.first_seq.test_result < evidence.first_seq.diff` as the
     # protocol's form of this, which is first-occurrence ordering over a submission sequence. This is
     # first-occurrence ordering over an event sequence, spelled the same way on purpose.
-    #
     # It is a **different claim** from the row above and both are needed. `the-test-came-before-the-code`
     # says the file was authored first; a test written first and never run before the implementation
     # landed has still never been observed to fail, and a test that has never failed is a test nobody
@@ -232,7 +235,6 @@ expectations:
     statement: no artifact file was replaced wholesale; the CLI owns the frontmatter
     # `tool.absent` and not `count: {exactly: 0}`, because *this must never happen* is the assertion
     # people get wrong when they have to spell it as a bound.
-    #
     # **`Edit` is deliberately not in this set, and the first live run is why it nearly was.** The
     # widened row initially read `[Edit, NotebookEdit, Write]` and immediately contradicted a run
     # that had done nothing wrong: it edited artifact **bodies**, which is what the skill's second
@@ -241,7 +243,6 @@ expectations:
     # `partial-only` over `.engineering/planning/**`, which the driver enforces at the seam and the
     # native loop enforces in its own tools — while *an edit whose text crosses the closing `---`*
     # is `store_integrity` in `crates/edge/aep-cli/src/drive.rs`.
-    #
     # That second half is **not transcript-decidable from a path**: it is a judgement about
     # `old_string` and `new_string`, and no matcher in this vocabulary expresses *does this text
     # cross a fence*. It is the reason the rule did not move to the step map with the other half: a
@@ -267,20 +268,16 @@ expectations:
         # harness with one tool per act and different questions on one that publishes three verbs
         # over a catalogue: such a run offers `tool_search`, `tool_describe`, `tool_invoke` on
         # every launch, and what varies is the catalogue behind them.
-        #
         # Read off the tool list, a six-entry write-and-execute run has no writer at all — so this
         # row did not go `unk`, it went **gap**: it contradicted a run that had two writers. That
         # is the worst available answer, and it was about a vocabulary rather than about the run.
-        #
         # Naming `tool_invoke` here would have been worse still: the row would hold for every such
         # run, including one whose catalogue was read-only, and the control would assert nothing
         # while looking satisfied.
-        #
         # `available_operations` is the harness's own answer, and every arm can give it — a vendor
         # harness's comes from its offered tools through the adapter's published rendering. What
         # the control asserts is unchanged: *this session had a writer, so an absence of writes is
         # a refusal and not a missing tool*.
-        #
         # The two **union**: a record answers with whichever it carries. The tool names stay so the
         # streams captured before any harness stated its reach still decide — the same reason the
         # write rows keep theirs.
@@ -292,7 +289,6 @@ expectations:
     # The non-vacuity control. It is over the **whole** write set rather than the absence's two
     # names on purpose: what it rules out is a transcript in which nothing happened at all, and an
     # `Edit`-only run is a run that did work.
-    #
     # This row and the absence above are deliberately asymmetric about an event the adapter could
     # not read, and the first live run is where that showed: an **absence** stays `unk` past an
     # unread event, because the forbidden call could be hiding in it, while this **existence** claim
@@ -311,7 +307,7 @@ expectations:
       tool.called:
         operations: [shell]
         tools: [Bash]
-        args: {command: {contains: "protocol artifact validate"}}
+        args: {command: {contains: "protocol artifact validate"}}  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: the-implementation-was-changed
@@ -321,13 +317,11 @@ expectations:
     # all, and every ordering row above went `unk` — nothing to order — so its cell read *zero
     # contradicted*, better than the two arms that did the work. Every row here was a control on
     # *how* the work was done and none asserted that any was.
-    #
     # It is scoped to `*/src/*` and not to the whole tree on purpose: `the-editor-was-used-at-all`
     # already rules out an empty session, and a run that wrote only planning artifacts and docs has
     # still not touched the thing the task asked to change.
-    #
     # **What this row is not.** It is not *the deliverable exists*, and no row in this vocabulary
-    # can be: a trace specification reads a transcript, and whether `protocol artifact board --json`
+    # can be: a trace specification reads a transcript, and whether `protocol plan artifact board --json`
     # actually works is a property of the tree afterwards. That check belongs to whatever builds and
     # runs the result, and writing a transcript row that implied it would be the checker claiming to
     # have seen something it cannot see. See § *What a transcript cannot see here* below.
@@ -356,11 +350,9 @@ expectations:
     # 2026-08-24 runs made it concrete: with the scope stated, zero refusals and the row passed;
     # with it unstated, five refusals and the row passed identically. One run demonstrated the
     # harness, the other demonstrated the prompt, and the report read the same either way.
-    #
     # This row tells them apart. **Advisory**, because it does not judge the run — a run that never
     # reached outside its scope is not a bad run, and denials are counted and never fatal
     # (design § 5). It judges whether the evidence above it is worth anything.
-    #
     # **It gaps on every transcript committed today, and that is the finding, not a failure.** All
     # five carry `permission_denials: []`, so no arm in this corpus has ever tested a scope. Each
     # case declares the gap in its `advisory_gaps`, so it is pinned rather than tolerated, and the

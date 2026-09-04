@@ -1,3 +1,14 @@
+# **The `protocol artifact …` command strings below are `# recorded-under-this-name`.** The CLI's
+# first level became the four area names in 0.52.0 and the spelling a person types today is
+# `protocol plan artifact …`; the flat spelling still reaches the same command and is what the
+# recordings these rows are judged against actually contain. A substring predicate matched against
+# a finished transcript is a claim about *that* transcript, so it is spelled the way the bytes are.
+#
+# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
+# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
+# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
+# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
+
 format: trace-spec/1
 id: planning-plugin/eval
 title: The planning plugin behaves as its skill says it does
@@ -21,10 +32,6 @@ title: The planning plugin behaves as its skill says it does
 # `cargo test -p trace-spec` checks this document against both of them — so a bound that stops
 # holding is caught by the gate rather than by a paid eval run.
 #
-# **`# recorded-under-this-name`.** `agentplugins@a2077d2` renamed the plugin `aep-planning` to
-# `aep-plan`. Every row carrying that marker names a skill or an agent as the **committed
-# recording** spells it, and is judged against that recording: renaming the row would turn an `ok`
-# into a `gap` and lose the check, not update it. The recordings are evidence and are not rewritten.
 
 expectations:
   # --- the experiment: the environment the run actually got --------------------------------
@@ -43,7 +50,6 @@ expectations:
     # this asserts it, because isolation that silently stops working is indistinguishable from
     # isolation that works: the run goes green either way, and the contamination shows up months
     # later as an unreproducible result.
-    #
     # **This row is about plugins and only about plugins.** A scratch config home does not make a
     # session hermetic: account-level MCP servers arrive with the login, over the network, and no
     # directory the runner controls excludes them. `mcp-servers-from-the-account` at the bottom of
@@ -101,7 +107,7 @@ expectations:
     expect:
       order:
         first: {tool: Skill}
-        before: {tool: Bash, args: {command: {contains: "protocol artifact"}}}
+        before: {tool: Bash, args: {command: {contains: "protocol artifact"}}}  # recorded-under-this-name
 
   - id: created-through-the-cli
     statement: artifacts were created with the CLI, not with hand-written frontmatter
@@ -111,7 +117,7 @@ expectations:
     expect:
       tool.called:
         tool: Bash
-        args: {command: {contains: "protocol artifact new"}}
+        args: {command: {contains: "protocol artifact new"}}  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: the-creating-call-succeeded
@@ -120,7 +126,6 @@ expectations:
     # `tool.called` is satisfied by a run whose only `protocol artifact new` exited non-zero —
     # the store got nothing, the agent reported anyway, and the eval passed. *Reached for the CLI*
     # and *created through it* are different findings, so they are different rows.
-    #
     # **The rate form, deliberately, and not `tool.failed: {count: {exactly: 0}}`.** A refusal
     # followed by a clean re-issue is normal here and is correct behaviour: the model writes
     # `protocol artifact kinds && … && protocol artifact new …`, the surface refuses the chained
@@ -128,7 +133,6 @@ expectations:
     # `gap`, which would be this document reporting the guardrail working as a defect — the same
     # mistake `the-cli-never-refused-a-shell-call` documents one screen up. `at_most: 0.99` says
     # the single thing this row is for: **not every** such call failed.
-    #
     # `tools:` and `operations:` together because the two vocabularies **union**, so the row
     # decides on the native arm rather than going `unk` there: `stream-json` names `Bash` and
     # nothing else, a three-verb surface names its catalogue entry and resolves the call to an
@@ -139,7 +143,7 @@ expectations:
       tool.error_rate:
         tools: [Bash, run]
         operations: [command.execute, shell]
-        args: {command: {contains: "protocol artifact new"}}
+        args: {command: {contains: "protocol artifact new"}}  # recorded-under-this-name
         rate: {at_most: 0.99}
 
   - id: validated-its-own-work
@@ -147,7 +151,7 @@ expectations:
     expect:
       tool.called:
         tool: Bash
-        args: {command: {contains: "protocol artifact validate"}}
+        args: {command: {contains: "protocol artifact validate"}}  # recorded-under-this-name
         count: {at_least: 1}
 
   - id: no-destructive-shell
@@ -184,7 +188,6 @@ expectations:
   - id: no-permission-denials
     statement: the sandbox contract held — nothing was refused permission
     # run.sh assertion 3.6, second half.
-    #
     # **This row got sharper when the plugin gained hooks, and it stays `exactly: 0`.** The plugin
     # this eval copies in now ships `hooks/store-integrity.sh`, which is active with or without a
     # driven run and denies a `Write` under `.engineering/planning/**` or an `Edit` that reaches the
@@ -216,7 +219,7 @@ expectations:
     expect:
       step.exec_time:
         tool: Bash
-        args: {command: {contains: "protocol artifact"}}
+        args: {command: {contains: "protocol artifact"}}  # recorded-under-this-name
         ms: {at_most: 2000}
 
   - id: the-plugin-loads-fast

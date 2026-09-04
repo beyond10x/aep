@@ -113,7 +113,7 @@ protocols: git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789
 schemas: schemas
 ```
 
-Write it with `aep reverse init` rather than by hand:
+Write it with `aep plan reverse init` rather than by hand:
 
 ```console
 $ $B reverse init \
@@ -160,13 +160,13 @@ or a pinned locator. Prefer the locator for anything other people will clone.
 
 `store:` names where the plan is kept — `markdown` (the default, one document per artifact under
 `.engineering/planning/`), `sqlite: <file>`, `postgres: <url>`, or `hybrid:` (markdown and a replica,
-under four declared words) — and every `aep artifact` verb opens through it; a relative file is
+under four declared words) — and every `aep plan artifact` verb opens through it; a relative file is
 relative to `.engineering/`. See [`backend.md` § Choosing the store](backend.md#choosing-the-store).
 
 `schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
 defaults to `schemas`, so `.engineering/schemas/` needs no explicit entry. The path locates the
-registry while each schema's absolute `$id` identifies its contract. `aep schema validate`
-and `aep schema typescript` discover this same registry from the project file.
+registry while each schema's absolute `$id` identifies its contract. `aep govern schema validate`
+and `aep govern schema typescript` discover this same registry from the project file.
 
 (The directory is called `.engineering` by default. If that name is taken, or your team calls it
 something else, set `AEP_PROJECT_DIR=.workflow` and discovery looks for that instead — read once per
@@ -233,7 +233,7 @@ project-local merge stays out of the way, because with your own tree you no long
 
 A repository that is old enough to want rules is old enough to have a plan nobody wrote down: a
 roadmap in the README, a suite switched off in CI two quarters ago, a `FIXME` that is really a story.
-`aep reverse scan` finds those and reports them with the `path:line` each was read from. It
+`aep plan reverse scan` finds those and reports them with the `path:line` each was read from. It
 interprets nothing and writes nothing.
 
 ```console
@@ -449,8 +449,8 @@ answers from the same clock. A record that is genuinely in the future is still r
 refusal names the file, the record's position in it and the date as written, while the rest of the
 document is submitted.
 
-`aep evidence inspect <file>` reads the dates back out of a record without submitting anything,
-and `aep evidence scan <dir>` does the same for claims written into markdown by hand — with a
+`aep observe evidence inspect <file>` reads the dates back out of a record without submitting anything,
+and `aep observe evidence scan <dir>` does the same for claims written into markdown by hand — with a
 coverage line comparing annotation-shaped occurrences against records the parser actually produced,
 because a scanner over human-written documents that quietly stops seeing half of them reports green
 either way. [`examples/evidence-horizons-corpus/`](../../examples/evidence-horizons-corpus/) is the

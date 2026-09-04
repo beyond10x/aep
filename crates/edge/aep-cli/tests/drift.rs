@@ -58,7 +58,14 @@ fn a_plan_with_one_event(name: &str) -> PathBuf {
     );
     let moved = protocol(
         &store,
-        &["artifact", "move", "--to", "active", "story:golden-one"],
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "--to",
+            "active",
+            "story:golden-one",
+        ],
     );
     assert!(
         moved.status.success(),
@@ -76,6 +83,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
     let related = protocol(
         &store,
         &[
+            "plan",
             "artifact",
             "relate",
             "story:golden-one",
@@ -102,7 +110,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
     )
     .expect("the edit");
 
-    let output = protocol(&store, &["artifact", "validate"]);
+    let output = protocol(&store, &["plan", "artifact", "validate"]);
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -124,7 +132,10 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
         "and the event: {text}"
     );
 
-    let json = protocol(&store, &["artifact", "validate", "--format", "json"]);
+    let json = protocol(
+        &store,
+        &["plan", "artifact", "validate", "--format", "json"],
+    );
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
     assert_eq!(parsed["drift"].as_array().map(Vec::len), Some(1));
     assert!(parsed.get("deleted").is_none(), "nothing was deleted");
@@ -136,7 +147,7 @@ fn a_document_removed_with_rm_is_reported_as_deleted() {
     let store = a_plan_with_one_event("removed");
     std::fs::remove_file(store.join("story/golden-one.md")).expect("rm");
 
-    let output = protocol(&store, &["artifact", "validate"]);
+    let output = protocol(&store, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
     let text = stdout(&output);
     assert!(text.contains("story:golden-one was deleted"), "{text}");
@@ -153,7 +164,10 @@ fn a_document_removed_with_rm_is_reported_as_deleted() {
 #[test]
 fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not_either() {
     let store = a_plan_with_one_event("clean");
-    let output = protocol(&store, &["artifact", "validate", "--format", "json"]);
+    let output = protocol(
+        &store,
+        &["plan", "artifact", "validate", "--format", "json"],
+    );
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
     assert!(parsed.get("drift").is_none());
@@ -168,7 +182,7 @@ fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/golden-plan/expected"),
         &untouched,
     );
-    let output = protocol(&untouched, &["artifact", "validate"]);
+    let output = protocol(&untouched, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     assert!(
         stdout(&output).contains("1 document(s) predate the event log"),
@@ -193,7 +207,7 @@ fn a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit() {
     );
     std::fs::write(&path, text.replace("revision: 4", "revision: 99")).expect("the edit");
 
-    let output = protocol(&store, &["artifact", "validate"]);
+    let output = protocol(&store, &["plan", "artifact", "validate"]);
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -222,7 +236,10 @@ fn a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit() {
         "and not a second time in the journal's older words: {text}"
     );
 
-    let json = protocol(&store, &["artifact", "validate", "--format", "json"]);
+    let json = protocol(
+        &store,
+        &["plan", "artifact", "validate", "--format", "json"],
+    );
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&json)).expect("JSON");
     assert_eq!(parsed["forged"].as_array().map(Vec::len), Some(1));
     assert!(parsed.get("drift").is_none(), "not also ordinary drift");
@@ -244,6 +261,7 @@ fn a_document_with_more_events_than_its_revision_is_not_forged() {
     let recorded = protocol(
         &store,
         &[
+            "plan",
             "artifact",
             "evidence",
             "story:golden-three",
@@ -264,7 +282,10 @@ fn a_document_with_more_events_than_its_revision_is_not_forged() {
         "an observation writes nothing and moves no revision:\n{text}"
     );
 
-    let output = protocol(&store, &["artifact", "validate", "--format", "json"]);
+    let output = protocol(
+        &store,
+        &["plan", "artifact", "validate", "--format", "json"],
+    );
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
     assert!(parsed.get("forged").is_none(), "{parsed}");
@@ -289,7 +310,7 @@ fn a_forged_revision_on_a_document_with_no_events_is_still_only_a_document_preda
     let text = std::fs::read_to_string(&path).expect("the document");
     std::fs::write(&path, text.replace("revision: 3", "revision: 99")).expect("the edit");
 
-    let output = protocol(&store, &["artifact", "validate"]);
+    let output = protocol(&store, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     assert!(
         stdout(&output).contains("4 document(s) predate the event log"),

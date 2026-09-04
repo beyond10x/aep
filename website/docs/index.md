@@ -30,10 +30,10 @@ ADP and AOP use AEP's planning and evidence substrate; they do not implement sep
 `aep` is canonical. `protocol` is an exact compatibility alias for existing automation.
 
 ```bash
-aep validate
-aep artifact board
-aep explain --action production.write
-aep trace check --spec expectations.trace.yaml --transcript run.jsonl
+aep govern validate
+aep plan artifact board
+aep govern explain --action production.write
+aep observe trace check --spec expectations.trace.yaml --transcript run.jsonl
 ```
 
 The CLI also includes a reference driver. It proves the harness contract has a real caller but does

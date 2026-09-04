@@ -62,6 +62,7 @@ fn scratch_store(name: &str) -> PathBuf {
     ] {
         let made = Command::new(env!("CARGO_BIN_EXE_protocol"))
             .args([
+                "plan",
                 "artifact",
                 "new",
                 kind,

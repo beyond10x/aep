@@ -103,6 +103,7 @@ const CODEX_STREAM: &str = "crates/edge/aep-cli/fixtures/eval-run/codex-plugin-a
 /// Ingests one recorded stream as one arm of one case, spending nothing.
 fn ingest(out: &Path, case: &str, arm: &str, harness: &str, stream: &str) -> Output {
     protocol(&[
+        "drive",
         "eval",
         "run",
         "--case",
@@ -454,6 +455,7 @@ fn a_run_of_arm_driven_is_read_even_though_it_is_not_launched_here() {
 fn one_recorded_stream_is_one_run_and_naming_two_cases_is_refused() {
     let out = scratch("aep-eval-run-two-cases-one-stream");
     let refused = protocol(&[
+        "drive",
         "eval",
         "run",
         "--case",
@@ -483,6 +485,7 @@ fn one_recorded_stream_is_one_run_and_naming_two_cases_is_refused() {
 fn naming_neither_a_case_nor_a_workflow_is_refused_rather_than_running_the_whole_corpus() {
     let out = scratch("aep-eval-run-no-case");
     let refused = protocol(&[
+        "drive",
         "eval",
         "run",
         "--arm",
@@ -514,6 +517,7 @@ fn tool_installed() -> bool {
 /// The arguments of a spawn — no `--stream`, so every gate below is reached.
 fn spawn_args<'a>(out: &'a Path, cwd: &'a Path, extra: &[&'a str]) -> Vec<&'a str> {
     let mut args = vec![
+        "drive",
         "eval",
         "run",
         "--case",
@@ -731,7 +735,13 @@ fn a_preflight_with_two_faults_names_both_rather_than_the_first() {
     let argv = out.join("argv");
 
     let mut invocation = spawn_args(&out, &cwd, &["--arm", "raw", "--budget-usd", "1.00"]);
-    invocation[3] = printable(&case);
+    // By the flag rather than by an index, for the reason the sibling below gives: `spawn_args`
+    // gained a word when `eval` moved under `drive`.
+    let case_flag = invocation
+        .iter()
+        .position(|word| *word == "--case")
+        .expect("`spawn_args` names the case with `--case`");
+    invocation[case_flag + 1] = printable(&case);
     let refused = protocol_with(
         &invocation,
         &[
@@ -880,7 +890,13 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
     // `raw` over a stream attesting one is refused, which is the point of the sibling test.
     let owned = stub_env(&binary, &argv, NO_PLUGIN_STREAM);
     let mut raw_args = spawn_args(&out, &cwd, &["--arm", "raw", "--budget-usd", "1.00"]);
-    raw_args[3] = VIOLATION_CASE;
+    // By the flag rather than by an index: `spawn_args` gained a word when `eval` moved under
+    // `drive`, and an index into its argv silently overwrote `--case` instead of its value.
+    let case = raw_args
+        .iter()
+        .position(|word| *word == "--case")
+        .expect("`spawn_args` names the case with `--case`");
+    raw_args[case + 1] = VIOLATION_CASE;
     let spawned = protocol_with(&raw_args, &as_pairs(&owned));
     assert_eq!(code(&spawned), 0, "{}", stderr(&spawned));
 
@@ -907,7 +923,7 @@ fn a_spawn_gives_arm_raw_the_committed_instructions_and_arm_plugin_the_plugin() 
         // unstated assertion that the workflow never changes, which `adp/default/2` then broke
         // without anything being wrong.
         prompt.starts_with("<!-- Rendered from `adp/default/")
-            && prompt.contains("` by `protocol workflow instruct`"),
+            && prompt.contains("` by `protocol govern workflow instruct`"),
         "arm a's treatment is the committed instruction document, in front of the task: {prompt}"
     );
     assert!(
@@ -1129,6 +1145,7 @@ fn the_cap_stops_the_sweep_before_the_run_that_would_pass_it() {
 
     let stopped = protocol_with(
         &[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1503,6 +1520,7 @@ fn a_declared_plugin_the_attestation_does_not_list_is_refused_rather_than_writte
         serde_json::json!([directory_entry()]),
     );
     let refused = protocol(&[
+        "drive",
         "eval",
         "run",
         "--case",
@@ -1542,6 +1560,7 @@ fn arm_plugin_may_be_a_marketplace_plugin_alone_and_the_manifest_says_so() {
         serde_json::json!([marketplace_entry(DEV_TEAM, "bdfinst", &digest)]),
     );
     let ingested = protocol(&[
+        "drive",
         "eval",
         "run",
         "--case",
@@ -1606,6 +1625,7 @@ fn redact_takes_the_operators_home_and_name_out_of_the_stream_it_writes() {
 
     let ingested = protocol_with(
         &[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1665,6 +1685,7 @@ fn the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays
     let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
     let first = protocol_with(
         &[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1701,6 +1722,7 @@ fn the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays
     let replay = scratch("aep-eval-run-redact-replays-again");
     let second = protocol_with(
         &[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1741,6 +1763,7 @@ fn without_redact_the_operators_own_stream_is_left_exactly_as_it_was() {
     let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
     let ingested = protocol_with(
         &[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1781,6 +1804,7 @@ fn a_model_is_refused_by_name_on_the_harnesses_whose_adapters_take_none() {
     for harness in ["codex", "b10x"] {
         let out = scratch(&format!("aep-eval-run-model-{harness}"));
         let refused = protocol(&[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -1821,6 +1845,7 @@ fn the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported(
     // away the only evidence that the pin was honoured.
     let out = scratch("aep-eval-run-model-requested");
     let ingested = protocol(&[
+        "drive",
         "eval",
         "run",
         "--case",
@@ -1847,14 +1872,21 @@ fn the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported(
     );
 
     // And the matrix reads that manifest without gaining a column for it.
-    let table = protocol(&["eval", "matrix", printable(&out)]);
+    let table = protocol(&["drive", "eval", "matrix", printable(&out)]);
     assert_eq!(code(&table), 0, "{}", stderr(&table));
     assert!(
         !stdout(&table).contains("model_requested"),
         "no column is added by accident: {}",
         stdout(&table)
     );
-    let json = protocol(&["eval", "matrix", printable(&out), "--format", "json"]);
+    let json = protocol(&[
+        "drive",
+        "eval",
+        "matrix",
+        printable(&out),
+        "--format",
+        "json",
+    ]);
     assert!(
         !stdout(&json).contains("model_requested"),
         "not in the JSON either: {}",

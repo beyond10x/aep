@@ -25,7 +25,7 @@ use aep_engine::engine::{EvidenceSubmission, ProtocolEngine, TransitionResult};
 use aep_engine::{Engine, Registry};
 use aep_project::load_tree_report;
 use anyhow::{bail, Context, Result};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 
 /// Who the entity surface seeds as.
 ///
@@ -38,6 +38,14 @@ const SEED_ACTOR: &str = "service:aep-cli";
 /// Fixed so two runs over the same manifest produce byte-identical output. A wall clock here would
 /// make every `--format json` diff noise.
 const SEED_AT: Timestamp = Timestamp::EPOCH;
+
+/// The first level of the command line.
+///
+/// The four area directories `crates/` is divided into, and the preflight that belongs to no area.
+/// Everything else at this level is a retained flat spelling, and [`command`] hides it by this
+/// list rather than by one of its own — so a verb added to an area is hidden from `--help` without
+/// anybody having to remember, and the only way to widen the first level is to widen this.
+const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
 
 /// Reference CLI for the Agentic Engineering Protocol.
 #[derive(Debug, Parser)]
@@ -168,9 +176,15 @@ enum ConformanceBackend {
     Project,
 }
 
-/// The available subcommands.
+/// `govern` — what the documents say, and what they decide.
+///
+/// The verbs that read a document tree and answer from it: whether it is valid, what a task
+/// resolves to, what a protocol declares, what an execution owes, why a decision went the way it
+/// did, what an entity type is, which schemas exist, and what a workflow looks like drawn. Nothing
+/// here writes to a plan and nothing here runs anything; the area name is `crates/govern/`, whose
+/// engine takes every one of these decisions.
 #[derive(Debug, Subcommand)]
-enum Command {
+enum GovernCommand {
     /// Check that a document tree is structurally and semantically valid.
     Validate {
         /// The document tree to load.
@@ -219,27 +233,45 @@ enum Command {
         #[arg(long)]
         action: Option<String>,
     },
-    /// Browse the plan in a browser, and move artifacts along their ladders from it.
+    /// Describe an entity type: what it is, whether it may change, and what may target it.
     ///
-    /// A board is a shape and a terminal prints lines, so triage is what the CLI is worst at. This
-    /// answers the same facts `artifact board`, `show` and `explain` print, and takes status moves
-    /// back through the same decision `artifact move` makes.
-    ///
-    /// **It binds `127.0.0.1` and there is no flag that widens it.** Reaching it from another
-    /// machine is `ssh -L`. The URL it prints carries a token for the run; a request without that
-    /// token is refused, which is what stops another page in the same browser writing to the store.
-    /// It is not authentication, and the module says so.
-    Serve {
-        /// Where the plan is, and which documents govern it.
+    /// This is how a harness asks what a design *is* rather than hard-coding it. The source is
+    /// still seeded, because the answer comes from the same backend that holds the entities.
+    Describe {
+        /// Where the artifacts come from and how to render.
         #[command(flatten)]
-        location: planning::StoreLocation,
-        /// The port to listen on. `0` takes whatever the operating system offers.
-        #[arg(long, default_value_t = 8899)]
-        port: u16,
-        /// Answer reads and refuse every transition.
-        #[arg(long)]
-        read_only: bool,
+        backend: BackendArgs,
+        /// The type to describe, such as `aep.design/v1`.
+        entity_type: String,
     },
+    /// Inspect built-in schemas or work with project-owned JSON Schema contracts.
+    Schema {
+        /// What to do. A built-in schema name such as `workflow` remains accepted.
+        #[command(subcommand)]
+        command: Option<schema::SchemaCommand>,
+    },
+    /// Draw a workflow, and a run over it.
+    ///
+    /// The engine answers *may this move?* in words; this answers *where is it?* in a picture —
+    /// the states down the page, the guards beside the arrows, and, when a run is drawn over them,
+    /// where it is, where it has been, what it produced and why it stopped. It evaluates nothing:
+    /// every overlay it draws was decided by the engine and read out of a run directory.
+    Workflow {
+        /// What to do with it.
+        #[command(subcommand)]
+        command: render::WorkflowCommand,
+    },
+}
+
+/// `plan` — the work that exists, where it is kept, and what may answer about it.
+///
+/// The markdown planning store and everything that reads or serves it: the artifacts, the board in
+/// a browser, the entity and audit surfaces over a seeded backend, the workspace that answers
+/// across repositories, the suites a storage backend is held to, and reading a repository that
+/// already exists into the protocol's terms. The area name is `crates/plan/`, which owns the
+/// storage contract these speak.
+#[derive(Debug, Subcommand)]
+enum PlanCommand {
     /// Plan work in the markdown planning store: epics, stories, tasks and how they relate.
     ///
     /// The store is a directory of markdown files — one artifact per file, YAML frontmatter, free
@@ -271,6 +303,107 @@ enum Command {
         #[command(subcommand)]
         command: planning::ArtifactCommand,
     },
+    /// Browse the plan in a browser, and move artifacts along their ladders from it.
+    ///
+    /// A board is a shape and a terminal prints lines, so triage is what the CLI is worst at. This
+    /// answers the same facts `artifact board`, `show` and `explain` print, and takes status moves
+    /// back through the same decision `artifact move` makes.
+    ///
+    /// **It binds `127.0.0.1` and there is no flag that widens it.** Reaching it from another
+    /// machine is `ssh -L`. The URL it prints carries a token for the run; a request without that
+    /// token is refused, which is what stops another page in the same browser writing to the store.
+    /// It is not authentication, and the module says so.
+    Serve {
+        /// Where the plan is, and which documents govern it.
+        #[command(flatten)]
+        location: planning::StoreLocation,
+        /// The port to listen on. `0` takes whatever the operating system offers.
+        #[arg(long, default_value_t = 8899)]
+        port: u16,
+        /// Answer reads and refuse every transition.
+        #[arg(long)]
+        read_only: bool,
+    },
+    /// Ask the reference backend about the entities an artifact manifest or planning store holds.
+    Entity {
+        /// Which question to ask about them.
+        #[command(subcommand)]
+        command: EntityCommand,
+    },
+    /// Show the audit trail, oldest first.
+    ///
+    /// The backend is in-memory, so this run seeds it from `--artifacts` or `--planning` and then
+    /// reads: what you see is the seeding itself, not a durable past.
+    Audit {
+        /// Where the artifacts come from and how to render.
+        #[command(flatten)]
+        backend: BackendArgs,
+        /// Only records from this activity; the seeding run is `seed-manifest`.
+        #[arg(long)]
+        correlation: Option<String>,
+        /// Only records about one entity, by locator or identity.
+        #[arg(long)]
+        entity: Option<String>,
+        /// Only refused attempts — what something tried to do and was stopped from doing.
+        #[arg(long)]
+        rejected: bool,
+    },
+    /// Answer across the repositories a workspace names, rather than only this one.
+    ///
+    /// A project file says what *this* repository runs under; `.engineering/workspace.yaml` says
+    /// which repositories one command should answer across. A story here blocked by a story
+    /// somewhere else can then say so, and one board shows the work rather than three.
+    ///
+    /// A repository without a workspace file is not a broken workspace — it is a repository that
+    /// answers only for itself, which is the ordinary case.
+    Workspace {
+        /// Which question to ask.
+        #[command(subcommand)]
+        command: workspace::WorkspaceCommand,
+    },
+    /// Check a storage backend against the AEP contract suites.
+    ///
+    /// The question is whether a **backend** implements `aep-contract` — commands, queries, audit,
+    /// idempotency, consistency — and the answer is about storage, not about any system you have
+    /// specified.
+    ///
+    /// The other conformance verb answers a different question. `protocol ess conform` asks whether
+    /// an **implementation** satisfies an executable system specification: whether `CreateInvoice`
+    /// with a negative amount is refused, whether a paid invoice can still be cancelled. Design §42
+    /// calls this one contract conformance and that one semantic conformance; neither subsumes the
+    /// other, and a backend passing here says nothing about a system passing there.
+    ///
+    /// Runs against the backend `--backend` names — `memory`, the reference implementation, unless
+    /// told otherwise — and the report's first line says which one answered, because a report that
+    /// does not name what it ran against is a report somebody will attribute to the wrong thing:
+    /// this verb was hard-coded to `memory` for two releases while a story ticked "runs against the
+    /// markdown store". `--store` says where a durable backend lives. **The suites write**, so a
+    /// durable backend given no `--store` gets a scratch store, and one pointed at a plan you keep
+    /// will append the suites' commands to that plan's journal.
+    ///
+    /// `--inject` deliberately breaks one property, to show that the suite responsible for it
+    /// actually fails — a suite that passes everything tells you nothing.
+    Conformance {
+        /// How much of the contract to check: core, audited or full.
+        #[arg(long, default_value = "full")]
+        level: String,
+        /// Run one suite by name instead of a whole level.
+        #[arg(long)]
+        suite: Option<String>,
+        /// Break one property on purpose, to see which suite catches it.
+        #[arg(long)]
+        inject: Option<String>,
+        /// Which backend to hold to the suites.
+        #[arg(long, value_enum, default_value_t = ConformanceBackend::Memory)]
+        backend: ConformanceBackend,
+        /// Where a durable backend lives: a directory for `markdown`, a file for `sqlite`, a URL
+        /// for `postgres`. Not with `project`, whose store `project.yaml` names.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// How to render the result.
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
+    },
     /// Read a repository that already exists into the protocol's own terms.
     ///
     /// Every other verb here starts from a document somebody wrote; these start from a repository
@@ -283,16 +416,16 @@ enum Command {
         #[command(subcommand)]
         command: reverse::ReverseCommand,
     },
-    /// Report whether this checkout is in a state the other verbs will accept.
-    ///
-    /// One line per check — the binary's version, the project file, the protocol source it names,
-    /// the planning store, each plugin directory given, and the checkout's newest release tag —
-    /// each `ok`, `warn` or `fail`. Exit `1` on any `fail`.
-    ///
-    /// It fixes nothing, which is what makes it safe to run first: a checker that also repairs
-    /// cannot be run to find out what is wrong. It reads no clock and opens no connection, so a
-    /// pinned protocol source is checked for shape and for a cached snapshot and never fetched.
-    Doctor(doctor::DoctorArgs),
+}
+
+/// `observe` — what actually happened, checked against what was expected.
+///
+/// Recorded harness activity, a contract runner's own record, the properties this repository's
+/// decisions rest on, a specification decided against admitted evidence, and the dated claims a
+/// document makes. Every one of them reads something that has already finished: none starts an
+/// agent, calls a model or reaches a network. The area name is `crates/observe/`.
+#[derive(Debug, Subcommand)]
+enum ObserveCommand {
     /// Judge an agent run against a typed specification, or report what is in one.
     ///
     /// The transcript comes from a harness that has already finished — these verbs never start an
@@ -350,6 +483,32 @@ enum Command {
         #[command(subcommand)]
         command: specification::SpecificationCommand,
     },
+    /// Read the dated claims a document makes, and say which of them nobody has looked at since.
+    ///
+    /// The observation half of evidence horizons. `scan` reads human-written markdown for the
+    /// annotation convention a claim is written in; `inspect` reads an evidence file of the kind
+    /// `protocol evaluate --evidence` submits. Neither writes anything, neither resolves a plan and
+    /// neither decides a gate: they report what a document says about when somebody last looked.
+    Evidence {
+        /// Which question to ask.
+        #[command(subcommand)]
+        command: EvidenceCommand,
+    },
+}
+
+/// What a run of a workflow — or a set of finished ones — can be asked to do.
+///
+/// `run`, `status`, `resume` and `transition` were always spelled `drive <verb>`, so grouping them
+/// under the area changed nothing about how they are typed. `eval` moved here: assembling what many
+/// checked runs said is a question about driving, and it was a twenty-third thing to choose between
+/// at the first level.
+#[derive(Debug, Subcommand)]
+enum DriveGroup {
+    // `run`, `status`, `resume` and `transition`, spelled exactly as they always were. Boxed
+    // because `DriveCommand` carries every flag of a run start and is eight times the size of the
+    // variant beside it, which `clippy::large_enum_variant` refuses.
+    #[command(flatten)]
+    Run(Box<drive::DriveCommand>),
     /// Assemble what many checked runs said into one table of facts.
     ///
     /// The evaluation programme's deliverable. Its runs come in three arms — raw instructions, the
@@ -371,6 +530,44 @@ enum Command {
         #[command(subcommand)]
         command: eval::EvalCommand,
     },
+}
+
+/// The first level of the command line: the four areas, `doctor`, and every flat spelling.
+///
+/// The four names are the area directories the crates are filed under — a reader choosing
+/// between *decide*, *plan*, *drive* and *observe* is choosing between the same four things
+/// `crates/` is divided into, and there is one place to look up which.
+///
+/// The flat spellings that reached 0.51.0 are the group enums **flattened in at this level**,
+/// not restated: an alias cannot be forgotten when a verb is added to an area, and cannot drift
+/// from the thing it aliases, because there is one definition of each. [`command`] hides them
+/// from `--help` by the same rule, so neither list is maintained by hand.
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// `govern` — what the documents say, and what they decide.
+    ///
+    /// The verbs that read a document tree and answer from it: whether it is valid, what a task
+    /// resolves to, what a protocol declares, what an execution owes, why a decision went the way it
+    /// did, what an entity type is, which schemas exist, and what a workflow looks like drawn. Nothing
+    /// here writes to a plan and nothing here runs anything; the area name is `crates/govern/`, whose
+    /// engine takes every one of these decisions.
+    Govern {
+        /// Which decision to take.
+        #[command(subcommand)]
+        command: GovernCommand,
+    },
+    /// `plan` — the work that exists, where it is kept, and what may answer about it.
+    ///
+    /// The markdown planning store and everything that reads or serves it: the artifacts, the board in
+    /// a browser, the entity and audit surfaces over a seeded backend, the workspace that answers
+    /// across repositories, the suites a storage backend is held to, and reading a repository that
+    /// already exists into the protocol's terms. The area name is `crates/plan/`, which owns the
+    /// storage contract these speak.
+    Plan {
+        /// Which question to ask of the plan.
+        #[command(subcommand)]
+        command: PlanCommand,
+    },
     /// Walk a workflow: run the steps a step map declares, and do only what the engine permits.
     ///
     /// The reference driver. It makes the engine's calls in order, executes the three kinds of step
@@ -379,130 +576,64 @@ enum Command {
     /// implementation with none of the conformance suites, and the first time the two disagreed the
     /// one nobody tested would win.
     Drive {
-        /// What to do with a run.
+        /// What to do with a run, or with a set of finished ones.
         #[command(subcommand)]
-        command: drive::DriveCommand,
+        command: DriveGroup,
     },
-    /// Draw a workflow, and a run over it.
+    /// `observe` — what actually happened, checked against what was expected.
     ///
-    /// The engine answers *may this move?* in words; this answers *where is it?* in a picture —
-    /// the states down the page, the guards beside the arrows, and, when a run is drawn over them,
-    /// where it is, where it has been, what it produced and why it stopped. It evaluates nothing:
-    /// every overlay it draws was decided by the engine and read out of a run directory.
-    Workflow {
-        /// What to do with it.
+    /// Recorded harness activity, a contract runner's own record, the properties this repository's
+    /// decisions rest on, a specification decided against admitted evidence, and the dated claims a
+    /// document makes. Every one of them reads something that has already finished: none starts an
+    /// agent, calls a model or reaches a network. The area name is `crates/observe/`.
+    Observe {
+        /// Which observation to make.
         #[command(subcommand)]
-        command: render::WorkflowCommand,
+        command: ObserveCommand,
     },
-    /// Ask the reference backend about the entities an artifact manifest or planning store holds.
-    Entity {
-        /// Which question to ask about them.
+    /// Report whether this checkout is in a state the other verbs will accept.
+    ///
+    /// One line per check — the binary's version, the project file, the protocol source it names,
+    /// the planning store, each plugin directory given, and the checkout's newest release tag —
+    /// each `ok`, `warn` or `fail`. Exit `1` on any `fail`.
+    ///
+    /// It fixes nothing, which is what makes it safe to run first: a checker that also repairs
+    /// cannot be run to find out what is wrong. It reads no clock and opens no connection, so a
+    /// pinned protocol source is checked for shape and for a cached snapshot and never fetched.
+    Doctor(doctor::DoctorArgs),
+    // Every spelling that worked before this grouping, kept working and hidden from the first
+    // level by `command`. Flattened rather than restated, so the aliases are the same tree.
+    #[command(flatten)]
+    FlatGovern(GovernCommand),
+    #[command(flatten)]
+    FlatPlan(PlanCommand),
+    #[command(flatten)]
+    FlatObserve(ObserveCommand),
+    // `eval` is the one verb that moved into an area whose own name was already a verb, so
+    // its flat spelling is not `drive eval` with a word removed and has to be said here.
+    /// Assemble what many checked runs said into one table of facts.
+    ///
+    /// The evaluation programme's deliverable. Its runs come in three arms — raw instructions, the
+    /// shipped plugin, a driven run whose calls an enforcer decides — against more than one
+    /// harness, and each leaves a run manifest beside the record `protocol trace check` wrote about
+    /// its transcript. This verb counts, per harness × arm × workflow and per expectation, how many
+    /// facts held, how many were contradicted and how many nobody could find out.
+    ///
+    /// **It computes no score**, and refuses to: the only ways to fold three columns into one
+    /// number are to count an unobservable expectation as a pass, which is the collapse invariant 5
+    /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
+    /// recording.
+    ///
+    /// Not to be confused with `protocol evaluate`, which asks the engine what one task owes and
+    /// what it is permitted. This verb decides nothing and reads no protocol document; the only
+    /// thing the two share is a stem.
+    Eval {
+        /// What to do with a set of runs.
         #[command(subcommand)]
-        command: EntityCommand,
-    },
-    /// Show the audit trail, oldest first.
-    ///
-    /// The backend is in-memory, so this run seeds it from `--artifacts` or `--planning` and then
-    /// reads: what you see is the seeding itself, not a durable past.
-    Audit {
-        /// Where the artifacts come from and how to render.
-        #[command(flatten)]
-        backend: BackendArgs,
-        /// Only records from this activity; the seeding run is `seed-manifest`.
-        #[arg(long)]
-        correlation: Option<String>,
-        /// Only records about one entity, by locator or identity.
-        #[arg(long)]
-        entity: Option<String>,
-        /// Only refused attempts — what something tried to do and was stopped from doing.
-        #[arg(long)]
-        rejected: bool,
-    },
-    /// Describe an entity type: what it is, whether it may change, and what may target it.
-    ///
-    /// This is how a harness asks what a design *is* rather than hard-coding it. The source is
-    /// still seeded, because the answer comes from the same backend that holds the entities.
-    Describe {
-        /// Where the artifacts come from and how to render.
-        #[command(flatten)]
-        backend: BackendArgs,
-        /// The type to describe, such as `aep.design/v1`.
-        entity_type: String,
-    },
-    /// Read the dated claims a document makes, and say which of them nobody has looked at since.
-    ///
-    /// The observation half of evidence horizons. `scan` reads human-written markdown for the
-    /// annotation convention a claim is written in; `inspect` reads an evidence file of the kind
-    /// `protocol evaluate --evidence` submits. Neither writes anything, neither resolves a plan and
-    /// neither decides a gate: they report what a document says about when somebody last looked.
-    Evidence {
-        /// Which question to ask.
-        #[command(subcommand)]
-        command: EvidenceCommand,
-    },
-    /// Answer across the repositories a workspace names, rather than only this one.
-    ///
-    /// A project file says what *this* repository runs under; `.engineering/workspace.yaml` says
-    /// which repositories one command should answer across. A story here blocked by a story
-    /// somewhere else can then say so, and one board shows the work rather than three.
-    ///
-    /// A repository without a workspace file is not a broken workspace — it is a repository that
-    /// answers only for itself, which is the ordinary case.
-    Workspace {
-        /// Which question to ask.
-        #[command(subcommand)]
-        command: workspace::WorkspaceCommand,
-    },
-    /// Inspect built-in schemas or work with project-owned JSON Schema contracts.
-    Schema {
-        /// What to do. A built-in schema name such as `workflow` remains accepted.
-        #[command(subcommand)]
-        command: Option<schema::SchemaCommand>,
-    },
-    /// Check a storage backend against the AEP contract suites.
-    ///
-    /// The question is whether a **backend** implements `aep-contract` — commands, queries, audit,
-    /// idempotency, consistency — and the answer is about storage, not about any system you have
-    /// specified.
-    ///
-    /// The other conformance verb answers a different question. `protocol ess conform` asks whether
-    /// an **implementation** satisfies an executable system specification: whether `CreateInvoice`
-    /// with a negative amount is refused, whether a paid invoice can still be cancelled. Design §42
-    /// calls this one contract conformance and that one semantic conformance; neither subsumes the
-    /// other, and a backend passing here says nothing about a system passing there.
-    ///
-    /// Runs against the backend `--backend` names — `memory`, the reference implementation, unless
-    /// told otherwise — and the report's first line says which one answered, because a report that
-    /// does not name what it ran against is a report somebody will attribute to the wrong thing:
-    /// this verb was hard-coded to `memory` for two releases while a story ticked "runs against the
-    /// markdown store". `--store` says where a durable backend lives. **The suites write**, so a
-    /// durable backend given no `--store` gets a scratch store, and one pointed at a plan you keep
-    /// will append the suites' commands to that plan's journal.
-    ///
-    /// `--inject` deliberately breaks one property, to show that the suite responsible for it
-    /// actually fails — a suite that passes everything tells you nothing.
-    Conformance {
-        /// How much of the contract to check: core, audited or full.
-        #[arg(long, default_value = "full")]
-        level: String,
-        /// Run one suite by name instead of a whole level.
-        #[arg(long)]
-        suite: Option<String>,
-        /// Break one property on purpose, to see which suite catches it.
-        #[arg(long)]
-        inject: Option<String>,
-        /// Which backend to hold to the suites.
-        #[arg(long, value_enum, default_value_t = ConformanceBackend::Memory)]
-        backend: ConformanceBackend,
-        /// Where a durable backend lives: a directory for `markdown`, a file for `sqlite`, a URL
-        /// for `postgres`. Not with `project`, whose store `project.yaml` names.
-        #[arg(long)]
-        store: Option<PathBuf>,
-        /// How to render the result.
-        #[arg(long, value_enum, default_value_t = Format::Text)]
-        format: Format,
+        command: eval::EvalCommand,
     },
 }
+
 
 /// The two questions the evidence surface answers.
 ///
@@ -768,39 +899,93 @@ fn main() -> ExitCode {
     }
 }
 
+/// The command line as the binary actually parses it.
+///
+/// The seam every reader of the tree goes through — `run`, the CLI reference check and the
+/// command-tree guard — so that what `--help` lists and what a test walks cannot be two different
+/// trees. `Cli::command()` alone is not that tree: the flat spellings are hidden here, by a rule
+/// rather than by a list, so a verb added to an area is hidden from the first level without
+/// anybody remembering to say so.
+fn command() -> clap::Command {
+    let mut command = Cli::command();
+    let flat: Vec<String> = command
+        .get_subcommands()
+        .map(|sub| sub.get_name().to_owned())
+        .filter(|name| !AREAS.contains(&name.as_str()))
+        .collect();
+    for name in flat {
+        command = command.mut_subcommand(name, |sub| sub.hide(true));
+    }
+    command
+}
+
+/// Parses the command line through [`command`].
+///
+/// [`Parser::parse`] would rebuild the tree from the derive and lose the hiding above, so the
+/// matches are taken here and mapped back through the same generated code `parse` uses.
+fn parse() -> Cli {
+    let mut matches = command().get_matches();
+    match Cli::from_arg_matches_mut(&mut matches) {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
+    }
+}
+
 /// Runs the CLI, returning the process exit code.
+///
+/// One arm per area, and a flat spelling reaches the same arm as its grouped path because it
+/// carries the same value: `Command::Govern { command }` and `Command::FlatGovern(command)` are
+/// two names for one `GovernCommand`, so nothing here can answer differently to `aep validate` and
+/// `aep govern validate`.
 fn run() -> Result<ExitCode> {
-    let cli = Cli::parse();
+    let cli = parse();
     match cli.command {
-        Command::Validate {
+        Command::Govern { command } | Command::FlatGovern(command) => govern(command),
+        Command::Plan { command } | Command::FlatPlan(command) => plan(command),
+        Command::Observe { command } | Command::FlatObserve(command) => observe(command),
+        Command::Drive { command } => drive_group(command),
+        Command::Eval { command } => eval::run(command),
+        Command::Doctor(args) => doctor::run(&args),
+    }
+}
+
+/// `aep govern` — and every one of its verbs by its flat spelling.
+fn govern(command: GovernCommand) -> Result<ExitCode> {
+    match command {
+        GovernCommand::Validate {
             root,
             artifacts,
             format,
             evidence,
         } => validate(&root, artifacts.as_deref(), format, evidence.as_deref()),
-        Command::Resolve(args) => resolve(&args),
-        Command::Inspect {
+        GovernCommand::Resolve(args) => resolve(&args),
+        GovernCommand::Inspect {
             root,
             reference,
             format,
         } => inspect(&root, reference.as_deref(), format),
-        Command::Evaluate(args) => evaluate(&args, None),
-        Command::Explain { execution, action } => evaluate(&execution, action.as_deref()),
-        Command::Artifact { command } => planning::run(command),
-        Command::Serve {
+        GovernCommand::Evaluate(args) => evaluate(&args, None),
+        GovernCommand::Explain { execution, action } => evaluate(&execution, action.as_deref()),
+        GovernCommand::Describe {
+            backend,
+            entity_type,
+        } => describe(&backend, &entity_type),
+        GovernCommand::Schema { command } => schema::run(command),
+        GovernCommand::Workflow { command } => render::run(command),
+    }
+}
+
+/// `aep plan` — and every one of its verbs by its flat spelling.
+fn plan(command: PlanCommand) -> Result<ExitCode> {
+    match command {
+        PlanCommand::Artifact { command } => planning::run(command),
+        PlanCommand::Serve {
             location,
             port,
             read_only,
         } => serve::run(&location, port, read_only),
-        Command::Trace { command } => trace::run(command),
-        Command::Contract { command } => contract::run(command),
-        Command::Property { command } => property::run(command),
-        Command::Specification { command } => specification::run(command),
-        Command::Eval { command } => eval::run(command),
-        Command::Drive { command } => drive::run(command),
-        Command::Workflow { command } => render::run(command),
-        Command::Entity { command } => entity(&command),
-        Command::Audit {
+        PlanCommand::Entity { command } => entity(&command),
+        PlanCommand::Audit {
             backend,
             correlation,
             entity,
@@ -811,11 +996,34 @@ fn run() -> Result<ExitCode> {
             entity.as_deref(),
             rejected,
         ),
-        Command::Describe {
+        PlanCommand::Workspace { command } => workspace::run(command),
+        PlanCommand::Conformance {
+            level,
+            suite,
+            inject,
             backend,
-            entity_type,
-        } => describe(&backend, &entity_type),
-        Command::Evidence { command } => match command {
+            store,
+            format,
+        } => conformance(
+            &level,
+            suite.as_deref(),
+            inject.as_deref(),
+            backend,
+            store.as_deref(),
+            format,
+        ),
+        PlanCommand::Reverse { command } => reverse::run(command),
+    }
+}
+
+/// `aep observe` — and every one of its verbs by its flat spelling.
+fn observe(command: ObserveCommand) -> Result<ExitCode> {
+    match command {
+        ObserveCommand::Trace { command } => trace::run(command),
+        ObserveCommand::Contract { command } => contract::run(command),
+        ObserveCommand::Property { command } => property::run(command),
+        ObserveCommand::Specification { command } => specification::run(command),
+        ObserveCommand::Evidence { command } => match command {
             EvidenceCommand::Scan {
                 paths,
                 at,
@@ -847,25 +1055,14 @@ fn run() -> Result<ExitCode> {
                 )
             }
         },
-        Command::Reverse { command } => reverse::run(command),
-        Command::Doctor(args) => doctor::run(&args),
-        Command::Workspace { command } => workspace::run(command),
-        Command::Schema { command } => schema::run(command),
-        Command::Conformance {
-            level,
-            suite,
-            inject,
-            backend,
-            store,
-            format,
-        } => conformance(
-            &level,
-            suite.as_deref(),
-            inject.as_deref(),
-            backend,
-            store.as_deref(),
-            format,
-        ),
+    }
+}
+
+/// `aep drive` — the driven run, and the evaluation of many finished ones.
+fn drive_group(command: DriveGroup) -> Result<ExitCode> {
+    match command {
+        DriveGroup::Run(command) => drive::run(*command),
+        DriveGroup::Eval { command } => eval::run(command),
     }
 }
 
@@ -2639,8 +2836,6 @@ fn exit_code(ok: bool) -> ExitCode {
 /// binary dispatches on and cannot drift from it by a rendering change.
 #[cfg(test)]
 mod cli_reference {
-    use clap::CommandFactory as _;
-
     /// The page a reader goes to for the verb list, relative to this crate.
     const REFERENCE: &str = "../../../website/docs/reference/cli.md";
 
@@ -2694,7 +2889,7 @@ mod cli_reference {
     #[test]
     fn every_verb_the_cli_answers_has_an_entry_in_the_reference() {
         let mut verbs = Vec::new();
-        leaves(&super::Cli::command(), "aep", &mut verbs);
+        leaves(&super::command(), "aep", &mut verbs);
         assert!(
             verbs.len() > 50,
             "the walk found only {} verbs, so it is walking the wrong tree rather than passing",
@@ -2718,6 +2913,227 @@ mod cli_reference {
                 .map(|verb| format!("  {verb}"))
                 .collect::<Vec<_>>()
                 .join("\n")
+        );
+    }
+}
+
+/// The first level of the command tree, held against the four areas it is named for.
+///
+/// `aep` reached 23 top-level verbs, which is a list and not a shape: nothing in `aep --help` said
+/// which of them decide, which plan, which drive and which observe, and the crates had already been
+/// filed under exactly those four words. The first level is now those four names plus `doctor`, and
+/// every spelling that worked before is a hidden top-level alias reaching the same leaf.
+///
+/// Two different claims are checked here, and they fail for different reasons.
+///
+/// * The **structural** one is derived from the tree: a verb an area groups must also be a
+///   top-level command with the same subtree under it. Nothing has to be remembered for it to hold
+///   — the aliases are the group enums flattened at the first level — so its job is to notice a
+///   change that breaks the construction rather than a forgotten list entry.
+/// * The **historical** one is a frozen list: the top-level verbs 0.51.0 answered to. That list is
+///   what *every existing flat spelling keeps working* means, it never grows, and it is the only
+///   part of this a later edit can quietly drop — `eval`, which moved under `drive`, is reachable
+///   flat by one variant and nothing else.
+///
+/// `drive` is the one area whose own name was already a verb. Its `run`, `status`, `resume` and
+/// `transition` were always spelled `drive <verb>`, so grouped and flat are the same three words
+/// and there is nothing to alias; the structural rule therefore does not run over it.
+#[cfg(test)]
+mod command_tree {
+    /// What `aep --help` lists, in the order it lists them.
+    const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
+
+    /// The areas whose verbs moved under them, and so owe a flat alias each.
+    const REGROUPED: [&str; 3] = ["govern", "plan", "observe"];
+
+    /// Every top-level verb 0.51.0 answered to, and every one of them still must.
+    ///
+    /// Frozen. A verb reaches this list by having shipped flat, which already happened; a verb
+    /// added after this story is reachable at its grouped path and owes nothing here.
+    const FLAT_SPELLINGS: [&str; 23] = [
+        "artifact",
+        "audit",
+        "conformance",
+        "contract",
+        "describe",
+        "doctor",
+        "drive",
+        "entity",
+        "eval",
+        "evaluate",
+        "evidence",
+        "explain",
+        "inspect",
+        "property",
+        "resolve",
+        "reverse",
+        "schema",
+        "serve",
+        "specification",
+        "trace",
+        "validate",
+        "workflow",
+        "workspace",
+    ];
+
+    /// The subcommand of `command` named `name`.
+    fn child<'a>(command: &'a clap::Command, name: &str) -> Option<&'a clap::Command> {
+        command.get_subcommands().find(|sub| sub.get_name() == name)
+    }
+
+    /// Every leaf path under `command`, relative to it.
+    ///
+    /// Hidden subcommands are walked, unlike the CLI reference's own walk: a hidden verb is not
+    /// documented, but it is still reachable, and *reachable by both spellings* is the claim here.
+    /// `help` is clap's rather than ours.
+    fn leaves(command: &clap::Command, prefix: Vec<String>, out: &mut Vec<Vec<String>>) {
+        let mut branched = false;
+        for sub in command.get_subcommands() {
+            if sub.get_name() == "help" {
+                continue;
+            }
+            branched = true;
+            let mut path = prefix.clone();
+            path.push(sub.get_name().to_owned());
+            leaves(sub, path, out);
+        }
+        if !branched {
+            out.push(prefix);
+        }
+    }
+
+    /// Whether `path` names a command clap can reach, whatever it then says about the arguments.
+    ///
+    /// A leaf with required arguments refuses a bare invocation, and that refusal is not the
+    /// question: only `InvalidSubcommand` says *there is no such command*.
+    fn resolves(path: &[String]) -> bool {
+        let mut argv = vec!["protocol".to_owned()];
+        argv.extend(path.iter().cloned());
+        match super::command().try_get_matches_from(argv) {
+            Ok(_) => true,
+            Err(error) => error.kind() != clap::error::ErrorKind::InvalidSubcommand,
+        }
+    }
+
+    #[test]
+    fn the_first_level_is_the_four_areas_and_doctor() {
+        let cli = super::command();
+        let listed: Vec<&str> = cli
+            .get_subcommands()
+            .filter(|sub| !sub.is_hide_set())
+            .map(clap::Command::get_name)
+            .collect();
+        assert_eq!(
+            listed, AREAS,
+            "`aep --help` lists what a reader is asked to choose between, and that is the four \
+             areas and the preflight — every other spelling is a compatibility alias and is hidden"
+        );
+    }
+
+    #[test]
+    fn every_verb_an_area_groups_is_also_a_top_level_alias_for_the_same_subtree() {
+        let cli = super::command();
+        let mut missing = Vec::new();
+        let mut divergent = Vec::new();
+        for area in REGROUPED {
+            let group = child(&cli, area)
+                .unwrap_or_else(|| panic!("`{area}` is one of the areas the first level lists"));
+            for grouped in group.get_subcommands() {
+                if grouped.get_name() == "help" {
+                    continue;
+                }
+                let Some(flat) = child(&cli, grouped.get_name()) else {
+                    missing.push(format!("{area} {}", grouped.get_name()));
+                    continue;
+                };
+                let (mut under_group, mut under_flat) = (Vec::new(), Vec::new());
+                leaves(grouped, Vec::new(), &mut under_group);
+                leaves(flat, Vec::new(), &mut under_flat);
+                under_group.sort();
+                under_flat.sort();
+                if under_group != under_flat {
+                    divergent.push(format!(
+                        "  {area} {name}: grouped {under_group:?}, flat {under_flat:?}",
+                        name = grouped.get_name()
+                    ));
+                }
+            }
+        }
+        assert!(
+            missing.is_empty() && divergent.is_empty(),
+            "a verb an area groups must answer to its flat spelling as well, over the same \
+             subtree.\nno top-level alias:\n{}\ndifferent subtree:\n{}",
+            missing
+                .iter()
+                .map(|verb| format!("  {verb}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            divergent.join("\n")
+        );
+    }
+
+    #[test]
+    fn every_flat_spelling_the_last_release_answered_still_resolves_and_is_hidden() {
+        let cli = super::command();
+        let mut absent = Vec::new();
+        let mut listed = Vec::new();
+        for verb in FLAT_SPELLINGS {
+            let Some(sub) = child(&cli, verb) else {
+                absent.push(verb);
+                continue;
+            };
+            if !sub.is_hide_set() && !AREAS.contains(&verb) {
+                listed.push(verb);
+            }
+        }
+        assert!(
+            absent.is_empty(),
+            "these spellings answered in 0.51.0 and no longer resolve, so every caller of them \
+             breaks: {absent:?}"
+        );
+        assert!(
+            listed.is_empty(),
+            "a retained flat spelling is a compatibility alias, not a choice offered to a reader, \
+             so it is hidden from the first level: {listed:?}"
+        );
+    }
+
+    #[test]
+    fn every_leaf_is_reachable_by_its_grouped_path_and_by_its_flat_spelling() {
+        let cli = super::command();
+        let mut unreachable = Vec::new();
+        for area in REGROUPED {
+            let group = child(&cli, area)
+                .unwrap_or_else(|| panic!("`{area}` is one of the areas the first level lists"));
+            let mut under_group = Vec::new();
+            leaves(group, vec![area.to_owned()], &mut under_group);
+            for grouped in under_group {
+                let flat: Vec<String> = grouped[1..].to_vec();
+                if !resolves(&grouped) {
+                    unreachable.push(format!("  grouped: {}", grouped.join(" ")));
+                }
+                if !resolves(&flat) {
+                    unreachable.push(format!("  flat:    {}", flat.join(" ")));
+                }
+            }
+        }
+        // `eval` is the one verb whose flat spelling is not its grouped path with a word removed:
+        // it moved *into* `drive`, so both `drive eval matrix` and `eval matrix` must reach it.
+        for path in [
+            vec!["drive".to_owned(), "eval".to_owned(), "matrix".to_owned()],
+            vec!["eval".to_owned(), "matrix".to_owned()],
+            vec!["drive".to_owned(), "eval".to_owned(), "run".to_owned()],
+            vec!["eval".to_owned(), "run".to_owned()],
+            vec!["drive".to_owned(), "run".to_owned()],
+        ] {
+            if !resolves(&path) {
+                unreachable.push(format!("  moved:   {}", path.join(" ")));
+            }
+        }
+        assert!(
+            unreachable.is_empty(),
+            "every leaf answers to both spellings; clap could not reach these:\n{}",
+            unreachable.join("\n")
         );
     }
 }

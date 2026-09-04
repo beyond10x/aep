@@ -194,7 +194,7 @@ fn fixture(name: &str) -> PathBuf {
 
 /// The bundle a scan of `root` produces, as JSON.
 fn bundle(root: &Path) -> Value {
-    let output = protocol_in(root, &["reverse", "scan", ".", "--format", "json"]);
+    let output = protocol_in(root, &["plan", "reverse", "scan", ".", "--format", "json"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     serde_json::from_str(&stdout(&output)).expect("the bundle is JSON")
 }
@@ -210,7 +210,7 @@ fn section<'a>(bundle: &'a Value, name: &str) -> &'a Vec<Value> {
 fn every_verb_can_be_built_and_asked_for_help() {
     let root = repository_root();
     for verb in ["scan", "init", "openapi", "history"] {
-        let output = protocol_in(&root, &["reverse", verb, "--help"]);
+        let output = protocol_in(&root, &["plan", "reverse", verb, "--help"]);
         assert_eq!(
             code(&output),
             0,
@@ -225,11 +225,11 @@ fn one_tree_scans_to_the_same_bytes_twice() {
     // The property a committed bundle rests on. A `read_dir` order that leaked into the output
     // would make this pass on the machine that wrote the bundle and fail on the one reviewing it.
     let root = fixture("aep-reverse-determinism");
-    let first = protocol_in(&root, &["reverse", "scan", ".", "--format", "json"]);
-    let second = protocol_in(&root, &["reverse", "scan", ".", "--format", "json"]);
+    let first = protocol_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
+    let second = protocol_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
     assert_eq!(stdout(&first), stdout(&second));
-    let text_first = protocol_in(&root, &["reverse", "scan", "."]);
-    let text_second = protocol_in(&root, &["reverse", "scan", "."]);
+    let text_first = protocol_in(&root, &["plan", "reverse", "scan", "."]);
+    let text_second = protocol_in(&root, &["plan", "reverse", "scan", "."]);
     assert_eq!(stdout(&text_first), stdout(&text_second));
 }
 
@@ -405,6 +405,7 @@ fn an_unpinned_git_source_is_refused_and_nothing_is_written() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -431,6 +432,7 @@ fn an_unsupported_source_scheme_is_refused() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -453,6 +455,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -473,6 +476,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     let created = protocol_in(
         &root,
         &[
+            "plan",
             "artifact",
             "new",
             "story",
@@ -486,6 +490,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     let again = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -511,6 +516,7 @@ fn an_absolute_protocol_source_is_refused_and_the_repository_is_left_as_it_was()
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -547,6 +553,7 @@ fn a_relative_source_resolves_through_a_directory_that_did_not_exist_yet() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -569,6 +576,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     let adopted = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "init",
             "--protocols",
@@ -582,6 +590,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     let created = protocol_in(
         &root,
         &[
+            "plan",
             "artifact",
             "new",
             "vision",
@@ -595,6 +604,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     let refused = protocol_in(
         &root,
         &[
+            "plan",
             "artifact",
             "move",
             "vision:where-we-are-going",
@@ -607,6 +617,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     let permitted = protocol_in(
         &root,
         &[
+            "plan",
             "artifact",
             "move",
             "vision:where-we-are-going",
@@ -626,6 +637,7 @@ fn a_draft_names_every_decision_it_could_not_take() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "openapi",
             "generated/openapi/widget-service.yaml",
@@ -664,6 +676,7 @@ fn a_document_that_is_not_openapi_is_refused() {
     let output = protocol_in(
         &root,
         &[
+            "plan",
             "reverse",
             "openapi",
             "Taskfile.yml",
@@ -763,7 +776,10 @@ fn history_fixture(name: &str) -> PathBuf {
 
 /// The history bundle for `root`, as JSON.
 fn history(root: &Path) -> Value {
-    let output = protocol_in(root, &["reverse", "history", ".", "--format", "json"]);
+    let output = protocol_in(
+        root,
+        &["plan", "reverse", "history", ".", "--format", "json"],
+    );
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     serde_json::from_str(&stdout(&output)).expect("the bundle is JSON")
 }
@@ -843,8 +859,14 @@ fn a_marked_line_is_dated_from_the_commit_that_wrote_it_and_not_from_today() {
 #[test]
 fn a_history_of_one_tree_is_the_same_bytes_twice() {
     let root = history_fixture("aep-reverse-history-determinism");
-    let first = protocol_in(&root, &["reverse", "history", ".", "--format", "json"]);
-    let second = protocol_in(&root, &["reverse", "history", ".", "--format", "json"]);
+    let first = protocol_in(
+        &root,
+        &["plan", "reverse", "history", ".", "--format", "json"],
+    );
+    let second = protocol_in(
+        &root,
+        &["plan", "reverse", "history", ".", "--format", "json"],
+    );
     assert_eq!(stdout(&first), stdout(&second));
 }
 
@@ -854,7 +876,7 @@ fn a_directory_with_no_history_says_so_in_one_sentence() {
     // tarball, has no history and that is an ordinary state — but it is not the same state as a
     // repository whose history happens to hold nothing, and the two must not print alike.
     let root = fixture("aep-reverse-no-history");
-    let output = protocol_in(&root, &["reverse", "history", "."]);
+    let output = protocol_in(&root, &["plan", "reverse", "history", "."]);
     assert_eq!(code(&output), 1);
     assert!(
         stderr(&output).contains("not a Git working tree"),
@@ -863,7 +885,7 @@ fn a_directory_with_no_history_says_so_in_one_sentence() {
     );
 
     // And the verb that needs no history still works on the same directory.
-    let scanned = protocol_in(&root, &["reverse", "scan", "."]);
+    let scanned = protocol_in(&root, &["plan", "reverse", "scan", "."]);
     assert_eq!(code(&scanned), 0, "{}", stderr(&scanned));
 }
 

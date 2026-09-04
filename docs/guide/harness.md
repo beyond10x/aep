@@ -64,10 +64,10 @@ same job in its sibling `checks.yaml`:
 
 | kind | map | the step runs | what the verb writes |
 |---|---|---|---|
-| `property_test_result` | `default` | `aep property evidence` | the property, the case count, and the seed — or its honest absence, for an exhaustive checker |
-| `verification` | `default` | `aep validate --evidence` | claim `document-tree-valid`, and every problem the walk found |
-| `specification` | `default` | `aep specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
-| `trace_conformance` | `checks` | `aep trace evidence` | what the checker measured against a trace specification |
+| `property_test_result` | `default` | `aep observe property evidence` | the property, the case count, and the seed — or its honest absence, for an exhaustive checker |
+| `verification` | `default` | `aep govern validate --evidence` | claim `document-tree-valid`, and every problem the walk found |
+| `specification` | `default` | `aep observe specification evidence` | the requirement-by-requirement verdict, naming what is unmet |
+| `trace_conformance` | `checks` | `aep observe trace evidence` | what the checker measured against a trace specification |
 
 The last of those makes a decision the format does not: **a requirement is a list item under a
 `Requirements` or `Acceptance` heading of the specification artifact, and it is satisfied when the
@@ -76,7 +76,7 @@ reported unmet rather than assumed met, and a ticked checkbox is deliberately no
 party that writes the specification is the party being checked.
 
 **Which specification it decides is the guard's own question, answered by the guard's own rule.**
-`aep specification evidence` selects an approved `specification` whose `specifies` edge lands
+`aep observe specification evidence` selects an approved `specification` whose `specifies` edge lands
 on the work the task declares — `spec-driven.before_implementation`'s
 `{kind: specification, status: approved, relation: {kind: specifies, target: task}}`, evaluated by
 `ArtifactRequirement::matches` over `Task::declared_work`, which is the same function and the same
@@ -131,7 +131,7 @@ document a person reads. One rule stays in the driver because no scope grammar c
 edit whose text crosses a planning document's closing `---` is refused whatever the scope allows,
 which is a judgement about the edit's text and not about its path.
 
-`aep workflow render --run <id>` draws where a run got to, what it produced and why it
+`aep govern workflow render --run <id>` draws where a run got to, what it produced and why it
 stopped, with the engine's own sentences on the arrows.
 
 ## The loop

@@ -262,7 +262,7 @@ assert!(report.passed(), "{report}");
 From the command line, against the reference backend:
 
 ```console
-$ aep conformance --level full
+$ aep plan conformance --level full
 identity — 8/8 properties hold
   ✓ a created entity is addressable by the identity it was given
   ...
@@ -272,7 +272,7 @@ conformance full: 89 properties hold
 And the check that matters most — that the suites catch anything at all:
 
 ```console
-$ aep conformance --suite idempotency --inject replay-applies
+$ aep plan conformance --suite idempotency --inject replay-applies
 idempotency — 1/6 properties hold
   ✗ a replay does not advance the revision — the command left the entity at revision 2, and after
     replaying it the entity is at revision 3
@@ -373,7 +373,7 @@ Deviation **D-P1** — the CLI writing through the store rather than through `Co
 ladders are data with an open status vocabulary, and an evidence record is the input to the
 evidence-gated move. `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 
-`aep conformance --backend memory|markdown|sqlite|postgres` runs the suites from the command
+`aep plan conformance --backend memory|markdown|sqlite|postgres` runs the suites from the command
 line against the store a person actually has; `--backend project` runs them against the *kind* of
 store the project's `project.yaml` names, on a scratch instance of it — a scratch directory, an
 in-memory database, a schema of its own on the configured server — because the suites write and a
@@ -381,8 +381,8 @@ plan is not theirs to write into.
 
 ## Choosing the store
 
-One line in `.engineering/project.yaml` says where the plan is kept, and every `aep artifact`
-verb, `aep drive` and `aep conformance --backend project` open through it
+One line in `.engineering/project.yaml` says where the plan is kept, and every `aep plan artifact`
+verb, `aep drive` and `aep plan conformance --backend project` open through it
 (`story:store-selection-in-project-yaml`):
 
 ```yaml
@@ -407,7 +407,7 @@ event says `depends_on …` at that revision (`story:relation-bumps-a-document-r
 
 A SQLite or Postgres plan keeps what the journal keeps as the runtime's events: who, when, which
 revision, and — because the command travels as the event's `args` (`entity-runtime` R-110) — what
-changed. `aep artifact history` reads them back as journal entries, so the history printed over
+changed. `aep plan artifact history` reads them back as journal entries, so the history printed over
 one store is the history printed over another. Evidence recorded about an artifact and an edge
 starting at one are *observations*: an event on that entity at its unchanged revision, which is what
 lets a second process count the evidence on hand from the log alone, and what `entity-runtime`
@@ -415,11 +415,11 @@ lets a second process count the evidence on hand from the log alone, and what `e
 
 ### One artifact, printed
 
-`aep artifact show <id>` prints the artifact an id names: its frontmatter fields, then its
+`aep plan artifact show <id>` prints the artifact an id names: its frontmatter fields, then its
 markdown body verbatim.
 
 ```console
-$ aep artifact show story:passkey-login
+$ aep plan artifact show story:passkey-login
 id         story:passkey-login
 kind       story
 status     active
@@ -461,13 +461,13 @@ documents has never been told about them.
 
 ### What made this done
 
-`aep artifact explain <id>` answers the audit question three months later out of the store
+`aep plan artifact explain <id>` answers the audit question three months later out of the store
 rather than out of the repository's log (`story:completion-audit-join`). Per status the artifact
 reached: the move, the instant, the revision it left the artifact at, and every evidence record
 admitted since the previous move.
 
 ```console
-$ aep artifact explain story:passkey-login
+$ aep plan artifact explain story:passkey-login
 story:passkey-login in .engineering/planning: implemented, revision 8
   active -> implemented  2026-08-28T19:51:50Z  (revision 8)
     test_result from task check (run-4711), observed 2026-08-28T12:00:00Z, admitted at revision 7
@@ -485,13 +485,13 @@ A status reached with no record is marked rather than left blank, in the words `
 `asserted — no record: the evidence was claimed, not held` for a move on a bare `--evidence` count,
 `no record: nothing was recorded about how this was decided` for a rung that asked for nothing. It
 reads through the contract in every store, so the answer over markdown, SQLite, Postgres and a
-hybrid is one answer. `--format json` carries the same fields. `aep explain` is a different
+hybrid is one answer. `--format json` carries the same fields. `aep govern explain` is a different
 question — how a policy decided — and this is deliberately not it.
 
 ### The plan kept twice
 
 `store: hybrid` keeps the plan in markdown for pull requests **and** in a replica for tooling, under
-four words nobody may leave out — a missing one is refused by name at `aep validate`:
+four words nobody may leave out — a missing one is refused by name at `aep govern validate`:
 
 ```yaml
 store:
@@ -512,13 +512,13 @@ side took and the other refused is a **divergence**, recorded and never swallowe
 `catch_up` replays what the authority holds now and merges nothing. The rejected alternative — a
 two-phase commit with a durable intent log — is rejected there, for the reason its module doc gives.
 
-Two verbs are ours. `aep artifact divergences` lists what one side took and the other did not,
-says which side is authoritative, and exits 1 while anything is outstanding. `aep artifact
+Two verbs are ours. `aep plan artifact divergences` lists what one side took and the other did not,
+says which side is authoritative, and exits 1 while anything is outstanding. `aep plan artifact
 catch-up` replays them at the side that missed them and writes back what it could not — a replica
-that moved on its own stays listed, for a person. Because every `aep artifact` verb is its own
+that moved on its own stays listed, for a person. Because every `aep plan artifact` verb is its own
 process, divergences live in `divergences.jsonl` beside the plan: written after every command, read
 back on the next open. The sixteen suites run against the composite with either side as authority
-(`aep conformance --backend hybrid`), and `store_selection.rs` runs every verb over the hybrid
+(`aep plan conformance --backend hybrid`), and `store_selection.rs` runs every verb over the hybrid
 example (`examples/planning-passkeys/.engineering/project.hybrid.yaml`) beside the other two stores —
 and makes the replica refuse a write, lists the divergence from a second process, catches it up from
 a third.

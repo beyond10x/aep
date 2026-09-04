@@ -76,8 +76,8 @@ pub fn render(scene: &Scene, obligations: &Obligations) -> String {
 
     let _ = writeln!(
         out,
-        "<!-- Rendered from `{}` by `protocol workflow instruct`. Do not edit: change the workflow \
-         document or the principles timed against its phases, and render again. -->",
+        "<!-- Rendered from `{}` by `protocol govern workflow instruct`. Do not edit: change the \
+         workflow document or the principles timed against its phases, and render again. -->",
         scene.reference
     );
     let _ = writeln!(out, "\n# {}\n", scene.title);
@@ -106,7 +106,7 @@ pub fn render(scene: &Scene, obligations: &Obligations) -> String {
 /// undocumented — and, being generated, it is not a file nothing produces either.
 pub fn index(instructions: &[Instruction]) -> String {
     let mut out = String::with_capacity(1024);
-    out.push_str("<!-- Rendered by `protocol workflow instruct`. Do not edit. -->\n");
+    out.push_str("<!-- Rendered by `protocol govern workflow instruct`. Do not edit. -->\n");
     out.push_str("\n# Workflows, as instructions\n\n");
     out.push_str(&wrapped(
         "One document per workflow this tree declares: its states, what opens each move between \
@@ -115,7 +115,9 @@ pub fn index(instructions: &[Instruction]) -> String {
          nothing here can disagree with the specification without the gate going red.",
     ));
     out.push_str("\n\nRegenerate with:\n\n");
-    out.push_str("```console\nprotocol workflow instruct --out generated/instructions\n```\n\n");
+    out.push_str(
+        "```console\nprotocol govern workflow instruct --out generated/instructions\n```\n\n",
+    );
     for instruction in instructions {
         let _ = writeln!(
             out,

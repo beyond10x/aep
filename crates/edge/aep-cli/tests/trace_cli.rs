@@ -86,6 +86,7 @@ fn the_record_the_checker_writes_is_one_the_engine_accepts() {
     let out = scratch("aep-trace-evidence-roundtrip").join("trace.yaml");
 
     let minted = protocol(&[
+        "observe",
         "trace",
         "evidence",
         "--spec",
@@ -121,6 +122,7 @@ fn the_record_the_checker_writes_is_one_the_engine_accepts() {
     );
 
     let evaluated = protocol(&[
+        "govern",
         "evaluate",
         "--task",
         TASK,
@@ -149,6 +151,7 @@ fn the_json_rendering_is_read_by_the_same_loader_as_the_yaml_one() {
     let out = scratch("aep-trace-evidence-json").join("trace.json");
 
     let minted = protocol(&[
+        "observe",
         "trace",
         "evidence",
         "--spec",
@@ -173,6 +176,7 @@ fn the_json_rendering_is_read_by_the_same_loader_as_the_yaml_one() {
     );
 
     let evaluated = protocol(&[
+        "govern",
         "evaluate",
         "--task",
         TASK,
@@ -208,6 +212,7 @@ fn a_run_that_gapped_is_written_down_rather_than_exited_on() {
     .expect("the fixture is writable");
 
     let checked = protocol(&[
+        "observe",
         "trace",
         "check",
         "--spec",
@@ -223,6 +228,7 @@ fn a_run_that_gapped_is_written_down_rather_than_exited_on() {
     );
 
     let minted = protocol(&[
+        "observe",
         "trace",
         "evidence",
         "--spec",
@@ -254,6 +260,7 @@ fn a_driven_event_stream_is_checked_with_the_same_arguments_as_a_recorded_transc
     // says which one it was — so a verdict that changed because the *reader* changed stays visible
     // as that rather than as a change in the agent's behaviour.
     let checked = protocol(&[
+        "observe",
         "trace",
         "check",
         "--spec",
@@ -277,6 +284,7 @@ fn a_driven_event_stream_is_checked_with_the_same_arguments_as_a_recorded_transc
     // And the record it mints is the same kind of record, from the same loop.
     let out = scratch("aep-trace-evidence-event-stream").join("trace.yaml");
     let minted = protocol(&[
+        "observe",
         "trace",
         "evidence",
         "--spec",
@@ -306,6 +314,7 @@ fn a_file_that_is_neither_wire_is_refused_with_the_format_it_was_read_as() {
     let stray = scratch("aep-trace-not-a-transcript").join("notes.md");
     std::fs::write(&stray, "# notes\n\nnothing here is a transcript\n").expect("the scratch tree");
     let refused = protocol(&[
+        "observe",
         "trace",
         "check",
         "--spec",
@@ -328,6 +337,7 @@ fn a_downgrade_the_specification_does_not_declare_is_refused_by_the_evidence_ver
     // a record must refuse it for the stronger reason: the record names the downgrades, and one
     // naming an id nobody declared would be a false statement about what the run gated on.
     let refused = protocol(&[
+        "observe",
         "trace",
         "evidence",
         "--spec",

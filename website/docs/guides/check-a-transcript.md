@@ -12,7 +12,7 @@ plugins, the tokens, the timings. Almost nobody checks that record with anything
 a **trace specification** states expectations over it, and the verdict is three-valued and
 evidence-cited.
 
-`aep trace` has three verbs. `inspect` reports what is in a transcript, `check` judges it
+`aep observe trace` has three verbs. `inspect` reports what is in a transcript, `check` judges it
 against a specification, and `evidence` mints the verdict as a record the engine reads. None of
 them starts an agent, calls a model or reaches a network — they read a file and evaluate typed
 predicates over it, which is what makes a verdict reproducible on any machine on any day.
@@ -29,7 +29,7 @@ changed because the *reader* changed is visible as that rather than as a change 
 behaviour. Try it on the committed driven step:
 
 ```bash
-target/debug/aep trace check \
+target/debug/aep observe trace check \
   --spec conformance/trace/expectations.driven-step.trace.yaml \
   --transcript crates/observe/trace-spec/tests/fixtures/metaharness-driven-honest-step.jsonl
 ```
@@ -38,7 +38,7 @@ target/debug/aep trace check \
 
 ```bash
 B=target/debug/aep
-$B trace inspect --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+$B observe trace inspect --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
 ```
 
 ```text
@@ -136,7 +136,7 @@ evidence and is not rewritten, so the specification's own rows keep the recorded
 marked `# recorded-under-this-name`.
 
 ```bash
-$B trace check --spec conformance/trace/expectations.trace.yaml \
+$B observe trace check --spec conformance/trace/expectations.trace.yaml \
     --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | head -12
 ```
 
@@ -160,7 +160,7 @@ is evaluated and printed and gates nothing, so a cost bound that drifted with mo
 turn a job red on its own. The last four lines close the report:
 
 ```bash
-$B trace check --spec conformance/trace/expectations.trace.yaml \
+$B observe trace check --spec conformance/trace/expectations.trace.yaml \
     --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl | tail -4
 ```
 
@@ -184,7 +184,7 @@ it ran. A check report quotes all of that, and a report is a thing people paste 
 requests. **`--redact` replaces every citation with an event index and a digest:**
 
 ```bash
-$B trace check --spec conformance/trace/expectations.trace.yaml \
+$B observe trace check --spec conformance/trace/expectations.trace.yaml \
     --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl --redact | head -6
 ```
 
@@ -204,7 +204,7 @@ naming what it contains — so pasting one somewhere public is a decision rather
 evaluated, still printed, and the report names every id that was downgraded:
 
 ```bash
-$B trace check --spec conformance/trace/expectations.trace.yaml \
+$B observe trace check --spec conformance/trace/expectations.trace.yaml \
     --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
     --advisory billed-to-the-session | grep -E 'billed|downgraded'
 ```
@@ -223,7 +223,7 @@ a requirement the protocol asked for.
 ## Mint the verdict as evidence
 
 ```bash
-$B trace evidence --spec conformance/trace/expectations.trace.yaml \
+$B observe trace evidence --spec conformance/trace/expectations.trace.yaml \
     --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl \
     --observed-at 2026-08-21 --out evidence.yaml
 ```
@@ -259,7 +259,7 @@ accepting a claim about a check that has not happened.
 The record is a summary, not the report: counts, ids and the digest pair cross the boundary; the
 cited transcript rows — prompts, file contents — do not. Its producer is the `trace-checker`
 verifier class, and the record is minted in the same process that ran the check, so an agent's own
-claim of conformance never satisfies the kind. `aep evaluate --evidence evidence.yaml` reads
+claim of conformance never satisfies the kind. `aep govern evaluate --evidence evidence.yaml` reads
 the emitted document directly: `trace_conformance` is one of the evidence kinds the development
 protocol declares, and `trace_conformance.**` one of its observable fact families
 (`protocols/adp/1.yaml`). A behavioural claim about *how an agent worked* is now a fact the
@@ -289,8 +289,8 @@ repository's own backlog — `W4-1/1`, 2026-08-21 — **blocked**, in `establish
 states short of the person it was meant to stop at, on two requirements the engine printed: a
 specification artifact still in `draft`, and `test.first_result == failed` reading `passed`. Four
 model sessions, 80 hook decisions of which 11 were denials, and 11 `permission_denials` entries in
-the transcripts — one for one, each naming its tool. `aep trace check` decided those four
-transcripts, and `aep trace evidence` minted a `trace_conformance` record from one of them.
+the transcripts — one for one, each naming its tool. `aep observe trace check` decided those four
+transcripts, and `aep observe trace evidence` minted a `trace_conformance` record from one of them.
 What the run found was about the step map, not about the enforcement. The full record, including
 what it cost and what broke, is `docs/plan/harness-wave-4-governed-dogfood.md` § *The first run*.
 

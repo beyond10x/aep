@@ -152,6 +152,7 @@ fn ingest_every_arm(name: &str) -> PathBuf {
 
     for replay in &REPLAYS {
         let ingested = protocol(&[
+            "drive",
             "eval",
             "run",
             "--case",
@@ -195,7 +196,14 @@ fn the_whole_pipeline_runs_on_committed_streams_and_assembles_the_matrix_byte_fo
     // with no vendor binary, no credential and no network anywhere in it.
     let out = ingest_every_arm("aep-eval-dry-run-golden");
 
-    let json = protocol(&["eval", "matrix", printable(&out), "--format", "json"]);
+    let json = protocol(&[
+        "drive",
+        "eval",
+        "matrix",
+        printable(&out),
+        "--format",
+        "json",
+    ]);
     assert_eq!(code(&json), 0, "{}", stderr(&json));
     assert_eq!(
         stdout(&json),
@@ -203,7 +211,7 @@ fn the_whole_pipeline_runs_on_committed_streams_and_assembles_the_matrix_byte_fo
         "the pipeline assembles the committed matrix, byte for byte"
     );
 
-    let text = protocol(&["eval", "matrix", printable(&out)]);
+    let text = protocol(&["drive", "eval", "matrix", printable(&out)]);
     assert_eq!(code(&text), 0, "{}", stderr(&text));
     assert_eq!(stdout(&text), MATRIX_TEXT);
 
@@ -226,7 +234,7 @@ fn the_dry_run_reaches_both_harnesses_all_three_arms_and_a_contradiction() {
     // green against a checker that had stopped checking — the arm-a run is the corpus's declared
     // violation, so two facts are contradicted here on purpose.
     let out = ingest_every_arm("aep-eval-dry-run-coverage");
-    let table = stdout(&protocol(&["eval", "matrix", printable(&out)]));
+    let table = stdout(&protocol(&["drive", "eval", "matrix", printable(&out)]));
 
     for (harness, arm) in [
         ("claude", "raw"),

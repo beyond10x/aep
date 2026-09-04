@@ -32,7 +32,7 @@
 #   * the driver's own per-call policy is the constraint (`decide_tool` in aep-cli's
 #     drive.rs, answering the metaharness seam in ask mode — formerly the plugin's
 #     `driven-surface.sh` hook, retired under `epic:metaharness-migration`). It denies any `Bash`
-#     call that is not one simple invocation of `aep artifact …` or `aep trace …` — no
+#     call that is not one simple invocation of `aep plan artifact …` or `aep observe trace …` — no
 #     pipes, no redirection, no `&&`, no command substitution, because a composed command line is
 #     a second command wearing the first one's name.
 #
