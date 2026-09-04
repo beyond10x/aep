@@ -7,6 +7,36 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [0.54.0] — 2026-09-04
+
+- **`govern workflow render --format mermaid` writes a diagram a Markdown document renders
+  itself.** The other three formats are assets: a reader needs a viewer, and a repository that wants
+  the figure beside its prose commits a binary and has to remember to regenerate it. So a README
+  explaining a workflow got a diagram somebody typed, which is true on the day it is typed — the
+  org-brain instance had one whose arrows were the order the states were written in rather than the
+  transitions, and which carried no guard at all. The Mermaid output carries the guard on each
+  arrow, which states are terminal, and the `requires` of each state as a note, and it is text, so
+  the command that wrote it can be run again in a gate.
+
+- **`govern workflow instruct --map <step-map>` also says what runs in each state.** A workflow
+  declares what may happen and never what does; the step map is the other half, separate because one
+  workflow governs instances whose programs differ. Read alone the instructions were honest and not
+  actionable — a reader of a state learned the rule it must satisfy and not that a program called
+  `brain ledger acquire` is what satisfies it. With a map each state names its steps in the author's
+  order, marked `command`, `llm` or `operator`. A map covering a state with no steps says the driver
+  runs nothing there; a map silent about a state says nothing, because those are different facts.
+  `--map` needs `--id`: one map is written against one workflow, and applying it across a directory
+  would render some documents saying what runs and some not, with nothing saying which.
+
+  The step map crosses into `aep-render` as `steps::StepsView`, a plain struct the caller builds —
+  the seam `run::RunView` already uses, which is what keeps `aep-domain` that crate's only
+  dependency.
+
+- A refused `drive resume` names a route that exists. It advised `--restart`, which no `drive` verb
+  parses, so a reader who followed it got a second refusal — a bare usage error that reads as their
+  own mistake rather than the message's. It now names `drive run`, and a test walks the whole
+  command tree to hold every flag the refusal names to a flag some verb accepts.
+
 ## [0.53.0] — 2026-09-04
 
 ### Added
