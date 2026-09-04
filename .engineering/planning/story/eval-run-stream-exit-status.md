@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-stream-exit-status
 kind: story
-status: draft
+status: active
 title: aep eval run --stream exits non-zero when the replay is not conformant or undecided
 summary: The stream replay prints not conformant / undecided (exit 3) and exits 0; callers reading the status take a contradicted replay as green.
 relations:
@@ -12,7 +12,7 @@ scope:
   path: crates/edge/aep-cli/src/eval.rs
 - confidence: inferred
   path: crates/edge/aep-cli/tests
-revision: 2
+revision: 4
 ---
 # Story: `aep eval run --stream` exits non-zero when the replay is not conformant or undecided
 
