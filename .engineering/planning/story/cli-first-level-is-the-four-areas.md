@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:cli-first-level-is-the-four-areas
 kind: story
-status: active
+status: implemented
 title: aep --help shows the four areas and doctor; every flat verb stays as a hidden alias
 summary: Group the 23 verbs under govern, plan, drive, observe (+ doctor) with hidden flat aliases, a clap-tree test, and grouped spellings in the driver documents and docs.
 relations:
@@ -30,7 +30,7 @@ scope:
   path: profiles
 - confidence: cited
   path: website/docs
-revision: 4
+revision: 5
 ---
 # Story: `aep --help` shows the four areas and `doctor`; every flat verb stays as a hidden alias
 
