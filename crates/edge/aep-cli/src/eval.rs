@@ -3274,6 +3274,13 @@ struct Products {
     cost_micro_usd: Option<u64>,
     /// What the check said, for the line the runner prints.
     verdict: String,
+    /// The exit code that verdict calls for, straight off the record.
+    ///
+    /// [`trace_spec::report::CheckReport::exit_code`] and never a second table: the sentence in
+    /// `verdict` above already names a code — `not conformant … (exit 1)` — and a runner that
+    /// derived the status from anywhere else could print one number and exit another, which is
+    /// what this one did until `story:eval-run-stream-exit-status`.
+    exit_code: u8,
     /// The model the stream stated, for the same line — `None` where it stated none.
     model: Option<String>,
 }
@@ -3372,6 +3379,7 @@ fn ingest(plan: &Plan, events: &[u8], observed_at: &str, redact: bool) -> Result
         report: report_json,
         cost_micro_usd: session.cost_micro_usd,
         verdict: trace_spec::render::verdict_sentence(&report),
+        exit_code: report.exit_code(),
         model: session.model.clone(),
     })
 }
@@ -3571,7 +3579,29 @@ fn version_token(reported: &str) -> Option<String> {
 /// warning, since a case may not run `aep` at all and the child's own failure is then cheap.
 fn preflight_child_path(cases: &[Case], out: &Path) -> Result<()> {
     let child_path = child_path_for(std::env::var("HOME").ok().as_deref());
-    match resolve_on_path("aep", &child_path) {
+    let refusals = child_path_refusals(cases, &child_path);
+    if refusals.is_empty() {
+        Ok(())
+    } else {
+        Err(refused_run(out, &refusals))
+    }
+}
+
+/// Every fault of one child `PATH`, in the order an operator would fix them.
+///
+/// **Accumulated and not returned one at a time** (invariant 3: validation accumulates), for the
+/// reason [`declared_plugins`] gives 400 lines above: these are independent defects of one machine.
+/// `EVAL-RUN-017` masked `EVAL-RUN-018` while this returned the first — a stale `aep` in
+/// `~/.local/bin` and no `ess` beside it are one afternoon's fix and were two live round trips to
+/// find out about.
+///
+/// Takes the `PATH` rather than reading `HOME` itself, so a test can point it at a tree it built
+/// instead of at the developer's own `~/.local/bin`.
+fn child_path_refusals(cases: &[Case], child_path: &str) -> Vec<RunRefusal> {
+    let mut refusals = Vec::new();
+    match resolve_on_path("aep", child_path) {
+        // An absence is a warning and not a refusal: a case may not run `aep` at all, and the
+        // child's own failure is then cheap. A *mismatch* is a run that pays before it finds out.
         None => eprintln!(
             "warning: no `aep` on the child's PATH ({child_path}); a case whose task runs it will \
              fail inside the session. `task install` in the aep checkout writes one to ~/.local/bin"
@@ -3585,30 +3615,24 @@ fn preflight_child_path(cases: &[Case], out: &Path) -> Result<()> {
             let found = version_token(&reported).unwrap_or_else(|| format!("unreadable: {reported:?}"));
             let own = env!("CARGO_PKG_VERSION");
             if found != own {
-                return Err(refused_run(
-                    out,
-                    &[RunRefusal::ChildAepMismatch {
-                        child: child.display().to_string(),
-                        found,
-                        own: own.to_owned(),
-                        child_path,
-                    }],
-                ));
+                refusals.push(RunRefusal::ChildAepMismatch {
+                    child: child.display().to_string(),
+                    found,
+                    own: own.to_owned(),
+                    child_path: child_path.to_owned(),
+                });
             }
         }
     }
     if let Some(case) = cases.iter().find(|case| case.needs_ess) {
-        if resolve_on_path("ess", &child_path).is_none() {
-            return Err(refused_run(
-                out,
-                &[RunRefusal::ChildEssMissing {
-                    case: case.id.clone(),
-                    child_path,
-                }],
-            ));
+        if resolve_on_path("ess", child_path).is_none() {
+            refusals.push(RunRefusal::ChildEssMissing {
+                case: case.id.clone(),
+                child_path: child_path.to_owned(),
+            });
         }
     }
-    Ok(())
+    refusals
 }
 
 /// Micro-dollars as the plain decimal a vendor flag takes: `12500000` → `12.500000`. Not
@@ -3830,6 +3854,9 @@ pub(crate) struct RunArgs {
 /// Split out of [`run_arm`] because it shares none of that function's machinery — no binary, no
 /// live flag, no cap, no working tree — and because a reader looking for *what happens for free*
 /// should find it in one piece.
+///
+/// **The status it answers with is the verdict**: `0` conformant, `1` contradicted, `3` undecided,
+/// the codes `trace check` already uses. See the return below for why the spawn path does not.
 fn ingest_recorded(
     args: &RunArgs,
     cases: Vec<Case>,
@@ -3868,7 +3895,18 @@ fn ingest_recorded(
         None
     };
     write_products(&args.out, &plan, recorded.as_deref(), &products)?;
-    Ok(ExitCode::SUCCESS)
+    // The verdict, as the status. A caller reading the exit code of an ingest gets the same answer
+    // as a person reading the line it just printed — `trace check`'s own three codes, from the same
+    // report: 0 conformant, 1 contradicted, 3 undecided. This was `SUCCESS` whatever the record
+    // said until `story:eval-run-stream-exit-status`, and on 2026-09-03 a gate that read it
+    // reported a replay contradicting two expectations as a replayed transcript.
+    //
+    // **The spawn path above deliberately does not do this.** It launches several runs against a
+    // budget and its last line is a ledger — `2 run(s), $0.53 spent` — so there is no single
+    // verdict for a status to agree with; a paid run that produced records must not read as a run
+    // that failed to happen. `--stream` is one recorded run and one verdict, which is what makes
+    // the status meaningful here.
+    Ok(ExitCode::from(products.exit_code))
 }
 
 /// Refuses the two arms this verb reads and does not launch, each naming the verb that does.

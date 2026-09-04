@@ -232,6 +232,15 @@ citation rows — which quote the prompt, the model's reasoning and file content
 That is why the evidence verb has no `--redact` flag; there is nothing left in the record for one to
 remove. See [Check a transcript](../guides/check-a-transcript.md).
 
+**`provenance.command` is spelled with the canonical `protocol` name, whichever binary was
+invoked.** `aep trace evidence` and `protocol trace evidence` write the same record, byte for byte,
+including that line. The provenance says what was *asked for*, in the vocabulary of the verb, and
+that vocabulary has one spelling for the tool; which of the two names is on the operator's `PATH` is
+a fact about the machine and not about the observation. It is what makes a committed record
+regenerable by a reader who installed the other name — a `command` that followed the invoked binary
+would make one check produce two documents, and every record already in a repository would diff
+against a rerun of the command that wrote it.
+
 ---
 
 **Sources.** `crates/govern/aep-domain/src/evidence.rs`; `crates/govern/aep-domain/src/requirement.rs` (the

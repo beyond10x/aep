@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:trace-evidence-provenance-command
 kind: story
-status: active
+status: implemented
 title: trace evidence records the binary that was invoked
 summary: provenance.command is the literal 'protocol trace evidence' whatever binary ran; decide whether evidence names the invoked binary or the canonical spelling.
 relations:
@@ -10,7 +10,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/edge/aep-cli/src/trace.rs
-revision: 4
+revision: 5
 ---
 # Story: `trace evidence` records the binary that was invoked
 

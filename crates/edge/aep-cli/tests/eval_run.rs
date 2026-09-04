@@ -657,6 +657,114 @@ fn a_stale_aep_on_the_childs_path_is_refused_before_anything_is_spent() {
     assert!(!argv.exists(), "and nothing was started");
 }
 
+/// A case whose subject names the `ess-specify` plugin, in a scratch directory of its own.
+///
+/// Written here because no case in the committed corpus declares a `subject` — the block is read by
+/// the preflight and by nothing else, and a corpus case gaining one would be a change to the
+/// programme rather than to this test.
+#[cfg(unix)]
+fn case_that_needs_ess(name: &str) -> PathBuf {
+    let directory = scratch(name);
+    std::fs::write(
+        directory.join("expectations.trace.yaml"),
+        "format: trace-spec/1\n\
+         id: eval-case/needs-ess\n\
+         expectations:\n\
+        \x20 - id: nothing-shelled-out\n\
+        \x20   expect:\n\
+        \x20     tool.absent:\n\
+        \x20       tool: Bash\n",
+    )
+    .expect("the scratch case is writable");
+    std::fs::write(
+        directory.join("case.yaml"),
+        "format: eval-case/1\n\
+         id: needs-ess\n\
+         workflow: adp/default\n\
+         task: draft the domain\n\
+         expectations: expectations.trace.yaml\n\
+         subject:\n\
+        \x20 skills: [ess-specify:specify]\n",
+    )
+    .expect("the scratch case is writable");
+    directory
+}
+
+/// Whether the fixed part of the child's `PATH` — the part no test can control — already has `ess`.
+///
+/// `EVAL-RUN-018` is *no `ess` anywhere the child will look*, and two of the three directories it
+/// looks in belong to the machine. A developer who installed `ess` into one of them makes the
+/// refusal unreachable, and the honest answer there is a skip by name, exactly as the missing
+/// `metaharness` binary gets one at the top of this file.
+#[cfg(unix)]
+fn ess_is_installed_where_no_test_can_remove_it() -> bool {
+    ["/usr/local/bin/ess", "/usr/bin/ess", "/bin/ess"]
+        .iter()
+        .any(|candidate| Path::new(candidate).exists())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_preflight_with_two_faults_names_both_rather_than_the_first() {
+    // Invariant 3: validation accumulates. The stale child `aep` (`EVAL-RUN-017`) and the missing
+    // child `ess` (`EVAL-RUN-018`) are independent defects of one machine, and an operator who has
+    // both should be told about both — the alternative is two live round trips to learn the second,
+    // which is what returning the first refusal bought.
+    use std::os::unix::fs::PermissionsExt as _;
+    if ess_is_installed_where_no_test_can_remove_it() {
+        eprintln!(
+            "skipped by name: `ess` is installed in the fixed part of the child's PATH here, so              EVAL-RUN-018 cannot be reached. The gate is green either way — that is what this skip              is for."
+        );
+        return;
+    }
+    let out = scratch("aep-eval-run-two-faults");
+    let cwd = scratch("aep-eval-run-two-faults-tree");
+    let home = scratch("aep-eval-run-two-faults-home");
+    let bin = home.join(".local/bin");
+    std::fs::create_dir_all(&bin).expect("the scratch home is writable");
+    let stale = bin.join("aep");
+    std::fs::write(&stale, "#!/bin/sh\necho 'protocol 0.1.0'\n").expect("written");
+    std::fs::set_permissions(&stale, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    // …and no `ess` beside it, which is the second fault.
+    let case = case_that_needs_ess("aep-eval-run-two-faults-case");
+    let binary = stub(&out);
+    let argv = out.join("argv");
+
+    let mut invocation = spawn_args(&out, &cwd, &["--arm", "raw", "--budget-usd", "1.00"]);
+    invocation[3] = printable(&case);
+    let refused = protocol_with(
+        &invocation,
+        &[
+            ("METAHARNESS_BIN", printable(&binary)),
+            ("METAHARNESS_LIVE", "1"),
+            ("STUB_ARGV", printable(&argv)),
+            ("HOME", printable(&home)),
+        ],
+    );
+
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    let reason = stderr(&refused);
+    assert!(
+        reason.contains("2 refusal(s)"),
+        "one refusal carrying both, not the first of two: {reason}"
+    );
+    for code in ["EVAL-RUN-017", "EVAL-RUN-018"] {
+        assert_eq!(
+            reason.lines().filter(|line| line.contains(code)).count(),
+            1,
+            "`{code}` is named, on a line of its own: {reason}"
+        );
+    }
+    assert!(
+        reason.contains(printable(&stale)) && reason.contains("needs-ess"),
+        "and each names what an operator has to go and fix: {reason}"
+    );
+    assert!(
+        !argv.exists(),
+        "and both were found before anything was started"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn a_spawn_with_no_cap_on_what_it_may_spend_is_refused_by_name() {
@@ -1773,4 +1881,140 @@ fn a_run_that_pins_no_model_writes_no_model_requested_key() {
         !manifest(&out, "claude-plugin-development-honest").contains("model_requested"),
         "an absent flag writes no key"
     );
+}
+
+// --- the status a caller reads, and the line a person reads --------------------------------------
+
+/// The exit code the run's own verdict line names, out of its `(exit N)`.
+///
+/// Read back out of the printed sentence rather than written here as a constant, because the claim
+/// is *the two agree*: a test naming both numbers itself would still pass if the sentence and the
+/// status drifted apart together.
+fn exit_code_the_verdict_line_names(printed: &str) -> i32 {
+    let line = printed
+        .lines()
+        .find(|line| line.contains("(exit "))
+        .unwrap_or_else(|| {
+            panic!("the run prints a verdict sentence carrying its code: {printed}")
+        });
+    let (_, tail) = line
+        .rsplit_once("(exit ")
+        .expect("the sentence names a code");
+    let (code, _) = tail.split_once(')').expect("the code is parenthesised");
+    code.trim().parse().expect("the code is a number")
+}
+
+/// The `trace-report/1` record one run left beside its manifest.
+fn record(out: &Path, name: &str) -> String {
+    std::fs::read_to_string(out.join(format!("{name}.report.json")))
+        .unwrap_or_else(|error| panic!("{name} left a record: {error}"))
+}
+
+#[test]
+fn a_contradicted_replay_exits_with_the_code_its_own_verdict_line_prints() {
+    // The corpus's designed contradiction, ingested from its own committed transcript: arm `raw`
+    // over `development-tests-after-the-code`, which wrote the code before the test. It printed
+    // `not conformant … (exit 1)` and exited **0** until this test, so a gate reading the status —
+    // which is what the agentplugins gate did on 2026-09-03 — took a contradicted replay as a
+    // replayed transcript and reported it green.
+    let out = scratch("aep-eval-run-status-contradicted");
+    let ingested = ingest(&out, VIOLATION_CASE, "raw", "claude", NO_PLUGIN_STREAM);
+    let printed = stdout(&ingested);
+
+    assert!(
+        printed.contains("not conformant:"),
+        "the fixture reaches the contradicted verdict: {printed}"
+    );
+    assert_eq!(
+        code(&ingested),
+        exit_code_the_verdict_line_names(&printed),
+        "the status and the sentence are one answer: {printed}"
+    );
+    assert_eq!(code(&ingested), 1, "and that answer is 1: {printed}");
+
+    // And the record beside it says the same thing, which is the fact the status was missing.
+    assert!(
+        record(&out, "claude-raw-development-tests-after-the-code")
+            .contains("\"verdict\": \"gap\""),
+        "the written record carries the verdict the status now reports"
+    );
+}
+
+#[test]
+fn an_undecided_replay_exits_three_rather_than_reporting_a_replayed_transcript() {
+    // `unk` is deliberately not a softer gap: *the agent did the wrong thing* and *the transcript
+    // could not decide it* want different people woken up, and `trace check` has spelled that as
+    // exit 3 since it existed. A replay of the same transcript through `eval run` said `undecided …
+    // (exit 3)` and exited 0.
+    //
+    // The transcript is the committed one; the specification is written here, because the corpus
+    // holds no case whose gating rows this transcript cannot decide — and one row nothing decides,
+    // with nothing contradicted, is exactly the shape being asserted.
+    let out = scratch("aep-eval-run-status-undecided");
+    let case = scratch("aep-eval-run-status-undecided-case");
+    std::fs::write(
+        case.join("expectations.trace.yaml"),
+        "format: trace-spec/1\n\
+         id: eval-case/nothing-decides-this\n\
+         title: A gating order row this transcript cannot decide either way\n\
+         expectations:\n\
+        \x20 - id: the-migration-ran-before-the-cutover\n\
+        \x20   statement: a command nobody in this transcript ran came before another one\n\
+        \x20   expect:\n\
+        \x20     order:\n\
+        \x20       first: {operations: [shell], tools: [Bash], args: {command: {contains: \"aep-no-such-migration\"}}}\n\
+        \x20       before: {operations: [shell], tools: [Bash], args: {command: {contains: \"aep-no-such-cutover\"}}}\n",
+    )
+    .expect("the scratch case is writable");
+    std::fs::write(
+        case.join("case.yaml"),
+        "format: eval-case/1\n\
+         id: nothing-decides-this\n\
+         workflow: adp/default\n\
+         task: |\n\
+        \x20 Undecidable by construction: the two commands the specification orders were never run.\n\
+         expectations: expectations.trace.yaml\n",
+    )
+    .expect("the scratch case is writable");
+
+    let ingested = ingest(&out, printable(&case), "raw", "claude", NO_PLUGIN_STREAM);
+    let printed = stdout(&ingested);
+
+    assert!(
+        printed.contains("undecided:"),
+        "the fixture reaches the undecided verdict: {printed}{}",
+        stderr(&ingested)
+    );
+    assert_eq!(
+        code(&ingested),
+        exit_code_the_verdict_line_names(&printed),
+        "the status and the sentence are one answer: {printed}"
+    );
+    assert_eq!(
+        code(&ingested),
+        3,
+        "and 3 is not 1: a transcript that could not decide the row is not a run that broke it: \
+         {printed}"
+    );
+    assert!(
+        record(&out, "claude-raw-nothing-decides-this").contains("\"verdict\": \"unknown\""),
+        "the written record carries the verdict the status now reports"
+    );
+}
+
+#[test]
+fn a_conformant_replay_still_exits_zero() {
+    // The control. A status that moved with the verdict would be worth nothing if it moved for
+    // every replay — this is the run that must keep exiting 0, and it is the same ingest every
+    // other test in this file depends on.
+    let out = scratch("aep-eval-run-status-conformant");
+    let ingested = ingest(&out, HONEST_CASE, "plugin", "claude", ATTESTED_STREAM);
+    let printed = stdout(&ingested);
+    assert!(printed.contains("conformant:"), "{printed}");
+    assert_eq!(
+        code(&ingested),
+        exit_code_the_verdict_line_names(&printed),
+        "{printed}"
+    );
+    assert_eq!(code(&ingested), 0, "{}", stderr(&ingested));
 }

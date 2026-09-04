@@ -454,3 +454,134 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
         );
     }
 }
+
+// --- one interface, one record --------------------------------------------------------------
+
+/// Runs `aep` — the canonical name — with `args` from the repository root.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(args)
+        .current_dir(root())
+        .output()
+        .expect("the aep binary runs")
+}
+
+/// A committed `contract_result` a contract runner emitted, which the fourth producer reads.
+const CONTRACT_RECORD: &str =
+    "crates/edge/aep-cli/fixtures/metaharness-contract-result-claude.json";
+
+/// The `command:` line a minted record carries, or a panic saying it carried none.
+fn provenance_command(document: &str) -> &str {
+    document
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("command: "))
+        .unwrap_or_else(|| {
+            panic!("a minted record states the command that produced it: {document}")
+        })
+}
+
+/// The record without the one line that is a clock reading rather than an observation.
+///
+/// `validate` and `property evidence` take no `--observed-at` and stamp the moment they ran — which
+/// is the truth, since they check in the process that mints — so two runs of one of them differ in
+/// that line whatever binary made them. It is dropped here and asserted to have been there, so the
+/// comparison below is about everything a caller's choice of name could reach and nothing else.
+fn without_the_clock(document: &str) -> String {
+    let kept: Vec<&str> = document
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("observed_at:"))
+        .collect();
+    assert!(
+        kept.len() < document.lines().count(),
+        "every record states when it was observed: {document}"
+    );
+    kept.join("\n")
+}
+
+#[test]
+fn every_evidence_producer_writes_the_same_record_through_either_binary_name() {
+    // **The class, not one instance.** `story:trace-evidence-provenance-command` was reported
+    // against `trace evidence`, whose `provenance.command` is the literal `protocol trace evidence`
+    // whatever binary ran. It is one of five verbs that mint a record with a reconstructed command
+    // line — `aep-cli/src/{trace,specification,contract,property}.rs`'s `invocation` and
+    // `app.rs`'s `protocol validate --root …` — and the question is the same for each.
+    //
+    // The answer is one answer for all five, and it is invariant 10: `aep` and `protocol` are one
+    // interface, so a record is the same document through either name, including the line saying
+    // which command produced it. A `command` taken from `current_exe` would make one check produce
+    // two documents and every committed record diff against a rerun of itself.
+    //
+    // Four are checked here; `trace evidence` is checked in `trace_cli.rs`, beside the rest of that
+    // verb. Both runs write to the **same** path, because two of these four write their own `--out`
+    // into the provenance and a differing path would be a difference this test created.
+    let directory = scratch("either-name");
+    let store = directory.join("store");
+    specification_store(&store);
+    let task = store.join("task.yaml");
+    let broken = directory.join("tree");
+    write(
+        &broken.join("protocols/broken.yaml"),
+        "id: broken\nversion: nine\n",
+    );
+
+    let cases: Vec<(&str, Vec<&str>)> = vec![
+        (
+            "validate",
+            vec!["validate", "--root", printable(&broken), "--evidence"],
+        ),
+        ("property", vec!["property", "evidence", "--out"]),
+        (
+            "specification",
+            vec![
+                "specification",
+                "evidence",
+                "--store",
+                printable(&store),
+                "--task",
+                printable(&task),
+                "--out",
+            ],
+        ),
+        (
+            "contract",
+            vec![
+                "contract",
+                "evidence",
+                "--record",
+                CONTRACT_RECORD,
+                "--observed-at",
+                "2026-08-23",
+                "--out",
+            ],
+        ),
+    ];
+
+    for (name, arguments) in cases {
+        let out = directory.join(format!("{name}.yaml"));
+        let mut invocation = arguments;
+        invocation.push(printable(&out));
+
+        aep(&invocation);
+        let from_aep = std::fs::read_to_string(&out)
+            .unwrap_or_else(|error| panic!("`aep {name}` wrote a record: {error}"));
+        protocol(&invocation);
+        let from_protocol = std::fs::read_to_string(&out)
+            .unwrap_or_else(|error| panic!("`protocol {name}` wrote a record: {error}"));
+
+        assert_eq!(
+            without_the_clock(&from_aep),
+            without_the_clock(&from_protocol),
+            "`{name}` writes one document through either name (invariant 10)"
+        );
+        assert_eq!(
+            provenance_command(&from_aep),
+            provenance_command(&from_protocol),
+            "including the command line it says produced it"
+        );
+        assert!(
+            provenance_command(&from_aep).starts_with("protocol "),
+            "and that line names the tool in the canonical spelling: {}",
+            provenance_command(&from_aep)
+        );
+    }
+}

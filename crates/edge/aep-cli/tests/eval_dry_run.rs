@@ -125,6 +125,25 @@ const REPLAYS: [Replay; 4] = [
     },
 ];
 
+/// The exit code the run's own verdict line names, out of its `(exit N)`.
+///
+/// `0` conformant, `1` contradicted, `3` undecided — the codes `protocol trace check` uses, which a
+/// `--stream` ingest now answers with. Read back out of the printed sentence rather than written
+/// down here, so a status and a sentence that drifted apart are what fails.
+fn exit_code_the_verdict_line_names(printed: &str) -> i32 {
+    let line = printed
+        .lines()
+        .find(|line| line.contains("(exit "))
+        .unwrap_or_else(|| {
+            panic!("the run prints a verdict sentence carrying its code: {printed}")
+        });
+    let (_, tail) = line
+        .rsplit_once("(exit ")
+        .expect("the sentence names a code");
+    let (code, _) = tail.split_once(')').expect("the code is parenthesised");
+    code.trim().parse().expect("the code is a number")
+}
+
 /// Replays all four runs into one directory and answers with it.
 fn ingest_every_arm(name: &str) -> PathBuf {
     let out = std::env::temp_dir().join(name);
@@ -151,13 +170,19 @@ fn ingest_every_arm(name: &str) -> PathBuf {
             // produces are the shape the committed ones have.
             "--redact",
         ]);
+        // **The status is the verdict, so it is asserted against the verdict** rather than against
+        // `0`: one of these four replays is the corpus's designed contradiction, and an ingest that
+        // exits 0 over it is what `story:eval-run-stream-exit-status` closed. The expected code is
+        // read out of the sentence the run just printed, so the two cannot drift apart together.
+        let printed = stdout(&ingested);
         assert_eq!(
             code(&ingested),
-            0,
-            "ingesting {} / {} / {} — {}",
+            exit_code_the_verdict_line_names(&printed),
+            "ingesting {} / {} / {} — {}{}",
             replay.harness,
             replay.arm,
             replay.case,
+            printed,
             stderr(&ingested)
         );
     }

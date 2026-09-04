@@ -7,6 +7,32 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Fixed
+
+- **`aep eval run --stream` exits with the verdict it prints.** The ingest printed
+  `not conformant: the run contradicted 2 expectation(s) … (exit 1)` — or
+  `undecided: … (exit 3)` — and exited **0**, so a caller reading the status took a contradicted
+  replay as a replayed transcript, which is what the agentplugins gate did on 2026-09-03. The three
+  codes are now `aep trace check`'s own, read off the same record: `0` conformant, `1` contradicted,
+  `3` undecided. A **spawn** is unchanged and still exits `0` whenever it launched anything: its
+  last line is a ledger over several runs rather than one verdict, and a paid run whose records were
+  written is not a run that failed to happen.
+- **`aep eval run`'s preflight reports every fault of the child's `PATH`, not the first.** A stale
+  `aep` in `~/.local/bin` (`EVAL-RUN-017`) masked a missing `ess` beside it (`EVAL-RUN-018`), so an
+  operator with both paid two live round trips to learn about the second. Both are found before
+  anything is spawned and refused together, one line each, each naming what to go and fix
+  (`AGENTS.md` invariant 3).
+- **`trace evidence`'s `provenance.command` is documented as the canonical spelling, and guarded.**
+  The record names the tool `protocol` whichever of the two binaries was invoked, which is what
+  invariant 10 requires of an output — a `command` that followed the caller's binary would make the
+  same check through the two names produce two different documents, and every committed evidence
+  record would diff against a rerun of the command that wrote it. Nothing in the gate said so and
+  nothing tested it; the contract is now stated at the site, on the
+  [evidence page](website/docs/concepts/evidence.md), and asserted by running both binaries and
+  comparing the records they write byte for byte.
+
 ## [0.51.0] — 2026-09-04
 
 ### Changed

@@ -349,3 +349,67 @@ fn a_downgrade_the_specification_does_not_declare_is_refused_by_the_evidence_ver
         stdout(&refused)
     );
 }
+
+/// Runs `aep` — the canonical name — with `args`, against the same document tree.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(args)
+        .current_dir(root())
+        .output()
+        .expect("the aep binary runs")
+}
+
+/// One minting of the committed transcript's record, to a named file.
+///
+/// Everything about it is pinned — the same spec, the same transcript, the same `--observed-at` —
+/// so the only thing that could make the two records differ is the name of the binary that ran.
+fn evidence_arguments(out: &str) -> Vec<&str> {
+    vec![
+        "trace",
+        "evidence",
+        "--spec",
+        SPEC,
+        "--transcript",
+        TRANSCRIPT,
+        "--observed-at",
+        "2026-08-21",
+        "--out",
+        out,
+    ]
+}
+
+#[test]
+fn the_provenance_command_is_the_canonical_spelling_whichever_binary_minted_the_record() {
+    // `provenance.command` says *what was asked for*, in this verb's own vocabulary, and the
+    // canonical vocabulary spells the tool `protocol` — the two names are one interface (invariant
+    // 10: identical output bytes and exit status), and a record whose bytes moved with the name on
+    // the caller's `PATH` would make two identical checks produce two different documents. Every
+    // evidence record committed to this repository was minted with that spelling; the guide quotes
+    // it as printed.
+    //
+    // So this is a contract and not an accident, and the test is the contract: both binaries, the
+    // same arguments, and the written record byte-identical.
+    let directory = scratch("aep-trace-evidence-provenance");
+    let by_aep = directory.join("by-aep.yaml");
+    let by_protocol = directory.join("by-protocol.yaml");
+    let canonical = aep(&evidence_arguments(printable(&by_aep)));
+    assert_eq!(code(&canonical), 0, "{}", stderr(&canonical));
+    let alias = protocol(&evidence_arguments(printable(&by_protocol)));
+    assert_eq!(code(&alias), 0, "{}", stderr(&alias));
+
+    let from_aep = std::fs::read_to_string(&by_aep).expect("`aep` wrote its record");
+    let from_protocol = std::fs::read_to_string(&by_protocol).expect("`protocol` wrote its record");
+    assert_eq!(
+        from_aep, from_protocol,
+        "the same check through the two names is the same document, byte for byte"
+    );
+
+    let command = from_aep
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("command: "))
+        .expect("the record carries a provenance command");
+    assert!(
+        command.starts_with("protocol trace evidence "),
+        "and it is spelled with the canonical `protocol`, whichever binary ran: {command}"
+    );
+}

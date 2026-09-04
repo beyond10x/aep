@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:eval-run-preflight-accumulates
 kind: story
-status: active
+status: implemented
 title: aep eval run preflight reports every refusal, not the first
 summary: preflight_child_path returns the first refusal so EVAL-RUN-017 masks EVAL-RUN-018; accumulate and name both.
 relations:
@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/edge/aep-cli/src/eval.rs
-revision: 4
+revision: 5
 ---
 # Story: `aep eval run` preflight reports every refusal, not the first
 

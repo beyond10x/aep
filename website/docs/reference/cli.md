@@ -468,13 +468,28 @@ and a machine without it is told so by name and exits `2` rather than reddening 
 | Command | Does |
 |---|---|
 | `aep eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
-| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--model <model>] [--stream <file>] [--budget-usd <usd>] [--redact]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing |
+| `aep eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--model <model>] [--stream <file>] [--budget-usd <usd>] [--redact]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing ; a `--stream` ingest exits with its own verdict — `0` conformant, `1` contradicted, `3` undecided |
 
 `eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
 an exit code that moved with the counts would be the single number it refuses to compute — there is
 no score, no ranking and no percentage in the output. Nothing spawns without `METAHARNESS_LIVE=1`
 and `--budget-usd`. Arms `driven` and `native` are not launched from here and the refusal says what
 launches each: `aep drive run` and `b10x-harness`.
+
+`eval run --stream` is the exception, and it exits with the verdict it prints — the same three codes
+`aep trace check` uses, from the same record:
+
+| code | what the run printed |
+|---|---|
+| `0` | `conformant: …` |
+| `1` | `not conformant: …` — the replay contradicted the specification |
+| `3` | `undecided: …` — nothing was contradicted and a gating row could not be judged |
+
+An ingest that prints one number and exits another is the defect this closes: a caller reading the
+status took a contradicted replay as a replayed transcript. A **spawn** still exits `0` whenever it
+launched anything, because its last line is a ledger over several runs rather than one verdict, and
+a paid run whose records were written is not a run that failed to happen. The verdicts are in the
+records it left, and `eval matrix` is what reads them.
 
 ### Naming the plugin arm's treatment
 
@@ -543,6 +558,10 @@ versions; `task install` refreshes that copy.
 |---|---|
 | `EVAL-RUN-017` | the child's `aep` is not this binary's version. Both paths and both versions are named; an absent child `aep` is a printed warning, since a case may not need it |
 | `EVAL-RUN-018` | the case's `subject.skills` names `ess-specify:*` (or the pre-rename `ess-schema:*`) and the child's `PATH` has no `ess` — the step it runs would be drafted by hand and never validated |
+
+Both are checked before anything is spawned and **reported together**, one line each: a stale `aep`
+in `~/.local/bin` and no `ess` beside it are two independent faults of one machine, and a preflight
+that stopped at the first made an operator pay for a second live round trip to learn the second.
 
 The manifest records **both** facts and keeps them apart: `model` is what the attestation reported
 and `model_requested` is what the run asked for, written immediately after it and only where the run
