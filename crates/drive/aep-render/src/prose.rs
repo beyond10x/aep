@@ -34,6 +34,7 @@ use std::fmt::Write as _;
 
 use crate::obligations::{BoundPrinciple, Landing, Obligations};
 use crate::scene::{Edge, Node, Scene};
+use crate::steps::StepsView;
 
 /// How wide the prose is wrapped.
 ///
@@ -61,17 +62,24 @@ pub struct Instruction {
 }
 
 /// A workflow and the principles that bind it, as one instruction document.
-pub fn instruction(scene: &Scene, obligations: &Obligations) -> Instruction {
+///
+/// `steps` is the driver's half, and it is optional because the two documents are separate on
+/// purpose: without it the document says what may happen, with it the document also says what runs.
+pub fn instruction(
+    scene: &Scene,
+    obligations: &Obligations,
+    steps: Option<&StepsView>,
+) -> Instruction {
     Instruction {
         path: format!("{}.md", scene.id),
         reference: scene.reference.clone(),
         title: scene.title.clone(),
-        document: render(scene, obligations),
+        document: render(scene, obligations, steps),
     }
 }
 
 /// A workflow and the principles that bind it, as instructions.
-pub fn render(scene: &Scene, obligations: &Obligations) -> String {
+pub fn render(scene: &Scene, obligations: &Obligations, steps: Option<&StepsView>) -> String {
     let mut out = String::with_capacity(8192);
 
     let _ = writeln!(
@@ -94,7 +102,7 @@ pub fn render(scene: &Scene, obligations: &Obligations) -> String {
     }
 
     header(&mut out, scene);
-    states(&mut out, scene, obligations);
+    states(&mut out, scene, obligations, steps);
     principles(&mut out, obligations);
 
     out
@@ -146,7 +154,7 @@ fn header(out: &mut String, scene: &Scene) {
 }
 
 /// Every state, in the order work reaches them.
-fn states(out: &mut String, scene: &Scene, obligations: &Obligations) {
+fn states(out: &mut String, scene: &Scene, obligations: &Obligations, steps: Option<&StepsView>) {
     out.push_str("## The states\n\n");
     for (index, node) in scene.nodes.iter().enumerate() {
         let _ = writeln!(out, "### {}. `{}` — {}\n", index + 1, node.id, node.title);
@@ -154,8 +162,37 @@ fn states(out: &mut String, scene: &Scene, obligations: &Obligations) {
             let _ = writeln!(out, "{}\n", wrapped(summary));
         }
         state_facts(out, node, obligations);
+        state_steps(out, node, steps);
         moves(out, scene, node);
     }
+}
+
+/// What a driver runs in one state, when the caller supplied a map.
+///
+/// Silence is two different facts and they are written differently. A map that does not mention
+/// this state says nothing here at all, because the map's author may simply not have got to it. A
+/// map that mentions it with no steps says so, because that is a claim: nothing runs, the state is
+/// a place the run passes through.
+fn state_steps(out: &mut String, node: &Node, steps: Option<&StepsView>) {
+    let Some(view) = steps else { return };
+    let Some(entries) = view.of(&node.id) else {
+        return;
+    };
+    if entries.is_empty() {
+        out.push_str("The driver runs nothing here.\n\n");
+        return;
+    }
+    // "in this order" only where there is an order. On a single step it is a phrase that says
+    // nothing and reads as though something were missing.
+    out.push_str(if entries.len() == 1 {
+        "One step runs here:\n\n"
+    } else {
+        "These steps run here, in this order:\n\n"
+    });
+    for entry in entries {
+        let _ = writeln!(out, "* `{}` — {}", entry.kind, entry.label);
+    }
+    out.push('\n');
 }
 
 /// What the document says about one state, before anything about leaving it.
@@ -495,6 +532,7 @@ fn capitalised(text: &str) -> String {
 mod tests {
     use super::*;
     use crate::obligations::Obligations;
+    use crate::steps::StepView;
     use crate::testing::{fixture_principles, fixture_workflow, principle_from};
 
     /// The repository's own development workflow, with the principles the repository ships.
@@ -502,7 +540,105 @@ mod tests {
         let workflow = fixture_workflow();
         let scene = Scene::build(&workflow, None);
         let obligations = Obligations::of(&workflow, fixture_principles().iter());
-        render(&scene, &obligations)
+        render(&scene, &obligations, None)
+    }
+
+    /// The same document, with a driver's half laid over it.
+    fn rendered_with(steps: &StepsView) -> String {
+        let workflow = fixture_workflow();
+        let scene = Scene::build(&workflow, None);
+        let obligations = Obligations::of(&workflow, fixture_principles().iter());
+        render(&scene, &obligations, Some(steps))
+    }
+
+    /// A map covering the workflow's first state and nothing else.
+    fn one_state_map(scene: &Scene, entries: Vec<StepView>) -> StepsView {
+        let mut states = std::collections::BTreeMap::new();
+        states.insert(scene.initial.clone(), entries);
+        StepsView {
+            reference: "fixture/map".to_owned(),
+            states,
+        }
+    }
+
+    #[test]
+    fn without_a_map_the_document_says_what_may_happen_and_never_what_runs() {
+        let written = rendered();
+        assert!(
+            !written.contains("runs here"),
+            "a workflow read on its own has no driver: {written}"
+        );
+    }
+
+    #[test]
+    fn a_mapped_state_says_what_runs_in_it_and_in_which_order() {
+        let workflow = fixture_workflow();
+        let scene = Scene::build(&workflow, None);
+        let map = one_state_map(
+            &scene,
+            vec![
+                StepView {
+                    kind: "command".to_owned(),
+                    label: "read the world".to_owned(),
+                },
+                StepView {
+                    kind: "llm".to_owned(),
+                    label: "decide what it meant".to_owned(),
+                },
+            ],
+        );
+        let written = rendered_with(&map);
+
+        assert!(
+            written.contains("These steps run here, in this order:"),
+            "{written}"
+        );
+        let first = written.find("read the world").expect("the first step");
+        let second = written
+            .find("decide what it meant")
+            .expect("the second step");
+        assert!(first < second, "the author's order survives: {written}");
+        assert!(
+            written.contains("* `command` — read the world"),
+            "{written}"
+        );
+    }
+
+    #[test]
+    fn one_step_is_not_told_it_has_an_order() {
+        let workflow = fixture_workflow();
+        let scene = Scene::build(&workflow, None);
+        let map = one_state_map(
+            &scene,
+            vec![StepView {
+                kind: "operator".to_owned(),
+                label: "ask a person".to_owned(),
+            }],
+        );
+        let written = rendered_with(&map);
+        assert!(written.contains("One step runs here:"), "{written}");
+        assert!(!written.contains("in this order"), "{written}");
+    }
+
+    #[test]
+    fn a_state_a_map_covers_with_nothing_reads_differently_from_one_it_omits() {
+        let workflow = fixture_workflow();
+        let scene = Scene::build(&workflow, None);
+        let claimed = rendered_with(&one_state_map(&scene, Vec::new()));
+        assert!(
+            claimed.contains("The driver runs nothing here."),
+            "a map that covers a state with no steps is making a claim: {claimed}"
+        );
+
+        let omitted = rendered_with(&StepsView {
+            reference: "fixture/map".to_owned(),
+            states: std::collections::BTreeMap::new(),
+        });
+        assert!(
+            !omitted.contains("The driver runs nothing here."),
+            "a map silent about a state says nothing about it: {omitted}"
+        );
+        assert!(!omitted.contains("runs here"), "{omitted}");
     }
 
     // There is deliberately **no whole-document snapshot in `fixtures/` here**, which is where the
@@ -605,6 +741,7 @@ mod tests {
         let document = render(
             &scene,
             &Obligations::of(&workflow, fixture_principles().iter()),
+            None,
         );
         assert!(
             document.contains(
@@ -647,7 +784,7 @@ transitions:
                 .unwrap_or_else(|errors| panic!("the fixture validates: {errors}"))
         };
         let scene = Scene::build(&workflow, None);
-        let document = render(&scene, &Obligations::of(&workflow, []));
+        let document = render(&scene, &Obligations::of(&workflow, []), None);
         assert!(
             document.contains("When the guard does not hold: escalate to oncall."),
             "a transition's failure policy is an instruction, not decoration: {document}"
@@ -660,6 +797,7 @@ transitions:
         let document = render(
             &Scene::build(&workflow, None),
             &Obligations::of(&workflow, []),
+            None,
         );
         assert!(
             document.contains("No principle in this tree times an obligation"),
@@ -683,6 +821,7 @@ requires:
         let document = render(
             &Scene::build(&workflow, None),
             &Obligations::of(&workflow, [&principle]),
+            None,
         );
         assert!(
             document.contains("**Owed at every transition:**"),
@@ -726,6 +865,7 @@ requires:
         let one = instruction(
             &Scene::build(&workflow, None),
             &Obligations::of(&workflow, fixture_principles().iter()),
+            None,
         );
         assert_eq!(
             one.path, "adp/default.md",

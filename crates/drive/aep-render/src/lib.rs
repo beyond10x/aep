@@ -70,10 +70,12 @@
 pub mod ansi;
 pub mod html;
 pub mod layout;
+pub mod mermaid;
 pub mod obligations;
 pub mod prose;
 pub mod run;
 pub mod scene;
+pub mod steps;
 pub mod svg;
 pub mod theme;
 

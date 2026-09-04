@@ -49,9 +49,11 @@ use aep_engine::execution::Snapshot;
 use aep_engine::registry::Registry;
 use aep_project::project::project_directory;
 use aep_render::obligations::Obligations;
+use aep_driver_spec::map::StepMap;
 use aep_render::prose::{self, Instruction};
+use aep_render::steps::{StepView, StepsView};
 use aep_render::run::{RunStatus, RunView};
-use aep_render::{ansi, html, scene::Scene, svg};
+use aep_render::{ansi, html, mermaid, scene::Scene, svg};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 
@@ -112,6 +114,13 @@ pub(crate) enum RenderFormat {
     Svg,
     /// One self-contained HTML page: the figure, the tables and nothing fetched from anywhere.
     Html,
+    /// A Mermaid `stateDiagram-v2`, for a Markdown document to render itself.
+    ///
+    /// The other three are assets: a reader needs a viewer, and a repository that wants the diagram
+    /// beside its prose commits a binary and has to remember to regenerate it. Mermaid is text, so
+    /// a README carries the workflow as something a command rewrites rather than as a picture that
+    /// drifts from the document it was drawn from.
+    Mermaid,
     /// A raster image, by way of `rsvg-convert`.
     Png,
     /// One terminal frame, with colour.
@@ -156,6 +165,13 @@ pub(crate) struct InstructArgs {
     /// The document tree to read the workflow and the principles that bind it from.
     #[arg(long, default_value = ".")]
     root: PathBuf,
+    /// A step map, so each state also says what a driver runs in it.
+    ///
+    /// A file, or the id of one already in the document tree — the two forms `protocol drive run
+    /// --map` takes. Without one the document says what may happen and not what runs, which is the
+    /// workflow read on its own: honest, and not enough to act on.
+    #[arg(long)]
+    map: Option<PathBuf>,
     /// Where to write: one file with `--id`, a directory of documents without it.
     #[arg(long)]
     out: Option<PathBuf>,
@@ -190,7 +206,8 @@ pub(crate) fn run(command: WorkflowCommand) -> Result<ExitCode> {
 /// which rules bind a workflow is a property of the documents, and a flag that let a caller choose
 /// would let a caller render a workflow with the inconvenient half of its rules left out.
 fn instruct(args: &InstructArgs) -> Result<ExitCode> {
-    let registry = crate::load(&args.root)?;
+    let documents = crate::load_documents(&args.root)?;
+    let registry = documents.registry;
     let principles: Vec<&Principle> = registry.principles().collect();
 
     let selected: Vec<&Workflow> = match &args.id {
@@ -206,12 +223,29 @@ fn instruct(args: &InstructArgs) -> Result<ExitCode> {
 
     // Sorted by the path each document lands at, so a directory written twice holds the same files
     // in the same order and the index reads the same both times.
+    // One map is written against one workflow, so it is refused where the caller asked for every
+    // workflow at once. Applying it to the one it names and silently omitting the steps of the
+    // others would render a directory in which some documents say what runs and some do not, with
+    // nothing in either saying which.
+    if args.map.is_some() && args.id.is_none() {
+        bail!("a step map is written against one workflow: `--map` needs `--id`");
+    }
+    let steps = args
+        .map
+        .as_deref()
+        .map(|named| {
+            let workflow = selected.first().expect("one workflow was selected");
+            crate::flow::step_map(named, &documents.drivers, workflow).map(|map| steps_view(&map))
+        })
+        .transpose()?;
+
     let mut instructions: Vec<Instruction> = selected
         .iter()
         .map(|workflow| {
             prose::instruction(
                 &Scene::build(workflow, None),
                 &Obligations::of(workflow, principles.iter().copied()),
+                steps.as_ref(),
             )
         })
         .collect();
@@ -232,6 +266,32 @@ fn instruct(args: &InstructArgs) -> Result<ExitCode> {
     };
     write_tree(&instructions, directory)?;
     Ok(ExitCode::SUCCESS)
+}
+
+/// The driver's half of a round, as the renderer takes it.
+///
+/// The conversion lives here rather than in `aep-render` because that crate depends on `aep-domain`
+/// alone, and a renderer that named `StepMap` would put the driver behind a crate whose whole job
+/// is to write text. It is the same seam `RunView` uses, for the same reason.
+fn steps_view(map: &StepMap) -> StepsView {
+    StepsView {
+        reference: map.id.to_string(),
+        states: map
+            .states
+            .iter()
+            .map(|(state, state_steps)| {
+                let entries = state_steps
+                    .steps
+                    .iter()
+                    .map(|step| StepView {
+                        kind: step.kind().to_string(),
+                        label: step.label(),
+                    })
+                    .collect();
+                (state.clone(), entries)
+            })
+            .collect(),
+    }
 }
 
 /// Writes a directory of instruction documents, and the index over them.
@@ -454,6 +514,7 @@ fn emit(workflow: &Workflow, view: Option<&RunView>, args: &RenderArgs) -> Resul
     match args.format {
         RenderFormat::Svg => write_text(&svg::render(&scene), args.out.as_deref()),
         RenderFormat::Html => write_text(&html::render(&scene), args.out.as_deref()),
+        RenderFormat::Mermaid => write_text(&mermaid::render(&scene), args.out.as_deref()),
         RenderFormat::Tui => {
             let frame = ansi::frame(&scene);
             // Colour is for a terminal. A file gets the text, because a saved frame full of control

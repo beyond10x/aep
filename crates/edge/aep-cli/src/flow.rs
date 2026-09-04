@@ -160,7 +160,7 @@ pub(crate) fn flow(args: &FlowArgs) -> Result<String> {
 ///
 /// The same two forms `protocol drive run --map` takes, read the same way, so one word means one
 /// thing across the two verbs that accept it.
-fn step_map(
+pub(crate) fn step_map(
     named: &Path,
     drivers: &aep_project::load::DriverRegistry,
     workflow: &Workflow,
