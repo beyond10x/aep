@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:one-spelling-for-an-edge
 kind: story
-status: active
+status: implemented
 title: One spelling for an edge, and a way to take one back
 summary: relate takes three positionals while new --relate takes rel:id; a wrong edge is permanent because there is no unrelate.
 tags:
@@ -20,7 +20,7 @@ scope:
   path: crates/plan/aep-backend-markdown
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 11
+revision: 12
 ---
 # Story: One spelling for an edge, and a way to take one back
 
