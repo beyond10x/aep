@@ -7,6 +7,24 @@ version is a breaking change to a protocol's semantics, not merely to a Rust API
 Entries record what changed for someone using the protocol. Rationale that does not fit in a line
 belongs in the commit message or in `docs/design/`.
 
+## [Unreleased]
+
+### Added
+
+- Optional paired `ess-conformance-report/2` and suite readers preserve exact counts,
+  original source bytes and completion time. Evidence is re-admitted before recording
+  or restoring it. The opt-in `adp-ess-conformance/1` protocol and
+  `development.ess-conformance-v2` profile require independent task expectations;
+  count-stage coverage remains unknown and cannot satisfy complete conformance.
+- Planning `--from` accepts report version 2 with its original suite through
+  `--suite`; evidence inspection exposes exact count values. Invalid pairs refuse
+  before storage changes.
+
+### Changed
+
+- Direct evidence recording returns a checked result and takes an explicit reading
+  instant so malformed or stale source evidence is refused before mutation.
+
 ## [0.54.0] — 2026-09-04
 
 - **`govern workflow render --format mermaid` writes a diagram a Markdown document renders
