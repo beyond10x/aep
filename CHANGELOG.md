@@ -11,6 +11,11 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- Optional `ess_conformance_coverage_v1` evidence admits exact original suite/5
+  lineage and complete selected coverage. Its separate opt-in profile requires
+  independent task, model, suite, selection, producer and freshness expectations;
+  incomplete, empty or unknown coverage cannot satisfy completion requirements.
+  Typed input, driver replay, inspection and planning preserve the original bytes.
 - Optional paired `ess-conformance-report/2` and suite readers preserve exact counts,
   original source bytes and completion time. Evidence is re-admitted before recording
   or restoring it. The opt-in `adp-ess-conformance/1` protocol and

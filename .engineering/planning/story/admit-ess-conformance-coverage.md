@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 26
+revision: 27
 ---
 ## Outcome
 
@@ -115,3 +115,11 @@ Under the standing ESS remediation implementation/publication authorization, roo
 - architecture/adr/0040-ess-complete-selection-evidence.md — SHA256 54931ffb2e52beb09e7ba7b952ec16f996a681161692227e5cdc25b1f3d337ac.
 
 Original review reports are035d8b8fd665457e387a73edfd47fec9b40fbdc85bc6c93a774b48f3f4f8ada3 andf13642c04236967cd71ff28096abb1907aa8e1139687243546f3192c345b058a. Actual AEP source baseline package tests separately passed1320cases0failed/ignored61summaries; that is existing-source resource/control evidence, not new reader implementation. Reader publication remains required before the ESS writer, followed by frozen actual Rust/Go correspondence before ESS writer publication.
+
+## Confirmed implementation handoff
+
+The assigned implementor confirmed five-package ownership and all three opt-in policy leaves at frozen48efe3783b559caf17f7d70510935e253d8b3d6f. Exact47 changed/new paths and239 source hashes were verified before freezing. Root additionally owns the six generated instruction leaves produced by the existing global renderer; the profile remains opt-in, with that limitation explicit in the new principle summary and public CLI reference. Actual schema generation changed exactly10 expected leaves, with no dependency or lockfile change.
+
+The final package run passed1360 cases,0failed/ignored,65 summaries, including40 new cases and every1320 inherited case. The initial1357pass/3fail run, setup failures and ten killed/restored guard mutations remain retained. Formatting, strict all-target Clippy, schema drift and final source preservation passed. Immutable implementor report SHA256266914db656135b55418d436dd8e1bbf5403f569cc738473ccfd2a62385d3717 and manifest SHA256357724cae32d749fb961e56e3ba1b3b4291efcc7b68308a2da60693561105647 are under the assigned unit scratch.
+
+First source attack is running under aep-drive:adversary0.8.0 after implementor relinquishment. Full repository gates, publication and actual future ESS writer correspondence remain pending. Source review and accepted binding reviews are distinct subjects. No runtime default or installed binary is changed.

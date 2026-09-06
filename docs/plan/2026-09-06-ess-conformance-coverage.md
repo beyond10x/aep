@@ -128,5 +128,32 @@ plus source-baseline logs are there before dispatch. Test TMPDIR alone uses the 
 outside-project fixture requires a directory outside a project. That exception is unit-owned,
 reported and part of cleanup; no compiler output moves outside the unit target.
 
-Next stage: implementor dispatch. No implementation gate, reader publication or suite/5 producer
-correspondence is claimed. The complete computed outputs are in the companion dated review record.
+Implementation is frozen at48efe3783b559caf17f7d70510935e253d8b3d6f with both bot identities
+verified. The first source adversary is running under aep-drive:adversary0.8.0 in the same unit,
+with tests-only ownership in the five assigned packages. Its scratch is
+target/ess-conformance-coverage/adversary-pass-1, build is the unit target, and its distinct
+explicit outside-project TMPDIR is
+/home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-1-tmp.
+The implementor relinquished all writes before freezing and review dispatch.
+
+The final five-package run executed1360 cases,0failed/ignored,65 summaries;40 cases are new.
+The initial full run retained1357passes and3failures. One failure required additive protocol/profile
+inventory expectations; two unchanged instruction tests exposed the existing renderer's global
+principle enumeration. Root applied the actual generator's six changed instruction leaves,
+with explicit opt-in wording; README stayed byte-exact. Existing workflows, renderer and default
+profiles were not changed. The public reference states the existing rendering limitation.
+All unchanged count, report and default-policy controls execute in the final green run.
+
+Strict package all-target Clippy, formatting, actual schema generation and drift checks each
+exited0. The generator changed exactly10 expected schema leaves. Ten named guard mutations each
+compiled and failed its selected assertion, then restored byte-exact; all original failures,
+setup failures, commands and restoration hashes are retained. No dependency or lockfile changed.
+Root verified all239 final manifest entries and47 changed/new paths before the bot commit.
+Implementor report SHA256266914db656135b55418d436dd8e1bbf5403f569cc738473ccfd2a62385d3717;
+manifest SHA256357724cae32d749fb961e56e3ba1b3b4291efcc7b68308a2da60693561105647.
+
+The separate scratch correspondence harness has only setup-compiled. Its22 preparation records
+were hash-verified, and the retained actual count-stage Rust control was copied byte-exact from
+the closed count-writer evidence. No helper runtime, actual suite/5 producer output or producer
+correspondence exists yet. Full repository integration gates and publication remain pending.
+The complete computed outputs are in the companion dated review record.
