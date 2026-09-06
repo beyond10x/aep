@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 pub(crate) struct AdmittedSuite {
-    pub document: Json,
+    definitions: crate::coverage_definition::Definitions,
     pub inventory: Inventory,
     pub reference: SuiteReference,
     pub spec_digest: SpecDigest,
@@ -131,8 +131,9 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         ));
     }
     validate_inventory(&inventory, &ids)?;
+    let definitions = crate::coverage_definition::Definitions::read(&document)?;
     Ok(AdmittedSuite {
-        document,
+        definitions,
         inventory,
         reference,
         spec_digest,
@@ -350,21 +351,14 @@ fn admit_child(child: &AdmittedSuite, parent: &AdmittedSuite) -> Result<()> {
             "filter must retain sources and every refusal occurrence unchanged",
         ));
     }
-    let child_root = child.document.object()?;
-    let parent_root = parent.document.object()?;
-    if !child_root["provenance"].equivalent(&parent_root["provenance"]) {
+    if child.definitions.provenance != parent.definitions.provenance {
         return Err(invalid(
             "ParentProvenanceMismatch",
             "filter cannot change provenance",
         ));
     }
-    let child_scenarios = child_root["scenarios"].object()?;
-    let parent_scenarios = parent_root["scenarios"].object()?;
-    for (id, scenario) in child_scenarios {
-        if !parent_scenarios
-            .get(id)
-            .is_some_and(|original| scenario.equivalent(original))
-        {
+    for (id, scenario) in &child.definitions.scenarios {
+        if parent.definitions.scenarios.get(id) != Some(scenario) {
             return Err(invalid(
                 "ParentScenarioMismatch",
                 format!("changed or absent surviving scenario {id}"),

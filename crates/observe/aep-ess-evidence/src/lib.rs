@@ -11,6 +11,7 @@ mod count_json;
 mod count_suite;
 mod counts;
 mod coverage;
+mod coverage_definition;
 mod coverage_suite;
 mod coverage_wire;
 
