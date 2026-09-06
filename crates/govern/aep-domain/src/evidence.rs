@@ -1236,6 +1236,8 @@ pub enum EvidenceKind {
     Specification,
     /// An implementation checked against an executable system specification.
     EssConformance,
+    /// Exact original-source ESS count diagnostics; legacy coverage remains unknown.
+    EssConformanceV2,
     /// A harness transcript checked against a trace specification.
     ///
     /// What it attests: a `trace-spec` document was decided against the recorded transcript of an
@@ -1277,6 +1279,7 @@ impl EvidenceKind {
         Self::Verification,
         Self::Specification,
         Self::EssConformance,
+        Self::EssConformanceV2,
         Self::TraceConformance,
     ];
 
@@ -1298,6 +1301,7 @@ impl EvidenceKind {
             Self::Verification => "verification",
             Self::Specification => "specification",
             Self::EssConformance => "ess_conformance",
+            Self::EssConformanceV2 => "ess_conformance_v2",
             Self::TraceConformance => "trace_conformance",
         }
     }
@@ -1363,7 +1367,7 @@ impl EvidenceKind {
             Self::Review | Self::ReviewOutcome => &[Verifier::HumanReview],
             Self::Verification => &[Verifier::PolicyEngine, Verifier::ModelChecker],
             Self::Specification => &[Verifier::TestRunner, Verifier::HumanReview],
-            Self::EssConformance => &[Verifier::ConformanceRunner],
+            Self::EssConformance | Self::EssConformanceV2 => &[Verifier::ConformanceRunner],
             Self::TraceConformance => &[Verifier::TraceChecker],
         }
     }
@@ -1456,6 +1460,8 @@ pub enum Evidence {
     Specification(SpecificationRecord),
     /// An implementation checked against an executable system specification.
     EssConformance(EssConformanceResult),
+    /// Original report/2 and suite/1–4 bytes; raw serde confers no admission.
+    EssConformanceV2(crate::ess_conformance_v2::EssConformanceV2Sources),
     /// A harness transcript checked against a trace specification.
     TraceConformance(TraceConformanceResult),
 }
@@ -1478,6 +1484,7 @@ impl Evidence {
             Self::Verification(_) => EvidenceKind::Verification,
             Self::Specification(_) => EvidenceKind::Specification,
             Self::EssConformance(_) => EvidenceKind::EssConformance,
+            Self::EssConformanceV2(_) => EvidenceKind::EssConformanceV2,
             Self::TraceConformance(_) => EvidenceKind::TraceConformance,
         }
     }
@@ -1494,6 +1501,9 @@ impl Evidence {
     pub fn spec_digest(&self) -> Option<&SpecDigest> {
         match self {
             Self::EssConformance(result) => Some(&result.spec_digest),
+            Self::EssConformanceV2(sources) => {
+                sources.reading().map(|reading| &reading.data().spec_digest)
+            }
             // `TraceConformance` also holds a `SpecDigest` and deliberately does **not** opt in,
             // which is worth saying because a reader will otherwise take it for an oversight. This
             // binding asks whether evidence was produced against the resolved model an artifact
@@ -1567,6 +1577,10 @@ impl Evidence {
                 result.status,
                 result.scenarios_failed,
                 result.scenarios_total
+            ),
+            Self::EssConformanceV2(sources) => sources.reading().map_or_else(
+                || "unadmitted ESS conformance v2 source pair".to_owned(),
+                |reading| format!("ESS conformance v2: {} scenarios, execution {}, conformance {} (unknown coverage)", reading.data().counts.total, reading.data().execution_status.as_str(), reading.data().conformance_status.as_str()),
             ),
             Self::TraceConformance(result) => format!(
                 "transcript against {}: {} ({} ok, {} gap, {} unk of {})",
@@ -1887,6 +1901,11 @@ impl Evidence {
                     base.child("scenarios").child("failed"),
                     FactValue::count(result.scenarios_failed),
                 ));
+            }
+            Self::EssConformanceV2(sources) => {
+                if let Some(reading) = sources.reading() {
+                    facts.extend(reading.facts());
+                }
             }
             Self::TraceConformance(result) => {
                 let base = path(&["trace_conformance"]);

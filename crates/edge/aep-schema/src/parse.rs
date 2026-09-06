@@ -120,6 +120,14 @@ impl fmt::Display for DocumentKind {
 /// Why a document could not be read.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
+    /// Original ESS sources or their enclosing observation did not admit.
+    #[error("evidence document{}: {source}", context(origin.as_deref()))]
+    EssAdmission {
+        /// Where the transport document came from.
+        origin: Option<String>,
+        /// Stable admission diagnostics, separate from raw syntax.
+        source: aep_domain::ess_conformance_v2::EssAdmissionError,
+    },
     /// The text is not well-formed YAML, or does not match the document's shape.
     #[error("{kind} document{}: {source}", context(origin.as_deref()))]
     Syntax {
@@ -156,14 +164,16 @@ impl DocumentError {
     pub fn validation_errors(&self) -> Option<&ValidationErrors> {
         match self {
             Self::Invalid { errors, .. } => Some(errors),
-            Self::Syntax { .. } => None,
+            Self::Syntax { .. } | Self::EssAdmission { .. } => None,
         }
     }
 
     /// Where the document came from, when known.
     pub fn origin(&self) -> Option<&str> {
         match self {
-            Self::Syntax { origin, .. } | Self::Invalid { origin, .. } => origin.as_deref(),
+            Self::Syntax { origin, .. }
+            | Self::Invalid { origin, .. }
+            | Self::EssAdmission { origin, .. } => origin.as_deref(),
         }
     }
 }
@@ -337,16 +347,87 @@ pub struct EvidenceInput {
     pub provenance: Option<aep_domain::evidence::Provenance>,
 }
 
-/// Reads a list of evidence submissions.
+/// Reads legacy evidence submissions. V2 requires [`evidence_list_with_reader`]; raw serde is archival input only.
 pub fn evidence_list(
     text: &str,
     origin: Option<&str>,
 ) -> Result<Vec<EvidenceInput>, DocumentError> {
-    read_yaml(text).map_err(|source| DocumentError::Syntax {
+    evidence_list_admitted(text, origin, None)
+}
+
+/// Reads submissions and explicitly re-admits original ESS bytes and observation equality.
+pub fn evidence_list_with_reader(
+    text: &str,
+    origin: Option<&str>,
+    reader: &dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader,
+) -> Result<Vec<EvidenceInput>, DocumentError> {
+    evidence_list_admitted(text, origin, Some(reader))
+}
+
+fn evidence_list_admitted(
+    text: &str,
+    origin: Option<&str>,
+    reader: Option<&dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+) -> Result<Vec<EvidenceInput>, DocumentError> {
+    use aep_domain::ess_conformance_v2::EssAdmissionError;
+    let syntax = |source| DocumentError::Syntax {
         kind: DocumentKind::Evidence,
         origin: origin.map(ToOwned::to_owned),
         source,
-    })
+    };
+    let admission = |source| DocumentError::EssAdmission {
+        origin: origin.map(ToOwned::to_owned),
+        source,
+    };
+    // This preflight is authority only for duplicate keys/closed envelope shape. Exact scalars
+    // are parsed afresh from the original text below, never from this dynamic representation.
+    let shape: serde_yaml::Value = serde_yaml::from_str(text).map_err(syntax)?;
+    if let Some(entries) = shape.as_sequence() {
+        for (index, entry) in entries.iter().enumerate() {
+            if entry.get("kind").and_then(serde_yaml::Value::as_str) == Some("ess_conformance_v2") {
+                if let Some(map) = entry.as_mapping() {
+                    for key in map.keys() {
+                        if !key.as_str().is_some_and(|key| {
+                            [
+                                "kind",
+                                "report_json",
+                                "suite_json",
+                                "observed_at",
+                                "producer",
+                                "about",
+                                "envelope_subject",
+                                "provenance",
+                            ]
+                            .contains(&key)
+                        }) {
+                            return Err(admission(EssAdmissionError::new(
+                                "UnknownField",
+                                format!("$[{index}]"),
+                                format!("unknown v2 envelope key {key:?}"),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut inputs: Vec<EvidenceInput> = serde_yaml::from_str(text).map_err(syntax)?;
+    for input in &mut inputs {
+        if let aep_domain::evidence::Evidence::EssConformanceV2(sources) = &mut input.evidence {
+            let reader = reader.ok_or_else(|| {
+                admission(EssAdmissionError::new(
+                    "MissingReader",
+                    "$",
+                    "v2 evidence admission requires an explicitly installed source reader",
+                ))
+            })?;
+            sources.admit(reader).map_err(admission)?;
+            sources
+                .check_observation(input.observed_at)
+                .map_err(admission)?;
+        }
+    }
+    Ok(inputs)
 }
 
 #[cfg(test)]

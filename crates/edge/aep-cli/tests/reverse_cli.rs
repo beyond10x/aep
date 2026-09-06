@@ -876,7 +876,12 @@ fn a_directory_with_no_history_says_so_in_one_sentence() {
     // tarball, has no history and that is an ordinary state — but it is not the same state as a
     // repository whose history happens to hold nothing, and the two must not print alike.
     let root = fixture("aep-reverse-no-history");
-    let output = protocol_in(&root, &["plan", "reverse", "history", "."]);
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["plan", "reverse", "history", "."])
+        .current_dir(&root)
+        .env("GIT_CEILING_DIRECTORIES", root.parent().unwrap())
+        .output()
+        .expect("the protocol binary runs");
     assert_eq!(code(&output), 1);
     assert!(
         stderr(&output).contains("not a Git working tree"),

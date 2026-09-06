@@ -7,6 +7,12 @@
 
 use std::fmt;
 
+mod count_json;
+mod count_suite;
+mod counts;
+
+pub use counts::{adapt_json_v2, CountStageReader};
+
 use aep_domain::evidence::{EssConformanceResult, Evidence, Producer, Provenance, SpecDigest};
 use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::{VerificationStatus, Verifier};

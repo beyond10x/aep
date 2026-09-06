@@ -1,0 +1,19 @@
+id: ess-conformance-v2
+version: 1
+title: Exact ESS evidence with explicit coverage
+summary: >-
+  Admit paired original report and suite bytes, then require independently bound complete
+  conformance. Count-stage legacy suites have unknown coverage and cannot discharge this rule.
+requires:
+  before_completion:
+    conditional:
+      - when: artifact.executable-system-specification.exists
+        require:
+          evidence:
+            - kind: ess_conformance_v2
+              at_least: 1
+              independent: true
+              verifier: conformance-runner
+verification:
+  - verifier: conformance-runner
+on_failure: block

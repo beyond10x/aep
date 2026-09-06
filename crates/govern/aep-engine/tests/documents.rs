@@ -42,13 +42,35 @@ fn the_document_tree_loads_and_is_internally_consistent() {
     );
 
     let registry = &outcome.registry;
-    assert_eq!(registry.protocols().count(), 3, "aep/1, adp/1 and aop/1");
+    assert_eq!(
+        registry
+            .protocols()
+            .map(|protocol| format!("{}/{}", protocol.id, protocol.version))
+            .collect::<std::collections::BTreeSet<_>>(),
+        ["aep/1", "adp/1", "aop/1", "adp-ess-conformance/1"]
+            .map(str::to_owned)
+            .into_iter()
+            .collect(),
+    );
     assert_eq!(registry.workflows().count(), 6);
     assert_eq!(
-        registry.profiles().count(),
-        8,
-        "three development points on one scale, `development.driven` beside them, incident and \
-         three release profiles"
+        registry
+            .profiles()
+            .map(|profile| profile.id.as_str())
+            .collect::<std::collections::BTreeSet<_>>(),
+        [
+            "development.fast",
+            "development.standard",
+            "development.critical",
+            "development.driven",
+            "development.ess-conformance-v2",
+            "incident.standard",
+            "release.progressive",
+            "release.source",
+            "release.dependency-chain",
+        ]
+        .into_iter()
+        .collect(),
     );
     assert!(
         registry.principles().count() >= 20,
@@ -69,6 +91,11 @@ fn every_profile_resolves_for_a_task_of_its_kind() {
         ("development.standard", "feature", "adp/1"),
         ("development.critical", "feature", "adp/1"),
         ("development.driven", "feature", "adp/1"),
+        (
+            "development.ess-conformance-v2",
+            "feature",
+            "adp-ess-conformance/1",
+        ),
         ("incident.standard", "incident", "aop/1"),
         ("release.progressive", "release", "aop/1"),
         ("release.source", "release", "aop/1"),

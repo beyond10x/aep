@@ -2,7 +2,7 @@
 
 # Progressive release
 
-`release/progressive/1` · 7 states · 6 transitions · 19 principles bind it.
+`release/progressive/1` · 7 states · 6 transitions · 20 principles bind it.
 
 Qualify, stage, canary, observe, promote, verify, complete — with rollback preconditions stated
 at the two states where a bad release is still recoverable.
@@ -120,6 +120,7 @@ These obligations fall due before you may enter it:
 * `contract-testing/before-completion` — Contract testing
 * `design-by-contract/before-completion` — Design by contract
 * `differential-testing/before-completion` — Differential testing
+* `ess-conformance-v2/before-completion` — Exact ESS evidence with explicit coverage
 * `ess-conformance/before-completion` — Conformance to the specification
 * `invariant-checking/before-completion` — Invariant checking
 * `mutation-testing/before-completion` — Mutation testing
@@ -274,6 +275,21 @@ Evidence it requires, which must exist before the work is finished:
 
 * evidence test_result from test-runner (independent)
 * evidence verification (independent)
+
+If one of its requirements is not met: block.
+
+### `ess-conformance-v2/1` — Exact ESS evidence with explicit coverage
+
+Admit paired original report and suite bytes, then require independently bound complete
+conformance. Count-stage legacy suites have unknown coverage and cannot discharge this rule.
+
+**Before entering `complete`, the completion phase:**
+
+* if artifact.executable-system-specification.exists then: evidence ess_conformance_v2 from conformance-runner (independent)
+
+Verifiers that must have spoken:
+
+* conformance-runner must run — before entering `complete`, the completion phase
 
 If one of its requirements is not met: block.
 

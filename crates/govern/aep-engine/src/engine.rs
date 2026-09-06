@@ -183,6 +183,7 @@ pub trait ProtocolEngine {
 /// The reference engine.
 #[derive(Debug)]
 pub struct Engine<C: Clock = SystemClock> {
+    ess_reader: Option<std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>>,
     registry: Registry,
     clock: C,
     executions: AtomicU64,
@@ -199,10 +200,21 @@ impl<C: Clock> Engine<C> {
     /// An engine over `registry`, using `clock`.
     pub fn with_clock(registry: Registry, clock: C) -> Self {
         Self {
+            ess_reader: None,
             registry,
             clock,
             executions: AtomicU64::new(0),
         }
+    }
+
+    #[must_use]
+    /// Installs the optional pure original-byte ESS reader for new/restored executions.
+    pub fn with_ess_conformance_v2_reader(
+        mut self,
+        reader: std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+    ) -> Self {
+        self.ess_reader = Some(reader);
+        self
     }
 
     /// The documents this engine resolves against.
@@ -227,7 +239,8 @@ impl<C: Clock> Engine<C> {
             ExecutionId::new(format!("execution.{ordinal}")).expect("valid id")
         });
 
-        let mut execution = Execution::new(id, plan, artifacts);
+        let mut execution =
+            Execution::new_with_ess_reader(id, plan, artifacts, self.ess_reader.clone());
         let now = self.clock.now();
         execution.observe_at(now);
         let task_id = execution.plan().task.id.clone();
@@ -271,11 +284,17 @@ impl<C: Clock> Engine<C> {
     ) -> Result<Execution, ProtocolError> {
         let plan = resolve(&task, &self.registry)?;
         drop(task);
-        let mut execution = Execution::restore(plan, artifacts, snapshot)?;
+        let now = self.clock.now();
+        let execution = Execution::restore_admitted(
+            plan,
+            artifacts,
+            snapshot,
+            self.ess_reader.clone(),
+            Some(now),
+        )?;
         // The restoring engine's clock, never the snapshotting one's: a horizon is re-decided
         // against the present, which is what stops a restored snapshot from carrying a verdict
         // that was true when it was taken.
-        execution.observe_at(self.clock.now());
         Ok(execution)
     }
 
@@ -403,12 +422,13 @@ impl<C: Clock> ProtocolEngine for Engine<C> {
             value: submission.evidence.clone(),
             provenance: submission.provenance,
         };
+        let record = execution.prepare_record(record, Some(now))?;
         let state = execution.state_id().clone();
         if let Some(entity) = submission.entity.clone() {
             execution.link_evidence(id.clone(), entity);
         }
         execution.observe_at(now);
-        execution.record_evidence(record);
+        execution.record_prepared(record);
 
         execution.emit(
             now,

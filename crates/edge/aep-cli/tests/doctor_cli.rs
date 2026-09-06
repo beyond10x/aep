@@ -395,7 +395,7 @@ fn the_environment_supplies_a_plugin_directory_only_when_the_command_line_named_
 #[test]
 fn a_root_that_is_not_a_git_checkout_warns_rather_than_failing() {
     let root = adopting_project("release-tag-no-git");
-    let output = doctor(&root, &[]);
+    let output = doctor_with(&root, "GIT_CEILING_DIRECTORIES", root.parent().unwrap());
     let (status, detail) = check(&output, "release-tag");
     assert_eq!(
         status, "warn",

@@ -255,6 +255,7 @@
         "verification",
         "specification",
         "ess_conformance",
+        "ess_conformance_v2",
         "trace_conformance",
         "test_execution",
         "source_diff",
