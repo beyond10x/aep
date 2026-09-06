@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 32
+revision: 33
 ---
 ## Outcome
 
@@ -153,3 +153,9 @@ Source is ready for root integration and the16-step repository gate. This does n
 ## Integrated source verification
 
 verification-report:ess-conformance-coverage-integrated records the clean merged58fe2f3e7bc1286d5de8f9bc6188da90ef9e8f8c gate: all16steps returned0,2269workspace cases passed,0failed/ignored,154summaries, with full source preservation. PostgreSQL explicitly skipped locally because its connection variable was unset. Rust1.85, schema drift and Website build passed. Both original source-review findings are resolved; no third attack was opened. Source implementation is complete under the standing authorization. Exact source publication, CI, immutable public delivery and actual future ESS producer correspondence remain separately observed obligations; this move asserts none of those pending results.
+
+## Published source and verified public delivery
+
+Published source658cf76e6371b1628f6de69548e724b52803f5c2 has successful exact-source CI, source bundle and documentation validation with both bot actor fields. Joint Atlas publication34044223213 succeeded on exact controlb0fb59be02712e221c2a07d3e589120ed0ae3d7a. Its complete1709-file artifact pins this reader/schema source pair, and the independent artifact verifier passed356routes/1328sitefiles. Full Website gate passed99tests,0failed/skipped/cancelled,141.370037115seconds; every artifact byte remained unchanged. Both live provenance endpoints and all3changed documentation pages matched exact artifact bytes. The dated wave page preserves every run/hash and the separate three existing Atlas workspace fence issues.
+
+Implementation evidence is archived and independently reread; the exact managed implementation tree and merged unit branch were retired through the manager/non-forced Git path. Joint Website support archival/cleanup is still finishing. Actual future ESS coverage producer correspondence remains unexecuted and required before that later writer's publication. No release, tag, installed binary or default switch is selected here.

@@ -310,3 +310,79 @@ implemented, revision32. Planning validation returned0 for278artifacts, retainin
 53pre-log records,4historical assertion closures and2known empty-review advisories. Source
 completion precedes the separately measured publication, CI, immutable public delivery and
 future actual ESS producer correspondence. No release or runtime installation is selected.
+
+## Published reader and exact public delivery
+
+Reader source658cf76e6371b1628f6de69548e724b52803f5c2 was published after the green58fe2f3
+gate and planning-record checks. Exact-source CI34043076998, bundle34043076999 and docs
+validation34043077009 all succeeded, attempt1, with actor and triggering actor b10x-bot[bot].
+The complete API readbacks are retained. Local PostgreSQL remains explicitly skipped in its
+own receipt; CI's successful configured gate is a separate observation.
+
+Atlas publication34044223213 succeeded at controlb0fb59be02712e221c2a07d3e589120ed0ae3d7a,
+attempt1, with both bot actor fields. It binds this exact reader and ESS schema workflow source
+239996d846460aee342ce42514378c25b2be5152. Complete layout-v2 artifact9992629303 retains all
+24source bundles and1709files. ZIP32604525bytes, SHA256
+3e0e482f6f6482eb5313db2557ebd243b4414cd5037b8dea8caeb9c6e4c9cfee; source-set SHA256
+ec193897f199ad03c2c267395c7ff2d8bc5833c95cdb171fc73d2fe8e9a667fb. Website runtime remains
+fc4571534765c098ed861bc326da4d3da0d1df63. The joint verifier required both independently
+supplied source commits and passed immutable verification of356routes and1328sitefiles.
+
+Full Website gate passed99tests,0failed/skipped/cancelled,141.370037115seconds; gate log SHA256
+69232941290d84ba0421f5e3adf396778839a3679f1e1dbfd382d85389fe7891. Every downloaded artifact
+file remained unchanged. Five actual live fetches at16:09:25–16:09:26UTC matched their artifact:
+both provenance endpoints, AEP CLI reference, ESS generation guide and ESS format reference.
+Live provenance SHA256b15b35b88e38d9a1166c580f06d3cb9f2a676ae9ca945db12558591df1b61025.
+
+Fresh Atlas fence:149Rust cases passed,0failed/ignored,6summaries,193.404612626seconds.
+Aggregate exit1 retains the same AgentIDE collector, primary Website pin and Widgets Serves
+issues; catalog, live Pages, projection, markdown and brand passed. Full log SHA256
+9d3948969995883e372201353dd0a619cf04e0d5b2ebeffcc8e6600fa7239799. Those workspace findings
+remain distinct from the exact immutable Website/publication results.
+
+## Retention and future producer boundary
+
+The compatibility helper now resolves all five AEP paths inside this continuing coordinator.
+Root verified its3sealed records,29revision records,327compiled inputs and4live helper hashes.
+Offline locked build passed in11.424seconds; it was not executed. Its frozen compiled inputs
+match published658cf76 exactly. Report SHA256
+2ffeaa6d3553b770878f69c7af437a57131c858f0ec710631e42c0340034c879. Actual ESS Rust/Go report/input
+correspondence through both readers/replay remains mandatory before the later writer publishes.
+
+The unit archive is /home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-retirement:
+8738files,5012directories,5594897compressedbytes, SHA256
+813be3e8630fca8c245629b5727a620093bd17c4596df9d88c19d6ce173e6ac2. Root independently reread
+every archive member and18169source entries. Three explicit external TMP roots are retained
+in full; only inventoried compiler-cache content is excluded. Initial cleanup encountered
+read-only protocol fixture directories after removing target. Root verified every residual
+file, granted owner write to9owned fixture directories, and completed the same four exact
+artifact-root removals. Original metadata and the first refusal remain retained.
+
+After verifying published ancestry, the lease ended, worktree finish succeeded and root applied
+GC only to the reviewed aep-ess-conformance-coverage id. The manager removed the tree; the merged
+branch was deleted without force. Other eligible Atlas work remains. The joint Website support
+retirement was still being sealed at that observation; its completion follows.
+
+## Joint Website retirement and reader closure
+
+The sealed archive at
+`/home/timo/.cache/ess-review/2026-09-06-resume/joint-coverage-schema-website-retirement`
+contains 25,170,415 compressed bytes, SHA256
+`8c571049f5c4b05cdee14db820b81dbc144f630a631aacecba061b54ee72daf3`.
+Root independently reread all 2,455 regular payloads (73,566,441 bytes), 621 directories,
+one literal symlink and one socket metadata record. Every one of the 62,168 original entries
+was checked, including 59,091 inventoried exclusions. All 1,709 publication files matched
+the original and every after manifest, all five saved live bodies matched the publication,
+and all 158 tracked Website files remained byte-exact against HEAD.
+
+Root found no process using the checkout or assigned TMP, removed only the seven reviewed
+generated roots, and verified the tracked tree stayed clean. The lease ended and `worktree
+finish` succeeded. After reviewing all 22 GC assessments, root applied only
+`aep-coverage-website-verification`; the manager recorded removal and the path is absent.
+Other eligible Atlas work was preserved. The reader implementation unit and joint Website
+support tree are retired; the continuing AEP coordinator retains the compiled compatibility
+helper and its evidence for the later ESS producer checks.
+
+The coverage reader is closed with source, exact CI, public delivery and retention recorded.
+No installed binary, default, release or tag was selected. Actual Rust/Go producer
+correspondence remains a prerequisite of the separate ESS coverage writer's publication.
