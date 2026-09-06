@@ -996,3 +996,131 @@ fn coverage_cli_inspection_admits_complete_original_input_and_exact_time() {
     assert!(text.contains("ess_conformance_coverage_v1"), "{text}");
     assert!(text.contains("completed_at"), "{text}");
 }
+
+#[test]
+fn adversary_coverage_engine_re_admits_clones_and_preserves_both_reader_orders() {
+    #[derive(Debug)]
+    struct Refusing;
+    impl aep_domain::ess_conformance_coverage::EssConformanceCoverageReader for Refusing {
+        fn read(
+            &self,
+            _: &aep_domain::ess_conformance_coverage::EssConformanceCoverageSources,
+        ) -> Result<
+            aep_domain::ess_conformance_coverage::EssConformanceCoverageReading,
+            aep_domain::ess_conformance_v2::EssAdmissionError,
+        > {
+            Err(aep_domain::ess_conformance_v2::EssAdmissionError::new(
+                "AdversaryReaderRefusal",
+                "$",
+                "configured reader must run on cloned sources",
+            ))
+        }
+    }
+    let directory = root().join("target/ess-conformance-coverage/adversary-pass-1/engine-fixture");
+    let documents = policy_fixture(&directory);
+    let c = context();
+    let count_suite = count_fixtures::suite();
+    let mut count_record = c.evidence[0].clone();
+    count_record.id = "independent-count-record".parse().unwrap();
+    count_record.value =
+        aep_ess_evidence::adapt_json_v2(&count_fixtures::report(&count_suite, 1), &count_suite)
+            .unwrap()
+            .evidence()
+            .clone();
+    for coverage_first in [true, false] {
+        let engine = aep_engine::Engine::with_clock(
+            aep_project::load_tree(&documents).unwrap(),
+            aep_engine::FixedClock::new(2),
+        );
+        let coverage = std::sync::Arc::new(aep_ess_evidence::CoverageReader);
+        let count = std::sync::Arc::new(aep_ess_evidence::CountStageReader);
+        let engine = if coverage_first {
+            engine
+                .with_ess_conformance_coverage_reader(coverage)
+                .with_ess_conformance_v2_reader(count)
+        } else {
+            engine
+                .with_ess_conformance_v2_reader(count)
+                .with_ess_conformance_coverage_reader(coverage)
+        };
+        let mut execution = engine
+            .initialize_with_artifacts(coverage_task(), c.graph.clone())
+            .unwrap();
+        execution.record_evidence(count_record.clone()).unwrap();
+        execution.record_evidence(c.evidence[0].clone()).unwrap();
+        let bytes = serde_json::to_vec(&execution.snapshot()).unwrap();
+        let raw: aep_engine::execution::Snapshot = serde_json::from_slice(&bytes).unwrap();
+        assert!(raw.evidence.iter().all(|e| e.record.facts().is_empty()));
+        let restored = engine
+            .restore(coverage_task(), c.graph.clone(), raw)
+            .unwrap();
+        assert_eq!(restored.recorded_evidence().len(), 2);
+        assert_eq!(restored.fact_store(), execution.fact_store());
+        let refusing = engine.with_ess_conformance_coverage_reader(std::sync::Arc::new(Refusing));
+        let mut empty = refusing
+            .initialize_with_artifacts(coverage_task(), c.graph.clone())
+            .unwrap();
+        empty
+            .record_evidence(count_record.clone())
+            .expect("coverage replacement preserves count reader");
+        let before = serde_json::to_vec(&empty.snapshot()).unwrap();
+        let error = empty.record_evidence(c.evidence[0].clone()).unwrap_err();
+        assert!(
+            error.to_string().contains("AdversaryReaderRefusal"),
+            "{error}"
+        );
+        assert_eq!(serde_json::to_vec(&empty.snapshot()).unwrap(), before);
+        let error = refusing
+            .restore(
+                coverage_task(),
+                c.graph.clone(),
+                serde_json::from_slice(&bytes).unwrap(),
+            )
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("AdversaryReaderRefusal"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_both_aliases() {
+    let directory =
+        root().join("target/ess-conformance-coverage/adversary-pass-1/inspection-fixture");
+    std::fs::create_dir_all(&directory).unwrap();
+    let (report, input) = fixtures::pair(1);
+    let duplicate = report.replace("\"passed\":1", "\"passed\":1,\"\\u0070assed\":1");
+    assert_ne!(duplicate, report);
+    let path = directory.join("duplicate-original.json");
+    let entry = serde_json::json!([{
+        "kind":"ess_conformance_coverage_v1", "report_json":duplicate, "suite_input_json":input,
+        "observed_at":1, "producer":{"producer":"verifier", "verifier":"conformance-runner"}, "about":"service:demo"
+    }]);
+    std::fs::write(&path, entry.to_string()).unwrap();
+    let args = [
+        "observe",
+        "evidence",
+        "inspect",
+        path.to_str().unwrap(),
+        "--at",
+        "2026-09-06",
+        "--format",
+        "json",
+    ];
+    let first = cli(&args);
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .current_dir(root())
+        .args(args)
+        .output()
+        .unwrap();
+    assert_eq!(first.status.code(), Some(1));
+    assert_eq!(first.status.code(), alias.status.code());
+    assert_eq!(first.stdout, alias.stdout);
+    assert_eq!(first.stderr, alias.stderr);
+    assert!(
+        String::from_utf8_lossy(&first.stderr).contains("DuplicateKey"),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+}
