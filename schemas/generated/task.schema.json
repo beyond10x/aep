@@ -258,6 +258,17 @@
             }
           ]
         },
+        "ess_conformance_coverage_v1": {
+          "description": "Independently authored complete ESS selection, never populated from report facts.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EssConformanceCoverageExpectation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "ess_conformance_v2": {
           "description": "Independently authored exact ESS count-stage expectation; never filled from evidence facts.",
           "anyOf": [
@@ -282,6 +293,34 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "EssConformanceCoverageExpectation": {
+      "description": "Independently chosen model, original suite and complete declared selection.",
+      "type": "object",
+      "required": [
+        "model",
+        "selected_ids",
+        "selection",
+        "suite"
+      ],
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/ArtifactRef"
+        },
+        "selected_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selection": {
+          "$ref": "#/definitions/Selection"
+        },
+        "suite": {
+          "$ref": "#/definitions/SuiteReference2"
         }
       },
       "additionalProperties": false
@@ -325,6 +364,60 @@
         }
       ]
     },
+    "Filter": {
+      "description": "An unfiltered selection or a precise narrowing of an admitted parent.",
+      "oneOf": [
+        {
+          "description": "No parent or selected-ID filter.",
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "all"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Exact IDs selected from the immediately preceding suite.",
+          "type": "object",
+          "required": [
+            "ids",
+            "kind",
+            "parent"
+          ],
+          "properties": {
+            "ids": {
+              "description": "Sorted distinct requested identities, possibly empty.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "explicit"
+              ]
+            },
+            "parent": {
+              "description": "Exact immediate parent.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/SuiteReference2"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "Node": {
       "description": "Any JSON/YAML value: null, boolean, number, string, array or object."
     },
@@ -360,6 +453,15 @@
             }
           }
         }
+      ]
+    },
+    "Origins": {
+      "description": "The origins selected by the independently declared boundary.",
+      "type": "string",
+      "enum": [
+        "authored",
+        "generated",
+        "generated_and_authored"
       ]
     },
     "PrincipleId": {
@@ -407,6 +509,84 @@
       "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
+    "Scope": {
+      "description": "Whole-system or named-component coverage boundary.",
+      "oneOf": [
+        {
+          "description": "The system boundary.",
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "system"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "One explicitly named component.",
+          "type": "object",
+          "required": [
+            "component",
+            "kind"
+          ],
+          "properties": {
+            "component": {
+              "description": "Original component name.",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "component"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Selection": {
+      "description": "Complete declared selection, never inferred from an execution count.",
+      "type": "object",
+      "required": [
+        "filter",
+        "origins",
+        "scope"
+      ],
+      "properties": {
+        "filter": {
+          "description": "Full parent-bound filter.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Filter"
+            }
+          ]
+        },
+        "origins": {
+          "description": "Selected source families.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Origins"
+            }
+          ]
+        },
+        "scope": {
+          "description": "System or component boundary.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Scope"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "SubjectRef": {
       "description": "Subject of evidence, written `<kind>:<id>`.",
       "type": "string",
@@ -415,6 +595,27 @@
     },
     "SuiteReference": {
       "description": "Exact original-suite identity; only the frozen count-stage profile is admitted.",
+      "type": "object",
+      "required": [
+        "digest",
+        "digest_profile",
+        "version"
+      ],
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "digest_profile": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SuiteReference2": {
+      "description": "Checked exact suite/5 reference. It does not broaden the frozen count reference.",
       "type": "object",
       "required": [
         "digest",

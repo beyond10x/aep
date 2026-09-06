@@ -352,7 +352,7 @@ pub fn evidence_list(
     text: &str,
     origin: Option<&str>,
 ) -> Result<Vec<EvidenceInput>, DocumentError> {
-    evidence_list_admitted(text, origin, None)
+    evidence_list_admitted(text, origin, None, None)
 }
 
 /// Reads submissions and explicitly re-admits original ESS bytes and observation equality.
@@ -361,13 +361,30 @@ pub fn evidence_list_with_reader(
     origin: Option<&str>,
     reader: &dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader,
 ) -> Result<Vec<EvidenceInput>, DocumentError> {
-    evidence_list_admitted(text, origin, Some(reader))
+    evidence_list_admitted(text, origin, Some(reader), None)
+}
+
+/// Re-admits original ESS sources using independent optional count and coverage readers.
+pub fn evidence_list_with_readers(
+    text: &str,
+    origin: Option<&str>,
+    readers: &aep_domain::ess_conformance_coverage::EssEvidenceReaders,
+) -> Result<Vec<EvidenceInput>, DocumentError> {
+    evidence_list_admitted(
+        text,
+        origin,
+        readers.count.as_deref(),
+        readers.coverage.as_deref(),
+    )
 }
 
 fn evidence_list_admitted(
     text: &str,
     origin: Option<&str>,
     reader: Option<&dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+    coverage_reader: Option<
+        &dyn aep_domain::ess_conformance_coverage::EssConformanceCoverageReader,
+    >,
 ) -> Result<Vec<EvidenceInput>, DocumentError> {
     use aep_domain::ess_conformance_v2::EssAdmissionError;
     let syntax = |source| DocumentError::Syntax {
@@ -384,14 +401,23 @@ fn evidence_list_admitted(
     let shape: serde_yaml::Value = serde_yaml::from_str(text).map_err(syntax)?;
     if let Some(entries) = shape.as_sequence() {
         for (index, entry) in entries.iter().enumerate() {
-            if entry.get("kind").and_then(serde_yaml::Value::as_str) == Some("ess_conformance_v2") {
+            let kind = entry.get("kind").and_then(serde_yaml::Value::as_str);
+            if matches!(
+                kind,
+                Some("ess_conformance_v2" | "ess_conformance_coverage_v1")
+            ) {
+                let suite_key = if kind == Some("ess_conformance_v2") {
+                    "suite_json"
+                } else {
+                    "suite_input_json"
+                };
                 if let Some(map) = entry.as_mapping() {
                     for key in map.keys() {
                         if !key.as_str().is_some_and(|key| {
                             [
                                 "kind",
                                 "report_json",
-                                "suite_json",
+                                suite_key,
                                 "observed_at",
                                 "producer",
                                 "about",
@@ -419,6 +445,21 @@ fn evidence_list_admitted(
                     "MissingReader",
                     "$",
                     "v2 evidence admission requires an explicitly installed source reader",
+                ))
+            })?;
+            sources.admit(reader).map_err(admission)?;
+            sources
+                .check_observation(input.observed_at)
+                .map_err(admission)?;
+        }
+        if let aep_domain::evidence::Evidence::EssConformanceCoverageV1(sources) =
+            &mut input.evidence
+        {
+            let reader = coverage_reader.ok_or_else(|| {
+                admission(EssAdmissionError::new(
+                    "MissingReader",
+                    "$",
+                    "coverage evidence admission requires its explicitly installed source reader",
                 ))
             })?;
             sources.admit(reader).map_err(admission)?;

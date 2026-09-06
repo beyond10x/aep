@@ -1,0 +1,9 @@
+id: adp-ess-conformance-coverage
+version: 1
+title: Development with complete ESS selection evidence
+summary: Original suite and parent admission with independently expected selection qualification.
+extends: adp/1
+evidence_kinds:
+  - ess_conformance_coverage_v1
+observables:
+  - 'ess_conformance_coverage_v1.**'

@@ -1238,6 +1238,8 @@ pub enum EvidenceKind {
     EssConformance,
     /// Exact original-source ESS count diagnostics; legacy coverage remains unknown.
     EssConformanceV2,
+    /// Original suite/5 coverage input and report, admitted by an explicitly installed reader.
+    EssConformanceCoverageV1,
     /// A harness transcript checked against a trace specification.
     ///
     /// What it attests: a `trace-spec` document was decided against the recorded transcript of an
@@ -1280,6 +1282,7 @@ impl EvidenceKind {
         Self::Specification,
         Self::EssConformance,
         Self::EssConformanceV2,
+        Self::EssConformanceCoverageV1,
         Self::TraceConformance,
     ];
 
@@ -1302,6 +1305,7 @@ impl EvidenceKind {
             Self::Specification => "specification",
             Self::EssConformance => "ess_conformance",
             Self::EssConformanceV2 => "ess_conformance_v2",
+            Self::EssConformanceCoverageV1 => "ess_conformance_coverage_v1",
             Self::TraceConformance => "trace_conformance",
         }
     }
@@ -1367,7 +1371,9 @@ impl EvidenceKind {
             Self::Review | Self::ReviewOutcome => &[Verifier::HumanReview],
             Self::Verification => &[Verifier::PolicyEngine, Verifier::ModelChecker],
             Self::Specification => &[Verifier::TestRunner, Verifier::HumanReview],
-            Self::EssConformance | Self::EssConformanceV2 => &[Verifier::ConformanceRunner],
+            Self::EssConformance | Self::EssConformanceV2 | Self::EssConformanceCoverageV1 => {
+                &[Verifier::ConformanceRunner]
+            }
             Self::TraceConformance => &[Verifier::TraceChecker],
         }
     }
@@ -1462,6 +1468,8 @@ pub enum Evidence {
     EssConformance(EssConformanceResult),
     /// Original report/2 and suite/1–4 bytes; raw serde confers no admission.
     EssConformanceV2(crate::ess_conformance_v2::EssConformanceV2Sources),
+    /// Original report/2 and input/1 bytes; raw serde confers no coverage admission.
+    EssConformanceCoverageV1(crate::ess_conformance_coverage::EssConformanceCoverageSources),
     /// A harness transcript checked against a trace specification.
     TraceConformance(TraceConformanceResult),
 }
@@ -1485,6 +1493,7 @@ impl Evidence {
             Self::Specification(_) => EvidenceKind::Specification,
             Self::EssConformance(_) => EvidenceKind::EssConformance,
             Self::EssConformanceV2(_) => EvidenceKind::EssConformanceV2,
+            Self::EssConformanceCoverageV1(_) => EvidenceKind::EssConformanceCoverageV1,
             Self::TraceConformance(_) => EvidenceKind::TraceConformance,
         }
     }
@@ -1502,6 +1511,9 @@ impl Evidence {
         match self {
             Self::EssConformance(result) => Some(&result.spec_digest),
             Self::EssConformanceV2(sources) => {
+                sources.reading().map(|reading| &reading.data().spec_digest)
+            }
+            Self::EssConformanceCoverageV1(sources) => {
                 sources.reading().map(|reading| &reading.data().spec_digest)
             }
             // `TraceConformance` also holds a `SpecDigest` and deliberately does **not** opt in,
@@ -1581,6 +1593,10 @@ impl Evidence {
             Self::EssConformanceV2(sources) => sources.reading().map_or_else(
                 || "unadmitted ESS conformance v2 source pair".to_owned(),
                 |reading| format!("ESS conformance v2: {} scenarios, execution {}, conformance {} (unknown coverage)", reading.data().counts.total, reading.data().execution_status.as_str(), reading.data().conformance_status.as_str()),
+            ),
+            Self::EssConformanceCoverageV1(sources) => sources.reading().map_or_else(
+                || "unadmitted ESS conformance coverage sources".to_owned(),
+                |reading| format!("ESS conformance coverage: {} scenarios, execution {}, conformance {}", reading.data().counts.total, reading.data().execution_status.as_str(), reading.data().conformance_status.as_str()),
             ),
             Self::TraceConformance(result) => format!(
                 "transcript against {}: {} ({} ok, {} gap, {} unk of {})",
@@ -1903,6 +1919,11 @@ impl Evidence {
                 ));
             }
             Self::EssConformanceV2(sources) => {
+                if let Some(reading) = sources.reading() {
+                    facts.extend(reading.facts());
+                }
+            }
+            Self::EssConformanceCoverageV1(sources) => {
                 if let Some(reading) = sources.reading() {
                     facts.extend(reading.facts());
                 }

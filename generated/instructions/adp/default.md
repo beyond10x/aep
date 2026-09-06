@@ -2,7 +2,7 @@
 
 # Standard development workflow
 
-`adp/default/2` · 10 states · 13 transitions · 21 principles bind it.
+`adp/default/2` · 10 states · 13 transitions · 22 principles bind it.
 
 Specification, decomposition, verifier setup, implementation, verification, adversarial
 verification and review, with an explicit route back to implementation when verification fails.
@@ -169,6 +169,7 @@ These obligations fall due before you may enter it:
 * `contract-testing/before-completion` — Contract testing
 * `design-by-contract/before-completion` — Design by contract
 * `differential-testing/before-completion` — Differential testing
+* `ess-conformance-coverage/before-completion` — Complete conformance for the independently declared ESS selection
 * `ess-conformance-v2/before-completion` — Exact ESS evidence with explicit coverage
 * `ess-conformance/before-completion` — Conformance to the specification
 * `invariant-checking/before-completion` — Invariant checking
@@ -197,6 +198,7 @@ These obligations fall due before you may enter it:
 * `contract-testing/before-completion` — Contract testing
 * `design-by-contract/before-completion` — Design by contract
 * `differential-testing/before-completion` — Differential testing
+* `ess-conformance-coverage/before-completion` — Complete conformance for the independently declared ESS selection
 * `ess-conformance-v2/before-completion` — Exact ESS evidence with explicit coverage
 * `ess-conformance/before-completion` — Conformance to the specification
 * `invariant-checking/before-completion` — Invariant checking
@@ -353,6 +355,22 @@ Evidence it requires, which must exist before the work is finished:
 
 * evidence test_result from test-runner (independent)
 * evidence verification (independent)
+
+If one of its requirements is not met: block.
+
+### `ess-conformance-coverage/1` — Complete conformance for the independently declared ESS selection
+
+In the opt-in coverage profile, require an admitted nonempty complete selection with all-pass
+execution, matching the task's independently named current model, original suite bytes and full
+selection.
+
+**Before entering `complete` and `declined`, the completion phase:**
+
+* evidence ess_conformance_coverage_v1 from conformance-runner (independent)
+
+Verifiers that must have spoken:
+
+* conformance-runner must run — before entering `complete` and `declined`, the completion phase
 
 If one of its requirements is not met: block.
 

@@ -54,8 +54,18 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
     };
     let spec_digest = digest(&p["spec_digest"])?;
     digest(&p["contract_digest"])?;
+    let ids = admit_scenarios(&root["scenarios"])?;
+    Ok(AdmittedSuite {
+        version: version.into(),
+        spec_digest,
+        ids,
+    })
+}
+
+// Suite/5 inherits exactly this execution vocabulary; its envelope and admission stay separate.
+pub(crate) fn admit_scenarios(scenarios: &Json) -> Result<Vec<ScenarioId>> {
     let mut ids = Vec::new();
-    for (id, scenario) in root["scenarios"].object()? {
+    for (id, scenario) in scenarios.object()? {
         ids.push(
             ScenarioId::new(id.clone())
                 .map_err(|error| scenario.error("MalformedScenarioId", error.to_string()))?,
@@ -78,11 +88,7 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
             semantic_reference(reference)?;
         }
     }
-    Ok(AdmittedSuite {
-        version: version.into(),
-        spec_digest,
-        ids,
-    })
+    Ok(ids)
 }
 
 fn name(value: &Json, kebab: bool) -> Result<()> {
@@ -109,7 +115,7 @@ fn outcome(value: &Json) -> Result<()> {
     name(&fields["command"], false)?;
     name(&fields["outcome"], true)
 }
-fn semantic_reference(value: &Json) -> Result<()> {
+pub(crate) fn semantic_reference(value: &Json) -> Result<()> {
     let fields = value.closed(&["kind", "name"], &[])?;
     let target = &fields["name"];
     match fields["kind"].text()? {

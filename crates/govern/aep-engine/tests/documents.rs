@@ -47,10 +47,16 @@ fn the_document_tree_loads_and_is_internally_consistent() {
             .protocols()
             .map(|protocol| format!("{}/{}", protocol.id, protocol.version))
             .collect::<std::collections::BTreeSet<_>>(),
-        ["aep/1", "adp/1", "aop/1", "adp-ess-conformance/1"]
-            .map(str::to_owned)
-            .into_iter()
-            .collect(),
+        [
+            "aep/1",
+            "adp/1",
+            "aop/1",
+            "adp-ess-conformance/1",
+            "adp-ess-conformance-coverage/1"
+        ]
+        .map(str::to_owned)
+        .into_iter()
+        .collect(),
     );
     assert_eq!(registry.workflows().count(), 6);
     assert_eq!(
@@ -64,6 +70,7 @@ fn the_document_tree_loads_and_is_internally_consistent() {
             "development.critical",
             "development.driven",
             "development.ess-conformance-v2",
+            "development.ess-conformance-coverage",
             "incident.standard",
             "release.progressive",
             "release.source",
@@ -95,6 +102,11 @@ fn every_profile_resolves_for_a_task_of_its_kind() {
             "development.ess-conformance-v2",
             "feature",
             "adp-ess-conformance/1",
+        ),
+        (
+            "development.ess-conformance-coverage",
+            "feature",
+            "adp-ess-conformance-coverage/1",
         ),
         ("incident.standard", "incident", "aop/1"),
         ("release.progressive", "release", "aop/1"),

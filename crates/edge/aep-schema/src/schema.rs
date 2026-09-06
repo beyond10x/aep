@@ -66,13 +66,24 @@ fn entry<T: JsonSchema>(
 /// Copy the payload's derived restriction after that merge; legacy published variants stay frozen.
 fn evidence_entry() -> GeneratedSchema {
     let mut entry = entry::<Evidence>("Evidence", "evidence", "one piece of submitted evidence");
-    let payload = schema_for!(aep_domain::ess_conformance_v2::EssConformanceV2Sources);
-    let restriction = payload.schema.object.unwrap().additional_properties;
-    let kind = serde_json::Value::String(
-        aep_domain::evidence::EvidenceKind::EssConformanceV2
-            .as_str()
-            .to_owned(),
+    close_evidence_variant::<aep_domain::ess_conformance_v2::EssConformanceV2Sources>(
+        &mut entry,
+        aep_domain::evidence::EvidenceKind::EssConformanceV2,
     );
+    close_evidence_variant::<aep_domain::ess_conformance_coverage::EssConformanceCoverageSources>(
+        &mut entry,
+        aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1,
+    );
+    entry
+}
+
+fn close_evidence_variant<T: JsonSchema>(
+    entry: &mut GeneratedSchema,
+    kind: aep_domain::evidence::EvidenceKind,
+) {
+    let payload = schema_for!(T);
+    let restriction = payload.schema.object.unwrap().additional_properties;
+    let kind = serde_json::Value::String(kind.as_str().to_owned());
     let variants = entry
         .schema
         .schema
@@ -99,7 +110,6 @@ fn evidence_entry() -> GeneratedSchema {
         })
         .expect("Evidence publishes its count-stage variant");
     variant.additional_properties = restriction;
-    entry
 }
 
 /// Every schema this build publishes.

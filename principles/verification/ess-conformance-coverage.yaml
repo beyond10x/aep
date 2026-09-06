@@ -1,0 +1,17 @@
+id: ess-conformance-coverage
+version: 1
+title: Complete conformance for the independently declared ESS selection
+summary: >-
+  In the opt-in coverage profile, require an admitted nonempty complete selection with all-pass
+  execution, matching the task's independently named current model, original suite bytes and full
+  selection.
+requires:
+  before_completion:
+    evidence:
+      - kind: ess_conformance_coverage_v1
+        at_least: 1
+        independent: true
+        verifier: conformance-runner
+verification:
+  - verifier: conformance-runner
+on_failure: block

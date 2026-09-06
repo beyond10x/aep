@@ -287,6 +287,10 @@ pub struct Constraints {
     /// Independently authored exact ESS count-stage expectation; never filled from evidence facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ess_conformance_v2: Option<crate::ess_conformance_v2::EssConformanceV2Expectation>,
+    /// Independently authored complete ESS selection, never populated from report facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ess_conformance_coverage_v1:
+        Option<crate::ess_conformance_coverage::EssConformanceCoverageExpectation>,
     /// Facts the task declares, which nothing else can observe for it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub facts: BTreeMap<FactPath, FactValue>,
@@ -302,6 +306,7 @@ impl Constraints {
     /// `true` when nothing is constrained.
     pub fn is_empty(&self) -> bool {
         self.ess_conformance_v2.is_none()
+            && self.ess_conformance_coverage_v1.is_none()
             && self.facts.is_empty()
             && self.capabilities.is_empty()
             && self.notes.is_empty()

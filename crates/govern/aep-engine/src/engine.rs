@@ -183,7 +183,7 @@ pub trait ProtocolEngine {
 /// The reference engine.
 #[derive(Debug)]
 pub struct Engine<C: Clock = SystemClock> {
-    ess_reader: Option<std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>>,
+    ess_readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders,
     registry: Registry,
     clock: C,
     executions: AtomicU64,
@@ -200,7 +200,7 @@ impl<C: Clock> Engine<C> {
     /// An engine over `registry`, using `clock`.
     pub fn with_clock(registry: Registry, clock: C) -> Self {
         Self {
-            ess_reader: None,
+            ess_readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders::default(),
             registry,
             clock,
             executions: AtomicU64::new(0),
@@ -213,7 +213,19 @@ impl<C: Clock> Engine<C> {
         mut self,
         reader: std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
     ) -> Self {
-        self.ess_reader = Some(reader);
+        self.ess_readers.count = Some(reader);
+        self
+    }
+
+    /// Installs the separate coverage reader while preserving the configured count reader.
+    #[must_use]
+    pub fn with_ess_conformance_coverage_reader(
+        mut self,
+        reader: std::sync::Arc<
+            dyn aep_domain::ess_conformance_coverage::EssConformanceCoverageReader,
+        >,
+    ) -> Self {
+        self.ess_readers.coverage = Some(reader);
         self
     }
 
@@ -240,7 +252,7 @@ impl<C: Clock> Engine<C> {
         });
 
         let mut execution =
-            Execution::new_with_ess_reader(id, plan, artifacts, self.ess_reader.clone());
+            Execution::new_with_ess_readers(id, plan, artifacts, self.ess_readers.clone());
         let now = self.clock.now();
         execution.observe_at(now);
         let task_id = execution.plan().task.id.clone();
@@ -289,7 +301,7 @@ impl<C: Clock> Engine<C> {
             plan,
             artifacts,
             snapshot,
-            self.ess_reader.clone(),
+            self.ess_readers.clone(),
             Some(now),
         )?;
         // The restoring engine's clock, never the snapshotting one's: a horizon is re-decided

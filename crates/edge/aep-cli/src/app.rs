@@ -1794,7 +1794,7 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
         origin,
     } = inputs(args)?;
 
-    let engine = Engine::new(registry).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader));
+    let engine = Engine::new(registry).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader)).with_ess_conformance_coverage_reader(std::sync::Arc::new(aep_ess_evidence::CoverageReader));
     let mut execution = match &args.state {
         Some(path) => {
             let text =
@@ -2309,10 +2309,17 @@ fn read_artifacts(path: &Path) -> Result<ArtifactGraph> {
 }
 
 /// Reads a list of evidence submissions.
+pub(crate) fn ess_readers() -> aep_domain::ess_conformance_coverage::EssEvidenceReaders {
+    aep_domain::ess_conformance_coverage::EssEvidenceReaders {
+        count: Some(std::sync::Arc::new(aep_ess_evidence::CountStageReader)),
+        coverage: Some(std::sync::Arc::new(aep_ess_evidence::CoverageReader)),
+    }
+}
+
 fn read_evidence(path: &Path) -> Result<Vec<EvidenceSubmission>> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let origin = path.display().to_string();
-    let inputs = aep_schema::parse::evidence_list_with_reader(&text, Some(&origin), &aep_ess_evidence::CountStageReader)
+    let inputs = aep_schema::parse::evidence_list_with_readers(&text, Some(&origin), &ess_readers())
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(inputs.into_iter().map(submission).collect())
 }
@@ -2754,7 +2761,7 @@ fn evidence_inspect(
         let text =
             fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let origin = path.display().to_string();
-        let inputs = aep_schema::parse::evidence_list_with_reader(&text, Some(&origin), &aep_ess_evidence::CountStageReader)?;
+        let inputs = aep_schema::parse::evidence_list_with_readers(&text, Some(&origin), &ess_readers())?;
         for (ordinal, input) in inputs.into_iter().enumerate() {
             let observed = input.observed_at;
             // The engine's comparison, made here so the two verbs cannot answer differently about
@@ -2769,7 +2776,11 @@ fn evidence_inspect(
                 ));
             }
             records.push(InspectedRecord {
-                completed_at: match &input.evidence { aep_domain::evidence::Evidence::EssConformanceV2(sources) => sources.reading().map(|reading| reading.data().completed_at.epoch_millis().to_string()), _ => None },
+                completed_at: match &input.evidence {
+                    aep_domain::evidence::Evidence::EssConformanceV2(sources) => sources.reading().map(|reading| reading.data().completed_at.epoch_millis().to_string()),
+                    aep_domain::evidence::Evidence::EssConformanceCoverageV1(sources) => sources.reading().map(|reading| reading.data().completed_at.epoch_millis().to_string()),
+                    _ => None,
+                },
                 file: origin.clone(),
                 kind: input.evidence.kind().to_string(),
                 observed_at: observed.day().to_string(),

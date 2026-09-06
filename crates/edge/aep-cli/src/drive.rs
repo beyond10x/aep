@@ -715,7 +715,7 @@ fn start(args: &RunArgs) -> Result<ExitCode> {
     let inputs = args.location.inputs()?;
     let runs = runs_directory(&inputs.project)?;
 
-    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader));
+    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader)).with_ess_conformance_coverage_reader(std::sync::Arc::new(aep_ess_evidence::CoverageReader));
     let plan = aep_engine::resolve(&inputs.task, &inputs.registry)
         .map_err(|errors| anyhow::anyhow!("{errors}"))
         .context("the task cannot be resolved")?;
@@ -945,7 +945,7 @@ fn resume(args: &ResumeArgs) -> Result<ExitCode> {
         return Ok(ExitCode::from(1));
     }
 
-    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader));
+    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader)).with_ess_conformance_coverage_reader(std::sync::Arc::new(aep_ess_evidence::CoverageReader));
     let options = DriverOptions {
         max_iterations: args.max_iterations,
         pause_on_approval,
@@ -3498,7 +3498,7 @@ fn position(
                     .join("; ")
             )
         })?;
-    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader));
+    let engine = Engine::new(inputs.registry.clone()).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader)).with_ess_conformance_coverage_reader(std::sync::Arc::new(aep_ess_evidence::CoverageReader));
     if let Some(snapshot) = snapshot {
         let execution = engine
             .restore(inputs.task.clone(), graph, snapshot)
@@ -5067,7 +5067,7 @@ fn read_record(
         }
     };
     let origin = path.display().to_string();
-    let inputs = match aep_schema::parse::evidence_list_with_reader(&text, Some(&origin), &aep_ess_evidence::CountStageReader) {
+    let inputs = match aep_schema::parse::evidence_list_with_readers(&text, Some(&origin), &crate::ess_readers()) {
         Ok(inputs) => inputs,
         Err(error) => {
             return no_verdict(format!(

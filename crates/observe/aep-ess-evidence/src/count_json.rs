@@ -187,6 +187,32 @@ impl Json {
     pub fn null(&self) -> bool {
         self.raw == "null"
     }
+    // Compare admitted survivor definitions, retaining semantic sequence order and exact integers.
+    // Float spellings occur only in validated payload positions; their domain is finite binary64.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        match (&self.kind, &other.kind) {
+            (Kind::Object(a), Kind::Object(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .all(|(key, value)| b.get(key).is_some_and(|other| value.equivalent(other)))
+            }
+            (Kind::Array(a), Kind::Array(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.equivalent(b))
+            }
+            (Kind::String(a), Kind::String(b)) => a == b,
+            (Kind::Scalar, Kind::Scalar) => {
+                if let (Ok(a), Ok(b)) = (self.raw.parse::<u64>(), other.raw.parse::<u64>()) {
+                    return a == b;
+                }
+                if let (Ok(a), Ok(b)) = (self.raw.parse::<f64>(), other.raw.parse::<f64>()) {
+                    return aep_domain::facts::Number::new(a).ok()
+                        == aep_domain::facts::Number::new(b).ok();
+                }
+                self.raw == other.raw
+            }
+            _ => false,
+        }
+    }
     // Legacy payload numbers deliberately use ESS's finite-number domain, not report scalar rules.
     pub fn payload(&self) -> Result<()> {
         match &self.kind {
