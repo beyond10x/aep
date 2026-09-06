@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 29
+revision: 30
 ---
 ## Outcome
 
@@ -141,3 +141,11 @@ The complete five-package run executed1375cases, allpassed,0failed/ignored,67sum
 Correction report SHA256113b4f5efcd5f134b71435683851dec306cc58d624a28f7cbb25afebccdad652. Root verified all4 handoff entries,47 execution-catalog entries,242 source entries and both adversary hashes. Source manifest SHA256792437f1bdb462d4b947740d167307e6204c784a43318b6859e00badb91585b2; execution manifest SHA2567c7d6d23d2e11e83931cea07ddd4f84ab1604caace06f18f96dac16adf9509e6. The immutable first source review receives a fixed outcome now that its correction is committed. This does not assert the final adversary's result, integration completion or actual producer correspondence.
 
 The second and final source adversary is assigned the frozen correction and complete original source change. No third source attack is authorized. All original contracts, runtime defaults, generated inputs, schemas and instructions remain unchanged by this correction. Reader-first publication and actual future ESS Rust/Go producer correspondence remain required.
+
+## Final source review and integration handoff
+
+review-result:ess-conformance-coverage-source-adversary-pass-2 preserves the immutable second/final source attack, report SHA256ba6b7057f922ef1f0ae288c0c0f006aabf9d319cab5c82c0fde1548e89f33d83. No semantic findings were returned. Five additional cases cover preserved predicate/metadata structure, inherited scalar parsing, closed vocabulary and named-current-model qualification through graph refresh/replay. Full five-package run:1380passed,0failed/ignored,68summaries,135.773seconds. A new helper-only Clippy failure was corrected without changing inputs/assertions; its four affected adapter cases, final formatting and strict Clippy then passed. The complete suite's earlier exact test bytes and final affected rerun are retained distinctly.
+
+Root verified the68-entry execution catalog, sealed records,241 unchanged original source entries and the original1126-line CLI test prefix. Exactly two additive test files,310addedlines,0removedlines were frozen at00b6108d7656b3947fa8940015147b317338ad7c with both bot identities verified. No third source attack was opened. The actual findings ledger reports carried[],new[],resolved2: both first-pass comparison findings. Its complete output is retained in the wave page. The first-pass fixed outcome remains; an empty second-pass findings list receives no fictitious finding outcome.
+
+Source is ready for root integration and the16-step repository gate. This does not claim that gate, source publication, runtime installation or actual ESS producer correspondence has happened. The prepared Website support and exact immutable artifact verification remain delivery requirements after green source publication.

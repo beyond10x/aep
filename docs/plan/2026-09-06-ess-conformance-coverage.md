@@ -210,3 +210,87 @@ TMPDIR: /home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-2-
 The complete brief and prior evidence are retained. No third source attack is authorized.
 Full repository gates, reader-first publication and actual future producer correspondence
 remain pending.
+
+## Delivery preparation
+
+Reserve the task-owned Website support id aep-coverage-website-verification at the exact
+Atlas-pinned runtime fc4571534765c098ed861bc326da4d3da0d1df63. Its planned worktree is
+/home/timo/.local/state/worktree/trees/b10x/website/aep-coverage-website-verification;
+build and scratch are target/ess-conformance-coverage beneath it. Root owns this support
+checkout. The short explicit external TMPDIR /home/timo/.cache/aep-cov-website-tmp is reserved
+for the Website gate's Unix-socket fixtures and is part of eventual exact-owned cleanup.
+
+The prepared verifier derives from the archived, successful composition delivery runner.
+Root verified its archive and entry hashes and changed only the assigned roots and expected
+repository from ESS to AEP. It preserves immutable layout-v2 inventory checks, exact runtime,
+actual Node reporter counts and complete Website gate invocation. Prepared runner SHA256
+d22bb3f5435963bd779c96526bfd069cc2012f485bbac339fb393157931d4b37; only syntax parsing has run.
+Original runner, substitution list and the harmless initial substitution-assertion refusal
+are retained in target/ess-conformance-coverage/integration-preparation. No publication
+artifact or delivery result is inferred from this preparation.
+
+The manager created that support tree at the reserved runtime after sampling14234378240free
+bytes. Lease ess-review-aep-website covers it. Node24 `npm ci --ignore-scripts` exited0 in
+20.234626566seconds. The setup wrapper then refused its overbroad full-cleanliness assertion:
+Website does not ignore target, so the explicitly assigned scratch appeared as untracked.
+Root verified all158 tracked files byte-for-byte against HEAD and confirmed every3387 untracked
+file was under the assigned scratch. This is a retained setup-check error, not a failed npm
+installation or a source mutation; neither npm nor any gate was repeated. The prepared delivery
+runner already checks tracked-source cleanliness separately. Full Website verification still
+requires the actual immutable publication artifact.
+
+## Final source review sealed
+
+The final attack found no semantic defect. Its immutable report is
+review-result:ess-conformance-coverage-source-adversary-pass-2, SHA256
+ba6b7057f922ef1f0ae288c0c0f006aabf9d319cab5c82c0fde1548e89f33d83. Complete five-package run:
+1380passed,0failed/ignored,68summaries,135.773seconds. A new test helper's Clippy issue was
+corrected without changing inputs/assertions; all four affected cases, final formatting and
+strict Clippy passed afterward. The full-suite and final helper bytes remain separately pinned.
+
+Root verified all68 execution-catalog entries, sealed records,241 unchanged original source
+entries and the original1126-line CLI prefix. Exactly two additive test paths,310addedlines,
+0removedlines were frozen at00b6108d7656b3947fa8940015147b317338ad7c with both bot identities
+verified. All reviewer writes are relinquished. No third source attack is opened. First-pass
+findings fell from2 to0; the CLI's entire comparison follows verbatim. The empty second pass
+receives no invented finding outcome.
+
+```json
+{
+  "artifact": "story:admit-ess-conformance-coverage",
+  "reviews": 4,
+  "from": "review-result:ess-conformance-coverage-source-adversary-pass-1",
+  "from_reviewer": "unattributed",
+  "to": "review-result:ess-conformance-coverage-source-adversary-pass-2",
+  "to_reviewer": "unattributed",
+  "carried": [],
+  "new": [],
+  "resolved": [
+    {
+      "file": "crates/observe/aep-ess-evidence/src/count_json.rs",
+      "line": 195,
+      "category": "contract-drift",
+      "severity": "blocker",
+      "verdict": "CONFIRMED",
+      "origin": "introduced",
+      "message": "Parent lineage comparison rejects semantically unchanged optional defaults because it compares raw object field presence instead of the inherited admitted definitions."
+    },
+    {
+      "file": "crates/observe/aep-ess-evidence/src/count_json.rs",
+      "line": 204,
+      "category": "contract-drift",
+      "severity": "blocker",
+      "verdict": "CONFIRMED",
+      "origin": "introduced",
+      "message": "Parent lineage comparison treats known Node payload integer spellings as exact u64 values and rejects equivalent finite-binary64 payloads under the coordinator-confirmed inherited Node interpretation."
+    }
+  ]
+}
+```
+
+Full source integration gates and publication are next; these unit measurements are not their
+results. The prepared full-gate runner executes the16 unchanged Taskfile steps with separate
+real statuses, verifies Rust1.85 through its own toolchain and preserves the configured
+PostgreSQL skip distinction. Its explicitly assigned outside-project TMPDIR is
+/home/timo/.cache/ess-cov-aep-gate-tmp; all logs stay under the coordinator's
+ target/ess-conformance-coverage/gate-<subject>. No source gate has run on the merged result yet.
