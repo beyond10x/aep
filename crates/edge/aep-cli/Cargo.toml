@@ -63,6 +63,8 @@ aep-driver-spec.workspace = true
 aep-render.workspace = true
 
 aep-engine.workspace = true
+# Optional ESS wire admission stays at the edge; domain/engine depend only on the pure reader port.
+aep-ess-evidence.workspace = true
 aep-project.workspace = true
 aep-schema.workspace = true
 

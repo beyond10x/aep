@@ -61,6 +61,17 @@ use crate::verification::Verifier;
 
 /// What the engine needs in order to decide whether requirements are met.
 pub trait RequirementContext {
+    /// Independently authored count-stage expectation, never taken from projected evidence facts.
+    fn ess_conformance_v2_expectation(
+        &self,
+    ) -> Option<&crate::ess_conformance_v2::EssConformanceV2Expectation> {
+        None
+    }
+
+    /// The resolved task's subject. A missing subject cannot authorize a v2 record.
+    fn task_subject(&self) -> Option<&SubjectRef> {
+        None
+    }
     /// The facts observed so far.
     fn facts(&self) -> &dyn FactSource;
 
@@ -340,7 +351,7 @@ impl EvidenceRequirement {
                 // horizon on one is a decay rule over a set that is never consulted — a gate that
                 // reads as guarded and is not. `Horizon::days(0)` is refused for the same reason,
                 // and the two refusals are kept consistent on purpose.
-                if at_least == 0 && horizon.is_some() {
+                if at_least == 0 && (horizon.is_some() || kind == EvidenceKind::EssConformanceV2) {
                     return Err(ParseError::shape(
                         "requires.evidence[]",
                         "at_least of at least 1 beside a horizon",
@@ -372,6 +383,10 @@ impl EvidenceRequirement {
 
     /// `true` when `record` counts towards this requirement.
     pub fn matches(&self, record: &EvidenceRecord) -> bool {
+        // V2 requires independent task/model/selection/time inputs; this API has none of them.
+        if self.kind == EvidenceKind::EssConformanceV2 {
+            return false;
+        }
         if record.kind() != self.kind {
             return false;
         }
@@ -491,6 +506,48 @@ impl EvidenceRequirement {
 
     /// Checks this requirement.
     fn evaluate(&self, context: &dyn RequirementContext) -> RequirementOutcome {
+        if self.kind == EvidenceKind::EssConformanceV2 {
+            if self.at_least == 0 {
+                return RequirementOutcome::new(
+                    RequirementFlavour::Evidence,
+                    self.to_string(),
+                    Truth::False,
+                )
+                .with_detail("InvalidRequirement: v2 requires at least one qualified record");
+            }
+            let decisions: Vec<_> = context
+                .evidence()
+                .iter()
+                .filter(|record| record.kind() == self.kind)
+                .map(|record| self.qualify_record(record, context))
+                .collect();
+            let count = decisions
+                .iter()
+                .filter(|decision| matches!(decision, RecordQualification::Qualified))
+                .count();
+            if count >= self.at_least {
+                return RequirementOutcome::new(
+                    RequirementFlavour::Evidence,
+                    self.to_string(),
+                    Truth::True,
+                );
+            }
+            let decision = decisions
+                .iter()
+                .find(|decision| matches!(decision, RecordQualification::Contradiction(_)))
+                .or_else(|| decisions.first());
+            let truth = if matches!(decision, Some(RecordQualification::Contradiction(_))) {
+                Truth::False
+            } else {
+                Truth::Unknown
+            };
+            let detail = decision.and_then(RecordQualification::issue).map_or_else(
+                || "MissingRecord: no v2 record submitted".into(),
+                |issue| format!("{} at {}: {}", issue.reason, issue.path, issue.detail),
+            );
+            return RequirementOutcome::new(RequirementFlavour::Evidence, self.to_string(), truth)
+                .with_detail(detail);
+        }
         let graph = context.artifacts();
         let mut matching = 0_usize;
         let mut unbound: Option<String> = None;
@@ -554,6 +611,243 @@ impl EvidenceRequirement {
         };
         RequirementOutcome::new(RequirementFlavour::Evidence, self.to_string(), truth)
             .with_detail(detail)
+    }
+}
+
+/// A per-record decision. Only Qualified contributes to a requirement's record count.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordQualification {
+    /// This record satisfies the requirement in this context.
+    Qualified,
+    /// An independently required input or adequate coverage is unavailable.
+    Unknown(crate::ess_conformance_v2::EssAdmissionIssue),
+    /// The observed record contradicts an independently required input or outcome.
+    Contradiction(crate::ess_conformance_v2::EssAdmissionIssue),
+}
+impl RecordQualification {
+    /// Stable refusal/unknown reason and location, absent only for a qualified record.
+    pub fn issue(&self) -> Option<&crate::ess_conformance_v2::EssAdmissionIssue> {
+        match self {
+            Self::Qualified => None,
+            Self::Unknown(issue) | Self::Contradiction(issue) => Some(issue),
+        }
+    }
+}
+
+fn unknown(reason: &'static str, path: &str, detail: &str) -> RecordQualification {
+    RecordQualification::Unknown(crate::ess_conformance_v2::EssAdmissionIssue {
+        reason,
+        path: path.into(),
+        detail: detail.into(),
+    })
+}
+fn contradiction(reason: &'static str, path: &str, detail: &str) -> RecordQualification {
+    RecordQualification::Contradiction(crate::ess_conformance_v2::EssAdmissionIssue {
+        reason,
+        path: path.into(),
+        detail: detail.into(),
+    })
+}
+
+impl EvidenceRequirement {
+    /// Qualifies this record against independent context. Count-stage legacy coverage never qualifies.
+    pub fn qualify_record(
+        &self,
+        record: &EvidenceRecord,
+        context: &dyn RequirementContext,
+    ) -> RecordQualification {
+        if self.kind != EvidenceKind::EssConformanceV2 {
+            if !self.matches(record) {
+                return unknown(
+                    "RecordMismatch",
+                    "$",
+                    "record does not match the requirement",
+                );
+            }
+            if let Some(reason) = Self::unbound_revision(record, context.artifacts()) {
+                return contradiction("ModelDigestMismatch", "$", &reason);
+            }
+            if let Some(reason) = self.lapsed(record, context) {
+                return unknown("StaleObservation", "$", &reason);
+            }
+            return RecordQualification::Qualified;
+        }
+        self.qualify_ess_record(record, context)
+    }
+
+    fn qualify_ess_record(
+        &self,
+        record: &EvidenceRecord,
+        context: &dyn RequirementContext,
+    ) -> RecordQualification {
+        if self.at_least == 0 {
+            return contradiction(
+                "InvalidRequirement",
+                "$requirement.at_least",
+                "v2 requires at least one qualified record",
+            );
+        }
+        let Evidence::EssConformanceV2(sources) = &record.value else {
+            return unknown("WrongKind", "$.kind", "not v2 evidence");
+        };
+        let Some(reading) = sources.reading() else {
+            return unknown(
+                "MissingAdmission",
+                "$",
+                "raw source bytes have no admitted reading",
+            );
+        };
+        let Some(subject) = context.task_subject() else {
+            return unknown(
+                "MissingTaskSubject",
+                "$task.subject",
+                "the task must independently name its subject",
+            );
+        };
+        if record.subject.as_ref() != Some(subject)
+            || self
+                .subject
+                .as_ref()
+                .is_some_and(|expected| record.subject.as_ref() != Some(expected))
+        {
+            return contradiction(
+                "SubjectMismatch",
+                "$.subject",
+                "record does not name the expected task/requirement subject",
+            );
+        }
+        if !matches!(
+            record.producer,
+            crate::evidence::Producer::Verifier {
+                verifier: Verifier::ConformanceRunner
+            }
+        ) || self
+            .verifier
+            .as_ref()
+            .is_some_and(|verifier| *verifier != Verifier::ConformanceRunner)
+        {
+            return contradiction("ProducerMismatch", "$.producer", "an independent conformance-runner is required; provenance.tool is not a substitute");
+        }
+        if let Some(refusal) = Self::qualify_ess_identity(reading, context) {
+            return refusal;
+        }
+        self.qualify_ess_observation(sources, record.observed_at, context)
+    }
+
+    fn qualify_ess_identity(
+        reading: &crate::ess_conformance_v2::EssConformanceV2Reading,
+        context: &dyn RequirementContext,
+    ) -> Option<RecordQualification> {
+        let Some(expected) = context.ess_conformance_v2_expectation() else {
+            return Some(unknown(
+                "MissingExpectation",
+                "$task.constraints.ess_conformance_v2",
+                "author the expectation before consuming evidence",
+            ));
+        };
+        let Some(model) = context.artifacts().resolve(expected.model()) else {
+            return Some(unknown(
+                "MissingModel",
+                "$task.constraints.ess_conformance_v2.model",
+                "the named model is absent from the current graph",
+            ));
+        };
+        if model.kind != ArtifactKind::ExecutableSystemSpecification {
+            return Some(contradiction(
+                "ModelKindMismatch",
+                "$task.constraints.ess_conformance_v2.model",
+                "the named artifact must be an executable-system specification",
+            ));
+        }
+        let Some(digest) = &model.model_digest else {
+            return Some(unknown(
+                "MissingModelDigest",
+                "$model.model_digest",
+                "the named current model declares no digest",
+            ));
+        };
+        let data = reading.data();
+        if digest != &data.spec_digest {
+            return Some(contradiction(
+                "ModelDigestMismatch",
+                "$.spec_digest",
+                "the report differs from the specifically named current model",
+            ));
+        }
+        if expected.suite() != &data.suite {
+            return Some(contradiction("SuiteReferenceMismatch", "$.suite", "version, digest profile and original-byte digest must all match the task expectation"));
+        }
+        if expected.selected_ids() != reading.selected_ids() {
+            return Some(contradiction(
+                "SelectionMismatch",
+                "$.outcomes",
+                "this record's selected IDs differ from the independent expectation",
+            ));
+        }
+        None
+    }
+
+    fn qualify_ess_observation(
+        &self,
+        sources: &crate::ess_conformance_v2::EssConformanceV2Sources,
+        observed_at: crate::time::ObservedAt,
+        context: &dyn RequirementContext,
+    ) -> RecordQualification {
+        let data = sources.reading().expect("qualified admitted source").data();
+        if let Err(error) = sources.check_observation(observed_at) {
+            return RecordQualification::Contradiction(error.issues[0].clone());
+        }
+        let Some(now) = context.now() else {
+            return unknown(
+                "MissingTime",
+                "$context.now",
+                "a current evaluation instant is required even without a horizon",
+            );
+        };
+        let Some(age) = now
+            .epoch_millis()
+            .checked_sub(data.completed_at.epoch_millis())
+        else {
+            return contradiction(
+                "FutureObservation",
+                "$.observed_at",
+                "the observation is later than the current evaluation instant",
+            );
+        };
+        if self
+            .horizon
+            .is_some_and(|horizon| age > horizon.as_millis())
+        {
+            return unknown(
+                "StaleObservation",
+                "$.observed_at",
+                "the observation exceeds the requirement's horizon",
+            );
+        }
+        if data.counts.total == 0 {
+            return unknown(
+                "EmptySelection",
+                "$.counts.total",
+                "an empty diagnostic selection establishes no conformance",
+            );
+        }
+        match data.execution_status {
+            crate::ess_conformance_v2::CountStatus::Failed => contradiction(
+                "ExecutionFailed",
+                "$.execution_status",
+                "the producer observed a failing final scenario",
+            ),
+            crate::ess_conformance_v2::CountStatus::Inconclusive => unknown(
+                "InconclusiveExecution",
+                "$.execution_status",
+                "the selected execution did not establish a passing result",
+            ),
+            crate::ess_conformance_v2::CountStatus::Passed => unknown(
+                "UnknownCoverage",
+                "$.coverage",
+                "legacy suite/1–4 has no complete-selection coverage inventory",
+            ),
+        }
     }
 }
 

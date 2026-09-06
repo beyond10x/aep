@@ -1794,7 +1794,7 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
         origin,
     } = inputs(args)?;
 
-    let engine = Engine::new(registry);
+    let engine = Engine::new(registry).with_ess_conformance_v2_reader(std::sync::Arc::new(aep_ess_evidence::CountStageReader));
     let mut execution = match &args.state {
         Some(path) => {
             let text =
@@ -2312,7 +2312,7 @@ fn read_artifacts(path: &Path) -> Result<ArtifactGraph> {
 fn read_evidence(path: &Path) -> Result<Vec<EvidenceSubmission>> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let origin = path.display().to_string();
-    let inputs = aep_schema::parse::evidence_list(&text, Some(&origin))
+    let inputs = aep_schema::parse::evidence_list_with_reader(&text, Some(&origin), &aep_ess_evidence::CountStageReader)
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(inputs.into_iter().map(submission).collect())
 }
@@ -2715,6 +2715,8 @@ fn markdown_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
 /// One submitted record, aged.
 #[derive(serde::Serialize)]
 struct InspectedRecord {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completed_at: Option<String>,
     file: String,
     kind: String,
     observed_at: String,
@@ -2752,7 +2754,7 @@ fn evidence_inspect(
         let text =
             fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let origin = path.display().to_string();
-        let inputs = aep_schema::parse::evidence_list(&text, Some(&origin))?;
+        let inputs = aep_schema::parse::evidence_list_with_reader(&text, Some(&origin), &aep_ess_evidence::CountStageReader)?;
         for (ordinal, input) in inputs.into_iter().enumerate() {
             let observed = input.observed_at;
             // The engine's comparison, made here so the two verbs cannot answer differently about
@@ -2767,6 +2769,7 @@ fn evidence_inspect(
                 ));
             }
             records.push(InspectedRecord {
+                completed_at: match &input.evidence { aep_domain::evidence::Evidence::EssConformanceV2(sources) => sources.reading().map(|reading| reading.data().completed_at.epoch_millis().to_string()), _ => None },
                 file: origin.clone(),
                 kind: input.evidence.kind().to_string(),
                 observed_at: observed.day().to_string(),

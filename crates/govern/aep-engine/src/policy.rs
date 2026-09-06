@@ -423,10 +423,12 @@ profile: test.release
         );
         assert!(!decision.is_allowed());
 
-        execution.record_evidence(approval(
-            Some("capability:deployment-create-production"),
-            "production-change",
-        ));
+        execution
+            .record_evidence(approval(
+                Some("capability:deployment-create-production"),
+                "production-change",
+            ))
+            .expect("legacy evidence fixture records");
         assert!(
             authorize(&execution, &request).is_allowed(),
             "with the approval recorded, the state's grant takes effect"
@@ -436,7 +438,9 @@ profile: test.release
     #[test]
     fn a_denied_capability_cannot_be_unlocked_by_an_approval() {
         let mut execution = execution(GUARDED_PROFILE);
-        execution.record_evidence(approval(Some("capability:secret-read"), "secret-read"));
+        execution
+            .record_evidence(approval(Some("capability:secret-read"), "secret-read"))
+            .expect("legacy evidence fixture records");
         let request = ActionRequest::new(Action::SecretRead(aep_domain::action::SecretRead {
             secret: "database-password".to_owned(),
         }));
@@ -454,10 +458,12 @@ profile: test.release
         }));
         assert!(!authorize(&execution, &request).is_allowed());
 
-        execution.record_evidence(approval(
-            Some("capability:repository-write"),
-            "change-review",
-        ));
+        execution
+            .record_evidence(approval(
+                Some("capability:repository-write"),
+                "change-review",
+            ))
+            .expect("legacy evidence fixture records");
         let decision = authorize(&execution, &request);
         assert!(
             decision.is_allowed(),
@@ -473,7 +479,9 @@ profile: test.release
             paths: vec!["src/lib.rs".to_owned()],
             intent: None,
         }));
-        execution.record_evidence(approval(None, "repository-write"));
+        execution
+            .record_evidence(approval(None, "repository-write"))
+            .expect("legacy evidence fixture records");
         assert!(authorize(&execution, &request).is_allowed());
     }
 
@@ -484,11 +492,13 @@ profile: test.release
         // evidence that unlocks the production write. Every other test here records `Granted`, so
         // none of them can reach the state where that check does any work.
         let mut execution = execution(GUARDED_PROFILE);
-        execution.record_evidence(decided(
-            Some("capability:production-write"),
-            "production-change",
-            ApprovalDecision::Denied,
-        ));
+        execution
+            .record_evidence(decided(
+                Some("capability:production-write"),
+                "production-change",
+                ApprovalDecision::Denied,
+            ))
+            .expect("legacy evidence fixture records");
         let request = ActionRequest::new(Action::ProductionMutate(
             aep_domain::action::ProductionMutate {
                 target: "checkout.feature_flag".to_owned(),
@@ -519,7 +529,9 @@ profile: test.release
         // `approval_recorded` matches on a subject *or* on the approval's own id. Two ways in is
         // two places the decision could go unread, so the refusal is checked through both.
         let mut execution = execution(GUARDED_PROFILE);
-        execution.record_evidence(decided(None, "repository-write", ApprovalDecision::Denied));
+        execution
+            .record_evidence(decided(None, "repository-write", ApprovalDecision::Denied))
+            .expect("legacy evidence fixture records");
         let request = ActionRequest::new(Action::RepositoryWrite(RepositoryWrite {
             paths: vec!["src/lib.rs".to_owned()],
             intent: None,
@@ -531,7 +543,9 @@ profile: test.release
             vec!["approval for capability repository.write".to_owned()]
         );
 
-        execution.record_evidence(approval(None, "repository-write"));
+        execution
+            .record_evidence(approval(None, "repository-write"))
+            .expect("legacy evidence fixture records");
         assert!(
             authorize(&execution, &request).is_allowed(),
             "and a real grant still unlocks it, so the guard is not just refusing everything"

@@ -646,28 +646,64 @@ impl ObservedAt {
 
 impl<'de> serde::Deserialize<'de> for ObservedAt {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let written = crate::node::Node::deserialize(deserializer)?;
-        match &written {
-            crate::node::Node::Text(text) => Ok(Self::on_day(
-                CivilDate::parse(text).map_err(serde::de::Error::custom)?,
-            )),
-            crate::node::Node::Number(number) => {
-                let millis = number.to_string();
-                millis
-                    .parse::<u64>()
-                    .map(|millis| Self::new(Timestamp::from_epoch_millis(millis)))
-                    .map_err(|_| {
-                        serde::de::Error::custom(format!(
-                            "an observation time is a date such as 2026-08-30 or epoch \
-                             milliseconds, found {millis}"
-                        ))
-                    })
+        struct ObservationVisitor;
+        impl<'input> serde::de::Visitor<'input> for ObservationVisitor {
+            type Value = ObservedAt;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a calendar date or epoch milliseconds")
             }
-            other => Err(serde::de::Error::custom(format!(
-                "an observation time is a date such as 2026-08-30 or epoch milliseconds, found {}",
-                other.type_name()
-            ))),
+
+            fn visit_u64<E: serde::de::Error>(self, millis: u64) -> Result<Self::Value, E> {
+                Ok(ObservedAt::new(Timestamp::from_epoch_millis(millis)))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, millis: i64) -> Result<Self::Value, E> {
+                u64::try_from(millis)
+                    .map_err(E::custom)
+                    .and_then(|value| self.visit_u64(value))
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                // Preserve the established floating-token interpretation; actual integer tokens
+                // take the exact path above. Embedded ESS report scalars have a stricter reader.
+                let number = crate::facts::Number::new(value).map_err(E::custom)?;
+                let millis = number.to_string().parse::<u64>().map_err(E::custom)?;
+                self.visit_u64(millis)
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'input>>(
+                self,
+                map: A,
+            ) -> Result<Self::Value, A::Error> {
+                // Feature-unified serde_json can deliver numeric tokens through its private map
+                // representation. Let its own decoder interpret that representation, as the
+                // legacy reader did, while retaining integer precision before the float branch.
+                let value = <serde_json::Value as serde::Deserialize>::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )?;
+                let serde_json::Value::Number(number) = value else {
+                    return Err(serde::de::Error::invalid_type(
+                        serde::de::Unexpected::Map,
+                        &self,
+                    ));
+                };
+                if let Some(millis) = number.as_u64() {
+                    return self.visit_u64(millis);
+                }
+                let value = number.as_f64().ok_or_else(|| {
+                    serde::de::Error::custom("epoch milliseconds do not fit a finite number")
+                })?;
+                self.visit_f64(value)
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                CivilDate::parse(value)
+                    .map(ObservedAt::on_day)
+                    .map_err(E::custom)
+            }
         }
+        deserializer.deserialize_any(ObservationVisitor)
     }
 }
 

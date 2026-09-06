@@ -1,0 +1,9 @@
+id: adp-ess-conformance
+version: 1
+title: Development with exact ESS conformance evidence
+summary: Original-byte ESS report admission with explicit unknown legacy coverage.
+extends: adp/1
+evidence_kinds:
+  - ess_conformance_v2
+observables:
+  - 'ess_conformance_v2.**'

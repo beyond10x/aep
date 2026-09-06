@@ -284,6 +284,9 @@ fn required_key(key: &str) -> schemars::schema::Schema {
 )]
 #[serde(deny_unknown_fields)]
 pub struct Constraints {
+    /// Independently authored exact ESS count-stage expectation; never filled from evidence facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ess_conformance_v2: Option<crate::ess_conformance_v2::EssConformanceV2Expectation>,
     /// Facts the task declares, which nothing else can observe for it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub facts: BTreeMap<FactPath, FactValue>,
@@ -298,7 +301,10 @@ pub struct Constraints {
 impl Constraints {
     /// `true` when nothing is constrained.
     pub fn is_empty(&self) -> bool {
-        self.facts.is_empty() && self.capabilities.is_empty() && self.notes.is_empty()
+        self.ess_conformance_v2.is_none()
+            && self.facts.is_empty()
+            && self.capabilities.is_empty()
+            && self.notes.is_empty()
     }
 }
 

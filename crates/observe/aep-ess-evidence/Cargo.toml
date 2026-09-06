@@ -11,7 +11,10 @@ authors.workspace = true
 [dependencies]
 aep-domain.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# Raw JSON tokens preserve exact full-u64 scalars and original spelling before admission.
+serde_json = { workspace = true, features = ["raw_value"] }
+# The count-stage contract hashes every original suite byte (same MSRV-compatible version as CLI).
+sha2 = "0.11"
 
 [lints]
 workspace = true

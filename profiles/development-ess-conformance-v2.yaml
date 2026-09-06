@@ -1,0 +1,10 @@
+id: development.ess-conformance-v2
+version: 1
+title: Development with exact ESS evidence
+summary: >-
+  Opt-in original-byte ESS admission. Count-stage suite/1–4 evidence remains diagnostic and cannot
+  complete ESS-governed work because its coverage is unknown.
+protocol: adp-ess-conformance/1
+extends: development.standard
+principles:
+  - ess-conformance-v2

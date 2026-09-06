@@ -61,6 +61,47 @@ fn entry<T: JsonSchema>(
     }
 }
 
+/// Preserve the new carrier's closed shape when publishing it as an internally tagged variant.
+/// Schemars merges the payload with an open tag object and loses its unknown-field refusal.
+/// Copy the payload's derived restriction after that merge; legacy published variants stay frozen.
+fn evidence_entry() -> GeneratedSchema {
+    let mut entry = entry::<Evidence>("Evidence", "evidence", "one piece of submitted evidence");
+    let payload = schema_for!(aep_domain::ess_conformance_v2::EssConformanceV2Sources);
+    let restriction = payload.schema.object.unwrap().additional_properties;
+    let kind = serde_json::Value::String(
+        aep_domain::evidence::EvidenceKind::EssConformanceV2
+            .as_str()
+            .to_owned(),
+    );
+    let variants = entry
+        .schema
+        .schema
+        .subschemas
+        .as_mut()
+        .unwrap()
+        .one_of
+        .as_mut()
+        .unwrap();
+    let variant = variants
+        .iter_mut()
+        .filter_map(|variant| match variant {
+            schemars::schema::Schema::Object(schema) => schema.object.as_mut(),
+            schemars::schema::Schema::Bool(_) => None,
+        })
+        .find(|object| {
+            object.properties.get("kind").is_some_and(|tag| match tag {
+                schemars::schema::Schema::Object(tag) => tag
+                    .enum_values
+                    .as_ref()
+                    .is_some_and(|values| values.contains(&kind)),
+                schemars::schema::Schema::Bool(_) => false,
+            })
+        })
+        .expect("Evidence publishes its count-stage variant");
+    variant.additional_properties = restriction;
+    entry
+}
+
 /// Every schema this build publishes.
 ///
 /// The document schemas are what a project's files are validated against; the interchange schemas
@@ -92,7 +133,7 @@ pub fn generated_schemas() -> Vec<GeneratedSchema> {
             "artifact-lifecycle",
             "the statuses one artifact kind may hold",
         ),
-        entry::<Evidence>("Evidence", "evidence", "one piece of submitted evidence"),
+        evidence_entry(),
         entry::<ActionRequest>(
             "ActionRequest",
             "action-request",

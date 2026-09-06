@@ -815,6 +815,30 @@
       }
     },
     {
+      "description": "Original report/2 and suite/1–4 bytes; raw serde confers no admission.",
+      "type": "object",
+      "required": [
+        "kind",
+        "report_json",
+        "suite_json"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ess_conformance_v2"
+          ]
+        },
+        "report_json": {
+          "type": "string"
+        },
+        "suite_json": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "A harness transcript checked against a trace specification.",
       "type": "object",
       "required": [

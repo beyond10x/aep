@@ -105,6 +105,7 @@ dependencies = [
  "aep-driver",
  "aep-driver-spec",
  "aep-engine",
+ "aep-ess-evidence",
  "aep-project",
  "aep-render",
  "aep-schema",
@@ -220,6 +221,7 @@ dependencies = [
  "aep-domain",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

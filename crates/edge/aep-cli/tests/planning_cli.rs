@@ -2025,7 +2025,7 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
 
 #[test]
 fn outside_a_project_the_missing_store_says_what_to_pass() {
-    let elsewhere = scratch("aep-plan-not-a-project");
+    let elsewhere = scratch("aep-plan-not-a-project/1/2/3/4/5/6/7/8/9/10/11/12");
     let output = protocol_in(&elsewhere, &["plan", "artifact", "list"]);
     assert_eq!(code(&output), 1);
     let said = stderr(&output);
@@ -2037,7 +2037,7 @@ fn outside_a_project_the_missing_store_says_what_to_pass() {
 fn the_vocabulary_verbs_answer_without_a_store() {
     // `kinds` and `relations` are questions about the vocabulary. Refusing them because the working
     // directory is not a project would be refusing for a reason unrelated to the question.
-    let elsewhere = scratch("aep-plan-vocabulary");
+    let elsewhere = scratch("aep-plan-vocabulary/1/2/3/4/5/6/7/8/9/10/11/12");
 
     let kinds = protocol_in(&elsewhere, &["plan", "artifact", "kinds"]);
     assert_eq!(code(&kinds), 0, "{}", stderr(&kinds));

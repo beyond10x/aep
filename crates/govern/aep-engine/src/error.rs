@@ -12,6 +12,9 @@ use aep_domain::ids::{StateId, SubjectRef, TaskId};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ProtocolError {
+    /// Exact ESS source admission or envelope integrity refused before mutation.
+    #[error("ESS count evidence refused: {0}")]
+    EssAdmission(#[from] aep_domain::ess_conformance_v2::EssAdmissionError),
     /// The documents cannot be resolved into an executable plan.
     #[error("the task cannot be resolved: {0}")]
     Resolution(#[from] ValidationErrors),
@@ -126,6 +129,7 @@ impl ProtocolError {
     /// A stable machine-readable code, for a harness that reports rather than branches.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::EssAdmission(_) => "ess_admission",
             Self::Resolution(_) => "resolution_failed",
             Self::UnknownState { .. } => "unknown_state",
             Self::EvidenceRejected { .. } => "evidence_rejected",

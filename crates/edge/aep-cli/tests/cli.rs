@@ -394,7 +394,11 @@ fn a_project_is_discovered_so_no_arguments_are_needed() {
 
 #[test]
 fn outside_a_project_the_missing_task_is_explained() {
-    let elsewhere = std::env::temp_dir().join("aep-cli-not-a-project");
+    // Project discovery is bounded to twelve ancestors. Keep this fixture genuinely outside
+    // discovery even when TMPDIR itself is inside the repository's target directory.
+    let elsewhere = std::env::temp_dir()
+        .join("aep-cli-not-a-project")
+        .join("1/2/3/4/5/6/7/8/9/10/11/12");
     std::fs::create_dir_all(&elsewhere).expect("writable");
 
     let output = Command::new(env!("CARGO_BIN_EXE_protocol"))

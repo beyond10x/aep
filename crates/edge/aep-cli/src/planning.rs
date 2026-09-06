@@ -1299,6 +1299,9 @@ pub(crate) enum ArtifactCommand {
             conflicts_with_all = ["kind", "source", "at", "review", "outcome"]
         )]
         from: Option<PathBuf>,
+        /// Exact original suite JSON required beside a standalone ESS report/2.
+        #[arg(long, value_name = "SUITE", requires = "from")]
+        suite: Option<PathBuf>,
         /// The kind of observation, such as `test_result`, `approval` or `review_outcome`.
         ///
         /// `review_outcome` is the one kind with two flags of its own: it records what became of a
@@ -1675,6 +1678,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             store,
             id,
             from,
+            suite,
             kind,
             source,
             review,
@@ -1686,6 +1690,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             &id,
             &EvidenceRequest {
                 from: from.as_deref(),
+                suite: suite.as_deref(),
                 kind: kind.as_deref(),
                 source: source.as_deref(),
                 review: review.as_deref(),
@@ -5738,6 +5743,8 @@ fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
 pub(crate) struct EvidenceRequest<'a> {
     /// A report to read the record out of, instead of the flags below.
     pub(crate) from: Option<&'a Path>,
+    /// Exact original suite bytes paired with a report/2.
+    pub(crate) suite: Option<&'a Path>,
     /// The kind of observation, as the caller spelled it. Absent only with `from`.
     pub(crate) kind: Option<&'a str>,
     /// Where it came from, where the caller said.
@@ -5904,13 +5911,39 @@ struct Recorded {
 /// Every one of them is the report's own. Nothing here decides a verdict, adjusts a count or
 /// supplies a time: a red run is recorded as readily as a green one, because whether a red record
 /// permits a move is the ladder's decision and not this verb's.
-fn recorded_from_report(path: &Path) -> Result<Recorded> {
+fn recorded_from_report(path: &Path, suite: Option<&Path>) -> Result<Recorded> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading {}", path.display()))?;
     let report: serde_json::Value = serde_json::from_str(&text)
         .with_context(|| format!("{} is not JSON", path.display()))?;
 
     let format = report.get("format").and_then(serde_json::Value::as_str);
+    if format == Some("ess-conformance-report/2") {
+        let suite_path = suite.context("MissingSuite: report/2 requires --suite with the exact original suite JSON")?;
+        let suite_json = std::fs::read_to_string(suite_path).with_context(|| format!("reading {}", suite_path.display()))?;
+        let adapted = aep_ess_evidence::adapt_json_v2(&text, &suite_json)?;
+        let aep_domain::evidence::Evidence::EssConformanceV2(sources) = adapted.evidence() else { unreachable!("v2 adapter returns v2 evidence"); };
+        let data = sources.reading().expect("adapter admitted sources").data();
+        // The wire/typed evidence admits full u64. Planning's actual event envelope has a
+        // narrower calendar spelling; ask that same runtime validator before opening a store.
+        let recorded_at = data.completed_at.iso_8601();
+        if !entity_core::is_valid_timestamp(&recorded_at) {
+            anyhow::bail!("PlanningTimestampUnsupported: valid report completed_at {} renders as {recorded_at}, which the planning event backend cannot record; original source time is unchanged", data.completed_at.epoch_millis());
+        }
+        // Structured source text preserves exact diagnostics and escaped original references.
+        // It is descriptive planning history, not a typed source archive or qualification.
+        let source = serde_json::json!({
+            "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":suite_path.display().to_string(),
+            "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
+            "producer_profile":data.producer_profile.as_str(), "suite":data.suite,
+            "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
+            "coverage":{"knowledge":"unknown"}, "policy":"complete-selection/1",
+            "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
+            "completed_at":data.completed_at.epoch_millis().to_string()
+        }).to_string();
+        return Ok(Recorded { kind: aep_domain::evidence::EvidenceKind::EssConformanceV2, source, reference: Some(path.display().to_string()), at: data.completed_at.epoch_millis().to_string() });
+    }
+    if suite.is_some() { anyhow::bail!("UnsupportedPairing: --suite is supported only with ess-conformance-report/2"); }
     if format != Some("ess-conformance-report/1") {
         anyhow::bail!(
             "{} says `format: {}` and this reads an `ess-conformance-report/1`. The format is the \
@@ -5991,12 +6024,13 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     use aep_domain::evidence::EvidenceKind;
 
     let id = artifact_id(id)?;
+    if request.suite.is_some() && request.from.is_none() { anyhow::bail!("--suite requires --from"); }
 
     // `--from` reads the kind, the source and the instant out of a report that already states
     // them; the flags are how the same record is made when there is no report to read.
     let read = match request.from {
         Some(report) => {
-            let mut read = recorded_from_report(report)?;
+            let mut read = recorded_from_report(report, request.suite)?;
             // `--ref` still wins: the report's path is where this process found it, and a CI run
             // URL is where anybody else can.
             if let Some(reference) = request.reference {

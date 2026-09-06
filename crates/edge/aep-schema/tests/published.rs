@@ -113,6 +113,54 @@ fn the_document_schemas_accept_every_document_this_repository_ships() {
     );
 }
 
+#[test]
+fn count_stage_evidence_schema_refuses_cache_claims_but_accepts_raw_source_strings() {
+    let entry = aep_schema::generated_schemas()
+        .into_iter()
+        .find(|entry| entry.filename == "evidence.schema.json")
+        .unwrap();
+    let schema: Value = serde_json::from_str(&entry.to_json().unwrap()).unwrap();
+    let variant = schema["oneOf"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|variant| variant["properties"]["kind"]["enum"][0] == "ess_conformance_v2")
+        .unwrap();
+    let variant_validator = jsonschema::validator_for(variant).unwrap();
+    let validator = validator("evidence.schema.json");
+    let raw = serde_json::json!({
+        "kind": "ess_conformance_v2",
+        "report_json": "raw report bytes need semantic admission",
+        "suite_json": "raw suite bytes need semantic admission"
+    });
+    assert!(validator.is_valid(&raw));
+    let evidence: aep_domain::evidence::Evidence = serde_json::from_value(raw.clone()).unwrap();
+    assert!(evidence.spec_digest().is_none());
+    for field in [
+        "reading",
+        "cache",
+        "verified",
+        "admitted",
+        "counts",
+        "extension",
+    ] {
+        let mut forged = raw.clone();
+        forged[field] = true.into();
+        let runtime_error =
+            serde_json::from_value::<aep_domain::evidence::Evidence>(forged.clone()).unwrap_err();
+        assert!(runtime_error.to_string().contains("unknown field"));
+        let error = variant_validator.validate(&forged).unwrap_err();
+        assert!(
+            matches!(
+                error.kind(),
+                jsonschema::error::ValidationErrorKind::AdditionalProperties { .. }
+            ),
+            "{field}: {error}"
+        );
+        assert!(!validator.is_valid(&forged));
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Wire-format aliases
 //

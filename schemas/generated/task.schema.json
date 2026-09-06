@@ -170,6 +170,11 @@
   },
   "additionalProperties": false,
   "definitions": {
+    "ArtifactRef": {
+      "description": "Reference to an artifact, optionally pinned with `@<version>`.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._/-]*(@[^@]+)?$"
+    },
     "Capability": {
       "description": "A semantic capability, such as `repository.write`, `network.read:private` or `deployment.create:staging`.",
       "examples": [
@@ -253,6 +258,17 @@
             }
           ]
         },
+        "ess_conformance_v2": {
+          "description": "Independently authored exact ESS count-stage expectation; never filled from evidence facts.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EssConformanceV2Expectation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "facts": {
           "description": "Facts the task declares, which nothing else can observe for it.",
           "type": "object",
@@ -266,6 +282,30 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "EssConformanceV2Expectation": {
+      "description": "Independently authored task expectation. A report must never populate this value itself.",
+      "type": "object",
+      "required": [
+        "model",
+        "selected_ids",
+        "suite"
+      ],
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/ArtifactRef"
+        },
+        "selected_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suite": {
+          "$ref": "#/definitions/SuiteReference"
         }
       },
       "additionalProperties": false
@@ -372,6 +412,27 @@
       "type": "string",
       "maxLength": 401,
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
+    },
+    "SuiteReference": {
+      "description": "Exact original-suite identity; only the frozen count-stage profile is admitted.",
+      "type": "object",
+      "required": [
+        "digest",
+        "digest_profile",
+        "version"
+      ],
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "digest_profile": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "TaskId": {
       "description": "task identifier.",

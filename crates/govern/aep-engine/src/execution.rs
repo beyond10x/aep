@@ -82,6 +82,7 @@ fn default_actor() -> ActorRef {
 /// A task being executed under a protocol.
 #[derive(Debug, Clone)]
 pub struct Execution {
+    ess_reader: Option<std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>>,
     id: ExecutionId,
     plan: ExecutionPlan,
     actor: ActorRef,
@@ -100,8 +101,21 @@ pub struct Execution {
 impl Execution {
     /// Starts an execution at its workflow's initial state.
     pub fn new(id: ExecutionId, plan: ExecutionPlan, artifacts: ArtifactGraph) -> Self {
+        Self::new_with_ess_reader(id, plan, artifacts, None)
+    }
+
+    /// Starts with an explicitly installed pure ESS reader, fixed for this execution.
+    pub fn new_with_ess_reader(
+        id: ExecutionId,
+        plan: ExecutionPlan,
+        artifacts: ArtifactGraph,
+        ess_reader: Option<
+            std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+        >,
+    ) -> Self {
         let state = plan.workflow.initial.clone();
         let mut execution = Self {
+            ess_reader,
             id,
             plan,
             actor: ActorRef::System,
@@ -202,9 +216,26 @@ impl Execution {
     }
 
     /// Records evidence as arriving in the current state.
-    pub fn record_evidence(&mut self, record: EvidenceRecord) {
+    ///
+    /// # Errors
+    /// Refuses v2 without a reader/current time or when original sources/envelope do not admit.
+    pub fn record_evidence(&mut self, record: EvidenceRecord) -> Result<(), ProtocolError> {
+        let record = self.prepare_record(record, self.evaluated_at)?;
+        self.record_prepared(record);
+        Ok(())
+    }
+
+    pub(crate) fn prepare_record(
+        &self,
+        record: EvidenceRecord,
+        now: Option<Timestamp>,
+    ) -> Result<PreparedRecord, ProtocolError> {
+        prepare_record(record, self.ess_reader.as_deref(), now)
+    }
+
+    pub(crate) fn record_prepared(&mut self, record: PreparedRecord) {
         self.evidence.push(RecordedEvidence {
-            record,
+            record: record.0,
             state: self.state.clone(),
         });
         self.refresh_facts();
@@ -262,6 +293,32 @@ impl Execution {
         artifacts: ArtifactGraph,
         snapshot: Snapshot,
     ) -> Result<Self, ProtocolError> {
+        Self::restore_admitted(plan, artifacts, snapshot, None, None)
+    }
+
+    /// Re-admits every source record with an explicit reader and present evaluation instant.
+    ///
+    /// # Errors
+    /// Refuses task/state mismatch or any inadmissible source/envelope; no partial execution escapes.
+    pub fn restore_with_ess_reader(
+        plan: ExecutionPlan,
+        artifacts: ArtifactGraph,
+        snapshot: Snapshot,
+        reader: std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+        now: Timestamp,
+    ) -> Result<Self, ProtocolError> {
+        Self::restore_admitted(plan, artifacts, snapshot, Some(reader), Some(now))
+    }
+
+    pub(crate) fn restore_admitted(
+        plan: ExecutionPlan,
+        artifacts: ArtifactGraph,
+        mut snapshot: Snapshot,
+        ess_reader: Option<
+            std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+        >,
+        now: Option<Timestamp>,
+    ) -> Result<Self, ProtocolError> {
         if snapshot.task != plan.task.id.to_string() {
             return Err(ProtocolError::UnknownState {
                 state: snapshot.state,
@@ -277,7 +334,12 @@ impl Execution {
                 workflow: plan.workflow.id.to_string(),
             });
         }
+        for recorded in &mut snapshot.evidence {
+            recorded.record =
+                prepare_record(recorded.record.clone(), ess_reader.as_deref(), now)?.0;
+        }
         let mut execution = Self {
+            ess_reader,
             id: snapshot.execution,
             plan,
             actor: snapshot.actor.clone(),
@@ -295,7 +357,7 @@ impl Execution {
             // verdict with a shelf life of forever. The restoring engine reads its own clock, so an
             // execution snapshotted while a 3d requirement was satisfied and restored six days
             // later evaluates to `Unknown` — from the same bytes.
-            evaluated_at: None,
+            evaluated_at: now,
         };
         execution.refresh_facts();
         Ok(execution)
@@ -603,6 +665,20 @@ impl Execution {
     /// requirement nobody has met yet, too — and `evidence.lapsed` exists so the two causes are
     /// distinguishable rather than merged.
     fn satisfies_evidence(&self, requirement: &EvidenceRequirement) -> bool {
+        if requirement.kind == aep_domain::evidence::EvidenceKind::EssConformanceV2 {
+            return requirement.at_least > 0
+                && self
+                    .records
+                    .iter()
+                    .filter(|record| {
+                        matches!(
+                            requirement.qualify_record(record, self),
+                            aep_domain::requirement::RecordQualification::Qualified
+                        )
+                    })
+                    .count()
+                    >= requirement.at_least;
+        }
         let matching = self
             .records
             .iter()
@@ -620,7 +696,49 @@ impl Execution {
     }
 }
 
+pub(crate) struct PreparedRecord(EvidenceRecord);
+
+fn prepare_record(
+    mut record: EvidenceRecord,
+    reader: Option<&dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+    now: Option<Timestamp>,
+) -> Result<PreparedRecord, ProtocolError> {
+    use aep_domain::ess_conformance_v2::EssAdmissionError;
+    if let Evidence::EssConformanceV2(sources) = &mut record.value {
+        let reader = reader.ok_or_else(|| {
+            EssAdmissionError::new("MissingReader", "$", "install an ESS original-byte reader")
+        })?;
+        sources.admit(reader)?;
+        sources.check_observation(record.observed_at)?;
+        let now = now.ok_or_else(|| {
+            EssAdmissionError::new(
+                "MissingTime",
+                "$.observed_at",
+                "v2 mutation requires a current evaluation instant",
+            )
+        })?;
+        if record.observed_at.timestamp() > now {
+            return Err(EssAdmissionError::new(
+                "FutureObservation",
+                "$.observed_at",
+                format!("current time is {}", now.epoch_millis()),
+            )
+            .into());
+        }
+    }
+    Ok(PreparedRecord(record))
+}
+
 impl RequirementContext for Execution {
+    fn ess_conformance_v2_expectation(
+        &self,
+    ) -> Option<&aep_domain::ess_conformance_v2::EssConformanceV2Expectation> {
+        self.plan.task.constraints.ess_conformance_v2.as_ref()
+    }
+
+    fn task_subject(&self) -> Option<&aep_domain::ids::SubjectRef> {
+        self.plan.task.subject.as_ref()
+    }
     fn facts(&self) -> &dyn FactSource {
         &self.facts
     }
@@ -715,27 +833,31 @@ mod tests {
     #[test]
     fn submission_order_is_observable_so_ordering_rules_are_checkable() {
         let mut execution = execution();
-        execution.record_evidence(record(
-            1,
-            Producer::Verifier {
-                verifier: Verifier::TestRunner,
-            },
-            Evidence::TestResult(TestResult::failing(TestSuite::Unit, 0, 1)),
-        ));
-        execution.record_evidence(record(
-            2,
-            Producer::Agent {
-                id: "opus".to_owned(),
-            },
-            Evidence::Diff(ChangeSet {
-                files_changed: 3,
-                lines_added: 40,
-                lines_removed: 2,
-                revision_before: None,
-                revision_after: None,
-                paths: Vec::new(),
-            }),
-        ));
+        execution
+            .record_evidence(record(
+                1,
+                Producer::Verifier {
+                    verifier: Verifier::TestRunner,
+                },
+                Evidence::TestResult(TestResult::failing(TestSuite::Unit, 0, 1)),
+            ))
+            .expect("legacy evidence fixture records");
+        execution
+            .record_evidence(record(
+                2,
+                Producer::Agent {
+                    id: "opus".to_owned(),
+                },
+                Evidence::Diff(ChangeSet {
+                    files_changed: 3,
+                    lines_added: 40,
+                    lines_removed: 2,
+                    revision_before: None,
+                    revision_after: None,
+                    paths: Vec::new(),
+                }),
+            ))
+            .expect("legacy evidence fixture records");
 
         assert_eq!(
             fact(&execution, "evidence.first_seq.test_result"),
@@ -755,20 +877,24 @@ mod tests {
     #[test]
     fn the_first_test_result_is_remembered_after_a_later_pass() {
         let mut execution = execution();
-        execution.record_evidence(record(
-            1,
-            Producer::Verifier {
-                verifier: Verifier::TestRunner,
-            },
-            Evidence::TestResult(TestResult::failing(TestSuite::Unit, 0, 1)),
-        ));
-        execution.record_evidence(record(
-            2,
-            Producer::Verifier {
-                verifier: Verifier::TestRunner,
-            },
-            Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
-        ));
+        execution
+            .record_evidence(record(
+                1,
+                Producer::Verifier {
+                    verifier: Verifier::TestRunner,
+                },
+                Evidence::TestResult(TestResult::failing(TestSuite::Unit, 0, 1)),
+            ))
+            .expect("legacy evidence fixture records");
+        execution
+            .record_evidence(record(
+                2,
+                Producer::Verifier {
+                    verifier: Verifier::TestRunner,
+                },
+                Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
+            ))
+            .expect("legacy evidence fixture records");
 
         assert_eq!(
             fact(&execution, "test.result"),
@@ -791,26 +917,30 @@ mod tests {
             "the test-driven principle requires independent test evidence"
         );
 
-        execution.record_evidence(record(
-            1,
-            Producer::Agent {
-                id: "opus".to_owned(),
-            },
-            Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
-        ));
+        execution
+            .record_evidence(record(
+                1,
+                Producer::Agent {
+                    id: "opus".to_owned(),
+                },
+                Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
+            ))
+            .expect("legacy evidence fixture records");
         assert_eq!(
             fact(&execution, "evidence.missing"),
             Some(FactValue::count(1)),
             "an agent's own report is not independent evidence"
         );
 
-        execution.record_evidence(record(
-            2,
-            Producer::Verifier {
-                verifier: Verifier::TestRunner,
-            },
-            Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
-        ));
+        execution
+            .record_evidence(record(
+                2,
+                Producer::Verifier {
+                    verifier: Verifier::TestRunner,
+                },
+                Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
+            ))
+            .expect("legacy evidence fixture records");
         assert_eq!(
             fact(&execution, "evidence.missing"),
             Some(FactValue::count(0))
@@ -822,13 +952,15 @@ mod tests {
         let registry = fixtures::standard_registry();
         let task = fixtures::standard_task();
         let mut execution = execution();
-        execution.record_evidence(record(
-            1,
-            Producer::Verifier {
-                verifier: Verifier::TestRunner,
-            },
-            Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
-        ));
+        execution
+            .record_evidence(record(
+                1,
+                Producer::Verifier {
+                    verifier: Verifier::TestRunner,
+                },
+                Evidence::TestResult(TestResult::passing(TestSuite::Unit, 4)),
+            ))
+            .expect("legacy evidence fixture records");
         execution.emit(
             Timestamp::from_epoch_millis(5),
             ProtocolEvent::StateEntered {
@@ -878,14 +1010,18 @@ mod tests {
         };
 
         let mut execution = execution();
-        execution.record_evidence(approval(1, ApprovalDecision::Denied));
+        execution
+            .record_evidence(approval(1, ApprovalDecision::Denied))
+            .expect("legacy evidence fixture records");
         assert_eq!(
             fact(&execution, "approvals.granted"),
             Some(FactValue::count(0)),
             "a reviewer refusing a change has not granted it"
         );
 
-        execution.record_evidence(approval(2, ApprovalDecision::Granted));
+        execution
+            .record_evidence(approval(2, ApprovalDecision::Granted))
+            .expect("legacy evidence fixture records");
         assert_eq!(
             fact(&execution, "approvals.granted"),
             Some(FactValue::count(1)),
