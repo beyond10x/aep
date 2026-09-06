@@ -1124,3 +1124,63 @@ fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_b
         String::from_utf8_lossy(&first.stderr)
     );
 }
+
+#[test]
+fn adversary_pass2_current_named_model_controls_both_decisions_after_graph_refresh_and_replay() {
+    use aep_domain::facts::FactSource;
+    let directory = root().join("target/ess-conformance-coverage/adversary-pass-2/model-fixture");
+    let documents = policy_fixture(&directory);
+    let engine = configured_engine(&documents, 2);
+    let c = context();
+    let mut execution = engine
+        .initialize_with_artifacts(coverage_task(), c.graph.clone())
+        .unwrap();
+    execution.record_evidence(c.evidence[0].clone()).unwrap();
+    let requirements = aep_domain::requirement::RequirementSet {
+        evidence: vec![requirement()],
+        ..Default::default()
+    };
+    assert!(requirements.evaluate(&execution).is_satisfied());
+    let snapshot = serde_json::to_vec(&execution.snapshot()).unwrap();
+    let wrong_named_model = aep_schema::parse::artifact_manifest(&format!(
+        "version: aep.artifacts/1\nartifacts:\n  - id: executable-system-specification:demo\n    kind: executable-system-specification\n    status: approved\n    model_digest: {}\n    location: {{path: changed.yaml}}\n  - id: executable-system-specification:matching-but-unselected\n    kind: executable-system-specification\n    status: approved\n    model_digest: {}\n    location: {{path: other.yaml}}\n", "b".repeat(64), fixtures::MODEL
+    ), None).unwrap();
+    execution.set_artifacts(wrong_named_model.clone());
+    let restored = engine
+        .restore(
+            coverage_task(),
+            wrong_named_model,
+            serde_json::from_slice(&snapshot).unwrap(),
+        )
+        .unwrap();
+    for current in [&execution, &restored] {
+        assert!(!requirements.evaluate(current).is_satisfied());
+        assert_eq!(
+            current
+                .fact_store()
+                .fact(&"evidence.missing".parse().unwrap())
+                .unwrap()
+                .to_string(),
+            "1"
+        );
+        assert_eq!(
+            requirement()
+                .qualify_record(&c.evidence[0], current)
+                .issue()
+                .unwrap()
+                .reason,
+            "ModelDigestMismatch"
+        );
+    }
+    execution.set_artifacts(c.graph);
+    assert!(requirements.evaluate(&execution).is_satisfied());
+    assert_eq!(
+        execution
+            .fact_store()
+            .fact(&"evidence.missing".parse().unwrap())
+            .unwrap()
+            .to_string(),
+        "0"
+    );
+    assert_eq!(serde_json::to_vec(&execution.snapshot()).unwrap(), snapshot);
+}
