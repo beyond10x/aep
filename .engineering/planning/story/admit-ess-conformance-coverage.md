@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 27
+revision: 28
 ---
 ## Outcome
 
@@ -123,3 +123,11 @@ The assigned implementor confirmed five-package ownership and all three opt-in p
 The final package run passed1360 cases,0failed/ignored,65 summaries, including40 new cases and every1320 inherited case. The initial1357pass/3fail run, setup failures and ten killed/restored guard mutations remain retained. Formatting, strict all-target Clippy, schema drift and final source preservation passed. Immutable implementor report SHA256266914db656135b55418d436dd8e1bbf5403f569cc738473ccfd2a62385d3717 and manifest SHA256357724cae32d749fb961e56e3ba1b3b4291efcc7b68308a2da60693561105647 are under the assigned unit scratch.
 
 First source attack is running under aep-drive:adversary0.8.0 after implementor relinquishment. Full repository gates, publication and actual future ESS writer correspondence remain pending. Source review and accepted binding reviews are distinct subjects. No runtime default or installed binary is changed.
+
+## First source review and correction decision
+
+review-result:ess-conformance-coverage-source-adversary-pass-1 preserves the complete immutable first source attack against48efe378. Its two introduced findings have three executed red cases: omitted optional step/provenance defaults are compared as raw field presence, and known Node payload numbers are compared as exact u64 tokens. The full attack executed1366cases:1363passed,3failed,0ignored,66summaries; every inherited1360case passed. The final affected four-case rerun retained1pass/3fail after two test-only semicolon insertions. Final formatter and strict all-target Clippy passed. Root verified the complete execution catalog and froze both additive test paths at29b4d30628389429729514bd97cae62accf732fb.
+
+The narrow coordinator decision follows the accepted ESS binding's explicit domains: use actual inherited defaults for admitted typed definitions and finite-binary64 equality only for actual Node payload fields. Exact u64 timing/count/position fields, original byte identities and all other survivor metadata remain exact. This is not global numeric normalization or deletion of null payload members. The report preserves that interpretation separately from the measured rejection and cites the existing ESS Node and timing owners. No actual suite5 producer or additional binding review is claimed.
+
+The same implementor is correcting this class under the original five-package ownership, with all inherited/adversary assertions retained. Full correction evidence and the second/final source attack remain pending. No fixed outcome is recorded before correction.

@@ -157,3 +157,26 @@ were hash-verified, and the retained actual count-stage Rust control was copied 
 the closed count-writer evidence. No helper runtime, actual suite/5 producer output or producer
 correspondence exists yet. Full repository integration gates and publication remain pending.
 The complete computed outputs are in the companion dated review record.
+
+## First source attack and correction
+
+The immutable first source attack is recorded as
+review-result:ess-conformance-coverage-source-adversary-pass-1, report SHA256
+d83f6aa2528da72ceffa71abcded5945ed17a3bdbf8ca7797665d51ea6fa2fad. Root verified its full
+execution-file catalog and manifest SHA256
+f50d7f00d4ce6f79c639f63154ec82a28d084cd6e14a6caa06e0fcb58c88590f. Two additive test paths,
+262 new lines and no removed assertions were frozen at29b4d30628389429729514bd97cae62accf732fb
+with both bot identities verified. The complete five-package attack executed1366 cases:
+1363passed,3failed,0ignored,66 summaries. All1360 inherited cases and3 new controls passed.
+Final formatting and strict all-target Clippy passed; the original helper compile failure and
+test-only semicolon correction remain separately recorded.
+
+Two introduced findings cover raw-presence comparison of inherited optional defaults and
+exact-u64 comparison at known finite Node payload positions. The report preserves the latter
+interpretation separately: root follows the accepted ESS binding's actual Node domain only at
+typed Node positions; exact u64 fields, all original byte hashes and other survivor metadata
+remain exact. This permits no global rounding or discarded null payload keys. Story revision28
+records that narrow decision and the correction handoff. The same implementor is correcting the
+complete class in its existing unit under target/ess-conformance-coverage/correction-pass-1,
+using its original assigned external TMPDIR. All previous source and adversary assertions remain.
+The second and final source attack, repository gates and publication are still pending.
