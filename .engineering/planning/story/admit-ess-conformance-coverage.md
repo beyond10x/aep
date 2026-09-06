@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 28
+revision: 29
 ---
 ## Outcome
 
@@ -131,3 +131,13 @@ review-result:ess-conformance-coverage-source-adversary-pass-1 preserves the com
 The narrow coordinator decision follows the accepted ESS binding's explicit domains: use actual inherited defaults for admitted typed definitions and finite-binary64 equality only for actual Node payload fields. Exact u64 timing/count/position fields, original byte identities and all other survivor metadata remain exact. This is not global numeric normalization or deletion of null payload members. The report preserves that interpretation separately from the measured rejection and cites the existing ESS Node and timing owners. No actual suite5 producer or additional binding review is claimed.
 
 The same implementor is correcting this class under the original five-package ownership, with all inherited/adversary assertions retained. Full correction evidence and the second/final source attack remain pending. No fixed outcome is recorded before correction.
+
+## Correction pass1 frozen for final source attack
+
+The same implementor corrected the inherited-default and typed-Node comparison class, frozen at143ad4afc2d4ecb6f280bcad2932239bed5fbfd5 with both bot identities verified. The new private definition view runs only after complete source admission; exact unsigned metadata and original-byte digest checks remain distinct. Exactly five adapter source/test paths changed; both frozen adversary test hashes are unchanged. The added class target covers all declared optional contexts and typed payload owners, including predicate operands under their inherited parser.
+
+The complete five-package run executed1375cases, allpassed,0failed/ignored,67summaries in149.69seconds. The original review's1366executed cases are preserved plus9newclass cases. Four named guard mutations each produced one actual assertion failure and were restored before the final13-case focused run. Final package formatting and strict all-target Clippy passed. Initial setup/helper/reason-name/lint and expanded-fixture failures remain classified in the complete report; they are not silently discarded.
+
+Correction report SHA256113b4f5efcd5f134b71435683851dec306cc58d624a28f7cbb25afebccdad652. Root verified all4 handoff entries,47 execution-catalog entries,242 source entries and both adversary hashes. Source manifest SHA256792437f1bdb462d4b947740d167307e6204c784a43318b6859e00badb91585b2; execution manifest SHA2567c7d6d23d2e11e83931cea07ddd4f84ab1604caace06f18f96dac16adf9509e6. The immutable first source review receives a fixed outcome now that its correction is committed. This does not assert the final adversary's result, integration completion or actual producer correspondence.
+
+The second and final source adversary is assigned the frozen correction and complete original source change. No third source attack is authorized. All original contracts, runtime defaults, generated inputs, schemas and instructions remain unchanged by this correction. Reader-first publication and actual future ESS Rust/Go producer correspondence remain required.

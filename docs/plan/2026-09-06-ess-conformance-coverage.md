@@ -180,3 +180,33 @@ records that narrow decision and the correction handoff. The same implementor is
 complete class in its existing unit under target/ess-conformance-coverage/correction-pass-1,
 using its original assigned external TMPDIR. All previous source and adversary assertions remain.
 The second and final source attack, repository gates and publication are still pending.
+
+## Corrected source and final attack
+
+Correction pass1 is frozen at143ad4afc2d4ecb6f280bcad2932239bed5fbfd5 with both bot identities
+verified. Exactly five adapter source/test files changed. Its private typed definition view
+runs after full source admission, applies inherited defaults and Node/predicate semantics at
+their declared owners, and preserves exact u64 metadata and original-byte identities. The two
+frozen first-review test files remain byte-exact.
+
+The complete five-package run passed1375cases,0failed/ignored,67summaries in149.69seconds.
+Nine class cases were added to the original1366 executed cases. Four actual named guard
+mutants each failed one assertion and were restored before the final13-case focused run.
+Formatting and strict all-target Clippy passed on the same frozen source. All first failures
+and setup/lint/fixture corrections remain separately recorded. No schema or instruction input
+changed, so no shared generator was rerun for this correction.
+
+Report SHA256113b4f5efcd5f134b71435683851dec306cc58d624a28f7cbb25afebccdad652. Root verified
+all4 handoff records,47 execution-catalog entries,242 source hashes and both original review
+test hashes. Source manifest SHA256792437f1bdb462d4b947740d167307e6204c784a43318b6859e00badb91585b2.
+The first immutable source review now has a fixed outcome linked to the correction commit;
+that outcome supplies no final-review or integration result.
+
+Agent expression_review_resume is running the second and final source attack under the same
+installed adversary0.8.0 charter after all implementor writes were relinquished. Tests-only
+ownership remains within the five assigned packages. Scratch is the unit's
+target/ess-conformance-coverage/adversary-pass-2; build remains its target. Explicit outside-project
+TMPDIR: /home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-2-tmp.
+The complete brief and prior evidence are retained. No third source attack is authorized.
+Full repository gates, reader-first publication and actual future producer correspondence
+remain pending.
