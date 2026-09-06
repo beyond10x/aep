@@ -278,8 +278,8 @@ Use these chosen additive leaves:
 | File | Required composition |
 |---|---|
 | `principles/verification/ess-conformance-v2.yaml` | id ess-conformance-v2, version 1. Where an executable-system specification governs the task, before-completion requires kind ess_conformance_v2, at least one, independent true, verifier conformance-runner. Its meaning is the shared qualifier, not a conjunction of global status/count facts. |
-| `protocols/adp-ess-conformance/2.yaml` | id adp-ess-conformance, version 2, extends adp/1; adds kind ess_conformance_v2 and observable ess_conformance_v2.**. Existing conformance-runner is inherited. |
-| `profiles/development-ess-conformance-v2.yaml` | id development.ess-conformance-v2, version 1, extends development.standard, protocol adp-ess-conformance/2, adds the new principle. |
+| `protocols/adp-ess-conformance/1.yaml` | id adp-ess-conformance, version 1, extends adp/1; adds kind ess_conformance_v2 and observable ess_conformance_v2.**. Existing conformance-runner is inherited. |
+| `profiles/development-ess-conformance-v2.yaml` | id development.ess-conformance-v2, version 1, extends development.standard, protocol adp-ess-conformance/1, adds the new principle. |
  
 Do not extend development.critical: it adds the legacy ess-conformance principle. Do not edit adp/1 or default profiles to activate v2. Registry/Profile composition must be tested against actual documents: source Profile::extend starts from the derived profile, inherits/merges principles and completion, and resolve checks the profile's more specific protocol (`profile.rs:81–116`, `aep-engine/src/resolve.rs:48–77`). This is source-backed feasibility, not an executed composition result.
 
@@ -321,7 +321,7 @@ Private admitted readings are intentionally absent from serialized evidence/snap
 Bound implementation scope:
 
 - cited packages: crates/observe/aep-ess-evidence, crates/govern/aep-domain, crates/govern/aep-engine, crates/edge/aep-schema, crates/edge/aep-cli;
-- inferred binding and selected leaves: docs/design/ess-conformance-v2-evidence.md; principles/verification/ess-conformance-v2.yaml; protocols/adp-ess-conformance/2.yaml; profiles/development-ess-conformance-v2.yaml;
+- inferred binding and selected leaves: docs/design/ess-conformance-v2-evidence.md; principles/verification/ess-conformance-v2.yaml; protocols/adp-ess-conformance/1.yaml; profiles/development-ess-conformance-v2.yaml;
 - inferred generated: schemas/generated/{artifact-lifecycle,artifact-manifest,driver-steps,event,evidence,principle,profile,protocol,workflow,task}.schema.json, narrowed/expanded only from actual generator output and coordinator review;
 - cited public leaf: website/docs/reference/cli.md;
 - cited CHANGELOG.md; inferred Cargo.lock for the adapter hashing/CLI dependency edge.
@@ -396,3 +396,7 @@ Open source-grounded limits remain explicit:
 - Current scope includes no ESS modeling dependency, AEP server/promotion redesign, generic evidence registry or new runtime entity.
 - External direct AEP API users, installed binaries, automation consuming detailed ESS output and retained generated Go/browser packages require actual rollout inventory. No local absence search establishes readiness.
 - Final generated changes, exact public API compilation impact, full-u64 backend/rendering behavior and actual policy/driver compatibility must be established by the implementation's tests and gate. Nothing in this draft claims those checks executed.
+
+## Real composition correction: protocol major versus ESS evidence major
+
+The actual new-policy composition test rejected the initially proposed adp-ess-conformance/2 before Registry resolution. Domain protocol.rs:39,252 and engine registry.rs:205 independently admit supported major1. No adp-ess-conformance protocol exists at the frozen00c742e baseline. Therefore create the new leaf protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance, version1, extending adp/1; the development.ess-conformance-v2 profile references that leaf. Its protocol-definition major is independent of report2 and ess_conformance_v2. The new evidence vocabulary and explicit profile still separate the opt-in contract; no old protocol file is rewritten. SUPPORTED_MAJORS, is_supported_major and both existing checks remain unchanged, and generic major2 documents remain refused. No ESS-specific core version exception is introduced. Retain the original /2 test failure as a proposal-feasibility defect, then measure actual corrected composition/default and generic-major-refusal controls. No /2 leaf was published or relied on by an installed consumer.

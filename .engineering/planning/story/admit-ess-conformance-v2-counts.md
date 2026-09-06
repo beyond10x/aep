@@ -29,7 +29,7 @@ scope:
 - confidence: inferred
   path: profiles/development-ess-conformance-v2.yaml
 - confidence: inferred
-  path: protocols/adp-ess-conformance/2.yaml
+  path: protocols/adp-ess-conformance/1.yaml
 - confidence: inferred
   path: schemas/generated/artifact-lifecycle.schema.json
 - confidence: inferred
@@ -52,7 +52,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 26
+revision: 29
 ---
 ## Problem and owner
 
@@ -66,7 +66,7 @@ Both original-byte reader paths admit the same valid report/2 plus its exact ori
 
 AEP docs/design/ess-conformance-v2-evidence.md and a dedicated Atlas ADR must bind original report/suite byte transport, re-admission at every typed readback/submission edge, exact integer envelope timestamps, independently supplied expectations and shared same-record qualification before implementation dispatch. The complete binding is now accepted for implementation, with the bounded review correction recorded below; it is not deployed. Existing Evidence/EvidenceEnvelope and the accepted ESS report wire are the typed owners; no new runtime entity or unrelated ESS modeling dependency is introduced.
 
-Names selected for the additive opt-in are evidence kind and fact namespace ess_conformance_v2, principle principles/verification/ess-conformance-v2.yaml, protocol protocols/adp-ess-conformance/2.yaml with id adp-ess-conformance version2 extending adp/1, and profile profiles/development-ess-conformance-v2.yaml extending development.standard. The profile must not inherit the legacy critical profile's additional ESS requirement. Validate actual protocol/profile composition before accepting these leaves; defaults stay untouched. Exact byte/readback and qualification details are bound in the accepted design; implementation must follow them.
+Names selected for the additive opt-in are evidence kind and fact namespace ess_conformance_v2, principle principles/verification/ess-conformance-v2.yaml, protocol protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance version2 extending adp/1, and profile profiles/development-ess-conformance-v2.yaml extending development.standard. The profile must not inherit the legacy critical profile's additional ESS requirement. Validate actual protocol/profile composition before accepting these leaves; defaults stay untouched. Exact byte/readback and qualification details are bound in the accepted design; implementation must follow them.
 
 ## Implementation boundary
 
@@ -92,7 +92,7 @@ Derived from read-only source at advertised AEP00c742e4179593738a2e8aa69e2ecc07d
 - crates/edge/aep-schema — cited; exact typed input/readback.
 - crates/edge/aep-cli — cited; both live readers and app/driver edges.
 - docs/design/ess-conformance-v2-evidence.md — inferred; accepted binding before production.
-- principles/verification/ess-conformance-v2.yaml, protocols/adp-ess-conformance/2.yaml and profiles/development-ess-conformance-v2.yaml — inferred; additive opt-in leaves, composition to validate.
+- principles/verification/ess-conformance-v2.yaml, protocols/adp-ess-conformance/1.yaml and profiles/development-ess-conformance-v2.yaml — inferred; additive opt-in leaves, composition to validate.
 - schemas/generated/{artifact-lifecycle,artifact-manifest,driver-steps,event,evidence,principle,profile,protocol,workflow,task}.schema.json — inferred; exact generator-owned propagation, never hand edits.
 - Cargo.lock — inferred; intentional hashing/adapter edges only.
 - CHANGELOG.md — cited; user-visible Unreleased record.
@@ -113,3 +113,7 @@ The typed value additions remain owned by existing Evidence/EvidenceEnvelope and
 Immutable review-result:ess-conformance-v2-binding-review-pass-1 preserves the complete warning that a shared unsigned/date visitor could silently narrow legacy numeric spellings. The accepted correction keeps actual integer tokens exact, preserves established integral floating/exponent/negative-floating-zero legacy admission and rejection behavior separately, and retains strict lexical integers inside embedded report JSON. Outer v2 time must equal the original report instant; rounding cannot freshen it. B04 explicitly requires compatibility, full-u64 transport and rounded-envelope mismatch controls. This is a bounded prerequisite document review, not a full implementation adversary pass or executed test evidence.
 
 The implementation wave has one unit spanning the five established packages because admission, typed replay and both CLI readers form one coherent seam. Actual policy composition, complete frozen suite-vocabulary transcription, source API compilation, generated propagation and full-u64 backend/history behavior remain reason-specific test obligations, not assertions from this decision. The coordinator owns the shared binding, changelog, planning and publication; the implementor works in its own managed tree and leaves source/test changes for review.
+
+## Real composition correction: protocol major versus ESS evidence major
+
+The actual new-policy composition test rejected the initially proposed adp-ess-conformance/2 before Registry resolution. Domain protocol.rs:39,252 and engine registry.rs:205 independently admit supported major1. No adp-ess-conformance protocol exists at the frozen00c742e baseline. Therefore create the new leaf protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance, version1, extending adp/1; the development.ess-conformance-v2 profile references that leaf. Its protocol-definition major is independent of report2 and ess_conformance_v2. The new evidence vocabulary and explicit profile still separate the opt-in contract; no old protocol file is rewritten. SUPPORTED_MAJORS, is_supported_major and both existing checks remain unchanged, and generic major2 documents remain refused. No ESS-specific core version exception is introduced. Retain the original /2 test failure as a proposal-feasibility defect, then measure actual corrected composition/default and generic-major-refusal controls. No /2 leaf was published or relied on by an installed consumer.
