@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:admit-ess-conformance-coverage
 kind: story
-status: active
+status: implemented
 title: Admit exact ESS coverage and qualify the declared selection
 relations:
 - serves: vision:O2
@@ -50,7 +50,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 30
+revision: 32
 ---
 ## Outcome
 
@@ -149,3 +149,7 @@ review-result:ess-conformance-coverage-source-adversary-pass-2 preserves the imm
 Root verified the68-entry execution catalog, sealed records,241 unchanged original source entries and the original1126-line CLI test prefix. Exactly two additive test files,310addedlines,0removedlines were frozen at00b6108d7656b3947fa8940015147b317338ad7c with both bot identities verified. No third source attack was opened. The actual findings ledger reports carried[],new[],resolved2: both first-pass comparison findings. Its complete output is retained in the wave page. The first-pass fixed outcome remains; an empty second-pass findings list receives no fictitious finding outcome.
 
 Source is ready for root integration and the16-step repository gate. This does not claim that gate, source publication, runtime installation or actual ESS producer correspondence has happened. The prepared Website support and exact immutable artifact verification remain delivery requirements after green source publication.
+
+## Integrated source verification
+
+verification-report:ess-conformance-coverage-integrated records the clean merged58fe2f3e7bc1286d5de8f9bc6188da90ef9e8f8c gate: all16steps returned0,2269workspace cases passed,0failed/ignored,154summaries, with full source preservation. PostgreSQL explicitly skipped locally because its connection variable was unset. Rust1.85, schema drift and Website build passed. Both original source-review findings are resolved; no third attack was opened. Source implementation is complete under the standing authorization. Exact source publication, CI, immutable public delivery and actual future ESS producer correspondence remain separately observed obligations; this move asserts none of those pending results.

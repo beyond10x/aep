@@ -294,3 +294,19 @@ real statuses, verifies Rust1.85 through its own toolchain and preserves the con
 PostgreSQL skip distinction. Its explicitly assigned outside-project TMPDIR is
 /home/timo/.cache/ess-cov-aep-gate-tmp; all logs stay under the coordinator's
  target/ess-conformance-coverage/gate-<subject>. No source gate has run on the merged result yet.
+
+## Integrated source gate
+
+The clean integration58fe2f3e7bc1286d5de8f9bc6188da90ef9e8f8c passed all16 declared steps.
+Workspace tests passed2269cases,0failed/ignored,154summaries in204.210432894seconds;
+docs-check separately passed2cases. The actual Rust1.85 toolchain, schema drift, strict Clippy
+and Website build passed. PostgreSQL explicitly skipped because ENTITY_POSTGRES_URL was
+unset; no local database execution is claimed. Every tracked source hash remained unchanged
+after each step and at completion. The complete gate ran15:27:34.342124–15:33:27.361723UTC.
+
+verification-report:ess-conformance-coverage-integrated retains every gate row and the separate
+review/correction history. The CLI recorded that test result and moved the owning story to
+implemented, revision32. Planning validation returned0 for278artifacts, retaining the same
+53pre-log records,4historical assertion closures and2known empty-review advisories. Source
+completion precedes the separately measured publication, CI, immutable public delivery and
+future actual ESS producer correspondence. No release or runtime installation is selected.
