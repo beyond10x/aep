@@ -143,7 +143,7 @@ Command: aep plan artifact waves --kind story --status proposed --format json, e
 
 ## Current stage
 
-Binding accepted; story active at revision26; unit provisioning follows the frozen opening records. The primary checkout has not been edited. The count writer, suite5 coverage, default migration and external installed/adopted consumers remain unimplemented or unverified.
+Reader implemented at revision50 and published at30aeef2; local and remote gates pass, with the explicit local PostgreSQL skip retained. The primary checkout has not been edited. The ESS count writer is now a separate active unit; actual producer compatibility, suite5 coverage, default migration and external installed/adopted consumers remain unfinished or unverified.
 
 ## Opening and actual unit
 
@@ -180,3 +180,13 @@ The complete implementation is frozen at `fc58d0fb365f04f2c92e0a7cc7a278f85b55ec
 Required final checks exposed schema closure, generated instruction propagation and feature-unified timestamp compatibility. The new tagged evidence schema now retains the source carrier's derived unknown-field restriction. The canonical instruction writer produced six changed documents after root recorded their scope; the canonical schema writer produced ten changed schemas. Legacy numeric controls pass under both ordinary and arbitrary-precision JSON dependency features. The exact protocol/profile inventory includes the new opt-in leaves while existing default policy source remains unchanged.
 
 The author relinquished all writes. Agent `expression_review_resume` now performs this unit's first bounded implementation review under the installed 0.8.0 adversary charter, through the general collaboration harness. It did not author this unit. Its exact subject, baseline and tests-only write scope are in `target/ess-conformance-v2-counts/adversary-pass-1/brief.md` and `frozen-head.txt`. The complete repository gate, publication and actual ESS producer correspondence remain pending; package success alone does not close the story.
+
+## Published source and delivery
+
+Source `30aeef2c9985613f5283764bdff3eec12160e43d` is published on main with both bot identities verified for every introduced direct commit. Remote CI34021889997, documentation validation34021889995 and passive bundle34021889975 completed successfully. This source includes the reviewed five-package reader, explicit protocol/profile and generated schemas. Source publication does not replace the installed older binary or upgrade external callers.
+
+Atlas publication34022002174 completed successfully. Source-set SHA256e9e694e70561fc9fc01836e875bc512772be8f4c5447d3af08c2c6eea0fc44ab selects exact AEP30aeef2, bundlea7b84bb222254fc7fcb6fcc82039bfd3f5590b11a9d1cfa8d52bae04caa24265, producer34021889975 attempt1/artifact9985774315. Its independent verifier passed356 routes and1,327 files; both live provenance endpoints equal immutable published bytes, SHA2560582b0fb5606f9da7db67f0b009fab2b7635d51697a2f23dfc12bdd614881b19. The separate full Website gate on this source set passed99 tests and every production check. That local rebuild has the same sources/routes but different build bytes; no bit-identical rebuild claim is made.
+
+The AEP implementation worktree was finished and removed through exact-id manager cleanup after its hash-verified3,043-file archive and advertised origin/main recovery proof. The merged local implementation branch was deleted without force. Both documentation support worktrees were similarly archived, finished and removed; the immutable delivery archive has2,290 files, SHA256b18e9daedc737f39e4615601ebbb4bb73d1c2a075508786ead945719beaf023f. The reader coordinator remains available for actual ESS Rust/Go compatibility; the dirty primary and its unpublished work remain untouched.
+
+Atlas shipment log and ADR0039 are published at84cadb687477efe34a0b63ae6417262d1e94e967. The actual shipment fence passed117 Rust cases and retained the three existing primary-workspace failures; no organization-wide green claim is made. Reader-first source publication is complete; actual frozen ESS producer pairs through both readers and typed replay remain required before opt-in writer publication. No release/tag/default or installed-adopter upgrade was made.
