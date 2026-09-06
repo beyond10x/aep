@@ -61,6 +61,12 @@ use crate::verification::Verifier;
 
 /// What the engine needs in order to decide whether requirements are met.
 pub trait RequirementContext {
+    /// Independent complete-selection expectation, never taken from evidence facts.
+    fn ess_conformance_coverage_expectation(
+        &self,
+    ) -> Option<&crate::ess_conformance_coverage::EssConformanceCoverageExpectation> {
+        None
+    }
     /// Independently authored count-stage expectation, never taken from projected evidence facts.
     fn ess_conformance_v2_expectation(
         &self,
@@ -351,7 +357,13 @@ impl EvidenceRequirement {
                 // horizon on one is a decay rule over a set that is never consulted — a gate that
                 // reads as guarded and is not. `Horizon::days(0)` is refused for the same reason,
                 // and the two refusals are kept consistent on purpose.
-                if at_least == 0 && (horizon.is_some() || kind == EvidenceKind::EssConformanceV2) {
+                if at_least == 0
+                    && (horizon.is_some()
+                        || matches!(
+                            kind,
+                            EvidenceKind::EssConformanceV2 | EvidenceKind::EssConformanceCoverageV1
+                        ))
+                {
                     return Err(ParseError::shape(
                         "requires.evidence[]",
                         "at_least of at least 1 beside a horizon",
@@ -384,7 +396,10 @@ impl EvidenceRequirement {
     /// `true` when `record` counts towards this requirement.
     pub fn matches(&self, record: &EvidenceRecord) -> bool {
         // V2 requires independent task/model/selection/time inputs; this API has none of them.
-        if self.kind == EvidenceKind::EssConformanceV2 {
+        if matches!(
+            self.kind,
+            EvidenceKind::EssConformanceV2 | EvidenceKind::EssConformanceCoverageV1
+        ) {
             return false;
         }
         if record.kind() != self.kind {
@@ -506,14 +521,24 @@ impl EvidenceRequirement {
 
     /// Checks this requirement.
     fn evaluate(&self, context: &dyn RequirementContext) -> RequirementOutcome {
-        if self.kind == EvidenceKind::EssConformanceV2 {
+        if matches!(
+            self.kind,
+            EvidenceKind::EssConformanceV2 | EvidenceKind::EssConformanceCoverageV1
+        ) {
+            let kind = if self.kind == EvidenceKind::EssConformanceCoverageV1 {
+                "coverage"
+            } else {
+                "v2"
+            };
             if self.at_least == 0 {
                 return RequirementOutcome::new(
                     RequirementFlavour::Evidence,
                     self.to_string(),
                     Truth::False,
                 )
-                .with_detail("InvalidRequirement: v2 requires at least one qualified record");
+                .with_detail(format!(
+                    "InvalidRequirement: {kind} requires at least one qualified record"
+                ));
             }
             let decisions: Vec<_> = context
                 .evidence()
@@ -542,7 +567,7 @@ impl EvidenceRequirement {
                 Truth::Unknown
             };
             let detail = decision.and_then(RecordQualification::issue).map_or_else(
-                || "MissingRecord: no v2 record submitted".into(),
+                || format!("MissingRecord: no {kind} record submitted"),
                 |issue| format!("{} at {}: {}", issue.reason, issue.path, issue.detail),
             );
             return RequirementOutcome::new(RequirementFlavour::Evidence, self.to_string(), truth)
@@ -656,6 +681,9 @@ impl EvidenceRequirement {
         record: &EvidenceRecord,
         context: &dyn RequirementContext,
     ) -> RecordQualification {
+        if self.kind == EvidenceKind::EssConformanceCoverageV1 {
+            return crate::ess_conformance_coverage::qualification::qualify(self, record, context);
+        }
         if self.kind != EvidenceKind::EssConformanceV2 {
             if !self.matches(record) {
                 return unknown(

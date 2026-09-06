@@ -399,6 +399,7 @@
         "specification",
         "ess_conformance",
         "ess_conformance_v2",
+        "ess_conformance_coverage_v1",
         "trace_conformance",
         "test_execution",
         "source_diff",

@@ -82,7 +82,7 @@ fn default_actor() -> ActorRef {
 /// A task being executed under a protocol.
 #[derive(Debug, Clone)]
 pub struct Execution {
-    ess_reader: Option<std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>>,
+    ess_readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders,
     id: ExecutionId,
     plan: ExecutionPlan,
     actor: ActorRef,
@@ -113,9 +113,27 @@ impl Execution {
             std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
         >,
     ) -> Self {
+        Self::new_with_ess_readers(
+            id,
+            plan,
+            artifacts,
+            aep_domain::ess_conformance_coverage::EssEvidenceReaders {
+                count: ess_reader,
+                coverage: None,
+            },
+        )
+    }
+
+    /// Starts with concrete independent optional count and coverage readers.
+    pub fn new_with_ess_readers(
+        id: ExecutionId,
+        plan: ExecutionPlan,
+        artifacts: ArtifactGraph,
+        ess_readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders,
+    ) -> Self {
         let state = plan.workflow.initial.clone();
         let mut execution = Self {
-            ess_reader,
+            ess_readers,
             id,
             plan,
             actor: ActorRef::System,
@@ -230,7 +248,7 @@ impl Execution {
         record: EvidenceRecord,
         now: Option<Timestamp>,
     ) -> Result<PreparedRecord, ProtocolError> {
-        prepare_record(record, self.ess_reader.as_deref(), now)
+        prepare_record(record, &self.ess_readers, now)
     }
 
     pub(crate) fn record_prepared(&mut self, record: PreparedRecord) {
@@ -293,7 +311,13 @@ impl Execution {
         artifacts: ArtifactGraph,
         snapshot: Snapshot,
     ) -> Result<Self, ProtocolError> {
-        Self::restore_admitted(plan, artifacts, snapshot, None, None)
+        Self::restore_admitted(
+            plan,
+            artifacts,
+            snapshot,
+            aep_domain::ess_conformance_coverage::EssEvidenceReaders::default(),
+            None,
+        )
     }
 
     /// Re-admits every source record with an explicit reader and present evaluation instant.
@@ -307,16 +331,37 @@ impl Execution {
         reader: std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
         now: Timestamp,
     ) -> Result<Self, ProtocolError> {
-        Self::restore_admitted(plan, artifacts, snapshot, Some(reader), Some(now))
+        Self::restore_with_ess_readers(
+            plan,
+            artifacts,
+            snapshot,
+            aep_domain::ess_conformance_coverage::EssEvidenceReaders {
+                count: Some(reader),
+                coverage: None,
+            },
+            now,
+        )
+    }
+
+    /// Re-admits every snapshot record with explicitly supplied optional readers and current time.
+    ///
+    /// # Errors
+    /// Refuses task/state mismatch, a missing reader or any invalid original source/envelope.
+    pub fn restore_with_ess_readers(
+        plan: ExecutionPlan,
+        artifacts: ArtifactGraph,
+        snapshot: Snapshot,
+        readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders,
+        now: Timestamp,
+    ) -> Result<Self, ProtocolError> {
+        Self::restore_admitted(plan, artifacts, snapshot, readers, Some(now))
     }
 
     pub(crate) fn restore_admitted(
         plan: ExecutionPlan,
         artifacts: ArtifactGraph,
         mut snapshot: Snapshot,
-        ess_reader: Option<
-            std::sync::Arc<dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
-        >,
+        ess_readers: aep_domain::ess_conformance_coverage::EssEvidenceReaders,
         now: Option<Timestamp>,
     ) -> Result<Self, ProtocolError> {
         if snapshot.task != plan.task.id.to_string() {
@@ -335,11 +380,10 @@ impl Execution {
             });
         }
         for recorded in &mut snapshot.evidence {
-            recorded.record =
-                prepare_record(recorded.record.clone(), ess_reader.as_deref(), now)?.0;
+            recorded.record = prepare_record(recorded.record.clone(), &ess_readers, now)?.0;
         }
         let mut execution = Self {
-            ess_reader,
+            ess_readers,
             id: snapshot.execution,
             plan,
             actor: snapshot.actor.clone(),
@@ -665,7 +709,11 @@ impl Execution {
     /// requirement nobody has met yet, too — and `evidence.lapsed` exists so the two causes are
     /// distinguishable rather than merged.
     fn satisfies_evidence(&self, requirement: &EvidenceRequirement) -> bool {
-        if requirement.kind == aep_domain::evidence::EvidenceKind::EssConformanceV2 {
+        if matches!(
+            requirement.kind,
+            aep_domain::evidence::EvidenceKind::EssConformanceV2
+                | aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1
+        ) {
             return requirement.at_least > 0
                 && self
                     .records
@@ -700,12 +748,12 @@ pub(crate) struct PreparedRecord(EvidenceRecord);
 
 fn prepare_record(
     mut record: EvidenceRecord,
-    reader: Option<&dyn aep_domain::ess_conformance_v2::EssConformanceV2Reader>,
+    readers: &aep_domain::ess_conformance_coverage::EssEvidenceReaders,
     now: Option<Timestamp>,
 ) -> Result<PreparedRecord, ProtocolError> {
     use aep_domain::ess_conformance_v2::EssAdmissionError;
     if let Evidence::EssConformanceV2(sources) = &mut record.value {
-        let reader = reader.ok_or_else(|| {
+        let reader = readers.count.as_deref().ok_or_else(|| {
             EssAdmissionError::new("MissingReader", "$", "install an ESS original-byte reader")
         })?;
         sources.admit(reader)?;
@@ -726,10 +774,45 @@ fn prepare_record(
             .into());
         }
     }
+    if let Evidence::EssConformanceCoverageV1(sources) = &mut record.value {
+        let reader = readers.coverage.as_deref().ok_or_else(|| {
+            EssAdmissionError::new(
+                "MissingReader",
+                "$",
+                "install an ESS coverage source reader",
+            )
+        })?;
+        sources.admit(reader)?;
+        sources.check_observation(record.observed_at)?;
+        let now = now.ok_or_else(|| {
+            EssAdmissionError::new(
+                "MissingTime",
+                "$.observed_at",
+                "coverage mutation requires current evaluation time",
+            )
+        })?;
+        if record.observed_at.timestamp() > now {
+            return Err(EssAdmissionError::new(
+                "FutureObservation",
+                "$.observed_at",
+                format!("current time is {}", now.epoch_millis()),
+            )
+            .into());
+        }
+    }
     Ok(PreparedRecord(record))
 }
 
 impl RequirementContext for Execution {
+    fn ess_conformance_coverage_expectation(
+        &self,
+    ) -> Option<&aep_domain::ess_conformance_coverage::EssConformanceCoverageExpectation> {
+        self.plan
+            .task
+            .constraints
+            .ess_conformance_coverage_v1
+            .as_ref()
+    }
     fn ess_conformance_v2_expectation(
         &self,
     ) -> Option<&aep_domain::ess_conformance_v2::EssConformanceV2Expectation> {

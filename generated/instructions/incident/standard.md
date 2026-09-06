@@ -2,7 +2,7 @@
 
 # Standard incident response
 
-`incident/standard/1` · 7 states · 6 transitions · 22 principles bind it.
+`incident/standard/1` · 7 states · 6 transitions · 23 principles bind it.
 
 Detect, triage, diagnose, mitigate, recover, verify and learn — with telemetry and health facts,
 not an agent's confidence, deciding when each stage is finished.
@@ -116,6 +116,7 @@ These obligations fall due before you may enter it:
 * `contract-testing/before-completion` — Contract testing
 * `design-by-contract/before-completion` — Design by contract
 * `differential-testing/before-completion` — Differential testing
+* `ess-conformance-coverage/before-completion` — Complete conformance for the independently declared ESS selection
 * `ess-conformance-v2/before-completion` — Exact ESS evidence with explicit coverage
 * `ess-conformance/before-completion` — Conformance to the specification
 * `invariant-checking/before-completion` — Invariant checking
@@ -271,6 +272,22 @@ Evidence it requires, which must exist before the work is finished:
 
 * evidence test_result from test-runner (independent)
 * evidence verification (independent)
+
+If one of its requirements is not met: block.
+
+### `ess-conformance-coverage/1` — Complete conformance for the independently declared ESS selection
+
+In the opt-in coverage profile, require an admitted nonempty complete selection with all-pass
+execution, matching the task's independently named current model, original suite bytes and full
+selection.
+
+**Before entering `learn`, the completion phase:**
+
+* evidence ess_conformance_coverage_v1 from conformance-runner (independent)
+
+Verifiers that must have spoken:
+
+* conformance-runner must run — before entering `learn`, the completion phase
 
 If one of its requirements is not met: block.
 

@@ -839,6 +839,30 @@
       "additionalProperties": false
     },
     {
+      "description": "Original report/2 and input/1 bytes; raw serde confers no coverage admission.",
+      "type": "object",
+      "required": [
+        "kind",
+        "report_json",
+        "suite_input_json"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ess_conformance_coverage_v1"
+          ]
+        },
+        "report_json": {
+          "type": "string"
+        },
+        "suite_input_json": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "A harness transcript checked against a trace specification.",
       "type": "object",
       "required": [

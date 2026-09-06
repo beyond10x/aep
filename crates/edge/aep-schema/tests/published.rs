@@ -161,6 +161,51 @@ fn count_stage_evidence_schema_refuses_cache_claims_but_accepts_raw_source_strin
     }
 }
 
+#[test]
+fn coverage_schema_keeps_the_separate_original_input_carrier_closed() {
+    let schema = validator("evidence.schema.json");
+    let raw = serde_json::json!({"kind":"ess_conformance_coverage_v1","report_json":"original report","suite_input_json":"original input"});
+    assert!(schema.is_valid(&raw));
+    let value: aep_domain::Evidence = serde_json::from_value(raw.clone()).unwrap();
+    assert!(value.facts().is_empty());
+    for key in [
+        "suite_json",
+        "reading",
+        "verified",
+        "admitted",
+        "coverage",
+        "counts",
+        "extra",
+    ] {
+        let mut bad = raw.clone();
+        bad[key] = true.into();
+        assert!(!schema.is_valid(&bad), "{key}");
+        assert!(serde_json::from_value::<aep_domain::Evidence>(bad).is_err());
+    }
+    for filename in [
+        "task.schema.json",
+        "protocol.schema.json",
+        "principle.schema.json",
+        "profile.schema.json",
+        "driver-steps.schema.json",
+        "event.schema.json",
+        "workflow.schema.json",
+        "artifact-manifest.schema.json",
+        "artifact-lifecycle.schema.json",
+    ] {
+        let generated = aep_schema::generated_schemas()
+            .into_iter()
+            .find(|entry| entry.filename == filename)
+            .unwrap()
+            .to_json()
+            .unwrap();
+        assert!(
+            generated.contains("ess_conformance_coverage_v1"),
+            "{filename}"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Wire-format aliases
 //

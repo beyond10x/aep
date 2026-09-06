@@ -1,0 +1,10 @@
+id: development.ess-conformance-coverage
+version: 1
+title: Development with complete ESS selection evidence
+summary: >-
+  Opt-in original coverage input admission. One independent record must satisfy the complete
+  expected selection and every model, subject, producer and observation condition.
+protocol: adp-ess-conformance-coverage/1
+extends: development.standard
+principles:
+  - ess-conformance-coverage

@@ -53,6 +53,7 @@ pub mod command;
 pub mod domain_event;
 pub mod entity;
 pub mod error;
+pub mod ess_conformance_coverage;
 pub mod ess_conformance_v2;
 pub mod event;
 pub mod evidence;
