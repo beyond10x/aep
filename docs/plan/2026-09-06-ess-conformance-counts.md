@@ -144,3 +144,9 @@ Command: aep plan artifact waves --kind story --status proposed --format json, e
 ## Current stage
 
 Binding accepted; story active at revision26; unit provisioning follows the frozen opening records. The primary checkout has not been edited. The count writer, suite5 coverage, default migration and external installed/adopted consumers remain unimplemented or unverified.
+
+## Opening and actual unit
+
+Opening46c3d8ba1f05cc79e35999223fdc60d3781c9fdc records the accepted binding, active storyr26 and full bounded review. Both direct identities are the organization bot; planning validates269 artifacts with the53 pre-journal/four historical-assertion advisories retained. Diff check is zero. This is metadata/design validation, not the implementation gate.
+
+The manager created /home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts at46c3d8b. Branchimpl/ess-conformance-v2-counts is leased toess-review-counts-implementation; build/temp is its target and scratch its target/ess-conformance-v2-counts. Root wrote unit-brief.md there before dispatch. Atlas companion opening27dec02 recorded ADR0039 and the active migration story before source implementation. The coordination was reconciled with concurrent Atlas304a58f through canonical incoming journal plus five AEP CLI replays of seven local events, preserving all artifact bytes, and published at3f0dbbf7701ce636df510316282d1c96a917df01. The actual opening fence completed at2026-09-06T00:40:57Z with116 of117 executed Rust cases passing and the previously reproduced relay timeout failure; the three existing sibling-workspace failures also remain. Metadata checks are clean; no organization-wide green result is asserted. Raw Atlas records are target/ess-conformance-v2-governance/{opening-fence,main-reconciliation}. Current stage: source implementor active in the assigned unit; its final source/gate/review result is pending.
