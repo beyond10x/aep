@@ -163,7 +163,17 @@ On 2026-09-06 the operator requested continuation of the owning ESS review sessi
 
 The story's stale `version2` spelling was corrected through `aep plan artifact body` to the accepted protocol version 1, matching the design's existing composition correction. The repository-local planning skill reference is absent in this checkout; root uses the installed aep-plan 0.8.0 planning skill and store conventions. No planning file or journal is hand-edited.
 
-## Frozen implementation under independent review
+## Completed reader integration
+
+The first implementation review returned no findings and passed all 1,320 assigned cases, including seven new focused cases. Its three files were hash-verified, formatting-checked and committed at `a5ad722399cfc17beef84208b44c9c98b2a51c70`. The complete immutable report is `review-result:ess-conformance-v2-counts-adversary-pass-1`, SHA-256 `a76352d1f461e387f8b229e41f31c33ef841f3be423ed4b4518c7d6295924bd6`. The unit merged at `012a183c1228538c86be26a91e46d982b01c970a`, with both direct commit identities verified.
+
+All sixteen declared gate commands completed with zero exits. The PostgreSQL command explicitly skipped without `ENTITY_POSTGRES_URL`; no live database verification is claimed. The full workspace suite passed 2,209 cases, zero failed or ignored, across 147 summaries. The actual MSRV 1.85 build and Website task passed. The first full-suite attempt exposed an existing outside-project fixture assumption under worktree-local TMPDIR; unchanged source passed the focused fixture and complete suite after gate scratch moved to `/home/timo/.cache/ess-review/2026-09-06-resume/aep-gate-tmp`. Original and final records remain in `target/ess-conformance-v2-counts/final-gate`; no source repair or hidden test skip was used.
+
+The installed older CLI refuses the additive vocabulary before store access. Completion therefore uses the candidate's freshly built `target/debug/aep`; the installed binary remains unchanged. `verification-report:ess-conformance-v2-counts-integrated` binds the exact source, individual gate records and limits. The story recorded dated test evidence and moved to implemented at revision 50. Validation reports 271 artifacts and retains the four historical assertion closures plus the empty-findings-list advisory.
+
+The unit archive has 3,043 hash-verified evidence files at `/home/timo/.cache/ess-review/2026-09-06-resume/aep-count-reader-evidence.tar.gz`, SHA-256 `bb7667d85405e2eae4b0eb8ae21f5b34561b48f5d1697cb4ffcb47f00685c41f`. Its adjacent manifest lists excluded disposable caches. Publication, public-source delivery, actual ESS producer qualification and managed cleanup remain separate observed outcomes. This source completion does not enable an ESS writer or alter a default or release.
+
+## Earlier frozen handoff
 
 The complete implementation is frozen at `fc58d0fb365f04f2c92e0a7cc7a278f85b55ec8e`. Root checked all 52 source/generated paths against the handoff manifest and verified bot author and committer. The immutable report is `target/ess-conformance-v2-counts/handoff.md` in the unit tree, SHA-256 `edaa883c03ccf116fba536b00e9600e096f4d7723f02c16084b7d9a1d15a2571`. Its final five-package run passed 1,313 cases with zero failures or ignored cases; scoped formatting, strict Clippy and the actual schema drift check exited zero. The report preserves 32 measured guard mutations and the earlier failures without replacing them with final green output.
 

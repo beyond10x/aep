@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:admit-ess-conformance-v2-counts
 kind: story
-status: active
+status: implemented
 title: Admit exact ESS report v2 counts through both AEP readers
 relations:
 - serves: vision:O2
@@ -10,7 +10,7 @@ relations:
 scope:
 - confidence: cited
   path: CHANGELOG.md
-- confidence: inferred
+- confidence: cited
   path: Cargo.lock
 - confidence: cited
   path: crates/edge/aep-cli
@@ -22,39 +22,39 @@ scope:
   path: crates/govern/aep-engine
 - confidence: cited
   path: crates/observe/aep-ess-evidence
-- confidence: inferred
+- confidence: cited
   path: docs/design/ess-conformance-v2-evidence.md
 - confidence: cited
   path: generated/instructions
-- confidence: inferred
+- confidence: cited
   path: principles/verification/ess-conformance-v2.yaml
-- confidence: inferred
+- confidence: cited
   path: profiles/development-ess-conformance-v2.yaml
-- confidence: inferred
+- confidence: cited
   path: protocols/adp-ess-conformance/1.yaml
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/artifact-lifecycle.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/artifact-manifest.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/driver-steps.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/event.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/evidence.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/principle.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/profile.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/protocol.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/task.schema.json
-- confidence: inferred
+- confidence: cited
   path: schemas/generated/workflow.schema.json
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 33
+revision: 50
 ---
 ## Problem and owner
 
@@ -101,6 +101,16 @@ Derived from read-only source at advertised AEP00c742e4179593738a2e8aa69e2ecc07d
 - website/docs/reference/cli.md — cited; scoped report1/report2 paired-input and evidence-inspection documentation.
 
 Collides with domain evidence/time/requirement, engine execution, typed evidence parsing, CLI readers and these exact policy/generated leaves. No backend, general persisted facts, whole profile tree or whole numeric model scope is reserved.
+
+Confirmed implementation and review scope:
+
+- cited — the five assigned crates own shared original-byte report/suite admission, closed raw transport, exact counts/time, engine re-admission, independent expectations, same-record qualification and both CLI readers. Core AEP compiles against no ESS modeling crate.
+- cited — the new principle, `adp-ess-conformance/1` leaf and `development.ess-conformance-v2` profile are additive opt-ins. Default policy source and generic supported protocol majors remain unchanged.
+- cited — ten schemas are exact `cargo xtask schema` output, with the raw type's derived new-kind closure. Six instruction files are canonical output from the expanded available-principle inventory; the index is unchanged.
+- cited — manifest/lock changes are narrow hashing and optional adapter dependencies. No backend, global Number/Node change, journal-facts schema migration, ESS writer, suite/5 or detailed run/2 reader was added.
+- cited — CLI documentation and changelog describe pairing, exact inspection, checked recording and unknown coverage. Installed external binaries and generated Go runtimes are not declared upgraded.
+
+Initial inferred scope above remains historical. Implementation passed 1,313 cases with 32 measured guard mutations; first review added seven and passed all 1,320. The integrated gate passed 2,209 cases, zero failures or ignored cases, plus applicable checks including MSRV and Website. PostgreSQL was explicitly skipped without a connection. The first full-suite attempt exposed an existing outside-project fixture under a project-local TMPDIR; unchanged source passed after moving gate scratch into an assigned external cache directory. The installed old CLI refused the new opt-in vocabulary before store access; completion uses the exact freshly built candidate CLI, without changing the installed binary.
 
 ## Preparation record
 
