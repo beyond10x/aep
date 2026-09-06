@@ -114,6 +114,19 @@ installed-reader or retained generated-runtime adoption.
 
 ## Current stage
 
-Bindings accepted, opening checks and unit provisioning pending. No new production implementation,
-unit tree, implementation gate, reader publication or suite/5 correspondence is claimed. The complete
-computed outputs are in the companion dated review record; later stage changes are recorded here.
+Bindings accepted at AEP4ecc1b63, ESS e339f4ce and published Atlas21dd01f1. Both author and committer
+on all direct commits were verified as the organization bot. AEP's ten opening checks passed;
+ESS's layout target and required site-build passed. These checks cover the opening records and
+unchanged existing source; no new reader implementation has been tested.
+
+The manager created /home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage
+at exact base4ecc1b63b53bbfcb31fd55f277e62643083375b1. Its branch is impl/ess-conformance-coverage,
+lease ess-review-coverage-implementation, build directory its target and scratch its
+target/ess-conformance-coverage. The root-written unit-brief.md and hash-verified accepted bindings
+plus source-baseline logs are there before dispatch. Test TMPDIR alone uses the explicitly assigned
+/home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-tmp because the existing
+outside-project fixture requires a directory outside a project. That exception is unit-owned,
+reported and part of cleanup; no compiler output moves outside the unit target.
+
+Next stage: implementor dispatch. No implementation gate, reader publication or suite/5 producer
+correspondence is claimed. The complete computed outputs are in the companion dated review record.
