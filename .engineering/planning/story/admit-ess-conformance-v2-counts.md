@@ -24,6 +24,8 @@ scope:
   path: crates/observe/aep-ess-evidence
 - confidence: inferred
   path: docs/design/ess-conformance-v2-evidence.md
+- confidence: cited
+  path: generated/instructions
 - confidence: inferred
   path: principles/verification/ess-conformance-v2.yaml
 - confidence: inferred
@@ -52,7 +54,7 @@ scope:
   path: schemas/generated/workflow.schema.json
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 29
+revision: 32
 ---
 ## Problem and owner
 
@@ -66,7 +68,7 @@ Both original-byte reader paths admit the same valid report/2 plus its exact ori
 
 AEP docs/design/ess-conformance-v2-evidence.md and a dedicated Atlas ADR must bind original report/suite byte transport, re-admission at every typed readback/submission edge, exact integer envelope timestamps, independently supplied expectations and shared same-record qualification before implementation dispatch. The complete binding is now accepted for implementation, with the bounded review correction recorded below; it is not deployed. Existing Evidence/EvidenceEnvelope and the accepted ESS report wire are the typed owners; no new runtime entity or unrelated ESS modeling dependency is introduced.
 
-Names selected for the additive opt-in are evidence kind and fact namespace ess_conformance_v2, principle principles/verification/ess-conformance-v2.yaml, protocol protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance version2 extending adp/1, and profile profiles/development-ess-conformance-v2.yaml extending development.standard. The profile must not inherit the legacy critical profile's additional ESS requirement. Validate actual protocol/profile composition before accepting these leaves; defaults stay untouched. Exact byte/readback and qualification details are bound in the accepted design; implementation must follow them.
+Names selected for the additive opt-in are evidence kind and fact namespace ess_conformance_v2, principle principles/verification/ess-conformance-v2.yaml, protocol protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance version 1 extending adp/1, and profile profiles/development-ess-conformance-v2.yaml extending development.standard. The profile must not inherit the legacy critical profile's additional ESS requirement. Validate actual protocol/profile composition before accepting these leaves; defaults stay untouched. Exact byte/readback and qualification details are bound in the accepted design; implementation must follow them.
 
 ## Implementation boundary
 
@@ -117,3 +119,7 @@ The implementation wave has one unit spanning the five established packages beca
 ## Real composition correction: protocol major versus ESS evidence major
 
 The actual new-policy composition test rejected the initially proposed adp-ess-conformance/2 before Registry resolution. Domain protocol.rs:39,252 and engine registry.rs:205 independently admit supported major1. No adp-ess-conformance protocol exists at the frozen00c742e baseline. Therefore create the new leaf protocols/adp-ess-conformance/1.yaml with id adp-ess-conformance, version1, extending adp/1; the development.ess-conformance-v2 profile references that leaf. Its protocol-definition major is independent of report2 and ess_conformance_v2. The new evidence vocabulary and explicit profile still separate the opt-in contract; no old protocol file is rewritten. SUPPORTED_MAJORS, is_supported_major and both existing checks remain unchanged, and generic major2 documents remain refused. No ESS-specific core version exception is introduced. Retain the original /2 test failure as a proposal-feasibility defect, then measure actual corrected composition/default and generic-major-refusal controls. No /2 leaf was published or relied on by an installed consumer.
+
+## Generated instruction scope correction
+
+The package instruction tests observed that adding the opt-in principle also changes the repository-wide workflow instruction projection, which inventories all declared principles. The owning test is crates/edge/aep-cli/tests/instructions.rs:17–22; its canonical writer is protocol govern workflow instruct --out generated/instructions. The resumed implementor retained the failed package run and exact generated patch under target/ess-conformance-v2-counts. Add generated/instructions as cited scope and regenerate its six changed workflow documents with that writer. No workflow or default policy source changes are authorized by this generated propagation.
