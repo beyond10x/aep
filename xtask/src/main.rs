@@ -566,13 +566,21 @@ fn authoritative_gate_contract(root: &Path) -> Result<()> {
 fn authoritative_gate_text(ci: &str, release: &str) -> Result<()> {
     let invocations = ci
         .lines()
-        .filter(|line| line.trim() == "run: task check")
+        .filter(|line| {
+            line.trim() == "run: task ${{ inputs.source_release && 'check-source' || 'check' }}"
+        })
         .count();
     if invocations != 1 {
         bail!(
-            "{CI_WORKFLOW} must invoke the authoritative `task check` gate exactly once; found \
+            "{CI_WORKFLOW} must select the authoritative Taskfile gate exactly once; found \
              {invocations} invocations"
         );
+    }
+    if !ci.contains("source_release:")
+        || !ci.contains("default: false")
+        || !release.contains("source_release: true")
+    {
+        bail!("ordinary CI must retain the full gate and source releases must select check-source");
     }
     if !release
         .lines()
@@ -606,6 +614,9 @@ fn release_asset_text(release: &str) -> Result<()> {
     for required in [
         "workflow_dispatch:",
         "always() && needs.provenance.result == 'success' && needs.build.result == 'success'",
+        "needs: [provenance, gate, build]",
+        "github.event_name == 'workflow_dispatch' && needs.gate.result == 'skipped'",
+        "ref: ${{ needs.provenance.outputs.commit }}",
         "cargo build --release --locked -p aep-cli --target ${{ matrix.target }}",
         "target/${TARGET}/release/aep",
         "target/${TARGET}/release/protocol",
@@ -1410,10 +1421,27 @@ const GATE_DEFINITION: &str = "Taskfile.yml";
 fn gate_steps(root: &Path) -> Result<Vec<String>> {
     let path = root.join(GATE_DEFINITION);
     let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let full = task_steps(&text, "check")?;
+    if full != ["check-source", "website"] {
+        bail!("task check must compose check-source followed by website");
+    }
+    let mut source = task_steps(&text, "check-source")?;
+    if source
+        .iter()
+        .any(|step| matches!(step.as_str(), "website" | "check" | "check-source"))
+    {
+        bail!("check-source must contain source checks without website or recursive gate steps");
+    }
+    source.push("website".to_owned());
+    Ok(source)
+}
+
+/// Reads one explicitly composed task's steps without inventing a second gate list.
+fn task_steps(text: &str, task: &str) -> Result<Vec<String>> {
     let mut steps = Vec::new();
     let mut inside = false;
     for line in text.lines() {
-        if line == "  check:" {
+        if line == format!("  {task}:") {
             inside = true;
             continue;
         }
@@ -1432,7 +1460,7 @@ fn gate_steps(root: &Path) -> Result<Vec<String>> {
     }
     if steps.is_empty() {
         bail!(
-            "{GATE_DEFINITION} has no `check:` block with `- task:` steps in it, so the gate's own \
+            "{GATE_DEFINITION} has no `{task}:` block with `- task:` steps in it, so the gate's own \
              step list cannot be derived — failing rather than publishing an empty gate"
         );
     }
@@ -1962,10 +1990,10 @@ mod currency_tests {
 
     #[test]
     fn removing_the_gate_or_its_release_reuse_is_drift() {
-        let ci = "steps:\n  - name: Gate\n    run: task check\n";
-        let release = "jobs:\n  gate:\n    uses: ./.github/workflows/ci.yml\n";
+        let ci = "source_release:\n  type: boolean\n  default: false\nsteps:\n  - name: Gate\n    run: task ${{ inputs.source_release && 'check-source' || 'check' }}\n";
+        let release = "jobs:\n  gate:\n    uses: ./.github/workflows/ci.yml\n    with:\n      source_release: true\n";
         authoritative_gate_text(ci, release).expect("the authoritative shape holds");
-        let no_gate = ci.replace("task check", "cargo test --workspace");
+        let no_gate = ci.replace("run: task", "run: cargo test");
         assert!(
             authoritative_gate_text(&no_gate, release).is_err(),
             "CI cannot replace the gate with a hand-picked command"

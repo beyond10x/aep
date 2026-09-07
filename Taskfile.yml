@@ -8,15 +8,14 @@ tasks:
 
   check:
     desc: >-
-      Format, status, planning, governance, dependency, lint, test, documentation, schema,
-      PostgreSQL, MSRV and website checks — everything CI runs. The final two require Node and a
-      Rust 1.85 toolchain beside Rust's own.
+      All source checks and public-site rendering, as ordinary CI runs.
+      Source releases use check-source; documentation publication runs asynchronously.
+    cmds:
+      - task: check-source
+      - task: website
 
-      `msrv` and `website` are here because they were **not**, and this description said
-      "everything CI runs" while they were missing. CI was red for eleven consecutive releases —
-      every tag from 0.13.0 to 0.23.1 — with a locally green gate the whole time, because the two
-      things that were failing were the two things only CI ran. A gate that covers less than the
-      gate it claims to be is worse than a gate that admits its scope.
+  check-source:
+    desc: All source, governance, security, compatibility and artifact checks for a source release.
     cmds:
       - task: fmt-check
       - task: status-check
@@ -33,7 +32,6 @@ tasks:
       - task: doc-check
       - task: schema-check
       - task: msrv
-      - task: website
 
   msrv:
     desc: Build on the declared MSRV, which is what CI's `MSRV 1.85` job does.
