@@ -12,7 +12,7 @@ pub(crate) const MICRO_USD: u64 = 1_000_000;
 ///
 /// A leading dollar sign is accepted. Exponents, signs and more than six fractional digits are
 /// refused so no caller can silently round authority up or down.
-pub(crate) fn micro_usd(written: &str) -> Result<u64> {
+pub fn micro_usd(written: &str) -> Result<u64> {
     let text = written.trim().trim_start_matches('$');
     let (whole, fraction) = match text.split_once('.') {
         Some((whole, fraction)) => (whole, fraction),
@@ -43,7 +43,7 @@ pub(crate) fn micro_usd(written: &str) -> Result<u64> {
 }
 
 /// Renders millionths of a dollar without losing trailing precision.
-pub(crate) fn dollars(micro: u64) -> String {
+pub fn dollars(micro: u64) -> String {
     format!("${}.{:06}", micro / MICRO_USD, micro % MICRO_USD)
 }
 

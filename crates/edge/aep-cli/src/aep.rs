@@ -1,3 +1,5 @@
 //! Canonical AEP command.
 
-include!("app.rs");
+fn main() -> std::process::ExitCode {
+    aep_cli::main()
+}

@@ -53,6 +53,7 @@
 //! that moved with the counts would be the scalar this verb refuses to compute. Everything refused
 //! here leaves through the binary's top-level handler as `1`, with the refusals on standard error.
 
+include!("eval_tests.rs");
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -62,25 +63,25 @@ use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::money::{dollars, micro_usd, MICRO_USD};
+use crate::money::{dollars, MICRO_USD};
 
 /// The format claim a run manifest carries.
-const MANIFEST_FORMAT: &str = "eval.run-manifest/1";
+pub const MANIFEST_FORMAT: &str = "eval.run-manifest/1";
 
 /// The format claim the assembled matrix carries.
-const MATRIX_FORMAT: &str = "eval.matrix/1";
+pub const MATRIX_FORMAT: &str = "eval.matrix/1";
 
 /// The format claim of the record a manifest accompanies.
-const REPORT_FORMAT: &str = "trace-report/1";
+pub const REPORT_FORMAT: &str = "trace-report/1";
 
 /// How a run manifest is named on disk.
-const MANIFEST_SUFFIX: &str = ".manifest.yaml";
+pub const MANIFEST_SUFFIX: &str = ".manifest.yaml";
 
 /// How the record beside it is named.
-const RECORD_SUFFIX: &str = ".report.json";
+pub const RECORD_SUFFIX: &str = ".report.json";
 
 /// How many hex characters a content digest has.
-const DIGEST_WIDTH: usize = 64;
+pub const DIGEST_WIDTH: usize = 64;
 
 // --- the arms ------------------------------------------------------------------------------------
 
@@ -104,7 +105,7 @@ const DIGEST_WIDTH: usize = 64;
 /// is the operator's decision and not this type's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
-enum Arm {
+pub enum Arm {
     /// The instructions alone: no plugin, no enforcement.
     ///
     /// **Enforcement model: none.** Nothing on this arm was ever in a position to refuse, so every
@@ -139,7 +140,7 @@ enum Arm {
 
 impl Arm {
     /// Reads the word a manifest wrote, or nothing when it is not one of the arms.
-    fn parse(written: &str) -> Option<Self> {
+    pub fn parse(written: &str) -> Option<Self> {
         match written {
             "raw" => Some(Self::Raw),
             "plugin" => Some(Self::Plugin),
@@ -150,7 +151,7 @@ impl Arm {
     }
 
     /// The word a manifest writes.
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Raw => "raw",
             Self::Plugin => "plugin",
@@ -167,7 +168,7 @@ impl Arm {
     /// three, so the refusal that exists to *list the arms* omitted one — which is why
     /// `the_arms_the_refusal_lists_are_every_arm_the_type_has` checks it against
     /// `ValueEnum::value_variants` rather than against a second hand-written list.
-    const ALL: [Self; 4] = [Self::Raw, Self::Plugin, Self::Driven, Self::Native];
+    pub const ALL: [Self; 4] = [Self::Raw, Self::Plugin, Self::Driven, Self::Native];
 }
 
 impl fmt::Display for Arm {
@@ -185,7 +186,7 @@ impl fmt::Display for Arm {
 /// different people to react, and a matrix that folded them together would be reporting a number
 /// nobody can act on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Outcome {
+pub enum Outcome {
     /// The expectation held.
     Held,
     /// The run contradicted it.
@@ -204,27 +205,27 @@ enum Outcome {
 
 /// The three counts, which is all a cell of the matrix ever holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
-struct Counts {
+pub struct Counts {
     /// How many facts held.
-    held: usize,
+    pub held: usize,
     /// How many were contradicted.
-    violated: usize,
+    pub violated: usize,
     /// How many nobody could find out.
-    unobservable: usize,
+    pub unobservable: usize,
     /// How many advisory rows were contradicted. Observations, not violations.
     #[serde(default, skip_serializing_if = "is_zero")]
-    advisory: usize,
+    pub advisory: usize,
 }
 
 /// Whether a count is zero, so a matrix written before advisory rows existed reads unchanged.
 #[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_zero(count: &usize) -> bool {
+pub const fn is_zero(count: &usize) -> bool {
     *count == 0
 }
 
 impl Counts {
     /// Adds one outcome.
-    fn add(&mut self, outcome: Outcome) {
+    pub fn add(&mut self, outcome: Outcome) {
         match outcome {
             Outcome::Held => self.held += 1,
             Outcome::Violated => self.violated += 1,
@@ -234,7 +235,7 @@ impl Counts {
     }
 
     /// Adds another cell's counts.
-    fn absorb(&mut self, other: Self) {
+    pub fn absorb(&mut self, other: Self) {
         self.held += other.held;
         self.violated += other.violated;
         self.unobservable += other.unobservable;
@@ -250,7 +251,7 @@ impl Counts {
 /// on `EVAL-MANIFEST-005` still passes when the sentence is rewritten, and a test matching on the
 /// sentence pins prose that nobody meant to freeze.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Refusal {
+pub enum Refusal {
     /// The document does not claim to be a run manifest.
     NotAManifest {
         /// What it claimed instead, where it claimed anything.
@@ -360,7 +361,7 @@ enum Refusal {
 
 impl Refusal {
     /// The stable code a test matches on.
-    fn code(&self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::NotAManifest { .. } => "EVAL-MANIFEST-001",
             Self::ArmUnknown { .. } => "EVAL-MANIFEST-002",
@@ -506,7 +507,7 @@ impl fmt::Display for Refusal {
 }
 
 /// Lists the experiment's arms for a refusal without lengthening its formatter.
-fn known_arms() -> String {
+pub fn known_arms() -> String {
     Arm::ALL
         .iter()
         .map(|arm| format!("`{arm}`"))
@@ -515,7 +516,7 @@ fn known_arms() -> String {
 }
 
 /// Renders the four ways a required record field can fail at the JSON boundary.
-fn fmt_record_field_refusal(f: &mut fmt::Formatter<'_>, refusal: &Refusal) -> fmt::Result {
+pub fn fmt_record_field_refusal(f: &mut fmt::Formatter<'_>, refusal: &Refusal) -> fmt::Result {
     match refusal {
         Refusal::RecordFieldMissing { field } => write!(
             f,
@@ -538,7 +539,7 @@ fn fmt_record_field_refusal(f: &mut fmt::Formatter<'_>, refusal: &Refusal) -> fm
 }
 
 /// The ` (it claims to be X)` clause, where a document claimed anything at all.
-fn claimed(found: Option<&str>) -> String {
+pub fn claimed(found: Option<&str>) -> String {
     found.map_or_else(
         || " and states no `format`".to_owned(),
         |format| format!(" — it states `format: {format}`"),
@@ -546,7 +547,7 @@ fn claimed(found: Option<&str>) -> String {
 }
 
 /// Every refusal in one message, in the shape this binary already uses for a refused document.
-fn refused(subject: &Path, refusals: &[Refusal]) -> anyhow::Error {
+pub fn refused(subject: &Path, refusals: &[Refusal]) -> anyhow::Error {
     let lines: Vec<String> = refusals
         .iter()
         .map(|refusal| format!("  {refusal}"))
@@ -573,24 +574,24 @@ fn refused(subject: &Path, refusals: &[Refusal]) -> anyhow::Error {
 /// verb's business.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawRunManifest {
+pub struct RawRunManifest {
     /// The format claim.
-    format: Option<String>,
+    pub format: Option<String>,
     /// Which arm.
-    arm: Option<String>,
+    pub arm: Option<String>,
     /// Which harness ran it.
-    harness: Option<String>,
+    pub harness: Option<String>,
     /// The workflow the case is a run of.
-    workflow: Option<String>,
+    pub workflow: Option<String>,
     /// The case or task.
-    case: Option<String>,
+    pub case: Option<String>,
     /// The plugin the run was given, or an explicit `null`.
     ///
     /// A [`Written`] and not an `Option`, because serde maps *the key is not there* and *the key
     /// says `null`* onto the same `None` — and those are the two facts this field exists to keep
     /// apart.
     #[serde(default, deserialize_with = "written_down")]
-    plugin_digest: Written,
+    pub plugin_digest: Written,
     /// The pinned marketplace plugins the run declared and the attestation confirmed.
     ///
     /// An `Option`-free `Vec` and **not** a [`Written`], which is the asymmetry with the field
@@ -600,7 +601,7 @@ struct RawRunManifest {
     /// nothing from a marketplace. So the key is written only where there is something to write,
     /// and every manifest committed before `--plugin` existed keeps its bytes.
     #[serde(default)]
-    plugins: Vec<RawManifestPlugin>,
+    pub plugins: Vec<RawManifestPlugin>,
     /// The model, as the harness resolved it, or an explicit `null`.
     ///
     /// A [`Written`] for `plugin_digest`'s reason, and it earned it the same way — on a live run.
@@ -608,7 +609,7 @@ struct RawRunManifest {
     /// *the harness never said which model* are different facts, and only the second is a run this
     /// verb can honestly describe. The key is still required.
     #[serde(default, deserialize_with = "written_down")]
-    model: Written,
+    pub model: Written,
     /// The model the run **asked** for, where it asked for one.
     ///
     /// A plain `Option` and not a [`Written`], which is the asymmetry with the field above rather
@@ -617,19 +618,19 @@ struct RawRunManifest {
     /// `model_requested` key and one that asked for nothing are the same run. So the key is written
     /// only where there is something to write, and every manifest assembled before `--model`
     /// existed keeps its bytes.
-    model_requested: Option<String>,
+    pub model_requested: Option<String>,
     /// The harness version the arm is pinned to.
-    harness_version: Option<String>,
+    pub harness_version: Option<String>,
     /// The transcript the record beside it was judged over.
-    transcript_digest: Option<String>,
+    pub transcript_digest: Option<String>,
     /// When the run was observed.
-    observed_at: Option<String>,
+    pub observed_at: Option<String>,
     /// What it cost, in millionths of a US dollar.
-    cost_micro_usd: Option<u64>,
+    pub cost_micro_usd: Option<u64>,
     /// How many tokens it used.
-    tokens: Option<u64>,
+    pub tokens: Option<u64>,
     /// How long it took, in milliseconds.
-    wall_time_ms: Option<u64>,
+    pub wall_time_ms: Option<u64>,
 }
 
 /// One marketplace plugin as a manifest writes it down.
@@ -638,20 +639,20 @@ struct RawRunManifest {
 /// here is a typo to refuse and not another producer's field to tolerate.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawManifestPlugin {
+pub struct RawManifestPlugin {
     /// The spelling the run declared: `<repo>@<name>@<pin>`.
-    plugin: Option<String>,
+    pub plugin: Option<String>,
     /// The digest the instrument attested for it.
-    digest: Option<String>,
+    pub digest: Option<String>,
 }
 
 /// One marketplace plugin, once it has been read through the rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ManifestPlugin {
+pub struct ManifestPlugin {
     /// The spelling the run declared.
-    plugin: String,
+    pub plugin: String,
     /// The digest the instrument attested.
-    digest: String,
+    pub digest: String,
 }
 
 /// What one run manifest says the run cost, in millionths of a US dollar.
@@ -665,7 +666,7 @@ struct ManifestPlugin {
 /// Read through [`RawRunManifest`] and not through a fresh reader, so the one document format this
 /// crate publishes has one parser: a second reader that accepted a manifest this one refuses would
 /// be a second definition of what a manifest is.
-pub(crate) fn manifest_cost_micro_usd(path: &Path) -> Option<u64> {
+pub fn manifest_cost_micro_usd(path: &Path) -> Option<u64> {
     let text = std::fs::read_to_string(path).ok()?;
     let raw: RawRunManifest = serde_yaml::from_str(&text).ok()?;
     (raw.format.as_deref() == Some(MANIFEST_FORMAT))
@@ -680,7 +681,7 @@ pub(crate) fn manifest_cost_micro_usd(path: &Path) -> Option<u64> {
 /// is the collapse `plugin_digest` cannot survive — *nobody recorded which plugin* and *there was
 /// no plugin* are the difference between a manifest with a hole in it and a run of arm `raw`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-enum Written {
+pub enum Written {
     /// The key is not in the document.
     #[default]
     Absent,
@@ -694,7 +695,7 @@ enum Written {
 ///
 /// `#[serde(default)]` on the field is what produces [`Written::Absent`]: this function is only
 /// called when the key is present, so a `None` here is the document's own `null`.
-fn written_down<'de, D>(deserializer: D) -> Result<Written, D::Error>
+pub fn written_down<'de, D>(deserializer: D) -> Result<Written, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -709,38 +710,38 @@ where
 /// No `Deserialize`, by invariant 2: the only way to obtain one is [`TryFrom`], so there is no path
 /// into the matrix that skipped the arm vocabulary or the `plugin_digest` rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RunManifest {
+pub struct RunManifest {
     /// Which arm.
-    arm: Arm,
+    pub arm: Arm,
     /// Which harness.
-    harness: String,
+    pub harness: String,
     /// The workflow.
-    workflow: String,
+    pub workflow: String,
     /// The case or task.
-    case: String,
+    pub case: String,
     /// The plugin the run was given, where it had one.
-    plugin_digest: Option<String>,
+    pub plugin_digest: Option<String>,
     /// The pinned marketplace plugins it was given, where it had any.
-    plugins: Vec<ManifestPlugin>,
+    pub plugins: Vec<ManifestPlugin>,
     /// The model, where the harness said which.
-    model: Option<String>,
+    pub model: Option<String>,
     /// The model the run asked for, where it asked for one.
     ///
     /// Read and kept apart from [`Self::model`]; nothing here reconciles the two, and `eval matrix`
     /// groups on neither. A phase that fixed a model checks it by reading both.
-    model_requested: Option<String>,
+    pub model_requested: Option<String>,
     /// The harness version pin.
-    harness_version: String,
+    pub harness_version: String,
     /// The transcript this manifest claims to describe.
-    transcript_digest: String,
+    pub transcript_digest: String,
     /// When the run was observed, as the manifest wrote it.
-    observed_at: String,
+    pub observed_at: String,
     /// What it cost, in millionths of a US dollar, where it said.
-    cost_micro_usd: Option<u64>,
+    pub cost_micro_usd: Option<u64>,
     /// How many tokens, where it said.
-    tokens: Option<u64>,
+    pub tokens: Option<u64>,
     /// How long, in milliseconds, where it said.
-    wall_time_ms: Option<u64>,
+    pub wall_time_ms: Option<u64>,
 }
 
 impl TryFrom<RawRunManifest> for RunManifest {
@@ -816,7 +817,7 @@ impl TryFrom<RawRunManifest> for RunManifest {
 }
 
 /// A field that must be there and must say something.
-fn required(
+pub fn required(
     refusals: &mut Vec<Refusal>,
     field: &'static str,
     written: Option<&str>,
@@ -839,7 +840,7 @@ fn required(
 /// [`required`]'s sibling, and the difference between them is the whole of what a live Codex run
 /// taught this reader: `null` is an answer and an absent key is not one. A key nobody wrote is
 /// refused, a key written `null` is read as *the harness did not say*, and the two never collapse.
-fn written_or_null(
+pub fn written_or_null(
     refusals: &mut Vec<Refusal>,
     field: &'static str,
     written: &Written,
@@ -859,7 +860,7 @@ fn written_or_null(
 }
 
 /// A digest field must be the form `sha256sum` prints.
-fn check_digest(refusals: &mut Vec<Refusal>, field: &'static str, written: &str) {
+pub fn check_digest(refusals: &mut Vec<Refusal>, field: &'static str, written: &str) {
     let well_formed = written.len() == DIGEST_WIDTH
         && written
             .chars()
@@ -877,7 +878,7 @@ fn check_digest(refusals: &mut Vec<Refusal>, field: &'static str, written: &str)
 /// The list is the marketplace half of the treatment, and it is validated **before** the digest
 /// rule below because that rule now reads it: arm `plugin` is satisfied by either mechanism, and
 /// only a manifest naming neither is refused.
-fn manifest_plugins(
+pub fn manifest_plugins(
     refusals: &mut Vec<Refusal>,
     arm: Option<Arm>,
     written: &[RawManifestPlugin],
@@ -916,7 +917,7 @@ fn manifest_plugins(
 /// marketplace with `--plugin`. Arm `plugin` needs one of the two and not a particular one, so a
 /// bench arm whose whole treatment is a pinned third-party plugin writes `plugin_digest: null`
 /// honestly rather than being refused for having no directory to hash.
-fn plugin_digest(
+pub fn plugin_digest(
     refusals: &mut Vec<Refusal>,
     arm: Option<Arm>,
     written: &Written,
@@ -953,26 +954,26 @@ fn plugin_digest(
 /// reader gains one the day the seam carries it and gains no rule with it, which is the position
 /// `trace-spec`'s own adapters take.
 #[derive(Debug, Deserialize)]
-struct RawRecord {
+pub struct RawRecord {
     /// The format claim.
-    format: Option<String>,
+    pub format: Option<String>,
     /// The specification's id.
     #[serde(default, deserialize_with = "json_written")]
-    spec_id: WrittenJson,
+    pub spec_id: WrittenJson,
     /// The specification's digest.
     #[serde(default, deserialize_with = "json_written")]
-    spec_digest: WrittenJson,
+    pub spec_digest: WrittenJson,
     /// The transcript it was judged over.
     #[serde(default, deserialize_with = "json_written")]
-    transcript_digest: WrittenJson,
+    pub transcript_digest: WrittenJson,
     /// One row per expectation.
     #[serde(default, deserialize_with = "json_written")]
-    expectations: WrittenJson,
+    pub expectations: WrittenJson,
 }
 
 /// Whether a producer wrote a JSON key, preserving explicit `null` and malformed values.
 #[derive(Debug, Default)]
-enum WrittenJson {
+pub enum WrittenJson {
     /// The key was not present.
     #[default]
     Absent,
@@ -981,7 +982,7 @@ enum WrittenJson {
 }
 
 /// Deserializes a present JSON key without imposing its field grammar yet.
-fn json_written<'de, D>(deserializer: D) -> Result<WrittenJson, D::Error>
+pub fn json_written<'de, D>(deserializer: D) -> Result<WrittenJson, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -990,28 +991,28 @@ where
 
 /// One expectation's row.
 #[derive(Debug, Deserialize)]
-struct RawRow {
+pub struct RawRow {
     /// The id the specification gave it.
-    id: Option<String>,
+    pub id: Option<String>,
     /// `advisory` or `gate`, as the checker wrote it. Absent reads as a gate row, which is the safe
     /// default: a row whose severity nobody stated is one whose contradiction should be seen.
-    severity: Option<String>,
+    pub severity: Option<String>,
     /// The verdict after the expectation's own `on_unknown` policy — the same value the report's
     /// summary counts and its exit code is derived from.
-    verdict: Option<String>,
+    pub verdict: Option<String>,
 }
 
 /// What a record says, once read.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Record {
+pub struct Record {
     /// The specification's id.
-    specification: String,
+    pub specification: String,
     /// The specification's digest.
-    spec_digest: String,
+    pub spec_digest: String,
     /// The transcript it was judged over.
-    transcript_digest: String,
+    pub transcript_digest: String,
     /// Each expectation and what it said, in the record's own order.
-    rows: Vec<(String, Outcome)>,
+    pub rows: Vec<(String, Outcome)>,
 }
 
 impl TryFrom<RawRecord> for Record {
@@ -1062,7 +1063,7 @@ impl TryFrom<RawRecord> for Record {
 }
 
 /// Reads a required record string and, for digest fields, checks its exact grammar.
-fn record_string(
+pub fn record_string(
     refusals: &mut Vec<Refusal>,
     field: &'static str,
     written: &WrittenJson,
@@ -1102,7 +1103,7 @@ fn record_string(
 }
 
 /// Reads the required, non-empty expectation rows while keeping malformed JSON inside this boundary.
-fn record_expectations(refusals: &mut Vec<Refusal>, written: &WrittenJson) -> Option<Vec<RawRow>> {
+pub fn record_expectations(refusals: &mut Vec<Refusal>, written: &WrittenJson) -> Option<Vec<RawRow>> {
     match written {
         WrittenJson::Absent => {
             refusals.push(Refusal::RecordFieldMissing {
@@ -1148,7 +1149,7 @@ fn record_expectations(refusals: &mut Vec<Refusal>, written: &WrittenJson) -> Op
 /// matrix that counted silence as a pass would be the one number this programme refuses to produce.
 /// A word this build cannot read is refused instead of bucketed, because *the checker said
 /// something new* and *nobody found out* are different facts.
-fn outcome_of(verdict: Option<&str>, severity: Option<&str>) -> Result<Outcome, String> {
+pub fn outcome_of(verdict: Option<&str>, severity: Option<&str>) -> Result<Outcome, String> {
     match verdict {
         Some("ok") => Ok(Outcome::Held),
         // An advisory row's gap is an observation about the evidence, not a contradiction by the
@@ -1171,27 +1172,27 @@ fn outcome_of(verdict: Option<&str>, severity: Option<&str>) -> Result<Outcome, 
 /// Never a bare number. A cell whose three runs include one that recorded no cost has a total over
 /// two of them, and a reader who cannot see that is reading a number that means something else.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-struct Reported {
+pub struct Reported {
     /// How many runs in the cell stated this quantity.
-    runs: usize,
+    pub runs: usize,
     /// Their total.
-    total: u64,
+    pub total: u64,
 }
 
 /// The three resource columns of a cell, each absent until some run states one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
-struct Resources {
+pub struct Resources {
     /// Cost, in millionths of a US dollar.
-    cost_micro_usd: Option<Reported>,
+    pub cost_micro_usd: Option<Reported>,
     /// Tokens.
-    tokens: Option<Reported>,
+    pub tokens: Option<Reported>,
     /// Wall time, in milliseconds.
-    wall_time_ms: Option<Reported>,
+    pub wall_time_ms: Option<Reported>,
 }
 
 impl Resources {
     /// Folds one run's quantities in.
-    fn absorb(&mut self, manifest: &RunManifest) {
+    pub fn absorb(&mut self, manifest: &RunManifest) {
         add(&mut self.cost_micro_usd, manifest.cost_micro_usd);
         add(&mut self.tokens, manifest.tokens);
         add(&mut self.wall_time_ms, manifest.wall_time_ms);
@@ -1199,7 +1200,7 @@ impl Resources {
 }
 
 /// Adds a run's quantity to a column, creating the column the first time one is stated.
-fn add(column: &mut Option<Reported>, stated: Option<u64>) {
+pub fn add(column: &mut Option<Reported>, stated: Option<u64>) {
     let Some(value) = stated else { return };
     let reported = column.get_or_insert(Reported { runs: 0, total: 0 });
     reported.runs += 1;
@@ -1208,103 +1209,103 @@ fn add(column: &mut Option<Reported>, stated: Option<u64>) {
 
 /// One run, as the matrix reports it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-struct RunRow {
+pub struct RunRow {
     /// The workflow.
-    workflow: String,
+    pub workflow: String,
     /// The case.
-    case: String,
+    pub case: String,
     /// The harness.
-    harness: String,
+    pub harness: String,
     /// The arm.
-    arm: Arm,
+    pub arm: Arm,
     /// The model, where the harness said which — `null` and never an omitted key, because a wire
     /// that states no model is stating something.
-    model: Option<String>,
+    pub model: Option<String>,
     /// The harness version pin.
-    harness_version: String,
+    pub harness_version: String,
     /// The plugin the run was given — `null` on arm `raw`, and never an omitted key.
-    plugin_digest: Option<String>,
+    pub plugin_digest: Option<String>,
     /// The specification its record was judged by.
-    specification: String,
+    pub specification: String,
     /// The transcript.
-    transcript_digest: String,
+    pub transcript_digest: String,
     /// When it was observed.
-    observed_at: String,
+    pub observed_at: String,
     /// What its expectations said.
     #[serde(flatten)]
-    counts: Counts,
+    pub counts: Counts,
     /// What it cost, where it said — `null` and never an omitted key, for the manifest's reason.
-    cost_micro_usd: Option<u64>,
+    pub cost_micro_usd: Option<u64>,
     /// How many tokens, where it said.
-    tokens: Option<u64>,
+    pub tokens: Option<u64>,
     /// How long, where it said.
-    wall_time_ms: Option<u64>,
+    pub wall_time_ms: Option<u64>,
 }
 
 /// One harness × arm × workflow cell.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-struct Cell {
+pub struct Cell {
     /// The workflow.
-    workflow: String,
+    pub workflow: String,
     /// The harness.
-    harness: String,
+    pub harness: String,
     /// The arm.
-    arm: Arm,
+    pub arm: Arm,
     /// How many runs went into it.
-    runs: usize,
+    pub runs: usize,
     /// What their expectations said.
     #[serde(flatten)]
-    counts: Counts,
+    pub counts: Counts,
     /// What they cost, over the runs that said.
     #[serde(flatten)]
-    resources: Resources,
+    pub resources: Resources,
 }
 
 /// One expectation in one cell.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-struct ExpectationRow {
+pub struct ExpectationRow {
     /// The workflow.
-    workflow: String,
+    pub workflow: String,
     /// The expectation's id.
-    expectation: String,
+    pub expectation: String,
     /// The harness.
-    harness: String,
+    pub harness: String,
     /// The arm.
-    arm: Arm,
+    pub arm: Arm,
     /// How many runs judged it.
-    runs: usize,
+    pub runs: usize,
     /// What they said.
     #[serde(flatten)]
-    counts: Counts,
+    pub counts: Counts,
 }
 
 /// The specification a set of records was judged by.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-struct SpecificationRow {
+pub struct SpecificationRow {
     /// Its id.
-    id: String,
+    pub id: String,
     /// Its digest, where the records state one.
-    digest: Option<String>,
+    pub digest: Option<String>,
     /// How many runs it judged.
-    runs: usize,
+    pub runs: usize,
 }
 
 /// The deliverable: counts of facts, per run, per cell and per expectation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-struct Matrix {
+pub struct Matrix {
     /// The format claim.
-    format: &'static str,
+    pub format: &'static str,
     /// The specifications the records were judged by.
-    specifications: Vec<SpecificationRow>,
+    pub specifications: Vec<SpecificationRow>,
     /// Every run.
-    runs: Vec<RunRow>,
+    pub runs: Vec<RunRow>,
     /// Every harness × arm × workflow cell.
-    cells: Vec<Cell>,
+    pub cells: Vec<Cell>,
     /// Every expectation, per cell.
-    expectations: Vec<ExpectationRow>,
+    pub expectations: Vec<ExpectationRow>,
     /// The three counts over everything, which is as close to a summary as this document goes.
     #[serde(flatten)]
-    totals: Counts,
+    pub totals: Counts,
 }
 
 /// Assembles the matrix, or every reason it cannot be assembled.
@@ -1312,7 +1313,7 @@ struct Matrix {
 /// Sorted by construction: the pairs arrive sorted by path, and every aggregate is built in a
 /// `BTreeMap` whose key is the tuple it is grouped by (invariant 9 — no `HashMap` anywhere near an
 /// output ordering).
-fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
+pub fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
     let mut refusals = Vec::new();
 
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
@@ -1361,7 +1362,7 @@ fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
 ///
 /// The key is `(workflow, expectation, harness, arm)`, which is the join the matrix is *for*: the
 /// same expectation, asked of the same workflow, in each arm of each harness.
-fn per_expectation(
+pub fn per_expectation(
     expectations: &mut BTreeMap<(String, String, String, Arm), (usize, Counts)>,
     manifest: &RunManifest,
     record: &Record,
@@ -1384,7 +1385,7 @@ fn per_expectation(
 }
 
 /// The folding half of [`assemble`], once the pairs are known to describe distinct runs.
-fn fold(
+pub fn fold(
     pairs: Vec<(RunManifest, Record)>,
     specifications: BTreeMap<String, (BTreeSet<String>, usize)>,
 ) -> Matrix {
@@ -1492,7 +1493,7 @@ fn fold(
 /// A directory is read one level deep for `*.manifest.yaml`, which is the convention
 /// `protocol evidence scan` already uses for markdown. A record with no manifest beside it is
 /// refused rather than skipped: a dropped record is a run that silently left the matrix.
-fn collect(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+pub fn collect(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut manifests = BTreeSet::new();
     for path in paths {
         if path.is_dir() {
@@ -1541,13 +1542,13 @@ fn collect(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
 }
 
 /// The path of the other half of a pair.
-fn sibling(path: &Path, from: &str, to: &str) -> PathBuf {
+pub fn sibling(path: &Path, from: &str, to: &str) -> PathBuf {
     let name = path.to_string_lossy();
     PathBuf::from(format!("{}{to}", name.trim_end_matches(from)))
 }
 
 /// Reads one pair: the manifest, then the record beside it.
-fn read_pair(manifest_path: &Path) -> Result<(RunManifest, Record)> {
+pub fn read_pair(manifest_path: &Path) -> Result<(RunManifest, Record)> {
     let text = std::fs::read_to_string(manifest_path)
         .with_context(|| format!("reading the manifest at {}", manifest_path.display()))?;
     let raw: RawRunManifest = serde_yaml::from_str(&text).with_context(|| {
@@ -1589,7 +1590,7 @@ fn read_pair(manifest_path: &Path) -> Result<(RunManifest, Record)> {
 /// matrix is either read by a person, as three tables, or parsed by a program, as JSON. A third
 /// rendering would be a third thing to keep in step with the other two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub(crate) enum MatrixFormat {
+pub enum MatrixFormat {
     /// Human-readable tables.
     Text,
     /// JSON, for another tool to read.
@@ -1598,7 +1599,7 @@ pub(crate) enum MatrixFormat {
 
 /// What can be done with a set of evaluation runs.
 #[derive(Debug, Subcommand)]
-pub(crate) enum EvalCommand {
+pub enum EvalCommand {
     /// Assemble the outcome matrix from run manifests and the records they accompany.
     ///
     /// One row per run, one cell per harness × arm × workflow, one row per expectation per cell —
@@ -1622,21 +1623,21 @@ pub(crate) enum EvalCommand {
 
 /// The arguments of `protocol eval matrix`.
 #[derive(Debug, Args)]
-pub(crate) struct MatrixArgs {
+pub struct MatrixArgs {
     /// The runs: a directory holding `*.manifest.yaml` beside `*.report.json`, or a manifest
     /// itself. Several may be named.
     #[arg(required = true)]
-    runs: Vec<PathBuf>,
+    pub runs: Vec<PathBuf>,
     /// How to render it.
     #[arg(long, value_enum, default_value_t = MatrixFormat::Text)]
-    format: MatrixFormat,
+    pub format: MatrixFormat,
     /// Where to write it. Without it, the matrix goes to standard output.
     #[arg(long)]
-    out: Option<PathBuf>,
+    pub out: Option<PathBuf>,
 }
 
 /// The `eval` verb family, one arm per subcommand.
-pub(crate) fn run(command: EvalCommand) -> Result<ExitCode> {
+pub fn run(command: EvalCommand) -> Result<ExitCode> {
     match command {
         EvalCommand::Matrix(args) => matrix(&args),
         EvalCommand::Run(args) => run_arm(&args),
@@ -1644,7 +1645,7 @@ pub(crate) fn run(command: EvalCommand) -> Result<ExitCode> {
 }
 
 /// `protocol eval matrix`
-fn matrix(args: &MatrixArgs) -> Result<ExitCode> {
+pub fn matrix(args: &MatrixArgs) -> Result<ExitCode> {
     let manifests = collect(&args.runs)?;
     let mut pairs = Vec::new();
     for manifest in &manifests {
@@ -1687,7 +1688,7 @@ fn matrix(args: &MatrixArgs) -> Result<ExitCode> {
 // --- the human rendering -----------------------------------------------------------------------
 
 /// Renders the matrix as three tables and one sentence.
-fn to_text(matrix: &Matrix) -> String {
+pub fn to_text(matrix: &Matrix) -> String {
     let mut lines = vec![
         format!(
             "{} — {} run(s), {} specification(s), {} cell(s)",
@@ -1800,7 +1801,7 @@ fn to_text(matrix: &Matrix) -> String {
 }
 
 /// One table row, left-aligned, single-spaced by the widths given.
-fn row(columns: &[(&str, usize)]) -> String {
+pub fn row(columns: &[(&str, usize)]) -> String {
     let rendered: Vec<String> = columns
         .iter()
         .map(|(text, width)| format!("{text:<width$}"))
@@ -1809,7 +1810,7 @@ fn row(columns: &[(&str, usize)]) -> String {
 }
 
 /// A cost column: dollars from micro-dollars by integer arithmetic, never a float.
-fn cost(reported: Option<Reported>, runs: usize) -> String {
+pub fn cost(reported: Option<Reported>, runs: usize) -> String {
     reported.map_or_else(
         || "—".to_owned(),
         |reported| {
@@ -1824,7 +1825,7 @@ fn cost(reported: Option<Reported>, runs: usize) -> String {
 }
 
 /// A quantity column, with the runs it covers.
-fn quantity(reported: Option<Reported>, runs: usize, unit: &str) -> String {
+pub fn quantity(reported: Option<Reported>, runs: usize, unit: &str) -> String {
     reported.map_or_else(
         || "—".to_owned(),
         |reported| format!("{}{unit} {}", reported.total, coverage(reported.runs, runs)),
@@ -1832,7 +1833,7 @@ fn quantity(reported: Option<Reported>, runs: usize, unit: &str) -> String {
 }
 
 /// `(2/3)`, and nothing at all when every run in the cell answered.
-fn coverage(reporting: usize, runs: usize) -> String {
+pub fn coverage(reporting: usize, runs: usize) -> String {
     if reporting == runs {
         String::new()
     } else {
@@ -1869,13 +1870,13 @@ fn coverage(reporting: usize, runs: usize) -> String {
 // matrix trusts.
 
 /// The binary the runner drives, the way this repository drives `git`.
-const METAHARNESS_BINARY: &str = "metaharness";
+pub const METAHARNESS_BINARY: &str = "metaharness";
 
 /// Where to look for that binary when it is not on `PATH` under its own name.
-const METAHARNESS_BIN_ENV: &str = "METAHARNESS_BIN";
+pub const METAHARNESS_BIN_ENV: &str = "METAHARNESS_BIN";
 
 /// The environment variable that must say `1` before anything is spawned and paid for.
-const METAHARNESS_LIVE_ENV: &str = "METAHARNESS_LIVE";
+pub const METAHARNESS_LIVE_ENV: &str = "METAHARNESS_LIVE";
 
 /// The exit code for *the tool this verb drives is not installed*.
 ///
@@ -1883,10 +1884,10 @@ const METAHARNESS_LIVE_ENV: &str = "METAHARNESS_LIVE";
 /// reactions: one is *install something*, the other is *fix what you wrote*. It is the code the
 /// programme's design constant 4 asks for — an absent binary is a skip, never a red gate — so a
 /// caller can tell the two apart without reading prose off stderr.
-const TOOL_MISSING_EXIT: u8 = 2;
+pub const TOOL_MISSING_EXIT: u8 = 2;
 
 /// How a run's raw event stream is named on disk.
-const EVENTS_SUFFIX: &str = ".events.jsonl";
+pub const EVENTS_SUFFIX: &str = ".events.jsonl";
 
 /// What a run whose stream states no cost is counted at, in US dollars.
 ///
@@ -1895,7 +1896,7 @@ const EVENTS_SUFFIX: &str = ".events.jsonl";
 /// cannot spend without limit. It never reaches a manifest — `cost_micro_usd` stays absent there,
 /// because the matrix reports totals over the runs that stated one and an assumed number would
 /// silently become a measurement.
-const ASSUMED_USD_PER_RUN: &str = "0.25";
+pub const ASSUMED_USD_PER_RUN: &str = "0.25";
 
 /// Which harness a run is of.
 ///
@@ -1904,7 +1905,7 @@ const ASSUMED_USD_PER_RUN: &str = "0.25";
 /// not a redesign; the runner has to know which vendor word `metaharness run` takes, while the
 /// plugin directory is an explicit machine-local input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub(crate) enum Harness {
+pub enum Harness {
     /// Claude Code.
     Claude,
     /// Codex.
@@ -1915,7 +1916,7 @@ pub(crate) enum Harness {
 
 impl Harness {
     /// The word `metaharness run` takes, and the word the manifest writes.
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
@@ -1946,13 +1947,13 @@ impl fmt::Display for Harness {
 /// `docs/design/runs-side-by-side-v0.1.md` § 3.2 and `MarketplacePluginError` in
 /// `metaharness-protocol`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MarketplacePlugin {
+pub struct MarketplacePlugin {
     /// The marketplace's **source repository**, as the caller named it — never its name.
-    repo: String,
+    pub repo: String,
     /// The plugin's own name inside that marketplace.
-    name: String,
+    pub name: String,
     /// The pin: a version or a commit, and which of the two it is, is metaharness's to decide.
-    pin: String,
+    pub pin: String,
 }
 
 impl MarketplacePlugin {
@@ -1966,7 +1967,7 @@ impl MarketplacePlugin {
     ///
     /// The refusal's own words, for the two spellings that name nothing reproducible: fewer than
     /// three segments, and a segment that is there and empty.
-    fn parse(given: &str) -> Result<Self, String> {
+    pub fn parse(given: &str) -> Result<Self, String> {
         let unpinned = || {
             format!(
                 "`{given}` names no pin. Write `<repo>@<name>@<version-or-commit>`: an unpinned \
@@ -1997,7 +1998,7 @@ impl MarketplacePlugin {
     /// The match is on `source`, which is the instrument's own identifier for what it placed —
     /// `<repo>@<name>@<pin> (marketplace <name>)` — and deliberately not on `loaded_by`, which is a
     /// sentence written for a person, or on `name`, which two marketplaces may share.
-    fn attested_by(&self, source: &str) -> bool {
+    pub fn attested_by(&self, source: &str) -> bool {
         let spelling = self.to_string();
         source == spelling || source.starts_with(&format!("{spelling} "))
     }
@@ -2013,7 +2014,7 @@ impl fmt::Display for MarketplacePlugin {
 
 /// Every way the runner refuses to start, by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum RunRefusal {
+pub enum RunRefusal {
     /// The binary this verb drives is not installed.
     ToolMissing {
         /// What was looked for, and where.
@@ -2114,7 +2115,7 @@ enum RunRefusal {
 
 impl RunRefusal {
     /// The stable code a test matches on.
-    fn code(&self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::ToolMissing { .. } => "EVAL-RUN-001",
             Self::NotLive => "EVAL-RUN-002",
@@ -2326,7 +2327,7 @@ impl fmt::Display for RunRefusal {
 
 /// Every way the case document is refused, by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum CaseRefusal {
+pub enum CaseRefusal {
     /// The document does not claim to be an eval case.
     NotACase {
         /// What it claimed instead.
@@ -2346,7 +2347,7 @@ enum CaseRefusal {
 
 impl CaseRefusal {
     /// The stable code a test matches on.
-    fn code(&self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::NotACase { .. } => "EVAL-CASE-001",
             Self::FieldMissing { .. } => "EVAL-CASE-002",
@@ -2384,7 +2385,7 @@ impl fmt::Display for CaseRefusal {
 /// of the stream, so a stream that does not state one is refused **here**, by name, and no manifest
 /// exists for the matrix to trust.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum StreamRefusal {
+pub enum StreamRefusal {
     /// The bytes are not a transcript this build can read.
     Unreadable {
         /// What the reader said.
@@ -2449,7 +2450,7 @@ enum StreamRefusal {
 
 impl StreamRefusal {
     /// The stable code a test matches on.
-    fn code(&self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::Unreadable { .. } => "EVAL-STREAM-001",
             Self::LineNotAnObject { .. } => "EVAL-STREAM-002",
@@ -2573,7 +2574,7 @@ impl fmt::Display for StreamRefusal {
 }
 
 /// The format claim an eval case carries.
-const CASE_FORMAT: &str = "eval-case/1";
+pub const CASE_FORMAT: &str = "eval-case/1";
 
 /// The `subject.skills` prefixes whose skill runs `ess` inside the session.
 ///
@@ -2586,10 +2587,10 @@ const CASE_FORMAT: &str = "eval-case/1";
 ///
 /// The matcher, the refusal a person reads, and the test that holds them together all read this
 /// list, so a third spelling is one edit and cannot be added to one of the three alone.
-const ESS_SKILL_PREFIXES: [&str; 2] = ["ess-specify:", "ess-schema:"];
+pub const ESS_SKILL_PREFIXES: [&str; 2] = ["ess-specify:", "ess-schema:"];
 
 /// Every spelling in [`ESS_SKILL_PREFIXES`], as a phrase for the refusal message.
-fn ess_skill_prefixes_phrase() -> String {
+pub fn ess_skill_prefixes_phrase() -> String {
     ESS_SKILL_PREFIXES
         .map(|prefix| format!("`{prefix}`"))
         .join(" or ")
@@ -2609,47 +2610,47 @@ fn ess_skill_prefixes_phrase() -> String {
 /// halves are now asserted there, by
 /// `a_case_may_declare_what_it_is_about_and_a_typo_inside_it_is_refused`.
 #[derive(Debug, Deserialize)]
-struct RawCase {
+pub struct RawCase {
     /// The format claim.
-    format: Option<String>,
+    pub format: Option<String>,
     /// The case's id, which must be its directory's name.
-    id: Option<String>,
+    pub id: Option<String>,
     /// The workflow it is a run of.
-    workflow: Option<String>,
+    pub workflow: Option<String>,
     /// What the agent is asked to do.
-    task: Option<String>,
+    pub task: Option<String>,
     /// The `trace-spec/1` document it is judged by, relative to the case directory.
-    expectations: Option<String>,
+    pub expectations: Option<String>,
     /// What the case is a case about. Only `skills` is read here, and only to ask what the child's
     /// `PATH` has to hold (`preflight_child_path`); the corpus test owns the rest of the shape.
-    subject: Option<RawSubject>,
+    pub subject: Option<RawSubject>,
 }
 
 /// The `subject:` block of a case, as far as this runner reads it.
 #[derive(Debug, Deserialize)]
-struct RawSubject {
+pub struct RawSubject {
     /// The skills the case is about, `<plugin>:<skill>`.
-    skills: Option<Vec<String>>,
+    pub skills: Option<Vec<String>>,
 }
 
 /// A case, once read.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Case {
+pub struct Case {
     /// Its id.
-    id: String,
+    pub id: String,
     /// The workflow.
-    workflow: String,
+    pub workflow: String,
     /// The task statement.
-    task: String,
+    pub task: String,
     /// The document it is judged by.
-    expectations: PathBuf,
+    pub expectations: PathBuf,
     /// Whether the case's subject names a skill under one of [`ESS_SKILL_PREFIXES`], whose step
     /// runs `ess` in the session.
-    needs_ess: bool,
+    pub needs_ess: bool,
 }
 
 /// Reads the case in a directory.
-fn read_case(directory: &Path) -> Result<Case> {
+pub fn read_case(directory: &Path) -> Result<Case> {
     let manifest = directory.join("case.yaml");
     if !manifest.exists() {
         return Err(refused_run(
@@ -2706,7 +2707,7 @@ fn read_case(directory: &Path) -> Result<Case> {
 }
 
 /// Every refusal in one message, in this binary's shape for a refused document.
-fn refused_run<R: fmt::Display>(subject: &Path, refusals: &[R]) -> anyhow::Error {
+pub fn refused_run<R: fmt::Display>(subject: &Path, refusals: &[R]) -> anyhow::Error {
     let lines: Vec<String> = refusals
         .iter()
         .map(|refusal| format!("  {refusal}"))
@@ -2720,7 +2721,7 @@ fn refused_run<R: fmt::Display>(subject: &Path, refusals: &[R]) -> anyhow::Error
 }
 
 /// The cases this invocation is about, in a stable order.
-fn select_cases(args: &RunArgs) -> Result<Vec<Case>> {
+pub fn select_cases(args: &RunArgs) -> Result<Vec<Case>> {
     let mut cases = Vec::new();
     for directory in &args.cases {
         cases.push(read_case(directory)?);
@@ -2758,9 +2759,9 @@ fn select_cases(args: &RunArgs) -> Result<Vec<Case>> {
 /// runner's own. Every one of them is required, and a stream that states none of them is refused
 /// rather than filled in: this document is what a later reader joins the matrix's rows by.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Session {
+pub struct Session {
     /// The harness and its version, as the manifest spells it: `claude 2.1.239`.
-    harness_version: String,
+    pub harness_version: String,
     /// The model the harness resolved, where it said which.
     ///
     /// Read from the stream and **not** from what the runner asked for, which is the narrowing this
@@ -2772,14 +2773,14 @@ struct Session {
     /// start — the whole of a 62-event pilot run never states one — so the honest manifest says
     /// `model: null`. Inventing `gpt-5-codex` there because it is the likely answer would be
     /// writing the one document the matrix trusts.
-    model: Option<String>,
+    pub model: Option<String>,
     /// The plugin that was installed from a directory, where one was.
-    plugin_digest: Option<String>,
+    pub plugin_digest: Option<String>,
     /// The pinned marketplace plugins the run declared, with the digests the instrument attested.
     ///
     /// In the order they were declared, which is the order they reached the argv: a manifest whose
     /// list order moved between two ingests of the same stream would diff against itself.
-    plugins: Vec<AttestedPlugin>,
+    pub plugins: Vec<AttestedPlugin>,
     /// What the run cost, in millionths of a US dollar, totalled over every session that said.
     ///
     /// # Every session, and the run that made that matter
@@ -2801,30 +2802,30 @@ struct Session {
     /// above now report what they spent. [`accumulate`] holds the absence rule: a session stating
     /// nothing adds nothing and never a zero, which is the same rule [`add`] applies one level up
     /// when a cell totals over its runs.
-    cost_micro_usd: Option<u64>,
+    pub cost_micro_usd: Option<u64>,
     /// How many tokens it used, totalled over every session that said.
     ///
     /// Same fold as [`Self::cost_micro_usd`], and the reason [`highest`] takes the larger rather
     /// than the last: the budget-exhausted record restates the cost but zeroes its `usage`.
-    tokens: Option<u64>,
+    pub tokens: Option<u64>,
     /// How long it took, totalled over every session that said.
     ///
     /// A sum and not a span: the driver runs its sessions one after another, and nothing here reads
     /// a clock to find out (invariant 9). Within one session it is the same fold as the other two.
-    wall_time_ms: Option<u64>,
+    pub wall_time_ms: Option<u64>,
 }
 
 /// One marketplace plugin, as the run declared it and the instrument attested it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct AttestedPlugin {
+pub struct AttestedPlugin {
     /// The spelling the run declared, `<repo>@<name>@<pin>`.
-    plugin: String,
+    pub plugin: String,
     /// The digest the attestation stated for it, byte for byte.
-    digest: String,
+    pub digest: String,
 }
 
 /// The four token counts a `usage` object carries, which is what the manifest's `tokens` totals.
-const TOKEN_KEYS: [&str; 4] = [
+pub const TOKEN_KEYS: [&str; 4] = [
     "input_tokens",
     "output_tokens",
     "cache_read_input_tokens",
@@ -2837,7 +2838,7 @@ impl Session {
     /// Fail-closed throughout, and the arm is an input because two of the rules are about the
     /// experiment rather than about the document: the treated arm without its treatment and the
     /// control arm with one are both refused here, which is crossing #4 arriving on this side.
-    fn read(
+    pub fn read(
         events: &[u8],
         arm: Arm,
         harness: Harness,
@@ -2958,17 +2959,20 @@ impl Session {
 ///
 /// Absent stays absent: a stream whose sessions all say `null` totals `None` and never `0`, which
 /// is the same rule [`add`] applies one level up when a cell totals over its runs.
-fn accumulate(total: &mut Option<u64>, stated: Option<u64>) {
+pub fn accumulate(total: &mut Option<u64>, stated: Option<u64>) {
     let Some(value) = stated else { return };
     let running = total.get_or_insert(0);
     *running = running.saturating_add(value);
 }
 
 /// The three quantities [`Session`] totals off a stream's terminal records.
-struct Totals {
-    cost: Option<u64>,
-    tokens: Option<u64>,
-    wall_time_ms: Option<u64>,
+pub struct Totals {
+    /// Observed spend in microdollars, absent when unstated.
+    pub cost: Option<u64>,
+    /// Observed token use, absent when unstated.
+    pub tokens: Option<u64>,
+    /// Observed elapsed milliseconds, absent when unstated.
+    pub wall_time_ms: Option<u64>,
 }
 
 /// Totals a stream's terminal records: [`highest`] within a session, [`accumulate`] across them.
@@ -2976,7 +2980,7 @@ struct Totals {
 /// The buckets arrive in stream order, one per `session.started`, and an empty one totals nothing.
 /// An unreadable cost is pushed as a refusal and the rest of the fold continues, because validation
 /// accumulates (invariant 3) rather than stopping at the first thing it cannot read.
-fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamRefusal>) -> Totals {
+pub fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamRefusal>) -> Totals {
     let mut totals = Totals {
         cost: None,
         tokens: None,
@@ -3014,14 +3018,14 @@ fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamRefus
 /// The larger and not the last, because the records are not ordered by completeness: Claude Code's
 /// budget-exhausted record restates the cost and the wall clock but zeroes its `usage`, so *last*
 /// would report a run of no tokens. Absent stays absent, as in [`accumulate`].
-fn highest(total: &mut Option<u64>, stated: Option<u64>) {
+pub fn highest(total: &mut Option<u64>, stated: Option<u64>) {
     let Some(value) = stated else { return };
     let running = total.get_or_insert(value);
     *running = (*running).max(value);
 }
 
 /// Where the instrument attests what it installed, as against what a vendor happened to echo.
-const INSTALLED_PLUGINS: &str = "hermetic.installed_plugins";
+pub const INSTALLED_PLUGINS: &str = "hermetic.installed_plugins";
 
 /// Reads the installed-plugin attestation, and applies the two rules that are about the experiment.
 ///
@@ -3046,7 +3050,7 @@ const INSTALLED_PLUGINS: &str = "hermetic.installed_plugins";
 /// instrument's row the correct one is not that it is populated more often — it is that the question
 /// this manifest asks is *what was this run given*, and only one of the two rows is an answer to it
 /// from something that knows.
-fn plugin_attestation(
+pub fn plugin_attestation(
     refusals: &mut Vec<StreamRefusal>,
     started: &serde_json::Value,
     arm: Arm,
@@ -3139,7 +3143,7 @@ fn plugin_attestation(
 /// An entry's `source`, which is the instrument's own identifier for what it placed.
 ///
 /// Falls back to the name where a row states none, so a refusal still says which row it is about.
-fn plugin_source(entry: &serde_json::Value) -> String {
+pub fn plugin_source(entry: &serde_json::Value) -> String {
     entry
         .get("source")
         .and_then(serde_json::Value::as_str)
@@ -3147,7 +3151,7 @@ fn plugin_source(entry: &serde_json::Value) -> String {
 }
 
 /// A plugin entry's name, however the attestation spelled it.
-fn plugin_name(entry: &serde_json::Value) -> String {
+pub fn plugin_name(entry: &serde_json::Value) -> String {
     entry
         .get("name")
         .and_then(serde_json::Value::as_str)
@@ -3159,7 +3163,7 @@ fn plugin_name(entry: &serde_json::Value) -> String {
 ///
 /// A `null` — which is what a Codex stream writes today — reads as **unknown**, so the manifest
 /// states no cost and the matrix's total says how many runs it covers. It is never read as free.
-fn cost_of(ended: &serde_json::Value) -> Result<Option<u64>, String> {
+pub fn cost_of(ended: &serde_json::Value) -> Result<Option<u64>, String> {
     match ended.get("total_cost_usd") {
         None | Some(serde_json::Value::Null) => Ok(None),
         // The number's own decimal text, rounded to the nearest millionth by integer arithmetic.
@@ -3172,7 +3176,7 @@ fn cost_of(ended: &serde_json::Value) -> Result<Option<u64>, String> {
 
 /// A cost a **wire** stated, as millionths of a dollar, rounded to the nearest one.
 ///
-/// [`micro_usd`]'s sibling, and the split between them is the whole of this fix. That one reads an
+/// [`crate::money::micro_usd`]'s sibling, and the split between them is the whole of this fix. That one reads an
 /// amount a **person typed** — `--budget-usd 5.00` — and refuses anything it cannot convert exactly,
 /// because a human who typed `1e-7` has made a mistake worth naming. This one reads a number a
 /// harness computed, and a harness computes in binary floating point: a live Claude run stated
@@ -3191,7 +3195,7 @@ fn cost_of(ended: &serde_json::Value) -> Result<Option<u64>, String> {
 /// strict reader turned *there is a number here I cannot convert* into *there is no number*, and a
 /// run that cost eighty cents entered the ledger at the assumed rate and its manifest with no cost
 /// at all. Unreadable is not unstated, on exactly invariant 5's reasoning one domain out.
-fn micro_usd_stated(written: &str) -> Result<u64, String> {
+pub fn micro_usd_stated(written: &str) -> Result<u64, String> {
     let text = written.trim();
     let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
     let readable = !whole.is_empty()
@@ -3229,7 +3233,7 @@ fn micro_usd_stated(written: &str) -> Result<u64, String> {
 /// A key the wire wrote as `null` contributes nothing and does not make the total absent: that is
 /// the same reading `protocol trace check` gives it — a count nobody stated is not a zero, and a
 /// total over the counts that were stated is what the matrix reports.
-fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
+pub fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
     let usage = ended.get("usage")?;
     let mut total = 0_u64;
     let mut stated = false;
@@ -3247,7 +3251,7 @@ fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
 /// One function, called on both paths, because the manifest's `transcript_digest` is taken over
 /// whatever this returns — a runner that wrote redacted bytes and digested the raw ones would
 /// publish a manifest naming a file that does not exist.
-fn stream_for(events: Vec<u8>, redact: bool, cwd: Option<&Path>) -> Vec<u8> {
+pub fn stream_for(events: Vec<u8>, redact: bool, cwd: Option<&Path>) -> Vec<u8> {
     if !redact {
         return events;
     }
@@ -3265,40 +3269,40 @@ fn stream_for(events: Vec<u8>, redact: bool, cwd: Option<&Path>) -> Vec<u8> {
 // --- assembling one run's three documents ---------------------------------------------------------
 
 /// The three documents one run leaves behind.
-struct Products {
+pub struct Products {
     /// The `eval.run-manifest/1` document.
-    manifest: String,
+    pub manifest: String,
     /// The `trace-report/1` record `protocol trace check --format json` writes.
-    report: String,
+    pub report: String,
     /// What the run cost, for the budget, where its stream stated one.
-    cost_micro_usd: Option<u64>,
+    pub cost_micro_usd: Option<u64>,
     /// What the check said, for the line the runner prints.
-    verdict: String,
+    pub verdict: String,
     /// The exit code that verdict calls for, straight off the record.
     ///
     /// [`trace_spec::report::CheckReport::exit_code`] and never a second table: the sentence in
     /// `verdict` above already names a code — `not conformant … (exit 1)` — and a runner that
     /// derived the status from anywhere else could print one number and exit another, which is
     /// what this one did until `story:eval-run-stream-exit-status`.
-    exit_code: u8,
+    pub exit_code: u8,
     /// The model the stream stated, for the same line — `None` where it stated none.
-    model: Option<String>,
+    pub model: Option<String>,
 }
 
 /// One run of one case in one arm on one harness.
-struct Plan {
+pub struct Plan {
     /// The case.
-    case: Case,
+    pub case: Case,
     /// The arm.
-    arm: Arm,
+    pub arm: Arm,
     /// The harness.
-    harness: Harness,
+    pub harness: Harness,
     /// The pinned marketplace plugins this run declared, in the order they were declared.
     ///
     /// On the plan rather than read back off the stream, because they are the runner's own fact —
     /// *this run asked for these* — and the stream's job is to say whether they arrived. The two
     /// are joined in [`plugin_attestation`], and a declaration nothing attested is refused there.
-    plugins: Vec<MarketplacePlugin>,
+    pub plugins: Vec<MarketplacePlugin>,
     /// The model this run asked for, where it named one.
     ///
     /// The runner's own fact for the same reason the plugins are, and kept **apart** from the model
@@ -3306,12 +3310,12 @@ struct Plan {
     /// resolves, so `claude-sonnet-4-6` asked for and `claude-sonnet-4-6-20260814` attested is a
     /// run that went as planned, and a runner that folded the two into one field would have thrown
     /// away the only evidence that it did.
-    model_requested: Option<String>,
+    pub model_requested: Option<String>,
 }
 
 impl Plan {
     /// How this run's three documents are named, which is also how the matrix pairs them.
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         format!("{}-{}-{}", self.harness, self.arm, self.case.id)
     }
 }
@@ -3326,7 +3330,7 @@ impl Plan {
 /// The check runs **in this process**, through the same `trace_spec::check::check` the `trace check`
 /// verb calls, rather than by shelling out to it: a report produced by a second path could differ
 /// from the one a reader gets, and the record beside a manifest has to be the checker's own output.
-fn ingest(plan: &Plan, events: &[u8], observed_at: &str, redact: bool) -> Result<Products> {
+pub fn ingest(plan: &Plan, events: &[u8], observed_at: &str, redact: bool) -> Result<Products> {
     let ir = trace_spec::reader::read_any(events).map_err(|errors| {
         refused_run(
             &plan.case.expectations,
@@ -3390,7 +3394,7 @@ fn ingest(plan: &Plan, events: &[u8], observed_at: &str, redact: bool) -> Result
 /// key order is the one the committed fixtures already use, so two waves' manifests diff against
 /// each other; and `plugin_digest` has to appear as an explicit `null` on arm `raw`, which is the
 /// one field whose *absence* the matrix refuses.
-fn manifest_text(
+pub fn manifest_text(
     plan: &Plan,
     session: &Session,
     transcript_digest: &str,
@@ -3465,301 +3469,20 @@ fn manifest_text(
     text
 }
 
-// --- spawning ---------------------------------------------------------------------------------------
-
-/// The binary, where it is installed.
-///
-/// A lookup and never a spawn, on `crate::drive::on_path`'s reasoning: running the tool to find out
-/// whether it exists is a side effect in a pre-flight.
-fn tool() -> Option<String> {
-    if let Some(named) = std::env::var_os(METAHARNESS_BIN_ENV) {
-        let path = PathBuf::from(&named);
-        return path.is_file().then(|| path.display().to_string());
-    }
-    crate::drive::on_path(METAHARNESS_BINARY).then(|| METAHARNESS_BINARY.to_owned())
-}
-
-/// Where the binary was looked for, for the refusal that says it is not there.
-fn looked_for() -> String {
-    match std::env::var_os(METAHARNESS_BIN_ENV) {
-        Some(named) => format!(
-            "`{METAHARNESS_BIN_ENV}` names {}, which is not a file",
-            PathBuf::from(named).display()
-        ),
-        None => format!("nothing on PATH is named `{METAHARNESS_BINARY}`"),
-    }
-}
-
-/// Whether the environment permits spending money.
-fn live() -> bool {
-    std::env::var(METAHARNESS_LIVE_ENV).is_ok_and(|value| value == "1")
-}
-
-/// The prompt one arm gives one case.
-///
-/// **Arm `raw` gets the instructions and arm `plugin` does not**, and that is the experiment rather
-/// than an omission. Arm a is *text and hope*: the workflow's committed instruction document,
-/// rendered by `protocol workflow instruct`, in front of the task. Arm b's treatment **is** the
-/// plugin — the skills and agents it installs are what are supposed to carry the workflow — so
-/// giving it the instructions too would measure a and b at once and attribute the result to b.
-fn prompt_for(plan: &Plan, instructions: &Path) -> Result<String> {
-    if plan.arm != Arm::Raw {
-        return Ok(plan.case.task.clone());
-    }
-    let document = instructions.join(format!("{}.md", plan.case.workflow));
-    let rendered = std::fs::read_to_string(&document).map_err(|_| {
-        refused_run(
-            &plan.case.expectations,
-            &[RunRefusal::InstructionsMissing {
-                workflow: plan.case.workflow.clone(),
-                expected: document.display().to_string(),
-            }],
-        )
-    })?;
-    Ok(format!("{rendered}\n---\n\n{}", plan.case.task))
-}
-
-/// The `metaharness run` invocation for one arm of one case.
-///
-/// `--decisions observe` is what makes arms a and b comparable with each other and with arm c:
-/// every run is spawned by the same instrument into the same hermetic scratch home with the same
-/// recording, and only the treatment varies. The mode allows everything and records everything —
-/// nothing here decides a tool call, which is arm c's whole difference and `protocol drive`'s job.
-/// The base of the `PATH` metaharness constructs for the session it spawns.
-const CHILD_BASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
-
-/// The `PATH` the spawned session gets: `$HOME/.local/bin` in front of [`CHILD_BASE_PATH`], as both
-/// metaharness vendor adapters build it (`metaharness-claude/src/launch.rs`, `child_path`), and never
-/// this process's own. Written out here rather than asked of metaharness, because the runner has to
-/// look where the child will look before it pays for the child to look there.
-fn child_path_for(home: Option<&str>) -> String {
-    match home {
-        Some(home) if !home.is_empty() => format!("{home}/.local/bin:{CHILD_BASE_PATH}"),
-        _ => CHILD_BASE_PATH.to_owned(),
-    }
-}
-
-/// The first executable named `program` on `path`, in `path`'s own order — a hand-rolled walk, so
-/// that it is exactly the child's resolution and not a resolver with opinions of its own.
-fn resolve_on_path(program: &str, path: &str) -> Option<PathBuf> {
-    path.split(':')
-        .filter(|dir| !dir.is_empty())
-        .map(|dir| Path::new(dir).join(program))
-        .find(|candidate| is_executable(candidate))
-}
-
-#[cfg(unix)]
-fn is_executable(candidate: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt as _;
-    std::fs::metadata(candidate)
-        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_executable(candidate: &Path) -> bool {
-    candidate.is_file()
-}
-
-/// The version out of what a binary printed for `--version`: `protocol 0.44.0` → `0.44.0`. The first
-/// token that starts with a digit, because the product name in front of it is prose.
-fn version_token(reported: &str) -> Option<String> {
-    reported
-        .split_whitespace()
-        .find(|token| token.starts_with(|c: char| c.is_ascii_digit()))
-        .map(ToOwned::to_owned)
-}
-
-/// Before a live spawn: the `aep` the session will run is this one, and `ess` is there if a case
-/// needs it.
-///
-/// The session's `PATH` is constructed by metaharness and does not include wherever this binary was
-/// launched from, so the two can disagree without anything saying so. On 2026-09-03 they did — a
-/// 0.40.1 in `~/.local/bin` beside the 0.44.0 that launched — and the golden path spent $10.96
-/// before stopping at `aep doctor: unrecognized subcommand`. A mismatch is refused; an absence is a
-/// warning, since a case may not run `aep` at all and the child's own failure is then cheap.
-fn preflight_child_path(cases: &[Case], out: &Path) -> Result<()> {
-    let child_path = child_path_for(std::env::var("HOME").ok().as_deref());
-    let refusals = child_path_refusals(cases, &child_path);
-    if refusals.is_empty() {
-        Ok(())
-    } else {
-        Err(refused_run(out, &refusals))
-    }
-}
-
-/// Every fault of one child `PATH`, in the order an operator would fix them.
-///
-/// **Accumulated and not returned one at a time** (invariant 3: validation accumulates), for the
-/// reason [`declared_plugins`] gives 400 lines above: these are independent defects of one machine.
-/// `EVAL-RUN-017` masked `EVAL-RUN-018` while this returned the first — a stale `aep` in
-/// `~/.local/bin` and no `ess` beside it are one afternoon's fix and were two live round trips to
-/// find out about.
-///
-/// Takes the `PATH` rather than reading `HOME` itself, so a test can point it at a tree it built
-/// instead of at the developer's own `~/.local/bin`.
-fn child_path_refusals(cases: &[Case], child_path: &str) -> Vec<RunRefusal> {
-    let mut refusals = Vec::new();
-    match resolve_on_path("aep", child_path) {
-        // An absence is a warning and not a refusal: a case may not run `aep` at all, and the
-        // child's own failure is then cheap. A *mismatch* is a run that pays before it finds out.
-        None => eprintln!(
-            "warning: no `aep` on the child's PATH ({child_path}); a case whose task runs it will \
-             fail inside the session. `task install` in the aep checkout writes one to ~/.local/bin"
-        ),
-        Some(child) => {
-            let reported = std::process::Command::new(&child)
-                .arg("--version")
-                .output()
-                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-                .unwrap_or_default();
-            let found = version_token(&reported).unwrap_or_else(|| format!("unreadable: {reported:?}"));
-            let own = env!("CARGO_PKG_VERSION");
-            if found != own {
-                refusals.push(RunRefusal::ChildAepMismatch {
-                    child: child.display().to_string(),
-                    found,
-                    own: own.to_owned(),
-                    child_path: child_path.to_owned(),
-                });
-            }
-        }
-    }
-    if let Some(case) = cases.iter().find(|case| case.needs_ess) {
-        if resolve_on_path("ess", child_path).is_none() {
-            refusals.push(RunRefusal::ChildEssMissing {
-                case: case.id.clone(),
-                child_path: child_path.to_owned(),
-            });
-        }
-    }
-    refusals
-}
-
-/// Micro-dollars as the plain decimal a vendor flag takes: `12500000` → `12.500000`. Not
-/// [`crate::money::dollars`], which is for a person and carries the sign.
-fn usd_plain(micro: u64) -> String {
-    format!("{}.{:06}", micro / 1_000_000, micro % 1_000_000)
-}
-
-fn spawn_argv(
-    plan: &Plan,
-    binary: &str,
-    working_directory: &Path,
-    prompt: &str,
-    plugin_directory: Option<&Path>,
-    model: Option<&str>,
-    max_budget_usd: Option<&str>,
-) -> Vec<String> {
-    let mut argv = vec![
-        binary.to_owned(),
-        "run".to_owned(),
-        plan.harness.as_str().to_owned(),
-        "--hermetic".to_owned(),
-        "--cwd".to_owned(),
-        working_directory.display().to_string(),
-        "--decisions".to_owned(),
-        "observe".to_owned(),
-    ];
-    // What is left of `--budget-usd`, handed to the session as the vendor's own stop, and placed
-    // with the run options rather than after the prompt: every reader of this argv that takes the
-    // prompt as the tail keeps working. Claude Code only, on `--model`'s reasoning — metaharness
-    // 0.6.1 refuses the flag for codex by name, and a flag accepted and dropped would be a cap that
-    // exists on paper. Before this the cap was checked between runs and nowhere else: a receipt, and
-    // one golden-path run stated $10.96 against 5.
-    if plan.harness == Harness::Claude {
-        if let Some(cap) = max_budget_usd {
-            argv.push("--max-budget-usd".to_owned());
-            argv.push(cap.to_owned());
-        }
-    }
-    argv.push("-p".to_owned());
-    argv.push(prompt.to_owned());
-    // Before the treatment, and on every arm: the model is the *condition* a phase holds fixed
-    // across its arms, so an argv where it moved with the arm would be an experiment varying two
-    // things. Absent where the operator named none, which is metaharness's default and this
-    // runner's until 0.44.0 — so an invocation that does not pin one keeps the argv it had.
-    if let Some(model) = model {
-        argv.push("--model".to_owned());
-        argv.push(model.to_owned());
-    }
-    if plan.arm == Arm::Plugin {
-        if let Some(directory) = plugin_directory {
-            argv.push("--plugin-dir".to_owned());
-            argv.push(directory.display().to_string());
-        }
-    }
-    // Forwarded verbatim, once per declaration, and after `--plugin-dir` rather than instead of it:
-    // metaharness 0.5.0 loads a marketplace plugin through the scratch config home and a directory
-    // through the vendor's own flag, so the two combine and the attestation lists both. Nothing is
-    // resolved, normalised or deduplicated here — a runner that rewrote a pin would be forwarding
-    // something other than what the operator wrote down.
-    for plugin in &plan.plugins {
-        argv.push("--plugin".to_owned());
-        argv.push(plugin.to_string());
-    }
-    argv
-}
-
-/// Spawns one run and answers with the stream it wrote.
-///
-/// The stream is captured whatever the tool exits with, and written down before anything is read
-/// out of it: a run that was paid for and then discarded because its last event was missing is the
-/// worst outcome this verb has.
-fn spawn(
-    plan: &Plan,
-    argv: &[String],
-    stream_path: &Path,
-    redact: bool,
-    cwd: Option<&Path>,
-) -> Result<Vec<u8>> {
-    let spawned = std::process::Command::new(&argv[0])
-        .args(&argv[1..])
-        .stdin(std::process::Stdio::null())
-        .output();
-    let output = match spawned {
-        Ok(output) => output,
-        Err(error) => bail!("`{}` could not be run: {error}", argv.join(" ")),
-    };
-
-    // Redacted **before** the write and not after it, so the operator's home never reaches the
-    // disk. The substitution is a pure byte transform that cannot fail, so nothing about the "write
-    // the paid run down before anything is read out of it" rule is given up by doing it here.
-    let stream = stream_for(output.stdout, redact, cwd);
-    std::fs::write(stream_path, &stream)
-        .with_context(|| format!("writing {}", stream_path.display()))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let tail: String = stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ");
-        return Err(refused_run(
-            Path::new(&plan.name()),
-            &[RunRefusal::SpawnFailed {
-                status: output
-                    .status
-                    .code()
-                    .map_or_else(|| "on a signal".to_owned(), |code| code.to_string()),
-                tail,
-                stream: stream_path.display().to_string(),
-            }],
-        ));
-    }
-    Ok(stream)
-}
-
 // --- the verb -------------------------------------------------------------------------------------
 
 /// The arguments of `protocol eval run`.
 #[derive(Debug, Args)]
-pub(crate) struct RunArgs {
+pub struct RunArgs {
     /// A case directory — one holding a `case.yaml`. Repeatable.
     #[arg(long = "case", value_name = "DIR")]
-    cases: Vec<PathBuf>,
+    pub cases: Vec<PathBuf>,
     /// Every case of one workflow, taken from the corpus.
     #[arg(long, value_name = "WORKFLOW_ID")]
-    workflow: Option<String>,
+    pub workflow: Option<String>,
     /// Where the corpus is, for `--workflow`.
     #[arg(long, value_name = "DIR", default_value = "conformance/eval")]
-    corpus: PathBuf,
+    pub corpus: PathBuf,
     /// Which arm this run belongs to.
     ///
     /// `driven` and `native` are refused for a spawn and accepted for `--stream`: a driven run is
@@ -3772,13 +3495,13 @@ pub(crate) struct RunArgs {
     /// on a `native` cell is compliance or not observable, and never enforced, unless the run
     /// carried a `scope:` or a loop hook that was in a position to refuse.
     #[arg(long, value_enum)]
-    arm: Arm,
+    pub arm: Arm,
     /// Which harness runs it.
     #[arg(long, value_enum)]
-    harness: Harness,
+    pub harness: Harness,
     /// Where the three documents per run are written.
     #[arg(long, value_name = "DIR")]
-    out: PathBuf,
+    pub out: PathBuf,
     /// Ingest a stream that already exists instead of spawning one.
     ///
     /// The whole runner minus the spawn, and it spends nothing: no binary is looked for, no
@@ -3786,7 +3509,7 @@ pub(crate) struct RunArgs {
     /// matrix, how a paid run is re-ingested after its manifest rules changed, and how `task check`
     /// exercises this pipeline end to end for free.
     #[arg(long, value_name = "FILE")]
-    stream: Option<PathBuf>,
+    pub stream: Option<PathBuf>,
     /// When the run was observed, as a date or epoch milliseconds.
     ///
     /// Required, and deliberately not defaulted to now as `protocol trace evidence` does. The
@@ -3794,16 +3517,16 @@ pub(crate) struct RunArgs {
     /// performed the observation, and a manifest is a committed document that must assemble to the
     /// same bytes twice. A clock in it would make every re-ingest a diff.
     #[arg(long, value_name = "DATE")]
-    observed_at: String,
+    pub observed_at: String,
     /// The tree the session works in. Required for a spawn.
     #[arg(long, value_name = "DIR")]
-    cwd: Option<PathBuf>,
+    pub cwd: Option<PathBuf>,
     /// The external agent plugin to install for arm `plugin`.
     ///
     /// AEP deliberately ships no marketplace sources. Name the installed or checked-out plugin
     /// explicitly so the launch record identifies the treatment the run received.
     #[arg(long, value_name = "DIR")]
-    plugin_dir: Option<PathBuf>,
+    pub plugin_dir: Option<PathBuf>,
     /// A pinned marketplace plugin to install, forwarded to `metaharness run claude` verbatim.
     ///
     /// `<repo>@<name>@<version-or-commit>`, repeatable, and combinable with `--plugin-dir` — the
@@ -3815,16 +3538,16 @@ pub(crate) struct RunArgs {
     /// Claude Code only, because that is the only harness metaharness 0.5.0 can resolve a
     /// marketplace for. The other kinds are refused by name rather than accepted and ignored.
     #[arg(long = "plugin", value_name = "REPO@NAME@PIN")]
-    plugins: Vec<String>,
+    pub plugins: Vec<String>,
     /// The cap on what this invocation may spend, in US dollars. Required for a spawn.
     #[arg(long, value_name = "USD")]
-    budget_usd: Option<String>,
+    pub budget_usd: Option<String>,
     /// What a run whose stream states no cost is counted at, in US dollars.
     #[arg(long, value_name = "USD", default_value = ASSUMED_USD_PER_RUN)]
-    assume_usd_per_run: String,
+    pub assume_usd_per_run: String,
     /// The rendered instruction documents arm `raw` is given.
     #[arg(long, value_name = "DIR", default_value = "generated/instructions")]
-    instructions: PathBuf,
+    pub instructions: PathBuf,
     /// The model the harness is asked to use, forwarded to `metaharness run <harness> --model`.
     ///
     /// **Verbatim, and resolved never.** metaharness 0.5.0 passes the string through to the vendor,
@@ -3839,14 +3562,14 @@ pub(crate) struct RunArgs {
     /// facts — *what was asked for* and *what ran* — and a phase that fixes a model is checked by
     /// comparing them.
     #[arg(long, value_name = "MODEL")]
-    model: Option<String>,
+    pub model: Option<String>,
     /// Cite event indices and digests only in the record beside each run.
     ///
     /// Opt-in, exactly as `protocol trace check --redact` is and for the same reason — a report is
     /// most useful with its evidence visible. Every record committed to this repository is written
     /// with it, because a report that quotes a transcript is not a thing to publish.
     #[arg(long)]
-    redact: bool,
+    pub redact: bool,
 }
 
 /// `protocol eval run --stream FILE`: the runner minus the spawn.
@@ -3857,7 +3580,7 @@ pub(crate) struct RunArgs {
 ///
 /// **The status it answers with is the verdict**: `0` conformant, `1` contradicted, `3` undecided,
 /// the codes `trace check` already uses. See the return below for why the spawn path does not.
-fn ingest_recorded(
+pub fn ingest_recorded(
     args: &RunArgs,
     cases: Vec<Case>,
     stream: &Path,
@@ -3913,7 +3636,7 @@ fn ingest_recorded(
 ///
 /// A second way to launch either one would be a second policy to forget, which is the mistake
 /// `epic:metaharness-migration` retired.
-fn launched_elsewhere(args: &RunArgs) -> Result<()> {
+pub fn launched_elsewhere(args: &RunArgs) -> Result<()> {
     match args.arm {
         Arm::Driven => Err(refused_run(
             &args.out,
@@ -3932,7 +3655,7 @@ fn launched_elsewhere(args: &RunArgs) -> Result<()> {
 /// Invariant 12 unchanged and widened by one word: no repository-local fallback chooses a plugin,
 /// and *a plugin* is now either a directory on this machine or a pinned marketplace coordinate.
 /// Both are the operator's explicit authority; neither is guessed from a path under this checkout.
-fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Result<()> {
+pub fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Result<()> {
     if args.arm == Arm::Plugin && args.plugin_dir.is_none() && plugins.is_empty() {
         return Err(refused_run(&args.out, &[RunRefusal::NoPluginTreatment]));
     }
@@ -3948,7 +3671,7 @@ fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Re
 /// nothing to find and does not depend on what is installed. Every refusal is collected rather than
 /// the first returned (invariant 3: validation accumulates) — an operator fixing two spellings
 /// should be told about two.
-fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
+pub fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
     let mut refusals = Vec::new();
     let mut plugins = Vec::new();
     for given in &args.plugins {
@@ -3990,142 +3713,16 @@ fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
     }
 }
 
-/// `protocol eval run`
-fn run_arm(args: &RunArgs) -> Result<ExitCode> {
-    // Validated and then written through as the caller spelled it: the manifest carries the date,
-    // and a date this binary cannot read is one the next reader cannot either.
-    crate::observation_time(Some(&args.observed_at))?;
-
-    let plugins = declared_plugins(args)?;
-    let cases = select_cases(args)?;
-    std::fs::create_dir_all(&args.out)
-        .with_context(|| format!("creating {}", args.out.display()))?;
-
-    if let Some(stream) = &args.stream {
-        return ingest_recorded(args, cases, stream, plugins);
-    }
-
-    // --- everything from here spends money -------------------------------------------------------
-
-    let Some(binary) = tool() else {
-        // Not an `Err`: the top-level handler renders those as `1`, and *the tool is missing* is
-        // the one outcome a caller has to be able to tell from *what you passed is wrong* without
-        // parsing prose. Design constant 4 — absent binary is a skip, never a red gate.
-        eprintln!(
-            "{}",
-            RunRefusal::ToolMissing {
-                looked_for: looked_for()
-            }
-        );
-        return Ok(ExitCode::from(TOOL_MISSING_EXIT));
-    };
-    if !live() {
-        return Err(refused_run(&args.out, &[RunRefusal::NotLive]));
-    }
-    launched_elsewhere(args)?;
-    require_plugin_treatment(args, &plugins)?;
-    let Some(budget) = &args.budget_usd else {
-        return Err(refused_run(&args.out, &[RunRefusal::NoBudget]));
-    };
-    preflight_child_path(&cases, &args.out)?;
-    let cap = micro_usd(budget)?;
-    let assumed = micro_usd(&args.assume_usd_per_run)?;
-    let Some(working_directory) = &args.cwd else {
-        return Err(refused_run(&args.out, &[RunRefusal::NoWorkingTree]));
-    };
-
-    let total = cases.len();
-    let mut spent = 0_u64;
-    let mut launched = 0_usize;
-
-    for (position, case) in cases.into_iter().enumerate() {
-        // Checked **before** the spawn and against the assumed rate, because the only number
-        // available before a run is the assumed one: a cap enforced after the fact is a receipt.
-        if spent.saturating_add(assumed) > cap {
-            outln!(
-                "{}",
-                RunRefusal::BudgetWouldBeExceeded {
-                    spent,
-                    next: assumed,
-                    cap,
-                    launched,
-                    skipped: total - position,
-                }
-            );
-            break;
-        }
-
-        let plan = Plan {
-            case,
-            arm: args.arm,
-            harness: args.harness,
-            plugins: plugins.clone(),
-            model_requested: args.model.clone(),
-        };
-        let prompt = prompt_for(&plan, &args.instructions)?;
-        let remaining = usd_plain(cap.saturating_sub(spent));
-        let invocation = spawn_argv(
-            &plan,
-            &binary,
-            working_directory,
-            &prompt,
-            args.plugin_dir.as_deref(),
-            args.model.as_deref(),
-            Some(&remaining),
-        );
-        let stream_path = args.out.join(format!("{}{EVENTS_SUFFIX}", plan.name()));
-
-        let cwd = args.cwd.as_deref();
-        let events = spawn(&plan, &invocation, &stream_path, args.redact, cwd)?;
-        let products = ingest(&plan, &events, &args.observed_at, args.redact)?;
-        // The stream's own stated cost, and the assumption **only** where it stated none — a cost
-        // this reader could not convert never arrives here as `None`, because `ingest` refuses it
-        // (`EVAL-STREAM-011`). A wire that writes `null` must not be able to spend without limit;
-        // a wire that priced the run must not be charged an estimate instead.
-        let (charge, source) = products
-            .cost_micro_usd
-            .map_or((assumed, "assumed"), |stated| (stated, "stated"));
-        spent = spent.saturating_add(charge);
-        write_products(&args.out, &plan, Some(&stream_path), &products)?;
-        // Printed per run rather than only as a total, because the failure this line exists to make
-        // visible is silent by nature: a stated cost dropped to an assumption looks exactly like a
-        // cheap run, and one live Claude run at $0.797785 was charged $0.250000 before anybody
-        // could see which of the two numbers the ledger was using.
-        outln!("  charged:  {} ({source})", dollars(charge));
-        launched += 1;
-    }
-
-    if launched == 0 {
-        return Err(refused_run(
-            &args.out,
-            &[RunRefusal::BudgetWouldBeExceeded {
-                spent,
-                next: assumed,
-                cap,
-                launched,
-                skipped: total,
-            }],
-        ));
-    }
-
-    outln!(
-        "{launched} run(s), {} spent against a cap of {}",
-        dollars(spent),
-        dollars(cap)
-    );
-    Ok(ExitCode::SUCCESS)
-}
-
 /// How a model nobody stated is spelled for a person.
 ///
 /// Obviously not a model name, and deliberately not blank: a column that renders an unstated model
 /// as nothing reads exactly like a column nobody looked at. The matrix's own **text** rendering has
 /// no model column at all — it groups by harness × arm × workflow — so this is where a person meets
 /// one; its JSON writes `"model": null`, which is the same fact in the shape a program reads.
-const MODEL_UNSTATED: &str = "(unstated)";
+pub const MODEL_UNSTATED: &str = "(unstated)";
 
 /// Writes one run's documents and says what was left where.
-fn write_products(
+pub fn write_products(
     out: &Path,
     plan: &Plan,
     stream: Option<&Path>,
@@ -4155,1331 +3752,13 @@ fn write_products(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    /// A manifest that passes every rule, as a starting point for one-line mutations.
-    const HONEST: &str = "\
-format: eval.run-manifest/1
-arm: plugin
-harness: claude
-workflow: adp/default
-case: case:create-a-story
-plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332
-model: claude-sonnet-5
-harness_version: claude 2.1.239
-transcript_digest: 6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
-observed_at: 2026-08-23
-";
-
-    /// Reads a manifest, returning the refusals rather than a message.
-    fn read(text: &str) -> Result<RunManifest, Vec<Refusal>> {
-        let raw: RawRunManifest = serde_yaml::from_str(text).expect("the fixture is YAML");
-        RunManifest::try_from(raw)
-    }
-
-    /// The codes a refusal set carries, which is what a test matches on.
-    fn codes(refusals: &[Refusal]) -> Vec<&'static str> {
-        refusals.iter().map(Refusal::code).collect()
-    }
-
-    #[test]
-    fn the_honest_manifest_is_read_so_every_mutation_below_reaches_its_rule() {
-        // The control. Without it a mutation test could be passing because the fixture was broken
-        // for some other reason entirely.
-        let manifest = read(HONEST).expect("the fixture states every field");
-        assert_eq!(manifest.arm, Arm::Plugin);
-        assert_eq!(manifest.harness, "claude");
-        assert!(manifest.plugin_digest.is_some());
-        assert_eq!(manifest.cost_micro_usd, None, "a quantity nobody stated");
-    }
-
-    #[test]
-    fn an_arm_this_evaluation_does_not_have_is_refused_by_name() {
-        let refusals = read(&HONEST.replace("arm: plugin", "arm: hybrid"))
-            .expect_err("another arm is a change to the programme");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-002"]);
-        let sentence = refusals[0].to_string();
-        assert!(
-            sentence.contains("`raw`, `plugin`, `driven`, `native`"),
-            "the refusal lists the arms there are, in programme order: {sentence}"
-        );
-    }
-
-    #[test]
-    fn the_arms_the_refusal_lists_are_every_arm_the_type_has() {
-        // `Arm::ALL` is the whole content of `EVAL-MANIFEST-002`, so an arm missing from it is an
-        // arm the refusal tells a reader does not exist — which is what `native` was between
-        // `dce6db5`, the commit that added it to the enum, to `parse` and to `as_str`, and this
-        // one. The second list is `ValueEnum`'s, derived from the variants themselves, so this
-        // cannot be satisfied by editing a second hand-written array to match the first.
-        assert_eq!(
-            Arm::ALL.as_slice(),
-            <Arm as ValueEnum>::value_variants(),
-            "every variant, in declaration order, which is the programme's order"
-        );
-        for arm in Arm::ALL {
-            assert_eq!(
-                Arm::parse(arm.as_str()),
-                Some(arm),
-                "and each word the refusal offers round-trips through `parse`"
-            );
-        }
-
-        let sentence = Refusal::ArmUnknown {
-            written: "b10x".to_owned(),
-        }
-        .to_string();
-        assert!(
-            sentence.contains("`native`"),
-            "the fourth arm is named where a reader is told what the arms are: {sentence}"
-        );
-        assert!(
-            !sentence.contains("three arms") && !sentence.contains("A fourth arm"),
-            "and the sentence states no count, so the next arm does not make it wrong: {sentence}"
-        );
-    }
-
-    #[test]
-    fn a_missing_field_is_refused_by_its_own_name_and_every_other_refusal_is_reported_beside_it() {
-        // Invariant 3: a document with four broken fields reports four refusals. A reader who has
-        // to run the verb four times to find four typos stops running it.
-        //
-        // `model` stays in this set deliberately after it became a `Written`: an *absent* model is
-        // still refused, and keeping it here proves `written_or_null` accumulates beside `required`
-        // rather than short-circuiting the pass.
-        let stripped = HONEST
-            .lines()
-            .filter(|line| {
-                !line.starts_with("model:")
-                    && !line.starts_with("harness_version:")
-                    && !line.starts_with("case:")
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let refusals = read(&stripped).expect_err("three fields are missing");
-        assert_eq!(
-            codes(&refusals),
-            [
-                "EVAL-MANIFEST-003",
-                "EVAL-MANIFEST-003",
-                "EVAL-MANIFEST-003"
-            ]
-        );
-        let named: Vec<String> = refusals.iter().map(ToString::to_string).collect();
-        for field in ["case", "model", "harness_version"] {
-            assert!(
-                named
-                    .iter()
-                    .any(|line| line.contains(&format!("`{field}`"))),
-                "each refusal names its own field: {named:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn an_omitted_plugin_digest_is_refused_and_an_explicit_null_is_not() {
-        // The rule the shape exists for. Serde maps `null` and *absent* onto the same `None`, so
-        // without `written_down` a manifest that forgot the key would read as a run that had no
-        // plugin — and arm `raw`'s whole claim is that it had none.
-        let omitted = HONEST
-            .lines()
-            .filter(|line| !line.starts_with("plugin_digest:"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let refusals = read(&omitted).expect_err("the key must be written");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-003"]);
-
-        let raw_arm = HONEST.replace("arm: plugin", "arm: raw").replace(
-            "plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
-            "plugin_digest: null",
-        );
-        let manifest = read(&raw_arm).expect("an explicit null on arm raw is the honest form");
-        assert_eq!(manifest.arm, Arm::Raw);
-        assert_eq!(manifest.plugin_digest, None);
-    }
-
-    #[test]
-    fn an_omitted_model_is_refused_and_an_explicit_null_is_not() {
-        // The rule `plugin_digest` already had, extended to `model` by a live run. Codex's wire
-        // names no model at session start, so *the harness did not say* is a fact a manifest must
-        // be able to state — and *nobody wrote the key* must still be refused, because a runner
-        // that dropped it would produce the same document.
-        let omitted = HONEST
-            .lines()
-            .filter(|line| !line.starts_with("model:"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let refusals = read(&omitted).expect_err("the key must be written");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-003"]);
-
-        let unstated = read(&HONEST.replace("model: claude-sonnet-5", "model: null"))
-            .expect("a wire that states no model is stating something");
-        assert_eq!(unstated.model, None);
-    }
-
-    #[test]
-    fn a_model_that_is_written_and_empty_is_refused_rather_than_read_as_unstated() {
-        // The boundary between the two answers above. Without this an empty string would slip
-        // through as `Some("")` and print as a blank model column, which reads like a rendering
-        // bug rather than a fact.
-        let refusals = read(&HONEST.replace("model: claude-sonnet-5", "model: \"\""))
-            .expect_err("an empty model names nothing");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-004"]);
-    }
-
-    #[test]
-    fn a_plugin_digest_on_arm_raw_is_refused_because_arm_raw_is_the_arm_without_one() {
-        let refusals = read(&HONEST.replace("arm: plugin", "arm: raw"))
-            .expect_err("arm raw carries no plugin");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-005"]);
-    }
-
-    #[test]
-    fn a_null_plugin_digest_on_arm_plugin_is_refused_because_the_plugin_is_the_subject() {
-        let refusals = read(&HONEST.replace(
-            "plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
-            "plugin_digest: null",
-        ))
-        .expect_err("arm plugin must say which plugin");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-006"]);
-    }
-
-    /// The same fixture with the directory treatment removed and a marketplace plugin named.
-    ///
-    /// Written out rather than patched with `replace`, because the two treatments differ by two
-    /// keys at once and a patch that changed one of them would be testing a manifest nothing
-    /// writes.
-    const MARKETPLACE: &str = "\
-format: eval.run-manifest/1
-arm: plugin
-harness: claude
-workflow: adp/default
-case: case:create-a-story
-plugin_digest: null
-plugins:
-  - plugin: bdfinst/agentic-dev-team@dev-team@1.4.0
-    digest: c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3
-model: claude-sonnet-5
-harness_version: claude 2.1.239
-transcript_digest: 6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b
-observed_at: 2026-08-23
-";
-
-    #[test]
-    fn a_marketplace_plugin_is_a_treatment_and_a_run_with_one_needs_no_directory_digest() {
-        // The arm `plugin` rule is about the **treatment**, not about one of the two mechanisms
-        // that deliver it. A run whose plugin came from a marketplace has no directory to digest,
-        // and `plugin_digest: null` there is a stated absence rather than a hole.
-        let manifest = read(MARKETPLACE).expect("a marketplace plugin is a plugin");
-        assert_eq!(manifest.plugin_digest, None);
-        assert_eq!(
-            manifest.plugins.first().map(|plugin| plugin.plugin.as_str()),
-            Some("bdfinst/agentic-dev-team@dev-team@1.4.0")
-        );
-    }
-
-    #[test]
-    fn arm_plugin_that_names_neither_mechanism_is_still_refused() {
-        // The boundary of the rule above: it widened what counts as a plugin, and it must not have
-        // widened it to nothing.
-        let refusals = read(&MARKETPLACE.replace(
-            "plugins:\n  - plugin: bdfinst/agentic-dev-team@dev-team@1.4.0\n    digest: \
-             c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3\n",
-            "",
-        ))
-        .expect_err("arm plugin must say which plugin");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-006"]);
-    }
-
-    #[test]
-    fn a_marketplace_plugin_on_arm_raw_is_refused_for_the_reason_a_digest_is() {
-        let refusals = read(&MARKETPLACE.replace("arm: plugin", "arm: raw"))
-            .expect_err("arm raw is the arm with no plugin in it");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-008"]);
-    }
-
-    #[test]
-    fn a_marketplace_plugin_whose_digest_is_not_one_is_refused_by_the_field_that_is_wrong() {
-        let refusals = read(
-            &MARKETPLACE.replace(
-                "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
-                "0.4.0",
-            ),
-        )
-        .expect_err("a version is not a digest");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-007"]);
-    }
-
-    #[test]
-    fn arm_driven_may_answer_either_way_because_the_enforcer_is_not_the_plugin() {
-        // The boundary of the two rules above. Without this test they could have been written as
-        // one rule — *a digest exactly when the arm is not raw* — and every other test would still
-        // pass.
-        let with = read(&HONEST.replace("arm: plugin", "arm: driven"))
-            .expect("a driven run may also have had the plugin installed");
-        assert!(with.plugin_digest.is_some());
-
-        let without = read(&HONEST.replace("arm: plugin", "arm: driven").replace(
-            "plugin_digest: 7258e0b6ac95f748bf5304b12b9c8c29d479ae4b812ee5b98640a8ab7f090332",
-            "plugin_digest: null",
-        ))
-        .expect("and it may not have");
-        assert_eq!(without.plugin_digest, None);
-    }
-
-    #[test]
-    fn a_document_that_does_not_claim_the_format_is_refused_before_its_fields_are_believed() {
-        let refusals = read(&HONEST.replace("eval.run-manifest/1", "eval.run-manifest/2"))
-            .expect_err("a version this build does not know");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-001"]);
-        assert!(
-            refusals[0].to_string().contains("eval.run-manifest/2"),
-            "the refusal quotes what it was handed: {}",
-            refusals[0]
-        );
-    }
-
-    #[test]
-    fn a_digest_that_is_not_a_digest_is_refused() {
-        let refusals = read(&HONEST.replace(
-            "transcript_digest: 6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
-            "transcript_digest: sha256:6522e1",
-        ))
-        .expect_err("a digest is 64 hex characters");
-        assert_eq!(codes(&refusals), ["EVAL-MANIFEST-007"]);
-    }
-
-    /// A record with the verdicts given, in the shape `protocol trace check --format json` writes.
-    fn record_of(verdicts: &[(&str, &str)]) -> String {
-        let rows: Vec<String> = verdicts
-            .iter()
-            .map(|(id, verdict)| {
-                format!(r#"{{"id":"{id}","kind":"tool.called","verdict":{verdict}}}"#)
-            })
-            .collect();
-        format!(
-            r#"{{"format":"trace-report/1","spec_id":"eval/development-story",
-                 "spec_digest":"fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
-                 "transcript_digest":"6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
-                 "expectations":[{}]}}"#,
-            rows.join(",")
-        )
-    }
-
-    /// Reads a record, returning the refusals rather than a message.
-    fn read_record(text: &str) -> Result<Record, Vec<Refusal>> {
-        let raw: RawRecord = serde_json::from_str(text).expect("the fixture is JSON");
-        Record::try_from(raw)
-    }
-
-    /// One complete record as a mutable JSON object.
-    fn record_value_json() -> serde_json::Value {
-        serde_json::from_str(&record_of(&[("held", "\"ok\"")])).expect("record fixture is JSON")
-    }
-
-    #[test]
-    fn each_required_record_key_is_refused_when_omitted() {
-        for field in [
-            "spec_id",
-            "spec_digest",
-            "transcript_digest",
-            "expectations",
-        ] {
-            let mut document = record_value_json();
-            document
-                .as_object_mut()
-                .expect("a record object")
-                .remove(field);
-            let refusals = read_record(&document.to_string()).expect_err("the key is required");
-            assert_eq!(codes(&refusals), ["EVAL-RECORD-004"], "{field}");
-            assert!(refusals[0].to_string().contains(field), "{field}");
-        }
-    }
-
-    #[test]
-    fn required_record_keys_distinguish_null_empty_and_malformed() {
-        for field in [
-            "spec_id",
-            "spec_digest",
-            "transcript_digest",
-            "expectations",
-        ] {
-            let mut document = record_value_json();
-            document[field] = serde_json::Value::Null;
-            let refusals = read_record(&document.to_string()).expect_err("null is not an identity");
-            assert_eq!(codes(&refusals), ["EVAL-RECORD-005"], "{field}");
-        }
-
-        let mut empty = record_value_json();
-        empty["spec_id"] = serde_json::json!("  ");
-        empty["spec_digest"] = serde_json::json!("");
-        empty["transcript_digest"] = serde_json::json!("");
-        empty["expectations"] = serde_json::json!([]);
-        let refusals = read_record(&empty.to_string()).expect_err("empty fields bind nothing");
-        assert_eq!(
-            codes(&refusals),
-            [
-                "EVAL-RECORD-006",
-                "EVAL-RECORD-006",
-                "EVAL-RECORD-006",
-                "EVAL-RECORD-006",
-            ]
-        );
-
-        let mut malformed = record_value_json();
-        malformed["spec_id"] = serde_json::json!(42);
-        malformed["spec_digest"] = serde_json::json!("sha256:short");
-        malformed["transcript_digest"] = serde_json::json!("ABCDEF");
-        malformed["expectations"] = serde_json::json!({"id": "not-an-array"});
-        let refusals =
-            read_record(&malformed.to_string()).expect_err("malformed fields cannot be joined");
-        assert_eq!(
-            codes(&refusals),
-            [
-                "EVAL-RECORD-007",
-                "EVAL-RECORD-007",
-                "EVAL-RECORD-007",
-                "EVAL-RECORD-007",
-            ]
-        );
-    }
-
-    #[test]
-    fn the_three_verdicts_map_onto_the_three_columns() {
-        let record = read_record(&record_of(&[
-            ("held", "\"ok\""),
-            ("violated", "\"gap\""),
-            ("unobservable", "\"unknown\""),
-        ]))
-        .expect("the shape the checker writes");
-        assert_eq!(
-            record.rows,
-            vec![
-                ("held".to_owned(), Outcome::Held),
-                ("violated".to_owned(), Outcome::Violated),
-                ("unobservable".to_owned(), Outcome::Unobservable),
-            ]
-        );
-    }
-
-    #[test]
-    fn a_row_whose_verdict_is_null_is_unobservable_and_never_held() {
-        // The polarity of the whole verb, and the mutation that breaks it is one character in
-        // `outcome_of`: `None => Ok(Outcome::Held)`. Both spellings of *nothing was recorded* are
-        // asserted, because a checker that dropped the key and one that wrote `null` produce
-        // documents that must be read the same way.
-        for record in [
-            record_of(&[("silent", "null")]),
-            r#"{"format":"trace-report/1","spec_id":"s",
-                 "spec_digest":"fd6bcd8ab28806f92f487276ffa60d21f51ebc0576b2027d9d279e3685e38466",
-                 "transcript_digest":"6522e1ebe318da1e0a604e595ecc9afed1d1041c6e418a1382e4f1600a17640b",
-                 "expectations":[{"id":"silent"}]}"#.to_owned(),
-        ] {
-            let read = read_record(&record).expect("a silent row is read, not refused");
-            assert_eq!(
-                read.rows,
-                vec![("silent".to_owned(), Outcome::Unobservable)],
-                "a row the checker recorded no verdict for is unobservable, never held"
-            );
-        }
-    }
-
-    #[test]
-    fn a_verdict_word_this_build_cannot_read_is_refused_rather_than_bucketed() {
-        let refusals = read_record(&record_of(&[("new", "\"probably\"")]))
-            .expect_err("an unreadable word is not a third answer");
-        assert_eq!(codes(&refusals), ["EVAL-RECORD-003"]);
-    }
-
-    #[test]
-    fn a_record_of_another_shape_is_refused_by_the_format_it_states() {
-        let refusals =
-            read_record(&record_of(&[("held", "\"ok\"")]).replace("trace-report/1", "trace-ir/1"))
-                .expect_err("the matrix reads a check report");
-        assert_eq!(codes(&refusals), ["EVAL-RECORD-001"]);
-        assert!(
-            refusals[0].to_string().contains("trace-ir/1"),
-            "named: {}",
-            refusals[0]
-        );
-    }
-
-    /// The honest manifest, as a value, with the arm and transcript given.
-    fn manifest_of(arm: Arm, transcript: &str) -> RunManifest {
-        RunManifest {
-            arm,
-            harness: "claude".to_owned(),
-            workflow: "adp/default".to_owned(),
-            case: "case:create-a-story".to_owned(),
-            plugin_digest: None,
-            plugins: Vec::new(),
-            model: Some("claude-sonnet-5".to_owned()),
-            model_requested: None,
-            harness_version: "claude 2.1.239".to_owned(),
-            transcript_digest: transcript.to_owned(),
-            observed_at: "2026-08-23".to_owned(),
-            cost_micro_usd: Some(1_500_000),
-            tokens: Some(10),
-            wall_time_ms: Some(20),
-        }
-    }
-
-    /// A record value with one row.
-    fn record_value(transcript: &str, digest: &str, outcome: Outcome) -> Record {
-        Record {
-            specification: "eval/development-story".to_owned(),
-            spec_digest: digest.to_owned(),
-            transcript_digest: transcript.to_owned(),
-            rows: vec![("only".to_owned(), outcome)],
-        }
-    }
-
-    #[test]
-    fn a_manifest_that_describes_another_run_than_its_record_is_refused() {
-        let pairs = vec![(
-            manifest_of(Arm::Raw, &"a".repeat(DIGEST_WIDTH)),
-            record_value(&"b".repeat(DIGEST_WIDTH), "d", Outcome::Held),
-        )];
-        let refusals = assemble(pairs).expect_err("the two documents are about different runs");
-        assert_eq!(codes(&refusals), ["EVAL-PAIR-003"]);
-    }
-
-    #[test]
-    fn one_transcript_cannot_arrive_twice_because_one_run_would_be_counted_twice() {
-        let digest = "c".repeat(DIGEST_WIDTH);
-        let pairs = vec![
-            (
-                manifest_of(Arm::Raw, &digest),
-                record_value(&digest, "d", Outcome::Held),
-            ),
-            (
-                manifest_of(Arm::Plugin, &digest),
-                record_value(&digest, "d", Outcome::Held),
-            ),
-        ];
-        let refusals = assemble(pairs).expect_err("two runs are two transcripts");
-        assert_eq!(codes(&refusals), ["EVAL-PAIR-004"]);
-    }
-
-    #[test]
-    fn one_specification_at_two_digests_is_refused_because_the_rows_share_a_name_only() {
-        let pairs = vec![
-            (
-                manifest_of(Arm::Raw, &"e".repeat(DIGEST_WIDTH)),
-                record_value(&"e".repeat(DIGEST_WIDTH), "before", Outcome::Held),
-            ),
-            (
-                manifest_of(Arm::Plugin, &"f".repeat(DIGEST_WIDTH)),
-                record_value(&"f".repeat(DIGEST_WIDTH), "after", Outcome::Violated),
-            ),
-        ];
-        let refusals = assemble(pairs).expect_err("the document moved between the two runs");
-        assert_eq!(codes(&refusals), ["EVAL-PAIR-005"]);
-    }
-
-    #[test]
-    fn a_cells_resource_total_says_how_many_runs_it_covers() {
-        // The reason a column is a pair and not a number: a total over two of three runs read as a
-        // total over three would understate the arm it describes.
-        let mut quiet = manifest_of(Arm::Driven, &"1".repeat(DIGEST_WIDTH));
-        quiet.cost_micro_usd = None;
-        quiet.tokens = None;
-        quiet.wall_time_ms = None;
-        let pairs = vec![
-            (
-                manifest_of(Arm::Driven, &"0".repeat(DIGEST_WIDTH)),
-                record_value(&"0".repeat(DIGEST_WIDTH), "d", Outcome::Held),
-            ),
-            (
-                quiet,
-                record_value(&"1".repeat(DIGEST_WIDTH), "d", Outcome::Unobservable),
-            ),
-        ];
-        let matrix = assemble(pairs).expect("two distinct runs of one cell");
-        assert_eq!(matrix.cells.len(), 1);
-        let cell = &matrix.cells[0];
-        assert_eq!(cell.runs, 2);
-        assert_eq!(
-            cell.resources.cost_micro_usd,
-            Some(Reported {
-                runs: 1,
-                total: 1_500_000
-            })
-        );
-        assert_eq!(cell.counts.held, 1);
-        assert_eq!(cell.counts.unobservable, 1);
-        assert_eq!(
-            cost(cell.resources.cost_micro_usd, cell.runs),
-            "$1.500000 (1/2)",
-            "the rendering says what the total covers"
-        );
-    }
-
-    #[test]
-    fn the_arms_sort_in_the_order_the_experiment_runs_them() {
-        // Alphabetically this is `driven`, `plugin`, `raw`, which reads the experiment backwards.
-        let mut arms = vec![Arm::Driven, Arm::Raw, Arm::Plugin];
-        arms.sort_unstable();
-        assert_eq!(arms, vec![Arm::Raw, Arm::Plugin, Arm::Driven]);
-    }
-
-    #[test]
-    fn no_rendering_of_a_matrix_contains_a_score() {
-        // The programme's one prohibition, asserted on the bytes rather than trusted to review.
-        let pairs = vec![(
-            manifest_of(Arm::Raw, &"2".repeat(DIGEST_WIDTH)),
-            record_value(&"2".repeat(DIGEST_WIDTH), "d", Outcome::Held),
-        )];
-        let matrix = assemble(pairs).expect("one run");
-        let text = to_text(&matrix);
-        let json = serde_json::to_string(&matrix).expect("the matrix serialises");
-        for rendering in [&text, &json] {
-            assert!(
-                !rendering.contains('%'),
-                "no percentage reaches an output: {rendering}"
-            );
-            assert_eq!(
-                rendering.matches("score").count(),
-                rendering.matches("no score is computed").count(),
-                "and the only occurrence of the word is the sentence saying there is none: \
-                 {rendering}"
-            );
-        }
-        assert!(
-            text.contains("No arm is ranked and no score is computed"),
-            "and the text rendering says so where a reader will look for one: {text}"
-        );
-    }
-
-    #[test]
-    fn a_table_holding_a_native_cell_says_how_to_read_it_and_one_without_stays_silent() {
-        // The reading rule of `docs/design/native-arm-store-integrity-design-v0.1.md` § 6 O1: the
-        // arm word is the only enforcement label a cell gets, and on this arm a clean row is
-        // compliance rather than a refusal. Printed as a line under the table it qualifies, not as
-        // a column — § 8 OQ4 leaves the column to the operator.
-        let native = to_text(
-            &assemble(vec![(
-                manifest_of(Arm::Native, &"7".repeat(DIGEST_WIDTH)),
-                record_value(&"7".repeat(DIGEST_WIDTH), "d", Outcome::Held),
-            )])
-            .expect("one native run"),
-        );
-        assert!(
-            native.contains("reading a `native` cell")
-                && native.contains("never enforced")
-                && native.contains("nobody asked"),
-            "a native cell carries the rule for reading it: {native}"
-        );
-
-        let driven = to_text(
-            &assemble(vec![(
-                manifest_of(Arm::Driven, &"8".repeat(DIGEST_WIDTH)),
-                record_value(&"8".repeat(DIGEST_WIDTH), "d", Outcome::Held),
-            )])
-            .expect("one driven run"),
-        );
-        assert!(
-            !driven.contains("reading a `native` cell"),
-            "and a table with no native cell in it says nothing about one: {driven}"
-        );
-    }
-
-    // --- the runner ---------------------------------------------------------------------------
-
-    #[test]
-    fn an_amount_becomes_millionths_by_integer_arithmetic_and_never_by_a_float() {
-        // The one-line mutation this guards is `(value * 1_000_000.0) as u64`, which turns the
-        // cost this repository's own fixtures carry — `0.0714` — into `71399`. A cent lost per run
-        // is a budget that overspends, and a manifest that will not reproduce.
-        assert_eq!(micro_usd("0.0714").expect("a cost off the wire"), 71_400);
-        assert_eq!(micro_usd("0.4137").expect("another"), 413_700);
-        assert_eq!(
-            micro_usd("10").expect("a whole number of dollars"),
-            10_000_000
-        );
-        assert_eq!(micro_usd("0.25").expect("the assumed rate"), 250_000);
-        assert_eq!(
-            micro_usd("$1.00").expect("a dollar sign is tolerated"),
-            1_000_000
-        );
-        assert_eq!(micro_usd("0").expect("nothing at all"), 0);
-    }
-
-    #[test]
-    fn an_amount_this_reader_cannot_convert_exactly_is_refused_rather_than_rounded() {
-        // Scientific notation and a seventh decimal place are both *nearly* readable, which is
-        // what makes silently approximating them tempting. A cost that cannot be converted exactly
-        // does not belong in a document somebody commits.
-        for written in ["1e-7", "0.1234567", "", "ten", "1.2.3", "-3"] {
-            assert!(
-                micro_usd(written).is_err(),
-                "`{written}` is not an amount this reader will convert"
-            );
-        }
-    }
-
-    #[test]
-    fn the_terminal_events_cost_is_read_from_its_own_decimal_text() {
-        let ended = serde_json::json!({ "total_cost_usd": 0.0714 });
-        assert_eq!(cost_of(&ended), Ok(Some(71_400)));
-        // Written `null` and absent are the same answer, and neither is zero: the manifest states
-        // no cost at all, and the matrix's total then says how many runs it covers.
-        assert_eq!(
-            cost_of(&serde_json::json!({ "total_cost_usd": null })),
-            Ok(None)
-        );
-        assert_eq!(cost_of(&serde_json::json!({})), Ok(None));
-    }
-
-    #[test]
-    fn a_cost_a_harness_computed_in_floating_point_is_read_and_not_refused() {
-        // **The live defect.** A Claude run stated `0.7977854999999999` — the shortest text that
-        // round-trips the `f64` sum of its per-turn costs — and the strict reader refused it for
-        // having seventeen significant figures. Eighty cents then entered the ledger as the
-        // assumed twenty-five and the manifest as no cost at all.
-        assert_eq!(micro_usd_stated("0.7977854999999999"), Ok(797_785));
-        assert_eq!(
-            cost_of(&serde_json::json!({ "total_cost_usd": 0.797_785_499_999_999_9 })),
-            Ok(Some(797_785))
-        );
-        // Half-up on everything past the sixth place, so both sides of the boundary are pinned
-        // rather than whichever one the first fixture happened to have.
-        assert_eq!(micro_usd_stated("0.1234564999"), Ok(123_456));
-        assert_eq!(micro_usd_stated("0.1234565"), Ok(123_457));
-        // And the carry is ordinary integer addition, so it crosses into the dollar.
-        assert_eq!(micro_usd_stated("0.9999995"), Ok(1_000_000));
-        // Six places or fewer still read exactly, which is every committed fixture.
-        assert_eq!(micro_usd_stated("0.5216"), Ok(521_600));
-        assert_eq!(micro_usd_stated("0"), Ok(0));
-    }
-
-    #[test]
-    fn a_stated_cost_this_reader_cannot_convert_is_refused_rather_than_read_as_no_cost() {
-        // The half of the defect that made it silent: `.ok()` collapsed *there is a number here I
-        // cannot convert* into *there is no number*, and the second is the one the ledger is
-        // allowed to charge an estimate for. Unreadable is not unstated.
-        assert!(micro_usd_stated("1e-7").is_err(), "an exponent is refused");
-        let reason = cost_of(&serde_json::json!({ "total_cost_usd": "0.80" }))
-            .expect_err("a cost written as a string is not a number");
-        assert!(
-            reason.contains("neither a number nor `null`"),
-            "and the refusal says which two answers there are: {reason}"
-        );
-    }
-
-    #[test]
-    fn a_person_typing_an_amount_is_still_held_to_an_exact_one() {
-        // The reason there are two readers rather than one loosened one. A wire computes and may
-        // hand over float noise; a person types, and `--budget-usd 1e-7` is a mistake worth naming
-        // rather than a cap silently rounded to nothing.
-        assert!(micro_usd("1e-7").is_err());
-        assert!(micro_usd("0.1234567").is_err());
-        assert_eq!(
-            micro_usd_stated("0.1234567"),
-            Ok(123_457),
-            "while the same text off a wire is rounded to the nearest millionth"
-        );
-    }
-
-    #[test]
-    fn a_usage_key_written_null_contributes_nothing_and_does_not_erase_the_total() {
-        let usage = serde_json::json!({
-            "usage": { "input_tokens": 14, "output_tokens": 1128,
-                       "cache_read_input_tokens": null, "cache_creation_input_tokens": 20168 }
-        });
-        assert_eq!(tokens_of(&usage), Some(14 + 1128 + 20168));
-        assert_eq!(
-            tokens_of(&serde_json::json!({ "usage": {} })),
-            None,
-            "and a usage object that states none of the four states no total"
-        );
-    }
-
-    /// A plan over a case, for the argv tests.
-    // --- the cap on the argv, and the child's PATH ---------------------------------------------
-
-    #[test]
-    fn what_is_left_of_the_cap_travels_to_a_claude_run_and_to_no_other() {
-        let mut plan = plan_of(Arm::Raw, Harness::Claude);
-        let argv = spawn_argv(
-            &plan,
-            "metaharness",
-            Path::new("/work/subject"),
-            "do the thing",
-            None,
-            None,
-            Some("4.200000"),
-        );
-        let at = argv
-            .iter()
-            .position(|word| word == "--max-budget-usd")
-            .expect("the cap is on the argv");
-        assert_eq!(argv[at + 1], "4.200000");
-        assert!(
-            at < argv.iter().position(|word| word == "-p").expect("a prompt"),
-            "the cap is a run option, placed before the prompt: {argv:?}"
-        );
-
-        plan.harness = Harness::Codex;
-        let codex = spawn_argv(
-            &plan,
-            "metaharness",
-            Path::new("/work/subject"),
-            "do the thing",
-            None,
-            None,
-            Some("4.200000"),
-        );
-        assert!(
-            !codex.iter().any(|word| word == "--max-budget-usd"),
-            "codex takes no cap and metaharness would refuse it: {codex:?}"
-        );
-    }
-
-    #[test]
-    fn micro_dollars_render_as_the_plain_decimal_a_vendor_flag_takes() {
-        assert_eq!(usd_plain(0), "0.000000");
-        assert_eq!(usd_plain(5_000_000), "5.000000");
-        assert_eq!(usd_plain(4_200_000), "4.200000");
-        assert_eq!(usd_plain(10_962_418), "10.962418");
-    }
-
-    #[test]
-    fn the_childs_path_is_the_one_metaharness_constructs() {
-        assert_eq!(
-            child_path_for(Some("/home/ada")),
-            "/home/ada/.local/bin:/usr/local/bin:/usr/bin:/bin"
-        );
-        assert_eq!(child_path_for(None), "/usr/local/bin:/usr/bin:/bin");
-        assert_eq!(child_path_for(Some("")), "/usr/local/bin:/usr/bin:/bin");
-    }
-
-    #[test]
-    fn the_version_is_the_first_token_that_starts_with_a_digit() {
-        assert_eq!(version_token("protocol 0.44.0").as_deref(), Some("0.44.0"));
-        assert_eq!(version_token("aep 0.45.0\n").as_deref(), Some("0.45.0"));
-        assert_eq!(version_token("").as_deref(), None);
-        assert_eq!(version_token("error: no such flag").as_deref(), None);
-    }
-
-    #[test]
-    fn a_case_whose_subject_names_the_ess_skill_says_it_needs_ess() {
-        let directory = std::env::temp_dir().join("aep-eval-case-needs-ess");
-        std::fs::remove_dir_all(&directory).ok();
-        std::fs::create_dir_all(&directory).expect("scratch");
-        std::fs::write(
-            directory.join("case.yaml"),
-            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
-             task: draft the domain\nexpectations: expectations.trace.yaml\n\
-             subject:\n  skills: [aep-plan:planning, ess-specify:specify]\n",
-        )
-        .expect("written");
-        let case = read_case(&directory).expect("a case");
-        assert!(case.needs_ess);
-
-        std::fs::write(
-            directory.join("case.yaml"),
-            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
-             task: draft the domain\nexpectations: expectations.trace.yaml\n",
-        )
-        .expect("written");
-        assert!(!read_case(&directory).expect("a case").needs_ess);
-    }
-
-    #[test]
-    fn both_spellings_of_the_ess_plugin_trip_the_preflight() {
-        // The plugin was renamed `ess-schema` → `ess-specify` in `agentplugins@a2077d2`. A
-        // preflight keyed on one spelling is a preflight that stops firing the day a case is
-        // written under the other, and the case that stops firing is the one that spawns and pays
-        // on a runner with no `ess` — which is the hazard the agentplugins adversary recorded
-        // against this exact line on 2026-09-03. Both spellings, one loop, so a third never gets
-        // added to the matcher without a case here.
-        let directory = std::env::temp_dir().join("aep-eval-case-needs-ess-both-spellings");
-        std::fs::remove_dir_all(&directory).ok();
-        std::fs::create_dir_all(&directory).expect("scratch");
-        assert!(
-            ESS_SKILL_PREFIXES.contains(&"ess-specify:")
-                && ESS_SKILL_PREFIXES.contains(&"ess-schema:"),
-            "the current id and the one the corpus was authored under, both: {ESS_SKILL_PREFIXES:?}"
-        );
-        for prefix in ESS_SKILL_PREFIXES {
-            let skill = format!("{prefix}a-skill");
-            std::fs::write(
-                directory.join("case.yaml"),
-                format!(
-                    "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
-                     task: draft the domain\nexpectations: expectations.trace.yaml\n\
-                     subject:\n  skills: [aep-plan:planning, {skill}]\n"
-                ),
-            )
-            .expect("written");
-            assert!(
-                read_case(&directory).expect("a case").needs_ess,
-                "`{skill}` names the plugin whose step runs `ess`, so the case needs `ess`"
-            );
-        }
-
-        // A skill whose plugin merely starts with the same letters is not that plugin.
-        std::fs::write(
-            directory.join("case.yaml"),
-            "format: eval-case/1\nid: aep-eval-case-needs-ess\nworkflow: adp/default\n\
-             task: draft the domain\nexpectations: expectations.trace.yaml\n\
-             subject:\n  skills: [ess-specifier:specify]\n",
-        )
-        .expect("written");
-        assert!(
-            !read_case(&directory).expect("a case").needs_ess,
-            "the prefix is `<plugin>:`, not a bare stem"
-        );
-
-        // The person who reads the refusal has to be able to tell which spelling tripped it, so
-        // the message names every spelling the matcher accepts.
-        let refusal = RunRefusal::ChildEssMissing {
-            case: "a-case".to_owned(),
-            child_path: "/usr/bin".to_owned(),
-        }
-        .to_string();
-        assert!(refusal.starts_with("EVAL-RUN-018"), "{refusal}");
-        for spelling in ESS_SKILL_PREFIXES {
-            assert!(
-                refusal.contains(spelling),
-                "the refusal names `{spelling}`, which is one of the spellings that trips it: \
-                 {refusal}"
-            );
-        }
-    }
-
-    fn plan_of(arm: Arm, harness: Harness) -> Plan {
-        Plan {
-            case: Case {
-                id: "development-honest".to_owned(),
-                workflow: "adp/default".to_owned(),
-                task: "Add a `--json` flag.".to_owned(),
-                expectations: PathBuf::from(
-                    "conformance/eval/development-honest/expectations.trace.yaml",
-                ),
-                needs_ess: false,
-            },
-            arm,
-            harness,
-            plugins: Vec::new(),
-            model_requested: None,
-        }
-    }
-
-    #[test]
-    fn a_pinned_plugin_reaches_the_argv_with_the_bytes_the_operator_wrote() {
-        // *Verbatim* is a claim about bytes, so it is asserted on bytes. The parse splits on the
-        // last two `@` and [`fmt::Display`] rejoins on them, which round-trips exactly — including
-        // a repository spelling that is not `owner/repo` and a commit pin, neither of which this
-        // runner interprets.
-        //
-        // The pin is a plugin an operator could install today: `aep-plan` at `agentplugins@a2077d2`,
-        // the commit that renamed it. A coordinate naming the old `aep-planning` would still
-        // round-trip — this runner resolves nothing — but it would model an install nobody can
-        // make, and the only such coordinate in the suite is the released `@0.4.0` pin in
-        // `tests/eval_run.rs`, which is kept old on purpose because that release really is named
-        // that.
-        let mut plan = plan_of(Arm::Plugin, Harness::Claude);
-        for given in [
-            "bdfinst/agentic-dev-team@dev-team@1.4.0",
-            "beyond10x/agentplugins@aep-plan@a2077d25a7d56fd34a4d8a0f37b0a152c39ad7ab",
-        ] {
-            plan.plugins
-                .push(MarketplacePlugin::parse(given).expect("a pinned spelling"));
-        }
-        let argv = spawn_argv(
-            &plan,
-            "metaharness",
-            Path::new("/work/subject"),
-            "do the thing",
-            Some(Path::new("/plugins/aep-plan")),
-            None,
-        None,
-    );
-        let forwarded: Vec<&String> = argv
-            .iter()
-            .zip(argv.iter().skip(1))
-            .filter(|(flag, _)| *flag == "--plugin")
-            .map(|(_, value)| value)
-            .collect();
-        assert_eq!(
-            forwarded,
-            vec![
-                "bdfinst/agentic-dev-team@dev-team@1.4.0",
-                "beyond10x/agentplugins@aep-plan@a2077d25a7d56fd34a4d8a0f37b0a152c39ad7ab"
-            ],
-            "the operator's bytes, in the operator's order: {argv:?}"
-        );
-        assert!(
-            argv.windows(2)
-                .any(|pair| pair == ["--plugin-dir", "/plugins/aep-plan"]),
-            "beside the directory rather than instead of it: {argv:?}"
-        );
-    }
-
-    #[test]
-    fn the_model_is_forwarded_verbatim_and_before_the_treatment() {
-        // The dry run of `--model`: the argv, with nothing spawned. *Verbatim* is a claim about
-        // bytes, so it is asserted on bytes — a runner that normalised `claude-sonnet-4-6` to a
-        // dated id would be pinning something other than what the operator wrote down.
-        let tree = PathBuf::from("/work/scratch");
-        let raw = spawn_argv(
-            &plan_of(Arm::Raw, Harness::Claude),
-            "metaharness",
-            &tree,
-            "do it",
-            None,
-            Some("claude-sonnet-4-6"),
-        None,
-    );
-        assert_eq!(
-            raw,
-            vec![
-                "metaharness",
-                "run",
-                "claude",
-                "--hermetic",
-                "--cwd",
-                "/work/scratch",
-                "--decisions",
-                "observe",
-                "-p",
-                "do it",
-                "--model",
-                "claude-sonnet-4-6",
-            ]
-        );
-        let plugin = spawn_argv(
-            &plan_of(Arm::Plugin, Harness::Claude),
-            "metaharness",
-            &tree,
-            "do it",
-            Some(Path::new("/plugins/aep-plan")),
-            Some("claude-sonnet-4-6"),
-        None,
-    );
-        assert_eq!(
-            plugin[..raw.len()],
-            raw[..],
-            "the model is a condition both arms are held at, so it sits before the treatment and \
-             not inside it"
-        );
-        assert!(
-            !spawn_argv(
-                &plan_of(Arm::Raw, Harness::Claude),
-                "metaharness",
-                &tree,
-                "do it",
-                None,
-                None,
-            None,
-        )
-            .iter()
-            .any(|word| word == "--model"),
-            "an invocation that pins no model keeps the argv it had before the flag existed"
-        );
-    }
-
-    #[test]
-    fn an_unpinned_plugin_is_refused_in_metaharness_own_words_and_never_defaulted() {
-        // Two segments name a plugin whose contents can change between two runs that both claim to
-        // have used it. metaharness refuses it at parse; this refuses it before the spawn, with the
-        // same sentence, so an operator does not read two different explanations of one mistake.
-        let refusal = MarketplacePlugin::parse("beyond10x/agentplugins@aep-plan")
-            .expect_err("two segments name no pin");
-        assert!(
-            refusal.contains("names no pin")
-                && refusal.contains("<repo>@<name>@<version-or-commit>"),
-            "{refusal}"
-        );
-        let blank = MarketplacePlugin::parse("beyond10x/agentplugins@aep-plan@")
-            .expect_err("an empty pin names everything");
-        assert!(blank.contains("empty pin"), "{blank}");
-    }
-
-    #[test]
-    fn every_arm_is_spawned_by_one_instrument_and_only_the_treatment_varies() {
-        // Design constant 1, as an assertion on the argv. The two invocations differ in exactly
-        // two words — `--plugin-dir` and the directory — and in nothing else: same hermetic mode,
-        // same decision mode, same working tree. An instrument that varied with the arm would make
-        // the comparison meaningless whatever the matrix said.
-        let tree = PathBuf::from("/work/scratch");
-        let raw = spawn_argv(
-            &plan_of(Arm::Raw, Harness::Claude),
-            "metaharness",
-            &tree,
-            "do it",
-            None,
-            None,
-        None,
-    );
-        let plugin = spawn_argv(
-            &plan_of(Arm::Plugin, Harness::Claude),
-            "metaharness",
-            &tree,
-            "do it",
-            Some(Path::new("/plugins/aep-plan")),
-            None,
-        None,
-    );
-
-        assert_eq!(
-            raw,
-            vec![
-                "metaharness",
-                "run",
-                "claude",
-                "--hermetic",
-                "--cwd",
-                "/work/scratch",
-                "--decisions",
-                "observe",
-                "-p",
-                "do it",
-            ]
-        );
-        assert_eq!(
-            plugin[..raw.len()],
-            raw[..],
-            "arm b is arm a plus its treatment, and nothing else"
-        );
-        assert_eq!(
-            &plugin[raw.len()..],
-            &[
-                "--plugin-dir".to_owned(),
-                "/plugins/aep-plan".to_owned()
-            ]
-        );
-        assert_eq!(
-            spawn_argv(
-                &plan_of(Arm::Plugin, Harness::Codex),
-                "metaharness",
-                &tree,
-                "do it",
-                Some(Path::new("/plugins/aep-plan")),
-                None,
-            None,
-        )
-            .last()
-            .expect("a plugin directory"),
-            "/plugins/aep-plan",
-            "the caller-selected plugin is independent of the harness"
-        );
-    }
-
-
-
-
-
-
-    #[test]
-    fn the_manifest_the_runner_assembles_is_one_the_matrixs_own_reader_reads() {
-        // The round trip, at the level of the two functions rather than through the binary. The
-        // failure it exists to catch is a quoting or key-order mistake that would otherwise sit
-        // undetected until a sweep had been paid for.
-        let session = Session {
-            harness_version: "claude 2.1.239".to_owned(),
-            model: Some("claude-sonnet-5".to_owned()),
-            plugin_digest: Some("a".repeat(DIGEST_WIDTH)),
-            plugins: Vec::new(),
-            cost_micro_usd: Some(521_600),
-            tokens: Some(116_546),
-            wall_time_ms: Some(22_320),
-        };
-        let text = manifest_text(
-            &plan_of(Arm::Plugin, Harness::Claude),
-            &session,
-            &"b".repeat(DIGEST_WIDTH),
-            "2026-08-23",
-        );
-        let manifest = read(&text).expect("the runner writes manifests its own reader reads");
-        assert_eq!(manifest.arm, Arm::Plugin);
-        assert_eq!(manifest.case, "case:development-honest");
-        assert_eq!(manifest.plugin_digest, Some("a".repeat(DIGEST_WIDTH)));
-        assert_eq!(manifest.cost_micro_usd, Some(521_600));
-    }
-
-    #[test]
-    fn a_transcript_of_several_sessions_totals_them_rather_than_reporting_the_last_one() {
-        // The driven shape. `protocol drive` starts a fresh session per workflow state, so a driven
-        // run's transcript is a concatenation with one terminal record per state — and this reader
-        // took the last of them until the first live driven run (2026-08-23) reported `$1.135363`
-        // for a walk that had cost `$15.014604` across six sessions.
-        //
-        // Doubling a committed fixture is the whole assertion: whatever one session states, two
-        // copies of it must state twice, on all three columns. A reader that takes the last record
-        // answers the single figure and fails here.
-        let one = std::fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/eval-run/claude-driven-attested.jsonl"),
-        )
-        .expect("the committed driven fixture");
-        let mut two = one.clone();
-        two.extend_from_slice(&one);
-
-        let single =
-            Session::read(&one, Arm::Driven, Harness::Claude, &[]).expect("a readable stream");
-        let doubled = Session::read(&two, Arm::Driven, Harness::Claude, &[])
-            .expect("two of them, concatenated");
-
-        assert_eq!(
-            doubled.cost_micro_usd,
-            single.cost_micro_usd.map(|cost| cost * 2),
-            "two sessions cost what both of them cost"
-        );
-        assert_eq!(
-            doubled.tokens,
-            single.tokens.map(|tokens| tokens * 2),
-            "and used what both of them used"
-        );
-        assert_eq!(
-            doubled.wall_time_ms,
-            single.wall_time_ms.map(|wall| wall * 2),
-            "and took as long as both of them took: the sessions run one after another"
-        );
-        assert_eq!(
-            (
-                doubled.harness_version.clone(),
-                doubled.model.clone(),
-                doubled.plugin_digest.clone()
-            ),
-            (
-                single.harness_version.clone(),
-                single.model.clone(),
-                single.plugin_digest.clone()
-            ),
-            "and nothing else moved: the opening record is still the first one"
-        );
-    }
-
-    #[test]
-    fn one_session_that_wrote_two_terminal_records_is_charged_once() {
-        // The budget-kill shape, and the other half of the fold. `--max-budget-usd` stops a session
-        // *after* it has written its `result`, so the stream carries a second terminal record
-        // saying `error_max_budget_usd` — and both restate the same running counters. Summing them
-        // reported `$30.002816` for the golden-path run of 2026-09-03, which spent `$15.00140784`.
-        //
-        // The second record also zeroes its `usage` while restating the cost and a shorter wall
-        // clock, which is why the fold takes the larger of the two rather than the last.
-        let one = std::fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/eval-run/claude-driven-attested.jsonl"),
-        )
-        .expect("the committed driven fixture");
-        let mut killed = one.clone();
-        killed.extend_from_slice(
-            concat!(
-                r#"{"format":"metaharness.event/1","seq":47,"run":"R3-4/claude-driven","#,
-                r#""event":"session.ended","is_error":true,"subtype":"error_max_budget_usd","#,
-                r#""terminal_reason":"budget_exhausted","num_turns":1,"duration_ms":12532,"#,
-                r#""total_cost_usd":0.5216,"usage":{"input_tokens":0,"output_tokens":0,"#,
-                r#""cache_read_input_tokens":0,"cache_creation_input_tokens":0}}"#,
-                "\n"
-            )
-            .as_bytes(),
-        );
-
-        let single =
-            Session::read(&one, Arm::Driven, Harness::Claude, &[]).expect("a readable stream");
-        let stopped = Session::read(&killed, Arm::Driven, Harness::Claude, &[])
-            .expect("the same session, stopped at its cap");
-
-        assert_eq!(
-            stopped.cost_micro_usd, single.cost_micro_usd,
-            "one session spent one figure, however many times it stated it"
-        );
-        assert_eq!(
-            stopped.tokens, single.tokens,
-            "and used what it used: the stopping record's zeroed usage is not the session's"
-        );
-        assert_eq!(
-            stopped.wall_time_ms, single.wall_time_ms,
-            "and ran as long as its longest statement, not the sum of two"
-        );
-    }
-
-    #[test]
-    fn a_run_that_states_no_cost_writes_no_cost_key_rather_than_a_zero() {
-        let session = Session {
-            // The shape the first live pilot run recorded: codex states no model at session start.
-            harness_version: "codex 0.144.0".to_owned(),
-            model: None,
-            plugin_digest: None,
-            plugins: Vec::new(),
-            cost_micro_usd: None,
-            tokens: None,
-            wall_time_ms: None,
-        };
-        let text = manifest_text(
-            &plan_of(Arm::Raw, Harness::Codex),
-            &session,
-            &"c".repeat(DIGEST_WIDTH),
-            "2026-08-23",
-        );
-        assert!(
-            !text.contains("cost_micro_usd") && !text.contains("tokens"),
-            "an unpriced run states nothing, and the matrix reports its cell over the runs that \
-             did: {text}"
-        );
-        assert!(
-            text.contains("plugin_digest: null") && text.contains("model: null"),
-            "and both keys that must be written even when they say nothing are written: {text}"
-        );
-        assert!(
-            read(&text).is_ok(),
-            "and a manifest with two written nulls in it is one the matrix reads: {text}"
-        );
-    }
-}
-
-#[cfg(test)]
-mod native_arm_tests {
-    use super::*;
-
-    #[test]
-    fn the_fourth_arm_is_a_word_the_manifest_reads_and_writes() {
-        assert_eq!(Arm::parse("native"), Some(Arm::Native));
-        assert_eq!(Arm::Native.as_str(), "native");
-        assert_eq!(Harness::B10x.as_str(), "b10x");
-    }
-
-    #[test]
-    fn the_arms_still_sort_in_the_order_the_experiment_runs_them() {
-        // `native` last, because it is the arm that removes the vendor loop entirely and every
-        // other arm is a treatment applied to one.
-        let mut arms = vec![Arm::Native, Arm::Driven, Arm::Raw, Arm::Plugin];
-        arms.sort();
-        assert_eq!(arms, vec![Arm::Raw, Arm::Plugin, Arm::Driven, Arm::Native]);
-    }
-
-    #[test]
-    fn a_native_run_is_refused_a_spawn_and_told_what_does_launch_it() {
-        // Same position as `driven` and a different reason, which the message has to carry: a
-        // driven run is launched by `protocol drive run` because there must be one policy; a
-        // native run is launched by `b10x-harness` because it *is* the loop and there is no vendor
-        // harness here to drive.
-        let refusal = RunRefusal::NativeIsNotLaunchedHere.to_string();
-        assert!(refusal.starts_with("EVAL-RUN-011"), "{refusal}");
-        assert!(refusal.contains("b10x-harness"), "{refusal}");
-        assert!(refusal.contains("--arm native --stream"), "{refusal}");
-        assert!(
-            refusal.contains("no vendor harness in it"),
-            "and says why it differs from driven: {refusal}"
-        );
-    }
-
-    #[test]
-    fn every_arm_has_a_code_of_its_own_and_none_is_reused() {
-        let codes = [
-            RunRefusal::NotLive.code(),
-            RunRefusal::NoBudget.code(),
-            RunRefusal::DrivenIsNotLaunchedHere.code(),
-            RunRefusal::NativeIsNotLaunchedHere.code(),
-        ];
-        let unique: std::collections::BTreeSet<&str> = codes.iter().copied().collect();
-        assert_eq!(unique.len(), codes.len(), "{codes:?}");
-    }
+/// Ingest a recorded evaluation stream without launching an execution host.
+pub fn run_arm(args: &RunArgs) -> Result<ExitCode> {
+    let stream = args.stream.as_ref().context("live evaluation moved to `metaharness aep drive eval run`; use --stream for offline ingestion")?;
+    crate::observation_time(Some(&args.observed_at))?;
+    let plugins = declared_plugins(args)?;
+    let cases = select_cases(args)?;
+    std::fs::create_dir_all(&args.out).with_context(|| format!("creating {}", args.out.display()))?;
+    ingest_recorded(args, cases, stream, plugins)
 }
