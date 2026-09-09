@@ -736,7 +736,7 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
             stolen.run
         );
     }
-    let outcome = finish(report, &run_id, &inputs.map_origin);
+    let outcome = finish_with_command(report, &run_id, &inputs.map_origin, host.resume_command());
     lock.release();
     outcome
 }
@@ -862,7 +862,7 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
         &mut executors,
         &options,
     );
-    let outcome = finish(report, &run_id, &inputs.map_origin);
+    let outcome = finish_with_command(report, &run_id, &inputs.map_origin, host.resume_command());
     lock.release();
     outcome
 }
@@ -1008,6 +1008,16 @@ pub fn finish(
     run: &RunId,
     map_origin: &str,
 ) -> Result<ExitCode> {
+    finish_with_command(report, run, map_origin, "protocol drive resume")
+}
+
+/// Render the continuation command owned by the execution host.
+fn finish_with_command(
+    report: Result<RunReport, DriveError>,
+    run: &RunId,
+    map_origin: &str,
+    resume_command: &str,
+) -> Result<ExitCode> {
     let report = match report {
         Ok(report) => report,
         Err(error) => bail!("{error}"),
@@ -1044,7 +1054,7 @@ pub fn finish(
         // `--pause-on-approval` and `--plugin-dir` were all re-read from nothing, so an operator
         // who typed exactly this got a different run or an error (F-W4.2-4). The run directory now
         // remembers all four, so the short line is the true one.
-        outln!("resume with: protocol drive resume {run}");
+        outln!("resume with: {resume_command} {run}");
     }
 
     Ok(match report.cursor.status {
@@ -2808,6 +2818,11 @@ pub struct ExecutorContext {
 
 /// Host preparation performs no run mutation or model launch.
 pub trait ExecutionHost {
+    /// The continuation command for a run this host starts or resumes.
+    fn resume_command(&self) -> &'static str {
+        "protocol drive resume"
+    }
+
     /// Validate this invocation before the lock or run id exists.
     fn prepare(&self, inputs: &Inputs, previous: Option<&Launch>, budget: Option<&str>, charge: Option<&str>) -> Result<PreparedExecution>;
 }
