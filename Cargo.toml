@@ -66,17 +66,16 @@ anyhow = "1"
 
 # `entity-runtime`, by git tag — see AGENTS.md § *Dependencies*. Declared **once**, here, because two
 # manifests each naming a tag is how two kernels came to be compiled into this workspace (0.5.2 under
-# the markdown backend, 0.8.0 under the SQLite one) for two releases. One line per crate, one tag for
+# the markdown backend, 0.8.0 under the SQLite one) for two releases. One line per crate, one pin for
 # every runtime crate; `cargo xtask deps` (the gate's `dep-check`) fails if the lockfile ever says otherwise.
-# `git` rather than a version because these crates are not on crates.io; a tag rather than `main`
-# because a ladder's verdicts are a published surface here and must not move under us — the pin is
-# the reversible half of `atlas/architecture/adr/0002`.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.17.6" }
+# These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
+# reproducible and upgrades reversible across the kernel and every provider.
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "faadc04f2f273517e21815d32ba3866f3aea7642" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

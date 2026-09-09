@@ -27,6 +27,9 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+- Pin Entity Runtime and the documentation build package to verified source revisions.
+  Entity Runtime's stricter replay validation refuses imported AEP audit events without
+  an emitting kernel definition; persisted AEP state and audit records remain available.
 - Direct evidence recording returns a checked result and takes an explicit reading
   instant so malformed or stale source evidence is refused before mutation.
 

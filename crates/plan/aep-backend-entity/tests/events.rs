@@ -171,8 +171,8 @@ fn each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle()
         "the published deterministic identity survives the runtime migration: {}",
         seal["event_id"]
     );
-    // What the move was decided on is the event's own `args` — the command's payload — where the
-    // runtime's fold can check it (R-110).
+    // The audit retains the AEP command payload. These are legacy-import records, not the
+    // arguments of an Entity Runtime operation that its replay verifier can re-execute.
     assert_eq!(
         events[2].args["decided_on"],
         serde_json::json!({ "recorded": "test_result=1" })
@@ -251,12 +251,11 @@ fn a_replayed_command_writes_no_event_as_it_writes_no_instance() {
 }
 
 #[test]
-fn the_stored_events_fold_back_to_the_stored_instance() {
-    // Runtime R-97: a fold reaches no state `execute` would have refused, and reproduces the
-    // instance. The definition is the test's: the adapter stores every contract entity as one
-    // `aep.entity` type whose statuses are open, so the fold is handed a ladder that declares the
-    // three steps this history took — a creation into `draft`, a self-transition (an update), and
-    // `draft -> proposed`.
+fn legacy_aep_audit_events_do_not_claim_kernel_verified_replay() {
+    // The adapter imports AEP decisions and stores their resulting state. A ladder alone cannot
+    // prove those decisions were emitted by the kernel: replay now requires the actual emitting
+    // definition and its argument, field and payload semantics. Keep this refusal explicit rather
+    // than inventing a definition from the observed events to make them pass.
     let definition: entity_core::EntityDefinition = serde_json::from_value(serde_json::json!({
         "entity": STORED_AS,
         "version": 1,
@@ -283,14 +282,19 @@ fn the_stored_events_fold_back_to_the_stored_instance() {
                 .expect("held"),
         )
     });
-    assert_eq!(events.len(), 3, "the fixture holds the history it folds");
+    assert_eq!(events.len(), 3, "the fixture holds the complete audit");
 
-    let folded = entity_core::rehydrate(&definition, &events).expect("the history folds");
-    assert_eq!(
-        folded, stored,
-        "what the events rebuild is what the store holds: state, revision and every field"
-    );
-    assert_eq!(folded.lifecycle_state, "proposed");
-    assert_eq!(folded.revision, 3);
-    assert_eq!(folded.fields["title"], "One, renamed");
+    let error = entity_core::rehydrate(&definition, &events)
+        .expect_err("a status ladder does not establish who emitted an audit event");
+    let entity_core::CoreError::Validation(errors) = error else {
+        panic!("expected an event validation refusal, got {error:?}");
+    };
+    assert!(errors.iter().any(|error| {
+        error.path == "events"
+            && error.message.contains("aep.entity.create/v1")
+            && error.message.contains("emits nothing on creation")
+    }));
+    assert_eq!(stored.lifecycle_state, "proposed");
+    assert_eq!(stored.revision, 3);
+    assert_eq!(stored.fields["title"], "One, renamed");
 }
