@@ -2,18 +2,23 @@
 format: aep.planning-md/1
 id: migration-plan:aep-runtime-extraction
 kind: migration-plan
-status: active
+status: implemented
 title: Move concrete AEP execution above the foundation
 relations:
 - informed_by: epic:reference-driver
 - serves: vision:O3
-revision: 2
+revision: 4
 ---
 ## Decision
-The operator approved extraction on 2026-09-09: model-backed runs move to `metaharness aep drive`; migrate eval and Agentplugins callers now; preserve compatible paused runs. AEP retains neutral governor, run machinery, command/operator driving and offline evidence ingestion. No foundation runtime dependency on installed Metaharness or Harness.
+The operator approved runtime extraction on 2026-09-09. AEP retains the neutral governor, run state, command/operator driving and offline evidence ingestion. Concrete model execution belongs in Metaharness, with no upward runtime dependency from the foundation (Atlas ADR 0047).
 
-## Implementation
-Make AEP CLI importable, share neutral run-host services, move concrete executor, frame/event translation, native hooks and live evaluation into Metaharness. Pin all AEP dependencies to one published commit. Keep existing authorization, spend, frozen wire and resume integrity rules. Record Atlas ADR 0047 and actual catalog direction, then complete fresh foundation composition and final planning validation.
+## Repository scope
+Expose the AEP command implementation and neutral execution-host interface; refuse model-backed starts and resumes before effects; preserve opaque launch metadata for compatible external hosts. The execution host supplies the continuation command printed for its paused runs. Preserve frozen frame, cursor, snapshot and evidence contracts.
 
-## Acceptance
-Foundation gates pass without tooling executables. Offline adapter tests retain denial, frame, budget, plugin and legacy-resume behavior. Callers invoke the real replacement command. Exact-hash composition receipt and final ER planning evidence exist before completion. Retire only reviewed recoverable worktrees; preserve unrelated changes. No tags, deployment, paid run or connectors_v2 enrollment.
+## Repository acceptance
+The full AEP gate passes, including governance, strict linting, workspace tests, documentation/schema checks, MSRV and website. Refusal tests leave project files unchanged and produce no live-evaluation output. The interface permits Metaharness to preserve paused-run authority and print its actual resume command. Publication uses the bot and exact-commit admission.
+
+## Coordination
+Metaharness owns concrete executor, native hooks, event translation and live evaluation; Agentplugins owns callers. Atlas's migration-plan:aep-runtime-extraction and task:foundation-composition-evidence own their integration order, actual catalog direction, the final exact-hash composition receipt and ER planning validation. This record's implemented status describes the AEP source implementation; Atlas cannot close the coordinated migration until those remaining requirements have evidence.
+
+No tags, deployment, paid run or connectors_v2 enrollment is authorized.
