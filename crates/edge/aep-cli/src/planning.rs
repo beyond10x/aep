@@ -324,7 +324,7 @@ impl Plan {
 /// `--store <dir>` is the markdown override, as it is for every `protocol artifact` verb. A store
 /// that cannot be read answers a report whose failures say so, which is what stops the run —
 /// the driver treats a plan it cannot trust as `StoreBroken`, not as *blocked*.
-pub(crate) struct DrivenPlan {
+pub struct DrivenPlan {
     plan: Plan,
     /// The project the plan belongs to, so the workspace manifest beside it can be read.
     project: PathBuf,

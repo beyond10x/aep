@@ -93,20 +93,20 @@ must refuse unknown fields and contradictory totals.
 Harness-specific skills, agents, and marketplace manifests live in the sibling `agentplugins`
 repository. This repository carries no plugin source and no marketplace manifest.
 
-`aep drive eval run --arm plugin` requires the treatment to be named explicitly: `--plugin-dir` for a tree
-checked out on this machine, or `--plugin <repo>@<name>@<version-or-commit>` for a pinned plugin the
-operator installed from a marketplace, which is forwarded to `metaharness` verbatim and resolved
-here never. `aep drive run` accepts repeatable `--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR`
-fallback. Neither command guesses a path under this checkout.
+`metaharness aep drive` owns model execution and live plugin evaluation. Plugin inputs remain
+explicit: directories or exact marketplace pins. AEP's offline ingestion records the treatment
+the stream attests and never installs a plugin or guesses a path under this checkout.
 
 ### Metaharness
 
-`metaharness` is an external tool, never a crate dependency. Paid or vendor-backed evaluation runs
-live there. This repository retains language-neutral trace fixtures, evaluation case definitions,
-and the runner that ingests or orchestrates explicitly authorized runs.
+Metaharness depends on AEP's neutral libraries; AEP has no runtime or Cargo dependency on
+Metaharness or Harness. Concrete execution, native hooks and live evaluation live in
+`metaharness aep drive`. This repository retains governor decisions, run storage, command/operator
+execution, language-neutral trace fixtures, evaluation definitions and offline ingestion.
 
-Nothing spawns without `METAHARNESS_LIVE=1` and `--budget-usd`. An absent tool exits with the
-documented tool-missing status. `--stream` ingestion spends nothing.
+An AEP invocation of a model-backed map refuses before run allocation and names the replacement
+command. Metaharness preserves explicit live authorization, exact spend caps and compatible
+paused runs. `aep drive eval run --stream` spends nothing.
 
 ### Public-source provenance
 

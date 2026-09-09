@@ -47,6 +47,9 @@ const SEED_AT: Timestamp = Timestamp::EPOCH;
 /// anybody having to remember, and the only way to widen the first level is to widen this.
 const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
 
+/// Protocol implementation version linked by this host.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Reference CLI for the Agentic Engineering Protocol.
 #[derive(Debug, Parser)]
 #[command(
@@ -777,7 +780,7 @@ enum EntityCommand {
 /// Rust's `println!` panics when the reader goes away, so `protocol inspect | head -3` ends in a
 /// stack trace instead of three lines. A consumer that stopped reading is not an error this program
 /// has anything to say about, so it exits quietly.
-fn write_out(text: &str, newline: bool) {
+pub fn write_out(text: &str, newline: bool) {
     use std::io::Write;
 
     let stdout = std::io::stdout();
@@ -827,7 +830,7 @@ mod trace;
 // The third, on the same criterion again: a verb family with its own store — a run directory — its
 // own vocabulary, and no shared state with the rest. It is also where the three things that touch
 // the world live, which is why they are here and not in `aep-driver`.
-mod drive;
+pub mod drive;
 
 // The fourth, and it holds the same boundary the third does: `aep-render` decides what a picture
 // looks like, and the poll loop, the rasteriser shell-out and the read of a run directory are here
@@ -844,8 +847,8 @@ mod contract;
 // check report `protocol trace check` writes — its vocabulary is the three arms of the evaluation
 // programme, and it shares nothing with the rest. It is also where the one rule that programme has
 // about its own output lives: counts of facts, never a score.
-mod eval;
-mod money;
+pub mod eval;
+pub mod money;
 mod redaction;
 mod workspace;
 
@@ -889,7 +892,8 @@ mod property;
 // here that decides a *document* against a run rather than code against a suite.
 mod specification;
 
-fn main() -> ExitCode {
+/// Execute the canonical AEP command or its compatibility alias.
+pub fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
         Err(error) => {
@@ -906,7 +910,7 @@ fn main() -> ExitCode {
 /// trees. `Cli::command()` alone is not that tree: the flat spellings are hidden here, by a rule
 /// rather than by a list, so a verb added to an area is hidden from the first level without
 /// anybody remembering to say so.
-fn command() -> clap::Command {
+pub fn command() -> clap::Command {
     let mut command = Cli::command();
     let flat: Vec<String> = command
         .get_subcommands()
@@ -1434,7 +1438,7 @@ fn kebab(value: &str) -> String {
 
 /// What can be done with a specification.
 /// The observation time a verifier was given, or now.
-pub(crate) fn observation_time(written: Option<&str>) -> Result<aep_domain::time::ObservedAt> {
+pub fn observation_time(written: Option<&str>) -> Result<aep_domain::time::ObservedAt> {
     match written {
         Some(value) => {
             let at = aep_domain::time::CivilDate::parse(value)
@@ -2955,7 +2959,7 @@ mod cli_reference {
 #[cfg(test)]
 mod command_tree {
     /// What `aep --help` lists, in the order it lists them.
-    const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
+const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
 
     /// The areas whose verbs moved under them, and so owe a flat alias each.
     const REGROUPED: [&str; 3] = ["govern", "plan", "observe"];

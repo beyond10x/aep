@@ -195,7 +195,7 @@ tasks:
     # failed` reads as "the gate failed", and `docs-check` reads as "the CLI reference is stale".
     # The verb list comes from clap, not from parsing `--help`, so a rendering change cannot move it.
     cmds:
-      - cargo test -q -p aep-cli --bin protocol cli_reference
+      - cargo test -q -p aep-cli --lib cli_reference
 
   clippy:
     desc: Lint every target, warnings are errors.

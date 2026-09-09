@@ -27,6 +27,13 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+- Concrete model driving, native execution hooks and live evaluation move to
+  `metaharness aep drive`. AEP exposes its neutral CLI library and retains command/operator
+  driving, governance, run storage and offline evaluation. Model-backed invocations through
+  AEP refuse before allocating a run and name the replacement command.
+- Pin Entity Runtime and the documentation build package to verified source revisions.
+  Entity Runtime's stricter replay validation refuses imported AEP audit events without
+  an emitting kernel definition; persisted AEP state and audit records remain available.
 - Direct evidence recording returns a checked result and takes an explicit reading
   instant so malformed or stale source evidence is refused before mutation.
 

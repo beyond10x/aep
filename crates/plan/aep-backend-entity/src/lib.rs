@@ -797,8 +797,9 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
 
             // The event is built from what the store held a moment ago and what the contract holds
             // now: `from_state` and `changed` are the difference, and for a creation there is no
-            // "before", so `from_state` is `None` and `changed` is every field — which is what the
-            // runtime's fold (`entity_core::rehydrate`) reads as a creation event.
+            // "before", so `from_state` is `None` and `changed` is every field. This is imported
+            // AEP audit history; it does not claim kernel-verified replay without an emitting
+            // Entity Runtime definition.
             let (from_state, changed) = match &held {
                 Some(before) => (
                     Some(before.lifecycle_state.clone()),

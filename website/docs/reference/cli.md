@@ -249,16 +249,17 @@ for the walkthrough.
 
 ## Drive: the driver surface
 
-`aep drive` walks a workflow: it makes the engine's calls in order, runs the three kinds of
-step that touch the world — a program, a model, a person — and records what it did. It evaluates no
+`aep drive` walks command/operator workflows through the neutral governor and records what it did.
+Model-backed maps, native hooks and live evaluation use `metaharness aep drive`.
+The host imports AEP's library; the foundation never launches Metaharness or Harness. It evaluates no
 gate itself, because a driver that could evaluate a gate would be a second protocol implementation
 with none of the conformance suites behind it.
 
 | Command | Does |
 |---|---|
-| `aep drive run [--map <file-or-id>] [--budget-usd <usd> --assume-usd-per-run <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3`; a map with an `llm` step requires both cost flags and `METAHARNESS_LIVE=1` |
+| `aep drive run [--map <file-or-id>] [--budget-usd <usd> --assume-usd-per-run <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3`; a map with an `llm` step is refused before allocation and names `metaharness aep drive run` |
 | `aep drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
-| `aep drive transition [--run <id>]` | answers a native loop's `transition` hook from the engine: the loop's JSON on stdin; exit `0` proceeds, `2` refuses with a JSON `reason`; writes nothing |
+| `aep drive transition [--run <id>]` | refuses with the replacement `metaharness aep drive transition`; that host answers the native JSON hook through AEP's governor |
 | `aep drive resume <run> [--budget-usd <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock; the optional budget may narrow, never raise, the launch cap |
 
 All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and
@@ -283,7 +284,7 @@ naming the program the map wrote, the program that was spawned and which of the 
 `step-context.json` per `llm` step. `--max-iterations` bounds the call, not the run's lifetime, so a
 resume gets the budget the operator typed.
 
-A map with an `llm` step is a paid run even when this machine or a later pre-flight would prevent
+In `metaharness aep drive`, a map with an `llm` step is a paid run even when this machine or a later pre-flight would prevent
 the first launch. It is refused before a lock or run id unless `METAHARNESS_LIVE=1`,
 `--budget-usd <usd>` and `--assume-usd-per-run <usd>` are all explicit. Dollar text is converted
 exactly to integer millionths; exponent notation, negative values and more than six fractional
@@ -502,19 +503,19 @@ A record reporting failures is written down and exits `0`. The verdict belongs i
 
 How well a harness follows these workflows, under four treatments — `raw` instructions, an
 operator-selected `plugin`, a `driven` run whose every tool call is answered at a seam, and a `native` run whose
-published toolset *is* the policy. `metaharness` is a tool here, the way `git` is: found on `PATH`,
-and a machine without it is told so by name and exits `2` rather than reddening a gate.
+published toolset *is* the policy. AEP ingests recorded streams with `--stream` and builds matrices.
+Live runs use `metaharness aep drive eval run`; AEP refuses that mode before creating output.
 
 | Command | Does |
 |---|---|
 | `aep drive eval matrix <runs>… [--format text\|json] [--out <file>]` | assembles the outcome matrix from `*.manifest.yaml` / `*.report.json` pairs: per harness × arm × workflow and per expectation, how many facts held, how many were contradicted, and how many nobody could find out |
-| `aep drive eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--model <model>] [--stream <file>] [--budget-usd <usd>] [--redact]` | runs one arm of one case and leaves the documents `eval matrix` reads; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing ; a `--stream` ingest exits with its own verdict — `0` conformant, `1` contradicted, `3` undecided |
+| `aep drive eval run --arm raw\|plugin\|driven\|native --harness … --case … --out <dir> --observed-at <date> [--plugin-dir <dir>] [--plugin <repo>@<name>@<pin>] [--model <model>] [--stream <file>] [--budget-usd <usd>] [--redact]` | ingests one recorded arm of one case and leaves the documents `eval matrix` reads; without `--stream`, names the Metaharness replacement; the plugin arm requires a plugin named explicitly, by either mechanism; `--stream` ingests a recorded run and spends nothing ; a `--stream` ingest exits with its own verdict — `0` conformant, `1` contradicted, `3` undecided |
 
 `eval matrix` exits `0` whenever a matrix was assembled, whatever it says: a matrix is a report, and
 an exit code that moved with the counts would be the single number it refuses to compute — there is
 no score, no ranking and no percentage in the output. Nothing spawns without `METAHARNESS_LIVE=1`
 and `--budget-usd`. Arms `driven` and `native` are not launched from here and the refusal says what
-launches each: `aep drive run` and `b10x-harness`.
+launches each: `metaharness aep drive run` and the Metaharness native evaluation runner.
 
 `eval run --stream` is the exception, and it exits with the verdict it prints — the same three codes
 `aep trace check` uses, from the same record:
