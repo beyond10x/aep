@@ -89,6 +89,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.52.0` | AEP 0.52.0 |
 | `0.53.0` | AEP 0.53.0 |
 | `0.54.0` | AEP 0.54.0 |
+| `0.55.0` | aep 0.55.0 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification

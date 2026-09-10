@@ -9,6 +9,11 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Public harness integration, concepts and transcript guides now route model-backed runs and
+  native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
+
 ## [0.55.0] — 2026-09-10
 
 ### Added

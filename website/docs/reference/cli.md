@@ -260,11 +260,12 @@ with none of the conformance suites behind it.
 | `aep drive run [--map <file-or-id>] [--budget-usd <usd> --assume-usd-per-run <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap]` | starts a new run of a task, allocating a run id such as `AUTH-142/3`; a map with an `llm` step is refused before allocation and names `metaharness aep drive run` |
 | `aep drive status [--run <id>]` | what the store's last run is doing, and who holds the lock |
 | `aep drive transition [--run <id>]` | refuses with the replacement `metaharness aep drive transition`; that host answers the native JSON hook through AEP's governor |
-| `aep drive resume <run> [--budget-usd <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a run that stopped, re-taking the store lock; the optional budget may narrow, never raise, the launch cap |
+| `aep drive resume <run> [--budget-usd <usd>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock]` | continues a command/operator run; model-backed runs use `metaharness aep drive resume`; the optional budget may narrow, never raise, the launch cap |
 
-All three discover `--project`, `--root`, `--task` and `--store` from the project when omitted, and
-take `--plugin-dir` (repeatable; `AEP_DRIVE_PLUGIN_DIR` supplies it when the flag is absent) to load
-a harness plugin into every `llm` step's session. `--pause-on-approval` runs until the first thing a
+The run and resume commands discover `--project`, `--root`, `--task` and `--store` from the project
+when omitted. For model execution, the Metaharness host takes `--plugin-dir` (repeatable;
+`AEP_DRIVE_PLUGIN_DIR` supplies it when the flag is absent) to load a harness plugin into every
+`llm` step's session. `--pause-on-approval` runs until the first thing a
 person owes, then persists and exits `0`; the resume walks on from the step after it. What answered
 the `operator` step is read on that resume from the run's own record: a granted `approval` a
 person recorded while the run was stopped always counts, and `--approver agent:<name>` admits one
@@ -276,8 +277,7 @@ nobody's answer. `run` and `resume` exit `0` when the run completes or stops awa
 and `1` otherwise.
 
 What a run writes beside its cursor, in `.engineering/runs/<run>/`: `launch.json`, how the run was
-started — which is what makes the printed `resume with: aep drive resume <run>` line a line
-that works, since `resume` fills in `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` from
+started. Resume fills in `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` from
 it and a flag typed on the resume still wins; `spend.json`, the exact integer-microdollar
 reservations made before model sessions; `commands.jsonl`, one line per `command` step attempt
 naming the program the map wrote, the program that was spawned and which of the two it was; and a

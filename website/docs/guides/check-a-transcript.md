@@ -277,9 +277,10 @@ that record is submitted, then moves.](/img/trace-evidence-gate.svg)
 
 The drawing is of the mechanism, not a screenshot of any one run — and its last panel is still
 labelled *soon*, because it was drawn before the driver shipped. **The driver ships today.**
-`aep drive run`, `drive status` and `drive resume` walk a workflow: they make the engine's
-calls in order, execute the three kinds of step that touch the world — a program, a model, a
-person — and record what they did. The driver evaluates no gate itself. A driver that could
+`aep drive run` and `aep drive resume` walk command/operator workflows. Model-backed workflows
+use `metaharness aep drive run` and `metaharness aep drive resume`; `aep drive status` still reads
+their retained run records. The hosts make the engine's calls in order and record what they did.
+The driver evaluates no gate itself. A driver that could
 evaluate a gate would be a second protocol implementation with none of the conformance suites,
 and the first time the two disagreed the one nobody tested would win.
 

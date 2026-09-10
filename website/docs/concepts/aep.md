@@ -100,8 +100,10 @@ Two ship, one per shape of work this repository has. `drivers/development/defaul
 are written against `adp/default/1`, so a `aep drive run` with no `--map` is refused, naming
 both rather than picking one.
 
-`aep drive run` walks the map, makes the engine's calls in order, and records what it did. It
-evaluates **no gate itself**. That restraint is the design: a driver that could decide whether a
+`aep drive run` walks command/operator maps. Model-backed maps use `metaharness aep drive run`;
+AEP 0.55.0 refuses their execution through its own CLI before allocating a run. Both hosts ask
+the same neutral governor and retain AEP run records. The driver evaluates **no gate itself**.
+That restraint is the design: a driver that could decide whether a
 transition is permitted would be a second implementation of the protocol with none of the
 conformance suites behind it, and the first time the two disagreed, the one nobody tested would win.
 So the driver asks, the engine answers, and a blocked run prints the engine's reasons and exits

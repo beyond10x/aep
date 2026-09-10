@@ -13,9 +13,10 @@ itself.
 
 ## First: you may not have to build one
 
-A reference driver ships in this repository. `aep drive` makes the engine's calls in order,
-executes the three kinds of step a step map declares — a program, a model, a person — and records
-what it did:
+AEP supplies the neutral driver, governor and run storage. `aep drive` executes command and
+operator steps. Since AEP 0.55.0, model-backed maps run through `metaharness aep drive`, which
+imports AEP's library and supplies concrete model execution. A model-backed invocation through
+`aep drive` refuses before allocating a run and prints the replacement command.
 
 Install the three local binaries from source checkouts and verify what will be resolved from
 `PATH` before crossing a model boundary:
@@ -52,19 +53,19 @@ Codex, add the same GitHub repository as a marketplace from the Plugins surface.
 [agent plugins install page](https://beyond10x.github.io/agentplugins/) carries the current list.
 
 ```shell-session
-$ aep drive run --project . --map development/default \
+$ METAHARNESS_LIVE=1 metaharness aep drive run --project . --map development/default \
     --plugin-dir /path/to/agentplugins/plugins/aep-plan --pause-on-approval \
     --budget-usd 10 --assume-usd-per-run 1
 $ aep drive status
-$ aep drive resume AUTH-142/3      # the run id `drive run` allocated
+$ METAHARNESS_LIVE=1 metaharness aep drive resume AUTH-142/3
 ```
 
-`drive run` needs a model and costs money. For a map with an `llm` step it also needs the explicit
+This map needs a model and costs money. For a map with an `llm` step the host needs the explicit
 environment opt-in `METAHARNESS_LIVE=1`, an outer `--budget-usd`, and a conservative
 `--assume-usd-per-run` charge that it reserves before every launch. `drive status` reads the run
 directory and needs nothing. `--map` is not optional in this tree: two step maps are written
 against `adp/default/1`, so a `drive run` given neither is refused, naming both ids rather than picking the first
-(`crates/edge/aep-cli/src/drive.rs:401-411`).
+as shown by the current command's `--help` and project map discovery.
 
 It evaluates no gate itself. A driver that could evaluate a gate would be a second protocol
 implementation with none of the conformance suites behind it, and the first time the two disagreed
@@ -73,9 +74,9 @@ also the argument for reading the rest of this page before writing your own.
 
 Two things the driver does not do, both of which land on you if you build one:
 
-* **It knows two harnesses, both through metaharness.** An `llm` step says `harness: claude-code`
-  (the default) or `harness: b10x`, and the driver launches `metaharness run claude` or
-  `metaharness run b10x`. Metaharness also has a Codex adapter, but `aep drive` does not yet
+* **The model host selects two harnesses.** An `llm` step says `harness: claude-code`
+  (the default) or `harness: b10x`, and Metaharness launches its Claude or b10x adapter.
+  Metaharness also has a Codex adapter, but `metaharness aep drive` does not yet
   select it; documenting that distinction prevents a Codex instruction integration from being
   mistaken for a governed drive arm. Neither supported drive arm is a stranger's harness — see
   [Limitations](../status/limitations.md).
@@ -405,12 +406,12 @@ sends the section back for another attempt, and a hook that cannot answer is rea
 holding its steps — one node when the map gave it one step or none — because the loop asks the
 hook at a group boundary and nowhere else, and a state that were a bare node would be a state the
 governor is never asked about. A retreat is therefore a section of sections. That
-hook is where the engine belongs, and **`aep drive transition` is the verb that answers it**:
+hook is where the engine belongs, and **`metaharness aep drive transition` answers it**:
 it reads the loop's JSON on stdin and answers `enter` from `evaluate` and `leave` from `transition`
 on a copy of the execution, in the engine's own words. Declare it in the hooks file:
 
 ```json
-{ "hooks": [ { "on": "transition", "run": ["protocol", "drive", "transition", "--run", "AUTH-142/1"] } ] }
+{ "hooks": [ { "on": "transition", "run": ["metaharness", "aep", "drive", "transition", "--run", "AUTH-142/1"] } ] }
 ```
 
 `--run` positions the engine on that run's snapshot over the store as it is now; without it the
@@ -418,7 +419,7 @@ engine is put on the state the flow path names — the section's first state on 
 `leave`. A section that came out failed is left alone. The verb decides only: it writes nothing,
 takes no lock, and a consultation leaves a run's cursor byte-identical. What it does **not** do is
 walk: the loop moves the sequencer, and a run that needs the engine to move it is still a
-`aep drive run`.
+`metaharness aep drive run` for a model-backed map, or `aep drive run` for command/operator work.
 
 ## Checking the run afterwards
 
