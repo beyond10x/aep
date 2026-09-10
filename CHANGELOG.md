@@ -11,6 +11,9 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed
+  evidence, including intermediate commits and merged side branches.
+
 - Public harness integration, concepts and transcript guides now route model-backed runs and
   native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
 
