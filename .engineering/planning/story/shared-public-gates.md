@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:shared-public-gates
 kind: story
-status: active
+status: implemented
 title: Adopt independent common source gates
 relations:
 - serves: vision:O2
@@ -13,7 +13,7 @@ scope:
   path: AGENTS.md
 - confidence: cited
   path: CHANGELOG.md
-revision: 4
+revision: 5
 ---
 ## Intent
 
