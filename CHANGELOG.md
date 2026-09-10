@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.55.0] — 2026-09-10
+
 ### Added
 
 - Pinned public Gates security and privacy checks, signed local evidence and
@@ -39,6 +41,13 @@ belongs in the commit message or in `docs/design/`.
   an emitting kernel definition; persisted AEP state and audit records remain available.
 - Direct evidence recording returns a checked result and takes an explicit reading
   instant so malformed or stale source evidence is refused before mutation.
+- Source releases retain correctness and artifact checks while documentation publication
+  proceeds independently.
+
+### Fixed
+
+- Execution hosts can name the runnable resume command in refusal messages, so callers are
+  directed to the host that can actually resume the run.
 
 ## [0.54.0] — 2026-09-04
 
