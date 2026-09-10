@@ -110,10 +110,11 @@ paused runs. `aep drive eval run --stream` spends nothing.
 
 ### Public-source provenance
 
-Public repositories carry product source and public technical history only. Credential minting,
-delivery credentials, private provenance policy, and history-audit machinery belong in private
-Atlas infrastructure. Do not add token scripts, private paths, private identities, or a public list
-of forbidden identities here.
+Public repositories carry product source and public technical history only. Public Gates owns
+generic security/privacy checks and bot delivery under Atlas ADR 0048. Credentials, signing keys
+and actual private policy values stay protected outside public source. Do not add private paths,
+private identities or a public denylist here. Superseded brand-exemption categories do not authorize
+new public associations.
 
 ## Invariants
 
@@ -173,8 +174,8 @@ website task the gate calls. CI delegates to the Taskfile rather than restating 
 
 ## Planning artifacts
 
-The planning store is `.engineering/planning/`. Its local skill at
-`.agents/skills/planning/SKILL.md` is the complete model and must be read before any store write.
+The planning store is `.engineering/planning/`. Use the installed AEP planning skill and this
+checkout's CLI vocabulary before any store write; planning mutations go through the CLI.
 
 Before the first planning-store write in a session, run:
 
@@ -235,9 +236,18 @@ naming a line nobody builds on. `0.48.0` was cut that way and read complete; `0.
 from a `main` that had never seen it, and the newer version shipped without the older one's
 lifecycle. `cargo xtask release` checks this now.
 
-This public repository contains no delivery credential machinery. Commit and publication are
-performed through the organization delivery boundary maintained by Atlas. Do not copy that
-machinery here for convenience.
+Install coordinated local hooks with `b10x-gates --repository beyond10x/aep install`. Use
+`b10x-gates bot` for direct commits, tags and pushes, retaining `b10x-bot[bot]`, and Gates `check`,
+`verify` and `publish` for signed common evidence. The hooks scan the index, names, messages,
+metadata, tags and every outgoing commit. Require the shared GitHub check before integration.
+Private policies and enrolled signing keys stay outside this repository; candidate suppression
+files carry no authority. Historical exceptions identify an exact rule, location and content
+digest at an explicit baseline, without rewriting history.
+
+Common receipt reuse preserves every AEP correctness and release requirement. Source changes,
+rebases, policy changes and scanner upgrades invalidate it. Ordinary commit/publish paths need no
+Atlas checkout, current Atlas main or organization-wide admission. Atlas owns documentation
+validation and Website coordination; documentation failures affect documentation delivery only.
 
 Conventional commit prefixes are `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
 Commit messages have a title, a blank line, and a body explaining what changed and why. Ticket

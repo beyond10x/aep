@@ -11,6 +11,9 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- Pinned public Gates security and privacy checks, signed local evidence and
+  coordinated hooks. Bot delivery no longer requires an Atlas checkout.
+
 - Optional `ess_conformance_coverage_v1` evidence admits exact original suite/5
   lineage and complete selected coverage. Its separate opt-in profile requires
   independent task, model, suite, selection, producer and freshness expectations;
