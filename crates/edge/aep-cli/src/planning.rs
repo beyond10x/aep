@@ -43,6 +43,7 @@ pub(crate) const OUTCOME_DAYS: u64 = 14;
 // file, no clock. Split out because `waves` is the one verb here that *computes* rather than reads
 // and renders, and a derivation nobody can unit-test without a directory is one nobody unit-tests.
 mod waves;
+mod review_findings;
 
 /// The directory inside `.engineering` that holds the plan.
 const PLANNING_DIRECTORY: &str = "planning";
@@ -3710,8 +3711,10 @@ fn print_waves(derived: &waves::Derivation) {
 fn shown_from(
     stored: &aep_backend_markdown::StoredDocument,
     providers: Option<&aep_domain::project::ProjectConfig>,
+    report: &StoreReport,
 ) -> Shown {
     let frontmatter = &stored.document.frontmatter;
+    let resolved = review_findings::resolve(report, stored).ok().flatten();
     Shown {
         id: frontmatter.id.to_string(),
         kind: frontmatter.kind.to_string(),
@@ -3752,7 +3755,8 @@ fn shown_from(
         // Always an array, `[]` where the body carries no block and `[]` where it carries one this
         // build cannot read — `validate` is what reports the second, because `show` printing an
         // error in place of a document would make an unreadable block hide the document it is in.
-        findings: aep_backend_markdown::findings::parse(&stored.document.body).unwrap_or_default(),
+        findings_source: resolved.as_ref().map(|value| value.source.to_string()),
+        findings: resolved.map(|value| value.findings).unwrap_or_default(),
         outcomes: Vec::new(),
         body: stored.document.body.clone(),
     }
@@ -3794,7 +3798,7 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
     // store handed to `--store` outside any project has no project.yaml, and printing the
     // references without their links is the right answer there.
     let config = aep_project::project::load_config(&args.repository_root()).ok();
-    let mut shown = shown_from(stored, config.as_ref());
+    let mut shown = shown_from(stored, config.as_ref(), &opened.report);
     // On the review, not on the artifact it is about. A reader holding a review id is asking
     // whether that lens ever changed anything, and the record that answers it is filed against the
     // reviewed artifact — so a verb that only showed what is filed *here* would answer *no* to a
@@ -4828,11 +4832,10 @@ fn findings_ledger(
         return Ok(ExitCode::SUCCESS);
     };
 
-    // A block this build cannot read is empty here rather than fatal: `validate` reports it, and a
-    // ledger that refused to answer because one of four reviews is malformed would be a report
-    // nobody could get out of a store that has a defect in it.
-    let before = findings::parse(&earlier.document.body).unwrap_or_default();
-    let after = findings::parse(&later.document.body).unwrap_or_default();
+    // Invalid structured evidence must not masquerade as an empty comparison. `show` still
+    // exposes the original body for repair; this derived report requires readable findings.
+    let before = review_findings::resolve(&opened.report, earlier)?.map(|value| value.findings).unwrap_or_default();
+    let after = review_findings::resolve(&opened.report, later)?.map(|value| value.findings).unwrap_or_default();
     let compared = findings::compare(&before, &after);
 
     let ledger = FindingsLedger {
@@ -5100,12 +5103,10 @@ fn review_value(args: &StoreArgs, since: Option<&str>) -> Result<ExitCode> {
         counted += 1;
         let tally = tallies.entry(reviewer_of(stored)).or_default();
         tally.reviews += 1;
-        // A block this build cannot read counts as no findings, and `validate` is what says so:
-        // a table that refused to be printed because one review of forty is malformed would be a
-        // report nobody can get out of a store that has a defect in it.
-        tally.findings += aep_backend_markdown::findings::parse(&stored.document.body)
-            .map(|found| found.len())
-            .unwrap_or_default();
+        // A missing block is unknown and contributes no enumerated findings. Invalid structured
+        // evidence refuses, so a stale transcription cannot silently change the reported count.
+        tally.findings += review_findings::resolve(&opened.report, stored)?
+            .map(|value| value.findings.len()).unwrap_or_default();
         for outcome in records.outcomes.get(id).into_iter().flatten() {
             *tally.outcomes.entry(*outcome).or_default() += 1;
         }
@@ -5291,14 +5292,15 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
     // a **problem**: `new` refuses one, so a broken block in the store was hand-written past the
     // command, which is the same class as drift. A block that is simply absent is reported.
     let mut without_findings = Vec::new();
+    problems.extend(review_findings::problems(report));
     for stored in report.documents.values() {
         if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
             continue;
         }
         let id = &stored.document.frontmatter.id;
-        match aep_backend_markdown::findings::parse(&stored.document.body) {
+        match review_findings::resolve(report, stored) {
             Err(error) => problems.push(format!("{id}: {error}")),
-            Ok(found) if found.is_empty() => without_findings.push(format!(
+            Ok(None) => without_findings.push(format!(
                 "{id} states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"
             )),
             Ok(_) => {}
@@ -7235,6 +7237,8 @@ pub(crate) struct Shown {
     /// Always written, on any kind. A `review-result` is where one belongs, and a reader that had
     /// to know the kind before it knew whether the key would be there would be reading two shapes.
     findings: Vec<aep_backend_markdown::findings::Finding>,
+    /// The original review or source-bound transcription supplying findings; null if absent.
+    findings_source: Option<String>,
     /// What became of it, for a `review-result`: every `review_outcome` record naming it.
     outcomes: Vec<ShownOutcome>,
     /// The markdown body, exactly as the store holds it.
@@ -7714,7 +7718,7 @@ pub(crate) fn shown_of(location: &StoreLocation, id: &str) -> Result<Shown> {
         .get(&id)
         .with_context(|| opened.missing(&id))?;
     let config = aep_project::project::load_config(&location.repository_root()).ok();
-    Ok(shown_from(stored, config.as_ref()))
+    Ok(shown_from(stored, config.as_ref(), &opened.report))
 }
 
 /// Where one artifact may go next, what each rung costs, and what it already holds.

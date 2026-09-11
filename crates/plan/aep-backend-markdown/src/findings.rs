@@ -63,11 +63,13 @@ pub enum Severity {
     Warning,
     /// Worth writing down, and nothing is owed.
     Note,
+    /// The source report did not grade the finding; this is not a claim of low severity.
+    Unspecified,
 }
 
 impl Severity {
     /// Every severity, in the order a report reads them.
-    pub const ALL: &'static [Self] = &[Self::Blocker, Self::Warning, Self::Note];
+    pub const ALL: &'static [Self] = &[Self::Blocker, Self::Warning, Self::Note, Self::Unspecified];
 
     /// The severity as written in a block.
     #[must_use]
@@ -76,6 +78,7 @@ impl Severity {
             Self::Blocker => "blocker",
             Self::Warning => "warning",
             Self::Note => "note",
+            Self::Unspecified => "unspecified",
         }
     }
 

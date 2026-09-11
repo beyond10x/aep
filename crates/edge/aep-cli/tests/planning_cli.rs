@@ -4472,6 +4472,233 @@ fn subject_epic(store: &Path) {
     assert_eq!(code(&subject), 0, "{}", stderr(&subject));
 }
 
+fn findings_supplement(
+    store: &Path,
+    drafts: &Path,
+    name: &str,
+    kind: &str,
+    target: &str,
+    original: &str,
+    body: &str,
+) {
+    use sha2::{Digest as _, Sha256};
+    use std::fmt::Write as _;
+    let mut digest = String::with_capacity(64);
+    for byte in Sha256::digest(original.as_bytes()) {
+        write!(digest, "{byte:02x}").expect("write digest");
+    }
+    let path = drafts.join(format!("{name}.md"));
+    std::fs::write(&path, body).expect("write transcription");
+    let created = protocol(&[
+        "plan",
+        "artifact",
+        "new",
+        kind,
+        name,
+        "--title",
+        name,
+        "--tag",
+        "review-findings-supplement",
+        "--ref",
+        &format!("review-body-sha256:{digest}"),
+        "--relate",
+        &format!("verifies:{target}"),
+        "--from",
+        printable(&path),
+        "--store",
+        printable(store),
+    ]);
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+}
+
+#[test]
+fn a_source_bound_findings_transcription_preserves_the_review_and_its_count() {
+    let store = scratch("aep-plan-findings-supplement");
+    let drafts = scratch("aep-plan-findings-supplement-drafts");
+    subject_epic(&store);
+    let original = "needs-revision: The loop never advances.\n";
+    review_of(&store, &drafts, "legacy", "epic:objectives", original);
+    let before = std::fs::read(store.join("review-result/legacy.md")).expect("original bytes");
+    findings_supplement(
+        &store,
+        &drafts,
+        "transcription",
+        "verification-report",
+        "review-result:legacy",
+        original,
+        &findings_body(&finding("src/loop.rs", 10, "The loop never advances")),
+    );
+    let validated = protocol(&[
+        "plan",
+        "artifact",
+        "validate",
+        "--store",
+        printable(&store),
+        "--strict",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+    let shown = protocol(&[
+        "plan",
+        "artifact",
+        "show",
+        "review-result:legacy",
+        "--store",
+        printable(&store),
+        "--format",
+        "json",
+    ]);
+    let shown: serde_json::Value = serde_json::from_str(&stdout(&shown)).expect("shown JSON");
+    assert_eq!(shown["body"], original);
+    assert_eq!(
+        shown["findings_source"],
+        "verification-report:transcription"
+    );
+    assert_eq!(shown["findings"][0]["message"], "The loop never advances");
+    let value = protocol(&[
+        "plan",
+        "artifact",
+        "review-value",
+        "--store",
+        printable(&store),
+        "--format",
+        "json",
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&value)).expect("value JSON");
+    assert_eq!(value["reviews"], 1);
+    assert_eq!(value["reviewers"][0]["findings"], 1);
+    review_of(
+        &store,
+        &drafts,
+        "resolved",
+        "epic:objectives",
+        &findings_body("[]\n"),
+    );
+    let ledger = protocol(&[
+        "plan",
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--from",
+        "review-result:legacy",
+        "--to",
+        "review-result:resolved",
+        "--store",
+        printable(&store),
+        "--format",
+        "json",
+    ]);
+    let ledger: serde_json::Value = serde_json::from_str(&stdout(&ledger)).expect("ledger JSON");
+    assert_eq!(ledger["resolved"].as_array().expect("resolved").len(), 1);
+    assert_eq!(
+        std::fs::read(store.join("review-result/legacy.md")).expect("retained bytes"),
+        before
+    );
+}
+
+#[test]
+fn ungraded_source_findings_remain_unspecified_rather_than_becoming_notes() {
+    let store = scratch("aep-plan-findings-unspecified");
+    let drafts = scratch("aep-plan-findings-unspecified-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "ungraded",
+        "epic:objectives",
+        "There is an ungraded gap.\n",
+    );
+    findings_supplement(&store, &drafts, "ungraded-copy", "verification-report", "review-result:ungraded",
+        "There is an ungraded gap.\n", "```findings\n- file: design.md\n  severity: unspecified\n  category: gap\n  message: There is an ungraded gap.\n```\n");
+    let shown = protocol(&[
+        "plan",
+        "artifact",
+        "show",
+        "review-result:ungraded",
+        "--store",
+        printable(&store),
+        "--format",
+        "json",
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&shown)).expect("shown JSON");
+    assert_eq!(value["findings"][0]["severity"], "unspecified");
+    assert!(value["findings"][0]["verdict"].is_null());
+}
+
+#[test]
+fn invalid_findings_transcriptions_cannot_silence_missing_structure() {
+    for (case, reason) in [
+        ("stale", "exact review-body-sha256"),
+        ("duplicate", "multiple review-findings-supplement"),
+        ("kind", "requires verification-report"),
+        ("target", "must verify a review-result"),
+        ("block", "requires a findings block"),
+        ("structured", "cannot replace an original findings block"),
+    ] {
+        let store = scratch(&format!("aep-plan-findings-supplement-{case}"));
+        let drafts = scratch(&format!("aep-plan-findings-supplement-{case}-drafts"));
+        subject_epic(&store);
+        let original = if case == "structured" {
+            "```findings\n[]\n```\n"
+        } else {
+            "approve: no remaining findings.\n"
+        };
+        review_of(&store, &drafts, "legacy", "epic:objectives", original);
+        findings_supplement(
+            &store,
+            &drafts,
+            "transcription",
+            if case == "kind" {
+                "specification"
+            } else {
+                "verification-report"
+            },
+            if case == "target" {
+                "epic:objectives"
+            } else {
+                "review-result:legacy"
+            },
+            if case == "stale" {
+                "different review\n"
+            } else {
+                original
+            },
+            if case == "block" {
+                "no structured block\n"
+            } else {
+                "```findings\n[]\n```\n"
+            },
+        );
+        if case == "duplicate" {
+            findings_supplement(
+                &store,
+                &drafts,
+                "second",
+                "verification-report",
+                "review-result:legacy",
+                original,
+                "```findings\n[]\n```\n",
+            );
+        }
+        let validated = protocol(&[
+            "plan",
+            "artifact",
+            "validate",
+            "--store",
+            printable(&store),
+            "--format",
+            "json",
+        ]);
+        assert_eq!(code(&validated), 1, "{case}: {}", stdout(&validated));
+        assert!(
+            stdout(&validated).contains(reason),
+            "{case}: {}",
+            stdout(&validated)
+        );
+    }
+}
+
 #[test]
 fn a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_array() {
     let store = scratch("aep-plan-findings-parsed");
@@ -4579,6 +4806,45 @@ fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
         !store.join("review-result/bad-block.md").exists(),
         "a refused `new` wrote the document anyway"
     );
+}
+
+#[test]
+fn validate_accepts_an_explicit_empty_findings_block_including_strict_mode() {
+    let store = scratch("aep-plan-findings-empty");
+    let drafts = scratch("aep-plan-findings-empty-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "approved",
+        "epic:objectives",
+        "approve\n\n```findings\n[]\n```\n",
+    );
+
+    for strict in [false, true] {
+        let mut args = vec![
+            "plan",
+            "artifact",
+            "validate",
+            "--store",
+            printable(&store),
+            "--format",
+            "json",
+        ];
+        if strict {
+            args.push("--strict");
+        }
+        let validated = protocol(&args);
+        assert_eq!(code(&validated), 0, "{}", stdout(&validated));
+        let summary: serde_json::Value = serde_json::from_str(&stdout(&validated)).unwrap();
+        assert!(
+            summary["without_findings"]
+                .as_array()
+                .is_none_or(Vec::is_empty),
+            "an explicit empty findings block records zero findings: {}",
+            stdout(&validated)
+        );
+    }
 }
 
 #[test]

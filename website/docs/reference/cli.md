@@ -119,13 +119,27 @@ identity — it is a declaration, exactly as strong as the rest of the provenanc
 **A review's findings are data.** A `review-result` body may carry one fenced ` ```findings ` block
 of YAML — a sequence of entries with `file`, `line`, `category`, `severity`, `verdict`, `origin`,
 and `message` fields, where
-`file`, `category`, `severity` and `message` are required. `severity` is `blocker`, `warning` or
-`note`; `verdict` is the adversary's `CONFIRMED`, `NEEDS-CHANGE` or `INFEASIBLE` or a critic's
+`file`, `category`, `severity` and `message` are required. `severity` is `blocker`, `warning`,
+`note` or `unspecified` (the source did not grade it); `verdict` is the adversary's
+`CONFIRMED`, `NEEDS-CHANGE` or `INFEASIBLE` or a critic's
 `approve` or `needs-revision`; `origin` is `introduced`, `pre-existing` or `undecided`, and an
 unwritten one *is* `undecided`. `aep plan artifact new` parses it and refuses a malformed one with the
 body line it is wrong on; `show --format json` returns it as an array; `findings` compares two of
 them; `validate` reports a review that has none. A block is required by nothing — a review written
 as prose is still a review, and the report is what says the next round starts from nowhere.
+An explicit `findings` block containing `[]` records zero findings and does not warn.
+
+To structure an immutable legacy report, create a `verification-report` with the tag
+`review-findings-supplement`, exactly one `verifies:review-result:<name>` relation,
+and `--ref review-body-sha256:<digest>`, where the digest is the lowercase SHA-256 of
+the exact original UTF-8 body returned by `show --body-only`. Its body supplies the
+canonical findings block and explains the transcription. Preserve the original
+verdict; this records no new critic run, review outcome or approval. `validate`
+rejects stale digests, missing or malformed blocks, duplicate supplements, wrong
+kinds or targets, and attempts to replace an existing original findings block.
+`show` retains the original body and exposes `findings_source`; `findings` and
+`review-value` use the same transcription without adding a review to their counts.
+Invalid source-bound transcriptions refuse findings comparisons and value reports.
 
 **A hybrid plan has two verbs of its own.** `store: hybrid` in `project.yaml` keeps the plan in
 markdown *and* in a replica under a declared policy. A write one side took and the other did not is

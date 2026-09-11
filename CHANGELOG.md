@@ -11,6 +11,10 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- Planning validation recognizes an explicit empty findings block as recorded zero findings.
+  Immutable legacy reviews may receive source-bound verification-report transcriptions;
+  validation and findings readers check their original body digest and retain review identity.
+
 - Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed
   evidence, including intermediate commits and merged side branches.
 
