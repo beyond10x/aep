@@ -21,5 +21,6 @@ validate them without linking the Rust crates.
 | [`action-request.schema.json`](action-request.schema.json) | `ActionRequest` | an action put to the engine |
 | [`event.schema.json`](event.schema.json) | `EventEnvelope` | one audit event |
 | [`planning-document.schema.json`](planning-document.schema.json) | `RawPlanningFrontmatter` | the frontmatter of one markdown planning document |
+| [`raw-capture-observation.schema.json`](raw-capture-observation.schema.json) | `RawCaptureObservationV1` | one complete, unstable, or refused raw planning-store observation |
 | [`trace-spec.schema.json`](trace-spec.schema.json) | `RawTraceSpec` | what an agent run must have looked like |
 | [`driver-steps.schema.json`](driver-steps.schema.json) | `RawStepMap` | what a harness does in each state of a workflow |

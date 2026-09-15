@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- Pure planning migration capture values preserve partial observations, validate capture
+  phases and discovered-table catalogs, and compute deterministic digests and changed sets.
+  The raw capture document schema is available in the generated schema roster.
+
 ### Fixed
 
 - Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed

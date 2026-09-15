@@ -12,10 +12,9 @@ authors.workspace = true
 aep-domain.workspace = true
 serde.workspace = true
 schemars.workspace = true
-thiserror.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true
+sha2 = "0.11"
+thiserror.workspace = true
 
 [lints]
 workspace = true

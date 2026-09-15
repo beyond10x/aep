@@ -36,6 +36,7 @@
 pub mod command;
 pub mod consistency;
 pub mod error;
+pub mod migration;
 pub mod query;
 pub mod registry;
 pub mod testing;
