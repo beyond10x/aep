@@ -1837,15 +1837,16 @@ fn validate_retained_refusal_coverage(
             push_terminal(&markdown.nodes.terminal, &mut exact);
             for node in &markdown.nodes.items {
                 match node {
-                    MarkdownNodeEvidenceV1::Captured(node) if foreign_markdown_node(node) => {
-                        exact.push(CaptureRefusalV1 {
-                            code: CaptureRefusalCodeV1::ForeignMarkdownNode,
-                            at: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
-                                relative: node.relative.clone(),
-                            }),
-                        });
+                    MarkdownNodeEvidenceV1::Captured(node) => {
+                        if let Some(code) = required_markdown_node_refusal(node) {
+                            exact.push(CaptureRefusalV1 {
+                                code,
+                                at: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
+                                    relative: node.relative.clone(),
+                                }),
+                            });
+                        }
                     }
-                    MarkdownNodeEvidenceV1::Captured(_) => {}
                     MarkdownNodeEvidenceV1::Unreadable(node) => coordinates.push(
                         PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
                             relative: node.relative.clone(),
@@ -3095,11 +3096,26 @@ fn validate_markdown_node(node: &MarkdownNodeV1, path: &str, errors: &mut Valida
     }
 }
 
-fn foreign_markdown_node(node: &MarkdownNodeV1) -> bool {
+fn required_markdown_node_refusal(node: &MarkdownNodeV1) -> Option<CaptureRefusalCodeV1> {
     match node.node {
-        MarkdownNodeKindV1::Directory => false,
-        MarkdownNodeKindV1::Regular(_) => !admitted_markdown_file(&node.relative),
-        MarkdownNodeKindV1::Symlink(_) | MarkdownNodeKindV1::Other(_) => true,
+        MarkdownNodeKindV1::Regular(_) if pending_batch_marker(&node.relative) => {
+            Some(CaptureRefusalCodeV1::PendingBatchPresent)
+        }
+        MarkdownNodeKindV1::Regular(_) if !admitted_markdown_file(&node.relative) => {
+            Some(CaptureRefusalCodeV1::ForeignMarkdownNode)
+        }
+        MarkdownNodeKindV1::Directory | MarkdownNodeKindV1::Regular(_) => None,
+        MarkdownNodeKindV1::Symlink(_) | MarkdownNodeKindV1::Other(_) => {
+            Some(CaptureRefusalCodeV1::ForeignMarkdownNode)
+        }
+    }
+}
+
+fn pending_batch_marker(path: &HostPathV1) -> bool {
+    const PENDING_BATCH: &str = ".aep-batch.pending.json";
+    match path {
+        HostPathV1::Unix(bytes) => bytes.as_bytes() == PENDING_BATCH.as_bytes(),
+        HostPathV1::Windows(units) => units.iter().copied().eq(PENDING_BATCH.encode_utf16()),
     }
 }
 
