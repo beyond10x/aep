@@ -17,6 +17,10 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- Raw capture validation checks present sources on preflight refusals, requires exact
+  source and foreign-node refusal coordinates, and accumulates supplied-capture defects
+  when phase reconstruction fails.
+
 - Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed
   evidence, including intermediate commits and merged side branches.
 

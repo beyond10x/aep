@@ -1297,6 +1297,7 @@ impl RawCaptureObservationV1 {
         );
         let reconstructed =
             reconstruct_capture(&complete.method, &self.source, &complete.phases, errors);
+        validate_capture(&complete.capture, errors);
         if let Some(reconstructed) = reconstructed {
             if complete.capture != reconstructed {
                 errors.push(
@@ -1304,7 +1305,6 @@ impl RawCaptureObservationV1 {
                     "$.observation.capture",
                 );
             }
-            validate_capture(&complete.capture, errors);
             if let Ok(expected) = self.complete_transcript_digest(&reconstructed) {
                 if complete.transcript_digest != expected {
                     errors.push(
@@ -1393,7 +1393,9 @@ impl RawCaptureObservationV1 {
                 } else {
                     PhaseExpectation::NotAttempted
                 };
-                if expectation == PhaseExpectation::FailedPrefix {
+                if expectation == PhaseExpectation::FailedPrefix
+                    || matches!(self.source, PresenceV1::Present(_))
+                {
                     validate_method_source(method, &self.source, "$.observation.method", errors);
                 }
                 validate_phases(method, &self.source, &refused.phases, expectation, errors);
@@ -1833,14 +1835,24 @@ fn validate_retained_refusal_coverage(
     match evidence {
         PhaseEvidenceV1::Markdown(markdown) => {
             push_terminal(&markdown.nodes.terminal, &mut exact);
-            coordinates.extend(markdown.nodes.items.iter().filter_map(|node| match node {
-                MarkdownNodeEvidenceV1::Captured(_) => None,
-                MarkdownNodeEvidenceV1::Unreadable(node) => Some(
-                    PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
-                        relative: node.relative.clone(),
-                    }),
-                ),
-            }));
+            for node in &markdown.nodes.items {
+                match node {
+                    MarkdownNodeEvidenceV1::Captured(node) if foreign_markdown_node(node) => {
+                        exact.push(CaptureRefusalV1 {
+                            code: CaptureRefusalCodeV1::ForeignMarkdownNode,
+                            at: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
+                                relative: node.relative.clone(),
+                            }),
+                        });
+                    }
+                    MarkdownNodeEvidenceV1::Captured(_) => {}
+                    MarkdownNodeEvidenceV1::Unreadable(node) => coordinates.push(
+                        PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
+                            relative: node.relative.clone(),
+                        }),
+                    ),
+                }
+            }
         }
         PhaseEvidenceV1::Sqlite(sql) | PhaseEvidenceV1::Postgres(sql) => {
             push_terminal(&sql.catalog.objects.terminal, &mut exact);
@@ -2662,6 +2674,19 @@ fn validate_refusals(refusals: &[CaptureRefusalV1], path: &str, errors: &mut Val
         path,
         errors,
     );
+    for (index, refusal) in refusals.iter().enumerate() {
+        if matches!(
+            refusal.code,
+            CaptureRefusalCodeV1::SourceUnreachable
+                | CaptureRefusalCodeV1::UnresolvedSourceCoordinate
+        ) && !matches!(refusal.at, PhysicalCoordinateV1::Root(_))
+        {
+            errors.push(
+                CaptureValidationCodeV1::IncompatibleVariant,
+                format!("{path}[{index}].at"),
+            );
+        }
+    }
 }
 
 fn variant_tag_owned(value: &impl CanonicalPartsV1) -> Vec<u8> {
@@ -3067,6 +3092,14 @@ fn validate_markdown_node(node: &MarkdownNodeV1, path: &str, errors: &mut Valida
             CaptureValidationCodeV1::UnsupportedSchema,
             format!("{path}.relative"),
         );
+    }
+}
+
+fn foreign_markdown_node(node: &MarkdownNodeV1) -> bool {
+    match node.node {
+        MarkdownNodeKindV1::Directory => false,
+        MarkdownNodeKindV1::Regular(_) => !admitted_markdown_file(&node.relative),
+        MarkdownNodeKindV1::Symlink(_) | MarkdownNodeKindV1::Other(_) => true,
     }
 }
 
