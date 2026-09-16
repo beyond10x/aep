@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CurrentPhaseV2",
+  "type": "object",
+  "required": [
+    "format",
+    "intent_digest",
+    "migration_id",
+    "phase",
+    "phase_digest"
+  ],
+  "properties": {
+    "format": {
+      "$ref": "#/definitions/CurrentPhaseFormatV2"
+    },
+    "intent_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "migration_id": {
+      "type": "string"
+    },
+    "phase": {
+      "$ref": "#/definitions/MigrationPhaseV1"
+    },
+    "phase_digest": {
+      "$ref": "#/definitions/DigestV1"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "CurrentPhaseFormatV2": {
+      "description": "The scalar literal aep.planning-migration-current/2.",
+      "type": "string",
+      "enum": [
+        "aep.planning-migration-current/2"
+      ]
+    },
+    "DigestV1": {
+      "description": "A canonical SHA-256 digest with its algorithm prefix.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "MigrationPhaseV1": {
+      "description": "Last durably established migration phase.",
+      "type": "string",
+      "enum": [
+        "prepared",
+        "destination_provisioned",
+        "imported",
+        "verified",
+        "published",
+        "selected",
+        "projection_published",
+        "complete"
+      ]
+    }
+  }
+}

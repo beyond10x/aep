@@ -1,0 +1,353 @@
+domain: aep.migration
+summary: Coordinates and explicit history boundaries of an admitted planning-store migration.
+
+# Authored design decisions in docs/design/eventlog-planning-authority-v0.1.md.
+# This model does not replace the complete Rust inventory or ER/provider wire schemas.
+types:
+  - name: aep.migration.SnapshotId
+    kind: newtype
+    of: String
+  - name: aep.migration.MigrationId
+    kind: newtype
+    of: String
+  - name: aep.migration.BoundaryId
+    kind: newtype
+    of: String
+  - name: aep.migration.AuthorityId
+    kind: newtype
+    of: String
+  - name: aep.migration.AuthoritySnapshotId
+    kind: newtype
+    of: String
+  - name: aep.migration.ProjectionWatermarkId
+    kind: newtype
+    of: String
+  - name: aep.migration.EvidenceBlobId
+    kind: newtype
+    of: String
+  - name: aep.migration.ReservationRosterId
+    kind: newtype
+    of: String
+  - name: aep.migration.CommandInvocationId
+    kind: newtype
+    of: String
+  - name: aep.migration.CommandStepId
+    kind: newtype
+    of: String
+  - name: aep.migration.SourceKind
+    kind: enum
+    variants: [Markdown, Sqlite, Postgres, Hybrid]
+  - name: aep.migration.HistoryAvailability
+    kind: enum
+    variants: [CompleteRecorded, Partial, Unrecorded]
+  - name: aep.migration.KnownOrder
+    kind: enum
+    variants: [Store, Subject, PerKind, Unavailable]
+  - name: aep.migration.LegacyEvidenceKind
+    kind: enum
+    variants: [CompleteEnvelope, BareDecision, BareEvent, RawRepresentation]
+  # Diagnostic phase vocabulary only. Rust-owned command records define their envelopes,
+  # evidence and guarded transitions; this is not a substitute executable state machine.
+  - name: aep.migration.ApplyPhase
+    kind: enum
+    variants: [Prepared, DestinationProvisioned, Imported, Verified, Published, Selected, ProjectionPublished, Complete]
+
+entities:
+  - name: aep.migration.AuthorityCoordinate
+    identity:
+      name: authority_id
+      type: aep.migration.AuthorityId
+    fields:
+      - name: logical_scope
+        type: String
+      - name: tenant
+        type: String
+      - name: stream_identity
+        type: String
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  - name: aep.migration.SourceSnapshot
+    identity:
+      name: snapshot_id
+      type: aep.migration.SnapshotId
+    fields:
+      - name: kind
+        type: aep.migration.SourceKind
+      - name: source_digest
+        type: String
+      - name: config_digest
+        type: String
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  - name: aep.migration.MigrationIntent
+    identity:
+      name: migration_id
+      type: aep.migration.MigrationId
+    fields:
+      - name: snapshot_id
+        type: aep.migration.SnapshotId
+      - name: destination_id
+        type: String
+      - name: authority_id
+        type: aep.migration.AuthorityId
+      - name: intent_digest
+        type: String
+    relations:
+      - name: source
+        kind: references
+        target: aep.migration.SourceSnapshot
+        cardinality: one
+        via: snapshot_id
+      - name: destination_authority
+        kind: references
+        target: aep.migration.AuthorityCoordinate
+        cardinality: one
+        via: authority_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  - name: aep.migration.ImportBoundary
+    identity:
+      name: boundary_id
+      type: aep.migration.BoundaryId
+    fields:
+      - name: snapshot_id
+        type: aep.migration.SnapshotId
+      - name: entity_name
+        type: String
+      - name: instance_id
+        type: String
+      - name: original_revision
+        type: Integer
+      - name: history
+        type: aep.migration.HistoryAvailability
+      - name: known_order
+        type: aep.migration.KnownOrder
+    relations:
+      - name: source
+        kind: references
+        target: aep.migration.SourceSnapshot
+        cardinality: one
+        via: snapshot_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # One exact retained source item. `order_coordinate` is a canonical nonnegative decimal
+  # when known_order is Store, Subject or PerKind and the literal `unavailable` otherwise.
+  # The Rust-owned closed mapping record enforces that tag-dependent rule.
+  - name: aep.migration.LegacyRecordCoordinate
+    identity:
+      name: boundary_id
+      type: aep.migration.BoundaryId
+    fields:
+      - name: snapshot_id
+        type: aep.migration.SnapshotId
+      - name: entity_name
+        type: String
+      - name: instance_id
+        type: String
+      - name: source_locator
+        type: String
+      - name: evidence_kind
+        type: aep.migration.LegacyEvidenceKind
+      - name: original_record_identity
+        type: String
+      - name: known_order
+        type: aep.migration.KnownOrder
+      - name: order_coordinate
+        type: String
+      - name: evidence_blob_id
+        type: aep.migration.EvidenceBlobId
+      - name: envelope_digest
+        type: String
+      - name: reservation_roster_id
+        type: aep.migration.ReservationRosterId
+    relations:
+      - name: source
+        kind: references
+        target: aep.migration.SourceSnapshot
+        cardinality: one
+        via: snapshot_id
+      - name: evidence_blob
+        kind: references
+        target: aep.migration.LegacyEvidenceBlob
+        cardinality: one
+        via: evidence_blob_id
+      - name: reservation_roster
+        kind: references
+        target: aep.migration.LegacyIdReservationRoster
+        cardinality: one
+        via: reservation_roster_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # Exact unavailable-order envelope bytes are an immutable ordinary provider subject.
+  # Rust owns the hex scalar, digest and byte-length validation.
+  - name: aep.migration.LegacyEvidenceBlob
+    identity:
+      name: evidence_blob_id
+      type: aep.migration.EvidenceBlobId
+    fields:
+      - name: snapshot_id
+        type: aep.migration.SnapshotId
+      - name: coordinate_id
+        type: aep.migration.BoundaryId
+      - name: original_record_identity
+        type: String
+      - name: exact_envelope_hex
+        type: String
+      - name: byte_length
+        type: Integer
+      - name: envelope_digest
+        type: String
+    relations:
+      - name: source
+        kind: references
+        target: aep.migration.SourceSnapshot
+        cardinality: one
+        via: snapshot_id
+      - name: coordinate
+        kind: references
+        target: aep.migration.LegacyRecordCoordinate
+        cardinality: one
+        via: coordinate_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # One complete immutable original-ID roster per import boundary. Rust owns the sorted
+  # closed entry vector; this diagnostic entity types its authority and digest identity.
+  - name: aep.migration.LegacyIdReservationRoster
+    identity:
+      name: reservation_roster_id
+      type: aep.migration.ReservationRosterId
+    fields:
+      - name: boundary_id
+        type: aep.migration.BoundaryId
+      - name: authority_id
+        type: aep.migration.AuthorityId
+      - name: entry_count
+        type: Integer
+      - name: roster_digest
+        type: String
+    relations:
+      - name: authority
+        kind: references
+        target: aep.migration.AuthorityCoordinate
+        cardinality: one
+        via: authority_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # The invocation reservation binds the complete original request and ordered child plan.
+  - name: aep.migration.CommandInvocation
+    identity:
+      name: command_invocation_id
+      type: aep.migration.CommandInvocationId
+    fields:
+      - name: authority_id
+        type: aep.migration.AuthorityId
+      - name: request_digest
+        type: String
+      - name: planned_step_count
+        type: Integer
+      - name: plan_digest
+        type: String
+      - name: committed_step_count
+        type: Integer
+      - name: invocation_receipt_digest
+        type: String
+    relations:
+      - name: authority
+        kind: references
+        target: aep.migration.AuthorityCoordinate
+        cardinality: one
+        via: authority_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # One independently committed business command in an invocation's ordered plan.
+  - name: aep.migration.CommandStep
+    identity:
+      name: command_step_id
+      type: aep.migration.CommandStepId
+    fields:
+      - name: command_invocation_id
+        type: aep.migration.CommandInvocationId
+      - name: step_index
+        type: Integer
+      - name: child_identity
+        type: String
+      - name: child_request_digest
+        type: String
+      - name: command_receipt_digest
+        type: String
+      - name: result_digest
+        type: String
+    relations:
+      - name: invocation
+        kind: references
+        target: aep.migration.CommandInvocation
+        cardinality: one
+        via: command_invocation_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  - name: aep.migration.AuthoritySnapshot
+    identity:
+      name: authority_snapshot_id
+      type: aep.migration.AuthoritySnapshotId
+    fields:
+      - name: authority_id
+        type: aep.migration.AuthorityId
+      - name: capture_digest
+        type: String
+    relations:
+      - name: authority
+        kind: references
+        target: aep.migration.AuthorityCoordinate
+        cardinality: one
+        via: authority_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  - name: aep.migration.ProjectionWatermark
+    identity:
+      name: watermark_id
+      type: aep.migration.ProjectionWatermarkId
+    fields:
+      - name: authority_snapshot_id
+        type: aep.migration.AuthoritySnapshotId
+      - name: inventory_digest
+        type: String
+    relations:
+      - name: authority_snapshot
+        kind: references
+        target: aep.migration.AuthoritySnapshot
+        cardinality: one
+        via: authority_snapshot_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]

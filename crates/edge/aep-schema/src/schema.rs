@@ -6,7 +6,12 @@
 //! reject on structure — the two cannot drift.
 
 use aep_backend_markdown::frontmatter::RawPlanningFrontmatter;
-use aep_contract::migration::RawCaptureObservationV1;
+use aep_contract::migration::{
+    ApplyResultV1, CurrentPhaseV1, CurrentPhaseV2, DryRunResultV1, DryRunResultV2,
+    InspectionResultV1, MigrationIntentV1, MigrationIntentV2, OwnershipMarkerV1, OwnershipMarkerV2,
+    PhaseRecordV1, PhaseRecordV2, PlanningMutationEnvelopeV1, ProjectionWatermarkV1,
+    RawCaptureObservationV1, RebuildResultV1, VerificationResultV1,
+};
 use aep_domain::action::ActionRequest;
 use aep_domain::artifact::ArtifactLifecycle;
 use aep_domain::event::EventEnvelope;
@@ -117,6 +122,7 @@ fn close_evidence_variant<T: JsonSchema>(
 ///
 /// The document schemas are what a project's files are validated against; the interchange schemas
 /// are what a harness exchanges with the engine at run time.
+#[allow(clippy::too_many_lines)] // One explicit table keeps every generated schema discoverable.
 pub fn generated_schemas() -> Vec<GeneratedSchema> {
     vec![
         entry::<RawProtocol>("RawProtocol", "protocol", "a protocol declaration"),
@@ -161,6 +167,86 @@ pub fn generated_schemas() -> Vec<GeneratedSchema> {
             "raw-capture-observation",
             "one complete, unstable, or refused raw planning-store observation",
         ),
+        entry::<InspectionResultV1>(
+            "InspectionResultV1",
+            "planning-inspection",
+            "one planning-store inspection result",
+        ),
+        entry::<DryRunResultV1>(
+            "DryRunResultV1",
+            "planning-migration-dry-run",
+            "one planning-store migration assessment",
+        ),
+        entry::<DryRunResultV2>(
+            "DryRunResultV2",
+            "planning-migration-dry-run-v2",
+            "one provider-assigned planning-store migration assessment",
+        ),
+        entry::<ApplyResultV1>(
+            "ApplyResultV1",
+            "planning-migration-apply",
+            "one durable planning-store migration result",
+        ),
+        entry::<VerificationResultV1>(
+            "VerificationResultV1",
+            "planning-verification",
+            "one selected planning-authority verification",
+        ),
+        entry::<RebuildResultV1>(
+            "RebuildResultV1",
+            "planning-projection-rebuild",
+            "one planning projection rebuild result",
+        ),
+        entry::<PlanningMutationEnvelopeV1>(
+            "PlanningMutationEnvelopeV1",
+            "planning-mutation",
+            "one ordinary planning mutation and its durable receipts",
+        ),
+        entry::<ProjectionWatermarkV1>(
+            "ProjectionWatermarkV1",
+            "planning-projection-watermark",
+            "one authority-owned projection watermark",
+        ),
+        entry::<MigrationIntentV1>(
+            "MigrationIntentV1",
+            "planning-migration-intent",
+            "one immutable planning migration intent",
+        ),
+        entry::<MigrationIntentV2>(
+            "MigrationIntentV2",
+            "planning-migration-intent-v2",
+            "one immutable provider-assigned planning migration request",
+        ),
+        entry::<OwnershipMarkerV1>(
+            "OwnershipMarkerV1",
+            "planning-store-ownership",
+            "one explicit-path planning ownership marker",
+        ),
+        entry::<OwnershipMarkerV2>(
+            "OwnershipMarkerV2",
+            "planning-store-ownership-v2",
+            "one provider-assigned explicit-path planning ownership marker",
+        ),
+        entry::<PhaseRecordV1>(
+            "PhaseRecordV1",
+            "planning-migration-phase",
+            "one durably established planning migration phase",
+        ),
+        entry::<PhaseRecordV2>(
+            "PhaseRecordV2",
+            "planning-migration-phase-v2",
+            "one provider-assigned durable planning migration phase",
+        ),
+        entry::<CurrentPhaseV1>(
+            "CurrentPhaseV1",
+            "planning-migration-current",
+            "one durable planning migration phase pointer",
+        ),
+        entry::<CurrentPhaseV2>(
+            "CurrentPhaseV2",
+            "planning-migration-current-v2",
+            "one provider-assigned durable planning migration phase pointer",
+        ),
         entry::<RawTraceSpec>(
             "RawTraceSpec",
             "trace-spec",
@@ -202,6 +288,21 @@ mod tests {
             "event.schema.json",
             "planning-document.schema.json",
             "raw-capture-observation.schema.json",
+            "planning-inspection.schema.json",
+            "planning-migration-dry-run.schema.json",
+            "planning-migration-dry-run-v2.schema.json",
+            "planning-migration-apply.schema.json",
+            "planning-verification.schema.json",
+            "planning-projection-rebuild.schema.json",
+            "planning-mutation.schema.json",
+            "planning-migration-intent.schema.json",
+            "planning-migration-intent-v2.schema.json",
+            "planning-store-ownership.schema.json",
+            "planning-store-ownership-v2.schema.json",
+            "planning-migration-phase.schema.json",
+            "planning-migration-phase-v2.schema.json",
+            "planning-migration-current.schema.json",
+            "planning-migration-current-v2.schema.json",
             "trace-spec.schema.json",
             "driver-steps.schema.json",
         ] {

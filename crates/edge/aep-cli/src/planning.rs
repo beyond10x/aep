@@ -25,6 +25,7 @@ use std::fmt::Write as _;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use aep_backend_markdown::{MarkdownStore, PlanningDocument, PlanningFrontmatter, StoreReport};
 use aep_domain::artifact::{
@@ -81,6 +82,9 @@ pub(crate) struct StoreArgs {
     /// How to render the result.
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
+    /// Stable identity for an ordinary mutation retry. Returned in every Eventlog mutation result.
+    #[arg(long)]
+    command_identity: Option<String>,
 }
 
 impl StoreArgs {
@@ -104,6 +108,29 @@ impl StoreLocation {
     /// working directory would discover.
     pub(crate) fn at(store: Option<PathBuf>, root: Option<PathBuf>) -> Self {
         Self { store, root }
+    }
+
+    /// Stable directory containing the cooperative writer lock for this selected plan.
+    ///
+    /// Resolution happens before a backend is opened. An explicit legacy Markdown path uses its
+    /// containing directory; project discovery uses the project metadata directory that also owns
+    /// the selector switched by migration.
+    fn acquire_writer_fence(
+        &self,
+    ) -> Result<crate::planning_writer_fence::PlanningWriterFence> {
+        if let Some(store) = &self.store {
+            return crate::planning_writer_fence::PlanningWriterFence::acquire_explicit(store);
+        }
+        let here = std::env::current_dir().context("reading the working directory")?;
+        let project = aep_project::project::discover(&here).with_context(|| {
+            format!(
+                "no project containing {} was found",
+                here.display()
+            )
+        })?;
+        crate::planning_writer_fence::PlanningWriterFence::acquire(
+            &project.join(project_directory()),
+        )
     }
 
     /// The repository the store sits in, so a workspace beside it can be found.
@@ -188,6 +215,12 @@ pub(crate) enum Plan {
         root: PathBuf,
         replica: Replica,
         policy: aep_domain::project::HybridPolicy,
+    },
+    /// Eventlog file authority and its derived tracked Markdown projection.
+    Eventlog {
+        authority_root: PathBuf,
+        projection_root: PathBuf,
+        authority: aep_domain::project::PlanningAuthority,
     },
 }
 
@@ -278,6 +311,15 @@ impl Plan {
                     policy: policy.clone(),
                 }
             }
+            StoreConfig::Eventlog {
+                path,
+                projection,
+                authority,
+            } => Self::Eventlog {
+                authority_root: path.clone(),
+                projection_root: projection.clone(),
+                authority: authority.clone(),
+            },
         })
     }
 
@@ -294,6 +336,17 @@ impl Plan {
                     replica.describe()
                 )
             }
+            Self::Eventlog {
+                authority_root,
+                authority,
+                ..
+            } => format!(
+                "the Eventlog store {} ({}/{}/{})",
+                authority_root.display(),
+                authority.logical_scope,
+                authority.tenant,
+                authority.stream_identity
+            ),
         }
     }
 
@@ -302,7 +355,7 @@ impl Plan {
     /// A markdown or hybrid plan is not opened here — its backend needs the workspace and the
     /// ladders the verbs carry (`markdown_backend_for`, `hybrid_backend_for`), and reading it does
     /// not need a backend at all.
-    fn open_backend(&self) -> Result<Option<PlanBackend>> {
+    pub(crate) fn open_backend(&self) -> Result<Option<PlanBackend>> {
         Ok(match self {
             Self::Markdown { .. } | Self::Hybrid { .. } => None,
             Self::Sqlite { path } => Some(PlanBackend::Sqlite(
@@ -314,6 +367,19 @@ impl Plan {
                 aep_backend_postgres::PostgresBackend::connect(url)
                     .map_err(|error| anyhow::anyhow!("{error}"))
                     .with_context(|| format!("connecting to {}", redact(url)))?,
+            )),
+            Self::Eventlog {
+                authority_root,
+                authority,
+                ..
+            } => Some(PlanBackend::Eventlog(
+                aep_backend_eventlog::open(
+                    authority_root.clone(),
+                    authority.logical_scope.clone(),
+                    authority.tenant.clone(),
+                    authority.stream_identity.clone(),
+                )
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
             )),
         })
     }
@@ -413,6 +479,7 @@ fn describe_config(store: &aep_domain::project::StoreConfig) -> String {
         StoreConfig::Sqlite { path } => format!("sqlite: {}", path.display()),
         StoreConfig::Postgres { url } => format!("postgres: {}", redact(url)),
         StoreConfig::Hybrid { .. } => "hybrid".to_owned(),
+        StoreConfig::Eventlog { path, .. } => format!("eventlog: {}", path.display()),
     }
 }
 
@@ -495,15 +562,28 @@ fn hybrid_backend_for(
 }
 
 /// The backend a plan opens: one enum so every verb is written once over the contract.
-enum PlanBackend {
+pub(crate) enum PlanBackend {
     Markdown(aep_backend_markdown::backend::MarkdownBackend),
     Sqlite(aep_backend_sqlite::SqliteBackend),
     Postgres(aep_backend_postgres::PostgresBackend),
     HybridSqlite(aep_backend_hybrid::HybridBackend<entity_sqlite::SqliteStore>),
     HybridPostgres(aep_backend_hybrid::HybridBackend<entity_postgres::PostgresStore>),
+    Eventlog(aep_backend_eventlog::EventlogBackend),
 }
 
 impl PlanBackend {
+    /// Immutable receipt of the most recent recorded command. Legacy providers return none.
+    fn last_commit_receipt(&self) -> Option<entity_store::asynchronous::CommitReceipt> {
+        match self {
+            Self::Markdown(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::Sqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::Postgres(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::HybridSqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::HybridPostgres(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::Eventlog(backend) => backend.last_commit_receipt(),
+        }
+    }
+
     /// The event log of one entity, as the provider keeps it — what a plan without a journal
     /// answers `history` from.
     fn events_of(
@@ -516,6 +596,7 @@ impl PlanBackend {
             Self::Postgres(backend) => backend.as_entity_backend().events_of(id),
             Self::HybridSqlite(backend) => backend.as_entity_backend().events_of(id),
             Self::HybridPostgres(backend) => backend.as_entity_backend().events_of(id),
+            Self::Eventlog(backend) => backend.events_of(id),
         };
         events.map_err(|error| anyhow::anyhow!("reading the event log: {error}"))
     }
@@ -534,6 +615,7 @@ impl aep_contract::command::CommandService for PlanBackend {
             Self::Postgres(backend) => backend.execute(envelope).await,
             Self::HybridSqlite(backend) => backend.execute(envelope).await,
             Self::HybridPostgres(backend) => backend.execute(envelope).await,
+            Self::Eventlog(backend) => backend.execute(envelope).await,
         }
     }
 }
@@ -552,6 +634,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.get(reference, consistency).await,
             Self::HybridSqlite(backend) => backend.get(reference, consistency).await,
             Self::HybridPostgres(backend) => backend.get(reference, consistency).await,
+            Self::Eventlog(backend) => backend.get(reference, consistency).await,
         }
     }
 
@@ -565,6 +648,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.resolve(locator).await,
             Self::HybridSqlite(backend) => backend.resolve(locator).await,
             Self::HybridPostgres(backend) => backend.resolve(locator).await,
+            Self::Eventlog(backend) => backend.resolve(locator).await,
         }
     }
 
@@ -581,6 +665,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.query(query).await,
             Self::HybridSqlite(backend) => backend.query(query).await,
             Self::HybridPostgres(backend) => backend.query(query).await,
+            Self::Eventlog(backend) => backend.query(query).await,
         }
     }
 
@@ -597,6 +682,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.relations(query).await,
             Self::HybridSqlite(backend) => backend.relations(query).await,
             Self::HybridPostgres(backend) => backend.relations(query).await,
+            Self::Eventlog(backend) => backend.relations(query).await,
         }
     }
 
@@ -610,6 +696,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.history(reference).await,
             Self::HybridSqlite(backend) => backend.history(reference).await,
             Self::HybridPostgres(backend) => backend.history(reference).await,
+            Self::Eventlog(backend) => backend.history(reference).await,
         }
     }
 
@@ -623,6 +710,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.audit(query).await,
             Self::HybridSqlite(backend) => backend.audit(query).await,
             Self::HybridPostgres(backend) => backend.audit(query).await,
+            Self::Eventlog(backend) => backend.audit(query).await,
         }
     }
 
@@ -636,6 +724,7 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.describe_type(entity_type).await,
             Self::HybridSqlite(backend) => backend.describe_type(entity_type).await,
             Self::HybridPostgres(backend) => backend.describe_type(entity_type).await,
+            Self::Eventlog(backend) => backend.describe_type(entity_type).await,
         }
     }
 }
@@ -697,6 +786,133 @@ impl Opened {
             )),
             None => evidence_from_events(self.backend()?, id),
         }
+    }
+}
+
+// The projection callback deliberately retains the complete typed failure rather than erasing the
+// authority snapshot and publication diagnostics at the CLI boundary.
+#[allow(clippy::result_large_err)]
+fn eventlog_invocation<E>(
+    args: &StoreArgs,
+    opened: &Opened,
+    request: &serde_json::Value,
+    child_requests: &[serde_json::Value],
+    mut execute: E,
+) -> Result<Option<aep_contract::migration::PlanningMutationEnvelopeV1>>
+where
+    E: FnMut(
+        &PlanBackend,
+        &aep_contract::migration::PlannedCommandStepV1,
+    ) -> Result<aep_contract::migration::PlanningMutationResultV1>,
+{
+    use aep_contract::migration::{AuthorityCoordinateV1, AuthorityValueV1, MigrationIdV1, CommandRefusalCodeV1};
+
+    let Plan::Eventlog {
+        authority_root,
+        projection_root,
+        authority: selected,
+    } = &opened.plan else {
+        return Ok(None);
+    };
+    let authority = AuthorityCoordinateV1 {
+        logical_scope: AuthorityValueV1::new(&selected.logical_scope)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        tenant: AuthorityValueV1::new(&selected.tenant)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        stream_identity: AuthorityValueV1::new(&selected.stream_identity)
+            .map_err(|error| anyhow::anyhow!(error))?,
+    };
+    let request_bytes = serde_json::to_vec(request)?;
+    let identity = args
+        .command_identity
+        .clone()
+        .or_else(|| std::env::var(COMMAND_IDENTITY_ENV).ok())
+        .unwrap_or_else(|| mint_command_identity(&request_bytes));
+    let command_identity = MigrationIdV1::new(identity)
+        .map_err(|error| anyhow::anyhow!("invalid --command-identity: {error}"))?;
+    let child_bytes = child_requests
+        .iter()
+        .map(serde_json::to_vec)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let reservation = aep_planning_migration::reservation(
+        command_identity,
+        authority.clone(),
+        &request_bytes,
+        &child_bytes,
+    )?;
+    let backend = opened.backend()?;
+    let publisher = aep_planning_migration::FileProjectionPublisher::new(
+        authority_root.clone(),
+        authority.clone(),
+        projection_root.clone(),
+    );
+    let adapter = || entity_eventlog::Authority {
+        logical_scope: authority.logical_scope.as_str().to_owned(),
+        tenant: authority.tenant.as_str().to_owned(),
+        stream_identity: authority.stream_identity.as_str().to_owned(),
+    };
+    let result = aep_planning_migration::execute_file_invocation(
+        authority_root.clone(),
+        reservation,
+        |planned| match execute(backend, planned) {
+            Ok(result) => {
+                let commit_receipt = backend.last_commit_receipt().ok_or_else(|| {
+                    aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
+                        mutation_refusal(
+                            &authority,
+                            CommandRefusalCodeV1::ReceiptConflict,
+                        ),
+                    ])
+                })?;
+                let snapshot = aep_backend_eventlog::complete_file_snapshot(
+                    authority_root,
+                    adapter(),
+                )
+                .map_err(|_| {
+                    aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
+                        mutation_refusal(
+                            &authority,
+                            CommandRefusalCodeV1::AuthoritySnapshotChanged,
+                        ),
+                    ])
+                })?;
+                let (authority_snapshot, _) =
+                    aep_planning_migration::authority_snapshot_identity(&authority, &snapshot)
+                        .map_err(|_| {
+                            aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
+                                mutation_refusal(
+                                    &authority,
+                                    CommandRefusalCodeV1::VerificationMismatch,
+                                ),
+                            ])
+                        })?;
+                Ok(aep_planning_migration::ExecutedChild {
+                    commit_receipt,
+                    result,
+                    authority_snapshot,
+                })
+            }
+            Err(_) => Err(aep_planning_migration::ChildExecutionFailure::Refused(vec![
+                mutation_refusal(&authority, CommandRefusalCodeV1::SemanticMismatch),
+            ])),
+        },
+        || publisher.publish_current(),
+    )?;
+    Ok(Some(result))
+}
+
+fn mutation_refusal(
+    authority: &aep_contract::migration::AuthorityCoordinateV1,
+    code: aep_contract::migration::CommandRefusalCodeV1,
+) -> aep_contract::migration::CommandRefusalV1 {
+    use aep_contract::migration::{CommandRefusalV1, DiagnosticCoordinateV1, AuthorityDiagnosticV1, PresenceV1};
+    CommandRefusalV1 {
+        code,
+        at: DiagnosticCoordinateV1::Authority(AuthorityDiagnosticV1 {
+            authority: authority.clone(),
+            subject: PresenceV1::Missing,
+            record_id: PresenceV1::Missing,
+        }),
     }
 }
 
@@ -777,11 +993,26 @@ fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Ope
                 files: None,
             })
         }
+        Plan::Eventlog {
+            projection_root, ..
+        } => {
+            let backend = plan
+                .open_backend()?
+                .context("an Eventlog plan opens its selected authority")?;
+            let report = report_from_backend(&backend)?;
+            let store = MarkdownStore::open(projection_root.clone());
+            Ok(Opened {
+                plan,
+                backend: Some(backend),
+                report,
+                files: Some(store),
+            })
+        }
     }
 }
 
 /// The documents a store that keeps none would hold: one per entity addressed into this plan.
-fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> {
+pub(crate) fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> {
     use aep_contract::query::{EntityQuery, QueryService, RelationQuery};
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityRef;
@@ -1573,6 +1804,9 @@ pub(crate) enum PlanningBoardFormat {
 /// exactly that, because the second half would need a wildcard the compiler stops checking.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
+    let _writer_fence = artifact_mutation_location(&command)
+        .map(StoreLocation::acquire_writer_fence)
+        .transpose()?;
     match command {
         ArtifactCommand::New(args) => create(&args),
         ArtifactCommand::Move {
@@ -1717,6 +1951,37 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
     }
 }
 
+/// Mutations use one cooperative protocol before any legacy backend opener. Read-only commands do
+/// not create or contend on the lock file.
+fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocation> {
+    match command {
+        ArtifactCommand::New(args) => Some(&args.store.location),
+        ArtifactCommand::Move { store, .. }
+        | ArtifactCommand::Relate { store, .. }
+        | ArtifactCommand::Unrelate { store, .. }
+        | ArtifactCommand::Body { store, .. }
+        | ArtifactCommand::Set { store, .. }
+        | ArtifactCommand::Scope { store, .. }
+        | ArtifactCommand::CatchUp { store }
+        | ArtifactCommand::Evidence { store, .. } => Some(&store.location),
+        ArtifactCommand::Waves { .. }
+        | ArtifactCommand::Show { .. }
+        | ArtifactCommand::List { .. }
+        | ArtifactCommand::Board { .. }
+        | ArtifactCommand::Blocked { .. }
+        | ArtifactCommand::Graph { .. }
+        | ArtifactCommand::Validate { .. }
+        | ArtifactCommand::History { .. }
+        | ArtifactCommand::Explain { .. }
+        | ArtifactCommand::Divergences { .. }
+        | ArtifactCommand::Findings { .. }
+        | ArtifactCommand::ReviewValue { .. }
+        | ArtifactCommand::Kinds { .. }
+        | ArtifactCommand::Relations { .. }
+        | ArtifactCommand::Lifecycle { .. } => None,
+    }
+}
+
 /// The members the workspace beside this store declares, if there is one.
 ///
 /// A store with no workspace file declares no members, so every member-qualified target is a
@@ -1778,6 +2043,38 @@ pub(crate) fn clock_at_the_edge() -> aep_domain::time::Timestamp {
 /// (`crate::drive::session_env`) and read here on every store write, so the two ends of the
 /// declaration are one constant rather than two string literals.
 pub(crate) const ACTOR_ENV: &str = "AEP_ACTOR";
+
+/// Stable invocation identity supplied by a driver-created action.
+///
+/// A direct CLI invocation may instead use `--command-identity`; when neither is present the edge
+/// mints and returns a fresh identity. Keeping the driver's value in one shared constant prevents
+/// the process-launch and command-admission halves from drifting into different environment keys.
+pub(crate) const COMMAND_IDENTITY_ENV: &str = "AEP_COMMAND_IDENTITY";
+
+static MINTED_COMMAND_ORDINAL: AtomicU64 = AtomicU64::new(0);
+
+fn mint_command_identity(request: &[u8]) -> String {
+    let elapsed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+        .to_be_bytes()
+        .to_vec();
+    let process = std::process::id().to_be_bytes().to_vec();
+    let ordinal = MINTED_COMMAND_ORDINAL
+        .fetch_add(1, Ordering::Relaxed)
+        .to_be_bytes()
+        .to_vec();
+    let digest = aep_contract::migration::digest_parts_v1(
+        "aep.planning-edge-command/1",
+        &[request.to_vec(), elapsed, process, ordinal],
+    )
+    .expect("bounded command identity inputs fit canonical framing");
+    format!(
+        "command-{}",
+        digest.as_wire().trim_start_matches("sha256:")
+    )
+}
 
 /// Who the command is from.
 ///
@@ -1962,9 +2259,12 @@ fn entity_body(
 ///
 /// The entity carries what the document states — status, title, summary, owner, tags and the
 /// **prose**, under `BODY_KEY`. The backend writes the file; nothing here does.
-fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Result<String> {
+fn create_through_a_command(
+    opened: &Opened,
+    document: &PlanningDocument,
+    command_identity: Option<&str>,
+) -> Result<(String, u64)> {
     use aep_contract::command::CommandService;
-    use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::command::{Command, CreateEntity};
     use aep_domain::entity::{EntityLocator, EntityType};
@@ -1982,30 +2282,7 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
     )
     .map_err(|error| anyhow::anyhow!("`{}` cannot be given an address: {error}", front.id))?;
 
-    // **Every target resolved before anything is written.** They used to be resolved inside the
-    // loop, after the create had been committed and journalled — so a typo in `--relate` left the
-    // caller told the command failed and holding an artifact without the edge they asked for.
-    for relation in &front.relations {
-        let target = relation.target.id();
-        block_on(QueryService::resolve(
-            backend,
-            &EntityLocator::new(
-                aep_backend_markdown::backend::ORGANISATION,
-                aep_backend_markdown::backend::SPACE,
-                target.namespace(),
-                target.name(),
-            )
-            .map_err(|error| anyhow::anyhow!("`{target}` cannot be given an address: {error}"))?,
-        ))
-        .map_err(|error| {
-            anyhow::anyhow!(
-                "`{}` would point at `{target}`, which this store does not hold: {error}",
-                front.id
-            )
-        })?;
-    }
-
-    let name = format!("new-{}", front.id);
+    let name = command_identity.map_or_else(|| format!("new-{}", front.id), ToOwned::to_owned);
     let envelope = envelope_for(
         &name,
         "protocol-artifact-new",
@@ -2036,17 +2313,52 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
         anyhow::bail!("creating `{}` reported no entity", front.id);
     };
 
-    // The edges, each its own command — the same one `protocol artifact relate` issues, because
-    // an edge created at birth and an edge added later are the same act.
-    let _ = created;
+    Ok((opened.path_of(&front.id), created.revision.get()))
+}
+
+fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Result<String> {
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::entity::EntityLocator;
+
+    let backend = opened.backend()?;
+    let front = &document.frontmatter;
+    // **Every target resolved before anything is written.** They used to be resolved inside the
+    // loop, after the create had been committed and journalled — so a typo in `--relate` left the
+    // caller told the command failed and holding an artifact without the edge they asked for.
     for relation in &front.relations {
-        relate_through_a_command(backend, &front.id, relation.kind, relation.target.id())?;
+        let target = relation.target.id();
+        block_on(QueryService::resolve(
+            backend,
+            &EntityLocator::new(
+                aep_backend_markdown::backend::ORGANISATION,
+                aep_backend_markdown::backend::SPACE,
+                target.namespace(),
+                target.name(),
+            )
+            .map_err(|error| anyhow::anyhow!("`{target}` cannot be given an address: {error}"))?,
+        ))
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "`{}` would point at `{target}`, which this store does not hold: {error}",
+                front.id
+            )
+        })?;
     }
 
-    Ok(opened.path_of(&front.id))
+    let (path, _) = create_through_a_command(opened, document, None)?;
+    // The edges, each its own command — the same one `protocol artifact relate` issues, because
+    // an edge created at birth and an edge added later are the same act.
+    for relation in &front.relations {
+        relate_through_a_command(backend, &front.id, relation.kind, relation.target.id(), None)?;
+    }
+    Ok(path)
 }
 
 /// `protocol artifact new`
+// One closed command assembles and validates the document, reserves every Eventlog child, then
+// emits the existing format-specific response; keeping that transaction visible is intentional.
+#[allow(clippy::too_many_lines)]
 fn create(args: &NewArgs) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(&args.kind).map_err(|error| anyhow::anyhow!("{error}"))?;
     // The id's namespace is the kind's *canonical* name, whichever spelling was typed, so `adr` and
@@ -2111,6 +2423,109 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     // invariant 14 gives state change exactly one door. The document above is what the command has
     // to produce, not what gets written — `MarkdownBackend` writes it, from the entity.
     let opened = open(&args.store.location, true)?;
+    if matches!(&opened.plan, Plan::Eventlog { .. }) {
+        // Resolve every target before the reservation can admit its first child. The immutable
+        // roster still contains create followed by each relation in caller order; a retry resumes
+        // the first missing child and never changes that order.
+        use aep_contract::query::QueryService;
+        use aep_contract::testing::block_on;
+        use aep_domain::entity::EntityLocator;
+        for relation in &document.frontmatter.relations {
+            let target = relation.target.id();
+            block_on(QueryService::resolve(
+                opened.backend()?,
+                &EntityLocator::new(
+                    aep_backend_markdown::backend::ORGANISATION,
+                    aep_backend_markdown::backend::SPACE,
+                    target.namespace(),
+                    target.name(),
+                )
+                .map_err(|error| {
+                    anyhow::anyhow!("`{target}` cannot be given an address: {error}")
+                })?,
+            ))
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "`{}` would point at `{target}`, which this store does not hold: {error}",
+                    document.frontmatter.id
+                )
+            })?;
+        }
+        let mut children = vec![serde_json::json!({
+            "operation": "create",
+            "id": id.to_string(),
+            "kind": kind.as_str(),
+            "status": status.as_str(),
+            "data": entity_body(&document),
+        })];
+        children.extend(document.frontmatter.relations.iter().map(|relation| {
+            serde_json::json!({
+                "operation":"relate",
+                "id":id.to_string(),
+                "relation":relation.kind.as_str(),
+                "target":relation.target.to_string(),
+            })
+        }));
+        let request = serde_json::json!({
+            "verb":"new",
+            "id":id.to_string(),
+            "kind":kind.as_str(),
+            "status":status.as_str(),
+            "children":children.clone(),
+        });
+        let mut created_revision = None;
+        if let Some(result) = eventlog_invocation(
+            &args.store,
+            &opened,
+            &request,
+            &children,
+            |backend, planned| {
+                if planned.step_index == 0 {
+                    let (_, revision) = create_through_a_command(
+                        &opened,
+                        &document,
+                        Some(&planned.child_identity),
+                    )?;
+                    created_revision = Some(revision);
+                    return Ok(aep_contract::migration::PlanningMutationResultV1::Created(
+                        aep_contract::migration::CreatedResultV1 {
+                            id: id.to_string(),
+                            kind: kind.as_str().to_owned(),
+                            status: status.as_str().to_owned(),
+                            revision,
+                            path: relative_path_for(&id),
+                        },
+                    ));
+                }
+                let relation = document
+                    .frontmatter
+                    .relations
+                    .get(
+                        usize::try_from(planned.step_index - 1)
+                            .context("the immutable new-command relation index exceeds usize")?,
+                    )
+                    .context("the immutable new-command roster named an absent relation")?;
+                relate_through_a_command(
+                    backend,
+                    &id,
+                    relation.kind,
+                    relation.target.id(),
+                    Some(&planned.child_identity),
+                )?;
+                Ok(aep_contract::migration::PlanningMutationResultV1::Related(
+                    aep_contract::migration::RelationResultV1 {
+                        id: id.to_string(),
+                        relation: relation.kind.as_str().to_owned(),
+                        target: relation.target.to_string(),
+                        revision: created_revision.unwrap_or(1),
+                    },
+                ))
+            },
+        )? {
+            crate::store_command::emit_mutation(&result, args.store.format)?;
+            return Ok(crate::exit_code(result.success()));
+        }
+    }
     let path = write_through_a_command(&opened, &document)?;
     let relative = relative_path_for(&id);
 
@@ -2138,6 +2553,7 @@ fn move_through_a_command(
     id: &ArtifactId,
     to: &ArtifactStatus,
     decided_on: &aep_backend_markdown::journal::Provenance,
+    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -2166,35 +2582,43 @@ fn move_through_a_command(
     ));
 
     let at = clock_at_the_edge();
-    let name = format!("move-{id}").replace([':', '/'], "-");
-    let context = CommandContext::new(
-        format!("req-{name}")
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        format!("{name}-{to}-{}", at.epoch_millis())
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        command_actor()?,
-        "protocol-artifact-move"
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
+    let payload = Command::MoveStatus(MoveStatus {
+        target: EntityRef::new(target),
+        to: to.as_str().to_owned(),
+        expected_revision: None,
+        decided_on: account,
+    });
+    let envelope = if let Some(identity) = command_identity { envelope_for(
+        identity,
+        "protocol-artifact-move",
+        "aep.status.move/v1",
+        payload,
         at,
-    );
-    block_on(
-        backend.execute(CommandEnvelope::new(
+    )? } else {
+        let name = format!("move-{id}").replace([':', '/'], "-");
+        let context = CommandContext::new(
+            format!("req-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            format!("{name}-{to}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            command_actor()?,
+            "protocol-artifact-move"
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            at,
+        );
+        CommandEnvelope::new(
             format!("cmd-{name}-{}", at.epoch_millis())
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.status.move/v1",
-            Command::MoveStatus(MoveStatus {
-                target: EntityRef::new(target),
-                to: to.as_str().to_owned(),
-                expected_revision: None,
-                decided_on: account,
-            }),
+            payload,
             context,
-        )),
-    )
+        )
+    };
+    block_on(backend.execute(envelope))
     .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
@@ -2248,6 +2672,8 @@ struct MoveRequest<'a> {
 /// store that does not exist. The caller needs the hops before it needs the reason.
 #[derive(Debug)]
 struct MoveOutcome {
+    /// Every hop named by the original request, including one at which the walk stopped.
+    requested: Vec<ArtifactStatus>,
     /// The hops that were written, in the order they were written.
     made: Vec<Moved>,
     /// What the decision rested on, kept so a caller can say whether it leaned on an assertion.
@@ -2305,6 +2731,7 @@ fn decide_and_move(
     registry: &aep_engine::Registry,
     repository: &Path,
     asked: MoveRequest<'_>,
+    execute_commands: bool,
 ) -> Result<MoveOutcome> {
     let MoveRequest {
         id,
@@ -2335,6 +2762,7 @@ fn decide_and_move(
         .get_mut(id)
         .with_context(|| not_here)?;
     let (standing, ladder, hops) = plan_the_walk(&stored.document, registry, to, via)?;
+    let requested = hops.clone();
 
     // **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for
     // the ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per
@@ -2350,6 +2778,7 @@ fn decide_and_move(
         &standing,
     ) {
         return Ok(MoveOutcome {
+            requested,
             made: Vec::new(),
             decided_on,
             refusal: Some(stopped),
@@ -2381,6 +2810,7 @@ fn decide_and_move(
                 .move_status(rung.clone(), registry.lifecycles(), &evidence, Some(now))
         {
             return Ok(MoveOutcome {
+                requested,
                 made,
                 decided_on,
                 refusal: Some(MoveStopped::Refused { from, refusal }),
@@ -2401,6 +2831,7 @@ fn decide_and_move(
             .find(|finding| !before.contains(*finding) && finding.contains(&id.to_string()))
         {
             return Ok(MoveOutcome {
+                requested,
                 made,
                 decided_on,
                 refusal: Some(MoveStopped::WouldNotValidate {
@@ -2416,7 +2847,9 @@ fn decide_and_move(
         // the decision and the account it rested on. `MarkdownBackend` writes the file and
         // journals it — **once per hop**, so a walk leaves the same record two commands would.
         let _ = relative;
-        move_through_a_command(opened.backend()?, id, rung, &decided_on)?;
+        if execute_commands {
+            move_through_a_command(opened.backend()?, id, rung, &decided_on, None)?;
+        }
         made.push(Moved {
             id: id.to_string(),
             from: from.as_str().to_owned(),
@@ -2427,6 +2860,7 @@ fn decide_and_move(
     }
 
     Ok(MoveOutcome {
+        requested,
         made,
         decided_on,
         refusal: None,
@@ -2506,6 +2940,7 @@ fn guarded_rung_on_the_walk(
 ///
 /// The decision is [`decide_and_move`]'s; this reads the clock at the edge, opens the store, and
 /// renders the outcome as the lines and exit code the terminal expects.
+#[allow(clippy::too_many_lines)]
 fn move_status(
     args: &StoreArgs,
     id: &str,
@@ -2528,6 +2963,7 @@ fn move_status(
     let mut opened = open(&args.location, true)?;
     let repository = args.repository_root();
 
+    let execute_commands = !matches!(&opened.plan, Plan::Eventlog { .. });
     let outcome = decide_and_move(
         &mut opened,
         &registry,
@@ -2539,7 +2975,68 @@ fn move_status(
             now: &now,
             via,
         },
+        execute_commands,
     )?;
+
+    if !execute_commands {
+        let children = outcome
+            .requested
+            .iter()
+            .map(|rung| {
+                serde_json::json!({
+                    "operation":"move",
+                    "id":id.to_string(),
+                    "to":rung.as_str(),
+                    "decided_on":outcome.decided_on,
+                })
+            })
+            .collect::<Vec<_>>();
+        let request = serde_json::json!({
+            "verb":"move",
+            "id":id.to_string(),
+            "to":to,
+            "via":via,
+            "now":now,
+            "decided_on":outcome.decided_on,
+            "children":children.clone(),
+        });
+        if let Some(result) = eventlog_invocation(
+            args,
+            &opened,
+            &request,
+            &children,
+            |backend, planned| {
+                let index = usize::try_from(planned.step_index)
+                    .context("the immutable move roster index exceeds usize")?;
+                let made = outcome
+                    .made
+                    .get(index)
+                    .context("the requested status hop was refused before execution")?;
+                let rung = outcome
+                    .requested
+                    .get(index)
+                    .context("the immutable move roster named an absent hop")?;
+                move_through_a_command(
+                    backend,
+                    &id,
+                    rung,
+                    &outcome.decided_on,
+                    Some(&planned.child_identity),
+                )?;
+                Ok(aep_contract::migration::PlanningMutationResultV1::Moved(
+                    aep_contract::migration::MovedResultV1 {
+                        id: id.to_string(),
+                        from: made.from.clone(),
+                        to: made.to.clone(),
+                        revision: made.revision,
+                    },
+                ))
+            },
+        )? {
+            crate::store_command::emit_mutation(&result, args.format)?;
+            return Ok(crate::exit_code(result.success()));
+        }
+    }
 
     // Reported before the refusal, because a walk that made two hops and stopped at the third made
     // two real moves and the reader has to see them first.
@@ -2662,6 +3159,7 @@ fn relate_through_a_command(
     source: &ArtifactId,
     relation: RelationKind,
     target: &ArtifactId,
+    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -2684,42 +3182,44 @@ fn relate_through_a_command(
     };
 
     let at = clock_at_the_edge();
-    let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
-    let context = CommandContext::new(
-        format!("req-{name}")
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        // **The instant is in the idempotency key and nowhere else**, as it is for `move`, `body`
-        // and `evidence`. A key naming only the edge names the edge and not the attempt: a store
-        // that keeps applied commands — SQLite and Postgres do, markdown does not — then reads the
-        // second `relate story:x depends_on story:y` as the first one being retried and writes
-        // nothing. Unreachable until `unrelate` made re-asserting an edge a thing anybody would do;
-        // reachable the moment it did, and the edge did not come back. The command id stays derived
-        // from the edge alone, because that field is what a genuine retry reuses and it is written
-        // into the journal, where a millisecond would make two identical writes read as different.
-        format!("rel-{name}-{}", at.epoch_millis())
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        command_actor()?,
-        "protocol-artifact-relate"
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
+    let payload = Command::CreateRelation(CreateRelation {
+        kind: relation,
+        source: EntityRef::new(resolve(source)?),
+        target: EntityRef::new(resolve(target)?),
+    });
+    let envelope = if let Some(identity) = command_identity { envelope_for(
+        identity,
+        "protocol-artifact-relate",
+        "aep.relation.create/v1",
+        payload,
         at,
-    );
-    block_on(
-        backend.execute(CommandEnvelope::new(
+    )? } else {
+        let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
+        let context = CommandContext::new(
+            format!("req-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            // A fresh ordinary CLI attempt gets a fresh idempotency key. A coordinated
+            // Eventlog retry instead takes the exact reserved child identity above.
+            format!("rel-{name}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            command_actor()?,
+            "protocol-artifact-relate"
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            at,
+        );
+        CommandEnvelope::new(
             format!("cmd-{name}")
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.create/v1",
-            Command::CreateRelation(CreateRelation {
-                kind: relation,
-                source: EntityRef::new(resolve(source)?),
-                target: EntityRef::new(resolve(target)?),
-            }),
+            payload,
             context,
-        )),
-    )
+        )
+    };
+    block_on(backend.execute(envelope))
     .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
@@ -2779,7 +3279,33 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
     let _ = relative;
-    relate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &serde_json::json!({"verb":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
+        &[serde_json::json!({"operation":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()})],
+        |backend, planned| {
+            relate_through_a_command(
+                backend,
+                &id,
+                relation,
+                target.id(),
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::Related(
+                aep_contract::migration::RelationResultV1 {
+                    id: id.to_string(),
+                    relation: relation.as_str().to_owned(),
+                    target: target.to_string(),
+                    revision: document.frontmatter.revision,
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
+    relate_through_a_command(opened.backend()?, &id, relation, target.id(), None)?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} (revision {})",
@@ -2811,6 +3337,7 @@ fn unrelate_through_a_command(
     source: &ArtifactId,
     relation: RelationKind,
     target: &ArtifactId,
+    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::{QueryService, RelationQuery};
@@ -2852,36 +3379,40 @@ fn unrelate_through_a_command(
     })?;
 
     let at = clock_at_the_edge();
-    let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
-    let context = CommandContext::new(
-        format!("req-unrel-{name}")
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        // Its own key, distinct from the one `relate` mints for the same three words, and carrying
-        // the instant for the reason `relate`'s does: a key naming only the edge names no
-        // particular attempt, so removing an edge that was made again would be replayed rather
-        // than run.
-        format!("unrel-{name}-{}", at.epoch_millis())
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        command_actor()?,
-        "protocol-artifact-unrelate"
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
+    let payload = Command::RemoveRelation(RemoveRelation {
+        relation: edge.id.clone(),
+    });
+    let envelope = if let Some(identity) = command_identity { envelope_for(
+        identity,
+        "protocol-artifact-unrelate",
+        "aep.relation.remove/v1",
+        payload,
         at,
-    );
-    block_on(
-        backend.execute(CommandEnvelope::new(
+    )? } else {
+        let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
+        let context = CommandContext::new(
+            format!("req-unrel-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            format!("unrel-{name}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            command_actor()?,
+            "protocol-artifact-unrelate"
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            at,
+        );
+        CommandEnvelope::new(
             format!("cmd-unrel-{name}")
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.remove/v1",
-            Command::RemoveRelation(RemoveRelation {
-                relation: edge.id.clone(),
-            }),
+            payload,
             context,
-        )),
-    )
+        )
+    };
+    block_on(backend.execute(envelope))
     .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
@@ -2949,7 +3480,33 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     // Through a command. The edge the contract removes is what `MarkdownBackend` takes out of the
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
-    unrelate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &serde_json::json!({"verb":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
+        &[serde_json::json!({"operation":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()})],
+        |backend, planned| {
+            unrelate_through_a_command(
+                backend,
+                &id,
+                relation,
+                target.id(),
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::Unrelated(
+                aep_contract::migration::RelationResultV1 {
+                    id: id.to_string(),
+                    relation: relation.as_str().to_owned(),
+                    target: target.to_string(),
+                    revision: document.frontmatter.revision,
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
+    unrelate_through_a_command(opened.backend()?, &id, relation, target.id(), None)?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} removed (revision {})",
@@ -2977,6 +3534,7 @@ fn update_through_a_command(
     id: &ArtifactId,
     changes: impl IntoIterator<Item = (String, aep_domain::node::Node)>,
     correlation: &str,
+    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -2995,33 +3553,41 @@ fn update_through_a_command(
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
 
     let at = clock_at_the_edge();
-    let name = format!("{correlation}-{id}").replace([':', '/'], "-");
-    let context = CommandContext::new(
-        format!("req-{name}")
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        format!("upd-{name}-{}", at.epoch_millis())
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
-        command_actor()?,
-        correlation
-            .parse()
-            .map_err(|error| anyhow::anyhow!("{error}"))?,
+    let payload = Command::UpdateEntity(UpdateEntity {
+        target: EntityRef::new(target),
+        changes: changes.into_iter().collect(),
+    });
+    let envelope = if let Some(identity) = command_identity { envelope_for(
+        identity,
+        correlation,
+        "aep.entity.update/v1",
+        payload,
         at,
-    );
-    block_on(
-        backend.execute(CommandEnvelope::new(
+    )? } else {
+        let name = format!("{correlation}-{id}").replace([':', '/'], "-");
+        let context = CommandContext::new(
+            format!("req-{name}")
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            format!("upd-{name}-{}", at.epoch_millis())
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            command_actor()?,
+            correlation
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            at,
+        );
+        CommandEnvelope::new(
             format!("cmd-{name}-{}", at.epoch_millis())
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.entity.update/v1",
-            Command::UpdateEntity(UpdateEntity {
-                target: EntityRef::new(target),
-                changes: changes.into_iter().collect(),
-            }),
+            payload,
             context,
-        )),
-    )
+        )
+    };
+    block_on(backend.execute(envelope))
     .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
@@ -3186,14 +3752,49 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
     // A verb that wrote the body directly is the second write path invariant 14 forbids, and a body
     // is the one thing a planning document is *for*.
     let _ = relative;
+    let body_change = vec![(
+        aep_backend_markdown::backend::BODY_KEY.to_owned(),
+        aep_domain::node::Node::from(document.body.as_str()),
+    )];
+    let body_digest = aep_contract::migration::digest_parts_v1(
+        "aep.planning-body/1",
+        &[document.body.as_bytes().to_vec()],
+    )?;
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &serde_json::json!({"verb":"body","id":id.to_string(),"edit":edit.correlation()}),
+        &[serde_json::json!({
+            "operation":"update",
+            "id":id.to_string(),
+            "changes":serde_json::to_value(&body_change)?,
+        })],
+        |backend, planned| {
+            update_through_a_command(
+                backend,
+                &id,
+                body_change.clone(),
+                edit.correlation(),
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::BodyUpdated(
+                aep_contract::migration::BodyUpdatedResultV1 {
+                    id: id.to_string(),
+                    revision: document.frontmatter.revision,
+                    body_digest,
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
     update_through_a_command(
         opened.backend()?,
         &id,
-        [(
-            aep_backend_markdown::backend::BODY_KEY.to_owned(),
-            aep_domain::node::Node::from(document.body.as_str()),
-        )],
+        body_change,
         edit.correlation(),
+        None,
     )?;
     let path = opened.path_of(&id);
     match args.format {
@@ -3335,6 +3936,7 @@ fn model_digest_change(
 ///
 /// Frontmatter through the same door as prose. `refused` carries the flags this verb accepts only
 /// in order to say why it will not honour them; each is `None` on every call that meant anything.
+#[allow(clippy::too_many_lines)]
 fn set(
     args: &StoreArgs,
     id: &str,
@@ -3428,7 +4030,48 @@ fn set(
     // than guessed only if that stops being true.
     let revision = front.revision.saturating_add(1);
     let relative = stored.relative_path.clone();
-    update_through_a_command(opened.backend()?, &id, changes, "protocol-artifact-set")?;
+    let request = serde_json::json!({
+        "verb": "set",
+        "id": id.to_string(),
+        "fields": named,
+    });
+    let child = serde_json::json!({
+        "operation": "update",
+        "id": id.to_string(),
+        "changes": serde_json::to_value(&changes)?,
+    });
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &request,
+        &[child],
+        |backend, planned| {
+            update_through_a_command(
+                backend,
+                &id,
+                changes.clone(),
+                "protocol-artifact-set",
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::FieldsSet(
+                aep_contract::migration::FieldsSetResultV1 {
+                    id: id.to_string(),
+                    revision,
+                    fields: named.clone(),
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
+    update_through_a_command(
+        opened.backend()?,
+        &id,
+        changes,
+        "protocol-artifact-set",
+        None,
+    )?;
 
     let path = opened.path_of(&id);
     match args.format {
@@ -3472,6 +4115,7 @@ fn scope_node(entries: &[aep_domain::artifact::ScopeEntry]) -> aep_domain::node:
 ///
 /// One command is one write and one revision, whatever it names — the same rule `set` follows, and
 /// the store's own: `revision` counts the writes it made.
+#[allow(clippy::too_many_lines)]
 fn scope(
     args: &StoreArgs,
     id: &str,
@@ -3545,11 +4189,46 @@ fn scope(
     let revision = front.revision.saturating_add(1);
     let relative = stored.relative_path.clone();
     let written = entries.clone();
+    let scope_change = vec![("scope".to_owned(), scope_node(&entries))];
+    let scope_digest = aep_contract::migration::digest_parts_v1(
+        "aep.planning-scope/1",
+        &[serde_json::to_vec(&entries)?],
+    )?;
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &serde_json::json!({"verb":"scope","id":id.to_string(),"entries":entries}),
+        &[serde_json::json!({
+            "operation":"update",
+            "id":id.to_string(),
+            "changes":serde_json::to_value(&scope_change)?,
+        })],
+        |backend, planned| {
+            update_through_a_command(
+                backend,
+                &id,
+                scope_change.clone(),
+                "protocol-artifact-scope",
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::ScopeUpdated(
+                aep_contract::migration::ScopeUpdatedResultV1 {
+                    id: id.to_string(),
+                    revision,
+                    scope_digest,
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
     update_through_a_command(
         opened.backend()?,
         &id,
-        vec![("scope".to_owned(), scope_node(&entries))],
+        scope_change,
         "protocol-artifact-scope",
+        None,
     )?;
 
     let path = opened.path_of(&id);
@@ -5857,6 +6536,9 @@ fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
 }
 
 /// Issues the `RecordEvidence` command that records one observation.
+// These are the eight independent fields in the persisted evidence command; combining them into
+// an untyped bag would weaken the existing command contract.
+#[allow(clippy::too_many_arguments)]
 fn evidence_through_a_command(
     backend: &PlanBackend,
     id: &ArtifactId,
@@ -5865,6 +6547,7 @@ fn evidence_through_a_command(
     answers: Option<(&ArtifactId, aep_domain::review::ReviewOutcome)>,
     reference: Option<&str>,
     at: aep_domain::time::Timestamp,
+    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::CommandService;
     use aep_contract::query::QueryService;
@@ -5882,11 +6565,14 @@ fn evidence_through_a_command(
     let target = block_on(QueryService::resolve(backend, &locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
 
-    let envelope = envelope_for(
-        &format!(
+    let name = command_identity.map_or_else(|| {
+        format!(
             "evidence-{id}-{kind}-{}",
             clock_at_the_edge().epoch_millis()
-        ),
+        )
+    }, ToOwned::to_owned);
+    let envelope = envelope_for(
+        &name,
         "protocol-artifact-evidence",
         "aep.evidence.record/v1",
         Command::RecordEvidence(RecordEvidence {
@@ -6062,6 +6748,7 @@ fn recorded_coverage(path: &Path, report_json: &str, input_path: &Path, input_js
     Ok(Recorded { kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1, source, reference: Some(path.display().to_string()), at: data.completed_at.epoch_millis().to_string() })
 }
 
+#[allow(clippy::too_many_lines)]
 fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) -> Result<ExitCode> {
     use aep_domain::evidence::EvidenceKind;
 
@@ -6136,6 +6823,46 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     // evidence-gated move decision**, so a verb appending one directly writes the thing the
     // decision reads without passing the door every other write passes — the same deviation D-P1
     // was, and invisible to a scan looking only for store writes.
+    let observed_at = instant(&at)?;
+    let revision = stored.document.frontmatter.revision;
+    let child = serde_json::json!({
+        "operation": "record_evidence",
+        "id": id.to_string(),
+        "kind": kind.as_str(),
+        "source": source,
+        "reference": reference,
+        "review": answers.map(|(review, _)| review.to_string()),
+        "outcome": answers.map(|(_, outcome)| outcome.as_str()),
+        "at": at,
+    });
+    if let Some(result) = eventlog_invocation(
+        args,
+        &opened,
+        &serde_json::json!({"verb":"evidence","id":id.to_string(),"record":child.clone()}),
+        &[child],
+        |backend, planned| {
+            evidence_through_a_command(
+                backend,
+                &id,
+                kind,
+                &source,
+                answers,
+                reference.as_deref(),
+                observed_at,
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::EvidenceRecorded(
+                aep_contract::migration::EvidenceRecordedResultV1 {
+                    id: id.to_string(),
+                    evidence_id: planned.child_identity.clone(),
+                    revision,
+                },
+            ))
+        },
+    )? {
+        crate::store_command::emit_mutation(&result, args.format)?;
+        return Ok(crate::exit_code(result.success()));
+    }
     evidence_through_a_command(
         opened.backend()?,
         &id,
@@ -6143,7 +6870,8 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
         &source,
         answers,
         reference.as_deref(),
-        instant(&at)?,
+        observed_at,
+        None,
     )?;
 
     let on_hand = opened.evidence_on_hand(&id)?;
@@ -7632,6 +8360,18 @@ mod tests {
     }
 
     #[test]
+    fn a_direct_edge_mints_distinct_valid_retry_identities() {
+        let first = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
+        let second = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
+        assert_ne!(first, second, "two new invocations must not share a reservation");
+        assert!(
+            aep_contract::migration::MigrationIdV1::new(first).is_ok(),
+            "the returned identity must be accepted unchanged on retry"
+        );
+        assert!(aep_contract::migration::MigrationIdV1::new(second).is_ok());
+    }
+
+    #[test]
     fn an_edge_argument_splits_at_the_first_colon_only() {
         // `derived_from:epic:passwordless` has three segments and one meaning: the target id keeps
         // its own colon. Splitting at the last would produce the relation `derived_from:epic`.
@@ -7674,6 +8414,7 @@ pub(crate) fn board_of(location: &StoreLocation, kind: Option<&str>) -> Result<V
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
+        command_identity: None,
     };
     let opened = open(location, false)?;
     let ladders = ladders_or_none(&args);
@@ -7722,6 +8463,7 @@ pub(crate) fn explained_of(location: &StoreLocation, id: &str) -> Result<Explain
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
+        command_identity: None,
     };
     let id = artifact_id(id)?;
     let opened = open(location, true)?;
@@ -7770,20 +8512,32 @@ pub(crate) fn store_of(location: &StoreLocation) -> Result<Served> {
 /// that assembled the steps itself would skip the store-wide re-validation and the guarded-rung
 /// rule, and would write a provenance of its own shape — three divergences, all silent, in the
 /// write path of a governed store.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn moved_by(
     location: &StoreLocation,
     id: &str,
     to: &str,
-    now: &str,
+    decided_on: Option<&str>,
+    command_identity: Option<&str>,
 ) -> Result<ServedMove> {
+    let _writer_fence = location.acquire_writer_fence()?;
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
+        command_identity: command_identity.map(ToOwned::to_owned),
     };
     let id = artifact_id(id)?;
     let registry = args.lifecycles()?;
     let mut opened = open(location, true)?;
+    if matches!(&opened.plan, Plan::Eventlog { .. }) && command_identity.is_none() {
+        bail!("an Eventlog served mutation requires command_identity for exact retry");
+    }
+    if matches!(&opened.plan, Plan::Eventlog { .. }) && decided_on.is_none() {
+        bail!("an Eventlog served mutation requires decided_on so a retry reproduces the request");
+    }
+    let now = decided_on.map_or_else(now_at_the_edge, ToOwned::to_owned);
     let repository = args.repository_root();
+    let execute_commands = !matches!(&opened.plan, Plan::Eventlog { .. });
     let outcome = decide_and_move(
         &mut opened,
         &registry,
@@ -7792,10 +8546,63 @@ pub(crate) fn moved_by(
             id: &id,
             to,
             asserted: aep_backend_markdown::kernel::EvidenceOnHand::new(),
-            now,
+            now: &now,
             via: false,
         },
+        execute_commands,
     )?;
+    let mutation = if execute_commands {
+        None
+    } else {
+        let children = outcome
+            .requested
+            .iter()
+            .map(|rung| {
+                serde_json::json!({
+                    "operation":"move",
+                    "id":id.to_string(),
+                    "to":rung.as_str(),
+                    "decided_on":outcome.decided_on,
+                })
+            })
+            .collect::<Vec<_>>();
+        let request = serde_json::json!({
+            "verb":"served_move",
+            "id":id.to_string(),
+            "to":to,
+            "via":false,
+                "now":now,
+                "decided_on":outcome.decided_on,
+            "children":children.clone(),
+        });
+        eventlog_invocation(&args, &opened, &request, &children, |backend, planned| {
+            let index = usize::try_from(planned.step_index)
+                .context("the immutable served move roster index exceeds usize")?;
+            let made = outcome
+                .made
+                .get(index)
+                .context("the requested served status hop was refused before execution")?;
+            let rung = outcome
+                .requested
+                .get(index)
+                .context("the immutable served move roster named an absent hop")?;
+            move_through_a_command(
+                backend,
+                &id,
+                rung,
+                &outcome.decided_on,
+                Some(&planned.child_identity),
+            )?;
+            Ok(aep_contract::migration::PlanningMutationResultV1::Moved(
+                aep_contract::migration::MovedResultV1 {
+                    id: id.to_string(),
+                    from: made.from.clone(),
+                    to: made.to.clone(),
+                    revision: made.revision,
+                },
+            ))
+        })?
+    };
     let leans_on_an_assertion = outcome.decided_on.leans_on_an_assertion();
     let refusal = outcome.refusal.map(|stopped| match stopped {
         MoveStopped::Refused { from, refusal } => ServedRefusal {
@@ -7825,6 +8632,7 @@ pub(crate) fn moved_by(
         made: outcome.made,
         leans_on_an_assertion,
         refusal,
+        mutation,
     })
 }
 
@@ -7850,12 +8658,26 @@ pub(crate) struct ServedMove {
     /// Why it stopped, when it did.
     #[serde(skip_serializing_if = "Option::is_none")]
     refusal: Option<ServedRefusal>,
+    /// Exact durable invocation and projection receipts for an Eventlog-backed served mutation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation: Option<aep_contract::migration::PlanningMutationEnvelopeV1>,
 }
 
 impl ServedMove {
-    /// Whether the move was refused, so a caller can pick a status code without reading the shape.
-    pub(crate) fn was_refused(&self) -> bool {
-        self.refusal.is_some()
+    /// HTTP status required by the closed served-mutation result contract.
+    pub(crate) fn http_status(&self) -> u16 {
+        use aep_contract::migration::PlanningMutationOutcomeV1;
+
+        match self.mutation.as_ref().map(|mutation| &mutation.outcome) {
+            Some(PlanningMutationOutcomeV1::Complete(_)) => 200,
+            Some(PlanningMutationOutcomeV1::Uncertain(_)) => 503,
+            Some(PlanningMutationOutcomeV1::CommittedProjectionFailure(_)) => 500,
+            None if self.refusal.is_none() => 200,
+            Some(
+                PlanningMutationOutcomeV1::Partial(_) | PlanningMutationOutcomeV1::Refused(_),
+            )
+            | None => 409,
+        }
     }
 }
 

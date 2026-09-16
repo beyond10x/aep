@@ -10,8 +10,12 @@
 //! `drivers/development/default.yaml`. That map's command steps run `cargo test --workspace`, and a
 //! test that ran it would be a test that ran itself.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+use fs2::FileExt as _;
+use sha2::{Digest as _, Sha256};
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -1057,6 +1061,98 @@ fn map_invoking_protocol() -> String {
     \x20         kind: diff\n\
     \x20         verifier: git\n"
         .to_owned()
+}
+
+/// A driven planning mutation, used to prove that the child process joins the same cooperative
+/// writer protocol as an ordinary CLI invocation.
+fn map_invoking_planning_writer() -> String {
+    "format: aep.driver-steps/1\n\
+     id: fixture/drive\n\
+     workflow: adp/default/2\n\
+     states:\n\
+    \x20 establish_verifiers:\n\
+    \x20   steps:\n\
+    \x20     - kind: command\n\
+    \x20       description: a driven planning mutation\n\
+    \x20       run: [protocol, plan, artifact, set, story:passkeys, --title, Racing, --store, .engineering/planning]\n\
+    \x20       evidence:\n\
+    \x20         kind: test_result\n\
+    \x20         suite: unit\n\
+    \x20         verifier: test-runner\n\
+    \x20 implement:\n\
+    \x20   steps:\n\
+    \x20     - kind: command\n\
+    \x20       run: [/bin/sh, -c, \"exit 0\"]\n\
+    \x20       evidence:\n\
+    \x20         kind: diff\n\
+    \x20         verifier: git\n"
+        .to_owned()
+}
+
+/// A `protocol` command spawned by the driver is a separate new-build writer and must observe a
+/// fence held by another process. This exercises the actual driver-to-child route rather than
+/// inferring it from the ordinary command parser.
+#[test]
+fn a_driven_planning_mutation_observes_the_shared_writer_fence() {
+    let fixture = Fixture::new("driven-writer-fence", false);
+    write(
+        &fixture.directory.join("steps.yaml"),
+        &map_invoking_planning_writer(),
+    );
+    let store = fixture
+        .directory
+        .join(".engineering/planning")
+        .canonicalize()
+        .expect("the explicit planning store canonicalises");
+    let digest = Sha256::digest(store.as_os_str().as_encoded_bytes())
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            write!(output, "{byte:02x}").expect("writing to a string cannot fail");
+            output
+        });
+    let lock_path = store
+        .parent()
+        .expect("the explicit store has a parent")
+        .join(format!(".aep-planning-writer-{digest}.lock"));
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .expect("the fixture writer fence opens");
+    lock.try_lock_exclusive()
+        .expect("the paused writer owns the fixture fence");
+
+    let output = fixture.drive(&["run"], &["--max-iterations", "8"]);
+    let run = fixture.runs().join("DRIVE-1").join("1");
+    let log =
+        std::fs::read_to_string(run.join("establish_verifiers-0-1.log")).unwrap_or_else(|error| {
+            panic!(
+                "the driven mutation wrote no log: {error}\n{}",
+                said(&output)
+            )
+        });
+    assert!(
+        log.contains("another admitted planning writer or migration holds"),
+        "the driven child did not observe the paused writer:\n{log}\n{}",
+        said(&output)
+    );
+    let story_document = std::fs::read_to_string(
+        fixture
+            .directory
+            .join(".engineering/planning/story/passkeys.md"),
+    )
+    .expect("the fixture story remains readable");
+    assert!(
+        story_document.contains("title: Sign in with a passkey"),
+        "{story_document}"
+    );
+    assert!(
+        !story_document.contains("title: Racing"),
+        "{story_document}"
+    );
+    lock.unlock().expect("the paused writer releases the fence");
 }
 
 /// Every line of a run's `commands.jsonl`, parsed.

@@ -108,6 +108,16 @@
   let picked = null;
   let readOnly = false;
 
+  const pendingKey = (id, to) => "aep-planning-command:" + id + ":" + to;
+  const freshCommand = () => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return {
+      command_identity: "served-" + [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+      decided_on: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    };
+  };
+
   const ask = async (path, options) => {
     const join = path.includes("?") ? "&" : "?";
     const answer = await fetch(path + join + "t=" + encodeURIComponent(TOKEN), options);
@@ -237,13 +247,27 @@
 
   async function moveIt(id, to, where) {
     where.replaceChildren(el("div", "note", "moving to " + to + "…"));
+    const key = pendingKey(id, to);
+    let command;
+    try {
+      command = JSON.parse(localStorage.getItem(key)) || freshCommand();
+    } catch (_) {
+      command = freshCommand();
+    }
+    localStorage.setItem(key, JSON.stringify(command));
     const answer = await ask("/api/artifact/" + encodeURIComponent(id) + "/move", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to }),
+      body: JSON.stringify({ to, ...command }),
     });
     const body = answer.body;
     where.replaceChildren();
+
+    const mutationKind = body.mutation && body.mutation.outcome && body.mutation.outcome.kind;
+    const legacyTerminal = !body.mutation && (body.made || body.refusal);
+    if (legacyTerminal || mutationKind === "complete" || mutationKind === "refused") {
+      localStorage.removeItem(key);
+    }
 
     for (const made of body.made || []) {
       where.append(el("div", "note good",

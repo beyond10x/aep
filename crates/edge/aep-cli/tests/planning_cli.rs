@@ -4,8 +4,12 @@
 //! a plan is a tree of files, and a test that called the library would not catch an argument that
 //! never reaches it, a `--format` declared twice, or a document written to the wrong path.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+use fs2::FileExt as _;
+use sha2::{Digest as _, Sha256};
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -260,6 +264,93 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
         "{}",
         stdout(&validated)
     );
+}
+
+#[test]
+fn a_paused_explicit_store_writer_excludes_a_second_cli_process() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    let store = scratch("aep-plan-cross-process-writer-fence");
+    copy_tree(&root().join(FIXTURE), &store);
+    let canonical = store.canonicalize().expect("fixture canonicalises");
+    let digest = Sha256::digest(canonical.as_os_str().as_encoded_bytes());
+    let digest = digest
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            write!(output, "{byte:02x}").expect("writing to a string cannot fail");
+            output
+        });
+    let lock = canonical
+        .parent()
+        .expect("fixture has a parent")
+        .join(format!(".aep-planning-writer-{digest}.lock"));
+
+    let mut paused = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args([
+            "plan",
+            "artifact",
+            "body",
+            "story:passkey-login",
+            "--from",
+            "-",
+            "--store",
+            printable(&store),
+        ])
+        .current_dir(root())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the paused writer starts");
+
+    let mut observed_held = false;
+    for _ in 0..100 {
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock)
+        {
+            if file.try_lock_exclusive().is_err() {
+                observed_held = true;
+                break;
+            }
+            file.unlock().expect("the probe releases its lock");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(observed_held, "the first CLI process never held {lock:?}");
+
+    let racing = protocol_in(
+        &root(),
+        &[
+            "plan",
+            "artifact",
+            "set",
+            "story:passkey-login",
+            "--title",
+            "Racing title",
+            "--store",
+            printable(&store),
+        ],
+    );
+    assert_ne!(code(&racing), 0, "a second process must not enter");
+    assert!(
+        stderr(&racing).contains("another admitted planning writer or migration holds"),
+        "{}",
+        stderr(&racing)
+    );
+
+    paused
+        .stdin
+        .take()
+        .expect("paused standard input")
+        .write_all(b"# Replacement body\n")
+        .expect("the first writer resumes");
+    let completed = paused.wait_with_output().expect("the first writer exits");
+    assert_eq!(code(&completed), 0, "{}", stderr(&completed));
+    std::fs::remove_file(lock).expect("retired test lock is removed");
 }
 
 #[test]

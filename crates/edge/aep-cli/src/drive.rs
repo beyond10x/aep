@@ -1693,6 +1693,10 @@ impl CommandStepExecutor for CliExecutors {
             .args(&words[1..])
             .current_dir(&self.working_directory)
             .envs(session_env(context.execution))
+            .env(
+                crate::planning::COMMAND_IDENTITY_ENV,
+                driver_command_identity(context),
+            )
             .stdin(Stdio::null())
             .output();
 
@@ -2493,6 +2497,31 @@ pub fn session_env(execution: &ExecutionId) -> Vec<(String, String)> {
         .map(|actor| (crate::planning::ACTOR_ENV.to_owned(), actor.to_string()))
         .into_iter()
         .collect()
+}
+
+/// Derives one stable ordinary-mutation identity from the persisted driven action.
+///
+/// The attempt number is intentionally absent: retrying the same state/index must reach the same
+/// reservation and provider idempotency keys. A different execution, state, or action index gets
+/// a different identity before the subprocess starts.
+fn driver_command_identity(context: &StepContext<'_>) -> String {
+    let index = u64::try_from(context.index)
+        .unwrap_or(u64::MAX)
+        .to_be_bytes()
+        .to_vec();
+    let digest = aep_contract::migration::digest_parts_v1(
+        "aep.planning-driver-action/1",
+        &[
+            context.execution.as_str().as_bytes().to_vec(),
+            context.state.as_str().as_bytes().to_vec(),
+            index,
+        ],
+    )
+    .expect("bounded driver action identity inputs fit canonical framing");
+    format!(
+        "driver-{}",
+        digest.as_wire().trim_start_matches("sha256:")
+    )
 }
 
 

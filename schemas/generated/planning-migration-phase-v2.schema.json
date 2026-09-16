@@ -1,0 +1,654 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PhaseRecordV2",
+  "type": "object",
+  "required": [
+    "format",
+    "intent_digest",
+    "migration_id",
+    "observations",
+    "phase",
+    "phase_digest",
+    "predecessor"
+  ],
+  "properties": {
+    "format": {
+      "$ref": "#/definitions/PhaseRecordFormatV2"
+    },
+    "intent_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "migration_id": {
+      "type": "string"
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/MigrationPhaseObservationV2"
+      }
+    },
+    "phase": {
+      "$ref": "#/definitions/MigrationPhaseV1"
+    },
+    "phase_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "predecessor": {
+      "$ref": "#/definitions/PresenceV1_of_DigestV1"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AuthorityCoordinateV1": {
+      "description": "Exact public Eventlog adapter authority tuple.",
+      "type": "object",
+      "required": [
+        "logical_scope",
+        "stream_identity",
+        "tenant"
+      ],
+      "properties": {
+        "logical_scope": {
+          "type": "string"
+        },
+        "stream_identity": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BindingPhaseObservationV2": {
+      "type": "object",
+      "required": [
+        "authority",
+        "intended_selector_bytes",
+        "intended_selector_digest",
+        "intent_digest",
+        "physical",
+        "replayed"
+      ],
+      "properties": {
+        "authority": {
+          "$ref": "#/definitions/AuthorityCoordinateV1"
+        },
+        "intended_selector_bytes": {
+          "$ref": "#/definitions/HexBytesV1"
+        },
+        "intended_selector_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "intent_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "physical": {
+          "$ref": "#/definitions/PhysicalRefV1"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompleteSnapshotPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "capture_digest",
+        "snapshot_id"
+      ],
+      "properties": {
+        "capture_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "snapshot_id": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "digest"
+      ],
+      "properties": {
+        "digest": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DestinationPreconditionV2": {
+      "type": "object",
+      "required": [
+        "destination_absent",
+        "destination_path",
+        "projection_path",
+        "projection_safe",
+        "staging_absent",
+        "staging_path"
+      ],
+      "properties": {
+        "destination_absent": {
+          "type": "boolean"
+        },
+        "destination_path": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "projection_path": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "projection_safe": {
+          "type": "boolean"
+        },
+        "staging_absent": {
+          "type": "boolean"
+        },
+        "staging_path": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DigestV1": {
+      "description": "A canonical SHA-256 digest with its algorithm prefix.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "HexBytesV1": {
+      "description": "Exact bytes encoded as lowercase hexadecimal pairs after hex:.",
+      "type": "string",
+      "pattern": "^hex:(?:[0-9a-f]{2})*$"
+    },
+    "HostPathV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unix"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HexBytesV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "windows"
+              ]
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ImportedSubjectPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "boundary_digest",
+        "replayed",
+        "subject"
+      ],
+      "properties": {
+        "boundary_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "subject": {
+          "$ref": "#/definitions/SubjectCoordinateV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MigrationPhaseObservationV2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "selector"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SelectorPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "config"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ConfigPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "source_capture"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SourceCapturePhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "writer_control"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/WriterControlPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "destination_precondition"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/DestinationPreconditionV2"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "binding"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/BindingPhaseObservationV2"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "imported_subject"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ImportedSubjectPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "complete_snapshot"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/CompleteSnapshotPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "projection"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ProjectionPhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "rename"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/RenamePhaseObservationV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "selector_durability"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SelectorDurabilityPhaseObservationV1"
+            }
+          }
+        }
+      ]
+    },
+    "MigrationPhaseV1": {
+      "description": "Last durably established migration phase.",
+      "type": "string",
+      "enum": [
+        "prepared",
+        "destination_provisioned",
+        "imported",
+        "verified",
+        "published",
+        "selected",
+        "projection_published",
+        "complete"
+      ]
+    },
+    "PhaseRecordFormatV2": {
+      "description": "The scalar literal aep.planning-migration-phase/2.",
+      "type": "string",
+      "enum": [
+        "aep.planning-migration-phase/2"
+      ]
+    },
+    "PhysicalRefV1": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "global_seq",
+        "stream_id",
+        "stream_version"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string"
+        },
+        "global_seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "stream_id": {
+          "type": "string"
+        },
+        "stream_version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "PresenceV1_of_DigestV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/DigestV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ProjectionPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "authority_snapshot",
+        "inventory_digest"
+      ],
+      "properties": {
+        "authority_snapshot": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "inventory_digest": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RenamePhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "destination_present",
+        "from",
+        "parents_synced",
+        "source_absent",
+        "to"
+      ],
+      "properties": {
+        "destination_present": {
+          "type": "boolean"
+        },
+        "from": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "parents_synced": {
+          "type": "boolean"
+        },
+        "source_absent": {
+          "type": "boolean"
+        },
+        "to": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectorDurabilityPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "file_synced",
+        "new_digest",
+        "old_digest",
+        "parent_synced"
+      ],
+      "properties": {
+        "file_synced": {
+          "type": "boolean"
+        },
+        "new_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "old_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "parent_synced": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectorPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "digest"
+      ],
+      "properties": {
+        "digest": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceCapturePhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "capture_digest",
+        "snapshot_id"
+      ],
+      "properties": {
+        "capture_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "snapshot_id": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SubjectCoordinateV1": {
+      "type": "object",
+      "required": [
+        "entity",
+        "id"
+      ],
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "WriterControlPhaseObservationV1": {
+      "type": "object",
+      "required": [
+        "selector_digest",
+        "source_digest"
+      ],
+      "properties": {
+        "selector_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "source_digest": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

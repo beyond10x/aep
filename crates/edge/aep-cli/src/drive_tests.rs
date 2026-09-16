@@ -479,6 +479,35 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         let slashed = ExecutionId::new("W4-3/1").expect("an execution id may carry a slash");
         assert!(session_env(&slashed).is_empty());
     }
+
+    #[test]
+    fn a_driven_action_keeps_one_command_identity_across_attempts() {
+        let task = driven_task();
+        let state = StateId::new("implement").expect("state");
+        let tools = config(&[]);
+        let directory = scratch("command-identity");
+        let requirements = Vec::new();
+        let reaching = Vec::new();
+        let context = |index, attempt| StepContext {
+            task: &task,
+            task_document: None,
+            execution: driven_execution(),
+            state: &state,
+            index,
+            attempt,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &requirements,
+            reaching: &reaching,
+            preceding_llm: None,
+        };
+        let first = driver_command_identity(&context(3, 1));
+        let retried = driver_command_identity(&context(3, 2));
+        let next = driver_command_identity(&context(4, 1));
+        assert_eq!(first, retried, "attempt is not part of the persisted action identity");
+        assert_ne!(first, next, "a different action index gets a different reservation");
+        assert!(aep_contract::migration::MigrationIdV1::new(first).is_ok());
+    }
 /// The `--write-scope` words are the words a step map is written in.
     ///
     /// Two spellings of one rule is one spelling that drifts, and the drift here is silent: a rule

@@ -15,7 +15,7 @@ task against evidence, and asking how old that evidence is.
 
 | Tool | Needed for |
 |---|---|
-| Rust 1.85 or newer | everything |
+| Rust 1.91 or newer | the CLI in this guide; pure AEP libraries retain Rust 1.85 |
 | [go-task](https://taskfile.dev) | the repository's gate (`task check`) — optional for this page |
 | Node | the documentation-site step of the gate — not needed for this page |
 

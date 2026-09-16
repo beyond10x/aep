@@ -144,6 +144,47 @@ const RECORDED: &str = "recorded";
 /// The lifecycle state a relation instance moves to when the relation is removed.
 const REMOVED: &str = "removed";
 
+/// One provider commit with the immutable recording metadata the Eventlog authority requires.
+#[derive(Debug, Clone)]
+pub struct PlanningCommit {
+    /// State, events, and optimistic predecessor.
+    pub commit: AtomicCommit,
+    /// Exact identity and provenance for the complete recorded decision.
+    pub recording: Recording,
+}
+
+/// The atomic planning write seam.
+///
+/// Legacy providers retain their existing transaction through the blanket implementation.
+/// Recorded providers consume the additional immutable recording metadata rather than attempting
+/// to reconstruct it after the command has committed.
+pub trait PlanningStore: Store {
+    /// Commits every member in order or commits none.
+    fn commit_planning_batch(
+        &mut self,
+        commits: &[PlanningCommit],
+    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError>;
+
+    /// Recovers the immutable receipt for a previously committed named planning batch.
+    fn recover_planning_receipt(
+        &self,
+        _key: &str,
+    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError> {
+        Ok(None)
+    }
+}
+
+impl<S: AtomicBatchStore> PlanningStore for S {
+    fn commit_planning_batch(
+        &mut self,
+        commits: &[PlanningCommit],
+    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError> {
+        let legacy: Vec<_> = commits.iter().map(|member| member.commit.clone()).collect();
+        self.commit_batch(&legacy)?;
+        Ok(None)
+    }
+}
+
 /// What the shell knows about a command and the kernel does not, taken before the envelope is
 /// handed to the contract and consumed.
 ///
@@ -211,6 +252,7 @@ impl Provenance {
             from_state,
             to_state: placement.state.clone(),
             changed,
+            removed: BTreeSet::default(),
             args: self.args.clone(),
             payload: Value::Null,
         };
@@ -599,6 +641,7 @@ pub struct EntityBackend<S, P = Identity> {
     durable: Mutex<S>,
     projection: Mutex<P>,
     latched: Mutex<Option<String>>,
+    last_commit_receipt: Mutex<Option<entity_store::asynchronous::CommitReceipt>>,
 }
 
 impl<S, P> fmt::Debug for EntityBackend<S, P> {
@@ -629,6 +672,14 @@ impl<S, P> EntityBackend<S, P> {
     /// `true` when it holds nothing.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+
+    /// The immutable provider receipt from the most recent recorded command, when available.
+    pub fn last_commit_receipt(&self) -> Option<entity_store::asynchronous::CommitReceipt> {
+        self.last_commit_receipt
+            .lock()
+            .expect("the receipt slot is not poisoned")
+            .clone()
     }
 
     /// The backend the contract logic lives in, for a caller that needs to look.
@@ -730,6 +781,7 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
             durable: Mutex::new(store),
             projection: Mutex::new(projection),
             latched: Mutex::new(None),
+            last_commit_receipt: Mutex::new(None),
         })
     }
 
@@ -772,7 +824,7 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
         placements: &[Placement],
         records: &[Record],
         provenance: &Provenance,
-    ) -> Result<Vec<AtomicCommit>, CommandError> {
+    ) -> Result<Vec<PlanningCommit>, CommandError> {
         let mut held_by_key: BTreeMap<(String, String), Option<EntityInstance>> = BTreeMap::new();
         let mut commits = Vec::new();
         for placement in placements {
@@ -808,6 +860,7 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 None => (None, placement.fields.clone()),
             };
             let event = provenance.event(placement, from_state, changed);
+            let record_id = event_record_id(&event);
             let instance = EntityInstance {
                 entity: placement.entity.clone(),
                 version: 1,
@@ -826,7 +879,12 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                     || held.map_or(Expect::Absent, |held| Expect::Revision(held.revision)),
                     |(_, expect)| *expect,
                 );
-            commits.push(AtomicCommit::new(decision, expect));
+            let mut recording = provenance.recording.clone();
+            recording.record_id = record_id;
+            commits.push(PlanningCommit {
+                commit: AtomicCommit::new(decision, expect),
+                recording,
+            });
             held_by_key.insert(key, Some(instance));
         }
         for record in records {
@@ -856,7 +914,18 @@ impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
                 fields,
             };
             let decision = Decision::legacy_import(instance.clone(), Vec::new());
-            commits.push(AtomicCommit::new(decision, expect));
+            let mut recording = provenance.recording.clone();
+            recording.record_id = format!(
+                "{}:{}@{}~{:016x}",
+                record.entity,
+                record.id,
+                revision,
+                digest(provenance.key.as_ref())
+            );
+            commits.push(PlanningCommit {
+                commit: AtomicCommit::new(decision, expect),
+                recording,
+            });
             held_by_key.insert(key, Some(instance));
         }
         Ok(commits)
@@ -1188,7 +1257,7 @@ fn as_fields(body: &Node) -> Map<String, Value> {
     }
 }
 
-impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBackend<S, P> {
+impl<S: PlanningStore, P: Projection<S> + Clone> CommandService for EntityBackend<S, P> {
     type Command = Command;
 
     // The `async` belongs to the contract. This body completes without awaiting: every provider
@@ -1224,6 +1293,17 @@ impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBac
             .as_ref()
             .is_ok_and(|result| result.outcome == CommandOutcome::Replayed)
         {
+            let key = planning_batch_key(&provenance.recording);
+            let receipt = self
+                .durable
+                .lock()
+                .expect("the provider is not poisoned")
+                .recover_planning_receipt(&key)
+                .map_err(|error| provider_error(&error))?;
+            *self
+                .last_commit_receipt
+                .lock()
+                .expect("the receipt slot is not poisoned") = receipt;
             return outcome;
         }
         let mut placements = Vec::new();
@@ -1240,9 +1320,13 @@ impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBac
         {
             let mut durable = self.durable.lock().expect("the provider is not poisoned");
             let commits = Self::commits(&durable, &placements, &records, &provenance)?;
-            durable
-                .commit_batch(&commits)
+            let receipt = durable
+                .commit_planning_batch(&commits)
                 .map_err(|error| provider_error(&error))?;
+            *self
+                .last_commit_receipt
+                .lock()
+                .expect("the receipt slot is not poisoned") = receipt;
         }
         self.inner.replace_with(&candidate);
         *self
@@ -1251,6 +1335,14 @@ impl<S: AtomicBatchStore, P: Projection<S> + Clone> CommandService for EntityBac
             .expect("the projection is not poisoned") = projection;
         outcome
     }
+}
+
+fn planning_batch_key(recording: &Recording) -> String {
+    recording
+        .causation
+        .clone()
+        .or_else(|| recording.correlation.clone())
+        .unwrap_or_else(|| recording.record_id.clone())
 }
 
 impl<S: Store, P: Projection<S>> QueryService for EntityBackend<S, P> {

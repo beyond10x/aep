@@ -912,6 +912,18 @@
       },
       "additionalProperties": false
     },
+    "EventlogSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "authority_root"
+      ],
+      "properties": {
+        "authority_root": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
     "FileImageV1": {
       "oneOf": [
         {
@@ -4209,6 +4221,26 @@
             },
             "value": {
               "$ref": "#/definitions/HybridSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "eventlog"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/EventlogSourceCoordinateV1"
             }
           },
           "additionalProperties": false

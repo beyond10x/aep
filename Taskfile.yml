@@ -34,13 +34,26 @@ tasks:
       - task: msrv
 
   msrv:
-    desc: Build on the declared MSRV, which is what CI's `MSRV 1.85` job does.
+    desc: Build pure libraries on Rust 1.85 and the Eventlog command runtime on Rust 1.91.
     # `--locked`, because the failure this catches lives in the lockfile rather than in the source:
     # a transitive dependency bumping *its* rust-version breaks the build with no commit of ours
     # touching a line of Rust. `idna_adapter` pulling in `icu_*@2.3.0` (rustc 1.88) did exactly
     # that, and nothing local noticed for eleven releases.
+    # The provider-backed Eventlog adapter requires Rust 1.91. Keep the existing library surface
+    # honest at 1.85 while compiling the complete runtime closure at its separately declared floor;
+    # excluding the runtime roots is exact because their only workspace reverse dependency is the
+    # CLI named in the same list.
     cmds:
-      - cargo +1.85 build --workspace --locked
+      - >-
+        cargo +1.85 build --workspace --locked
+        --exclude aep-backend-eventlog
+        --exclude aep-planning-migration
+        --exclude aep-cli
+      - >-
+        cargo +1.91 build --locked
+        -p aep-backend-eventlog
+        -p aep-planning-migration
+        -p aep-cli
 
   website:
     desc: Build the documentation site, which is what CI's `Website` workflow does.

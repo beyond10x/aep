@@ -41,6 +41,31 @@ pub const PROJECT_DIRECTORY: &str = ".engineering";
 pub const PROJECT_FILE: &str = "project.yaml";
 /// The format version this build reads.
 pub const PROJECT_VERSION: &str = "aep.project/1";
+/// The opt-in Eventlog planning-authority format.
+pub const PROJECT_VERSION_V2: &str = "aep.project/2";
+
+/// Which closed project document reader accepted the selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectVersion {
+    /// The legacy Markdown, `SQLite`, `PostgreSQL` and hybrid selector.
+    #[serde(rename = "aep.project/1")]
+    V1,
+    /// Eventlog file authority with a tracked Markdown projection.
+    #[serde(rename = "aep.project/2")]
+    V2,
+}
+
+impl ProjectVersion {
+    /// The canonical document spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::V1 => PROJECT_VERSION,
+            Self::V2 => PROJECT_VERSION_V2,
+        }
+    }
+}
 
 /// The protocol documents a project adopts, before the engine resolves them to a directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -275,6 +300,8 @@ impl ProjectLocalPaths {
 /// What a project says about itself.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ProjectConfig {
+    /// The closed project document reader that accepted this configuration.
+    pub version: ProjectVersion,
     /// The protocol version it runs under.
     pub protocol: ProtocolRef,
     /// The profile it uses.
@@ -362,6 +389,11 @@ pub enum RawStore {
         /// The composite's policy and its two halves.
         hybrid: Box<RawHybrid>,
     },
+    /// `eventlog: { path, projection }`, admitted only by `aep.project/2`.
+    Eventlog {
+        /// The authority and projection paths.
+        eventlog: RawEventlog,
+    },
 }
 
 /// Hand-written rather than `#[serde(untagged)]`, for the refusal's sake: an untagged enum that
@@ -387,18 +419,31 @@ impl<'de> serde::Deserialize<'de> for RawStore {
                             hybrid: Box::new(hybrid),
                         })
                         .map_err(|error| D::Error::custom(format!("store.hybrid: {error}"))),
+                    "eventlog" => serde_json::from_value::<RawEventlog>(inner)
+                        .map(|eventlog| Self::Eventlog { eventlog })
+                        .map_err(|error| D::Error::custom(format!("store.eventlog: {error}"))),
                     other => Err(D::Error::custom(format!(
                         "`{other}` is not a store form; write `markdown`, `sqlite: <path>`, \
-                         `postgres: <url>` or `hybrid: {{…}}`"
+                         `postgres: <url>`, `hybrid: {{…}}` or `eventlog: {{…}}`"
                     ))),
                 }
             }
             other => Err(D::Error::custom(format!(
-                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>` or `hybrid: {{…}}`, \
-                 not {other}"
+                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>`, `hybrid: {{…}}` or \
+                 `eventlog: {{…}}`, not {other}"
             ))),
         }
     }
+}
+
+/// The two project-relative paths owned by an Eventlog planning selection.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawEventlog {
+    /// Directory containing the authoritative file Eventlog provider.
+    pub path: PathBuf,
+    /// Directory containing the derived tracked Markdown projection.
+    pub projection: PathBuf,
 }
 
 /// A hybrid store as written: four policy words and two stores, none defaulted.
@@ -426,12 +471,12 @@ pub enum StoreConfig {
     /// Markdown documents under `.engineering/planning/`. The default.
     #[default]
     Markdown,
-    /// One SQLite file, at a path relative to `.engineering/`.
+    /// One `SQLite` file, at a path relative to `.engineering/`.
     Sqlite {
         /// The database file.
         path: PathBuf,
     },
-    /// A PostgreSQL database the caller connects to.
+    /// A `PostgreSQL` database the caller connects to.
     Postgres {
         /// A libpq connection string or URL.
         url: String,
@@ -445,6 +490,27 @@ pub enum StoreConfig {
         /// The replica.
         replica: Box<StoreConfig>,
     },
+    /// Eventlog file authority and its derived Markdown projection.
+    Eventlog {
+        /// Authority provider directory.
+        path: PathBuf,
+        /// Derived projection directory.
+        projection: PathBuf,
+        /// Exact public adapter authority tuple.
+        authority: PlanningAuthority,
+    },
+}
+
+/// Exact Eventlog authority identity selected by an `aep.project/2` document.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PlanningAuthority {
+    /// Provider-complete logical scope.
+    pub logical_scope: String,
+    /// Eventlog tenant identity.
+    pub tenant: String,
+    /// Immutable provider stream identity.
+    pub stream_identity: String,
 }
 
 impl StoreConfig {
@@ -465,6 +531,15 @@ impl StoreConfig {
                 policy: policy.clone(),
                 local: Box::new(local.resolved(engineering)),
                 replica: Box::new(replica.resolved(engineering)),
+            },
+            Self::Eventlog {
+                path,
+                projection,
+                authority,
+            } => Self::Eventlog {
+                path: engineering.join(path),
+                projection: engineering.join(projection),
+                authority: authority.clone(),
             },
         }
     }
@@ -577,8 +652,196 @@ impl RawStore {
                     replica: Box::new(replica.validate(&format!("{at}.hybrid.replica"), errors)),
                 }
             }
+            Self::Eventlog { eventlog } => StoreConfig::Eventlog {
+                path: eventlog.path,
+                projection: eventlog.projection,
+                authority: PlanningAuthority {
+                    logical_scope: String::new(),
+                    tenant: String::new(),
+                    stream_identity: String::new(),
+                },
+            },
         }
     }
+}
+
+#[allow(clippy::too_many_lines)] // Keeps the two closed project-version field catalogs together.
+fn validate_versioned_store(
+    version: ProjectVersion,
+    raw_store: Option<RawStore>,
+    planning_scope: Option<String>,
+    planning_tenant: Option<String>,
+    planning_identity: Option<String>,
+    errors: &mut ValidationErrors,
+) -> StoreConfig {
+    match version {
+        ProjectVersion::V1 => {
+            for (field, value) in [
+                ("planning_scope", planning_scope.as_ref()),
+                ("planning_tenant", planning_tenant.as_ref()),
+                ("planning_identity", planning_identity.as_ref()),
+            ] {
+                if value.is_some() {
+                    errors.push(ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("project.{field}"),
+                        format!("`{field}` belongs only to `{PROJECT_VERSION_V2}`"),
+                    ));
+                }
+            }
+            match raw_store {
+                Some(RawStore::Eventlog { .. }) => {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            "project.store.eventlog",
+                            format!("an Eventlog planning authority requires `{PROJECT_VERSION_V2}`"),
+                        )
+                        .with_hint("change the version and provide all three planning authority identities"),
+                    );
+                    StoreConfig::Markdown
+                }
+                Some(store) => {
+                    let validated = store.validate("project.store", errors);
+                    if contains_eventlog(&validated) {
+                        errors.push(ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            "project.store",
+                            "an Eventlog store cannot be nested in a legacy hybrid",
+                        ));
+                    }
+                    validated
+                }
+                None => StoreConfig::Markdown,
+            }
+        }
+        ProjectVersion::V2 => {
+            let authority = PlanningAuthority {
+                logical_scope: required_authority_value("planning_scope", planning_scope, errors),
+                tenant: required_authority_value("planning_tenant", planning_tenant, errors),
+                stream_identity: required_authority_value(
+                    "planning_identity",
+                    planning_identity,
+                    errors,
+                ),
+            };
+            let eventlog = match raw_store {
+                None => RawEventlog {
+                    path: PathBuf::from("state"),
+                    projection: PathBuf::from("planning"),
+                },
+                Some(RawStore::Eventlog { eventlog }) => eventlog,
+                Some(_) => {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            "project.store",
+                            format!(
+                                "`{PROJECT_VERSION_V2}` supports only `eventlog: {{ path, projection }}`"
+                            ),
+                        )
+                        .with_hint("legacy stores remain readable only through an aep.project/1 selector"),
+                    );
+                    RawEventlog {
+                        path: PathBuf::from("state"),
+                        projection: PathBuf::from("planning"),
+                    }
+                }
+            };
+            validate_eventlog_path("path", &eventlog.path, errors);
+            validate_eventlog_path("projection", &eventlog.projection, errors);
+            if paths_overlap(&eventlog.path, &eventlog.projection) {
+                errors.push(ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    "project.store.eventlog",
+                    "authority and projection paths must be disjoint",
+                ));
+            }
+            for (name, path) in [
+                ("path", &eventlog.path),
+                ("projection", &eventlog.projection),
+            ] {
+                if path == Path::new(PROJECT_FILE) || path.starts_with(PROJECT_FILE) {
+                    errors.push(ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("project.store.eventlog.{name}"),
+                        "an Eventlog-owned path cannot contain the project selector",
+                    ));
+                }
+            }
+            StoreConfig::Eventlog {
+                path: eventlog.path,
+                projection: eventlog.projection,
+                authority,
+            }
+        }
+    }
+}
+
+fn contains_eventlog(store: &StoreConfig) -> bool {
+    match store {
+        StoreConfig::Eventlog { .. } => true,
+        StoreConfig::Hybrid { local, replica, .. } => {
+            contains_eventlog(local) || contains_eventlog(replica)
+        }
+        StoreConfig::Markdown | StoreConfig::Sqlite { .. } | StoreConfig::Postgres { .. } => false,
+    }
+}
+
+fn required_authority_value(
+    field: &str,
+    value: Option<String>,
+    errors: &mut ValidationErrors,
+) -> String {
+    match value {
+        Some(value) if !value.trim().is_empty() && value.len() <= 255 => value,
+        Some(_) => {
+            errors.push(ValidationError::new(
+                ValidationCode::TypeMismatch,
+                format!("project.{field}"),
+                format!(
+                    "`{field}` must contain 1..=255 UTF-8 bytes including a non-whitespace byte"
+                ),
+            ));
+            String::new()
+        }
+        None => {
+            errors.push(ValidationError::new(
+                ValidationCode::TypeMismatch,
+                format!("project.{field}"),
+                format!("`{PROJECT_VERSION_V2}` requires `{field}`"),
+            ));
+            String::new()
+        }
+    }
+}
+
+fn validate_eventlog_path(field: &str, path: &Path, errors: &mut ValidationErrors) {
+    use std::path::Component;
+
+    let invalid_component = path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    });
+    if path.as_os_str().is_empty() || path == Path::new(".") || invalid_component {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::TypeMismatch,
+                format!("project.store.eventlog.{field}"),
+                format!(
+                    "`{}` is not a contained nonempty project-relative path",
+                    path.display()
+                ),
+            )
+            .with_hint("use a relative child path without `..` components"),
+        );
+    }
+}
+
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    left == right || left.starts_with(right) || right.starts_with(left)
 }
 
 /// A project configuration document, as parsed.
@@ -619,6 +882,15 @@ pub struct RawProjectConfig {
     /// Where the plan is kept. Absent means `markdown`.
     #[serde(default)]
     pub store: Option<RawStore>,
+    /// Provider-complete logical scope, required by `aep.project/2`.
+    #[serde(default)]
+    pub planning_scope: Option<String>,
+    /// Eventlog tenant identity, required by `aep.project/2`.
+    #[serde(default)]
+    pub planning_tenant: Option<String>,
+    /// Immutable provider stream identity, required by `aep.project/2`.
+    #[serde(default)]
+    pub planning_identity: Option<String>,
     /// A URL pattern per external system, each carrying `{key}`.
     #[serde(default)]
     pub providers: BTreeMap<String, String>,
@@ -635,22 +907,27 @@ fn default_version() -> String {
 impl TryFrom<RawProjectConfig> for ProjectConfig {
     type Error = ValidationErrors;
 
+    #[allow(clippy::too_many_lines)] // One validation pass accumulates every project-field defect.
     fn try_from(raw: RawProjectConfig) -> Result<Self, Self::Error> {
         let mut errors = ValidationErrors::new();
 
-        if raw.version != PROJECT_VERSION {
-            errors.push(
-                ValidationError::new(
-                    ValidationCode::UnsupportedProtocolVersion,
-                    "project.version",
-                    format!(
-                        "this build reads `{PROJECT_VERSION}`, not `{}`",
-                        raw.version
-                    ),
-                )
-                .with_hint("upgrade the tooling rather than reinterpreting the document"),
-            );
-        }
+        let version = match raw.version.as_str() {
+            PROJECT_VERSION => ProjectVersion::V1,
+            PROJECT_VERSION_V2 => ProjectVersion::V2,
+            other => {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::UnsupportedProtocolVersion,
+                        "project.version",
+                        format!(
+                            "this build reads `{PROJECT_VERSION}` and `{PROJECT_VERSION_V2}`, not `{other}`"
+                        ),
+                    )
+                    .with_hint("upgrade the tooling rather than reinterpreting the document"),
+                );
+                ProjectVersion::V1
+            }
+        };
 
         let protocols = match raw.protocols {
             Some(value) => match ProtocolSource::parse(value) {
@@ -737,11 +1014,17 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             }
         }
 
-        let store = raw.store.map_or(StoreConfig::Markdown, |store| {
-            store.validate("project.store", &mut errors)
-        });
+        let store = validate_versioned_store(
+            version,
+            raw.store,
+            raw.planning_scope,
+            raw.planning_tenant,
+            raw.planning_identity,
+            &mut errors,
+        );
 
         let config = Self {
+            version,
             protocol: raw.protocol,
             profile: raw.profile,
             summary: raw.summary,
@@ -756,6 +1039,8 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     const BASE: &str = "protocol: adp/1\nprofile: development.standard\n";
@@ -763,7 +1048,69 @@ mod tests {
     #[test]
     fn a_project_that_names_no_store_keeps_its_plan_in_markdown() {
         let parsed = config(BASE).expect("valid");
+        assert_eq!(parsed.version, ProjectVersion::V1);
         assert_eq!(parsed.store, StoreConfig::Markdown);
+    }
+
+    #[test]
+    fn a_v2_project_selects_only_an_exact_eventlog_authority() {
+        let parsed = config(&format!(
+            "version: aep.project/2\n{BASE}planning_scope: aep.planning\n\
+             planning_tenant: planning-main\nplanning_identity: stream-01\n"
+        ))
+        .expect("valid v2 defaults");
+        assert_eq!(parsed.version, ProjectVersion::V2);
+        assert_eq!(
+            parsed.store.resolved(Path::new("/repo/.engineering")),
+            StoreConfig::Eventlog {
+                path: PathBuf::from("/repo/.engineering/state"),
+                projection: PathBuf::from("/repo/.engineering/planning"),
+                authority: PlanningAuthority {
+                    logical_scope: "aep.planning".to_owned(),
+                    tenant: "planning-main".to_owned(),
+                    stream_identity: "stream-01".to_owned(),
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn project_versions_do_not_borrow_each_others_store_vocabulary() {
+        let v1 = config(&format!(
+            "{BASE}store:\n  eventlog:\n    path: state\n    projection: planning\n"
+        ))
+        .expect_err("v1 cannot silently select Eventlog");
+        assert!(v1
+            .as_slice()
+            .iter()
+            .any(|error| error.location == "project.store.eventlog"));
+
+        let v2 = config(&format!(
+            "version: aep.project/2\n{BASE}planning_scope: aep.planning\n\
+             planning_tenant: planning-main\nplanning_identity: stream-01\nstore: markdown\n"
+        ))
+        .expect_err("v2 cannot reinterpret a legacy store");
+        assert!(v2
+            .as_slice()
+            .iter()
+            .any(|error| error.location == "project.store"));
+    }
+
+    #[test]
+    fn v2_requires_authority_identity_and_disjoint_contained_paths() {
+        let errors = config(&format!(
+            "version: aep.project/2\n{BASE}planning_scope: ' '\nplanning_tenant: tenant\n\
+             store:\n  eventlog:\n    path: planning/state\n    projection: planning\n"
+        ))
+        .expect_err("identity and path failures accumulate");
+        let locations: BTreeSet<&str> = errors
+            .as_slice()
+            .iter()
+            .map(|error| error.location.as_str())
+            .collect();
+        assert!(locations.contains("project.planning_scope"));
+        assert!(locations.contains("project.planning_identity"));
+        assert!(locations.contains("project.store.eventlog"));
     }
 
     #[test]

@@ -108,6 +108,20 @@ when the artifact has none — so a `jq` shape needs no branch for an artifact w
 The difference is that they write exactly one file, at a path the id determines, inside a directory
 somebody opted into — and an item you did not want is removed with `rm`.
 
+### Plan: the store migration surface
+
+These commands inspect and prepare the opt-in `aep.project/2` Eventlog planning authority. Real
+apply and rebuild require an admitted writer-control provider; when none is installed, the command
+refuses rather than treating a quiet process list or a clean SQL snapshot as exclusion.
+
+| Command | Does |
+|---|---|
+| `aep plan store inspect [--project <project.yaml>] [--format text\|json]` | reports the selected backend, source inventory, migration phase, authority and projection readiness without mutating either store |
+| `aep plan store migrate dry-run --authority-scope <scope> --authority-tenant <tenant> (--authority-new\|--authority-identity <stream>) [--project <project.yaml>] [--format text\|json]` | captures the selected legacy source read-only, validates its mapping and reports the exact source snapshot and destination request; provider-assigned mode leaves the physical identity pending |
+| `aep plan store migrate apply --authority-scope <scope> --authority-tenant <tenant> (--authority-new\|--authority-identity <stream>) --snapshot <digest> --migration <id> [--project <project.yaml>] [--format text\|json]` | under admitted writer control, imports the captured authority through the eight durable phases, publishes the tracked Markdown projection and returns the immutable original receipt; otherwise returns `writer_exclusion_unavailable` |
+| `aep plan store verify [--project <project.yaml>] [--format text\|json]` | compares two provider-complete reads of the selected authority, its retained legacy boundary graph and the current projection |
+| `aep plan store rebuild --authority-snapshot <digest> [--project <project.yaml>] [--format text\|json]` | under admitted authority writer control, rebuilds only owned projection paths from that exact unchanged snapshot without re-executing a business command |
+
 **Every write is journalled with an actor, and the caller says who.** `AEP_ACTOR` declares it —
 `human:<name>`, `agent:<name>`, `service:<name>` or `system` — and a value that does not parse is
 refused, naming the variable, rather than quietly replaced by yours; unset, the write is

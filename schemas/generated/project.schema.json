@@ -16,6 +16,30 @@
         "null"
       ]
     },
+    "planning_identity": {
+      "description": "Immutable provider stream identity, required by `aep.project/2`.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "planning_scope": {
+      "description": "Provider-complete logical scope, required by `aep.project/2`.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "planning_tenant": {
+      "description": "Eventlog tenant identity, required by `aep.project/2`.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "principles": {
       "description": "Where project-local principles are.",
       "default": null,
@@ -127,6 +151,25 @@
       "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
+    "RawEventlog": {
+      "description": "The two project-relative paths owned by an Eventlog planning selection.",
+      "type": "object",
+      "required": [
+        "path",
+        "projection"
+      ],
+      "properties": {
+        "path": {
+          "description": "Directory containing the authoritative file Eventlog provider.",
+          "type": "string"
+        },
+        "projection": {
+          "description": "Directory containing the derived tracked Markdown projection.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "RawHybrid": {
       "description": "A hybrid store as written: four policy words and two stores, none defaulted.",
       "type": "object",
@@ -219,6 +262,23 @@
               "allOf": [
                 {
                   "$ref": "#/definitions/RawHybrid"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "`eventlog: { path, projection }`, admitted only by `aep.project/2`.",
+          "type": "object",
+          "required": [
+            "eventlog"
+          ],
+          "properties": {
+            "eventlog": {
+              "description": "The authority and projection paths.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RawEventlog"
                 }
               ]
             }

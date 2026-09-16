@@ -419,6 +419,9 @@ wire_struct!(PostgresSourceCoordinateV1 {
     endpoint: PostgresEndpointV1,
     endpoint_id: DigestV1,
 });
+wire_struct!(EventlogSourceCoordinateV1 {
+    authority_root: HostPathV1
+});
 wire_struct!(HybridSourceCoordinateV1 {
     local_root: HostPathV1,
     replica: SqlReplicaCoordinateV1,
@@ -431,6 +434,7 @@ closed_enum!(SourceCoordinateV1 {
     Sqlite(SqliteSourceCoordinateV1) => "sqlite",
     Postgres(PostgresSourceCoordinateV1) => "postgres",
     Hybrid(HybridSourceCoordinateV1) => "hybrid",
+    Eventlog(EventlogSourceCoordinateV1) => "eventlog",
 });
 
 wire_struct!(SqliteReplicaCoordinateV1 {
@@ -1604,7 +1608,9 @@ fn validate_source(source: &PresenceV1<SourceCoordinateV1>, errors: &mut Validat
                 }
             }
         }
-        SourceCoordinateV1::Markdown(_) | SourceCoordinateV1::Sqlite(_) => {}
+        SourceCoordinateV1::Markdown(_)
+        | SourceCoordinateV1::Sqlite(_)
+        | SourceCoordinateV1::Eventlog(_) => {}
     }
 }
 

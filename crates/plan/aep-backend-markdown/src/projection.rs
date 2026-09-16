@@ -725,7 +725,24 @@ pub fn document_from_entity(
     let kind: aep_domain::artifact::ArtifactKind = artifact.namespace().parse().ok()?;
     let mut frontmatter = PlanningFrontmatter::new(artifact, kind, "draft".parse().ok()?);
     apply_body(&mut frontmatter, data);
-    frontmatter.relations = relations.to_vec();
+    // A migrated Markdown crossing has no local destination entity and therefore cannot be
+    // represented by the identity backend's `aep.relation` row. The import keeps the exact
+    // authored relation in the entity body. Merge that retained source value with ordinary local
+    // relation rows so rebuilding a projection neither drops crossings nor duplicates local edges.
+    let mut projected_relations = match data {
+        Node::Map(fields) => fields
+            .get("relations")
+            .and_then(|node| serde_json::to_value(node).ok())
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    for relation in relations {
+        if !projected_relations.contains(relation) {
+            projected_relations.push(relation.clone());
+        }
+    }
+    frontmatter.relations = projected_relations;
     frontmatter.revision = revision;
     let body = match data {
         Node::Map(fields) => match fields.get(BODY_KEY) {

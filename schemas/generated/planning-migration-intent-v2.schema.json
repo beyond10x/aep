@@ -1,0 +1,670 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MigrationIntentV2",
+  "description": "Immutable provider-owned-identity migration request persisted before provider effects.",
+  "type": "object",
+  "required": [
+    "config_digest",
+    "destination_path",
+    "destination_request",
+    "format",
+    "intent_digest",
+    "mapping",
+    "migration_id",
+    "migration_root",
+    "projection_path",
+    "selector_digest",
+    "selector_version",
+    "source_coordinate",
+    "source_snapshot",
+    "staging_path"
+  ],
+  "properties": {
+    "config_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "destination_path": {
+      "$ref": "#/definitions/HostPathV1"
+    },
+    "destination_request": {
+      "$ref": "#/definitions/DestinationRequestV2"
+    },
+    "format": {
+      "$ref": "#/definitions/MigrationIntentFormatV2"
+    },
+    "intent_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "mapping": {
+      "$ref": "#/definitions/MappingIdentityV1"
+    },
+    "migration_id": {
+      "type": "string"
+    },
+    "migration_root": {
+      "$ref": "#/definitions/HostPathV1"
+    },
+    "projection_path": {
+      "$ref": "#/definitions/HostPathV1"
+    },
+    "selector_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "selector_version": {
+      "$ref": "#/definitions/ProjectVersionV1"
+    },
+    "source_coordinate": {
+      "$ref": "#/definitions/SourceCoordinateV1"
+    },
+    "source_snapshot": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "staging_path": {
+      "$ref": "#/definitions/HostPathV1"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AuthorityCoordinateV1": {
+      "description": "Exact public Eventlog adapter authority tuple.",
+      "type": "object",
+      "required": [
+        "logical_scope",
+        "stream_identity",
+        "tenant"
+      ],
+      "properties": {
+        "logical_scope": {
+          "type": "string"
+        },
+        "stream_identity": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DestinationRequestV2": {
+      "description": "Whether migration binds an existing provider identity or lets a fresh provider assign it.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "provider_assigned"
+              ]
+            },
+            "value": {
+              "type": "object",
+              "required": [
+                "logical_scope",
+                "tenant"
+              ],
+              "properties": {
+                "logical_scope": {
+                  "type": "string"
+                },
+                "tenant": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "exact_existing"
+              ]
+            },
+            "value": {
+              "type": "object",
+              "required": [
+                "authority"
+              ],
+              "properties": {
+                "authority": {
+                  "$ref": "#/definitions/AuthorityCoordinateV1"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DigestV1": {
+      "description": "A canonical SHA-256 digest with its algorithm prefix.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "EventlogSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "authority_root"
+      ],
+      "properties": {
+        "authority_root": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HexBytesV1": {
+      "description": "Exact bytes encoded as lowercase hexadecimal pairs after hex:.",
+      "type": "string",
+      "pattern": "^hex:(?:[0-9a-f]{2})*$"
+    },
+    "HostPathV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unix"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HexBytesV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "windows"
+              ]
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HybridPolicyWordsV1": {
+      "type": "object",
+      "required": [
+        "authority",
+        "on_divergence",
+        "on_unreachable",
+        "read"
+      ],
+      "properties": {
+        "authority": {
+          "type": "string"
+        },
+        "on_divergence": {
+          "type": "string"
+        },
+        "on_unreachable": {
+          "type": "string"
+        },
+        "read": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HybridSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "divergence_file",
+        "local_root",
+        "policy",
+        "replica"
+      ],
+      "properties": {
+        "divergence_file": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "local_root": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "policy": {
+          "$ref": "#/definitions/PresenceV1_of_HybridPolicyWordsV1"
+        },
+        "replica": {
+          "$ref": "#/definitions/SqlReplicaCoordinateV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MappingFormatV1": {
+      "description": "The scalar literal aep.planning-import/1.",
+      "type": "string",
+      "enum": [
+        "aep.planning-import/1"
+      ]
+    },
+    "MappingIdentityV1": {
+      "type": "object",
+      "required": [
+        "definition_digests",
+        "mapping_version"
+      ],
+      "properties": {
+        "definition_digests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DigestV1"
+          }
+        },
+        "mapping_version": {
+          "$ref": "#/definitions/MappingFormatV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MarkdownSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "root"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MigrationIntentFormatV2": {
+      "description": "The scalar literal aep.planning-migration-intent/2.",
+      "type": "string",
+      "enum": [
+        "aep.planning-migration-intent/2"
+      ]
+    },
+    "PostgresEndpointV1": {
+      "type": "object",
+      "required": [
+        "database",
+        "hosts",
+        "schema"
+      ],
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PostgresHostV1"
+          }
+        },
+        "schema": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostgresHostV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "tcp"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/TcpPostgresHostV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unix"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/UnixPostgresHostV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PostgresReplicaCoordinateV1": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "endpoint_id"
+      ],
+      "properties": {
+        "endpoint": {
+          "$ref": "#/definitions/PostgresEndpointV1"
+        },
+        "endpoint_id": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostgresSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "endpoint_id"
+      ],
+      "properties": {
+        "endpoint": {
+          "$ref": "#/definitions/PostgresEndpointV1"
+        },
+        "endpoint_id": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PresenceV1_of_HybridPolicyWordsV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HybridPolicyWordsV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ProjectVersionV1": {
+      "description": "Accepted project selector version.",
+      "type": "string",
+      "enum": [
+        "aep.project/1",
+        "aep.project/2"
+      ]
+    },
+    "SourceCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "markdown"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MarkdownSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sqlite"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqliteSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "postgres"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PostgresSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "hybrid"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HybridSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "eventlog"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/EventlogSourceCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SqlReplicaCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sqlite"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqliteReplicaCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "postgres"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PostgresReplicaCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SqliteReplicaCoordinateV1": {
+      "type": "object",
+      "required": [
+        "database"
+      ],
+      "properties": {
+        "database": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqliteSourceCoordinateV1": {
+      "type": "object",
+      "required": [
+        "database"
+      ],
+      "properties": {
+        "database": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TcpPostgresHostV1": {
+      "type": "object",
+      "required": [
+        "host",
+        "port"
+      ],
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnixPostgresHostV1": {
+      "type": "object",
+      "required": [
+        "directory",
+        "port"
+      ],
+      "properties": {
+        "directory": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -3,7 +3,7 @@ name = "aep-cli"
 description = "Reference CLI for the Agentic Engineering Protocol."
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+rust-version = "1.91"
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
@@ -36,8 +36,11 @@ aep-backend-hybrid.workspace = true
 # adapter (`story:store-selection-in-project-yaml`): the runtime's event type, and the provider
 # trait its `events` sits on. Same tag as every `entity-*` crate, declared once in the workspace.
 aep-backend-entity.workspace = true
+aep-backend-eventlog.workspace = true
+aep-planning-migration.workspace = true
 entity-core.workspace = true
 entity-store.workspace = true
+entity-eventlog.workspace = true
 # A hybrid plan's replica is one of the runtime's providers, opened here from what `project.yaml`
 # names (`replica: { sqlite: … }` or `replica: { postgres: … }`).
 entity-sqlite.workspace = true
@@ -76,6 +79,7 @@ aep-schema.workspace = true
 trace-domain.workspace = true
 trace-spec.workspace = true
 anyhow.workspace = true
+fs2.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -90,3 +94,6 @@ sha2 = "0.11"
 workspace = true
 
 [dev-dependencies]
+postgres.workspace = true
+rusqlite.workspace = true
+time = "0.3"
