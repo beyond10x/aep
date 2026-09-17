@@ -8,28 +8,25 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use aep_contract::migration::{
-    ApplyCompleteV1, ApplyFormatV1, ApplyOutcomeV1, ApplyRefusedV1, ApplyResultV1, AuthorityCoordinateV1,
-    AuthoritySnapshotIdV1, AuthorityValueV1, BackendKindV1, CommandRefusalCodeV1,
-    CommandRefusalV1, DiagnosticCoordinateV1, DigestV1,
-    DryRunAdmittedV2, DryRunFormatV2, DryRunOutcomeV2, DryRunRefusedV1, DryRunResultV2,
-    HistorySummaryV1, InspectionFormatV1, InspectionObservedV1, InspectionOutcomeV1,
-    InspectionReadinessV1, InspectionResultV1, InventoryCountsV1, MappingFormatV1,
-    MappingIdentityV1, MigrationIdV1, PresenceV1, ProjectVersionV1,
-    MigrationReceiptV1,
-    RebuildFormatV1, RebuildOutcomeV1, RebuildRefusedV1, RebuildResultV1, RebuildUncertainV1,
-    RebuiltV1, RefusedV1,
-    SelectorDiagnosticV1, VerificationFormatV1, VerificationOutcomeV1, VerificationRefusedV1,
-    VerificationResultV1, VerifiedV1, VerificationMismatchV1, ProjectionObservationV1,
-    ProjectionDriftV1, ProjectionWatermarkV1, ProjectionInventoryDigestV1,
-    SelectionV1, SourceCoordinateV1, SourceSnapshotIdV1, MarkdownSourceCoordinateV1,
-    SqliteSourceCoordinateV1, HybridSourceCoordinateV1, SqlReplicaCoordinateV1,
-    SqliteReplicaCoordinateV1, PostgresReplicaCoordinateV1, EventlogSourceCoordinateV1,
-    HybridPolicyWordsV1, MigrationIntentFormatV2, MigrationIntentV2, IntentDigestV1,
-    DestinationRequestV2, DestinationRequirementsV2,
-    ObservationOutcomeV1, LegacyRawCaptureV1, AuthorityObservationV1,
-};
 use aep_backend_markdown::{MarkdownStore, StoreReport};
+use aep_contract::migration::{
+    ApplyCompleteV1, ApplyFormatV1, ApplyOutcomeV1, ApplyRefusedV1, ApplyResultV1,
+    AuthorityCoordinateV1, AuthorityObservationV1, AuthoritySnapshotIdV1, AuthorityValueV1,
+    BackendKindV1, CommandRefusalCodeV1, CommandRefusalV1, DestinationRequestV2,
+    DestinationRequirementsV2, DiagnosticCoordinateV1, DigestV1, DryRunAdmittedV2, DryRunFormatV2,
+    DryRunOutcomeV2, DryRunRefusedV1, DryRunResultV2, EventlogSourceCoordinateV1, HistorySummaryV1,
+    HybridPolicyWordsV1, HybridSourceCoordinateV1, InspectionFormatV1, InspectionObservedV1,
+    InspectionOutcomeV1, InspectionReadinessV1, InspectionResultV1, IntentDigestV1,
+    InventoryCountsV1, LegacyRawCaptureV1, MappingFormatV1, MappingIdentityV1,
+    MarkdownSourceCoordinateV1, MigrationIdV1, MigrationIntentFormatV2, MigrationIntentV2,
+    MigrationReceiptV1, ObservationOutcomeV1, PostgresReplicaCoordinateV1, PresenceV1,
+    ProjectVersionV1, ProjectionDriftV1, ProjectionInventoryDigestV1, ProjectionObservationV1,
+    ProjectionWatermarkV1, RebuildFormatV1, RebuildOutcomeV1, RebuildRefusedV1, RebuildResultV1,
+    RebuildUncertainV1, RebuiltV1, RefusedV1, SelectionV1, SelectorDiagnosticV1,
+    SourceCoordinateV1, SourceSnapshotIdV1, SqlReplicaCoordinateV1, SqliteReplicaCoordinateV1,
+    SqliteSourceCoordinateV1, VerificationFormatV1, VerificationMismatchV1, VerificationOutcomeV1,
+    VerificationRefusedV1, VerificationResultV1, VerifiedV1,
+};
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::de::{DeserializeSeed, MapAccess, SeqAccess, Visitor};
@@ -62,10 +59,18 @@ pub(crate) struct AuthorityArgs {
     #[arg(long)]
     authority_tenant: String,
     /// Let the fresh destination provider assign its physical stream identity.
-    #[arg(long, conflicts_with = "authority_identity", required_unless_present = "authority_identity")]
+    #[arg(
+        long,
+        conflicts_with = "authority_identity",
+        required_unless_present = "authority_identity"
+    )]
     authority_new: bool,
     /// Recover an exact identity only from an already owned migration stage.
-    #[arg(long, conflicts_with = "authority_new", required_unless_present = "authority_new")]
+    #[arg(
+        long,
+        conflicts_with = "authority_new",
+        required_unless_present = "authority_new"
+    )]
     authority_identity: Option<String>,
 }
 
@@ -109,10 +114,7 @@ pub(crate) fn run(command: StoreCommand) -> Result<ExitCode> {
     run_with_control(command, &UnavailableWriterControl)
 }
 
-pub(crate) fn run_with_control<C>(
-    command: StoreCommand,
-    control: &C,
-) -> Result<ExitCode>
+pub(crate) fn run_with_control<C>(command: StoreCommand, control: &C) -> Result<ExitCode>
 where
     C: aep_planning_migration::WriterControl + aep_planning_migration::AuthorityWriterControl,
 {
@@ -250,7 +252,9 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
 ) -> ApplyResultV1 {
     let resolved = match resolve(common) {
         Ok(value) => value,
-        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable)
+        }
     };
     let migration_root = match migration_root(&resolved.engineering, &migration_id) {
         Ok(value) => value,
@@ -289,13 +293,7 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
     };
     intent.intent_digest = match aep_planning_migration::intent_digest_v2(&intent) {
         Ok(value) => value,
-        Err(_) => {
-            return apply_refusal(
-                common,
-                migration_id,
-                CommandRefusalCodeV1::IntentConflict,
-            )
-        }
+        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::IntentConflict),
     };
     let mut guard = match control.acquire(&intent) {
         Ok(value) => value,
@@ -319,9 +317,17 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
     }
     let captured = match resolved.capture() {
         Ok(value) => value,
-        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable),
+        Err(aep_planning_migration::AcquisitionError::RefusedObservation(observation)) => {
+            return apply_capture_refusal(common, migration_id, &observation);
+        }
+        Err(_) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable)
+        }
     };
     let ObservationOutcomeV1::Complete(complete) = &captured.observation else {
+        if matches!(captured.observation, ObservationOutcomeV1::Refused(_)) {
+            return apply_capture_refusal(common, migration_id, &captured);
+        }
         return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnstable);
     };
     if complete.raw_snapshot_id != requested_snapshot {
@@ -332,11 +338,7 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
         Err(code) => return apply_refusal(common, migration_id, code),
     };
     if captured.source != PresenceV1::Present(intent.source_coordinate.clone()) {
-        return apply_refusal(
-            common,
-            migration_id,
-            CommandRefusalCodeV1::SourceUnreadable,
-        );
+        return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable);
     }
     let inputs = aep_planning_migration::ApplyInputs {
         intent,
@@ -347,7 +349,9 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
         projection_path,
         recovery_capture_bytes: match compact_json_line(&captured) {
             Ok(value) => value,
-            Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::IntentConflict),
+            Err(_) => {
+                return apply_refusal(common, migration_id, CommandRefusalCodeV1::IntentConflict)
+            }
         },
         source_capture_digest: complete.transcript_digest,
         histories,
@@ -370,15 +374,50 @@ fn execute_apply<C: aep_planning_migration::WriterControl>(
             .map_err(|_| aep_planning_migration::ApplyError::EvidenceConflict)
     }) {
         Ok(value) => value,
-        Err(aep_planning_migration::ApplyError::Writer(_)) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::WriterExclusionUnavailable),
-        Err(aep_planning_migration::ApplyError::IntentConflict) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::IntentConflict),
-        Err(aep_planning_migration::ApplyError::ForeignStage) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::ForeignStage),
-        Err(aep_planning_migration::ApplyError::DestinationConflict) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::DestinationConflict),
-        Err(aep_planning_migration::ApplyError::AuthorityIdentityMismatch) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::AuthorityIdentityMismatch),
-        Err(aep_planning_migration::ApplyError::SelectorChanged) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::SelectorChanged),
-        Err(aep_planning_migration::ApplyError::ReceiptConflict | aep_planning_migration::ApplyError::EvidenceConflict) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::ReceiptConflict),
-        Err(aep_planning_migration::ApplyError::VerificationMismatch) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::VerificationMismatch),
-        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::PublishUncertain),
+        Err(aep_planning_migration::ApplyError::Writer(_)) => {
+            return apply_refusal(
+                common,
+                migration_id,
+                CommandRefusalCodeV1::WriterExclusionUnavailable,
+            )
+        }
+        Err(aep_planning_migration::ApplyError::IntentConflict) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::IntentConflict)
+        }
+        Err(aep_planning_migration::ApplyError::ForeignStage) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::ForeignStage)
+        }
+        Err(aep_planning_migration::ApplyError::DestinationConflict) => {
+            return apply_refusal(
+                common,
+                migration_id,
+                CommandRefusalCodeV1::DestinationConflict,
+            )
+        }
+        Err(aep_planning_migration::ApplyError::AuthorityIdentityMismatch) => {
+            return apply_refusal(
+                common,
+                migration_id,
+                CommandRefusalCodeV1::AuthorityIdentityMismatch,
+            )
+        }
+        Err(aep_planning_migration::ApplyError::SelectorChanged) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::SelectorChanged)
+        }
+        Err(
+            aep_planning_migration::ApplyError::ReceiptConflict
+            | aep_planning_migration::ApplyError::EvidenceConflict,
+        ) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::ReceiptConflict),
+        Err(aep_planning_migration::ApplyError::VerificationMismatch) => {
+            return apply_refusal(
+                common,
+                migration_id,
+                CommandRefusalCodeV1::VerificationMismatch,
+            )
+        }
+        Err(_) => {
+            return apply_refusal(common, migration_id, CommandRefusalCodeV1::PublishUncertain)
+        }
     };
     let snapshot = match aep_backend_eventlog::complete_file_snapshot(
         &destination_path,
@@ -389,12 +428,25 @@ fn execute_apply<C: aep_planning_migration::WriterControl>(
         },
     ) {
         Ok(value) => value,
-        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::AuthorityIdentityMismatch),
+        Err(_) => {
+            return apply_refusal(
+                common,
+                migration_id,
+                CommandRefusalCodeV1::AuthorityIdentityMismatch,
+            )
+        }
     };
-    let (snapshot_id, capture_digest) = match aep_planning_migration::authority_snapshot_identity(&receipt.authority, &snapshot) {
-        Ok(value) => value,
-        Err(_) => return apply_refusal(common, migration_id, CommandRefusalCodeV1::VerificationMismatch),
-    };
+    let (snapshot_id, capture_digest) =
+        match aep_planning_migration::authority_snapshot_identity(&receipt.authority, &snapshot) {
+            Ok(value) => value,
+            Err(_) => {
+                return apply_refusal(
+                    common,
+                    migration_id,
+                    CommandRefusalCodeV1::VerificationMismatch,
+                )
+            }
+        };
     let facts = inventory_from_histories(&snapshot.histories);
     let current_authority = receipt.authority.clone();
     ApplyResultV1 {
@@ -535,14 +587,35 @@ fn compact_json_line(value: &impl Serialize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn apply_refusal(common: &CommonArgs, migration_id: MigrationIdV1, code: CommandRefusalCodeV1) -> ApplyResultV1 {
+fn apply_refusal(
+    common: &CommonArgs,
+    migration_id: MigrationIdV1,
+    code: CommandRefusalCodeV1,
+) -> ApplyResultV1 {
     let last_proved_phase = resolve(common)
         .ok()
         .and_then(|resolved| current_phase_for_migration(&resolved.engineering, &migration_id))
         .map_or(PresenceV1::Missing, PresenceV1::Present);
-    ApplyResultV1 { format: ApplyFormatV1, outcome: ApplyOutcomeV1::Refused(ApplyRefusedV1 {
-        migration_id, last_proved_phase, refusals: vec![selector_refusal(common, code)],
-    }) }
+    ApplyResultV1 {
+        format: ApplyFormatV1,
+        outcome: ApplyOutcomeV1::Refused(ApplyRefusedV1 {
+            migration_id,
+            last_proved_phase,
+            refusals: vec![selector_refusal(common, code)],
+        }),
+    }
+}
+
+fn apply_capture_refusal(
+    common: &CommonArgs,
+    migration_id: MigrationIdV1,
+    observation: &aep_contract::migration::RawCaptureObservationV1,
+) -> ApplyResultV1 {
+    let mut result = apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable);
+    if let ApplyOutcomeV1::Refused(ref mut refused) = result.outcome {
+        refused.refusals = capture_refusals(observation);
+    }
+    result
 }
 
 // The ordered refusal mapping mirrors the rebuild protocol: fence, capture, stage, recheck,
@@ -555,14 +628,27 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
 ) -> RebuildResultV1 {
     let resolved = match resolve(common) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
     let crate::planning::Plan::Eventlog {
         authority_root,
         projection_root,
         authority: selected,
-    } = &resolved.plan else {
-        return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::IncompletePublication);
+    } = &resolved.plan
+    else {
+        return rebuild_refusal(
+            common,
+            requested,
+            PresenceV1::Missing,
+            CommandRefusalCodeV1::IncompletePublication,
+        );
     };
     let authority = match (
         AuthorityValueV1::new(&selected.logical_scope),
@@ -574,11 +660,25 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
             tenant,
             stream_identity,
         },
-        _ => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::AuthorityIdentityMismatch),
+        _ => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::AuthorityIdentityMismatch,
+            )
+        }
     };
     let mut guard = match control.acquire_authority(&authority, requested) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::WriterExclusionUnavailable),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::WriterExclusionUnavailable,
+            )
+        }
     };
     let adapter = || entity_eventlog::Authority {
         logical_scope: authority.logical_scope.as_str().to_owned(),
@@ -587,14 +687,34 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
     };
     let first = match aep_backend_eventlog::complete_file_snapshot(authority_root, adapter()) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let (first_id, _) = match aep_planning_migration::authority_snapshot_identity(&authority, &first) {
-        Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::VerificationMismatch),
-    };
+    let (first_id, _) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &first) {
+            Ok(value) => value,
+            Err(_) => {
+                return rebuild_refusal(
+                    common,
+                    requested,
+                    PresenceV1::Missing,
+                    CommandRefusalCodeV1::VerificationMismatch,
+                )
+            }
+        };
     if first_id != requested {
-        return rebuild_refusal(common, requested, PresenceV1::Present(first_id), CommandRefusalCodeV1::AuthoritySnapshotChanged);
+        return rebuild_refusal(
+            common,
+            requested,
+            PresenceV1::Present(first_id),
+            CommandRefusalCodeV1::AuthoritySnapshotChanged,
+        );
     }
     let publisher = aep_planning_migration::FileProjectionPublisher::new(
         authority_root.clone(),
@@ -603,52 +723,127 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
     );
     let staged = match publisher.stage(requested) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Present(first_id), CommandRefusalCodeV1::ProjectionConflict),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Present(first_id),
+                CommandRefusalCodeV1::ProjectionConflict,
+            )
+        }
     };
     let staged_inventory = staged.inventory_digest();
-    if control.recheck_authority(&mut guard, &authority, requested).is_err() {
-        return rebuild_refusal(common, requested, PresenceV1::Present(first_id), CommandRefusalCodeV1::WriterExclusionUnavailable);
+    if control
+        .recheck_authority(&mut guard, &authority, requested)
+        .is_err()
+    {
+        return rebuild_refusal(
+            common,
+            requested,
+            PresenceV1::Present(first_id),
+            CommandRefusalCodeV1::WriterExclusionUnavailable,
+        );
     }
     let second = match aep_backend_eventlog::complete_file_snapshot(authority_root, adapter()) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Present(first_id), CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Present(first_id),
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let (second_id, _) = match aep_planning_migration::authority_snapshot_identity(&authority, &second) {
-        Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Present(first_id), CommandRefusalCodeV1::VerificationMismatch),
-    };
+    let (second_id, _) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &second) {
+            Ok(value) => value,
+            Err(_) => {
+                return rebuild_refusal(
+                    common,
+                    requested,
+                    PresenceV1::Present(first_id),
+                    CommandRefusalCodeV1::VerificationMismatch,
+                )
+            }
+        };
     if second_id != requested {
-        return rebuild_refusal(common, requested, PresenceV1::Present(second_id), CommandRefusalCodeV1::AuthoritySnapshotChanged);
+        return rebuild_refusal(
+            common,
+            requested,
+            PresenceV1::Present(second_id),
+            CommandRefusalCodeV1::AuthoritySnapshotChanged,
+        );
     }
     let publication = match publisher.commit(staged) {
         Ok(value) => value,
-        Err(_) => return RebuildResultV1 {
-            format: RebuildFormatV1,
-            outcome: RebuildOutcomeV1::Uncertain(RebuildUncertainV1 {
-                requested_snapshot: requested,
-                staged_inventory_digest: staged_inventory,
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::PublishUncertain)],
-            }),
-        },
+        Err(_) => {
+            return RebuildResultV1 {
+                format: RebuildFormatV1,
+                outcome: RebuildOutcomeV1::Uncertain(RebuildUncertainV1 {
+                    requested_snapshot: requested,
+                    staged_inventory_digest: staged_inventory,
+                    refusals: vec![selector_refusal(
+                        common,
+                        CommandRefusalCodeV1::PublishUncertain,
+                    )],
+                }),
+            }
+        }
     };
     let current = match aep_backend_eventlog::complete_file_snapshot(authority_root, adapter()) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let (current_id, capture_digest) = match aep_planning_migration::authority_snapshot_identity(&authority, &current) {
-        Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Missing, CommandRefusalCodeV1::VerificationMismatch),
-    };
+    let (current_id, capture_digest) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &current) {
+            Ok(value) => value,
+            Err(_) => {
+                return rebuild_refusal(
+                    common,
+                    requested,
+                    PresenceV1::Missing,
+                    CommandRefusalCodeV1::VerificationMismatch,
+                )
+            }
+        };
     let prior = match aep_planning_migration::before_projection_watermark(&current, requested) {
         Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Present(current_id), CommandRefusalCodeV1::ProjectionDrift),
+        Err(_) => {
+            return rebuild_refusal(
+                common,
+                requested,
+                PresenceV1::Present(current_id),
+                CommandRefusalCodeV1::ProjectionDrift,
+            )
+        }
     };
-    let (prior_id, _) = match aep_planning_migration::authority_snapshot_identity(&authority, &prior) {
-        Ok(value) => value,
-        Err(_) => return rebuild_refusal(common, requested, PresenceV1::Present(current_id), CommandRefusalCodeV1::ProjectionDrift),
-    };
+    let (prior_id, _) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &prior) {
+            Ok(value) => value,
+            Err(_) => {
+                return rebuild_refusal(
+                    common,
+                    requested,
+                    PresenceV1::Present(current_id),
+                    CommandRefusalCodeV1::ProjectionDrift,
+                )
+            }
+        };
     if prior_id != requested {
-        return rebuild_refusal(common, requested, PresenceV1::Present(current_id), CommandRefusalCodeV1::AuthoritySnapshotChanged);
+        return rebuild_refusal(
+            common,
+            requested,
+            PresenceV1::Present(current_id),
+            CommandRefusalCodeV1::AuthoritySnapshotChanged,
+        );
     }
     let facts = inventory_from_histories(&current.histories);
     RebuildResultV1 {
@@ -697,12 +892,17 @@ fn rebuild_refusal(
 fn inspect(common: &CommonArgs) -> InspectionResultV1 {
     let resolved = match resolve(common) {
         Ok(value) => value,
-        Err(_) => return InspectionResultV1 {
-            format: InspectionFormatV1,
-            outcome: InspectionOutcomeV1::Refused(RefusedV1 {
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::SourceUnreadable)],
-            }),
-        },
+        Err(_) => {
+            return InspectionResultV1 {
+                format: InspectionFormatV1,
+                outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                    refusals: vec![selector_refusal(
+                        common,
+                        CommandRefusalCodeV1::SourceUnreadable,
+                    )],
+                }),
+            }
+        }
     };
     if matches!(resolved.plan, crate::planning::Plan::Eventlog { .. }) {
         return inspect_eventlog(common, resolved);
@@ -728,7 +928,10 @@ fn inspect(common: &CommonArgs) -> InspectionResultV1 {
         Err(_) => InspectionResultV1 {
             format: InspectionFormatV1,
             outcome: InspectionOutcomeV1::Refused(RefusedV1 {
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::SourceUnreadable)],
+                refusals: vec![selector_refusal(
+                    common,
+                    CommandRefusalCodeV1::SourceUnreadable,
+                )],
             }),
         },
     }
@@ -740,7 +943,8 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
         authority_root,
         projection_root,
         authority: selected,
-    } = &resolved.plan else {
+    } = &resolved.plan
+    else {
         unreachable!("caller selected Eventlog")
     };
     let authority = match (
@@ -753,12 +957,17 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
             tenant,
             stream_identity,
         },
-        _ => return InspectionResultV1 {
-            format: InspectionFormatV1,
-            outcome: InspectionOutcomeV1::Refused(RefusedV1 {
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::AuthorityIdentityMismatch)],
-            }),
-        },
+        _ => {
+            return InspectionResultV1 {
+                format: InspectionFormatV1,
+                outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                    refusals: vec![selector_refusal(
+                        common,
+                        CommandRefusalCodeV1::AuthorityIdentityMismatch,
+                    )],
+                }),
+            }
+        }
     };
     let snapshot = match aep_backend_eventlog::complete_file_snapshot(
         authority_root,
@@ -769,25 +978,33 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
         },
     ) {
         Ok(value) => value,
-        Err(_) => return InspectionResultV1 {
-            format: InspectionFormatV1,
-            outcome: InspectionOutcomeV1::Refused(RefusedV1 {
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::SourceUnreadable)],
-            }),
-        },
+        Err(_) => {
+            return InspectionResultV1 {
+                format: InspectionFormatV1,
+                outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                    refusals: vec![selector_refusal(
+                        common,
+                        CommandRefusalCodeV1::SourceUnreadable,
+                    )],
+                }),
+            }
+        }
     };
-    let (snapshot_id, capture_digest) = match aep_planning_migration::authority_snapshot_identity(
-        &authority,
-        &snapshot,
-    ) {
-        Ok(value) => value,
-        Err(_) => return InspectionResultV1 {
-            format: InspectionFormatV1,
-            outcome: InspectionOutcomeV1::Refused(RefusedV1 {
-                refusals: vec![selector_refusal(common, CommandRefusalCodeV1::VerificationMismatch)],
-            }),
-        },
-    };
+    let (snapshot_id, capture_digest) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &snapshot) {
+            Ok(value) => value,
+            Err(_) => {
+                return InspectionResultV1 {
+                    format: InspectionFormatV1,
+                    outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                        refusals: vec![selector_refusal(
+                            common,
+                            CommandRefusalCodeV1::VerificationMismatch,
+                        )],
+                    }),
+                }
+            }
+        };
     let facts = inventory_from_histories(&snapshot.histories);
     let projection = projection_inventory(projection_root, &snapshot)
         .ok()
@@ -795,11 +1012,10 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
             let prior = aep_planning_migration::before_projection_watermark(
                 &snapshot,
                 watermark.authority_snapshot,
-            ).ok()?;
-            let (prior_id, _) = aep_planning_migration::authority_snapshot_identity(
-                &authority,
-                &prior,
-            ).ok()?;
+            )
+            .ok()?;
+            let (prior_id, _) =
+                aep_planning_migration::authority_snapshot_identity(&authority, &prior).ok()?;
             (prior_id == watermark.authority_snapshot).then_some(ProjectionObservationV1 {
                 root: host_path(projection_root),
                 authority_snapshot: watermark.authority_snapshot,
@@ -863,24 +1079,32 @@ fn selected_migration_phase(
     for entry in fs::read_dir(engineering.join("migrations")).ok()? {
         let Ok(entry) = entry else { continue };
         let root = entry.path();
-        let Ok(current_bytes) = fs::read(root.join("current.json")) else { continue };
-        if let Ok(current) = serde_json::from_slice::<aep_contract::migration::CurrentPhaseV2>(
-            &current_bytes,
-        ) {
-            let Ok(binding_bytes) = fs::read(root.join("phases/02-destination-provisioned.json")) else {
+        let Ok(current_bytes) = fs::read(root.join("current.json")) else {
+            continue;
+        };
+        if let Ok(current) =
+            serde_json::from_slice::<aep_contract::migration::CurrentPhaseV2>(&current_bytes)
+        {
+            let Ok(binding_bytes) = fs::read(root.join("phases/02-destination-provisioned.json"))
+            else {
                 continue;
             };
-            let Ok(binding_record) = serde_json::from_slice::<aep_contract::migration::PhaseRecordV2>(
-                &binding_bytes,
-            ) else {
+            let Ok(binding_record) =
+                serde_json::from_slice::<aep_contract::migration::PhaseRecordV2>(&binding_bytes)
+            else {
                 continue;
             };
-            let Some(binding) = binding_record.observations
-                .into_iter()
-                .find_map(|value| match value {
-                    aep_contract::migration::MigrationPhaseObservationV2::Binding(value) => Some(value),
-                    _ => None,
-            }) else {
+            let Some(binding) =
+                binding_record
+                    .observations
+                    .into_iter()
+                    .find_map(|value| match value {
+                        aep_contract::migration::MigrationPhaseObservationV2::Binding(value) => {
+                            Some(value)
+                        }
+                        _ => None,
+                    })
+            else {
                 continue;
             };
             if binding.authority == *authority
@@ -890,15 +1114,17 @@ fn selected_migration_phase(
             }
             continue;
         }
-        let Ok(current) = serde_json::from_slice::<aep_contract::migration::CurrentPhaseV1>(
-            &current_bytes,
-        ) else {
+        let Ok(current) =
+            serde_json::from_slice::<aep_contract::migration::CurrentPhaseV1>(&current_bytes)
+        else {
             continue;
         };
-        let Ok(intent_bytes) = fs::read(root.join("intent.json")) else { continue };
-        let Ok(intent) = serde_json::from_slice::<aep_contract::migration::MigrationIntentV1>(
-            &intent_bytes,
-        ) else {
+        let Ok(intent_bytes) = fs::read(root.join("intent.json")) else {
+            continue;
+        };
+        let Ok(intent) =
+            serde_json::from_slice::<aep_contract::migration::MigrationIntentV1>(&intent_bytes)
+        else {
             continue;
         };
         if intent.authority == *authority && intent.intended_selector_digest == selector_digest {
@@ -927,8 +1153,7 @@ fn selected_migration_receipt(
         let receipt: MigrationReceiptV1 = serde_json::from_slice(&bytes)
             .with_context(|| format!("{} is not a migration receipt", path.display()))?;
         if receipt.authority == *authority && receipt.selected_selector_digest == selector_digest {
-            if aep_planning_migration::migration_receipt_digest(&receipt)?
-                != receipt.receipt_digest
+            if aep_planning_migration::migration_receipt_digest(&receipt)? != receipt.receipt_digest
             {
                 anyhow::bail!("{} has a mismatched receipt digest", path.display());
             }
@@ -938,7 +1163,9 @@ fn selected_migration_receipt(
     match matches.as_slice() {
         [receipt] => Ok(receipt.clone()),
         [] => anyhow::bail!("the selected Eventlog authority has no completed migration receipt"),
-        _ => anyhow::bail!("more than one completed migration receipt claims the selected authority"),
+        _ => {
+            anyhow::bail!("more than one completed migration receipt claims the selected authority")
+        }
     }
 }
 
@@ -946,21 +1173,69 @@ fn selected_migration_receipt(
 fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> DryRunResultV2 {
     let resolved = match resolve(common) {
         Ok(resolved) => resolved,
-        Err(_) => return dry_refusal(common, PresenceV1::Missing, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return dry_refusal(
+                common,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
     let selection = resolved.selection.clone();
     let facts = match resolved.inventory() {
         Ok(facts) if facts.clean => facts,
-        Ok(_) => return dry_refusal(common, PresenceV1::Present(selection), CommandRefusalCodeV1::IncompleteInventory),
-        Err(_) => return dry_refusal(common, PresenceV1::Present(selection), CommandRefusalCodeV1::SourceUnreadable),
+        Ok(_) => {
+            return dry_refusal(
+                common,
+                PresenceV1::Present(selection),
+                CommandRefusalCodeV1::IncompleteInventory,
+            )
+        }
+        Err(_) => {
+            return dry_refusal(
+                common,
+                PresenceV1::Present(selection),
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
     let complete = match resolved.capture() {
         Ok(aep_contract::migration::RawCaptureObservationV1 {
             observation: aep_contract::migration::ObservationOutcomeV1::Complete(complete),
             ..
         }) => complete,
-        Ok(_) => return dry_refusal(common, PresenceV1::Present(selection), CommandRefusalCodeV1::SourceUnstable),
-        Err(_) => return dry_refusal(common, PresenceV1::Present(selection), CommandRefusalCodeV1::SourceUnreadable),
+        Ok(observation) if matches!(observation.observation, ObservationOutcomeV1::Refused(_)) => {
+            return DryRunResultV2 {
+                format: DryRunFormatV2,
+                outcome: DryRunOutcomeV2::Refused(DryRunRefusedV1 {
+                    selection: PresenceV1::Present(selection),
+                    refusals: capture_refusals(&observation),
+                }),
+            };
+        }
+        Ok(_) => {
+            return dry_refusal(
+                common,
+                PresenceV1::Present(selection),
+                CommandRefusalCodeV1::SourceUnstable,
+            )
+        }
+        Err(aep_planning_migration::AcquisitionError::RefusedObservation(observation)) => {
+            return DryRunResultV2 {
+                format: DryRunFormatV2,
+                outcome: DryRunOutcomeV2::Refused(DryRunRefusedV1 {
+                    selection: PresenceV1::Present(selection),
+                    refusals: capture_refusals(&observation),
+                }),
+            };
+        }
+        Err(_) => {
+            return dry_refusal(
+                common,
+                PresenceV1::Present(selection),
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
     if let Err(code) = mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
         return dry_refusal(common, PresenceV1::Present(selection), code);
@@ -998,6 +1273,53 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
     }
 }
 
+fn capture_refusals(
+    observation: &aep_contract::migration::RawCaptureObservationV1,
+) -> Vec<CommandRefusalV1> {
+    use aep_contract::migration::{
+        CaptureRefusalCodeV1, PhaseResultV1, PhysicalCoordinateV1, RootCoordinateV1,
+        SourceDiagnosticV1,
+    };
+    let fallback = || {
+        vec![CommandRefusalV1 {
+            code: CommandRefusalCodeV1::SourceUnreadable,
+            at: DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+                coordinate: PhysicalCoordinateV1::Root(RootCoordinateV1::Observation),
+            }),
+        }]
+    };
+    if observation.validate().is_err() {
+        return fallback();
+    }
+    let ObservationOutcomeV1::Refused(refused) = &observation.observation else {
+        return fallback();
+    };
+    let failures = refused
+        .preflight_refusals
+        .iter()
+        .chain(refused.phases.iter().flat_map(|phase| match &phase.result {
+            PhaseResultV1::Refused(result) => result.refusals.as_slice(),
+            _ => &[],
+        }));
+    failures
+        .map(|failure| CommandRefusalV1 {
+            code: match failure.code {
+                CaptureRefusalCodeV1::UnsupportedSchema => CommandRefusalCodeV1::UnsupportedSchema,
+                CaptureRefusalCodeV1::UnknownPhysicalObject
+                | CaptureRefusalCodeV1::ForeignMarkdownNode => CommandRefusalCodeV1::ForeignContent,
+                CaptureRefusalCodeV1::PendingBatchPresent => {
+                    CommandRefusalCodeV1::PendingLegacyIntent
+                }
+                CaptureRefusalCodeV1::HybridContradiction => CommandRefusalCodeV1::DivergentHybrid,
+                _ => CommandRefusalCodeV1::SourceUnreadable,
+            },
+            at: DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+                coordinate: failure.at.clone(),
+            }),
+        })
+        .collect()
+}
+
 fn dry_refusal(
     common: &CommonArgs,
     selection: PresenceV1<SelectionV1>,
@@ -1015,18 +1337,47 @@ fn dry_refusal(
 // Verification reports a distinct refusal coordinate for every failed read or comparison; the
 // explicit matches preserve that closed result mapping.
 #[allow(clippy::manual_let_else)]
+#[allow(clippy::too_many_lines)]
 fn verify(common: &CommonArgs) -> VerificationResultV1 {
     let resolved = match resolve(common) {
         Ok(value) => value,
-        Err(_) => return verification_refusal(common, PresenceV1::Missing, CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return verification_refusal(
+                common,
+                PresenceV1::Missing,
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let crate::planning::Plan::Eventlog { authority_root, projection_root, authority: selected } = &resolved.plan else {
-        return verification_refusal(common, PresenceV1::Present(resolved.selection), CommandRefusalCodeV1::IncompletePublication);
+    let crate::planning::Plan::Eventlog {
+        authority_root,
+        projection_root,
+        authority: selected,
+    } = &resolved.plan
+    else {
+        return verification_refusal(
+            common,
+            PresenceV1::Present(resolved.selection),
+            CommandRefusalCodeV1::IncompletePublication,
+        );
     };
-    let authority = match (AuthorityValueV1::new(&selected.logical_scope),
-        AuthorityValueV1::new(&selected.tenant), AuthorityValueV1::new(&selected.stream_identity)) {
-        (Ok(logical_scope), Ok(tenant), Ok(stream_identity)) => AuthorityCoordinateV1 { logical_scope, tenant, stream_identity },
-        _ => return verification_refusal(common, PresenceV1::Present(resolved.selection), CommandRefusalCodeV1::AuthorityIdentityMismatch),
+    let authority = match (
+        AuthorityValueV1::new(&selected.logical_scope),
+        AuthorityValueV1::new(&selected.tenant),
+        AuthorityValueV1::new(&selected.stream_identity),
+    ) {
+        (Ok(logical_scope), Ok(tenant), Ok(stream_identity)) => AuthorityCoordinateV1 {
+            logical_scope,
+            tenant,
+            stream_identity,
+        },
+        _ => {
+            return verification_refusal(
+                common,
+                PresenceV1::Present(resolved.selection),
+                CommandRefusalCodeV1::AuthorityIdentityMismatch,
+            )
+        }
     };
     let adapter = || entity_eventlog::Authority {
         logical_scope: authority.logical_scope.as_str().to_owned(),
@@ -1035,41 +1386,85 @@ fn verify(common: &CommonArgs) -> VerificationResultV1 {
     };
     let first = match aep_backend_eventlog::complete_file_snapshot(authority_root, adapter()) {
         Ok(value) => value,
-        Err(_) => return verification_refusal(common, PresenceV1::Present(resolved.selection), CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return verification_refusal(
+                common,
+                PresenceV1::Present(resolved.selection),
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let (current_id, capture_digest) = match aep_planning_migration::authority_snapshot_identity(&authority, &first) {
-        Ok(value) => value,
-        Err(_) => return verification_refusal(common, PresenceV1::Present(resolved.selection), CommandRefusalCodeV1::VerificationMismatch),
-    };
+    let (current_id, capture_digest) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &first) {
+            Ok(value) => value,
+            Err(_) => {
+                return verification_refusal(
+                    common,
+                    PresenceV1::Present(resolved.selection),
+                    CommandRefusalCodeV1::VerificationMismatch,
+                )
+            }
+        };
     let (inventory_digest, watermark) = match projection_inventory(projection_root, &first) {
         Ok(value) => value,
-        Err(_) => return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift),
+        Err(_) => {
+            return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift)
+        }
     };
     if watermark.authority != authority
         || watermark.projection_inventory_digest != inventory_digest
-        || watermark.watermark_digest != aep_planning_migration::projection_watermark_digest(
-            watermark.authority_snapshot, watermark.projection_inventory_digest)
+        || watermark.watermark_digest
+            != aep_planning_migration::projection_watermark_digest(
+                watermark.authority_snapshot,
+                watermark.projection_inventory_digest,
+            )
     {
         return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift);
     }
-    let prior = match aep_planning_migration::before_projection_watermark(&first, watermark.authority_snapshot) {
+    let prior = match aep_planning_migration::before_projection_watermark(
+        &first,
+        watermark.authority_snapshot,
+    ) {
         Ok(value) => value,
-        Err(_) => return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift),
+        Err(_) => {
+            return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift)
+        }
     };
-    let (prior_id, _) = match aep_planning_migration::authority_snapshot_identity(&authority, &prior) {
-        Ok(value) => value,
-        Err(_) => return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ProjectionDrift),
-    };
+    let (prior_id, _) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &prior) {
+            Ok(value) => value,
+            Err(_) => {
+                return verification_mismatch(
+                    resolved.selection,
+                    CommandRefusalCodeV1::ProjectionDrift,
+                )
+            }
+        };
     let second = match aep_backend_eventlog::complete_file_snapshot(authority_root, adapter()) {
         Ok(value) => value,
-        Err(_) => return verification_refusal(common, PresenceV1::Present(resolved.selection), CommandRefusalCodeV1::SourceUnreadable),
+        Err(_) => {
+            return verification_refusal(
+                common,
+                PresenceV1::Present(resolved.selection),
+                CommandRefusalCodeV1::SourceUnreadable,
+            )
+        }
     };
-    let (second_id, _) = match aep_planning_migration::authority_snapshot_identity(&authority, &second) {
-        Ok(value) => value,
-        Err(_) => return verification_mismatch(resolved.selection, CommandRefusalCodeV1::AuthoritySnapshotChanged),
-    };
+    let (second_id, _) =
+        match aep_planning_migration::authority_snapshot_identity(&authority, &second) {
+            Ok(value) => value,
+            Err(_) => {
+                return verification_mismatch(
+                    resolved.selection,
+                    CommandRefusalCodeV1::AuthoritySnapshotChanged,
+                )
+            }
+        };
     if current_id != second_id || prior_id != watermark.authority_snapshot {
-        return verification_mismatch(resolved.selection, CommandRefusalCodeV1::AuthoritySnapshotChanged);
+        return verification_mismatch(
+            resolved.selection,
+            CommandRefusalCodeV1::AuthoritySnapshotChanged,
+        );
     }
     let receipt = match selected_migration_receipt(
         &resolved.engineering,
@@ -1077,16 +1472,24 @@ fn verify(common: &CommonArgs) -> VerificationResultV1 {
         resolved.selection.selector_digest,
     ) {
         Ok(receipt) => receipt,
-        Err(_) => return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ReceiptConflict),
+        Err(_) => {
+            return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ReceiptConflict)
+        }
     };
     let facts = inventory_from_histories(&first.histories);
     let authority_observation = AuthorityObservationV1 {
-        authority: authority.clone(), snapshot_id: current_id, inventory: facts.inventory,
-        history: facts.history, capture_digest,
+        authority: authority.clone(),
+        snapshot_id: current_id,
+        inventory: facts.inventory,
+        history: facts.history,
+        capture_digest,
     };
     let projection = ProjectionObservationV1 {
-        root: host_path(projection_root), authority_snapshot: watermark.authority_snapshot,
-        inventory_digest, watermark_digest: watermark.watermark_digest, drift: ProjectionDriftV1::Current,
+        root: host_path(projection_root),
+        authority_snapshot: watermark.authority_snapshot,
+        inventory_digest,
+        watermark_digest: watermark.watermark_digest,
+        drift: ProjectionDriftV1::Current,
     };
     VerificationResultV1 {
         format: VerificationFormatV1,
@@ -1104,19 +1507,33 @@ fn verification_refusal(
     selection: PresenceV1<SelectionV1>,
     code: CommandRefusalCodeV1,
 ) -> VerificationResultV1 {
-    VerificationResultV1 { format: VerificationFormatV1,
+    VerificationResultV1 {
+        format: VerificationFormatV1,
         outcome: VerificationOutcomeV1::Refused(VerificationRefusedV1 {
-            selection, refusals: vec![selector_refusal(common, code)],
-        }) }
+            selection,
+            refusals: vec![selector_refusal(common, code)],
+        }),
+    }
 }
 
-fn verification_mismatch(selection: SelectionV1, code: CommandRefusalCodeV1) -> VerificationResultV1 {
-    VerificationResultV1 { format: VerificationFormatV1,
+fn verification_mismatch(
+    selection: SelectionV1,
+    code: CommandRefusalCodeV1,
+) -> VerificationResultV1 {
+    VerificationResultV1 {
+        format: VerificationFormatV1,
         outcome: VerificationOutcomeV1::Mismatch(VerificationMismatchV1 {
-            selection, authority: PresenceV1::Missing, projection: PresenceV1::Missing,
-            refusals: vec![CommandRefusalV1 { code, at: DiagnosticCoordinateV1::Output(
-                aep_contract::migration::OutputDiagnosticV1 { stream: aep_contract::migration::OutputStreamV1::Stdout }) }],
-        }) }
+            selection,
+            authority: PresenceV1::Missing,
+            projection: PresenceV1::Missing,
+            refusals: vec![CommandRefusalV1 {
+                code,
+                at: DiagnosticCoordinateV1::Output(aep_contract::migration::OutputDiagnosticV1 {
+                    stream: aep_contract::migration::OutputStreamV1::Stdout,
+                }),
+            }],
+        }),
+    }
 }
 
 fn projection_inventory(
@@ -1124,34 +1541,58 @@ fn projection_inventory(
     snapshot: &entity_store::asynchronous::CompleteStoreSnapshot,
 ) -> Result<(ProjectionInventoryDigestV1, ProjectionWatermarkV1)> {
     let report = MarkdownStore::open(root).load();
-    if !report.failures.is_empty() { anyhow::bail!("projection is unreadable"); }
-    let mut owned = report.documents.values().map(|stored| {
-        (stored.relative_path.clone(), stored.document.render().into_bytes())
-    }).collect::<Vec<_>>();
+    if !report.failures.is_empty() {
+        anyhow::bail!("projection is unreadable");
+    }
+    let mut owned = report
+        .documents
+        .values()
+        .map(|stored| {
+            (
+                stored.relative_path.clone(),
+                stored.document.render().into_bytes(),
+            )
+        })
+        .collect::<Vec<_>>();
     owned.sort_by(|left, right| left.0.cmp(&right.0));
-    let parts = owned.iter().flat_map(|(path, bytes)| [path.as_bytes().to_vec(), bytes.clone()]).collect::<Vec<_>>();
+    let parts = owned
+        .iter()
+        .flat_map(|(path, bytes)| [path.as_bytes().to_vec(), bytes.clone()])
+        .collect::<Vec<_>>();
     let inventory = ProjectionInventoryDigestV1(aep_contract::migration::digest_parts_v1(
-        "aep.planning-projection-inventory/1", &parts,
+        "aep.planning-projection-inventory/1",
+        &parts,
     )?);
-    let mut candidates = snapshot.histories.iter().filter_map(|subject| {
-        if subject.history.subject.entity != aep_backend_eventlog::PROJECTION_METADATA_AS
-            || subject.history.records.len() != 1 { return None; }
-        let value = subject.terminal.fields.get("document")?.clone();
-        let watermark = serde_json::from_value::<ProjectionWatermarkV1>(value).ok()?;
-        Some((subject.history.records[0].receipt.position.store, watermark))
-    }).collect::<Vec<_>>();
+    let mut candidates = snapshot
+        .histories
+        .iter()
+        .filter_map(|subject| {
+            if subject.history.subject.entity != aep_backend_eventlog::PROJECTION_METADATA_AS
+                || subject.history.records.len() != 1
+            {
+                return None;
+            }
+            let value = subject.terminal.fields.get("document")?.clone();
+            let watermark = serde_json::from_value::<ProjectionWatermarkV1>(value).ok()?;
+            Some((subject.history.records[0].receipt.position.store, watermark))
+        })
+        .collect::<Vec<_>>();
     candidates.sort_by_key(|(position, _)| *position);
-    let watermark = candidates.into_iter().rev().find_map(|(_, watermark)| {
-        (watermark.projection_inventory_digest == inventory).then_some(watermark)
-    }).context("no authority watermark covers the projection")?;
+    let watermark = candidates
+        .into_iter()
+        .rev()
+        .find_map(|(_, watermark)| {
+            (watermark.projection_inventory_digest == inventory).then_some(watermark)
+        })
+        .context("no authority watermark covers the projection")?;
     Ok((inventory, watermark))
 }
 
 fn destination_request(args: &AuthorityArgs) -> Result<DestinationRequestV2> {
-    let logical_scope = AuthorityValueV1::new(&args.authority_scope)
-        .context("invalid --authority-scope")?;
-    let tenant = AuthorityValueV1::new(&args.authority_tenant)
-        .context("invalid --authority-tenant")?;
+    let logical_scope =
+        AuthorityValueV1::new(&args.authority_scope).context("invalid --authority-scope")?;
+    let tenant =
+        AuthorityValueV1::new(&args.authority_tenant).context("invalid --authority-tenant")?;
     match (&args.authority_identity, args.authority_new) {
         (None, true) => Ok(DestinationRequestV2::ProviderAssigned {
             logical_scope,
@@ -1165,9 +1606,7 @@ fn destination_request(args: &AuthorityArgs) -> Result<DestinationRequestV2> {
                     .context("invalid --authority-identity")?,
             },
         }),
-        _ => anyhow::bail!(
-            "choose exactly one of --authority-new or --authority-identity"
-        ),
+        _ => anyhow::bail!("choose exactly one of --authority-new or --authority-identity"),
     }
 }
 
@@ -1197,10 +1636,17 @@ impl Resolved {
         }
     }
 
-    fn capture(&self) -> std::result::Result<aep_contract::migration::RawCaptureObservationV1, aep_planning_migration::AcquisitionError> {
+    fn capture(
+        &self,
+    ) -> std::result::Result<
+        aep_contract::migration::RawCaptureObservationV1,
+        aep_planning_migration::AcquisitionError,
+    > {
         match &self.plan {
             crate::planning::Plan::Markdown { root } => aep_planning_migration::capture_markdown(
-                root, host_path(root), self.selector_binding(),
+                root,
+                host_path(root),
+                self.selector_binding(),
             ),
             crate::planning::Plan::Sqlite { path } => {
                 aep_planning_migration::capture_sqlite(path, self.selector_binding())
@@ -1208,7 +1654,11 @@ impl Resolved {
             crate::planning::Plan::Postgres { url } => {
                 aep_planning_migration::capture_postgres(url, self.selector_binding())
             }
-            crate::planning::Plan::Hybrid { root, replica, policy } => {
+            crate::planning::Plan::Hybrid {
+                root,
+                replica,
+                policy,
+            } => {
                 let divergence = root.join(aep_backend_hybrid::DIVERGENCES);
                 let policy = HybridPolicyWordsV1 {
                     authority: policy.authority.clone(),
@@ -1217,15 +1667,29 @@ impl Resolved {
                     on_divergence: policy.on_divergence.clone(),
                 };
                 match replica {
-                    crate::planning::Replica::Sqlite(path) => aep_planning_migration::capture_hybrid_sqlite(
-                        root, path, &divergence, policy, self.selector_binding(),
-                    ),
-                    crate::planning::Replica::Postgres(url) => aep_planning_migration::capture_hybrid_postgres(
-                        root, url, &divergence, policy, self.selector_binding(),
-                    ),
+                    crate::planning::Replica::Sqlite(path) => {
+                        aep_planning_migration::capture_hybrid_sqlite(
+                            root,
+                            path,
+                            &divergence,
+                            policy,
+                            self.selector_binding(),
+                        )
+                    }
+                    crate::planning::Replica::Postgres(url) => {
+                        aep_planning_migration::capture_hybrid_postgres(
+                            root,
+                            url,
+                            &divergence,
+                            policy,
+                            self.selector_binding(),
+                        )
+                    }
                 }
             }
-            crate::planning::Plan::Eventlog { .. } => Err(aep_planning_migration::AcquisitionError::InvalidCapture),
+            crate::planning::Plan::Eventlog { .. } => {
+                Err(aep_planning_migration::AcquisitionError::InvalidCapture)
+            }
         }
     }
 
@@ -1242,7 +1706,13 @@ impl Resolved {
                 crate::planning::report_from_backend(&backend)?
             }
         };
-        Ok(inventory(&report, matches!(self.plan, crate::planning::Plan::Markdown { .. } | crate::planning::Plan::Hybrid { .. })))
+        Ok(inventory(
+            &report,
+            matches!(
+                self.plan,
+                crate::planning::Plan::Markdown { .. } | crate::planning::Plan::Hybrid { .. }
+            ),
+        ))
     }
 }
 
@@ -1253,7 +1723,9 @@ fn resolve(common: &CommonArgs) -> Result<Resolved> {
 
 #[allow(clippy::too_many_lines)]
 fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
-    let selector = if let Some(path) = &common.project { path.clone() } else {
+    let selector = if let Some(path) = &common.project {
+        path.clone()
+    } else {
         let root = aep_project::project::discover(here).context("no project found")?;
         root.join(aep_project::project::project_directory())
             .join(aep_domain::project::PROJECT_FILE)
@@ -1262,7 +1734,8 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
         .parent()
         .context("project selector has no parent")?
         .to_path_buf();
-    let selector_bytes = fs::read(&selector).with_context(|| format!("reading {}", selector.display()))?;
+    let selector_bytes =
+        fs::read(&selector).with_context(|| format!("reading {}", selector.display()))?;
     let config = aep_schema::parse::project(
         std::str::from_utf8(&selector_bytes).context("project selector is not UTF-8")?,
         Some(&selector.display().to_string()),
@@ -1287,13 +1760,17 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
     let (backend, source, authority, projection) = match &plan {
         crate::planning::Plan::Markdown { root } => (
             BackendKindV1::Markdown,
-            SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 { root: host_path(root) }),
+            SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 {
+                root: host_path(root),
+            }),
             PresenceV1::Missing,
             PresenceV1::Missing,
         ),
         crate::planning::Plan::Sqlite { path } => (
             BackendKindV1::Sqlite,
-            SourceCoordinateV1::Sqlite(SqliteSourceCoordinateV1 { database: host_path(path) }),
+            SourceCoordinateV1::Sqlite(SqliteSourceCoordinateV1 {
+                database: host_path(path),
+            }),
             PresenceV1::Missing,
             PresenceV1::Missing,
         ),
@@ -1307,11 +1784,17 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
                 PresenceV1::Missing,
             )
         }
-        crate::planning::Plan::Hybrid { root, replica, policy } => {
+        crate::planning::Plan::Hybrid {
+            root,
+            replica,
+            policy,
+        } => {
             let replica = match replica {
-                crate::planning::Replica::Sqlite(path) => SqlReplicaCoordinateV1::Sqlite(
-                    SqliteReplicaCoordinateV1 { database: host_path(path) },
-                ),
+                crate::planning::Replica::Sqlite(path) => {
+                    SqlReplicaCoordinateV1::Sqlite(SqliteReplicaCoordinateV1 {
+                        database: host_path(path),
+                    })
+                }
                 crate::planning::Replica::Postgres(url) => {
                     let value = aep_planning_migration::postgres_source_coordinate(url)
                         .map_err(|error| anyhow::anyhow!(error))?;
@@ -1338,9 +1821,15 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
                 PresenceV1::Missing,
             )
         }
-        crate::planning::Plan::Eventlog { authority_root, projection_root, authority } => (
+        crate::planning::Plan::Eventlog {
+            authority_root,
+            projection_root,
+            authority,
+        } => (
             BackendKindV1::Eventlog,
-            SourceCoordinateV1::Eventlog(EventlogSourceCoordinateV1 { authority_root: host_path(authority_root) }),
+            SourceCoordinateV1::Eventlog(EventlogSourceCoordinateV1 {
+                authority_root: host_path(authority_root),
+            }),
             PresenceV1::Present(AuthorityCoordinateV1 {
                 logical_scope: AuthorityValueV1::new(&authority.logical_scope)?,
                 tenant: AuthorityValueV1::new(&authority.tenant)?,
@@ -1400,10 +1889,7 @@ fn mapped_histories(
     resolved: &Resolved,
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
-) -> std::result::Result<
-    Vec<entity_store::asynchronous::SubjectHistory>,
-    CommandRefusalCodeV1,
-> {
+) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, CommandRefusalCodeV1> {
     mapped_histories_for_source(&resolved.selection.source, capture, snapshot)
 }
 
@@ -1411,10 +1897,7 @@ fn mapped_histories_for_source(
     source: &SourceCoordinateV1,
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
-) -> std::result::Result<
-    Vec<entity_store::asynchronous::SubjectHistory>,
-    CommandRefusalCodeV1,
-> {
+) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, CommandRefusalCodeV1> {
     let histories = match capture {
         LegacyRawCaptureV1::Markdown(raw) => {
             let SourceCoordinateV1::Markdown(_) = source else {
@@ -1427,7 +1910,10 @@ fn mapped_histories_for_source(
             if !matches!(
                 (source, capture),
                 (SourceCoordinateV1::Sqlite(_), LegacyRawCaptureV1::Sqlite(_))
-                    | (SourceCoordinateV1::Postgres(_), LegacyRawCaptureV1::Postgres(_))
+                    | (
+                        SourceCoordinateV1::Postgres(_),
+                        LegacyRawCaptureV1::Postgres(_)
+                    )
             ) {
                 return Err(CommandRefusalCodeV1::SemanticMismatch);
             }
@@ -1436,7 +1922,8 @@ fn mapped_histories_for_source(
         }
         LegacyRawCaptureV1::Hybrid(raw) => {
             if matches!(&raw.divergences,
-                aep_contract::migration::FileImageV1::Present(value) if !value.bytes.as_bytes().is_empty()) {
+                aep_contract::migration::FileImageV1::Present(value) if !value.bytes.as_bytes().is_empty())
+            {
                 return Err(CommandRefusalCodeV1::DivergentHybrid);
             }
             if !matches!(source, SourceCoordinateV1::Hybrid(_)) {
@@ -1475,7 +1962,9 @@ fn terminal_instances(
         })
         .collect::<Vec<_>>();
     instances.sort_by(|left, right| {
-        left.entity.cmp(&right.entity).then_with(|| left.id.cmp(&right.id))
+        left.entity
+            .cmp(&right.entity)
+            .then_with(|| left.id.cmp(&right.id))
     });
     instances
 }
@@ -1486,7 +1975,12 @@ fn comparable_planning_instance(
     if instance.entity != aep_backend_entity::STORED_AS {
         return (!instance.entity.starts_with("aep.")).then(|| {
             let mut projected = instance.clone();
-            if projected.fields.get("version").and_then(serde_json::Value::as_str) == Some("1") {
+            if projected
+                .fields
+                .get("version")
+                .and_then(serde_json::Value::as_str)
+                == Some("1")
+            {
                 projected.fields.remove("version");
             }
             projected
@@ -1508,7 +2002,12 @@ fn comparable_planning_instance(
     name.clone_into(&mut projected.id);
     projected.fields.remove("$aep");
     projected.fields.remove("status");
-    if projected.fields.get("version").and_then(serde_json::Value::as_str) == Some("1") {
+    if projected
+        .fields
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        == Some("1")
+    {
         projected.fields.remove("version");
     }
     Some(projected)
@@ -1524,34 +2023,65 @@ fn mapping_identity() -> MappingIdentityV1 {
             aep_backend_entity::APPLIED_AS,
             aep_backend_eventlog::INVOCATION_AS,
             "aep.planning-import-boundary",
-        ].map(|value| digest(value.as_bytes())).to_vec(),
+        ]
+        .map(|value| digest(value.as_bytes()))
+        .to_vec(),
     }
 }
 
 fn intended_v2_selector(resolved: &Resolved, authority: &AuthorityCoordinateV1) -> Result<Vec<u8>> {
     let bytes = fs::read(&resolved.selector_path)?;
     let yaml: serde_yaml::Value = serde_yaml::from_slice(&bytes)?;
-    let map = yaml.as_mapping().context("project selector is not an object")?;
+    let map = yaml
+        .as_mapping()
+        .context("project selector is not an object")?;
     let ordered = [
-        "version", "protocol", "profile", "summary", "protocols", "artifacts", "task",
-        "state", "principles", "profiles", "schemas", "store", "planning_scope",
-        "planning_tenant", "planning_identity", "providers",
+        "version",
+        "protocol",
+        "profile",
+        "summary",
+        "protocols",
+        "artifacts",
+        "task",
+        "state",
+        "principles",
+        "profiles",
+        "schemas",
+        "store",
+        "planning_scope",
+        "planning_tenant",
+        "planning_identity",
+        "providers",
     ];
     let mut output = String::from("{");
     let mut first = true;
     for key in ordered {
         let value = match key {
             "version" => Some(serde_json::Value::String("aep.project/2".to_owned())),
-            "store" => Some(serde_json::json!({"eventlog":{"path":"state","projection":"planning"}})),
-            "planning_scope" => Some(serde_json::Value::String(authority.logical_scope.as_str().to_owned())),
-            "planning_tenant" => Some(serde_json::Value::String(authority.tenant.as_str().to_owned())),
-            "planning_identity" => Some(serde_json::Value::String(authority.stream_identity.as_str().to_owned())),
-            other => map.get(serde_yaml::Value::String(other.to_owned()))
-                .map(serde_json::to_value).transpose()?,
+            "store" => {
+                Some(serde_json::json!({"eventlog":{"path":"state","projection":"planning"}}))
+            }
+            "planning_scope" => Some(serde_json::Value::String(
+                authority.logical_scope.as_str().to_owned(),
+            )),
+            "planning_tenant" => Some(serde_json::Value::String(
+                authority.tenant.as_str().to_owned(),
+            )),
+            "planning_identity" => Some(serde_json::Value::String(
+                authority.stream_identity.as_str().to_owned(),
+            )),
+            other => map
+                .get(serde_yaml::Value::String(other.to_owned()))
+                .map(serde_json::to_value)
+                .transpose()?,
         };
         let Some(value) = value else { continue };
-        if key == "providers" && value.as_object().is_some_and(serde_json::Map::is_empty) { continue; }
-        if !first { output.push(','); }
+        if key == "providers" && value.as_object().is_some_and(serde_json::Map::is_empty) {
+            continue;
+        }
+        if !first {
+            output.push(',');
+        }
         first = false;
         output.push_str(&serde_json::to_string(key)?);
         output.push(':');
@@ -1561,7 +2091,9 @@ fn intended_v2_selector(resolved: &Resolved, authority: &AuthorityCoordinateV1) 
     Ok(output.into_bytes())
 }
 
-fn inventory_from_histories(histories: &[entity_store::asynchronous::SubjectSnapshot]) -> InventoryFacts {
+fn inventory_from_histories(
+    histories: &[entity_store::asynchronous::SubjectSnapshot],
+) -> InventoryFacts {
     let mut inventory = InventoryCountsV1::default();
     let mut history = HistorySummaryV1::default();
     inventory.subjects = histories.len() as u64;
@@ -1570,7 +2102,7 @@ fn inventory_from_histories(histories: &[entity_store::asynchronous::SubjectSnap
             aep_backend_entity::RELATIONS_AS => inventory.relations += 1,
             aep_backend_entity::AUDIT_AS => inventory.audit_records += 1,
             aep_backend_entity::APPLIED_AS => inventory.applied_commands += 1,
-            aep_backend_eventlog::INVOCATION_AS | "aep.planning-import-boundary" => {},
+            aep_backend_eventlog::INVOCATION_AS | "aep.planning-import-boundary" => {}
             _ => inventory.entities += 1,
         }
         match &subject.history.origin {
@@ -1578,13 +2110,41 @@ fn inventory_from_histories(histories: &[entity_store::asynchronous::SubjectSnap
             entity_store::asynchronous::HistoryOrigin::Imported(anchor) => {
                 history.partial += 1;
                 inventory.raw_evidence_items += anchor.evidence.len() as u64;
-                inventory.complete_envelopes += anchor.evidence.iter().filter(|value| matches!(value, entity_store::asynchronous::LegacyEvidence::Envelope(_))).count() as u64;
-                inventory.bare_decisions += anchor.evidence.iter().filter(|value| matches!(value, entity_store::asynchronous::LegacyEvidence::Decision(_))).count() as u64;
-                inventory.bare_events += anchor.evidence.iter().filter(|value| matches!(value, entity_store::asynchronous::LegacyEvidence::Event(_))).count() as u64;
+                inventory.complete_envelopes += anchor
+                    .evidence
+                    .iter()
+                    .filter(|value| {
+                        matches!(
+                            value,
+                            entity_store::asynchronous::LegacyEvidence::Envelope(_)
+                        )
+                    })
+                    .count() as u64;
+                inventory.bare_decisions += anchor
+                    .evidence
+                    .iter()
+                    .filter(|value| {
+                        matches!(
+                            value,
+                            entity_store::asynchronous::LegacyEvidence::Decision(_)
+                        )
+                    })
+                    .count() as u64;
+                inventory.bare_events += anchor
+                    .evidence
+                    .iter()
+                    .filter(|value| {
+                        matches!(value, entity_store::asynchronous::LegacyEvidence::Event(_))
+                    })
+                    .count() as u64;
             }
         }
     }
-    InventoryFacts { inventory, history, clean: true }
+    InventoryFacts {
+        inventory,
+        history,
+        clean: true,
+    }
 }
 
 fn digest(bytes: &[u8]) -> DigestV1 {
@@ -1605,8 +2165,7 @@ mod tests {
     use super::*;
 
     static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
-    const LEGACY_COLLISION_RECORD: &str =
-        "aep.entity:01MEM0000000000000002@1#0~19c4cfd489ddecfd";
+    const LEGACY_COLLISION_RECORD: &str = "aep.entity:01MEM0000000000000002@1#0~19c4cfd489ddecfd";
 
     struct DisposableWriterControl;
 
@@ -1627,16 +2186,15 @@ mod tests {
         let graph = report
             .graph_in_workspace(Vec::<aep_domain::workspace::MemberName>::new())
             .expect("seed source graph");
-        let backend = aep_backend_sqlite::SqliteBackend::open(database)
-            .expect("SQLite fixture opens");
+        let backend =
+            aep_backend_sqlite::SqliteBackend::open(database).expect("SQLite fixture opens");
         aep_backend_memory::seed::from_manifest(
             &backend,
             &graph,
             aep_backend_markdown::backend::ORGANISATION,
             aep_backend_markdown::backend::SPACE,
             aep_domain::time::Timestamp::from_epoch_millis(1_700_000_000_000),
-            &aep_domain::entity::ActorRef::parse("human:migration-fixture")
-                .expect("actor"),
+            &aep_domain::entity::ActorRef::parse("human:migration-fixture").expect("actor"),
         )
         .expect("SQLite fixture seeds");
     }
@@ -1670,7 +2228,12 @@ mod tests {
             .execute(
                 "INSERT INTO history(entity,id,position,kind,record_id,document) \
                  VALUES (?1,?2,0,'observation',?3,?4)",
-                rusqlite::params![entity, id, record_id, String::from_utf8(document.clone()).unwrap()],
+                rusqlite::params![
+                    entity,
+                    id,
+                    record_id,
+                    String::from_utf8(document.clone()).unwrap()
+                ],
             )
             .expect("legacy observation inserts");
         document
@@ -1682,16 +2245,15 @@ mod tests {
         let graph = report
             .graph_in_workspace(Vec::<aep_domain::workspace::MemberName>::new())
             .expect("seed source graph");
-        let backend = aep_backend_postgres::PostgresBackend::connect(url)
-            .expect("PostgreSQL fixture opens");
+        let backend =
+            aep_backend_postgres::PostgresBackend::connect(url).expect("PostgreSQL fixture opens");
         aep_backend_memory::seed::from_manifest(
             &backend,
             &graph,
             aep_backend_markdown::backend::ORGANISATION,
             aep_backend_markdown::backend::SPACE,
             aep_domain::time::Timestamp::from_epoch_millis(1_700_000_000_000),
-            &aep_domain::entity::ActorRef::parse("human:migration-fixture")
-                .expect("actor"),
+            &aep_domain::entity::ActorRef::parse("human:migration-fixture").expect("actor"),
         )
         .expect("PostgreSQL fixture seeds");
     }
@@ -1884,8 +2446,7 @@ mod tests {
         );
         let foreign_id = MigrationIdV1::new("cli-foreign-stage").expect("migration");
         let foreign_root = migration_root(&engineering, &foreign_id).expect("migration root");
-        fs::create_dir_all(foreign_root.join("stage/authority"))
-            .expect("foreign stage fixture");
+        fs::create_dir_all(foreign_root.join("stage/authority")).expect("foreign stage fixture");
         let foreign = apply_with_control(
             &common,
             destination.clone(),
@@ -1909,7 +2470,12 @@ mod tests {
             ApplyOutcomeV1::Complete(applied) => applied,
             other => panic!("disposable controlled CLI apply completes: {other:?}"),
         };
-        assert!(!applied.receipt.authority.stream_identity.as_str().is_empty());
+        assert!(!applied
+            .receipt
+            .authority
+            .stream_identity
+            .as_str()
+            .is_empty());
         let selected = fs::read_to_string(&selector).expect("selected v2 selector");
         assert!(selected.contains("\"version\":\"aep.project/2\""));
         assert!(selected.contains(applied.receipt.authority.stream_identity.as_str()));
@@ -1920,8 +2486,14 @@ mod tests {
             format: StoreOutputFormat::Json,
         };
         let ordinary = resolve_from(&discovered, &nested).expect("ordinary discovery reopens v2");
-        assert_eq!(ordinary.selection.authority, PresenceV1::Present(applied.receipt.authority.clone()));
-        assert!(verify(&common).success(), "selected authority reopens and verifies");
+        assert_eq!(
+            ordinary.selection.authority,
+            PresenceV1::Present(applied.receipt.authority.clone())
+        );
+        assert!(
+            verify(&common).success(),
+            "selected authority reopens and verifies"
+        );
         let retried = apply_with_control(
             &common,
             destination,
@@ -1937,21 +2509,26 @@ mod tests {
         let adapter = || entity_eventlog::Authority {
             logical_scope: applied.receipt.authority.logical_scope.as_str().to_owned(),
             tenant: applied.receipt.authority.tenant.as_str().to_owned(),
-            stream_identity: applied.receipt.authority.stream_identity.as_str().to_owned(),
+            stream_identity: applied
+                .receipt
+                .authority
+                .stream_identity
+                .as_str()
+                .to_owned(),
         };
-        let before_rebuild = aep_backend_eventlog::complete_file_snapshot(
-            &engineering.join("state"),
-            adapter(),
-        )
-        .expect("capture authority before rebuild");
+        let before_rebuild =
+            aep_backend_eventlog::complete_file_snapshot(&engineering.join("state"), adapter())
+                .expect("capture authority before rebuild");
         let coordinates = before_rebuild
             .histories
             .iter()
-            .filter(|value| {
-                value.history.subject.entity == "aep.migration.LegacyRecordCoordinate"
-            })
+            .filter(|value| value.history.subject.entity == "aep.migration.LegacyRecordCoordinate")
             .collect::<Vec<_>>();
-        assert_eq!(coordinates.len(), 2, "both journal line shapes are retained");
+        assert_eq!(
+            coordinates.len(),
+            2,
+            "both journal line shapes are retained"
+        );
         let mut journal_kinds = std::collections::BTreeSet::new();
         for coordinate in &coordinates {
             let entity_store::asynchronous::HistoryOrigin::Imported(anchor) =
@@ -1960,7 +2537,11 @@ mod tests {
                 panic!("legacy coordinate is an imported boundary")
             };
             assert_eq!(
-                anchor.instance.fields.get("order").and_then(serde_json::Value::as_str),
+                anchor
+                    .instance
+                    .fields
+                    .get("order")
+                    .and_then(serde_json::Value::as_str),
                 Some("store")
             );
             assert_eq!(
@@ -1980,13 +2561,14 @@ mod tests {
                     .expect("closed journal evidence kind"),
             );
         }
-        assert_eq!(journal_kinds, std::collections::BTreeSet::from(["change", "event"]));
+        assert_eq!(
+            journal_kinds,
+            std::collections::BTreeSet::from(["change", "event"])
+        );
         let retained_lines = before_rebuild
             .histories
             .iter()
-            .filter(|value| {
-                value.history.subject.entity == "aep.migration.LegacyEvidenceBlob"
-            })
+            .filter(|value| value.history.subject.entity == "aep.migration.LegacyEvidenceBlob")
             .map(|value| {
                 let entity_store::asynchronous::HistoryOrigin::Imported(anchor) =
                     &value.history.origin
@@ -2021,19 +2603,19 @@ mod tests {
             panic!("writer-controlled rebuild recovers the removed projection")
         };
         assert!(engineering.join("planning/story/one.md").is_file());
-        assert_eq!(rebuilt.projection.authority_snapshot, applied.current.snapshot_id);
-        let after_rebuild = aep_backend_eventlog::complete_file_snapshot(
-            &engineering.join("state"),
-            adapter(),
-        )
-        .expect("capture authority after rebuild");
+        assert_eq!(
+            rebuilt.projection.authority_snapshot,
+            applied.current.snapshot_id
+        );
+        let after_rebuild =
+            aep_backend_eventlog::complete_file_snapshot(&engineering.join("state"), adapter())
+                .expect("capture authority after rebuild");
         let business = |snapshot: entity_store::asynchronous::CompleteStoreSnapshot| {
             snapshot
                 .histories
                 .into_iter()
                 .filter(|value| {
-                    value.history.subject.entity
-                        != aep_backend_eventlog::PROJECTION_METADATA_AS
+                    value.history.subject.entity != aep_backend_eventlog::PROJECTION_METADATA_AS
                 })
                 .collect::<Vec<_>>()
         };
@@ -2068,7 +2650,10 @@ mod tests {
         let ApplyOutcomeV1::Refused(changed) = changed.outcome else {
             panic!("changed request must not reuse the migration identity")
         };
-        assert_eq!(changed.refusals[0].code, CommandRefusalCodeV1::IntentConflict);
+        assert_eq!(
+            changed.refusals[0].code,
+            CommandRefusalCodeV1::IntentConflict
+        );
 
         let selected_bytes = fs::read(&selector).expect("selected selector bytes");
         let selected_text = std::str::from_utf8(&selected_bytes).expect("selector UTF-8");
@@ -2103,6 +2688,66 @@ mod tests {
         fs::write(&selector, selected_bytes).expect("restore selected selector");
 
         let _ = fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn dry_run_retains_catalog_refusal_coordinate_without_creating_migration_state() {
+        let project = std::env::temp_dir().join(format!(
+            "aep-cli-catalog-refusal-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed),
+        ));
+        let engineering = project.join(".engineering");
+        let planning = engineering.join("planning");
+        let selector = engineering.join("project.yaml");
+        let database = engineering.join("plan.sqlite3");
+        fs::create_dir_all(project.join("protocols")).unwrap();
+        write_one_story(&planning, "One");
+        seed_sqlite_from_markdown(&planning, &database);
+        let connection = rusqlite::Connection::open(&database).unwrap();
+        connection
+            .execute_batch(
+                "ALTER TABLE history ADD COLUMN foreign_value TEXT DEFAULT 'retained failure'",
+            )
+            .unwrap();
+        drop(connection);
+        fs::write(&selector, "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\nstore:\n  sqlite: plan.sqlite3\n").unwrap();
+        let before = fs::read(&database).unwrap();
+        let result = dry_run(
+            &CommonArgs {
+                project: Some(selector),
+                format: StoreOutputFormat::Json,
+            },
+            DestinationRequestV2::ProviderAssigned {
+                logical_scope: AuthorityValueV1::new("refusal-scope").unwrap(),
+                tenant: AuthorityValueV1::new("refusal-tenant").unwrap(),
+            },
+        );
+        let DryRunOutcomeV2::Refused(refused) = result.outcome else {
+            panic!("unsupported schema admitted");
+        };
+        assert_eq!(refused.refusals.len(), 1);
+        assert_eq!(
+            refused.refusals[0].code,
+            CommandRefusalCodeV1::UnsupportedSchema
+        );
+        assert_eq!(
+            refused.refusals[0].at,
+            DiagnosticCoordinateV1::Source(aep_contract::migration::SourceDiagnosticV1 {
+                coordinate: aep_contract::migration::PhysicalCoordinateV1::SqlCatalog(
+                    aep_contract::migration::SqlCatalogCoordinateV1 {
+                        namespace: PresenceV1::Present("main".into()),
+                        family: aep_contract::migration::CatalogFamilyV1::TableDefinition,
+                        table: PresenceV1::Present("history".into()),
+                        row: PresenceV1::Present(0),
+                    }
+                ),
+            })
+        );
+        assert_eq!(fs::read(database).unwrap(), before);
+        assert!(!engineering.join("migrations").exists());
+        assert!(!engineering.join("state").exists());
+        fs::remove_dir_all(project).unwrap();
     }
 
     #[test]
@@ -2192,12 +2837,11 @@ mod tests {
                 .as_str()
                 .to_owned(),
         };
-        let authority_snapshot =
-            aep_backend_eventlog::complete_file_snapshot(
-                &engineering.join("state"),
-                authority.clone(),
-            )
-                .expect("complete imported SQLite authority");
+        let authority_snapshot = aep_backend_eventlog::complete_file_snapshot(
+            &engineering.join("state"),
+            authority.clone(),
+        )
+        .expect("complete imported SQLite authority");
         let kinds = authority_snapshot
             .histories
             .iter()
@@ -2212,6 +2856,42 @@ mod tests {
         )
         .expect("the provider-complete boundary graph validates");
         assert!(reserved.contains(LEGACY_COLLISION_RECORD));
+        let ordered_subject = serde_json::from_slice::<entity_store::RecordedObservation>(
+            &legacy_observation,
+        )
+        .expect("SQLite observation is a real encoded envelope");
+        let ordered_store = aep_backend_eventlog::open(
+            engineering.join("state"),
+            authority.logical_scope.clone(),
+            authority.tenant.clone(),
+            authority.stream_identity.clone(),
+        )
+        .expect("ordinary backend opens ordered imported history");
+        let ordered_evidence = ordered_store
+            .with_store(|store| {
+                store.legacy_evidence_for_subject(&ordered_subject.entity, &ordered_subject.id)
+            })
+            .expect("ordinary reader resolves ordered imported evidence");
+        assert_eq!(ordered_evidence.len(), 1);
+        assert_eq!(ordered_evidence[0].exact_bytes, legacy_observation);
+        assert_eq!(
+            ordered_evidence[0].order,
+            aep_backend_eventlog::LegacyBoundaryOrder::Subject
+        );
+        assert_eq!(ordered_evidence[0].ordinal, PresenceV1::Present(0));
+        assert!(
+            ordered_store
+                .with_store(|store| {
+                    entity_store::HistoryProvider::observations(
+                        store,
+                        &ordered_subject.entity,
+                        &ordered_subject.id,
+                    )
+                })
+                .expect("recorded suffix remains queryable")
+                .is_empty(),
+            "imported ordered evidence remains separate from the newly recorded suffix"
+        );
         let mut missing_blob = authority_snapshot.clone();
         let blob_index = missing_blob
             .histories
@@ -2230,9 +2910,7 @@ mod tests {
         let altered = altered_blob
             .histories
             .iter_mut()
-            .find(|subject| {
-                subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob"
-            })
+            .find(|subject| subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob")
             .expect("one retained evidence blob");
         altered.terminal.fields.insert(
             "exact_bytes".to_owned(),
@@ -2282,6 +2960,44 @@ mod tests {
             serde_json::from_slice(&legacy_observation).expect("legacy observation envelope"),
         );
         let unavailable_subject = unavailable_entry.subject().clone();
+        let decision_definition = serde_json::from_value(serde_json::json!({
+            "entity": "aep.reader-decision",
+            "version": 1,
+            "schema": { "fields": { "title": { "type": "string", "required": true } } },
+            "lifecycle": { "initial": "open", "states": ["open", "closed"] },
+            "operations": { "close": { "transitions": [{ "from": "open", "to": "closed" }] } }
+        }))
+        .expect("decision fixture definition parses");
+        let mut decision_registry = entity_core::Registry::new();
+        decision_registry
+            .register(decision_definition)
+            .expect("decision fixture definition validates");
+        let decision = entity_core::Runtime::new(&decision_registry)
+            .create(
+                "aep.reader-decision",
+                1,
+                "reader-decision",
+                serde_json::json!({"title": "Retained decision"}),
+            )
+            .expect("real decision is created");
+        let legacy_decision = entity_store::RecordedCommit::new(
+            decision,
+            &entity_store::Recording {
+                record_id: "legacy-decision-one".to_owned(),
+                recorded_at: "2026-09-16T12:00:00Z".to_owned(),
+                correlation: None,
+                causation: None,
+                actor: None,
+            },
+        )
+        .expect("real decision is recorded");
+        let decision_subject = entity_store::asynchronous::RecordedEntry::Decision(
+            legacy_decision.clone(),
+        )
+        .subject()
+        .clone();
+        let legacy_decision_bytes =
+            serde_json::to_vec(&legacy_decision).expect("decision envelope serialises");
         let unavailable_authority = AuthorityCoordinateV1 {
             logical_scope: AuthorityValueV1::new("planning-unavailable").expect("scope"),
             tenant: AuthorityValueV1::new("tenant-unavailable").expect("tenant"),
@@ -2291,15 +3007,26 @@ mod tests {
             aep_planning_migration::bind_authoritative_evidence_with_unavailable(
                 unavailable_histories,
                 &unavailable_authority,
-                &[aep_planning_migration::UnavailableLegacyEnvelope {
-                    source_locator: "history/aep.entity/01MEM0000000000000002/unavailable"
-                        .to_owned(),
-                    destination_entity: unavailable_subject.entity,
-                    destination_id: unavailable_subject.id,
-                    evidence_kind: aep_contract::migration::HistoryKindV1::Observation,
-                    original_record_id: LEGACY_COLLISION_RECORD.to_owned(),
-                    exact_bytes: HexBytesV1::new(legacy_observation.clone()),
-                }],
+                &[
+                    aep_planning_migration::UnavailableLegacyEnvelope {
+                        source_locator: "history/aep.entity/01MEM0000000000000002/unavailable"
+                            .to_owned(),
+                        destination_entity: unavailable_subject.entity.clone(),
+                        destination_id: unavailable_subject.id.clone(),
+                        evidence_kind: aep_contract::migration::HistoryKindV1::Observation,
+                        original_record_id: LEGACY_COLLISION_RECORD.to_owned(),
+                        exact_bytes: HexBytesV1::new(legacy_observation.clone()),
+                    },
+                    aep_planning_migration::UnavailableLegacyEnvelope {
+                        source_locator: "history/aep.reader-decision/reader-decision/unavailable"
+                            .to_owned(),
+                        destination_entity: decision_subject.entity.clone(),
+                        destination_id: decision_subject.id.clone(),
+                        evidence_kind: aep_contract::migration::HistoryKindV1::Decision,
+                        original_record_id: "legacy-decision-one".to_owned(),
+                        exact_bytes: HexBytesV1::new(legacy_decision_bytes.clone()),
+                    },
+                ],
             )
             .expect("unavailable envelope becomes a closed provider boundary");
         let unavailable_context = entity_eventlog::EventlogOperationContext {
@@ -2336,19 +3063,22 @@ mod tests {
             unavailable_adapter.clone(),
         )
         .expect("unavailable-order provider-complete snapshot");
-        assert!(
-            aep_backend_eventlog::validate_legacy_boundary_snapshot(
-                &unavailable_snapshot,
-                &unavailable_adapter,
-            )
-            .expect("unavailable-order join validates")
-            .contains(LEGACY_COLLISION_RECORD)
-        );
+        assert!(aep_backend_eventlog::validate_legacy_boundary_snapshot(
+            &unavailable_snapshot,
+            &unavailable_adapter,
+        )
+        .expect("unavailable-order join validates")
+        .contains(LEGACY_COLLISION_RECORD));
         let unavailable_coordinate = unavailable_snapshot
             .histories
             .iter()
             .find(|subject| {
                 subject.history.subject.entity == "aep.migration.LegacyRecordCoordinate"
+                    && subject.terminal.fields.get("original_record_id")
+                        == Some(&serde_json::json!({
+                            "kind": "present",
+                            "value": LEGACY_COLLISION_RECORD
+                        }))
             })
             .expect("unavailable coordinate is provider-complete");
         assert_eq!(
@@ -2358,6 +3088,26 @@ mod tests {
         assert_eq!(
             unavailable_coordinate.terminal.fields.get("ordinal"),
             Some(&serde_json::json!({"kind":"missing"}))
+        );
+        let mut wrong_subject = unavailable_snapshot.clone();
+        let altered_coordinate = wrong_subject
+            .histories
+            .iter_mut()
+            .find(|subject| {
+                subject.history.subject == unavailable_coordinate.history.subject
+            })
+            .expect("unavailable coordinate is present");
+        altered_coordinate.terminal.fields.insert(
+            "destination_id".to_owned(),
+            serde_json::Value::String("wrong-subject".to_owned()),
+        );
+        assert!(
+            aep_backend_eventlog::validate_legacy_boundary_snapshot(
+                &wrong_subject,
+                &unavailable_adapter,
+            )
+            .expect_err("an envelope cannot be joined to another destination subject")
+            .contains("envelope subject or identity disagrees")
         );
         fn collision_command() -> CommandEnvelope<Command> {
             CommandEnvelope::new(
@@ -2385,12 +3135,103 @@ mod tests {
             )
         }
         let unavailable_store = aep_backend_eventlog::open(
-            unavailable_path,
-            unavailable_adapter.logical_scope,
-            unavailable_adapter.tenant,
-            unavailable_adapter.stream_identity,
+            unavailable_path.clone(),
+            unavailable_adapter.logical_scope.clone(),
+            unavailable_adapter.tenant.clone(),
+            unavailable_adapter.stream_identity.clone(),
         )
         .expect("ordinary backend opens the unavailable-order authority");
+        let subject_evidence = unavailable_store
+            .with_store(|store| {
+                store.legacy_evidence_for_subject(
+                    &unavailable_subject.entity,
+                    &unavailable_subject.id,
+                )
+            })
+            .expect("ordinary subject lookup reads imported evidence");
+        assert_eq!(subject_evidence.len(), 1);
+        let original_id_evidence = unavailable_store
+            .with_store(|store| store.legacy_evidence_by_original_id(LEGACY_COLLISION_RECORD))
+            .expect("ordinary original-id lookup reads imported evidence")
+            .expect("the reserved original id resolves");
+        assert_eq!(subject_evidence[0], original_id_evidence);
+        let decision_evidence = unavailable_store
+            .with_store(|store| {
+                store.legacy_evidence_for_subject(&decision_subject.entity, &decision_subject.id)
+            })
+            .expect("ordinary reader resolves a real encoded decision");
+        assert_eq!(decision_evidence.len(), 1);
+        assert_eq!(decision_evidence[0].exact_bytes, legacy_decision_bytes);
+        assert_eq!(
+            decision_evidence[0].kind,
+            aep_backend_eventlog::LegacyBoundaryKind::Decision
+        );
+        assert_eq!(
+            unavailable_store
+                .with_store(|store| store.legacy_evidence_by_original_id("legacy-decision-one"))
+                .expect("original ID resolves the real encoded decision"),
+            Some(decision_evidence[0].clone())
+        );
+        assert_eq!(original_id_evidence.exact_bytes, legacy_observation);
+        assert_eq!(original_id_evidence.source_snapshot, sqlite.source_snapshot.0);
+        assert_eq!(original_id_evidence.destination_entity, unavailable_subject.entity);
+        assert_eq!(original_id_evidence.destination_id, unavailable_subject.id);
+        assert_eq!(original_id_evidence.original_record_id, LEGACY_COLLISION_RECORD);
+        assert_eq!(
+            original_id_evidence.kind,
+            aep_backend_eventlog::LegacyBoundaryKind::Observation
+        );
+        assert_eq!(
+            original_id_evidence.order,
+            aep_backend_eventlog::LegacyBoundaryOrder::Unavailable
+        );
+        assert_eq!(original_id_evidence.ordinal, PresenceV1::Missing);
+        assert_eq!(
+            original_id_evidence.source_locator,
+            "history/aep.entity/01MEM0000000000000002/unavailable"
+        );
+        assert_eq!(
+            original_id_evidence.boundary_id,
+            unavailable_snapshot
+                .histories
+                .iter()
+                .find(|value| value.history.subject.entity == "aep.planning-import-boundary")
+                .expect("import boundary remains provider-complete")
+                .history
+                .subject
+                .id
+        );
+        assert_eq!(
+            original_id_evidence.coordinate_subject_id,
+            unavailable_coordinate.history.subject.id
+        );
+        assert!(unavailable_snapshot.histories.iter().any(|value| {
+            value.history.subject.entity == "aep.migration.LegacyEvidenceBlob"
+                && value.history.subject.id == original_id_evidence.evidence_blob_subject_id
+        }));
+        assert!(unavailable_snapshot.histories.iter().any(|value| {
+            value.history.subject.entity == "aep.migration.LegacyIdReservationRoster"
+                && value.history.subject.id == original_id_evidence.reservation_roster_id
+        }));
+        assert!(
+            unavailable_store
+                .with_store(|store| store.legacy_evidence_by_original_id("not-reserved"))
+                .expect("missing original id is a complete lookup")
+                .is_none()
+        );
+        assert!(
+            unavailable_store
+                .with_store(|store| {
+                    entity_store::HistoryProvider::observations(
+                        store,
+                        &unavailable_subject.entity,
+                        &unavailable_subject.id,
+                    )
+                })
+                .expect("recorded suffix remains queryable")
+                .is_empty(),
+            "unavailable imported evidence is not newly recorded history"
+        );
         let unavailable_collision = block_on(unavailable_store.execute(collision_command()))
             .expect_err("unavailable-order roster blocks original record-id reuse");
         assert!(
@@ -2399,17 +3240,19 @@ mod tests {
                 .contains(LEGACY_COLLISION_RECORD),
             "{unavailable_collision}"
         );
+        drop(unavailable_store);
         let evidence_blob = authority_snapshot
             .histories
             .iter()
             .find_map(|subject| {
-                (subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob")
-                    .then(|| match &subject.history.origin {
+                (subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob").then(|| {
+                    match &subject.history.origin {
                         entity_store::asynchronous::HistoryOrigin::Imported(anchor) => {
                             anchor.instance.fields.clone()
                         }
                         entity_store::asynchronous::HistoryOrigin::Genesis => unreachable!(),
-                    })
+                    }
+                })
             })
             .expect("exact legacy evidence blob remains in provider-complete history");
         assert_eq!(
@@ -2445,6 +3288,33 @@ mod tests {
                 .join("recovery/raw-capture.json"),
         )
         .expect("remove external recovery copy after Complete");
+        let reopened_unavailable_store = aep_backend_eventlog::open(
+            unavailable_path,
+            unavailable_adapter.logical_scope,
+            unavailable_adapter.tenant,
+            unavailable_adapter.stream_identity,
+        )
+        .expect("reopen imported evidence after recovery-copy deletion");
+        assert_eq!(
+            reopened_unavailable_store
+                .with_store(|store| {
+                    store.legacy_evidence_for_subject(
+                        &unavailable_subject.entity,
+                        &unavailable_subject.id,
+                    )
+                })
+                .expect("subject lookup uses only the selected authority"),
+            subject_evidence
+        );
+        assert_eq!(
+            reopened_unavailable_store
+                .with_store(|store| store.legacy_evidence_by_original_id(LEGACY_COLLISION_RECORD))
+                .expect("original-id lookup uses only the selected authority"),
+            Some(original_id_evidence)
+        );
+        let after_copy_collision = block_on(reopened_unavailable_store.execute(collision_command()))
+            .expect_err("original ID remains reserved without a recovery copy");
+        assert!(after_copy_collision.to_string().contains(LEGACY_COLLISION_RECORD));
         assert!(
             verify(&common).success(),
             "history and original-id evidence remain provider-complete without recovery copy"
@@ -2573,9 +3443,7 @@ mod tests {
         let retained = authority_snapshot
             .histories
             .iter()
-            .filter(|subject| {
-                subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob"
-            })
+            .filter(|subject| subject.history.subject.entity == "aep.migration.LegacyEvidenceBlob")
             .any(|subject| {
                 subject.terminal.fields.get("exact_bytes")
                     == Some(
@@ -2583,7 +3451,10 @@ mod tests {
                             .expect("exact PostgreSQL bytes serialise"),
                     )
             });
-        assert!(retained, "exact PostgreSQL history bytes remain provider-complete");
+        assert!(
+            retained,
+            "exact PostgreSQL history bytes remain provider-complete"
+        );
         fs::remove_file(
             migration_root(&engineering, &migration_id)
                 .expect("migration root")
@@ -2655,7 +3526,10 @@ pub(crate) fn emit_mutation(
         crate::Format::Text => emit(value, StoreOutputFormat::Text),
         crate::Format::Json => emit(value, StoreOutputFormat::Json),
         crate::Format::Yaml => {
-            out!("{}", serde_yaml::to_string(value).context("rendering mutation result")?);
+            out!(
+                "{}",
+                serde_yaml::to_string(value).context("rendering mutation result")?
+            );
             Ok(())
         }
     }
@@ -2673,7 +3547,10 @@ struct OrderedNodeSeed;
 impl<'de> DeserializeSeed<'de> for OrderedNodeSeed {
     type Value = OrderedNode;
 
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
         deserializer.deserialize_any(OrderedNodeVisitor)
     }
 }
@@ -2742,7 +3619,11 @@ fn flatten(path: &str, node: &OrderedNode, output: &mut String) {
             let _ = writeln!(output, "{path}\t{value}");
         }
         OrderedNode::Sequence(values) => {
-            let count = if path.is_empty() { "count".to_owned() } else { format!("{path}.count") };
+            let count = if path.is_empty() {
+                "count".to_owned()
+            } else {
+                format!("{path}.count")
+            };
             let _ = writeln!(output, "{count}\t{}", values.len());
             for (index, value) in values.iter().enumerate() {
                 flatten(&format!("{path}[{index}]"), value, output);
@@ -2750,7 +3631,11 @@ fn flatten(path: &str, node: &OrderedNode, output: &mut String) {
         }
         OrderedNode::Object(values) => {
             for (name, value) in values {
-                let child = if path.is_empty() { name.clone() } else { format!("{path}.{name}") };
+                let child = if path.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{path}.{name}")
+                };
                 flatten(&child, value, output);
             }
         }

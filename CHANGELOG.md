@@ -17,6 +17,36 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- SQLite planning storage selects the exact bundled `rusqlite` 0.40.2 line shared with Entity
+  Runtime and Eventlog consumers. Plan formats, storage semantics and Rust minimums are unchanged.
+
+- PostgreSQL capture retains completed catalog and row families, rejected cells and physical
+  tuple coordinates on failure. Unresolved endpoints preserve earlier hybrid observations;
+  later reads stop at the failure. Data reads use the admitted schema explicitly.
+
+- SQLite migration catalog refusals retain completed table observations and the failing DDL;
+  hybrid captures retain their earlier local observations and stop subsequent reads. Migration
+  command refusals carry the observed source coordinate instead of a selector-only diagnostic.
+  Catalog acquisition reads primary and unique keys separately; malformed data rows retain their
+  exact cells and physical rowid alongside the valid prefix, without reading later row families.
+
+- Filesystem capture retains earlier scans and hybrid phases when a later read fails, records
+  foreign nodes without following their links, and reports the exact changed paths for unstable
+  Markdown sources. Refused observations retain invalid path units with explicit diagnostics and
+  may retain a hybrid prefix before its PostgreSQL source coordinate has been resolved; complete
+  captures still require admitted paths and resolved coordinates.
+
+- SQL migration observes and admits physical catalog declarations before decoding provider
+  rows, retaining column, constraint and index metadata instead of supplying a schema template.
+
+- Explicit legacy `--store` selection refuses an Eventlog project's derived planning projection,
+  including an empty projection, instead of reopening it as writable Markdown authority.
+
+- Project-selected planning writers and explicit `--store` writers now contend on the same
+  canonical Markdown-store fence, including the Markdown side of a hybrid. The project selector
+  fence remains held, and unrelated explicit stores remain independent. This cooperative fence
+  does not establish exclusion of older writers that do not implement it.
+
 - Raw capture validation checks present sources on preflight refusals, requires exact
   source and foreign-node refusal coordinates, preserves the dedicated root pending-batch
   refusal for both host path encodings, and accumulates supplied-capture defects when

@@ -692,11 +692,15 @@ new command. It rejects a proposed record ID present either in adapter lookup or
 roster. The check is inside the same recorded-command guard and all writers for this authority use
 it; B-WRITER still has to prove that operational premise.
 
-History/query resolves an unavailable-order item by
-`destination subject -> LegacyRecordCoordinate -> LegacyEvidenceBlob`, verifies the source,
-boundary, record ID, byte length and digest joins, and returns those exact decoded envelope bytes as
-unavailable-order legacy evidence, never as a newly committed record. Record lookup of a reserved ID
-returns that same coordinate/blob result. Destination verification regenerates the complete roster
+The ordinary opened Eventlog backend exposes imported evidence through
+`with_store` and `EventlogPlanningStore::legacy_evidence_for_subject` or
+`legacy_evidence_by_original_id`. Each read takes a fresh provider-complete snapshot and validates
+the complete boundary/coordinate/blob/roster join before returning separate typed evidence with
+the exact envelope bytes, source and destination identities, original record ID, and explicit
+order and ordinal. Subject lookup presents results deterministically by coordinate ID; that
+presentation order does not assert a historical order. Unavailable-order evidence remains distinct
+from newly recorded `HistoryProvider` and `QueryService` history, whose ordered suffix semantics do
+not change. Destination verification regenerates the complete roster
 and every blob from the source fact ledger, then compares the ordinary provider subjects and joins.
 The external `recovery/raw-capture.json` is still required for incomplete apply recovery but is not a
 history or collision side table: after `Complete`, deleting that recovery copy leaves history,

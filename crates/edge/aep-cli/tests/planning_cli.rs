@@ -267,6 +267,114 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
 }
 
 #[test]
+fn an_explicit_v2_projection_is_never_reopened_as_markdown_authority() {
+    let project = scratch("aep-plan-explicit-v2-projection");
+    let engineering = project.join(".engineering");
+    let projection = engineering.join("planning");
+    std::fs::create_dir_all(&projection).expect("empty projection");
+    write(
+        &engineering.join("project.yaml"),
+        "version: aep.project/2\nprotocol: adp/1\nprofile: development.standard\n\
+         planning_scope: aep.planning\nplanning_tenant: planning-main\n\
+         planning_identity: stream-01\n",
+    );
+
+    // Both an empty and a deleted projection remain derived, even when selected from elsewhere.
+    for deleted in [false, true] {
+        if deleted {
+            std::fs::remove_dir(&projection).expect("delete the empty projection");
+        }
+        let created = protocol(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            "must-refuse",
+            "--title",
+            "Must refuse",
+            "--store",
+            printable(&projection),
+        ]);
+        assert_ne!(code(&created), 0, "{}", stdout(&created));
+        assert!(
+            stderr(&created).contains("cannot open an Eventlog projection as Markdown authority"),
+            "{}",
+            stderr(&created)
+        );
+        assert!(!projection.join("story/must-refuse.md").exists());
+    }
+    #[cfg(unix)]
+    {
+        let alias = project.join("metadata-alias");
+        std::os::unix::fs::symlink(&engineering, &alias).expect("metadata directory alias");
+        let aliased_projection = alias.join("planning");
+        let refused = protocol(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            "must-refuse",
+            "--title",
+            "Must refuse",
+            "--store",
+            printable(&aliased_projection),
+        ]);
+        assert_ne!(code(&refused), 0);
+        assert!(
+            stderr(&refused).contains("cannot open an Eventlog projection as Markdown authority"),
+            "{}",
+            stderr(&refused)
+        );
+        assert!(!projection.exists());
+    }
+}
+
+#[test]
+fn an_explicit_canonical_store_contends_with_the_project_writer_fence() {
+    let project = scratch("aep-plan-project-explicit-writer-fence");
+    let engineering = project.join(".engineering");
+    let planning = engineering.join("planning");
+    std::fs::create_dir_all(&planning).expect("fixture store");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(engineering.join(".aep-planning-writer.lock"))
+        .expect("project writer fence opens");
+    file.try_lock_exclusive()
+        .expect("project writer holds the fence");
+
+    let args = [
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "racing",
+        "--title",
+        "Racing",
+        "--store",
+        printable(&planning),
+    ];
+    let racing = protocol(&args);
+    assert_ne!(
+        code(&racing),
+        0,
+        "the explicit spelling bypassed the project lock"
+    );
+    assert!(
+        stderr(&racing).contains("another admitted planning writer"),
+        "{}",
+        stderr(&racing)
+    );
+    assert!(!planning.join("story/racing.md").exists());
+    drop(file);
+    let released = protocol(&args);
+    assert_eq!(code(&released), 0, "{}", stderr(&released));
+    assert!(planning.join("story/racing.md").exists());
+}
+
+#[test]
 fn a_paused_explicit_store_writer_excludes_a_second_cli_process() {
     use std::io::Write as _;
     use std::process::Stdio;

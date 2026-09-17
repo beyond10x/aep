@@ -115,19 +115,13 @@ impl StoreLocation {
     /// Resolution happens before a backend is opened. An explicit legacy Markdown path uses its
     /// containing directory; project discovery uses the project metadata directory that also owns
     /// the selector switched by migration.
-    fn acquire_writer_fence(
-        &self,
-    ) -> Result<crate::planning_writer_fence::PlanningWriterFence> {
+    fn acquire_writer_fence(&self) -> Result<crate::planning_writer_fence::PlanningWriterFence> {
         if let Some(store) = &self.store {
             return crate::planning_writer_fence::PlanningWriterFence::acquire_explicit(store);
         }
         let here = std::env::current_dir().context("reading the working directory")?;
-        let project = aep_project::project::discover(&here).with_context(|| {
-            format!(
-                "no project containing {} was found",
-                here.display()
-            )
-        })?;
+        let project = aep_project::project::discover(&here)
+            .with_context(|| format!("no project containing {} was found", here.display()))?;
         crate::planning_writer_fence::PlanningWriterFence::acquire(
             &project.join(project_directory()),
         )
@@ -166,6 +160,7 @@ impl StoreLocation {
     /// decides — `markdown` by default, so no existing project changes meaning.
     fn plan(&self) -> Result<Plan> {
         if let Some(path) = &self.store {
+            refuse_explicit_eventlog_projection(path)?;
             return Ok(Plan::Markdown { root: path.clone() });
         }
         Plan::discovered()
@@ -198,6 +193,34 @@ impl StoreLocation {
     fn lifecycles(&self) -> Result<aep_engine::Registry> {
         crate::load(&self.document_root()?)
     }
+}
+
+/// An explicit legacy path cannot promote an Eventlog projection back to authority, even when
+/// empty or deleted. Inspect the selected path's project, rather than the caller's working
+/// directory, and also inspect the canonical target of an existing symbolic link.
+fn refuse_explicit_eventlog_projection(path: &Path) -> Result<()> {
+    let absolute = std::path::absolute(path).context("resolving the explicit planning path")?;
+    let canonical = crate::planning_writer_fence::canonical_store_path(path)?;
+    for selected in [&absolute, &canonical] {
+        for engineering in selected.ancestors().filter(|ancestor| {
+            ancestor
+                .file_name()
+                .is_some_and(|name| name == project_directory())
+        }) {
+            if let Plan::Eventlog {
+                projection_root, ..
+            } = Plan::for_project(engineering)?
+            {
+                if selected.starts_with(&projection_root) {
+                    bail!(
+                        "explicit --store cannot open an Eventlog projection as Markdown authority: {}",
+                        selected.display()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Where a plan is kept, resolved: what a verb opens.
@@ -805,20 +828,22 @@ where
         &aep_contract::migration::PlannedCommandStepV1,
     ) -> Result<aep_contract::migration::PlanningMutationResultV1>,
 {
-    use aep_contract::migration::{AuthorityCoordinateV1, AuthorityValueV1, MigrationIdV1, CommandRefusalCodeV1};
+    use aep_contract::migration::{
+        AuthorityCoordinateV1, AuthorityValueV1, CommandRefusalCodeV1, MigrationIdV1,
+    };
 
     let Plan::Eventlog {
         authority_root,
         projection_root,
         authority: selected,
-    } = &opened.plan else {
+    } = &opened.plan
+    else {
         return Ok(None);
     };
     let authority = AuthorityCoordinateV1 {
         logical_scope: AuthorityValueV1::new(&selected.logical_scope)
             .map_err(|error| anyhow::anyhow!(error))?,
-        tenant: AuthorityValueV1::new(&selected.tenant)
-            .map_err(|error| anyhow::anyhow!(error))?,
+        tenant: AuthorityValueV1::new(&selected.tenant).map_err(|error| anyhow::anyhow!(error))?,
         stream_identity: AuthorityValueV1::new(&selected.stream_identity)
             .map_err(|error| anyhow::anyhow!(error))?,
     };
@@ -858,24 +883,19 @@ where
             Ok(result) => {
                 let commit_receipt = backend.last_commit_receipt().ok_or_else(|| {
                     aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
-                        mutation_refusal(
-                            &authority,
-                            CommandRefusalCodeV1::ReceiptConflict,
-                        ),
+                        mutation_refusal(&authority, CommandRefusalCodeV1::ReceiptConflict),
                     ])
                 })?;
-                let snapshot = aep_backend_eventlog::complete_file_snapshot(
-                    authority_root,
-                    adapter(),
-                )
-                .map_err(|_| {
-                    aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
-                        mutation_refusal(
-                            &authority,
-                            CommandRefusalCodeV1::AuthoritySnapshotChanged,
-                        ),
-                    ])
-                })?;
+                let snapshot =
+                    aep_backend_eventlog::complete_file_snapshot(authority_root, adapter())
+                        .map_err(|_| {
+                            aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
+                                mutation_refusal(
+                                    &authority,
+                                    CommandRefusalCodeV1::AuthoritySnapshotChanged,
+                                ),
+                            ])
+                        })?;
                 let (authority_snapshot, _) =
                     aep_planning_migration::authority_snapshot_identity(&authority, &snapshot)
                         .map_err(|_| {
@@ -892,9 +912,12 @@ where
                     authority_snapshot,
                 })
             }
-            Err(_) => Err(aep_planning_migration::ChildExecutionFailure::Refused(vec![
-                mutation_refusal(&authority, CommandRefusalCodeV1::SemanticMismatch),
-            ])),
+            Err(_) => Err(aep_planning_migration::ChildExecutionFailure::Refused(
+                vec![mutation_refusal(
+                    &authority,
+                    CommandRefusalCodeV1::SemanticMismatch,
+                )],
+            )),
         },
         || publisher.publish_current(),
     )?;
@@ -905,7 +928,9 @@ fn mutation_refusal(
     authority: &aep_contract::migration::AuthorityCoordinateV1,
     code: aep_contract::migration::CommandRefusalCodeV1,
 ) -> aep_contract::migration::CommandRefusalV1 {
-    use aep_contract::migration::{CommandRefusalV1, DiagnosticCoordinateV1, AuthorityDiagnosticV1, PresenceV1};
+    use aep_contract::migration::{
+        AuthorityDiagnosticV1, CommandRefusalV1, DiagnosticCoordinateV1, PresenceV1,
+    };
     CommandRefusalV1 {
         code,
         at: DiagnosticCoordinateV1::Authority(AuthorityDiagnosticV1 {
@@ -1531,10 +1556,20 @@ pub(crate) enum ArtifactCommand {
         )]
         from: Option<PathBuf>,
         /// Exact original suite JSON required beside a standalone ESS report/2.
-        #[arg(long, value_name = "SUITE", requires = "from", conflicts_with = "suite_input")]
+        #[arg(
+            long,
+            value_name = "SUITE",
+            requires = "from",
+            conflicts_with = "suite_input"
+        )]
         suite: Option<PathBuf>,
         /// Original ess-conformance-input/1 carrying suite/5 and its complete parent lineage.
-        #[arg(long, value_name = "INPUT", requires = "from", conflicts_with = "suite")]
+        #[arg(
+            long,
+            value_name = "INPUT",
+            requires = "from",
+            conflicts_with = "suite"
+        )]
         suite_input: Option<PathBuf>,
         /// The kind of observation, such as `test_result`, `approval` or `review_outcome`.
         ///
@@ -1898,8 +1933,17 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             kind,
             status,
             reference,
-        } => list(&store, kind.as_deref(), status.as_deref(), reference.as_deref()),
-        ArtifactCommand::Board { store, format, kind } => board(&store, format, kind.as_deref()),
+        } => list(
+            &store,
+            kind.as_deref(),
+            status.as_deref(),
+            reference.as_deref(),
+        ),
+        ArtifactCommand::Board {
+            store,
+            format,
+            kind,
+        } => board(&store, format, kind.as_deref()),
         ArtifactCommand::Blocked { store, category } => blocked(&store, category.as_deref()),
         ArtifactCommand::Graph { store, format } => graph(&store, format),
         ArtifactCommand::Validate {
@@ -2070,10 +2114,7 @@ fn mint_command_identity(request: &[u8]) -> String {
         &[request.to_vec(), elapsed, process, ordinal],
     )
     .expect("bounded command identity inputs fit canonical framing");
-    format!(
-        "command-{}",
-        digest.as_wire().trim_start_matches("sha256:")
-    )
+    format!("command-{}", digest.as_wire().trim_start_matches("sha256:"))
 }
 
 /// Who the command is from.
@@ -2350,7 +2391,13 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
     // The edges, each its own command — the same one `protocol artifact relate` issues, because
     // an edge created at birth and an edge added later are the same act.
     for relation in &front.relations {
-        relate_through_a_command(backend, &front.id, relation.kind, relation.target.id(), None)?;
+        relate_through_a_command(
+            backend,
+            &front.id,
+            relation.kind,
+            relation.target.id(),
+            None,
+        )?;
     }
     Ok(path)
 }
@@ -2379,9 +2426,9 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     frontmatter.owner.clone_from(&args.owner);
     frontmatter.tags = args.tag.iter().cloned().collect();
     for value in &args.reference {
-        frontmatter.refs.insert(
-            ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?,
-        );
+        frontmatter
+            .refs
+            .insert(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?);
     }
     if let Some(value) = &args.withholds {
         frontmatter.withholds = Some(
@@ -2588,13 +2635,15 @@ fn move_through_a_command(
         expected_revision: None,
         decided_on: account,
     });
-    let envelope = if let Some(identity) = command_identity { envelope_for(
-        identity,
-        "protocol-artifact-move",
-        "aep.status.move/v1",
-        payload,
-        at,
-    )? } else {
+    let envelope = if let Some(identity) = command_identity {
+        envelope_for(
+            identity,
+            "protocol-artifact-move",
+            "aep.status.move/v1",
+            payload,
+            at,
+        )?
+    } else {
         let name = format!("move-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
@@ -2618,8 +2667,7 @@ fn move_through_a_command(
             context,
         )
     };
-    block_on(backend.execute(envelope))
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
 
@@ -3000,12 +3048,8 @@ fn move_status(
             "decided_on":outcome.decided_on,
             "children":children.clone(),
         });
-        if let Some(result) = eventlog_invocation(
-            args,
-            &opened,
-            &request,
-            &children,
-            |backend, planned| {
+        if let Some(result) =
+            eventlog_invocation(args, &opened, &request, &children, |backend, planned| {
                 let index = usize::try_from(planned.step_index)
                     .context("the immutable move roster index exceeds usize")?;
                 let made = outcome
@@ -3031,8 +3075,8 @@ fn move_status(
                         revision: made.revision,
                     },
                 ))
-            },
-        )? {
+            })?
+        {
             crate::store_command::emit_mutation(&result, args.format)?;
             return Ok(crate::exit_code(result.success()));
         }
@@ -3187,13 +3231,15 @@ fn relate_through_a_command(
         source: EntityRef::new(resolve(source)?),
         target: EntityRef::new(resolve(target)?),
     });
-    let envelope = if let Some(identity) = command_identity { envelope_for(
-        identity,
-        "protocol-artifact-relate",
-        "aep.relation.create/v1",
-        payload,
-        at,
-    )? } else {
+    let envelope = if let Some(identity) = command_identity {
+        envelope_for(
+            identity,
+            "protocol-artifact-relate",
+            "aep.relation.create/v1",
+            payload,
+            at,
+        )?
+    } else {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
@@ -3219,8 +3265,7 @@ fn relate_through_a_command(
             context,
         )
     };
-    block_on(backend.execute(envelope))
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
 
@@ -3283,7 +3328,9 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
         args,
         &opened,
         &serde_json::json!({"verb":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        &[serde_json::json!({"operation":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()})],
+        &[
+            serde_json::json!({"operation":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
+        ],
         |backend, planned| {
             relate_through_a_command(
                 backend,
@@ -3382,13 +3429,15 @@ fn unrelate_through_a_command(
     let payload = Command::RemoveRelation(RemoveRelation {
         relation: edge.id.clone(),
     });
-    let envelope = if let Some(identity) = command_identity { envelope_for(
-        identity,
-        "protocol-artifact-unrelate",
-        "aep.relation.remove/v1",
-        payload,
-        at,
-    )? } else {
+    let envelope = if let Some(identity) = command_identity {
+        envelope_for(
+            identity,
+            "protocol-artifact-unrelate",
+            "aep.relation.remove/v1",
+            payload,
+            at,
+        )?
+    } else {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-unrel-{name}")
@@ -3412,8 +3461,7 @@ fn unrelate_through_a_command(
             context,
         )
     };
-    block_on(backend.execute(envelope))
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
 
@@ -3484,7 +3532,9 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
         args,
         &opened,
         &serde_json::json!({"verb":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        &[serde_json::json!({"operation":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()})],
+        &[
+            serde_json::json!({"operation":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
+        ],
         |backend, planned| {
             unrelate_through_a_command(
                 backend,
@@ -3493,14 +3543,16 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
                 target.id(),
                 Some(&planned.child_identity),
             )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::Unrelated(
-                aep_contract::migration::RelationResultV1 {
-                    id: id.to_string(),
-                    relation: relation.as_str().to_owned(),
-                    target: target.to_string(),
-                    revision: document.frontmatter.revision,
-                },
-            ))
+            Ok(
+                aep_contract::migration::PlanningMutationResultV1::Unrelated(
+                    aep_contract::migration::RelationResultV1 {
+                        id: id.to_string(),
+                        relation: relation.as_str().to_owned(),
+                        target: target.to_string(),
+                        revision: document.frontmatter.revision,
+                    },
+                ),
+            )
         },
     )? {
         crate::store_command::emit_mutation(&result, args.format)?;
@@ -3557,13 +3609,9 @@ fn update_through_a_command(
         target: EntityRef::new(target),
         changes: changes.into_iter().collect(),
     });
-    let envelope = if let Some(identity) = command_identity { envelope_for(
-        identity,
-        correlation,
-        "aep.entity.update/v1",
-        payload,
-        at,
-    )? } else {
+    let envelope = if let Some(identity) = command_identity {
+        envelope_for(identity, correlation, "aep.entity.update/v1", payload, at)?
+    } else {
         let name = format!("{correlation}-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
@@ -3587,8 +3635,7 @@ fn update_through_a_command(
             context,
         )
     };
-    block_on(backend.execute(envelope))
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(())
 }
 
@@ -3777,13 +3824,15 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
                 edit.correlation(),
                 Some(&planned.child_identity),
             )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::BodyUpdated(
-                aep_contract::migration::BodyUpdatedResultV1 {
-                    id: id.to_string(),
-                    revision: document.frontmatter.revision,
-                    body_digest,
-                },
-            ))
+            Ok(
+                aep_contract::migration::PlanningMutationResultV1::BodyUpdated(
+                    aep_contract::migration::BodyUpdatedResultV1 {
+                        id: id.to_string(),
+                        revision: document.frontmatter.revision,
+                        body_digest,
+                    },
+                ),
+            )
         },
     )? {
         crate::store_command::emit_mutation(&result, args.format)?;
@@ -4040,12 +4089,8 @@ fn set(
         "id": id.to_string(),
         "changes": serde_json::to_value(&changes)?,
     });
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &request,
-        &[child],
-        |backend, planned| {
+    if let Some(result) =
+        eventlog_invocation(args, &opened, &request, &[child], |backend, planned| {
             update_through_a_command(
                 backend,
                 &id,
@@ -4053,15 +4098,17 @@ fn set(
                 "protocol-artifact-set",
                 Some(&planned.child_identity),
             )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::FieldsSet(
-                aep_contract::migration::FieldsSetResultV1 {
-                    id: id.to_string(),
-                    revision,
-                    fields: named.clone(),
-                },
-            ))
-        },
-    )? {
+            Ok(
+                aep_contract::migration::PlanningMutationResultV1::FieldsSet(
+                    aep_contract::migration::FieldsSetResultV1 {
+                        id: id.to_string(),
+                        revision,
+                        fields: named.clone(),
+                    },
+                ),
+            )
+        })?
+    {
         crate::store_command::emit_mutation(&result, args.format)?;
         return Ok(crate::exit_code(result.success()));
     }
@@ -4211,13 +4258,15 @@ fn scope(
                 "protocol-artifact-scope",
                 Some(&planned.child_identity),
             )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::ScopeUpdated(
-                aep_contract::migration::ScopeUpdatedResultV1 {
-                    id: id.to_string(),
-                    revision,
-                    scope_digest,
-                },
-            ))
+            Ok(
+                aep_contract::migration::PlanningMutationResultV1::ScopeUpdated(
+                    aep_contract::migration::ScopeUpdatedResultV1 {
+                        id: id.to_string(),
+                        revision,
+                        scope_digest,
+                    },
+                ),
+            )
         },
     )? {
         crate::store_command::emit_mutation(&result, args.format)?;
@@ -4276,10 +4325,7 @@ fn derive_waves(args: &StoreArgs, kind: &str, status: Option<&str>) -> Result<Ex
         .values()
         .filter(|stored| {
             let front = &stored.document.frontmatter;
-            front.kind.is_a(&kind)
-                && status
-                    .as_ref()
-                    .is_none_or(|wanted| &front.status == wanted)
+            front.kind.is_a(&kind) && status.as_ref().is_none_or(|wanted| &front.status == wanted)
         })
         .map(|stored| {
             let front = &stored.document.frontmatter;
@@ -4535,7 +4581,10 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
             // The count and the breakdown, not the entries: the block itself is printed verbatim a
             // few lines below, and a verb that listed each finding twice would be padding.
             if !shown.findings.is_empty() {
-                rows.push(vec!["findings".to_owned(), severity_breakdown(&shown.findings)]);
+                rows.push(vec![
+                    "findings".to_owned(),
+                    severity_breakdown(&shown.findings),
+                ]);
             }
             // One line per outcome, labelled once. This is the answer to *did this review ever
             // change anything*, and it is on the review rather than on the artifact because the
@@ -4756,10 +4805,7 @@ fn description_for(
 }
 
 /// Every reference on one artifact, linked where the project declared how.
-fn references(
-    refs: &[String],
-    providers: Option<&aep_domain::project::ProjectConfig>,
-) -> String {
+fn references(refs: &[String], providers: Option<&aep_domain::project::ProjectConfig>) -> String {
     refs.iter()
         .map(|shorthand| {
             // The key alone in the cell: a board joined to a tracker is read by people who already
@@ -5542,14 +5588,13 @@ fn findings_ledger(
 
 /// One finding, on one line: where it is, what class it is, and what it says.
 fn finding_line(finding: &aep_backend_markdown::findings::Finding) -> String {
-    let at = finding
-        .line
-        .map_or_else(|| finding.file.clone(), |line| format!("{}:{line}", finding.file));
+    let at = finding.line.map_or_else(
+        || finding.file.clone(),
+        |line| format!("{}:{line}", finding.file),
+    );
     format!(
         "{at}  {}  {}  {}",
-        finding.severity,
-        finding.category,
-        finding.message
+        finding.severity, finding.category, finding.message
     )
 }
 
@@ -5616,9 +5661,7 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
     let mut overdue = Vec::new();
     for stored in opened.report.documents.values() {
         let id = &stored.document.frontmatter.id;
-        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult
-            || answered.contains(id)
-        {
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult || answered.contains(id) {
             continue;
         }
         let (Some(now), Some(at)) = (now, created.get(id).and_then(|at| instant(at).ok())) else {
@@ -5802,8 +5845,16 @@ fn review_value(args: &StoreArgs, since: Option<&str>) -> Result<ExitCode> {
                 reviewer,
                 reviews: tally.reviews,
                 findings: tally.findings,
-                no_op: tally.outcomes.get(&ReviewOutcome::NoOp).copied().unwrap_or(0),
-                fixed: tally.outcomes.get(&ReviewOutcome::Fixed).copied().unwrap_or(0),
+                no_op: tally
+                    .outcomes
+                    .get(&ReviewOutcome::NoOp)
+                    .copied()
+                    .unwrap_or(0),
+                fixed: tally
+                    .outcomes
+                    .get(&ReviewOutcome::Fixed)
+                    .copied()
+                    .unwrap_or(0),
                 escalated: tally
                     .outcomes
                     .get(&ReviewOutcome::Escalated)
@@ -6163,8 +6214,14 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         ("drifted", summary.drift.len()),
         ("forged revision", summary.forged.len()),
         ("deleted", summary.deleted.len()),
-        ("recording no findings block", summary.without_findings.len()),
-        ("without a recorded outcome", summary.without_an_outcome.len()),
+        (
+            "recording no findings block",
+            summary.without_findings.len(),
+        ),
+        (
+            "without a recorded outcome",
+            summary.without_an_outcome.len(),
+        ),
     ] {
         if count > 0 {
             refusing.push(format!("{count} {label}"));
@@ -6565,12 +6622,15 @@ fn evidence_through_a_command(
     let target = block_on(QueryService::resolve(backend, &locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
 
-    let name = command_identity.map_or_else(|| {
-        format!(
-            "evidence-{id}-{kind}-{}",
-            clock_at_the_edge().epoch_millis()
-        )
-    }, ToOwned::to_owned);
+    let name = command_identity.map_or_else(
+        || {
+            format!(
+                "evidence-{id}-{kind}-{}",
+                clock_at_the_edge().epoch_millis()
+            )
+        },
+        ToOwned::to_owned,
+    );
     let envelope = envelope_for(
         &name,
         "protocol-artifact-evidence",
@@ -6603,32 +6663,50 @@ struct Recorded {
 fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
     // This probe chooses a versioned reader only. Admission re-reads the complete original.
     let probe = serde_json::from_str::<serde_json::Value>(original).ok();
-    if probe.as_ref().and_then(|value| value.get("provenance")).and_then(|p| p.get("suite_version")).and_then(serde_json::Value::as_str) == Some("ess-conformance/5") {
+    if probe
+        .as_ref()
+        .and_then(|value| value.get("provenance"))
+        .and_then(|p| p.get("suite_version"))
+        .and_then(serde_json::Value::as_str)
+        == Some("ess-conformance/5")
+    {
         return Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?));
     }
     Ok(None)
 }
 
 /// Reads descriptive report fields; the ladder independently decides whether evidence permits a move.
-fn recorded_from_report(path: &Path, suite: Option<&Path>, suite_input: Option<&Path>) -> Result<Recorded> {
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    let report: serde_json::Value = serde_json::from_str(&text)
-        .with_context(|| format!("{} is not JSON", path.display()))?;
+// Keep the format-specific report and suite evidence checks together before constructing Recorded.
+#[allow(clippy::too_many_lines)]
+fn recorded_from_report(
+    path: &Path,
+    suite: Option<&Path>,
+    suite_input: Option<&Path>,
+) -> Result<Recorded> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let report: serde_json::Value =
+        serde_json::from_str(&text).with_context(|| format!("{} is not JSON", path.display()))?;
 
     let format = report.get("format").and_then(serde_json::Value::as_str);
     if format == Some("ess-conformance-report/2") {
         if let Some(input_path) = suite_input {
-            let input = std::fs::read_to_string(input_path).with_context(|| format!("reading {}", input_path.display()))?;
+            let input = std::fs::read_to_string(input_path)
+                .with_context(|| format!("reading {}", input_path.display()))?;
             return recorded_coverage(path, &text, input_path, &input, "original_input");
         }
-        let suite_path = suite.context("MissingSuite: report/2 requires --suite with the exact original suite JSON")?;
-        let suite_json = std::fs::read_to_string(suite_path).with_context(|| format!("reading {}", suite_path.display()))?;
+        let suite_path = suite.context(
+            "MissingSuite: report/2 requires --suite with the exact original suite JSON",
+        )?;
+        let suite_json = std::fs::read_to_string(suite_path)
+            .with_context(|| format!("reading {}", suite_path.display()))?;
         if let Some(input) = coverage_input_from_raw_suite(&suite_json)? {
             return recorded_coverage(path, &text, suite_path, &input, "wrapped_raw_suite");
         }
         let adapted = aep_ess_evidence::adapt_json_v2(&text, &suite_json)?;
-        let aep_domain::evidence::Evidence::EssConformanceV2(sources) = adapted.evidence() else { unreachable!("v2 adapter returns v2 evidence"); };
+        let aep_domain::evidence::Evidence::EssConformanceV2(sources) = adapted.evidence() else {
+            unreachable!("v2 adapter returns v2 evidence");
+        };
         let data = sources.reading().expect("adapter admitted sources").data();
         // The wire/typed evidence admits full u64. Planning's actual event envelope has a
         // narrower calendar spelling; ask that same runtime validator before opening a store.
@@ -6647,10 +6725,23 @@ fn recorded_from_report(path: &Path, suite: Option<&Path>, suite_input: Option<&
             "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
             "completed_at":data.completed_at.epoch_millis().to_string()
         }).to_string();
-        return Ok(Recorded { kind: aep_domain::evidence::EvidenceKind::EssConformanceV2, source, reference: Some(path.display().to_string()), at: data.completed_at.epoch_millis().to_string() });
+        return Ok(Recorded {
+            kind: aep_domain::evidence::EvidenceKind::EssConformanceV2,
+            source,
+            reference: Some(path.display().to_string()),
+            at: data.completed_at.epoch_millis().to_string(),
+        });
     }
-    if suite.is_some() { anyhow::bail!("UnsupportedPairing: --suite is supported only with ess-conformance-report/2"); }
-    if suite_input.is_some() { anyhow::bail!("UnsupportedPairing: --suite-input is supported only with ess-conformance-report/2"); }
+    if suite.is_some() {
+        anyhow::bail!(
+            "UnsupportedPairing: --suite is supported only with ess-conformance-report/2"
+        );
+    }
+    if suite_input.is_some() {
+        anyhow::bail!(
+            "UnsupportedPairing: --suite-input is supported only with ess-conformance-report/2"
+        );
+    }
     if format != Some("ess-conformance-report/1") {
         anyhow::bail!(
             "{} says `format: {}` and this reads an `ess-conformance-report/1`. The format is the \
@@ -6727,9 +6818,17 @@ fn recorded_from_report(path: &Path, suite: Option<&Path>, suite_input: Option<&
     })
 }
 
-fn recorded_coverage(path: &Path, report_json: &str, input_path: &Path, input_json: &str, transport: &str) -> Result<Recorded> {
+fn recorded_coverage(
+    path: &Path,
+    report_json: &str,
+    input_path: &Path,
+    input_json: &str,
+    transport: &str,
+) -> Result<Recorded> {
     let adapted = aep_ess_evidence::adapt_json_coverage(report_json, input_json)?;
-    let aep_domain::Evidence::EssConformanceCoverageV1(sources) = adapted.evidence() else { unreachable!("coverage adapter returns coverage evidence"); };
+    let aep_domain::Evidence::EssConformanceCoverageV1(sources) = adapted.evidence() else {
+        unreachable!("coverage adapter returns coverage evidence");
+    };
     let reading = sources.reading().expect("adapter admitted sources");
     let data = reading.data();
     let recorded_at = data.completed_at.iso_8601();
@@ -6745,7 +6844,12 @@ fn recorded_coverage(path: &Path, report_json: &str, input_path: &Path, input_js
         "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
         "completed_at":data.completed_at.epoch_millis().to_string()
     }).to_string();
-    Ok(Recorded { kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1, source, reference: Some(path.display().to_string()), at: data.completed_at.epoch_millis().to_string() })
+    Ok(Recorded {
+        kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1,
+        source,
+        reference: Some(path.display().to_string()),
+        at: data.completed_at.epoch_millis().to_string(),
+    })
 }
 
 #[allow(clippy::too_many_lines)]
@@ -6753,9 +6857,15 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     use aep_domain::evidence::EvidenceKind;
 
     let id = artifact_id(id)?;
-    if request.suite.is_some() && request.from.is_none() { anyhow::bail!("--suite requires --from"); }
-    if request.suite_input.is_some() && request.from.is_none() { anyhow::bail!("--suite-input requires --from"); }
-    if request.suite_input.is_some() && request.suite.is_some() { anyhow::bail!("--suite-input conflicts with --suite"); }
+    if request.suite.is_some() && request.from.is_none() {
+        anyhow::bail!("--suite requires --from");
+    }
+    if request.suite_input.is_some() && request.from.is_none() {
+        anyhow::bail!("--suite-input requires --from");
+    }
+    if request.suite_input.is_some() && request.suite.is_some() {
+        anyhow::bail!("--suite-input conflicts with --suite");
+    }
 
     // `--from` reads the kind, the source and the instant out of a report that already states
     // them; the flags are how the same record is made when there is no report to read.
@@ -6851,13 +6961,15 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
                 observed_at,
                 Some(&planned.child_identity),
             )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::EvidenceRecorded(
-                aep_contract::migration::EvidenceRecordedResultV1 {
-                    id: id.to_string(),
-                    evidence_id: planned.child_identity.clone(),
-                    revision,
-                },
-            ))
+            Ok(
+                aep_contract::migration::PlanningMutationResultV1::EvidenceRecorded(
+                    aep_contract::migration::EvidenceRecordedResultV1 {
+                        id: id.to_string(),
+                        evidence_id: planned.child_identity.clone(),
+                        revision,
+                    },
+                ),
+            )
         },
     )? {
         crate::store_command::emit_mutation(&result, args.format)?;
@@ -7735,9 +7847,7 @@ fn select(
     // provider is a filter that would quietly return an empty list, which reads as *this ticket is
     // not in the plan* and is a different fact.
     let reference = match reference {
-        Some(value) => {
-            Some(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?)
-        }
+        Some(value) => Some(ExternalRef::parse(value).map_err(|error| anyhow::anyhow!("{error}"))?),
         None => None,
     };
 
@@ -8363,7 +8473,10 @@ mod tests {
     fn a_direct_edge_mints_distinct_valid_retry_identities() {
         let first = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
         let second = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
-        assert_ne!(first, second, "two new invocations must not share a reservation");
+        assert_ne!(
+            first, second,
+            "two new invocations must not share a reservation"
+        );
         assert!(
             aep_contract::migration::MigrationIdV1::new(first).is_ok(),
             "the returned identity must be accepted unchanged on retry"
@@ -8673,9 +8786,7 @@ impl ServedMove {
             Some(PlanningMutationOutcomeV1::Uncertain(_)) => 503,
             Some(PlanningMutationOutcomeV1::CommittedProjectionFailure(_)) => 500,
             None if self.refusal.is_none() => 200,
-            Some(
-                PlanningMutationOutcomeV1::Partial(_) | PlanningMutationOutcomeV1::Refused(_),
-            )
+            Some(PlanningMutationOutcomeV1::Partial(_) | PlanningMutationOutcomeV1::Refused(_))
             | None => 409,
         }
     }

@@ -860,6 +860,18 @@ wire_struct!(SqlSchemaV1 {
     indexes: Vec<IndexSchemaV1>,
     foreign_objects: Vec<ForeignObjectV1>,
 });
+
+impl SqlSchemaV1 {
+    /// Whether these observed declarations match the admitted legacy provider shape.
+    ///
+    /// Physical readers use this before decoding provider rows. The caller must first establish
+    /// the meaning of each typed catalog predicate from the actual database; this comparison
+    /// does not prove that a supplied catalog was observed or that capture is complete.
+    pub fn is_known_provider_schema(&self) -> bool {
+        known_schema_shape(self, &self.dialect)
+    }
+}
+
 wire_struct!(TableSchemaV1 {
     name: String,
     catalog_definition: PresenceV1<HexBytesV1>,
@@ -1397,10 +1409,32 @@ impl RawCaptureObservationV1 {
                 } else {
                     PhaseExpectation::NotAttempted
                 };
-                if expectation == PhaseExpectation::FailedPrefix
-                    || matches!(self.source, PresenceV1::Present(_))
+                let unresolved_prefix = expectation == PhaseExpectation::FailedPrefix
+                    && matches!(self.source, PresenceV1::Missing)
+                    && matches!(
+                        method,
+                        ObservationMethodV1::PostgresRepeatableReadOnly
+                            | ObservationMethodV1::HybridBracketedSqlSnapshot
+                    );
+                if !unresolved_prefix
+                    && (expectation == PhaseExpectation::FailedPrefix
+                        || matches!(self.source, PresenceV1::Present(_)))
                 {
                     validate_method_source(method, &self.source, "$.observation.method", errors);
+                }
+                if unresolved_prefix {
+                    for phase in &refused.phases {
+                        let evidence = match &phase.result {
+                            PhaseResultV1::Complete(result) => Some(&result.evidence),
+                            PhaseResultV1::Refused(result) => Some(&result.evidence),
+                            PhaseResultV1::NotAttempted => None,
+                        };
+                        if matches!(evidence, Some(PhaseEvidenceV1::Sqlite(sql) | PhaseEvidenceV1::Postgres(sql)) if matches!(sql.source, PresenceV1::Present(_)))
+                        {
+                            // An observed replica can no longer be hidden behind an unresolved root.
+                            errors.push(CaptureValidationCodeV1::MissingCoordinate, "$.source");
+                        }
+                    }
                 }
                 validate_phases(method, &self.source, &refused.phases, expectation, errors);
                 if let PresenceV1::Present(SourceCoordinateV1::Hybrid(hybrid)) = &self.source {
@@ -1511,6 +1545,7 @@ enum ExpectedEvidence {
     Markdown,
     Sqlite,
     Postgres,
+    UnresolvedSql,
     Divergences,
 }
 
@@ -1700,7 +1735,7 @@ fn expected_roster(
                     SqlReplicaCoordinateV1::Sqlite(_) => ExpectedEvidence::Sqlite,
                     SqlReplicaCoordinateV1::Postgres(_) => ExpectedEvidence::Postgres,
                 },
-                _ => ExpectedEvidence::Sqlite,
+                _ => ExpectedEvidence::UnresolvedSql,
             };
             vec![
                 (CapturePhaseV1::LocalBefore, ExpectedEvidence::Markdown),
@@ -1842,6 +1877,15 @@ fn validate_retained_refusal_coverage(
         PhaseEvidenceV1::Markdown(markdown) => {
             push_terminal(&markdown.nodes.terminal, &mut exact);
             for node in &markdown.nodes.items {
+                let relative = markdown_evidence_relative(node);
+                if relative.validate_relative().is_err() {
+                    exact.push(CaptureRefusalV1 {
+                        code: CaptureRefusalCodeV1::InvalidRelativePath,
+                        at: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
+                            relative: relative.clone(),
+                        }),
+                    });
+                }
                 match node {
                     MarkdownNodeEvidenceV1::Captured(node) => {
                         if let Some(code) = required_markdown_node_refusal(node) {
@@ -1918,21 +1962,27 @@ fn validate_phase_result(
             format!("{path}.result.value.evidence_digest"),
         );
     }
-    let compatible = matches!(
-        (expected, evidence),
-        (
-            Some(ExpectedEvidence::Markdown),
-            PhaseEvidenceV1::Markdown(_)
-        ) | (Some(ExpectedEvidence::Sqlite), PhaseEvidenceV1::Sqlite(_))
-            | (
-                Some(ExpectedEvidence::Postgres),
-                PhaseEvidenceV1::Postgres(_)
-            )
-            | (
-                Some(ExpectedEvidence::Divergences),
-                PhaseEvidenceV1::Divergences(_)
-            )
-    );
+    let compatible = (partial
+        && matches!(expected, Some(ExpectedEvidence::UnresolvedSql))
+        && matches!(
+            evidence,
+            PhaseEvidenceV1::Sqlite(_) | PhaseEvidenceV1::Postgres(_)
+        ))
+        || matches!(
+            (expected, evidence),
+            (
+                Some(ExpectedEvidence::Markdown),
+                PhaseEvidenceV1::Markdown(_)
+            ) | (Some(ExpectedEvidence::Sqlite), PhaseEvidenceV1::Sqlite(_))
+                | (
+                    Some(ExpectedEvidence::Postgres),
+                    PhaseEvidenceV1::Postgres(_)
+                )
+                | (
+                    Some(ExpectedEvidence::Divergences),
+                    PhaseEvidenceV1::Divergences(_)
+                )
+        );
     if !compatible {
         errors.push(
             CaptureValidationCodeV1::IncompatibleVariant,
@@ -2000,7 +2050,7 @@ fn validate_markdown_evidence(
     );
     for (index, node) in evidence.nodes.items.iter().enumerate() {
         let relative = markdown_evidence_relative(node);
-        if relative.validate_relative().is_err() {
+        if !partial && relative.validate_relative().is_err() {
             errors.push(
                 CaptureValidationCodeV1::InvalidRelativePath,
                 format!("{path}.result.value.evidence.value.nodes.items[{index}].relative"),
@@ -3103,6 +3153,9 @@ fn validate_markdown_node(node: &MarkdownNodeV1, path: &str, errors: &mut Valida
 }
 
 fn required_markdown_node_refusal(node: &MarkdownNodeV1) -> Option<CaptureRefusalCodeV1> {
+    if node.relative.validate_relative().is_err() {
+        return Some(CaptureRefusalCodeV1::InvalidRelativePath);
+    }
     match node.node {
         MarkdownNodeKindV1::Regular(_) if pending_batch_marker(&node.relative) => {
             Some(CaptureRefusalCodeV1::PendingBatchPresent)
@@ -3114,6 +3167,13 @@ fn required_markdown_node_refusal(node: &MarkdownNodeV1) -> Option<CaptureRefusa
         MarkdownNodeKindV1::Symlink(_) | MarkdownNodeKindV1::Other(_) => {
             Some(CaptureRefusalCodeV1::ForeignMarkdownNode)
         }
+    }
+}
+
+impl MarkdownNodeV1 {
+    /// The capture refusal required for these exact observed path units and node kind.
+    pub fn capture_refusal(&self) -> Option<CaptureRefusalCodeV1> {
+        required_markdown_node_refusal(self)
     }
 }
 

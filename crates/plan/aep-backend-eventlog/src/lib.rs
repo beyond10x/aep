@@ -45,6 +45,45 @@ pub const PROJECTION_METADATA_AS: &str = "aep.planning-projection-metadata";
 const LEGACY_COORDINATE_AS: &str = "aep.migration.LegacyRecordCoordinate";
 const LEGACY_EVIDENCE_AS: &str = "aep.migration.LegacyEvidenceBlob";
 const LEGACY_ROSTER_AS: &str = "aep.migration.LegacyIdReservationRoster";
+const LEGACY_IMPORT_BOUNDARY_AS: &str = "aep.planning-import-boundary";
+
+/// The order actually established by a retained legacy source, never a presentation index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyBoundaryOrder {
+    Store,
+    Subject,
+    PerKind,
+    Unavailable,
+}
+
+/// A complete imported envelope's kind, separate from newly recorded suffix entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyBoundaryKind {
+    Decision,
+    Observation,
+}
+
+/// Exact imported envelope bytes and their validated provider-complete provenance.
+///
+/// Collection order is by coordinate subject ID for stable presentation; `order` and `ordinal`
+/// alone describe historical order. This value carries no newly recorded receipt or revision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportedLegacyEvidence {
+    pub source_snapshot: aep_contract::migration::DigestV1,
+    pub source_locator: String,
+    pub boundary_id: String,
+    pub coordinate_subject_id: String,
+    pub evidence_blob_subject_id: String,
+    pub reservation_roster_id: String,
+    pub destination_entity: String,
+    pub destination_id: String,
+    pub original_record_id: String,
+    pub kind: LegacyBoundaryKind,
+    pub order: LegacyBoundaryOrder,
+    pub ordinal: aep_contract::migration::PresenceV1<u64>,
+    pub envelope_digest: aep_contract::migration::DigestV1,
+    pub exact_bytes: Vec<u8>,
+}
 
 const CAPTURE_LIMITS: eventlog_core::CaptureLimits = eventlog_core::CaptureLimits {
     max_events: 1_000_000,
@@ -681,6 +720,42 @@ struct LegacyRosterValue {
 }
 
 impl EventlogPlanningStore {
+    /// Reads complete imported envelopes for one destination from a fresh validated authority.
+    /// The vector is sorted by coordinate ID, not by inferred historical order.
+    pub fn legacy_evidence_for_subject(
+        &self,
+        entity: &str,
+        id: &str,
+    ) -> Result<Vec<ImportedLegacyEvidence>, StoreError> {
+        Subject::new(entity, id).map_err(async_error)?;
+        Ok(self
+            .read_legacy_evidence()?
+            .into_iter()
+            .filter(|value| value.destination_entity == entity && value.destination_id == id)
+            .collect())
+    }
+
+    /// Looks up one complete imported envelope by its reserved original global record ID.
+    pub fn legacy_evidence_by_original_id(
+        &self,
+        record_id: &str,
+    ) -> Result<Option<ImportedLegacyEvidence>, StoreError> {
+        Ok(self
+            .read_legacy_evidence()?
+            .into_iter()
+            .find(|value| value.original_record_id == record_id))
+    }
+
+    fn read_legacy_evidence(&self) -> Result<Vec<ImportedLegacyEvidence>, StoreError> {
+        let snapshot = self
+            .bridge
+            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
+            .map_err(read_error)?;
+        validated_legacy_boundary_snapshot(&snapshot, &self.authority)
+            .map(|validated| validated.evidence)
+            .map_err(StoreError::Backend)
+    }
+
     /// Validates every closed coordinate/blob/roster join and returns the immutable original IDs.
     /// This read is part of backend open and every recorded command, so deleting or corrupting a
     /// boundary value cannot silently disable history lookup or collision protection.
@@ -697,11 +772,23 @@ impl EventlogPlanningStore {
 ///
 /// Exposed so migration acceptance can mutate a captured disposable snapshot and prove that a
 /// missing or altered provider subject is causally refused without corrupting a real authority.
-#[allow(clippy::too_many_lines)] // One audit path validates the closed coordinate/blob/roster join.
 pub fn validate_legacy_boundary_snapshot(
     snapshot: &CompleteStoreSnapshot,
     authority: &Authority,
 ) -> Result<BTreeSet<String>, String> {
+    validated_legacy_boundary_snapshot(snapshot, authority).map(|validated| validated.reserved)
+}
+
+struct ValidatedLegacyBoundary {
+    reserved: BTreeSet<String>,
+    evidence: Vec<ImportedLegacyEvidence>,
+}
+
+#[allow(clippy::too_many_lines)] // One pass joins every coordinate, blob, roster and source boundary.
+fn validated_legacy_boundary_snapshot(
+    snapshot: &CompleteStoreSnapshot,
+    authority: &Authority,
+) -> Result<ValidatedLegacyBoundary, String> {
     let mut coordinates = BTreeMap::new();
     let mut evidence = BTreeMap::new();
     for subject in &snapshot.histories {
@@ -784,6 +871,7 @@ pub fn validate_legacy_boundary_snapshot(
         return Err("legacy evidence contains an unjoined blob".to_owned());
     }
     let mut reserved = BTreeSet::new();
+    let mut imported = Vec::new();
     let mut rostered_coordinates = BTreeSet::new();
     for subject in &snapshot.histories {
         if subject.history.subject.entity != LEGACY_ROSTER_AS {
@@ -847,6 +935,20 @@ pub fn validate_legacy_boundary_snapshot(
         if digest != roster.roster_digest {
             return Err("legacy reservation roster digest disagrees".to_owned());
         }
+        let boundary = snapshot
+            .histories
+            .iter()
+            .find(|value| {
+                value.history.subject.entity == LEGACY_IMPORT_BOUNDARY_AS
+                    && value.history.subject.id == roster.boundary_id
+            })
+            .ok_or_else(|| format!("legacy import boundary `{}` is absent", roster.boundary_id))?;
+        let boundary_source = boundary
+            .terminal
+            .fields
+            .get("source_snapshot")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "legacy import boundary has no source snapshot".to_owned())?;
         for entry in &roster.entries {
             if !rostered_coordinates.insert(entry.coordinate_subject_id.clone()) {
                 return Err(format!(
@@ -888,12 +990,69 @@ pub fn validate_legacy_boundary_snapshot(
                 || blob.original_record_id
                     != aep_contract::migration::PresenceV1::Present(entry.record_id.clone())
                 || blob.envelope_digest != entry.envelope_digest
+                || coordinate.source_snapshot.as_wire() != boundary_source
             {
                 return Err(format!(
                     "legacy boundary join for `{}` disagrees",
                     entry.record_id
                 ));
             }
+            let (kind, envelope) = match coordinate.evidence_kind.as_str() {
+                "decision" => (
+                    LegacyBoundaryKind::Decision,
+                    serde_json::from_slice::<RecordedCommit>(blob.exact_bytes.as_bytes())
+                        .map(RecordedEntry::Decision),
+                ),
+                "observation" => (
+                    LegacyBoundaryKind::Observation,
+                    serde_json::from_slice::<RecordedObservation>(blob.exact_bytes.as_bytes())
+                        .map(RecordedEntry::Observation),
+                ),
+                _ => {
+                    return Err(format!(
+                        "legacy record `{}` is not an envelope",
+                        entry.record_id
+                    ))
+                }
+            };
+            let envelope = envelope.map_err(|error| {
+                format!(
+                    "legacy record `{}` envelope is invalid: {error}",
+                    entry.record_id
+                )
+            })?;
+            if envelope.record_id() != entry.record_id
+                || envelope.subject().entity != coordinate.destination_entity
+                || envelope.subject().id != coordinate.destination_id
+            {
+                return Err(format!(
+                    "legacy record `{}` envelope subject or identity disagrees",
+                    entry.record_id
+                ));
+            }
+            let order = match coordinate.order.as_str() {
+                "store" => LegacyBoundaryOrder::Store,
+                "subject" => LegacyBoundaryOrder::Subject,
+                "per_kind" => LegacyBoundaryOrder::PerKind,
+                "unavailable" => LegacyBoundaryOrder::Unavailable,
+                _ => unreachable!("validated coordinate order"),
+            };
+            imported.push(ImportedLegacyEvidence {
+                source_snapshot: coordinate.source_snapshot,
+                source_locator: coordinate.source_locator.clone(),
+                boundary_id: roster.boundary_id.clone(),
+                coordinate_subject_id: entry.coordinate_subject_id.clone(),
+                evidence_blob_subject_id: entry.evidence_blob_subject_id.clone(),
+                reservation_roster_id: subject.history.subject.id.clone(),
+                destination_entity: coordinate.destination_entity.clone(),
+                destination_id: coordinate.destination_id.clone(),
+                original_record_id: entry.record_id.clone(),
+                kind,
+                order,
+                ordinal: coordinate.ordinal.clone(),
+                envelope_digest: coordinate.envelope_digest,
+                exact_bytes: blob.exact_bytes.as_bytes().to_vec(),
+            });
         }
     }
     for (coordinate_id, coordinate) in &coordinates {
@@ -907,7 +1066,11 @@ pub fn validate_legacy_boundary_snapshot(
             ));
         }
     }
-    Ok(reserved)
+    imported.sort_by(|left, right| left.coordinate_subject_id.cmp(&right.coordinate_subject_id));
+    Ok(ValidatedLegacyBoundary {
+        reserved,
+        evidence: imported,
+    })
 }
 
 #[derive(serde::Deserialize)]
