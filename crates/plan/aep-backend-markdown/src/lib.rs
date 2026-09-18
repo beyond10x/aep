@@ -86,6 +86,7 @@
 
 pub mod assembly;
 pub mod backend;
+pub mod chain;
 pub mod claim;
 pub mod document;
 pub mod drift;

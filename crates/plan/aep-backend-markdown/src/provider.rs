@@ -263,25 +263,28 @@ impl MarkdownProvider {
             .collect())
     }
 
+    /// Appends events to the journal, each sealed to the one before it.
+    ///
+    /// The seal is [`crate::chain`]'s and the two keys it adds are invisible here on the way back:
+    /// `DomainEvent` refuses no unknown field, so [`events_raw`](Self::events_raw) parses a sealed
+    /// line into exactly the event that was committed. That matters beyond tidiness —
+    /// [`apply_recoverable`](Self::apply_recoverable) decides which events are still missing by
+    /// comparing parsed events for equality, and a seal that survived that parse would make every
+    /// recovered batch append its events a second time.
     fn append_events(&self, events: &[DomainEvent]) -> Result<(), StoreError> {
         if events.is_empty() {
             return Ok(());
         }
         let path = self.store.root().join(JOURNAL);
-        let mut lines = String::new();
+        let mut records = Vec::with_capacity(events.len());
         for event in events {
-            lines.push_str(
-                &serde_json::to_string(event).map_err(|error| {
+            records.push(
+                serde_json::to_value(event).map_err(|error| {
                     StoreError::Backend(format!("serialising an event: {error}"))
                 })?,
             );
-            lines.push('\n');
         }
-        fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .and_then(|mut file| file.write_all(lines.as_bytes()))
+        crate::chain::append_sealed(self.store.root(), &records)
             .map_err(|error| backend("appending to", &path, &error))
     }
 }

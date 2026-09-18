@@ -286,8 +286,39 @@ fn normalise(project: &Path, text: &str) -> String {
             _ => line,
         };
         let line = blank_instants(&line);
+        if line.starts_with("journal chain:") {
+            continue;
+        }
+        let line = without_the_journals_chain(&line);
         out.push_str(&line);
         out.push('\n');
+    }
+    out
+}
+
+/// `line` with the journal's hash-chain coverage blanked.
+///
+/// The one fact on this report that a SQLite or Postgres plan **cannot** have an equal of, for the
+/// same reason `validate` reconciles no journal for one: a plan without files keeps its history in
+/// the store, and the contract answers it — there is no second record, so there is nothing to
+/// chain. Comparing the counts would demand a database grow a `journal.jsonl` to stay equivalent,
+/// which is backwards. What the verbs must still agree on is everything the *plan* is, and every
+/// other number here is compared, revisions included.
+///
+/// The text rendering's whole line is dropped by the caller; this takes the two JSON counts out of
+/// the object, which is always written because a report that omits a count is a report a consumer
+/// has to branch on.
+fn without_the_journals_chain(line: &str) -> String {
+    let mut out = line.to_owned();
+    for key in ["\"chain_verified\":", "\"chain_uncovered\":"] {
+        if let Some(start) = out.find(key) {
+            let after = &out[start + key.len()..];
+            let end = after
+                .find(',')
+                .or_else(|| after.find('\n'))
+                .unwrap_or(after.len());
+            out = format!("{}{key}{}", &out[..start], &after[end..]);
+        }
     }
     out
 }

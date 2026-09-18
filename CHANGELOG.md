@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- A markdown plan's `journal.jsonl` is now a hash chain: every record `aep` appends carries the
+  digest of the record before it and a digest of its own bytes, written under a lock and flushed
+  before the lock is released. `aep plan artifact validate` walks the chain and fails, naming the
+  exact record, when one has been edited, inserted, removed or reordered — which closes the case a
+  document and its journal were edited *together* to agree on a revision no command produced.
+  A journal written before this exists is reported as not covered and is not a finding of any tier,
+  including under `--strict`; the first record appended to one seals every line before it as a
+  block, so the older lines become tamper-evident without being rewritten. This detects tampering
+  within a log, and it prevents nothing. It does not detect a log replaced wholesale, and it does
+  not detect one truncated at the tail; a chain is computed from the bytes it protects, so both need
+  the head recorded somewhere the log does not control — gap register D-3, still proposed.
+
 ### Fixed
 
 - Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed

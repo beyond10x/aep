@@ -41,17 +41,20 @@ serde.workspace = true
 serde_yaml.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
+# The journal's hash chain (`src/chain.rs`), and nothing else. **Not a new dependency**: this is the
+# same `0.11` six other crates here already take in `[dependencies]`, it was already in this crate's
+# `[dev-dependencies]`, and it is the workspace's one hashing crate — adding a second would be two
+# answers to one question. What moved is only which section it sits in, because the digest is now
+# something this crate *ships* rather than something a test computes: a journal record carries the
+# digest of the record before it, so a line that is edited no longer agrees with its own seal. It is
+# a digest and not a signature: a signature needs a key, and a key is gap register **D-3**, which is
+# proposed and not accepted. The test that already used it keeps working from here — it verifies
+# `tests/fixtures/entity-runtime-aep/PIN.md` against the bytes beside it, so a copy of another
+# repository's documents cannot drift without the pin drifting too.
+sha2 = "0.11"
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 aep-conformance.workspace = true
-# Test-only, and the same `0.10` seven other crates here already take — it is the workspace's one
-# hashing crate and adding a second would be two answers to one question. It is here rather than in
-# `[dependencies]` because nothing this crate ships hashes anything: it verifies
-# `tests/fixtures/entity-runtime-aep/PIN.md` against the bytes beside it, so a copy of another
-# repository's documents cannot drift without the pin drifting too. `entity-runtime` holds the
-# mirror-image copy of ours and checks it the same way, in its gate's `pin-check`; this repository
-# has no such step, so the check lives in the test that depends on the copy.
-sha2 = "0.11"
