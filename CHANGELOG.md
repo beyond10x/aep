@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.56.0] — 2026-09-18
+
 ### Added
 
 - A markdown plan's `journal.jsonl` is now a hash chain: every record `aep` appends carries the
