@@ -37,10 +37,14 @@
 //! later entry rather than by editing an earlier one. The file grows; a plan that produces a
 //! thousand moves a year produces a file measured in tens of kilobytes, which is the right trade
 //! for a record nobody can quietly amend.
+//!
+//! *Nobody can quietly amend* was a claim about convention until [`crate::chain`]: every record
+//! this store appends now carries the digest of the record before it, so an edited line no longer
+//! agrees with its own seal and `aep plan artifact validate` names the line. What that does and
+//! does not detect — and in particular that it does **not** detect a log replaced wholesale, nor
+//! one truncated at the tail — is written out there rather than summarised here.
 
 use std::fmt;
-use std::fs::OpenOptions;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use std::collections::BTreeMap;
@@ -235,25 +239,22 @@ impl fmt::Display for Change {
 
 /// Appends an entry, creating the journal if this is the first thing that ever happened.
 ///
+/// Sealed to the entry before it by [`crate::chain`], the same way the provider's event lines are.
+/// Both shapes share one file, so they share one chain: a chain that covered only half the lines
+/// would leave the other half editable, which is the hole it exists to close. The two keys the
+/// seal adds are `#[serde(default)]`-shaped in effect — [`Entry`] refuses no unknown field — so a
+/// sealed line reads back as exactly the entry that was written.
+///
 /// # Errors
 ///
-/// Whatever the filesystem said. A write that failed is **not** swallowed: a journal that silently
-/// stops recording is worse than one that is not there, because the first looks like a plan where
-/// nothing happened.
+/// Whatever the filesystem said, and a journal whose lock another writer holds. A write that
+/// failed is **not** swallowed: a journal that silently stops recording is worse than one that is
+/// not there, because the first looks like a plan where nothing happened.
 pub fn append(root: &Path, entry: &Entry) -> std::io::Result<()> {
-    let path = root.join(JOURNAL);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut line = serde_json::to_string(entry).map_err(std::io::Error::other)?;
-    line.push('\n');
-    // Append, never rewrite: two processes writing at once interleave whole lines rather than
-    // corrupting each other's, which is the property JSONL is chosen for.
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)?
-        .write_all(line.as_bytes())
+    let record = serde_json::to_value(entry).map_err(std::io::Error::other)?;
+    // Append, never rewrite. The lock is the chain's: sealing turns *read the head, then append*
+    // into one operation, and two writers interleaving it would fork the chain.
+    crate::chain::append_sealed(root, std::slice::from_ref(&record))
 }
 
 /// Every entry, oldest first.
