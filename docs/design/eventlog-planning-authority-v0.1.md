@@ -119,6 +119,15 @@ the full deterministic projection, replaces only owned projection paths, preserv
 with explicit conflicts, and returns the covered authority/watermark. Concurrent commits must be
 fenced or make the rebuild visibly stale; they cannot yield a false current result.
 
+Projection ownership comes from exact captured Markdown bytes or an ownership inventory whose
+snapshot and digest match authority-held watermark evidence. Parseability alone never makes a
+current path replaceable. On Unix, the inventory and recovery equality include all permission
+bits, including setuid, setgid and sticky; projected files use deterministic mode `0644`.
+This corrects the intended `aep.planning-projection-inventory/1` digest without changing its typed
+wire envelope or schema. Watermarks produced by the incomplete byte-only implementation are not
+compatible: verification and recovery refuse them instead of treating a mode-blind digest as
+current.
+
 ## Acceptance and the six real cutovers
 
 The one owner story includes the new backend/config/commands and operational acceptance. Subtasks

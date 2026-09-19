@@ -147,6 +147,100 @@ fn seed_sqlite(planning: &PathBuf, database: &PathBuf) {
     .expect("SQLite source seeded");
 }
 
+fn align_replica_id_with_markdown_mapping(database: &PathBuf) -> aep_domain::entity::EntityId {
+    let digest = aep_contract::migration::digest_parts_v1(
+        "aep.migration.markdown-entity/1",
+        &[b"story/one.md".to_vec(), b"story:one".to_vec()],
+    )
+    .expect("fixed mapping input frames");
+    let mapped = aep_domain::entity::EntityId::new(format!(
+        "MIG{}",
+        digest.as_wire().trim_start_matches("sha256:")
+    ))
+    .expect("mapped Markdown identity is admitted");
+    let mut connection = rusqlite::Connection::open(database).expect("SQLite source reopens");
+    let transaction = connection
+        .transaction()
+        .expect("identity fixture transaction");
+    let document: String = transaction
+        .query_row(
+            "SELECT document FROM instances WHERE entity = 'aep.entity' ORDER BY id LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("replica subject exists");
+    let mut instance: entity_core::EntityInstance =
+        serde_json::from_str(&document).expect("replica terminal is typed");
+    let original = instance.id.clone();
+    instance.id = mapped.to_string();
+    instance
+        .fields
+        .get_mut("$aep")
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|value| value.get_mut("metadata"))
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("replica terminal has AEP metadata")
+        .insert(
+            "id".to_owned(),
+            serde_json::Value::String(mapped.to_string()),
+        );
+    transaction
+        .execute(
+            "UPDATE instances SET id = ?1, document = ?2 WHERE entity = 'aep.entity' AND id = ?3",
+            rusqlite::params![
+                mapped.to_string(),
+                serde_json::to_string(&instance).expect("terminal serialises"),
+                original
+            ],
+        )
+        .expect("replica terminal identity aligns");
+    let events = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT revision, position, document FROM events \
+                 WHERE entity = 'aep.entity' AND id = ?1 ORDER BY revision, position",
+            )
+            .expect("event query prepares");
+        statement
+            .query_map([&original], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .expect("events query")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("events collect")
+    };
+    for (revision, position, document) in events {
+        let mut event: entity_core::DomainEvent =
+            serde_json::from_str(&document).expect("replica event is typed");
+        event.id = mapped.to_string();
+        transaction
+            .execute(
+                "UPDATE events SET id = ?1, document = ?2 \
+                 WHERE entity = 'aep.entity' AND id = ?3 AND revision = ?4 AND position = ?5",
+                rusqlite::params![
+                    mapped.to_string(),
+                    serde_json::to_string(&event).expect("event serialises"),
+                    original,
+                    revision,
+                    position
+                ],
+            )
+            .expect("replica event identity aligns");
+    }
+    transaction
+        .execute(
+            "UPDATE legacy_origins SET id = ?1 WHERE entity = 'aep.entity' AND id = ?2",
+            rusqlite::params![mapped.to_string(), original],
+        )
+        .expect("replica origin identity aligns");
+    transaction.commit().expect("identity fixture commits");
+    mapped
+}
+
 fn seed_postgres(planning: &PathBuf, url: &str) {
     let report = MarkdownStore::open(planning).load();
     assert!(report.is_clean());
@@ -174,6 +268,38 @@ fn apply_selected_sql_source(root: &PathBuf, selector: &PathBuf, migration: &str
     ];
     let (success, history_before, error) = run(root, &history_args);
     assert!(success, "source history: {history_before} {error}");
+    apply_selected_source(root, selector, migration);
+    let (success, history_after, error) = run(root, &history_args);
+    assert!(success, "selected history: {history_after} {error}");
+    assert_eq!(
+        history_after, history_before,
+        "ordinary history survives migration"
+    );
+}
+
+fn apply_selected_source(root: &PathBuf, selector: &PathBuf, migration: &str) {
+    let (success, applied, error) = run_selected_source_apply(root, selector, migration);
+    assert!(success, "SQL public apply: {applied} {error}");
+    assert!(applied["outcome"]["value"]["receipt"].is_object());
+    let selector_text = selector.to_string_lossy().into_owned();
+    let verify = [
+        "plan",
+        "store",
+        "verify",
+        "--project",
+        &selector_text,
+        "--format",
+        "json",
+    ];
+    let (success, verified, error) = run(root, &verify);
+    assert!(success, "SQL selected verify: {verified} {error}");
+}
+
+fn run_selected_source_apply(
+    root: &PathBuf,
+    selector: &PathBuf,
+    migration: &str,
+) -> (bool, serde_json::Value, String) {
     let selector_text = selector.to_string_lossy().into_owned();
     let dry = [
         "plan",
@@ -221,27 +347,9 @@ fn apply_selected_sql_source(root: &PathBuf, selector: &PathBuf, migration: &str
         false,
         None,
     );
-    let (success, applied, error) = run(root, &apply);
-    assert!(success, "SQL public apply: {applied} {error}");
-    assert!(applied["outcome"]["value"]["receipt"].is_object());
+    let outcome = run(root, &apply);
     stop_holder(&mut holder);
-    let verify = [
-        "plan",
-        "store",
-        "verify",
-        "--project",
-        &selector_text,
-        "--format",
-        "json",
-    ];
-    let (success, verified, error) = run(root, &verify);
-    assert!(success, "SQL selected verify: {verified} {error}");
-    let (success, history_after, error) = run(root, &history_args);
-    assert!(success, "selected history: {history_after} {error}");
-    assert_eq!(
-        history_after, history_before,
-        "ordinary history survives migration"
-    );
+    outcome
 }
 
 #[test]
@@ -421,17 +529,182 @@ fn repair_committed_projection_failure(
 }
 
 #[test]
+fn sqlite_projection_refuses_unowned_valid_markdown_before_migration_writes() {
+    let (root, selector) = project();
+    let engineering = root.join(".engineering");
+    let planning = engineering.join("planning");
+    let story = planning.join("story/one.md");
+    let original_story = fs::read(&story).expect("unowned valid Markdown fixture");
+    seed_sqlite(&planning, &engineering.join("plan.sqlite3"));
+    let original_selector = b"{\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\",\"store\":{\"sqlite\":\"plan.sqlite3\"}}\n";
+    fs::write(&selector, original_selector).expect("SQLite selector");
+    let selector_text = selector.to_string_lossy().into_owned();
+    let dry = [
+        "plan",
+        "store",
+        "migrate",
+        "dry-run",
+        "--project",
+        &selector_text,
+        "--authority-scope",
+        "control-sql",
+        "--authority-tenant",
+        "control-sql-tenant",
+        "--authority-new",
+        "--format",
+        "json",
+    ];
+    let (success, preview, error) = run(&root, &dry);
+    assert!(
+        success,
+        "SQL dry-run reports the collision: {preview} {error}"
+    );
+    assert_eq!(
+        preview["outcome"]["value"]["destination_requirements"]["foreign_content"]
+            .as_array()
+            .expect("foreign paths")
+            .len(),
+        1
+    );
+
+    let (success, refused, error) =
+        run_selected_source_apply(&root, &selector, "control-sqlite-foreign-projection");
+    assert!(!success, "unowned collision must refuse: {refused} {error}");
+    assert_eq!(
+        fs::read(&selector).expect("selector survives"),
+        original_selector
+    );
+    assert_eq!(
+        fs::read(&story).expect("foreign story survives"),
+        original_story
+    );
+    assert!(
+        !engineering.join("migrations").exists(),
+        "preflight refusal must not create durable migration evidence"
+    );
+    fs::remove_dir_all(root).expect("remove disposable collision fixture");
+}
+
+#[test]
 fn public_sqlite_source_applies_under_observed_writer_stop() {
     let (root, selector) = project();
     let engineering = root.join(".engineering");
-    seed_sqlite(
-        &engineering.join("planning"),
-        &engineering.join("plan.sqlite3"),
-    );
+    let planning = engineering.join("planning");
+    seed_sqlite(&planning, &engineering.join("plan.sqlite3"));
+    fs::remove_dir_all(planning).expect("positive SQL projection begins unoccupied");
     fs::write(&selector,
         "{\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\",\"store\":{\"sqlite\":\"plan.sqlite3\"}}\n")
         .expect("SQLite selector");
     apply_selected_sql_source(&root, &selector, "control-sqlite-migration");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One public journey compares the selected prefix, losing retained evidence, and recorded suffix.
+fn replica_authoritative_hybrid_keeps_only_selected_history_and_appends_recorded_suffix() {
+    let (root, selector) = project();
+    let engineering = root.join(".engineering");
+    let planning = engineering.join("planning");
+    let database = engineering.join("plan.sqlite3");
+    seed_sqlite(&planning, &database);
+    let replica_id = align_replica_id_with_markdown_mapping(&database);
+    let replica = aep_backend_sqlite::SqliteBackend::open(&database).expect("replica opens");
+    let selected_before = replica
+        .as_entity_backend()
+        .events_of(&replica_id)
+        .expect("replica-selected history before migration");
+    assert!(
+        !selected_before.is_empty(),
+        "replica history fixture is nonempty"
+    );
+    let duplicate = serde_json::to_vec(&serde_json::json!({
+        "at": "2023-11-14T22:13:20Z",
+        "actor": "human:writer-control-fixture",
+        "artifact": "story:one",
+        "kind": "story",
+        "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    }))
+    .expect("duplicate local entry serialises");
+    let conflicting = serde_json::to_vec(&serde_json::json!({
+        "at": "2026-01-01T00:00:01Z",
+        "actor": "human:local-losing-copy",
+        "artifact": "story:one",
+        "kind": "story",
+        "revision": 1,
+        "change": {"change": "evidence", "kind": "test_result", "source": "local-only"}
+    }))
+    .expect("conflicting local entry serialises");
+    fs::write(
+        planning.join("journal.jsonl"),
+        [duplicate.as_slice(), b"\n", conflicting.as_slice(), b"\n"].concat(),
+    )
+    .expect("losing local history fixture");
+    fs::write(
+        &selector,
+        "{\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\",\"store\":{\"hybrid\":{\"authority\":\"replica\",\"read\":\"replica-first\",\"on_unreachable\":\"refuse\",\"on_divergence\":\"record\",\"local\":\"markdown\",\"replica\":{\"sqlite\":\"plan.sqlite3\"}}}}\n",
+    )
+    .expect("replica-authoritative hybrid selector");
+    let history = [
+        "plan",
+        "artifact",
+        "history",
+        "story:one",
+        "--format",
+        "json",
+    ];
+    apply_selected_source(&root, &selector, "control-hybrid-replica-migration");
+
+    let (success, migrated, error) = run(&root, &history);
+    assert!(
+        success,
+        "selected history after migration: {migrated} {error}"
+    );
+    let migrated = migrated.as_array().expect("migrated selected history");
+    assert_eq!(
+        migrated.len(),
+        selected_before.len(),
+        "losing local entries must not be prepended or duplicate replica history"
+    );
+    assert!(
+        !migrated
+            .iter()
+            .any(|entry| entry.to_string().contains("local-only")),
+        "losing local detail became public history: {migrated:?}"
+    );
+
+    let evidence = [
+        "plan",
+        "artifact",
+        "evidence",
+        "story:one",
+        "--kind",
+        "test_result",
+        "--source",
+        "post-migration",
+        "--at",
+        "2026-01-02T00:00:00Z",
+        "--format",
+        "json",
+    ];
+    let (success, recorded, error) = run(&root, &evidence);
+    assert!(success, "post-migration suffix records: {recorded} {error}");
+    let (success, selected_after, error) = run(&root, &history);
+    assert!(
+        success,
+        "replica-selected history after suffix: {selected_after} {error}"
+    );
+    let selected_after = selected_after.as_array().expect("selected history");
+    assert_eq!(
+        &selected_after[..migrated.len()],
+        migrated,
+        "the recorded suffix must follow the selected replica history"
+    );
+    assert_eq!(selected_after.len(), migrated.len() + 1);
+    assert_eq!(
+        selected_after.last().expect("recorded suffix")["change"]["source"],
+        "post-migration"
+    );
+    fs::remove_dir_all(root).expect("remove disposable hybrid fixture");
 }
 
 struct PgCleanup {
@@ -472,7 +745,9 @@ fn public_postgres_source_applies_under_observed_writer_stop_when_configured() {
         .expect("isolated SQL namespace");
     let separator = if url.contains('?') { '&' } else { '?' };
     let scoped_url = format!("{url}{separator}options=-csearch_path%3D{schema}");
-    seed_postgres(&root.join(".engineering/planning"), &scoped_url);
+    let planning = root.join(".engineering/planning");
+    seed_postgres(&planning, &scoped_url);
+    fs::remove_dir_all(planning).expect("positive PostgreSQL projection begins unoccupied");
     let config = serde_json::json!({
         "protocol":"adp/1", "profile":"development.standard", "protocols":"../protocols",
         "store":{"postgres":scoped_url}

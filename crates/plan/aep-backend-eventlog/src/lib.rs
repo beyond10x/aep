@@ -787,6 +787,9 @@ impl EventlogPlanningStore {
             .map_err(read_error)?;
         validate_legacy_boundary_snapshot(&snapshot, &self.authority)
             .map_err(StoreError::Backend)?;
+        if !selected_history_uses_markdown(&snapshot).map_err(StoreError::Backend)? {
+            return Ok(Vec::new());
+        }
         let mut lines = BTreeMap::new();
         let mut source = None;
         for subject in &snapshot.histories {
@@ -894,6 +897,43 @@ impl EventlogPlanningStore {
             .map_err(|error| format!("reading legacy boundary evidence: {error:?}"))?;
         validate_legacy_boundary_snapshot(&snapshot, &self.authority)
     }
+}
+
+fn selected_history_uses_markdown(snapshot: &CompleteStoreSnapshot) -> Result<bool, String> {
+    let mut selected = None;
+    for boundary in &snapshot.histories {
+        if boundary.history.subject.entity != LEGACY_IMPORT_BOUNDARY_AS {
+            continue;
+        }
+        let raw = boundary
+            .terminal
+            .fields
+            .get("raw_capture")
+            .cloned()
+            .ok_or_else(|| "legacy import boundary has no raw capture".to_owned())?;
+        let raw: aep_contract::migration::LegacyRawCaptureV1 = serde_json::from_value(raw)
+            .map_err(|error| format!("invalid legacy raw capture: {error}"))?;
+        let uses_markdown = match raw {
+            aep_contract::migration::LegacyRawCaptureV1::Markdown(_) => true,
+            aep_contract::migration::LegacyRawCaptureV1::Sqlite(_)
+            | aep_contract::migration::LegacyRawCaptureV1::Postgres(_) => false,
+            aep_contract::migration::LegacyRawCaptureV1::Hybrid(raw) => {
+                match raw.policy.authority.as_str() {
+                    "local" => true,
+                    "replica" => false,
+                    other => {
+                        return Err(format!(
+                            "legacy hybrid boundary has unknown selected authority {other:?}"
+                        ));
+                    }
+                }
+            }
+        };
+        if selected.replace(uses_markdown).is_some() {
+            return Err("multiple legacy import boundaries disagree with one source".to_owned());
+        }
+    }
+    Ok(selected.unwrap_or(false))
 }
 
 /// Validates the immutable legacy coordinate/blob/roster graph in one provider-complete snapshot.

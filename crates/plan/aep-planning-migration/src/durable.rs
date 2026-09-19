@@ -4,7 +4,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[allow(clippy::wildcard_imports)]
 // This coordinator implements the complete closed migration vocabulary.
@@ -132,6 +132,233 @@ pub enum ApplyError {
     VerificationMismatch,
 }
 
+/// Reports existing or aliased unowned destination paths without following links or writing.
+///
+/// Missing suffixes are safe. An existing target, a non-directory ancestor, or any symlink in the
+/// walk is foreign. Callers use the same predicate for dry-run reporting and the fresh apply fence.
+pub fn foreign_destination_paths(paths: &[&Path]) -> Vec<PathBuf> {
+    let mut foreign = std::collections::BTreeSet::new();
+    for target in paths {
+        let mut current = PathBuf::new();
+        for component in target.components() {
+            current.push(component.as_os_str());
+            match fs::symlink_metadata(&current) {
+                Ok(metadata) => {
+                    let at_target = current == *target;
+                    if metadata.file_type().is_symlink() || at_target || !metadata.is_dir() {
+                        foreign.insert(current.clone());
+                        break;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+                Err(_) => {
+                    foreign.insert(current.clone());
+                    break;
+                }
+            }
+        }
+    }
+    foreign.into_iter().collect()
+}
+
+fn projection_is_legacy_source(intent: &MigrationIntentV2) -> bool {
+    match &intent.source_coordinate {
+        SourceCoordinateV1::Markdown(source) => source.root == intent.projection_path,
+        SourceCoordinateV1::Hybrid(source) => source.local_root == intent.projection_path,
+        SourceCoordinateV1::Sqlite(_)
+        | SourceCoordinateV1::Postgres(_)
+        | SourceCoordinateV1::Eventlog(_) => false,
+    }
+}
+
+fn validate_apply_path_layout(input: &ApplyInputs) -> Result<(), ApplyError> {
+    for path in [
+        &input.phase_root,
+        &input.staging_path,
+        &input.destination_path,
+        &input.projection_path,
+        &input.selector_path,
+    ] {
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+        {
+            return Err(ApplyError::EvidenceConflict);
+        }
+    }
+    if !input.staging_path.starts_with(&input.phase_root)
+        || input.destination_path.starts_with(&input.phase_root)
+        || input.phase_root.starts_with(&input.destination_path)
+    {
+        return Err(ApplyError::EvidenceConflict);
+    }
+    let paths = [
+        &input.phase_root,
+        &input.staging_path,
+        &input.destination_path,
+        &input.projection_path,
+        &input.selector_path,
+    ];
+    for (index, left) in paths.iter().enumerate() {
+        if paths[index + 1..].contains(left) {
+            return Err(ApplyError::EvidenceConflict);
+        }
+    }
+    let engineering = input
+        .selector_path
+        .parent()
+        .ok_or(ApplyError::EvidenceConflict)?;
+    if input.phase_root.parent() != Some(&engineering.join("migrations"))
+        || input.staging_path != input.phase_root.join("stage/authority")
+        || input.destination_path != engineering.join("state")
+        || input.projection_path != engineering.join("planning")
+    {
+        return Err(ApplyError::EvidenceConflict);
+    }
+    match &input.intent.source_coordinate {
+        SourceCoordinateV1::Markdown(source) => {
+            if host_path_buf(&source.root)? != input.projection_path {
+                return Err(ApplyError::EvidenceConflict);
+            }
+        }
+        SourceCoordinateV1::Hybrid(source) => {
+            if host_path_buf(&source.local_root)? != input.projection_path {
+                return Err(ApplyError::EvidenceConflict);
+            }
+            if let SqlReplicaCoordinateV1::Sqlite(replica) = &source.replica {
+                validate_source_separation(&host_path_buf(&replica.database)?, input)?;
+            }
+        }
+        SourceCoordinateV1::Sqlite(source) => {
+            validate_source_separation(&host_path_buf(&source.database)?, input)?;
+        }
+        SourceCoordinateV1::Eventlog(source) => {
+            validate_source_separation(&host_path_buf(&source.authority_root)?, input)?;
+        }
+        SourceCoordinateV1::Postgres(_) => {}
+    }
+    Ok(())
+}
+
+fn validate_source_separation(source: &Path, input: &ApplyInputs) -> Result<(), ApplyError> {
+    if [
+        input.phase_root.as_path(),
+        input.destination_path.as_path(),
+        input.projection_path.as_path(),
+    ]
+    .iter()
+    .any(|owned| source.starts_with(owned) || owned.starts_with(source))
+    {
+        return Err(ApplyError::EvidenceConflict);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn host_path_buf(path: &HostPathV1) -> Result<PathBuf, ApplyError> {
+    use std::os::unix::ffi::OsStringExt as _;
+
+    match path {
+        HostPathV1::Unix(bytes) => {
+            Ok(std::ffi::OsString::from_vec(bytes.as_bytes().to_vec()).into())
+        }
+        HostPathV1::Windows(_) => Err(ApplyError::EvidenceConflict),
+    }
+}
+
+#[cfg(windows)]
+fn host_path_buf(path: &HostPathV1) -> Result<PathBuf, ApplyError> {
+    use std::os::windows::ffi::OsStringExt as _;
+
+    match path {
+        HostPathV1::Windows(units) => Ok(std::ffi::OsString::from_wide(units).into()),
+        HostPathV1::Unix(_) => Err(ApplyError::EvidenceConflict),
+    }
+}
+
+fn validate_no_follow_path(path: &Path, audit_tree: bool) -> Result<(), ApplyError> {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() {
+                    return Err(ApplyError::EvidenceConflict);
+                }
+                if current != path && !metadata.is_dir() {
+                    return Err(ApplyError::EvidenceConflict);
+                }
+                validate_single_link(&metadata)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    if audit_tree && path.is_dir() {
+        validate_owned_tree(path)?;
+    }
+    Ok(())
+}
+
+fn validate_owned_tree(directory: &Path) -> Result<(), ApplyError> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(ApplyError::EvidenceConflict);
+        }
+        validate_single_link(&metadata)?;
+        if metadata.is_dir() {
+            validate_owned_tree(&path)?;
+        } else if !metadata.is_file() {
+            return Err(ApplyError::EvidenceConflict);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn validate_single_link(metadata: &fs::Metadata) -> Result<(), ApplyError> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    if metadata.is_file() && metadata.nlink() != 1 {
+        return Err(ApplyError::EvidenceConflict);
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn validate_single_link(_metadata: &fs::Metadata) -> Result<(), ApplyError> {
+    Ok(())
+}
+
+fn validate_resume_paths(input: &ApplyInputs) -> Result<(), ApplyError> {
+    validate_no_follow_path(&input.phase_root, true)?;
+    validate_no_follow_path(&input.staging_path, true)?;
+    validate_no_follow_path(&input.destination_path, true)?;
+    validate_no_follow_path(&input.projection_path, true)?;
+    validate_no_follow_path(&input.selector_path, false)
+}
+
+fn validate_prewrite_paths(input: &ApplyInputs) -> Result<(), ApplyError> {
+    validate_no_follow_path(&input.selector_path, false)?;
+    let selector = fs::symlink_metadata(&input.selector_path)?;
+    if !selector.is_file() || selector.file_type().is_symlink() {
+        return Err(ApplyError::EvidenceConflict);
+    }
+    validate_no_follow_path(&input.projection_path, true)?;
+    match fs::symlink_metadata(&input.projection_path) {
+        Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
+            Err(ApplyError::EvidenceConflict)
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
 /// Executes or resumes one immutable migration. Existing phase bytes are compared, never replaced.
 pub fn apply<C, F>(
     control: &C,
@@ -191,6 +418,8 @@ where
     F: Fn(&AuthorityCoordinateV1) -> Result<Vec<u8>, ApplyError>,
     H: FnMut(MigrationPhaseV1) -> Result<(), ApplyError>,
 {
+    validate_apply_path_layout(input)?;
+    validate_prewrite_paths(input)?;
     let expected_intent = intent_digest_v2(&input.intent)?;
     if input.intent.intent_digest != expected_intent {
         return Err(ApplyError::IntentConflict);
@@ -212,7 +441,34 @@ where
     let marker_path = input.phase_root.join("ownership.json");
     let recovery_path = input.phase_root.join("recovery/raw-capture.json");
     let receipt_path = input.phase_root.join("receipt.json");
-    if receipt_path.exists() {
+    let resuming = match fs::symlink_metadata(&intent_path) {
+        Ok(metadata) if !metadata.is_file() || metadata.file_type().is_symlink() => {
+            return Err(ApplyError::EvidenceConflict);
+        }
+        Ok(metadata) => {
+            validate_single_link(&metadata)?;
+            true
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let mut fresh_paths = vec![
+                input.phase_root.as_path(),
+                input.staging_path.as_path(),
+                input.destination_path.as_path(),
+            ];
+            if !projection_is_legacy_source(&input.intent) {
+                fresh_paths.push(input.projection_path.as_path());
+            }
+            if !foreign_destination_paths(&fresh_paths).is_empty() {
+                return Err(ApplyError::ForeignStage);
+            }
+            false
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if resuming {
+        validate_resume_paths(input)?;
+    }
+    if fs::symlink_metadata(&receipt_path).is_ok() {
         if fs::read(&intent_path)? != compact_line(&input.intent)?
             || fs::read(&marker_path)? != compact_line(&marker)?
             || fs::read(&recovery_path)? != input.recovery_capture_bytes
@@ -243,9 +499,6 @@ where
         input.intent.intent_digest,
     )?;
     let first_prepared = !journal.is_at_least(MigrationPhaseV1::Prepared);
-    if first_prepared && (input.staging_path.exists() || input.destination_path.exists()) {
-        return Err(ApplyError::ForeignStage);
-    }
     if first_prepared {
         after_effect(MigrationPhaseV1::Prepared)?;
     }
@@ -1108,6 +1361,176 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One case proves the complete fresh/resumed path-substitution boundary without duplicating its fixture.
+    fn foreign_destination_refuses_before_creating_migration_evidence() {
+        let root = std::env::temp_dir().join(format!(
+            "aep-foreign-destination-preflight-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let phase_root = root.join("migrations/one");
+        let staging_path = phase_root.join("stage/authority");
+        let destination_path = root.join("state");
+        let projection_path = root.join("planning");
+        let selector_path = root.join("project.yaml");
+        fs::create_dir_all(&destination_path).expect("foreign destination fixture");
+        fs::write(&selector_path, b"version: aep.project/1\n").expect("legacy selector");
+        let source_snapshot = SourceSnapshotIdV1(DigestV1::from_bytes([1; 32]));
+        let selector_digest = selector_digest_v1(b"version: aep.project/1\n");
+        let mut intent = MigrationIntentV2 {
+            format: MigrationIntentFormatV2,
+            migration_id: MigrationIdV1::new("foreign-destination-preflight").expect("migration"),
+            source_snapshot,
+            selector_digest,
+            config_digest: DigestV1::from_bytes([2; 32]),
+            source_coordinate: SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 {
+                root: path(&projection_path),
+            }),
+            migration_root: path(&phase_root),
+            staging_path: path(&staging_path),
+            destination_path: path(&destination_path),
+            projection_path: path(&projection_path),
+            destination_request: DestinationRequestV2::ProviderAssigned {
+                logical_scope: AuthorityValueV1::new("planning-test").expect("scope"),
+                tenant: AuthorityValueV1::new("tenant-test").expect("tenant"),
+            },
+            mapping: MappingIdentityV1 {
+                mapping_version: MappingFormatV1,
+                definition_digests: Vec::new(),
+            },
+            selector_version: ProjectVersionV1::V2,
+            intent_digest: IntentDigestV1(DigestV1::from_bytes([0; 32])),
+        };
+        intent.intent_digest = intent_digest_v2(&intent).expect("intent digest");
+        let input = ApplyInputs {
+            intent,
+            selector_path,
+            phase_root: phase_root.clone(),
+            staging_path,
+            destination_path,
+            projection_path,
+            recovery_capture_bytes: b"{}\n".to_vec(),
+            source_capture_digest: DigestV1::from_bytes([3; 32]),
+            histories: Vec::new(),
+        };
+
+        let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+            .expect_err("foreign destination refuses before the migration owns any path");
+        assert!(matches!(error, ApplyError::ForeignStage));
+        for relative in [
+            "intent.json",
+            "ownership.json",
+            "recovery/raw-capture.json",
+            "current.json",
+            "phases/01-prepared.json",
+        ] {
+            assert!(
+                !phase_root.join(relative).exists(),
+                "refusal created {relative}"
+            );
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let selector_alias = root.join("selector-hard-link");
+            fs::hard_link(&input.selector_path, &selector_alias)
+                .expect("fresh selector hard-link substitution");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a fresh hard-linked selector is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!phase_root.join("intent.json").exists());
+            fs::remove_file(selector_alias).expect("remove selector hard-link fixture");
+
+            let selector_target = root.join("selector-target");
+            fs::rename(&input.selector_path, &selector_target).expect("move selector target");
+            symlink(&selector_target, &input.selector_path)
+                .expect("fresh selector symlink substitution");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a fresh selector symlink is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!phase_root.join("intent.json").exists());
+            fs::remove_file(&input.selector_path).expect("remove selector symlink fixture");
+            fs::rename(selector_target, &input.selector_path).expect("restore selector fixture");
+
+            let nested_destination = input.projection_path.join("state");
+            let mut nested_intent = input.intent.clone();
+            nested_intent.destination_path = path(&nested_destination);
+            nested_intent.intent_digest = IntentDigestV1(DigestV1::from_bytes([0; 32]));
+            nested_intent.intent_digest =
+                intent_digest_v2(&nested_intent).expect("nested intent digest");
+            let nested = ApplyInputs {
+                intent: nested_intent,
+                selector_path: input.selector_path.clone(),
+                phase_root: input.phase_root.clone(),
+                staging_path: input.staging_path.clone(),
+                destination_path: nested_destination.clone(),
+                projection_path: input.projection_path.clone(),
+                recovery_capture_bytes: input.recovery_capture_bytes.clone(),
+                source_capture_digest: input.source_capture_digest,
+                histories: input.histories.clone(),
+            };
+            let error = apply(&AllowWriter, &nested, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("nested source and destination paths refuse before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!nested_destination.exists());
+            assert!(!phase_root.join("intent.json").exists());
+
+            let projection_target = root.join("projection-target");
+            fs::create_dir_all(&projection_target).expect("projection symlink target");
+            symlink(&projection_target, &input.projection_path)
+                .expect("fresh projection symlink substitution");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a fresh projection symlink is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!phase_root.join("intent.json").exists());
+            fs::remove_file(&input.projection_path).expect("remove projection symlink fixture");
+
+            fs::create_dir_all(&input.projection_path).expect("projection source fixture");
+            let projection_alias = input.projection_path.join("story.md");
+            let projection_file = root.join("projection-hard-link-target");
+            fs::write(&projection_file, b"projected\n").expect("projection file fixture");
+            fs::hard_link(&projection_file, &projection_alias)
+                .expect("fresh projection hard-link substitution");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a fresh projection hard link is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!phase_root.join("intent.json").exists());
+            fs::remove_dir_all(&input.projection_path).expect("remove projection source fixture");
+            fs::remove_dir_all(projection_target).expect("remove projection target fixture");
+            fs::remove_file(projection_file).expect("remove projection hard-link target");
+
+            fs::create_dir_all(&phase_root).expect("resume fixture root");
+            fs::write(
+                phase_root.join("intent.json"),
+                compact_line(&input.intent).expect("intent bytes"),
+            )
+            .expect("resume intent");
+            let outside = root.join("outside-marker");
+            fs::write(&outside, b"outside\n").expect("outside marker target");
+            symlink(&outside, phase_root.join("ownership.json"))
+                .expect("substituted ownership link");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a resumed ownership symlink is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert_eq!(fs::read(&outside).expect("outside target"), b"outside\n");
+            assert!(!phase_root.join("recovery/raw-capture.json").exists());
+
+            fs::remove_file(phase_root.join("ownership.json")).expect("remove symlink fixture");
+            let alias = root.join("intent-alias");
+            fs::hard_link(phase_root.join("intent.json"), &alias)
+                .expect("substituted intent hard link");
+            let error = apply(&AllowWriter, &input, |_| Ok(b"{}\n".to_vec()))
+                .expect_err("a resumed hard-linked intent is refused before evidence writes");
+            assert!(matches!(error, ApplyError::EvidenceConflict));
+            assert!(!phase_root.join("recovery/raw-capture.json").exists());
+        }
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn provider_assigned_apply_binds_one_identity_and_exact_retry_returns_one_receipt() {
         let root = std::env::temp_dir().join(format!(
             "aep-provider-assigned-{}-{}",
@@ -1130,7 +1553,7 @@ mod tests {
             selector_digest,
             config_digest: DigestV1::from_bytes([2; 32]),
             source_coordinate: SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 {
-                root: path(&root.join("legacy")),
+                root: path(&projection_path),
             }),
             migration_root: path(&phase_root),
             staging_path: path(&staging_path),
@@ -1225,7 +1648,7 @@ mod tests {
                 selector_digest,
                 config_digest: DigestV1::from_bytes([2; 32]),
                 source_coordinate: SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 {
-                    root: path(&root.join("legacy")),
+                    root: path(&projection_path),
                 }),
                 migration_root: path(&phase_root),
                 staging_path: path(&staging_path),

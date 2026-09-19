@@ -2,9 +2,9 @@
 
 #![allow(missing_docs)]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[allow(clippy::wildcard_imports)]
 // This publisher implements the complete closed projection vocabulary.
@@ -18,6 +18,32 @@ use aep_domain::entity::EntityRef;
 use crate::durable::{ProjectionError, ProjectionPublication, ProjectionPublisher};
 use entity_eventlog::{Authority, EventlogOperationContext};
 use time::OffsetDateTime;
+
+const PROJECTION_OWNERSHIP_FILE: &str = ".aep-projection-ownership.json";
+
+pub type ProjectionInventoryEntry = (String, Vec<u8>, u32);
+
+#[cfg(unix)]
+const OWNED_FILE_MODE: u32 = 0o644;
+
+#[cfg(windows)]
+const OWNED_FILE_MODE: u32 = 0;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectionOwnershipV1 {
+    format: String,
+    authority_snapshot: AuthoritySnapshotIdV1,
+    owned: Vec<ProjectionOwnedFileV1>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectionOwnedFileV1 {
+    path: String,
+    digest: DigestV1,
+    mode: u32,
+}
 
 pub struct FileProjectionPublisher {
     authority_path: PathBuf,
@@ -54,6 +80,7 @@ impl FileProjectionPublisher {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // Staging keeps rendering, authority evidence, preservation, ownership, and the watermark in one ordered operation.
     pub fn stage(
         &self,
         authority_snapshot: AuthoritySnapshotIdV1,
@@ -117,18 +144,32 @@ impl FileProjectionPublisher {
             store
                 .create(&document)
                 .map_err(|_| ProjectionError::NotPublished)?;
-            owned.push((relative, bytes));
+            set_owned_file_mode(&stage.join(&relative))
+                .map_err(|_| ProjectionError::NotPublished)?;
+            owned.push((relative, bytes, OWNED_FILE_MODE));
         }
         owned.sort_by(|left, right| left.0.cmp(&right.0));
-        let preserved_foreign_paths = preserve_foreign(&self.projection_root, &stage, &owned)?;
-        let parts = owned
-            .iter()
-            .flat_map(|(path, bytes)| [path.as_bytes().to_vec(), bytes.clone()])
-            .collect::<Vec<_>>();
-        let inventory_digest = ProjectionInventoryDigestV1(
-            digest_parts_v1("aep.planning-projection-inventory/1", &parts)
-                .map_err(|_| ProjectionError::NotPublished)?,
-        );
+        let complete = aep_backend_eventlog::complete_file_snapshot(
+            &self.authority_path,
+            Authority {
+                logical_scope: self.authority.logical_scope.as_str().to_owned(),
+                tenant: self.authority.tenant.as_str().to_owned(),
+                stream_identity: self.authority.stream_identity.as_str().to_owned(),
+            },
+        )
+        .map_err(|_| ProjectionError::NotPublished)?;
+        let known_watermarks = projection_watermarks(&complete, &self.authority);
+        let captured_owned = captured_markdown_files(&complete)?;
+        let preserved_foreign_paths = preserve_foreign(
+            &self.projection_root,
+            &stage,
+            &owned,
+            &known_watermarks,
+            &captured_owned,
+        )?;
+        let inventory_digest =
+            projection_inventory_digest(&owned).map_err(|_| ProjectionError::NotPublished)?;
+        write_projection_ownership(&stage, authority_snapshot, &owned)?;
         let watermark = ProjectionWatermarkV1 {
             format: ProjectionWatermarkFormatV1,
             authority: self.authority.clone(),
@@ -394,7 +435,9 @@ impl ProjectionPublisher for FileProjectionPublisher {
 fn preserve_foreign(
     current: &Path,
     stage: &Path,
-    new_owned: &[(String, Vec<u8>)],
+    new_owned: &[(String, Vec<u8>, u32)],
+    known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
+    captured_owned: &BTreeMap<String, Vec<u8>>,
 ) -> Result<u64, ProjectionError> {
     if !current.exists() {
         return Ok(0);
@@ -403,21 +446,32 @@ fn preserve_foreign(
     if !report.failures.is_empty() {
         return Err(ProjectionError::ForeignConflict);
     }
-    let old_owned = report
-        .documents
-        .values()
-        .map(|stored| stored.relative_path.clone())
-        .collect::<BTreeSet<_>>();
+    let old_owned = match read_projection_ownership(current, known_watermarks)? {
+        Some(owned) => owned
+            .into_iter()
+            .map(|(path, _, _)| path)
+            .collect::<BTreeSet<_>>(),
+        None => captured_owned
+            .iter()
+            .filter(|(path, bytes)| {
+                fs::read(current.join(path)).ok().as_deref() == Some(bytes.as_slice())
+            })
+            .map(|(path, _)| path.clone())
+            .collect(),
+    };
     let new_owned = new_owned
         .iter()
-        .map(|(path, _)| path.clone())
+        .map(|(path, _, _)| path.clone())
         .collect::<BTreeSet<_>>();
     let mut files = Vec::new();
     collect_files(current, current, &mut files)?;
     let mut preserved = 0;
     for (relative, source) in files {
-        if old_owned.contains(&relative) || new_owned.contains(&relative) {
+        if relative == PROJECTION_OWNERSHIP_FILE || old_owned.contains(&relative) {
             continue;
+        }
+        if new_owned.contains(&relative) {
+            return Err(ProjectionError::ForeignConflict);
         }
         let destination = stage.join(&relative);
         if let Some(parent) = destination.parent() {
@@ -427,6 +481,223 @@ fn preserve_foreign(
         preserved += 1;
     }
     Ok(preserved)
+}
+
+fn projection_watermarks(
+    snapshot: &entity_store::asynchronous::CompleteStoreSnapshot,
+    authority: &AuthorityCoordinateV1,
+) -> Vec<(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)> {
+    snapshot
+        .histories
+        .iter()
+        .filter_map(|subject| {
+            if subject.history.subject.entity != aep_backend_eventlog::PROJECTION_METADATA_AS
+                || subject.history.records.len() != 1
+            {
+                return None;
+            }
+            let watermark = serde_json::from_value::<ProjectionWatermarkV1>(
+                subject.terminal.fields.get("document")?.clone(),
+            )
+            .ok()?;
+            (watermark.authority == *authority
+                && watermark.watermark_digest
+                    == projection_watermark_digest(
+                        watermark.authority_snapshot,
+                        watermark.projection_inventory_digest,
+                    ))
+            .then_some((
+                watermark.authority_snapshot,
+                watermark.projection_inventory_digest,
+            ))
+        })
+        .collect()
+}
+
+fn captured_markdown_files(
+    snapshot: &entity_store::asynchronous::CompleteStoreSnapshot,
+) -> Result<BTreeMap<String, Vec<u8>>, ProjectionError> {
+    let mut owned = BTreeMap::new();
+    for subject in &snapshot.histories {
+        if subject.history.subject.entity != "aep.planning-import-boundary" {
+            continue;
+        }
+        let raw = subject
+            .terminal
+            .fields
+            .get("raw_capture")
+            .cloned()
+            .ok_or(ProjectionError::ForeignConflict)
+            .and_then(|value| {
+                serde_json::from_value::<LegacyRawCaptureV1>(value)
+                    .map_err(|_| ProjectionError::ForeignConflict)
+            })?;
+        let markdown = match &raw {
+            LegacyRawCaptureV1::Markdown(value) => Some(value),
+            LegacyRawCaptureV1::Hybrid(value) => Some(&value.local),
+            LegacyRawCaptureV1::Sqlite(_) | LegacyRawCaptureV1::Postgres(_) => None,
+        };
+        let Some(markdown) = markdown else {
+            continue;
+        };
+        for node in &markdown.nodes {
+            let MarkdownNodeKindV1::Regular(file) = &node.node else {
+                continue;
+            };
+            let relative = relative_projection_path(&node.relative)?;
+            if Path::new(&relative)
+                .extension()
+                .and_then(|value| value.to_str())
+                != Some("md")
+            {
+                continue;
+            }
+            if owned
+                .insert(relative, file.bytes.as_bytes().to_vec())
+                .is_some()
+            {
+                return Err(ProjectionError::ForeignConflict);
+            }
+        }
+    }
+    Ok(owned)
+}
+
+fn relative_projection_path(path: &HostPathV1) -> Result<String, ProjectionError> {
+    let value = match path {
+        HostPathV1::Unix(bytes) => std::str::from_utf8(bytes.as_bytes())
+            .map_err(|_| ProjectionError::ForeignConflict)?
+            .to_owned(),
+        HostPathV1::Windows(units) => {
+            String::from_utf16(units).map_err(|_| ProjectionError::ForeignConflict)?
+        }
+    };
+    let path = Path::new(&value);
+    if path.as_os_str().is_empty()
+        || path.is_absolute()
+        || path
+            .components()
+            .any(|part| !matches!(part, Component::Normal(_)))
+    {
+        return Err(ProjectionError::ForeignConflict);
+    }
+    Ok(value.replace('\\', "/"))
+}
+
+fn owned_file_digest(bytes: &[u8]) -> Result<DigestV1, ProjectionError> {
+    digest_parts_v1("aep.planning-projection-owned-file/1", &[bytes.to_vec()])
+        .map_err(|_| ProjectionError::NotPublished)
+}
+
+fn write_projection_ownership(
+    stage: &Path,
+    authority_snapshot: AuthoritySnapshotIdV1,
+    owned: &[(String, Vec<u8>, u32)],
+) -> Result<(), ProjectionError> {
+    let marker = ProjectionOwnershipV1 {
+        format: "aep.planning-projection-ownership/1".to_owned(),
+        authority_snapshot,
+        owned: owned
+            .iter()
+            .map(|(path, bytes, mode)| {
+                Ok(ProjectionOwnedFileV1 {
+                    path: path.clone(),
+                    digest: owned_file_digest(bytes)?,
+                    mode: *mode,
+                })
+            })
+            .collect::<Result<Vec<_>, ProjectionError>>()?,
+    };
+    let mut bytes = serde_json::to_vec(&marker).map_err(|_| ProjectionError::NotPublished)?;
+    bytes.push(b'\n');
+    let path = stage.join(PROJECTION_OWNERSHIP_FILE);
+    fs::write(&path, bytes).map_err(|_| ProjectionError::NotPublished)?;
+    set_owned_file_mode(&path).map_err(|_| ProjectionError::NotPublished)
+}
+
+fn read_projection_ownership(
+    current: &Path,
+    known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
+) -> Result<Option<Vec<ProjectionInventoryEntry>>, ProjectionError> {
+    let marker_path = current.join(PROJECTION_OWNERSHIP_FILE);
+    let metadata = match fs::symlink_metadata(&marker_path) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(ProjectionError::ForeignConflict),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(ProjectionError::ForeignConflict);
+    }
+    let marker: ProjectionOwnershipV1 = serde_json::from_slice(
+        &fs::read(marker_path).map_err(|_| ProjectionError::ForeignConflict)?,
+    )
+    .map_err(|_| ProjectionError::ForeignConflict)?;
+    if marker.format != "aep.planning-projection-ownership/1" {
+        return Err(ProjectionError::ForeignConflict);
+    }
+    let mut paths = BTreeSet::new();
+    let mut inventory = Vec::with_capacity(marker.owned.len());
+    for entry in marker.owned {
+        if relative_projection_path(&HostPathV1::Unix(HexBytesV1::new(
+            entry.path.as_bytes().to_vec(),
+        )))? != entry.path
+            || entry.path == PROJECTION_OWNERSHIP_FILE
+            || !paths.insert(entry.path.clone())
+        {
+            return Err(ProjectionError::ForeignConflict);
+        }
+        let path = current.join(&entry.path);
+        let metadata = fs::symlink_metadata(&path).map_err(|_| ProjectionError::ForeignConflict)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(ProjectionError::ForeignConflict);
+        }
+        let bytes = fs::read(&path).map_err(|_| ProjectionError::ForeignConflict)?;
+        if owned_file_digest(&bytes)? != entry.digest
+            || projection_file_mode(&path).map_err(|_| ProjectionError::ForeignConflict)?
+                != entry.mode
+        {
+            return Err(ProjectionError::ForeignConflict);
+        }
+        inventory.push((entry.path, bytes, entry.mode));
+    }
+    inventory.sort_by(|left, right| left.0.cmp(&right.0));
+    let digest =
+        projection_inventory_digest(&inventory).map_err(|_| ProjectionError::ForeignConflict)?;
+    if !known_watermarks.contains(&(marker.authority_snapshot, digest)) {
+        return Err(ProjectionError::ForeignConflict);
+    }
+    Ok(Some(inventory))
+}
+
+pub fn projection_owned_inventory(
+    root: &Path,
+    snapshot: &entity_store::asynchronous::CompleteStoreSnapshot,
+) -> Result<Vec<ProjectionInventoryEntry>, ProjectionError> {
+    let watermarks = snapshot
+        .histories
+        .iter()
+        .filter_map(|subject| {
+            if subject.history.subject.entity != aep_backend_eventlog::PROJECTION_METADATA_AS
+                || subject.history.records.len() != 1
+            {
+                return None;
+            }
+            let watermark = serde_json::from_value::<ProjectionWatermarkV1>(
+                subject.terminal.fields.get("document")?.clone(),
+            )
+            .ok()?;
+            (watermark.watermark_digest
+                == projection_watermark_digest(
+                    watermark.authority_snapshot,
+                    watermark.projection_inventory_digest,
+                ))
+            .then_some((
+                watermark.authority_snapshot,
+                watermark.projection_inventory_digest,
+            ))
+        })
+        .collect::<Vec<_>>();
+    read_projection_ownership(root, &watermarks)?.ok_or(ProjectionError::ForeignConflict)
 }
 
 fn collect_files(
@@ -522,6 +793,11 @@ fn trees_equal(left: &Path, right: &Path) -> Result<bool, ProjectionError> {
         return Ok(false);
     }
     for ((_, left), (_, right)) in left_files.iter().zip(&right_files) {
+        if projection_file_mode(left).map_err(|_| ProjectionError::Uncertain)?
+            != projection_file_mode(right).map_err(|_| ProjectionError::Uncertain)?
+        {
+            return Ok(false);
+        }
         let left = fs::read(left).map_err(|_| ProjectionError::Uncertain)?;
         let right = fs::read(right).map_err(|_| ProjectionError::Uncertain)?;
         if left != right {
@@ -529,6 +805,49 @@ fn trees_equal(left: &Path, right: &Path) -> Result<bool, ProjectionError> {
         }
     }
     Ok(true)
+}
+
+pub fn projection_inventory_digest(
+    owned: &[ProjectionInventoryEntry],
+) -> Result<ProjectionInventoryDigestV1, FrameError> {
+    let parts = owned
+        .iter()
+        .flat_map(|(path, bytes, mode)| {
+            [
+                path.as_bytes().to_vec(),
+                bytes.clone(),
+                mode.to_be_bytes().to_vec(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    Ok(ProjectionInventoryDigestV1(digest_parts_v1(
+        "aep.planning-projection-inventory/1",
+        &parts,
+    )?))
+}
+
+#[cfg(unix)]
+pub fn projection_file_mode(path: &Path) -> std::io::Result<u32> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    Ok(fs::symlink_metadata(path)?.permissions().mode() & 0o7777)
+}
+
+#[cfg(windows)]
+pub fn projection_file_mode(_path: &Path) -> std::io::Result<u32> {
+    Ok(OWNED_FILE_MODE)
+}
+
+#[cfg(unix)]
+fn set_owned_file_mode(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    fs::set_permissions(path, fs::Permissions::from_mode(OWNED_FILE_MODE))
+}
+
+#[cfg(windows)]
+fn set_owned_file_mode(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 #[must_use]
@@ -553,7 +872,7 @@ mod tests {
 
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::testing::block_on;
-    use aep_domain::command::{Command, CreateEntity};
+    use aep_domain::command::{Command, CreateEntity, UpdateEntity};
     use aep_domain::entity::{ActorRef, EntityLocator, EntityType};
     use aep_domain::node::Node;
     use aep_domain::time::Timestamp;
@@ -652,6 +971,45 @@ mod tests {
             block_on(backend.execute(envelope)).expect("create projected story");
         }
 
+        fn update_story_title(&self, title: &str) {
+            let suffix = title.to_ascii_lowercase().replace(' ', "-");
+            let backend = aep_backend_eventlog::open(
+                self.authority_path.clone(),
+                self.authority.logical_scope.as_str().to_owned(),
+                self.authority.tenant.as_str().to_owned(),
+                self.authority.stream_identity.as_str().to_owned(),
+            )
+            .expect("open disposable authority");
+            let target = block_on(backend.resolve(
+                &EntityLocator::parse("ep://planning/store/story/projected").expect("locator"),
+            ))
+            .expect("resolve projected story");
+            let command = Command::UpdateEntity(UpdateEntity {
+                target: EntityRef::new(target),
+                changes: BTreeMap::from([("title".to_owned(), Node::from(title))]),
+            });
+            let context = CommandContext::new(
+                format!("req-update-projected-{suffix}")
+                    .parse()
+                    .expect("request"),
+                format!("key-update-projected-{suffix}")
+                    .parse()
+                    .expect("idempotency key"),
+                ActorRef::parse("human:projection-test").expect("actor"),
+                "corr-update-projected".parse().expect("correlation"),
+                Timestamp::from_epoch_millis(1_700_000_000_001),
+            );
+            let envelope = CommandEnvelope::new(
+                format!("cmd-update-projected-{suffix}")
+                    .parse()
+                    .expect("command"),
+                command.kind().as_str(),
+                command,
+                context,
+            );
+            block_on(backend.execute(envelope)).expect("update projected story");
+        }
+
         fn snapshot(&self) -> entity_store::asynchronous::CompleteStoreSnapshot {
             aep_backend_eventlog::complete_file_snapshot(
                 &self.authority_path,
@@ -737,5 +1095,99 @@ mod tests {
             stale_reconstruction, covered,
             "removing W cannot hide any later business or control subject"
         );
+    }
+
+    #[test]
+    fn valid_foreign_document_survives_owned_replacement_and_owned_collision_refuses() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        publisher.publish_current().expect("initial publication");
+        let foreign = fixture.projection_root.join("task/foreign.md");
+        fs::create_dir_all(foreign.parent().expect("foreign parent")).expect("foreign parent");
+        let foreign_bytes = b"---\nformat: aep.planning-md/1\nid: task:foreign\nkind: task\nstatus: draft\ntitle: Foreign\nrelations: []\nrevision: 1\n---\n";
+        fs::write(&foreign, foreign_bytes).expect("valid unowned document");
+        let current = aep_backend_markdown::MarkdownStore::open(&fixture.projection_root).load();
+        assert!(
+            current.is_clean(),
+            "foreign fixture must be valid: {current:?}"
+        );
+        assert!(
+            current
+                .documents
+                .contains_key(&ArtifactId::new("task:foreign").expect("foreign id")),
+            "the valid foreign document must participate in the destructive parseability branch"
+        );
+
+        fixture.update_story_title("Replaced");
+        publisher
+            .publish_current()
+            .expect("ordinary owned replacement preserves a valid foreign document");
+        assert_eq!(
+            fs::read(&foreign).expect("foreign document survives"),
+            foreign_bytes
+        );
+        assert!(
+            fs::read_to_string(fixture.projection_root.join("story/projected.md"))
+                .expect("owned document")
+                .contains("title: Replaced"),
+            "owned projection was not replaced"
+        );
+
+        let ownership_path = fixture.projection_root.join(PROJECTION_OWNERSHIP_FILE);
+        let ownership = fs::read(&ownership_path).expect("projection ownership marker");
+        fs::remove_file(&ownership_path).expect("simulate lost local ownership metadata");
+        fixture.update_story_title("Unproven replacement");
+        let (_, failure) = publisher
+            .publish_current()
+            .expect_err("a missing ownership marker cannot make parseability prove ownership");
+        assert_eq!(failure.code, CommandRefusalCodeV1::ProjectionConflict);
+        assert_eq!(
+            fs::read(&foreign).expect("foreign document survives missing-marker refusal"),
+            foreign_bytes
+        );
+        fs::write(&ownership_path, ownership).expect("restore validated ownership marker");
+
+        fs::write(
+            fixture.projection_root.join("story/projected.md"),
+            "---\nformat: aep.planning-md/1\nid: story:projected\nkind: story\nstatus: draft\ntitle: Foreign collision\nrelations: []\nrevision: 2\n---\n",
+        )
+        .expect("valid foreign collision");
+        let (_, failure) = publisher
+            .publish_current()
+            .expect_err("a changed file at an owned path is an explicit conflict");
+        assert_eq!(failure.code, CommandRefusalCodeV1::ProjectionConflict);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recovery_tree_equality_includes_regular_file_modes() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = std::env::temp_dir().join(format!(
+            "aep-projection-mode-equality-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let left = root.join("left");
+        let right = root.join("right");
+        fs::create_dir_all(&left).expect("left tree");
+        fs::create_dir_all(&right).expect("right tree");
+        fs::write(left.join("same.md"), b"same bytes\n").expect("left file");
+        fs::write(right.join("same.md"), b"same bytes\n").expect("right file");
+        fs::set_permissions(left.join("same.md"), fs::Permissions::from_mode(0o600))
+            .expect("left mode");
+        fs::set_permissions(right.join("same.md"), fs::Permissions::from_mode(0o644))
+            .expect("right mode");
+
+        assert!(
+            !trees_equal(&left, &right).expect("trees compare"),
+            "mode-only drift must prevent recovery equality"
+        );
+        let _ = fs::remove_dir_all(root);
     }
 }

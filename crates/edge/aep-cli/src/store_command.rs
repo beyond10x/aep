@@ -1142,6 +1142,7 @@ fn selected_migration_receipt(
 }
 
 #[allow(clippy::manual_let_else)]
+#[allow(clippy::too_many_lines)] // The result keeps every read-only capture, mapping, and destination refusal visibly ordered.
 fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> DryRunResultV2 {
     let resolved = match resolve(common) {
         Ok(resolved) => resolved,
@@ -1223,6 +1224,13 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
     let stage_name = source_snapshot.0.as_wire().replace(':', "-");
     let destination = resolved.engineering.join("state");
     let projection = resolved.engineering.join("planning");
+    let staging = migration_root.join(&stage_name).join("stage/authority");
+    let foreign_content = migration_foreign_content(
+        &resolved.selection.source,
+        &staging,
+        &destination,
+        &projection,
+    );
     DryRunResultV2 {
         format: DryRunFormatV2,
         outcome: DryRunOutcomeV2::Admitted(DryRunAdmittedV2 {
@@ -1235,14 +1243,37 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
             comparison_digest: digest(&comparison),
             destination_requirements: DestinationRequirementsV2 {
                 migration_root: host_path(&migration_root),
-                staging_path: host_path(&migration_root.join(stage_name).join("stage/authority")),
+                staging_path: host_path(&staging),
                 destination_path: host_path(&destination),
                 projection_path: host_path(&projection),
                 destination_request,
-                foreign_content: Vec::new(),
+                foreign_content,
             },
         }),
     }
+}
+
+fn migration_foreign_content(
+    source: &SourceCoordinateV1,
+    staging: &Path,
+    destination: &Path,
+    projection: &Path,
+) -> Vec<aep_contract::migration::HostPathV1> {
+    let projection_is_source = match source {
+        SourceCoordinateV1::Markdown(source) => source.root == host_path(projection),
+        SourceCoordinateV1::Hybrid(source) => source.local_root == host_path(projection),
+        SourceCoordinateV1::Sqlite(_)
+        | SourceCoordinateV1::Postgres(_)
+        | SourceCoordinateV1::Eventlog(_) => false,
+    };
+    let mut paths = vec![staging, destination];
+    if !projection_is_source {
+        paths.push(projection);
+    }
+    aep_planning_migration::foreign_destination_paths(&paths)
+        .iter()
+        .map(|path| host_path(path))
+        .collect()
 }
 
 fn capture_refusals(
@@ -1512,29 +1543,10 @@ fn projection_inventory(
     root: &Path,
     snapshot: &entity_store::asynchronous::CompleteStoreSnapshot,
 ) -> Result<(ProjectionInventoryDigestV1, ProjectionWatermarkV1)> {
-    let report = MarkdownStore::open(root).load();
-    if !report.failures.is_empty() {
-        anyhow::bail!("projection is unreadable");
-    }
-    let mut owned = report
-        .documents
-        .values()
-        .map(|stored| {
-            (
-                stored.relative_path.clone(),
-                stored.document.render().into_bytes(),
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut owned = aep_planning_migration::projection_owned_inventory(root, snapshot)
+        .map_err(|_| anyhow::anyhow!("projection ownership is absent or disagrees"))?;
     owned.sort_by(|left, right| left.0.cmp(&right.0));
-    let parts = owned
-        .iter()
-        .flat_map(|(path, bytes)| [path.as_bytes().to_vec(), bytes.clone()])
-        .collect::<Vec<_>>();
-    let inventory = ProjectionInventoryDigestV1(aep_contract::migration::digest_parts_v1(
-        "aep.planning-projection-inventory/1",
-        &parts,
-    )?);
+    let inventory = aep_planning_migration::projection_inventory_digest(&owned)?;
     let mut candidates = snapshot
         .histories
         .iter()
@@ -2416,6 +2428,21 @@ mod tests {
             !engineering.join("migrations").exists() && !engineering.join("state").exists(),
             "dry-run must not create a stage merely to discover an identity"
         );
+        fs::create_dir_all(engineering.join("state")).expect("foreign destination fixture");
+        let foreign_preview = dry_run(&common, destination.clone());
+        let DryRunOutcomeV2::Admitted(foreign_preview) = foreign_preview.outcome else {
+            panic!("read-only preflight reports foreign destination content")
+        };
+        assert_eq!(
+            foreign_preview.destination_requirements.foreign_content,
+            vec![host_path(&engineering.join("state"))],
+            "dry-run must report the existing unowned destination without writing"
+        );
+        assert!(
+            !engineering.join("migrations").exists(),
+            "foreign discovery must remain read-only"
+        );
+        fs::remove_dir_all(engineering.join("state")).expect("remove foreign destination fixture");
         let foreign_id = MigrationIdV1::new("cli-foreign-stage").expect("migration");
         let foreign_root = migration_root(&engineering, &foreign_id).expect("migration root");
         fs::create_dir_all(foreign_root.join("stage/authority")).expect("foreign stage fixture");
@@ -2430,6 +2457,12 @@ mod tests {
             panic!("unowned pre-existing stage is refused")
         };
         assert_eq!(foreign.refusals[0].code, CommandRefusalCodeV1::ForeignStage);
+        assert!(
+            !foreign_root.join("intent.json").exists()
+                && !foreign_root.join("ownership.json").exists()
+                && !foreign_root.join("recovery/raw-capture.json").exists(),
+            "foreign refusal must not leave migration ownership or recovery evidence"
+        );
         let migration_id = MigrationIdV1::new("cli-provider-assigned").expect("migration");
         let applied = apply_with_control(
             &common,
@@ -2466,6 +2499,24 @@ mod tests {
             verify(&common).success(),
             "selected authority reopens and verifies"
         );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let projected = engineering.join("planning/story/one.md");
+            fs::set_permissions(&projected, fs::Permissions::from_mode(0o4644))
+                .expect("introduce mode-only projection drift");
+            assert!(
+                !verify(&common).success(),
+                "watermark verification must detect special-bit mode drift"
+            );
+            fs::set_permissions(&projected, fs::Permissions::from_mode(0o644))
+                .expect("restore canonical projection mode");
+            assert!(
+                verify(&common).success(),
+                "canonical mode restores watermark verification"
+            );
+        }
         let retried = apply_with_control(
             &common,
             destination,
@@ -2755,6 +2806,11 @@ mod tests {
             panic!("actual SQLite source is admitted")
         };
         assert_eq!(sqlite.inventory.subjects, 1);
+        assert_eq!(
+            sqlite.destination_requirements.foreign_content,
+            vec![host_path(&planning)],
+            "the Markdown seed is not owned by the selected SQL source"
+        );
 
         fs::write(
             &selector,
@@ -2781,6 +2837,7 @@ mod tests {
 
         fs::write(&selector, format!("{base}store:\n  sqlite: plan.sqlite3\n"))
             .expect("restore SQLite selector");
+        fs::remove_dir_all(&planning).expect("positive SQL projection begins unoccupied");
         let migration_id = MigrationIdV1::new("sqlite-provider-assigned").expect("migration");
         let applied = apply_with_control(
             &common,
@@ -3346,6 +3403,11 @@ mod tests {
             panic!("actual PostgreSQL source is admitted")
         };
         assert_eq!(postgres.inventory.subjects, 1);
+        assert_eq!(
+            postgres.destination_requirements.foreign_content,
+            vec![host_path(&planning)],
+            "the Markdown seed is not owned by the selected PostgreSQL source"
+        );
 
         fs::write(
             &selector,
@@ -3376,6 +3438,7 @@ mod tests {
             format!("{base}store:\n  postgres: {quoted_url}\n"),
         )
         .expect("restore PostgreSQL selector");
+        fs::remove_dir_all(&planning).expect("positive PostgreSQL projection begins unoccupied");
         let migration_id = MigrationIdV1::new("postgres-provider-assigned").expect("migration");
         let applied = apply_with_control(
             &common,

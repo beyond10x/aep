@@ -11,6 +11,12 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- Migration dry-run and apply now discover foreign destination paths before durable writes and
+  refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by
+  captured or watermarked evidence, so valid foreign Markdown survives rebuilds and collisions
+  refuse explicitly. Projection inventories and recovery comparisons include Unix permission
+  modes, and replica-authoritative hybrid history no longer exposes the losing local journal.
+
 - Migrated Markdown history remains visible through ordinary history, explanation and evidence
   reads, including both legacy journal shapes and later recorded writes. Evidence writes retain
   the artifact's revision independently of the recorded storage revision, and projection failures
