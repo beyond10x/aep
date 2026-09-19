@@ -615,9 +615,13 @@ fn projection_failure_envelope(
     reservation_receipt_digest: ReceiptDigestV1,
     committed: &[CommittedMutationStepV1],
     failed_step_index: u64,
-    projection: ProjectionFailureV1,
+    mut projection: ProjectionFailureV1,
     snapshot: AuthoritySnapshotIdV1,
 ) -> Result<PlanningMutationEnvelopeV1, MutationLedgerError> {
+    // A publisher reports its failed operation. At this boundary the authority command has
+    // already committed: preserve the reason/path, but report the committed outcome required
+    // by the public contract rather than turning it into an invalid refusal envelope.
+    projection.code = CommandRefusalCodeV1::CommittedProjectionFailure;
     let result = PlanningMutationEnvelopeV1 {
         format: MutationFormatV1,
         outcome: PlanningMutationOutcomeV1::CommittedProjectionFailure(

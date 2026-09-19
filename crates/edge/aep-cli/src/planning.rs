@@ -595,6 +595,43 @@ pub(crate) enum PlanBackend {
 }
 
 impl PlanBackend {
+    /// Retained journal entries followed by the provider's actual recorded event suffix.
+    fn entries_of(
+        &self,
+        entity: &aep_domain::entity::EntityId,
+        id: &ArtifactId,
+    ) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
+        let mut entries = Vec::new();
+        let mut unreadable = 0;
+        if let Self::Eventlog(backend) = self {
+            let lines = backend.with_store(|store| {
+                store.legacy_journal_for_subject("aep.entity", &entity.to_string())
+            })?;
+            for line in lines {
+                let entry = serde_json::from_slice::<aep_backend_markdown::journal::Entry>(&line)
+                    .ok()
+                    .or_else(|| {
+                        let event = serde_json::from_slice::<entity_core::DomainEvent>(&line).ok()?;
+                        if event.entity != id.namespace() || event.id != id.name() {
+                            return None;
+                        }
+                        entry_from_event(self, id, &event)
+                    });
+                match entry {
+                    Some(entry) if entry.artifact == *id => entries.push(entry),
+                    _ => unreadable += 1,
+                }
+            }
+        }
+        for event in self.events_of(entity)? {
+            match entry_from_event(self, id, &event) {
+                Some(entry) => entries.push(entry),
+                None => unreadable += 1,
+            }
+        }
+        Ok((entries, unreadable))
+    }
+
     /// Immutable receipt of the most recent recorded command. Legacy providers return none.
     fn last_commit_receipt(&self) -> Option<entity_store::asynchronous::CommitReceipt> {
         match self {
@@ -1121,11 +1158,9 @@ fn evidence_from_events(
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
     let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for event in backend.events_of(&target)? {
-        if let Some(entry) = entry_from_event(backend, id, &event) {
-            if let Change::Evidence { kind, .. } = entry.change {
-                *counted.entry(kind).or_default() += 1;
-            }
+    for entry in backend.entries_of(&target, id)?.0 {
+        if let Change::Evidence { kind, .. } = entry.change {
+            *counted.entry(kind).or_default() += 1;
         }
     }
     Ok(counted)
@@ -7210,15 +7245,7 @@ fn entries_from_the_contract(
     .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
     let entity = block_on(backend.resolve(&locator)).with_context(|| opened.missing(id))?;
 
-    let mut entries = Vec::new();
-    let mut unreadable = 0;
-    for event in &backend.events_of(&entity)? {
-        match entry_from_event(backend, id, event) {
-            Some(entry) => entries.push(entry),
-            None => unreadable += 1,
-        }
-    }
-    Ok((entries, unreadable))
+    backend.entries_of(&entity, id)
 }
 
 /// `protocol artifact explain`

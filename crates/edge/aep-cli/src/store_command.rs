@@ -33,6 +33,12 @@ use serde::de::{DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 
+#[cfg(target_os = "linux")]
+mod writer_control;
+#[cfg(not(target_os = "linux"))]
+#[path = "store_command/writer_control_unsupported.rs"]
+mod writer_control;
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum StoreOutputFormat {
     Text,
@@ -88,6 +94,11 @@ pub(crate) enum StoreCommand {
         #[arg(long)]
         authority_snapshot: String,
     },
+    /// Hold observed writer stop and operator no-restart custody in this foreground process.
+    WriterControl {
+        #[command(subcommand)]
+        command: writer_control::WriterControlCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -111,7 +122,17 @@ pub(crate) enum MigrateCommand {
 }
 
 pub(crate) fn run(command: StoreCommand) -> Result<ExitCode> {
-    run_with_control(command, &UnavailableWriterControl)
+    if let StoreCommand::WriterControl { command } = command {
+        return writer_control::hold(command);
+    }
+    let common = match &command {
+        StoreCommand::Migrate {
+            command: MigrateCommand::Apply { common, .. },
+        }
+        | StoreCommand::Rebuild { common, .. } => Some(common.clone()),
+        _ => None,
+    };
+    run_with_control(command, &writer_control::PublicWriterControl::new(common))
 }
 
 pub(crate) fn run_with_control<C>(command: StoreCommand, control: &C) -> Result<ExitCode>
@@ -187,56 +208,7 @@ where
             emit(&result, common.format)?;
             Ok(crate::exit_code(result.success()))
         }
-    }
-}
-
-struct UnavailableWriterControl;
-
-impl aep_planning_migration::WriterControl for UnavailableWriterControl {
-    type Guard = ();
-
-    fn acquire(
-        &self,
-        _intent: &MigrationIntentV2,
-    ) -> std::result::Result<Self::Guard, aep_planning_migration::WriterControlError> {
-        Err(aep_planning_migration::WriterControlError::Unavailable)
-    }
-
-    fn recheck(
-        &self,
-        _guard: &mut Self::Guard,
-        _source_snapshot: SourceSnapshotIdV1,
-        _selector_digest: DigestV1,
-    ) -> std::result::Result<(), aep_planning_migration::WriterControlError> {
-        Err(aep_planning_migration::WriterControlError::Unavailable)
-    }
-
-    fn retire_source(
-        &self,
-        _guard: &mut Self::Guard,
-    ) -> std::result::Result<(), aep_planning_migration::WriterControlError> {
-        Err(aep_planning_migration::WriterControlError::Unavailable)
-    }
-}
-
-impl aep_planning_migration::AuthorityWriterControl for UnavailableWriterControl {
-    type Guard = ();
-
-    fn acquire_authority(
-        &self,
-        _authority: &AuthorityCoordinateV1,
-        _requested: AuthoritySnapshotIdV1,
-    ) -> std::result::Result<Self::Guard, aep_planning_migration::WriterControlError> {
-        Err(aep_planning_migration::WriterControlError::Unavailable)
-    }
-
-    fn recheck_authority(
-        &self,
-        _guard: &mut Self::Guard,
-        _authority: &AuthorityCoordinateV1,
-        _requested: AuthoritySnapshotIdV1,
-    ) -> std::result::Result<(), aep_planning_migration::WriterControlError> {
-        Err(aep_planning_migration::WriterControlError::Unavailable)
+        StoreCommand::WriterControl { .. } => anyhow::bail!("writer control is a foreground command"),
     }
 }
 

@@ -110,9 +110,10 @@ somebody opted into — and an item you did not want is removed with `rm`.
 
 ### Plan: the store migration surface
 
-These commands inspect and prepare the opt-in `aep.project/2` Eventlog planning authority. Real
-apply and rebuild require an admitted writer-control provider; when none is installed, the command
-refuses rather than treating a quiet process list or a clean SQL snapshot as exclusion.
+These commands inspect and prepare the opt-in `aep.project/2` Eventlog planning authority. On
+Linux, apply and rebuild use a foreground writer-control holder for the operator's manually
+started local agent sessions. Without a live matching holder, they refuse with
+`writer_exclusion_unavailable`.
 
 | Command | Does |
 |---|---|
@@ -121,6 +122,26 @@ refuses rather than treating a quiet process list or a clean SQL snapshot as exc
 | `aep plan store migrate apply --authority-scope <scope> --authority-tenant <tenant> (--authority-new\|--authority-identity <stream>) --snapshot <digest> --migration <id> [--project <project.yaml>] [--format text\|json]` | under admitted writer control, imports the captured authority through the eight durable phases, publishes the tracked Markdown projection and returns the immutable original receipt; otherwise returns `writer_exclusion_unavailable` |
 | `aep plan store verify [--project <project.yaml>] [--format text\|json]` | compares two provider-complete reads of the selected authority, its retained legacy boundary graph and the current projection |
 | `aep plan store rebuild --authority-snapshot <digest> [--project <project.yaml>] [--format text\|json]` | under admitted authority writer control, rebuilds only owned projection paths from that exact unchanged snapshot without re-executing a business command |
+| `aep plan store writer-control hold --migration <id> --snapshot <digest> --writer-pid <pid>… [--project <project.yaml>]` | observes the named live writer processes and their visible descendants exit, then holds operator no-restart custody in the foreground for the matching apply |
+| `aep plan store writer-control hold --authority-snapshot <digest> --writer-pid <pid>… [--project <project.yaml>]` | holds the selected Eventlog authority for a matching rebuild |
+
+Start the holder while the applicable writer sessions are still live. Name every applicable
+writer process, including independently started children; the holder does not kill them. Stop
+and drain them yourself. After it reports their exits and rechecks the selected source, type
+`HOLD` in that terminal. Keep it open until apply, retry or rebuild has finished and the new
+selector is verified. Press Enter to release custody. If the holder stops, the next mutating
+command refuses. `--resume-stop` on the same hold command reuses only that holder's retained
+same-boot stop observation; it requires a new `HOLD` and rechecks the current source or selected
+authority. It cannot create stop evidence for a session already gone before any holder observed
+it. A stopped PID, a clean snapshot, a cooperative lock or a saved witness alone never admits a
+write.
+
+The operator is responsible for the complete writer set and for not restarting any applicable
+session during custody. The socket only proves that the foreground holder is still answering;
+it cannot prevent the operator from starting another unfenced process. An interrupted apply
+reacquires current custody on retry and preserves the original migration receipt. Old executable
+processes must remain stopped through selector verification. This holder is available only on
+Linux; other platforms refuse mutation until an operational control is supplied.
 
 **Every write is journalled with an actor, and the caller says who.** `AEP_ACTOR` declares it —
 `human:<name>`, `agent:<name>`, `service:<name>` or `system` — and a value that does not parse is

@@ -624,6 +624,7 @@ impl PlanningStore for EventlogPlanningStore {
             .unwrap_or_else(|| commits[0].recording.record_id.clone());
         let context = context_from_recording(&commits[0].recording);
         let mut actions = Vec::with_capacity(commits.len());
+        let mut pending_revisions = BTreeMap::new();
         for member in commits {
             let instance = &member.commit.decision.instance;
             let subject = Subject::new(&instance.entity, &instance.id).map_err(async_error)?;
@@ -633,16 +634,35 @@ impl PlanningStore for EventlogPlanningStore {
                 "events": member.commit.decision.record.events,
             });
             match member.commit.expect {
-                Expect::Absent => actions.push(BatchAction::Create(CreateRequest {
-                    subject,
-                    definition_version: 1,
-                    fields: json!({ "document": document }),
-                    recording: member.recording.clone(),
-                })),
+                Expect::Absent => {
+                    pending_revisions.insert(subject.clone(), (instance.revision, 1));
+                    actions.push(BatchAction::Create(CreateRequest {
+                        subject,
+                        definition_version: 1,
+                        fields: json!({ "document": document }),
+                        recording: member.recording.clone(),
+                    }));
+                }
                 Expect::Revision(expected_revision) => {
+                    let (logical, physical) = match pending_revisions.get(&subject) {
+                        Some(revisions) => *revisions,
+                        None => self.revisions_before(&subject, &member.recording.record_id)?,
+                    };
+                    if logical != expected_revision {
+                        return Err(StoreError::RevisionConflict {
+                            entity: instance.entity.clone(),
+                            id: instance.id.clone(),
+                            expected: member.commit.expect,
+                            found: Some(logical),
+                        });
+                    }
+                    let next = physical.checked_add(1).ok_or_else(|| {
+                        StoreError::Backend("planning storage revision exhausted".to_owned())
+                    })?;
+                    pending_revisions.insert(subject.clone(), (instance.revision, next));
                     actions.push(BatchAction::Execute(ExecuteRequest {
                         subject,
-                        expected_revision,
+                        expected_revision: physical,
                         operation: "replace".to_owned(),
                         arguments: json!({ "document": document }),
                         fulfillments: BTreeMap::new(),
@@ -720,6 +740,114 @@ struct LegacyRosterValue {
 }
 
 impl EventlogPlanningStore {
+    /// AEP entity revisions do not advance for evidence, while the containing ER row does.
+    /// A retry uses the actual predecessor of its original record, preserving ER's request
+    /// comparison instead of rebuilding an expectation from the latest physical revision.
+    fn revisions_before(
+        &self,
+        subject: &Subject,
+        record_id: &str,
+    ) -> Result<(u64, u64), StoreError> {
+        let history = self
+            .bridge
+            .history(subject, CallWait::Forever)
+            .map_err(read_error)?;
+        let mut prior = match history.origin {
+            HistoryOrigin::Imported(anchor) => Some(anchor.instance),
+            HistoryOrigin::Genesis => None,
+        };
+        for record in history.records {
+            if record.entry.record_id() == record_id {
+                break;
+            }
+            if let RecordedEntry::Decision(commit) = record.entry {
+                prior = Some(commit.envelope.record.result);
+            }
+        }
+        let prior = prior.ok_or_else(|| {
+            StoreError::Backend("planning revision has no predecessor".to_owned())
+        })?;
+        let physical = prior.revision;
+        Ok((unpack(prior)?.revision, physical))
+    }
+
+    /// Original Markdown journal lines for a migrated subject, in their declared source order.
+    ///
+    /// These are retained evidence bytes, not newly recorded events or decisions. SQL events
+    /// already live in the imported anchor and are deliberately not returned here.
+    pub fn legacy_journal_for_subject(
+        &self,
+        entity: &str,
+        id: &str,
+    ) -> Result<Vec<Vec<u8>>, StoreError> {
+        Subject::new(entity, id).map_err(async_error)?;
+        let snapshot = self
+            .bridge
+            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
+            .map_err(read_error)?;
+        validate_legacy_boundary_snapshot(&snapshot, &self.authority)
+            .map_err(StoreError::Backend)?;
+        let mut lines = BTreeMap::new();
+        let mut source = None;
+        for subject in &snapshot.histories {
+            if subject.history.subject.entity != LEGACY_COORDINATE_AS {
+                continue;
+            }
+            let coordinate: LegacyCoordinateValue = serde_json::from_value(Value::Object(
+                subject.terminal.fields.clone(),
+            ))
+            .map_err(|error| StoreError::Backend(format!("invalid journal coordinate: {error}")))?;
+            if coordinate.destination_entity != entity
+                || coordinate.destination_id != id
+                || !coordinate.source_locator.starts_with("journal.jsonl/")
+            {
+                continue;
+            }
+            let aep_contract::migration::PresenceV1::Present(ordinal) = coordinate.ordinal else {
+                return Err(StoreError::Backend(
+                    "legacy journal order is absent".to_owned(),
+                ));
+            };
+            if coordinate.order != "store"
+                || coordinate.source_locator != format!("journal.jsonl/{ordinal}")
+                || !matches!(coordinate.evidence_kind.as_str(), "change" | "event")
+                || source.is_some_and(|held| held != coordinate.source_snapshot)
+                || !snapshot.histories.iter().any(|boundary| {
+                    boundary.history.subject.entity == LEGACY_IMPORT_BOUNDARY_AS
+                        && boundary.history.subject.id == coordinate.source_snapshot.as_wire()
+                        && boundary.terminal.fields.get("source_snapshot")
+                            == Some(&Value::String(coordinate.source_snapshot.as_wire()))
+                })
+            {
+                return Err(StoreError::Backend(
+                    "legacy journal source or order disagrees".to_owned(),
+                ));
+            }
+            source = Some(coordinate.source_snapshot);
+            let blob = snapshot
+                .histories
+                .iter()
+                .find(|blob| {
+                    blob.history.subject.entity == LEGACY_EVIDENCE_AS
+                        && blob.history.subject.id == coordinate.evidence_blob_id
+                })
+                .expect("validated coordinate has an evidence blob");
+            let blob: LegacyEvidenceValue = serde_json::from_value(Value::Object(
+                blob.terminal.fields.clone(),
+            ))
+            .map_err(|error| StoreError::Backend(format!("invalid journal evidence: {error}")))?;
+            if lines
+                .insert(ordinal, blob.exact_bytes.as_bytes().to_vec())
+                .is_some()
+            {
+                return Err(StoreError::Backend(
+                    "legacy journal ordinal is duplicated".to_owned(),
+                ));
+            }
+        }
+        Ok(lines.into_values().collect())
+    }
+
     /// Reads complete imported envelopes for one destination from a fresh validated authority.
     /// The vector is sorted by coordinate ID, not by inferred historical order.
     pub fn legacy_evidence_for_subject(
@@ -1088,12 +1216,26 @@ fn unpack(instance: EntityInstance) -> Result<EntityInstance, StoreError> {
     let document: PlanningDocument = serde_json::from_value(document).map_err(|error| {
         StoreError::Backend(format!("invalid Eventlog planning document: {error}"))
     })?;
+    // The typed AEP metadata already persists its semantic revision. The ER wrapper has its
+    // own revision, including evidence-only writes, and must not substitute that for AEP's.
+    let revision = if instance.entity == aep_backend_entity::STORED_AS {
+        document
+            .fields
+            .get("$aep")
+            .and_then(|value| value.get("metadata"))
+            .and_then(|value| value.get("revision"))
+            .and_then(Value::as_u64)
+            .filter(|revision| *revision > 0)
+            .ok_or_else(|| StoreError::Backend("planning entity revision is absent".to_owned()))?
+    } else {
+        instance.revision
+    };
     Ok(EntityInstance {
         entity: instance.entity,
         version: instance.version,
         id: instance.id,
         lifecycle_state: document.lifecycle_state,
-        revision: instance.revision,
+        revision,
         fields: document.fields,
     })
 }

@@ -9,7 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Migrated Markdown history remains visible through ordinary history, explanation and evidence
+  reads, including both legacy journal shapes and later recorded writes. Evidence writes retain
+  the artifact's revision independently of the recorded storage revision, and projection failures
+  after a commit return a recoverable committed result.
+
 ### Added
+
+- `plan store writer-control hold` binds a local foreground operator custody session to one
+  migration or projection rebuild. Public apply, matching retry and rebuild now require that live
+  control and recheck its selected source or authority before effects.
 
 - Pure planning migration capture values preserve partial observations, validate capture
   phases and discovered-table catalogs, and compute deterministic digests and changed sets.

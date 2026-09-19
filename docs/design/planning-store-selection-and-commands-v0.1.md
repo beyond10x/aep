@@ -1,7 +1,8 @@
 # Planning authority selection and migration commands v0.1
 
-Status: proposed concrete command/config companion to eventlog-planning-authority-v0.1.md,
-under the same migration owner. No command below is claimed to exist in the current executable.
+Status: command/config companion to eventlog-planning-authority-v0.1.md under the same migration
+owner. The public command and foreground Linux writer-control path are implemented in the current
+source; real-store activation still needs observed operator custody for that store.
 The pure raw-capture contract and values are implemented at
 715e52a88df9abcfcdd35752c09ab64b1e5a3fb3, with both source examinations and the full
 repository gate complete. See planning-raw-capture-v0.1.md. Physical source acquisition,
@@ -241,13 +242,31 @@ records, missing evidence, mixed stages and selector substitution refuse or repo
 none is repaired by timestamp ordering, choosing the longest file or minting a new migration ID.
 Read-only inspect/verify reports unresolved phases without advancing them.
 
-Writer control is an edge-owned capability, not caller JSON or a boolean flag. Admission returns
-an opaque held guard bound to the complete source fleet and selector; effecting operations require
-that guard and a fresh recheck. Its implementation must enforce exclusion or prove the admitted
-supervised quiescence for all relevant legacy writers, including restarts. The operational facts
-needed for that provider remain unavailable. Until established, real apply returns
-`WriterExclusionUnavailable`; pure phase tests and disposable controlled fixtures do not qualify
-any of the six real stores.
+Writer control is an edge-owned capability, not caller JSON or a boolean flag. On the confirmed
+single-machine operator model, `plan store writer-control hold` is a foreground command: it binds
+one resolved selector, source/config and migration snapshot or the selected Eventlog authority
+and requested rebuild snapshot. The operator names every applicable live writer process; the
+holder records each PID with its start identity and boot identity, tracks visible descendants,
+and observes them exit. It then re-captures the selected source or authority and asks the
+operator to take continuing no-restart custody in that terminal. The command never kills a
+writer. The operator remains responsible for the complete writer set, including independently
+started children, and for preventing restarts. This is the ordinary operator-controlled writer
+trust boundary; a local socket cannot enforce a human no-restart decision.
+
+The holder answers a local challenge only while that foreground custody remains active. Apply
+and rebuild acquire a live non-serialized guard; each existing durable recheck compares the
+holder generation and re-resolves current selector/source or authority. A replacement holder
+cannot satisfy a guard acquired from a dead one. On interruption, `--resume-stop` may reuse only
+same-boot process exits that the previous holder actually recorded for the same bound request;
+it still needs a new foreground custody act and current source/selector validation. An already
+stopped source without such retained observation has no admission path. A missing, stale,
+substituted or lost holder returns `WriterExclusionUnavailable`; process absence, a saved witness
+and cooperative locks cannot establish exclusion by themselves. The selected v2 authority is
+checked against the durable provider binding on matching retry, and retirement remains under
+held old-writer custody until selector verification. On non-Linux hosts this adapter refuses.
+The private temporary stop sidecar is closed `aep.writer-stop/1` and binds process start identities
+to the Linux boot identity; unknown versions and fields refuse. It records stop observation only,
+never a serialized held guard or no-restart authority.
 
 ## Closed command result families
 
@@ -711,6 +730,19 @@ complete available history remain inside the selected authority without inventin
 ER public types. Any future source that cannot provide either adapter-eligible order or this closed
 coordinate/blob/reservation join is `unsupported_schema`; no currently supported legacy backend is
 narrowed.
+
+Ordinary artifact history and explanation also read the retained Markdown journal coordinates
+through `legacy_journal_for_subject`. They decode the original Entry and DomainEvent shapes in
+declared journal-line order, then append the actual recorded suffix once. They never manufacture
+decisions or infer chronology from timestamps. Evidence totals use the same entries. SQL events
+remain on the existing imported-anchor path and are not duplicated through this journal reader.
+
+An AEP artifact revision is the revision already persisted in its typed metadata. Evidence-only
+writes leave that revision unchanged even though the containing ER storage row advances. The
+adapter compares the logical expectation with the original predecessor, then passes the physical
+expectation to ER's atomic batch. Matching retries use their recorded predecessor. This changes no
+persisted format. A failure while projecting a committed command uses the public committed-failure
+code with the projection reason and path; retry repairs projection without repeating the command.
 
 ## Opaque authority snapshots and projection watermarks
 
