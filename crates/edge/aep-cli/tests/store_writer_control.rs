@@ -761,6 +761,17 @@ fn public_postgres_source_applies_under_observed_writer_stop_when_configured() {
 #[allow(clippy::too_many_lines)]
 fn public_apply_requires_live_custody_and_preserves_original_retry() {
     let (root, selector) = project();
+    let planning = root.join(".engineering/planning");
+    fs::write(
+        planning.join("story/one.md"),
+        "---\nformat: aep.planning-md/1\nid: story:one\nkind: story\nstatus: draft\ntitle: One\nrelations:\n- depends_on: story:two\nrevision: 1\n---\n",
+    )
+    .expect("legacy story relates to the second owned artifact");
+    fs::write(
+        planning.join("story/two.md"),
+        "---\nformat: aep.planning-md/1\nid: story:two\nkind: story\nstatus: draft\ntitle: Two\nrelations: []\nrevision: 1\n---\n",
+    )
+    .expect("second legacy story");
     let selector_text = selector.to_string_lossy().into_owned();
     let dry_args = [
         "plan",
@@ -932,6 +943,33 @@ fn public_apply_requires_live_custody_and_preserves_original_retry() {
         .as_str()
         .expect("verified authority snapshot")
         .to_owned();
+    let projected_two = planning.join("story/two.md");
+    let authoritative_two = fs::read(&projected_two).expect("second authoritative projection");
+    assert!(
+        fs::read_to_string(planning.join("story/one.md"))
+            .expect("first authoritative projection")
+            .contains("depends_on: story:two"),
+        "the remaining owned document must reference the deleted artifact"
+    );
+    let history_args = [
+        "plan",
+        "artifact",
+        "history",
+        "story:two",
+        "--format",
+        "json",
+    ];
+    let (success, history_before_rebuild, error) = run(&root, &history_args);
+    assert!(
+        success,
+        "history before rebuild: {history_before_rebuild} {error}"
+    );
+    fs::remove_file(&projected_two).expect("delete exactly one owned projection");
+    let (success, drifted, _) = run(&root, &verify);
+    assert!(
+        !success && drifted.to_string().contains("projection_drift"),
+        "ordinary verification must report the missing owned file as drift: {drifted}"
+    );
     let rebuild_args = [
         "plan",
         "store",
@@ -959,6 +997,33 @@ fn public_apply_requires_live_custody_and_preserves_original_retry() {
     assert!(success, "rebuild: {rebuilt} {error}");
     assert!(rebuilt.to_string().contains("rebuilt"));
     stop_holder(&mut rebuild_holder);
+    assert_eq!(
+        fs::read(&projected_two).expect("missing owned projection is restored"),
+        authoritative_two
+    );
+    let (success, verified_after_rebuild, error) = run(&root, &verify);
+    assert!(
+        success,
+        "verification after partial projection rebuild: {verified_after_rebuild} {error}"
+    );
+    assert_eq!(
+        verified_after_rebuild["outcome"]["value"]["projection"]["authority_snapshot"],
+        authority_snapshot,
+        "rebuild must project the exact requested authority snapshot"
+    );
+    assert_eq!(
+        verified_after_rebuild["outcome"]["value"]["projection"]["drift"],
+        "current"
+    );
+    let (success, history_after_rebuild, error) = run(&root, &history_args);
+    assert!(
+        success,
+        "history after rebuild: {history_after_rebuild} {error}"
+    );
+    assert_eq!(
+        history_after_rebuild, history_before_rebuild,
+        "projection recovery must preserve authoritative history"
+    );
 
     let explicit = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "artifact", "list", "--store"])

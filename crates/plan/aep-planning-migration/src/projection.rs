@@ -37,7 +37,7 @@ struct ProjectionOwnershipV1 {
     owned: Vec<ProjectionOwnedFileV1>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProjectionOwnedFileV1 {
     path: String,
@@ -442,23 +442,20 @@ fn preserve_foreign(
     if !current.exists() {
         return Ok(0);
     }
-    let report = aep_backend_markdown::MarkdownStore::open(current).load();
-    if !report.failures.is_empty() {
-        return Err(ProjectionError::ForeignConflict);
-    }
-    let old_owned = match read_projection_ownership(current, known_watermarks)? {
-        Some(owned) => owned
-            .into_iter()
-            .map(|(path, _, _)| path)
-            .collect::<BTreeSet<_>>(),
-        None => captured_owned
-            .iter()
-            .filter(|(path, bytes)| {
-                fs::read(current.join(path)).ok().as_deref() == Some(bytes.as_slice())
-            })
-            .map(|(path, _)| path.clone())
-            .collect(),
-    };
+    let old_owned =
+        match read_projection_ownership_for_rebuild(current, known_watermarks, new_owned)? {
+            Some(owned) => owned
+                .into_iter()
+                .map(|(path, _, _)| path)
+                .collect::<BTreeSet<_>>(),
+            None => captured_owned
+                .iter()
+                .filter(|(path, bytes)| {
+                    fs::read(current.join(path)).ok().as_deref() == Some(bytes.as_slice())
+                })
+                .map(|(path, _)| path.clone())
+                .collect(),
+        };
     let new_owned = new_owned
         .iter()
         .map(|(path, _, _)| path.clone())
@@ -479,6 +476,10 @@ fn preserve_foreign(
         }
         fs::copy(source, destination).map_err(|_| ProjectionError::NotPublished)?;
         preserved += 1;
+    }
+    let report = aep_backend_markdown::MarkdownStore::open(stage).load();
+    if !report.failures.is_empty() {
+        return Err(ProjectionError::ForeignConflict);
     }
     Ok(preserved)
 }
@@ -619,6 +620,57 @@ fn read_projection_ownership(
     current: &Path,
     known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
 ) -> Result<Option<Vec<ProjectionInventoryEntry>>, ProjectionError> {
+    let Some(marker) = read_projection_ownership_marker(current)? else {
+        return Ok(None);
+    };
+    let (mut inventory, missing) = read_owned_files(current, &marker, false)?;
+    debug_assert!(!missing, "strict ownership read refuses missing files");
+    inventory.sort_by(|left, right| left.0.cmp(&right.0));
+    validate_owned_inventory(marker.authority_snapshot, &inventory, known_watermarks)?;
+    Ok(Some(inventory))
+}
+
+fn read_projection_ownership_for_rebuild(
+    current: &Path,
+    known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
+    staged_owned: &[ProjectionInventoryEntry],
+) -> Result<Option<Vec<ProjectionInventoryEntry>>, ProjectionError> {
+    let Some(mut marker) = read_projection_ownership_marker(current)? else {
+        return Ok(None);
+    };
+    let (mut present, missing) = read_owned_files(current, &marker, true)?;
+    if !missing {
+        present.sort_by(|left, right| left.0.cmp(&right.0));
+        validate_owned_inventory(marker.authority_snapshot, &present, known_watermarks)?;
+        return Ok(Some(present));
+    }
+
+    marker
+        .owned
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    let mut staged_marker = staged_owned
+        .iter()
+        .map(|(path, bytes, mode)| {
+            Ok(ProjectionOwnedFileV1 {
+                path: path.clone(),
+                digest: owned_file_digest(bytes)?,
+                mode: *mode,
+            })
+        })
+        .collect::<Result<Vec<_>, ProjectionError>>()?;
+    staged_marker.sort_by(|left, right| left.path.cmp(&right.path));
+    if marker.owned != staged_marker {
+        return Err(ProjectionError::ForeignConflict);
+    }
+    let mut staged_owned = staged_owned.to_vec();
+    staged_owned.sort_by(|left, right| left.0.cmp(&right.0));
+    validate_owned_inventory(marker.authority_snapshot, &staged_owned, known_watermarks)?;
+    Ok(Some(staged_owned))
+}
+
+fn read_projection_ownership_marker(
+    current: &Path,
+) -> Result<Option<ProjectionOwnershipV1>, ProjectionError> {
     let marker_path = current.join(PROJECTION_OWNERSHIP_FILE);
     let metadata = match fs::symlink_metadata(&marker_path) {
         Ok(value) => value,
@@ -635,9 +687,18 @@ fn read_projection_ownership(
     if marker.format != "aep.planning-projection-ownership/1" {
         return Err(ProjectionError::ForeignConflict);
     }
+    Ok(Some(marker))
+}
+
+fn read_owned_files(
+    current: &Path,
+    marker: &ProjectionOwnershipV1,
+    allow_missing: bool,
+) -> Result<(Vec<ProjectionInventoryEntry>, bool), ProjectionError> {
     let mut paths = BTreeSet::new();
     let mut inventory = Vec::with_capacity(marker.owned.len());
-    for entry in marker.owned {
+    let mut missing = false;
+    for entry in &marker.owned {
         if relative_projection_path(&HostPathV1::Unix(HexBytesV1::new(
             entry.path.as_bytes().to_vec(),
         )))? != entry.path
@@ -647,7 +708,14 @@ fn read_projection_ownership(
             return Err(ProjectionError::ForeignConflict);
         }
         let path = current.join(&entry.path);
-        let metadata = fs::symlink_metadata(&path).map_err(|_| ProjectionError::ForeignConflict)?;
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(value) => value,
+            Err(error) if allow_missing && error.kind() == std::io::ErrorKind::NotFound => {
+                missing = true;
+                continue;
+            }
+            Err(_) => return Err(ProjectionError::ForeignConflict),
+        };
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err(ProjectionError::ForeignConflict);
         }
@@ -658,15 +726,22 @@ fn read_projection_ownership(
         {
             return Err(ProjectionError::ForeignConflict);
         }
-        inventory.push((entry.path, bytes, entry.mode));
+        inventory.push((entry.path.clone(), bytes, entry.mode));
     }
-    inventory.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok((inventory, missing))
+}
+
+fn validate_owned_inventory(
+    authority_snapshot: AuthoritySnapshotIdV1,
+    inventory: &[ProjectionInventoryEntry],
+    known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
+) -> Result<(), ProjectionError> {
     let digest =
-        projection_inventory_digest(&inventory).map_err(|_| ProjectionError::ForeignConflict)?;
-    if !known_watermarks.contains(&(marker.authority_snapshot, digest)) {
+        projection_inventory_digest(inventory).map_err(|_| ProjectionError::ForeignConflict)?;
+    if !known_watermarks.contains(&(authority_snapshot, digest)) {
         return Err(ProjectionError::ForeignConflict);
     }
-    Ok(Some(inventory))
+    Ok(())
 }
 
 pub fn projection_owned_inventory(
@@ -1161,6 +1236,121 @@ mod tests {
             .publish_current()
             .expect_err("a changed file at an owned path is an explicit conflict");
         assert_eq!(failure.code, CommandRefusalCodeV1::ProjectionConflict);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // One matrix holds every conflict that a missing sibling must not hide.
+    fn partial_recovery_authenticates_missing_paths_and_checks_every_remaining_file() {
+        let root = std::env::temp_dir().join(format!(
+            "aep-partial-projection-ownership-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(root.join("story")).expect("projection root");
+        let owned = vec![
+            (
+                "story/one.md".to_owned(),
+                b"owned one\n".to_vec(),
+                OWNED_FILE_MODE,
+            ),
+            (
+                "story/two.md".to_owned(),
+                b"owned two\n".to_vec(),
+                OWNED_FILE_MODE,
+            ),
+        ];
+        for (path, bytes, _) in &owned {
+            fs::write(root.join(path), bytes).expect("owned projection file");
+            set_owned_file_mode(&root.join(path)).expect("canonical owned mode");
+        }
+        let snapshot = AuthoritySnapshotIdV1(DigestV1::from_bytes([7; 32]));
+        write_projection_ownership(&root, snapshot, &owned).expect("ownership marker");
+        let watermark = vec![(
+            snapshot,
+            projection_inventory_digest(&owned).expect("owned inventory digest"),
+        )];
+
+        fs::remove_file(root.join("story/two.md")).expect("one owned path is missing");
+        assert_eq!(
+            read_projection_ownership(&root, &watermark),
+            Err(ProjectionError::ForeignConflict),
+            "ordinary verification must not accept a partial projection"
+        );
+        assert_eq!(
+            read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+            Ok(Some(owned.clone())),
+            "the authority-bound inventory authenticates the missing owned path"
+        );
+
+        fs::write(root.join("story/one.md"), b"replaced\n").expect("replace remaining owned file");
+        assert_eq!(
+            read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+            Err(ProjectionError::ForeignConflict),
+            "a missing sibling must not hide changed remaining content"
+        );
+        fs::write(root.join("story/one.md"), &owned[0].1).expect("restore remaining bytes");
+        set_owned_file_mode(&root.join("story/one.md")).expect("restore remaining mode");
+
+        let mut stale_owned = owned.clone();
+        stale_owned[1].1 = b"new authority bytes\n".to_vec();
+        assert_eq!(
+            read_projection_ownership_for_rebuild(&root, &watermark, &stale_owned),
+            Err(ProjectionError::ForeignConflict),
+            "a stale marker cannot claim a changed authoritative inventory"
+        );
+
+        let marker_path = root.join(PROJECTION_OWNERSHIP_FILE);
+        let marker_bytes = fs::read(&marker_path).expect("original marker bytes");
+        let mut forged: ProjectionOwnershipV1 =
+            serde_json::from_slice(&marker_bytes).expect("typed marker");
+        forged.authority_snapshot = AuthoritySnapshotIdV1(DigestV1::from_bytes([8; 32]));
+        fs::write(
+            &marker_path,
+            serde_json::to_vec(&forged).expect("forged marker serialises"),
+        )
+        .expect("write forged marker");
+        assert_eq!(
+            read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+            Err(ProjectionError::ForeignConflict),
+            "an unauthenticated ownership marker cannot authorize recovery"
+        );
+        fs::write(&marker_path, marker_bytes).expect("restore ownership marker");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{symlink, PermissionsExt as _};
+
+            fs::set_permissions(root.join("story/one.md"), fs::Permissions::from_mode(0o600))
+                .expect("change remaining owned mode");
+            assert_eq!(
+                read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+                Err(ProjectionError::ForeignConflict),
+                "a missing sibling must not hide mode drift"
+            );
+            fs::set_permissions(
+                root.join("story/one.md"),
+                fs::Permissions::from_mode(OWNED_FILE_MODE),
+            )
+            .expect("restore remaining owned mode");
+            fs::remove_file(root.join("story/one.md")).expect("remove remaining owned file");
+            symlink("two.md", root.join("story/one.md")).expect("symlink conflict");
+            assert_eq!(
+                read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+                Err(ProjectionError::ForeignConflict),
+                "a symlink at an owned path remains a conflict"
+            );
+            fs::remove_file(root.join("story/one.md")).expect("remove symlink conflict");
+        }
+        #[cfg(not(unix))]
+        fs::remove_file(root.join("story/one.md")).expect("remove remaining owned file");
+        fs::create_dir(root.join("story/one.md")).expect("type conflict");
+        assert_eq!(
+            read_projection_ownership_for_rebuild(&root, &watermark, &owned),
+            Err(ProjectionError::ForeignConflict),
+            "a directory at an owned path remains a conflict"
+        );
+
+        fs::remove_dir_all(root).expect("remove partial projection fixture");
     }
 
     #[cfg(unix)]
