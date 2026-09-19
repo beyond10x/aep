@@ -245,11 +245,13 @@ Read-only inspect/verify reports unresolved phases without advancing them.
 Writer control is an edge-owned capability, not caller JSON or a boolean flag. On the confirmed
 single-machine operator model, `plan store writer-control hold` is a foreground command: it binds
 one resolved selector, source/config and migration snapshot or the selected Eventlog authority
-and requested rebuild snapshot. The operator names every applicable live writer process; the
-holder records each PID with its start identity and boot identity, tracks visible descendants,
-and observes them exit. It then re-captures the selected source or authority and asks the
-operator to take continuing no-restart custody in that terminal. The command never kills a
-writer. The operator remains responsible for the complete writer set, including independently
+and requested rebuild snapshot. When applicable writers are live, the operator names every one;
+the holder records each PID with its start identity and boot identity, tracks visible descendants,
+and observes them exit. When the operator has already established that no applicable writer is
+live, `--already-idle` is a fresh affirmative assertion of that fact and creates no stop witness.
+Both paths then re-capture the selected source or authority and ask the operator to take continuing
+no-restart custody in that terminal. The command never kills a writer or infers an empty writer set
+from `/proc`. The operator remains responsible for the complete writer set, including independently
 started children, and for preventing restarts. This is the ordinary operator-controlled writer
 trust boundary; a local socket cannot enforce a human no-restart decision.
 
@@ -259,11 +261,13 @@ holder generation and re-resolves current selector/source or authority. A replac
 cannot satisfy a guard acquired from a dead one. On interruption, `--resume-stop` may reuse only
 same-boot process exits that the previous holder actually recorded for the same bound request;
 it still needs a new foreground custody act and current source/selector validation. An already
-stopped source without such retained observation has no admission path. A missing, stale,
-substituted or lost holder returns `WriterExclusionUnavailable`; process absence, a saved witness
-and cooperative locks cannot establish exclusion by themselves. The selected v2 authority is
-checked against the durable provider binding on matching retry, and retirement remains under
-held old-writer custody until selector verification. On non-Linux hosts this adapter refuses.
+idle source instead requires a fresh `--already-idle` assertion and foreground custody act for
+initial apply, matching retry or rebuild; it is never derived from omitted process arguments and
+cannot be resumed as observed-stop evidence. A missing, stale, substituted or lost holder returns
+`WriterExclusionUnavailable`; process absence, a saved witness and cooperative locks cannot
+establish exclusion by themselves. The selected v2 authority is checked against the durable
+provider binding on matching retry, and retirement remains under held old-writer custody until
+selector verification. On non-Linux hosts this adapter refuses.
 The private temporary stop sidecar is closed `aep.writer-stop/1` and binds process start identities
 to the Linux boot identity; unknown versions and fields refuse. It records stop observation only,
 never a serialized held guard or no-restart authority.

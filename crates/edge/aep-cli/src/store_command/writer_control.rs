@@ -49,11 +49,18 @@ pub(crate) struct HoldArgs {
     #[arg(long, conflicts_with = "migration", required_unless_present = "migration")]
     authority_snapshot: Option<String>,
     /// Every applicable live writer process; descendants observed while they run are included.
-    #[arg(long = "writer-pid", conflicts_with = "resume_stop", required_unless_present = "resume_stop")]
+    #[arg(
+        long = "writer-pid",
+        conflicts_with_all = ["resume_stop", "already_idle"],
+        required_unless_present_any = ["resume_stop", "already_idle"]
+    )]
     writer_pids: Vec<u32>,
     /// Reuse only prior observed stop facts after a holder crash; requires fresh custody.
-    #[arg(long, conflicts_with = "writer_pids")]
+    #[arg(long, conflicts_with_all = ["writer_pids", "already_idle"])]
     resume_stop: bool,
+    /// Affirm no applicable writer is running; creates no stop witness and requires fresh custody.
+    #[arg(long, conflicts_with_all = ["writer_pids", "resume_stop"])]
+    already_idle: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -332,7 +339,11 @@ fn run_holder(args: &HoldArgs) -> Result<ExitCode> {
             let migration = MigrationIdV1::new(migration.clone())?;
             let snapshot = SourceSnapshotIdV1(DigestV1::parse(snapshot)?);
             if resolved.selection.project_version == ProjectVersionV1::V2 {
-                if !args.resume_stop { anyhow::bail!("selected migration requires a prior observed stop witness"); }
+                if !args.resume_stop && !args.already_idle {
+                    anyhow::bail!(
+                        "selected migration requires a prior observed stop witness or a fresh already-idle assertion"
+                    );
+                }
                 let root = super::migration_root(&resolved.engineering, &migration)?;
                 let intent: MigrationIntentV2 = serde_json::from_slice(&fs::read(root.join("intent.json"))?)?;
                 if intent.migration_id != migration || intent.source_snapshot != snapshot {
@@ -382,6 +393,8 @@ fn run_holder(args: &HoldArgs) -> Result<ExitCode> {
             }
         }
         witness.stopped
+    } else if args.already_idle {
+        Vec::new()
     } else {
         if args.writer_pids.is_empty() { anyhow::bail!("name at least one live writer process"); }
         let stopped = observe_stops(&args.writer_pids)?;
@@ -420,7 +433,13 @@ fn run_holder(args: &HoldArgs) -> Result<ExitCode> {
         let (observed, _) = aep_planning_migration::authority_snapshot_identity(authority, &captured)?;
         if observed != *snapshot { anyhow::bail!("selected authority snapshot changed"); }
     }
-    println!("Retained stop evidence for {} writer processes. Keep this foreground command running, and do not restart any applicable writer until the selected authority is verified.", stopped.len());
+    if args.already_idle {
+        println!(
+            "Accepted already-idle assertion without creating stop evidence. Keep this foreground command running, and do not start any applicable writer until the selected authority is verified."
+        );
+    } else {
+        println!("Retained stop evidence for {} writer processes. Keep this foreground command running, and do not restart any applicable writer until the selected authority is verified.", stopped.len());
+    }
     println!("Type HOLD to take continuing no-restart custody; an empty line later releases it.");
     std::io::stdout().flush()?;
     let mut line = String::new();

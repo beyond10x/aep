@@ -122,19 +122,21 @@ started local agent sessions. Without a live matching holder, they refuse with
 | `aep plan store migrate apply --authority-scope <scope> --authority-tenant <tenant> (--authority-new\|--authority-identity <stream>) --snapshot <digest> --migration <id> [--project <project.yaml>] [--format text\|json]` | under admitted writer control, imports the captured authority through the eight durable phases, publishes the tracked Markdown projection and returns the immutable original receipt; otherwise returns `writer_exclusion_unavailable` |
 | `aep plan store verify [--project <project.yaml>] [--format text\|json]` | compares two provider-complete reads of the selected authority, its retained legacy boundary graph and the current projection |
 | `aep plan store rebuild --authority-snapshot <digest> [--project <project.yaml>] [--format text\|json]` | under admitted authority writer control, rebuilds only owned projection paths from that exact unchanged snapshot without re-executing a business command |
-| `aep plan store writer-control hold --migration <id> --snapshot <digest> --writer-pid <pid>… [--project <project.yaml>]` | observes the named live writer processes and their visible descendants exit, then holds operator no-restart custody in the foreground for the matching apply |
-| `aep plan store writer-control hold --authority-snapshot <digest> --writer-pid <pid>… [--project <project.yaml>]` | holds the selected Eventlog authority for a matching rebuild |
+| `aep plan store writer-control hold --migration <id> --snapshot <digest> (--writer-pid <pid>…\|--already-idle\|--resume-stop) [--project <project.yaml>]` | observes named live writers stop, accepts a fresh affirmative already-idle assertion, or resumes retained stop observation, then holds no-restart custody for the matching apply |
+| `aep plan store writer-control hold --authority-snapshot <digest> (--writer-pid <pid>…\|--already-idle\|--resume-stop) [--project <project.yaml>]` | holds the selected Eventlog authority for a matching rebuild under the selected custody mode |
 
-Start the holder while the applicable writer sessions are still live. Name every applicable
-writer process, including independently started children; the holder does not kill them. Stop
-and drain them yourself. After it reports their exits and rechecks the selected source, type
-`HOLD` in that terminal. Keep it open until apply, retry or rebuild has finished and the new
-selector is verified. Press Enter to release custody. If the holder stops, the next mutating
-command refuses. `--resume-stop` on the same hold command reuses only that holder's retained
-same-boot stop observation; it requires a new `HOLD` and rechecks the current source or selected
-authority. It cannot create stop evidence for a session already gone before any holder observed
-it. A stopped PID, a clean snapshot, a cooperative lock or a saved witness alone never admits a
-write.
+When applicable writer sessions are live, start the holder while they are still live. Name every
+applicable writer process, including independently started children; the holder does not kill
+them. Stop and drain them yourself. If the operator has already established that no applicable
+writer is running, use `--already-idle` to make that fact explicit. The command does not infer it
+from process absence and writes no stop witness for this mode. After the holder reports the chosen
+admission and rechecks the selected source or authority, type `HOLD` in that terminal. Keep it open
+until apply, retry or rebuild has finished and the new selector is verified. Press Enter to release
+custody. If the holder stops, the next mutating command refuses. `--resume-stop` on the same hold
+command reuses only retained same-boot stop observation; already-idle custody must instead be
+asserted afresh with `--already-idle`. Both paths require a new `HOLD` and recheck the current source
+or selected authority. A stopped PID, a clean snapshot, a cooperative lock or a saved witness alone
+never admits a write.
 
 The operator is responsible for the complete writer set and for not restarting any applicable
 session during custody. The socket only proves that the foreground holder is still answering;

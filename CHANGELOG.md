@@ -26,7 +26,9 @@ belongs in the commit message or in `docs/design/`.
 
 - `plan store writer-control hold` binds a local foreground operator custody session to one
   migration or projection rebuild. Public apply, matching retry and rebuild now require that live
-  control and recheck its selected source or authority before effects.
+  control and recheck its selected source or authority before effects. Operators with an already
+  idle writer set can affirm it explicitly with `--already-idle`; that fresh custody mode creates
+  no observed-stop witness and must be asserted again after interruption.
 
 - Pure planning migration capture values preserve partial observations, validate capture
   phases and discovered-table catalogs, and compute deterministic digests and changed sets.

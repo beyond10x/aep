@@ -86,7 +86,7 @@ fn hold(
             &writer.as_ref().expect("live writer").id().to_string(),
         ]);
     }
-    let mut holder = command.spawn().expect("holder starts");
+    let holder = command.spawn().expect("holder starts");
     if let Some(writer) = writer.as_mut() {
         // The holder samples the live identity before the operator stops it.
         thread::sleep(Duration::from_millis(300));
@@ -100,12 +100,37 @@ fn hold(
         writer.kill().expect("operator stops the disposable writer");
         writer.wait().expect("writer drained");
     }
+    activate_holder(holder)
+}
+
+fn hold_already_idle(
+    root: &PathBuf,
+    selector: &PathBuf,
+    identity: &[&str],
+) -> (Child, BufReader<std::process::ChildStdout>) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_aep"));
+    command
+        .args(["plan", "store", "writer-control", "hold", "--project"])
+        .arg(selector)
+        .args(identity)
+        .arg("--already-idle")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .current_dir(root);
+    activate_holder(command.spawn().expect("already-idle holder starts"))
+}
+
+fn activate_holder(mut holder: Child) -> (Child, BufReader<std::process::ChildStdout>) {
     let mut stdout = BufReader::new(holder.stdout.take().expect("holder stdout"));
     let mut line = String::new();
     stdout
         .read_line(&mut line)
-        .expect("holder stop observation");
-    assert!(line.contains("Retained stop evidence"), "{line}");
+        .expect("holder custody preparation");
+    assert!(
+        line.contains("Retained stop evidence") || line.contains("Accepted already-idle assertion"),
+        "{line}"
+    );
     line.clear();
     stdout.read_line(&mut line).expect("custody prompt");
     assert!(line.contains("Type HOLD"), "{line}");
@@ -119,6 +144,22 @@ fn hold(
     stdout.read_line(&mut line).expect("holder active");
     assert!(line.contains("Writer control held"), "{line}");
     (holder, stdout)
+}
+
+fn holder_output(
+    root: &PathBuf,
+    selector: &PathBuf,
+    identity: &[&str],
+    mode: &[&str],
+) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(["plan", "store", "writer-control", "hold", "--project"])
+        .arg(selector)
+        .args(identity)
+        .args(mode)
+        .current_dir(root)
+        .output()
+        .expect("holder refusal runs")
 }
 
 fn stop_holder(holder: &mut Child) {
@@ -1039,4 +1080,225 @@ fn public_apply_requires_live_custody_and_preserves_original_retry() {
         String::from_utf8_lossy(&explicit.stderr).contains("Eventlog projection"),
         "legacy locator names why the selected projection is retired"
     );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn public_already_idle_custody_applies_retries_and_rebuilds_without_stop_witness() {
+    let (root, selector) = project();
+    let selector_text = selector.to_string_lossy().into_owned();
+    let dry = [
+        "plan",
+        "store",
+        "migrate",
+        "dry-run",
+        "--project",
+        &selector_text,
+        "--authority-scope",
+        "idle-control-test",
+        "--authority-tenant",
+        "idle-control-tenant",
+        "--authority-new",
+        "--format",
+        "json",
+    ];
+    let (success, preview, error) = run(&root, &dry);
+    assert!(success, "idle dry-run: {preview} {error}");
+    let snapshot = preview["outcome"]["value"]["source_snapshot"]
+        .as_str()
+        .expect("idle source snapshot")
+        .to_owned();
+    let identity = ["--migration", "idle-migration", "--snapshot", &snapshot];
+    let apply = [
+        "plan",
+        "store",
+        "migrate",
+        "apply",
+        "--project",
+        &selector_text,
+        "--authority-scope",
+        "idle-control-test",
+        "--authority-tenant",
+        "idle-control-tenant",
+        "--authority-new",
+        "--snapshot",
+        &snapshot,
+        "--migration",
+        "idle-migration",
+        "--format",
+        "json",
+    ];
+
+    let omitted = holder_output(&root, &selector, &identity, &[]);
+    assert!(
+        !omitted.status.success(),
+        "omitting every writer-control mode must refuse"
+    );
+    let conflict = holder_output(
+        &root,
+        &selector,
+        &identity,
+        &["--already-idle", "--resume-stop"],
+    );
+    assert!(
+        !conflict.status.success(),
+        "already-idle and resume-stop must conflict"
+    );
+    let current_pid = std::process::id().to_string();
+    let conflict = holder_output(
+        &root,
+        &selector,
+        &identity,
+        &["--already-idle", "--writer-pid", &current_pid],
+    );
+    assert!(
+        !conflict.status.success(),
+        "already-idle and observed writer PIDs must conflict"
+    );
+
+    let mut unconfirmed = Command::new(env!("CARGO_BIN_EXE_aep"));
+    unconfirmed
+        .args(["plan", "store", "writer-control", "hold", "--project"])
+        .arg(&selector)
+        .args(identity)
+        .arg("--already-idle")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .current_dir(&root);
+    let mut unconfirmed = unconfirmed.spawn().expect("unconfirmed idle holder starts");
+    let mut output = BufReader::new(unconfirmed.stdout.take().expect("unconfirmed stdout"));
+    let mut line = String::new();
+    output.read_line(&mut line).expect("idle assertion");
+    assert!(line.contains("Accepted already-idle assertion"), "{line}");
+    line.clear();
+    output.read_line(&mut line).expect("idle custody prompt");
+    assert!(line.contains("Type HOLD"), "{line}");
+    unconfirmed
+        .stdin
+        .as_mut()
+        .expect("unconfirmed stdin")
+        .write_all(b"NO\n")
+        .expect("decline custody");
+    assert!(!unconfirmed
+        .wait()
+        .expect("unconfirmed holder exits")
+        .success());
+
+    let (mut holder, _output) = hold_already_idle(&root, &selector, &identity);
+    let wrong_migration = apply.map(|part| {
+        if part == "idle-migration" {
+            "other-idle-migration"
+        } else {
+            part
+        }
+    });
+    let (success, refused, _) = run(&root, &wrong_migration);
+    assert!(
+        !success && refused.to_string().contains("writer_exclusion_unavailable"),
+        "wrong idle migration binding: {refused}"
+    );
+    let wrong_snapshot = format!(
+        "{}{}",
+        &snapshot[..snapshot.len() - 1],
+        if snapshot.ends_with('0') { '1' } else { '0' }
+    );
+    let wrong_snapshot_args = apply.map(|part| {
+        if part == snapshot {
+            &*wrong_snapshot
+        } else {
+            part
+        }
+    });
+    let (success, refused, _) = run(&root, &wrong_snapshot_args);
+    assert!(
+        !success && refused.to_string().contains("writer_exclusion_unavailable"),
+        "wrong idle source snapshot: {refused}"
+    );
+    let original_selector = fs::read(&selector).expect("idle selector");
+    let mut changed_selector = original_selector.clone();
+    changed_selector.extend_from_slice(b"# changed while idle custody is held\n");
+    fs::write(&selector, changed_selector).expect("changed idle selector");
+    let (success, refused, _) = run(&root, &apply);
+    assert!(
+        !success && refused.to_string().contains("writer_exclusion_unavailable"),
+        "changed idle selector: {refused}"
+    );
+    fs::write(&selector, original_selector).expect("restore idle selector");
+
+    let (success, applied, error) = run(&root, &apply);
+    assert!(success, "already-idle apply: {applied} {error}");
+    let receipt = applied["outcome"]["value"]["receipt"].clone();
+    let (success, retry, error) = run(&root, &apply);
+    assert!(success, "already-idle matching retry: {retry} {error}");
+    assert_eq!(retry["outcome"]["value"]["receipt"], receipt);
+
+    holder.kill().expect("simulate already-idle holder crash");
+    holder.wait().expect("already-idle holder reaped");
+    let (success, refused, _) = run(&root, &apply);
+    assert!(
+        !success && refused.to_string().contains("writer_exclusion_unavailable"),
+        "dead already-idle holder: {refused}"
+    );
+    let resume = holder_output(&root, &selector, &identity, &["--resume-stop"]);
+    assert!(
+        !resume.status.success(),
+        "idle custody must not mint stop evidence"
+    );
+    assert!(
+        String::from_utf8_lossy(&resume.stderr).contains("no observed stop witness"),
+        "idle custody must not be resumable as observed-stop evidence: {}",
+        String::from_utf8_lossy(&resume.stderr)
+    );
+
+    let (mut reacquired, _output) = hold_already_idle(&root, &selector, &identity);
+    let (success, retry, error) = run(&root, &apply);
+    assert!(success, "fresh idle custody retry: {retry} {error}");
+    assert_eq!(retry["outcome"]["value"]["receipt"], receipt);
+    stop_holder(&mut reacquired);
+
+    let verify = [
+        "plan",
+        "store",
+        "verify",
+        "--project",
+        &selector_text,
+        "--format",
+        "json",
+    ];
+    let (success, verified, error) = run(&root, &verify);
+    assert!(success, "idle verify: {verified} {error}");
+    let authority_snapshot = verified["outcome"]["value"]["authority"]["snapshot_id"]
+        .as_str()
+        .expect("idle authority snapshot")
+        .to_owned();
+    let projected = root.join(".engineering/planning/story/one.md");
+    let expected = fs::read(&projected).expect("idle projection");
+    fs::remove_file(&projected).expect("remove idle projection");
+    let rebuild_identity = ["--authority-snapshot", &authority_snapshot];
+    let rebuild_args = [
+        "plan",
+        "store",
+        "rebuild",
+        "--project",
+        &selector_text,
+        "--authority-snapshot",
+        &authority_snapshot,
+        "--format",
+        "json",
+    ];
+    let (mut rebuild_holder, _output) = hold_already_idle(&root, &selector, &rebuild_identity);
+    let (success, rebuilt, error) = run(&root, &rebuild_args);
+    assert!(success, "already-idle rebuild: {rebuilt} {error}");
+    stop_holder(&mut rebuild_holder);
+    assert_eq!(
+        fs::read(&projected).expect("idle projection rebuilt"),
+        expected
+    );
+    let (success, verified, error) = run(&root, &verify);
+    assert!(
+        success,
+        "verification after idle rebuild: {verified} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove already-idle fixture");
 }
