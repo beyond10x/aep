@@ -1454,3 +1454,586 @@ fn validate_reports_a_hand_edited_eventlog_projection_as_drift_decided_by_the_au
     );
     fs::remove_dir_all(root).expect("remove disposable fixture");
 }
+
+/// The same migrated plan, with one review recorded **before** the migration and one after it.
+///
+/// The frozen journal under the projection holds the first review's creation and can hold nothing
+/// about the second, so a reader that takes its order from that file holds a *partial* order over
+/// the two — and under `Option`'s ordering the review it says nothing about sorts first, which is
+/// the reverse of when the two rounds happened.
+fn migrated_eventlog_plan_with_a_review_from_before_the_migration(migration: &str) -> PathBuf {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, first, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "alpha",
+            "--title",
+            "First round",
+            "--owner",
+            "agent:alpha",
+            "--relate",
+            "reviews:story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a review recorded before the migration: {first} {error}"
+    );
+    apply_selected_source(&root, &selector, migration);
+    let identity = format!("{migration}-second-round");
+    let (success, second, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "beta",
+            "--title",
+            "Second round",
+            "--owner",
+            "agent:beta",
+            "--relate",
+            "reviews:story:one",
+            "--command-identity",
+            &identity,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a review recorded after the migration: {second} {error}"
+    );
+    root
+}
+
+/// **An evidence-gated move on a migrated plan counts the records the authority holds.**
+///
+/// `Opened::evidence_on_hand` matched on the projected files, so on an Eventlog plan it counted
+/// the journal under the projection: the migrated store's, frozen where the migration left it.
+/// Every record written after the cut-over was invisible to the rung that asked for it, so the
+/// first evidence-gated move on a migrated store was refused by the store's own reader while the
+/// authority held the record the rung wanted.
+#[test]
+#[allow(clippy::too_many_lines)] // One journey: the rung, the record, the move, and what it rested on.
+fn an_evidence_gated_move_on_a_migrated_plan_counts_evidence_recorded_after_the_migration() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("evidence-v2-gated-move");
+    // A rung that asks for something the frozen journal cannot hold: the fixture recorded one
+    // `test_result` before the migration and never an `approval`, so the approval recorded below
+    // is a record that exists in the authority and nowhere else.
+    fs::create_dir_all(root.join("protocols/artifacts/lifecycles")).expect("lifecycle directory");
+    fs::write(
+        root.join("protocols/artifacts/lifecycles/story.yaml"),
+        "kind: story\n\
+         initial: draft\n\
+         transitions:\n  \
+           draft: [proposed]\n  \
+           proposed: [signed]\n  \
+           signed: []\n\
+         requires:\n  \
+           signed:\n    \
+             - evidence: approval\n      \
+               at_least: 1\n",
+    )
+    .expect("a guarded rung");
+
+    let explain = [
+        "plan",
+        "artifact",
+        "explain",
+        "story:one",
+        "--format",
+        "json",
+    ];
+    let (success, before, error) = run(&root, &explain);
+    assert!(success, "explain before the record: {before} {error}");
+    assert_eq!(
+        before["next"],
+        serde_json::json!([
+            {"status": "signed", "needs": [{"kind": "approval", "at_least": 1, "held": 0}]}
+        ]),
+        "the rung asks for one approval and nothing holds one yet: {before}"
+    );
+
+    let (success, recorded, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:one",
+            "--kind",
+            "approval",
+            "--source",
+            "human:reviewer",
+            "--command-identity",
+            "evidence-v2-gated-move-approval",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "recording an approval after the migration: {recorded} {error}"
+    );
+
+    let (success, after, error) = run(&root, &explain);
+    assert!(success, "explain after the record: {after} {error}");
+    assert_eq!(
+        after["next"],
+        serde_json::json!([
+            {"status": "signed", "needs": [{"kind": "approval", "at_least": 1, "held": 1}]}
+        ]),
+        "the approval the authority holds is not on hand: {after}"
+    );
+
+    let (success, moved, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "signed",
+            "--command-identity",
+            "evidence-v2-gated-move-signed",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "the rung refused a record the store itself holds: {moved} {error}"
+    );
+    assert_eq!(moved["outcome"]["kind"], "complete", "{moved}");
+
+    let (success, explained, error) = run(&root, &explain);
+    assert!(success, "explain after the move: {explained} {error}");
+    let reached = explained["reached"]
+        .as_array()
+        .expect("the statuses it reached");
+    let last = reached.last().expect("the move just made");
+    assert_eq!(last["to"], "signed", "{explained}");
+    let rested = last["rested_on"]
+        .as_array()
+        .expect("what the move rested on");
+    assert_eq!(
+        rested.len(),
+        1,
+        "the move names the record it rested on: {explained}"
+    );
+    assert_eq!(rested[0]["kind"], "approval", "{explained}");
+    assert_eq!(rested[0]["source"], "human:reviewer", "{explained}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **What became of a review recorded after the migration is what the store answers with.**
+///
+/// `outcomes_of` and `review_records` read the journal under the projection, so on a migrated plan
+/// a `review_outcome` recorded after the cut-over was held by the authority and reported by
+/// neither `show` nor `review-value` — the two verbs whose whole question is whether a review ever
+/// changed anything.
+#[test]
+#[allow(clippy::too_many_lines)] // One record, asked of the three verbs that answer for a review.
+fn a_review_outcome_recorded_after_migration_is_shown_and_counted() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("evidence-v2-review-outcome");
+    let (success, created, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "alpha",
+            "--title",
+            "A round",
+            "--owner",
+            "agent:alpha",
+            "--relate",
+            "reviews:story:one",
+            "--command-identity",
+            "evidence-v2-review-outcome-review",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a review recorded after the migration: {created} {error}"
+    );
+    let (success, recorded, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:one",
+            "--kind",
+            "review_outcome",
+            "--review",
+            "review-result:alpha",
+            "--outcome",
+            "fixed",
+            "--source",
+            "human:maintainer",
+            "--command-identity",
+            "evidence-v2-review-outcome-record",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "recording what became of the review: {recorded} {error}"
+    );
+
+    let (success, shown, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "show",
+            "review-result:alpha",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "show on the review: {shown} {error}");
+    let outcomes = shown["outcomes"].as_array().expect("what became of it");
+    assert_eq!(
+        outcomes.len(),
+        1,
+        "the record the authority holds is not shown: {shown}"
+    );
+    assert_eq!(outcomes[0]["reviewed"], "story:one", "{shown}");
+    assert_eq!(outcomes[0]["outcome"], "fixed", "{shown}");
+    assert_eq!(outcomes[0]["source"], "human:maintainer", "{shown}");
+
+    let (success, table, error) = run(
+        &root,
+        &["plan", "artifact", "review-value", "--format", "json"],
+    );
+    assert!(success, "the review-value table: {table} {error}");
+    let rows = table["reviewers"].as_array().expect("one row per reviewer");
+    assert_eq!(rows.len(), 1, "{table}");
+    assert_eq!(rows[0]["reviewer"], "agent:alpha", "{table}");
+    assert_eq!(
+        rows[0]["fixed"], 1,
+        "the outcome the authority holds is not counted: {table}"
+    );
+
+    // The same record, read the way `explain` has always read one — from the contract. Asserted
+    // beside the two above so the readings cannot drift apart again.
+    let (success, explained, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "explain",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "explain on the reviewed artifact: {explained} {error}"
+    );
+    let since = explained["recorded_since"]
+        .as_array()
+        .expect("records since the last move");
+    assert!(
+        since
+            .iter()
+            .any(|admitted| admitted["kind"] == "review_outcome"),
+        "{explained}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **A migrated plan's reviews are not ordered by the journal the migration froze.**
+///
+/// `reviews_of` ordered the rounds by their position in the journal under the projection. After a
+/// migration that file holds every review recorded before the cut-over and none recorded since, so
+/// the order was partial — and a review it says nothing about sorts ahead of one it does. The
+/// default pair `findings` compares was then the second round against the first, reported the
+/// wrong way round, which is a ledger that calls every resolved finding new.
+#[test]
+fn the_reviews_of_a_migrated_plan_are_not_ordered_by_the_frozen_journal() {
+    let root =
+        migrated_eventlog_plan_with_a_review_from_before_the_migration("evidence-v2-review-order");
+    let (success, ledger, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "findings",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "the ledger over two rounds: {ledger} {error}");
+    assert_eq!(ledger["reviews"], 2, "{ledger}");
+    assert_eq!(
+        ledger["from"], "review-result:alpha",
+        "the round recorded after the migration was compared as the earlier one: {ledger}"
+    );
+    assert_eq!(ledger["to"], "review-result:beta", "{ledger}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// Copies a directory tree, preserving each file's mode, for a case that has to put a projection
+/// back the way an earlier command published it.
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    fs::create_dir_all(to).expect("copy destination");
+    for entry in fs::read_dir(from).expect("readable source") {
+        let entry = entry.expect("directory entry");
+        let target = to.join(entry.file_name());
+        if entry.file_type().expect("entry type").is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), &target).expect("copy one file");
+        }
+    }
+}
+
+/// **A document planted in an Eventlog projection is reported by nothing today**, and this is the
+/// record of that rather than a claim it is right.
+///
+/// The drift check both `verify` and `validate` make asks whether the files the authority *owns*
+/// digest to a watermark it published. A path the ownership marker never listed is digested by
+/// neither side, so the watermark still matches, `verify` answers `current`, and the plan's
+/// documents — which come from the authority — never mention `story:two` at all. The gap is filed
+/// as `story:unowned-document-in-eventlog-projection-is-reported` and is not closed in this wave.
+///
+/// The case asserts what the build does, so the gap cannot close silently: when that story lands,
+/// this is the assertion that fails, and the answer is to rewrite it as the refusal the story
+/// promises — never to loosen it, and never to mark it ignored, which would delete the only record
+/// that anybody knows.
+#[test]
+fn a_foreign_document_planted_in_an_eventlog_projection_is_reported_by_nothing_today() {
+    let (root, selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-foreign-file");
+    fs::write(
+        root.join(".engineering/planning/story/two.md"),
+        "---\nformat: aep.planning-md/1\nid: story:two\nkind: story\nstatus: draft\ntitle: \
+         Two\nrelations: []\nrevision: 1\n---\n",
+    )
+    .expect("a document written into the projection outside a command");
+    let selector_text = selector.to_string_lossy().into_owned();
+    let (success, verified, error) = run(
+        &root,
+        &[
+            "plan",
+            "store",
+            "verify",
+            "--project",
+            &selector_text,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "`story:unowned-document-in-eventlog-projection-is-reported` has landed: verify now \
+         reports the planted document. Assert the refusal that story promises here: {verified} \
+         {error}"
+    );
+    assert_eq!(
+        verified["outcome"]["value"]["projection"]["drift"], "current",
+        "`story:unowned-document-in-eventlog-projection-is-reported` has landed: the ownership \
+         marker now covers an unlisted path. Assert the drift that story promises here: {verified}"
+    );
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        success,
+        "`story:unowned-document-in-eventlog-projection-is-reported` has landed: validate now \
+         reports the planted document. Assert the finding that story promises here: {after} \
+         {error}"
+    );
+    assert_eq!(after["problems"], serde_json::json!([]), "{after}");
+    assert_eq!(
+        after["artifacts"], 1,
+        "the plan's documents are the authority's, and the planted file is in none of them: \
+         {after}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// The deleted boundary of the same claim: a projected document removed rather than edited.
+#[test]
+fn validate_reports_a_projected_document_deleted_outside_a_command_on_an_eventlog_plan() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-deleted-file");
+    fs::remove_file(root.join(".engineering/planning/story/one.md"))
+        .expect("a document removed outside a command");
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "a deleted projected document passed validate: {after} {error}"
+    );
+    let drift = after["drift"].as_array().expect("drift findings");
+    assert_eq!(drift.len(), 1, "{after}");
+    assert!(
+        drift[0]
+            .as_str()
+            .expect("a finding is text")
+            .contains("drifted from its authority"),
+        "{after}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// The projection put back the way the *previous* command published it, while the authority holds
+/// a later move. Every owned file digests to a watermark the authority recorded — an older one —
+/// so a check that asks only *is this some published state* answers current, and the reader of
+/// `story/one.md` sees `proposed` where the plan says `active`.
+#[test]
+fn validate_reports_an_eventlog_projection_left_at_an_earlier_published_state() {
+    let (root, selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-stale-projection");
+    let projection = root.join(".engineering/planning");
+    let kept = root.join("projection-after-the-first-move");
+    copy_tree(&projection, &kept);
+    let (success, moved, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "active",
+            "--command-identity",
+            "validate-v2-stale-projection-second",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "second governed move: {moved} {error}");
+    let projected = projection.join("story/one.md");
+    assert!(
+        fs::read_to_string(&projected)
+            .expect("republished story")
+            .contains("status: active"),
+        "the second move republished the projection"
+    );
+    fs::remove_dir_all(&projection).expect("remove the republished projection");
+    copy_tree(&kept, &projection);
+    assert!(
+        fs::read_to_string(&projected)
+            .expect("restored story")
+            .contains("status: proposed"),
+        "the projection is back at the earlier published state"
+    );
+    let selector_text = selector.to_string_lossy().into_owned();
+    let (_, verified, _) = run(
+        &root,
+        &[
+            "plan",
+            "store",
+            "verify",
+            "--project",
+            &selector_text,
+            "--format",
+            "json",
+        ],
+    );
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "the projection says proposed where the authority says active, and validate reported the \
+         plan clean: {after} — verify said {verified} — {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// A `review-result` recorded before the migration, never answered by a `review_outcome`, and old
+/// enough for `--outcome-within`. Its creation instant is in the legacy journal migration left
+/// under the projection, and the document is in the authority, so the class `validate` documents
+/// (`website/docs/reference/cli.md`) has everything it needs on a migrated plan.
+#[test]
+fn strict_validate_reports_a_pre_migration_review_without_an_outcome_on_an_eventlog_plan() {
+    let (root, selector) = project();
+    fs::create_dir_all(root.join(".engineering/planning/review-result")).expect("review directory");
+    fs::write(
+        root.join(".engineering/planning/review-result/old.md"),
+        "---\nformat: aep.planning-md/1\nid: review-result:old\nkind: review-result\nstatus: \
+         active\ntitle: Old\nrelations:\n- reviews: story:one\nrevision: 1\n---\n# Old\n\nProse \
+         only.\n",
+    )
+    .expect("legacy review document");
+    let story = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    let review = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "review-result:old", "kind": "review-result", "revision": 1,
+        "change": {"change": "created", "status": "active"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{story}\n{review}\n"),
+    )
+    .expect("legacy journal");
+    apply_selected_source(&root, &selector, "validate-v2-review-outcome");
+    let (_, after, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "validate",
+            "--strict",
+            "--outcome-within",
+            "7",
+            "--format",
+            "json",
+        ],
+    );
+    assert_eq!(
+        after["artifacts"], 2,
+        "the migrated plan holds both: {after}"
+    );
+    assert!(
+        after["without_findings"]
+            .as_array()
+            .is_some_and(|prose| prose.len() == 1),
+        "validate sees the review on the migrated plan: {after}"
+    );
+    let without = after
+        .get("without_an_outcome")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        without.iter().any(|finding| finding
+            .as_str()
+            .is_some_and(|text| text.contains("review-result:old"))),
+        "a review recorded before the migration and never answered is reported by no class once \
+         the plan is Eventlog: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}

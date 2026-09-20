@@ -835,11 +835,17 @@ impl Opened {
     }
 
     /// The evidence recorded about `id`, by kind, wherever this plan keeps its records.
+    ///
+    /// Through [`Opened::journal`], so a migrated Eventlog plan is counted from its authority. The
+    /// journal under its projection stops where the migration did, and this count is the input to
+    /// the evidence-gated move decision: read from that file, a record made after the cut-over did
+    /// not exist, and the first guarded rung on a migrated store was refused by the store's own
+    /// reader for evidence the store was holding.
     fn evidence_on_hand(
         &self,
         id: &ArtifactId,
     ) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
-        match &self.files {
+        match self.journal() {
             Some(store) => Ok(aep_backend_markdown::journal::evidence_on_hand(
                 store.root(),
                 id,
@@ -867,6 +873,35 @@ impl Opened {
             | Plan::Postgres { .. }
             | Plan::Hybrid { .. } => self.files.as_ref(),
         }
+    }
+
+    /// Every history entry this plan holds, for a question asked over the whole store.
+    ///
+    /// *When was each artifact created*, *what became of this review* — the journal answers both,
+    /// for the plan whose record it is ([`Opened::journal`]). An Eventlog plan's record is its
+    /// authority, and the journal under its projection is the migrated store's: every record
+    /// written after the cut-over is simply absent from it, so `review-value` counted no outcome
+    /// and `show` listed none for a review answered after a migration. The authority keeps its
+    /// history per entity, so it is gathered one artifact at a time through
+    /// [`entries_from_the_contract`] — the reading `history` and `explain` already make, and
+    /// deliberately the only one there is.
+    ///
+    /// A SQLite or Postgres plan answers nothing here, as it always has: it never had a journal to
+    /// go stale, and *no outcomes rather than a wrong number* is the invariant [`outcomes_of`]
+    /// states. An artifact the contract will not answer for is left out rather than guessed at.
+    fn history_entries(&self) -> Vec<aep_backend_markdown::journal::Entry> {
+        if let Some(store) = self.journal() {
+            return aep_backend_markdown::journal::read(store.root()).0;
+        }
+        if !matches!(self.plan, Plan::Eventlog { .. }) {
+            return Vec::new();
+        }
+        self.report
+            .documents
+            .keys()
+            .filter_map(|id| entries_from_the_contract(self, id).ok())
+            .flat_map(|(entries, _)| entries)
+            .collect()
     }
 }
 
@@ -5486,13 +5521,19 @@ fn reviews(stored: &aep_backend_markdown::StoredDocument, subject: &ArtifactId) 
 /// two reviews recorded in one second have the same one. What the journal holds is the order the
 /// store was actually written in, which is the order a second round happened in. A plan whose
 /// journal says nothing about a review falls back to the id, so the answer is at least stable.
+///
+/// The journal, and only where it is this plan's own record ([`Opened::journal`]). On a migrated
+/// Eventlog plan the file under the projection holds every review recorded before the cut-over
+/// and nothing about one recorded since, which is a **partial** order — and `Option`'s ordering
+/// puts the reviews it says nothing about first, so the second round sorted ahead of the first and
+/// the pair `findings` compares by default was the two the wrong way round. A plan whose record is
+/// the authority takes the stable fallback instead.
 fn reviews_of<'a>(
     opened: &'a Opened,
     subject: &ArtifactId,
 ) -> Vec<&'a aep_backend_markdown::StoredDocument> {
     let order: BTreeMap<ArtifactId, usize> = opened
-        .files
-        .as_ref()
+        .journal()
         .map(|store| {
             aep_backend_markdown::journal::read(store.root())
                 .0
@@ -5684,17 +5725,20 @@ fn print_ledger(ledger: &FindingsLedger) {
 
 /// Reviews at least `days` old that no `review_outcome` record names.
 ///
-/// The age is the instant the journal recorded the review's **creation**, against the clock read
-/// here. A review the journal says nothing about has no age this can compute, and is left out
-/// rather than guessed at: a document predating the event log is already its own reported class,
-/// and reporting it twice under a second heading would say two things about one gap.
+/// The age is the instant the store recorded the review's **creation**, against the clock read
+/// here. A review the store's history says nothing about has no age this can compute, and is left
+/// out rather than guessed at: a document predating the event log is already its own reported
+/// class, and reporting it twice under a second heading would say two things about one gap.
+///
+/// The history, and not the journal file ([`Opened::history_entries`]). Reading only the journal
+/// emptied this class outright on every migrated Eventlog plan — including a review recorded
+/// *before* the cut-over, whose creation the frozen journal still holds and whose document the
+/// authority holds — while `website/docs/reference/cli.md` promises the class unconditionally. A
+/// class that is empty because of where a plan keeps its records is a silence, not an answer.
 fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
     use aep_backend_markdown::journal::Change;
 
-    let Some(store) = opened.journal() else {
-        return Vec::new();
-    };
-    let entries = aep_backend_markdown::journal::read(store.root()).0;
+    let entries = opened.history_entries();
     let mut created: BTreeMap<ArtifactId, String> = BTreeMap::new();
     let mut answered: BTreeSet<ArtifactId> = BTreeSet::new();
     for entry in entries {
@@ -5793,15 +5837,15 @@ struct ReviewRecords {
     outcomes: BTreeMap<ArtifactId, Vec<aep_domain::review::ReviewOutcome>>,
 }
 
-/// The journal, read once for both things the table needs from it.
+/// The store's own history, read once for both things the table needs from it.
+///
+/// Through [`Opened::history_entries`], so a migrated Eventlog plan is counted from its authority
+/// and not from the journal the migration froze under its projection.
 fn review_records(opened: &Opened) -> ReviewRecords {
     use aep_backend_markdown::journal::Change;
 
     let mut records = ReviewRecords::default();
-    let Some(store) = opened.files.as_ref() else {
-        return records;
-    };
-    for entry in aep_backend_markdown::journal::read(store.root()).0 {
+    for entry in opened.history_entries() {
         match entry.change {
             Change::Created { .. } => {
                 records.created.entry(entry.artifact).or_insert(entry.at);
@@ -6642,19 +6686,18 @@ fn review_outcome_of<'a>(
 
 /// Every recorded outcome of one review, oldest first.
 ///
-/// Read from the journal rather than from the reviewed artifact's own evidence count, because the
-/// count says *how many `review_outcome` records* and this question is *which review*. A markdown
-/// plan is the only one with a journal file; a store that keeps its history in the contract
-/// answers no outcomes here rather than a wrong number, which is invariant 5 rather than a gap
-/// nobody wrote down.
+/// Read from the store's history rather than from the reviewed artifact's own evidence count,
+/// because the count says *how many `review_outcome` records* and this question is *which
+/// review*. [`Opened::history_entries`] is where that history is: the journal for the plan whose
+/// record it is, the authority for an Eventlog plan — whose projected journal ends at the
+/// migration, so a review answered after the cut-over read as one nobody ever acted on. A SQLite
+/// or Postgres plan answers no outcomes here rather than a wrong number, which is invariant 5
+/// rather than a gap nobody wrote down.
 fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
     use aep_backend_markdown::journal::Change;
 
-    let Some(store) = opened.files.as_ref() else {
-        return Vec::new();
-    };
-    aep_backend_markdown::journal::read(store.root())
-        .0
+    opened
+        .history_entries()
         .into_iter()
         .filter_map(|entry| match entry.change {
             Change::Evidence {

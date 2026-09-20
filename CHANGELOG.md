@@ -17,7 +17,21 @@ belongs in the commit message or in `docs/design/`.
   advisories (`closed_on_an_assertion`, `without_an_outcome`, `pre_provider`) answer for an
   Eventlog plan as they do for SQLite and Postgres. Drift on an Eventlog plan is now the
   projection's, decided by the authority's own watermark — the same fact `plan store verify`
-  reports as `projection_drift` — so a projection edited outside a command is still a problem.
+  reports as `projection_drift` — so an owned projection file edited or deleted by hand is
+  reported. A document added at a path the authority's ownership marker does not list is digested
+  by neither side and is still reported by nothing; that gap is
+  `story:unowned-document-in-eventlog-projection-is-reported`.
+
+- On an Eventlog plan, the evidence a move is judged against, the outcomes `plan artifact show`
+  lists for a review, the reviewer totals in `plan artifact review-value`, the order
+  `plan artifact findings` compares two rounds in, and the reviews-without-an-outcome class of
+  `plan artifact validate --strict` now come from the authority rather than from the legacy
+  `journal.jsonl` left under the projection by migration. An evidence record, a `review_outcome`
+  or a review written after the cut-over was invisible to the first four, so the first
+  evidence-gated move on a migrated store was refused for evidence the store was holding; the
+  fifth was empty on every migrated plan, including for a review the frozen journal still records.
+  Markdown and hybrid plans are unchanged; a SQLite or Postgres plan still reports no outcomes
+  rather than a wrong number.
 
 - Migration dry-run and apply now discover foreign destination paths before durable writes and
   refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by
