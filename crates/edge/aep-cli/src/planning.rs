@@ -594,20 +594,46 @@ pub(crate) enum PlanBackend {
     Eventlog(aep_backend_eventlog::EventlogBackend),
 }
 
+/// Where the store itself puts one history entry, across every artifact in it.
+///
+/// The authority keeps history **per entity** and writes its instants to the second, so two
+/// records made in one second about two artifacts carry nothing that tells them apart — a reader
+/// that concatenated per-artifact histories answered in artifact-id order and called it oldest
+/// first (`review-2`, finding 1), and one that sorted on the instant alone fell to the same id.
+/// What the store does keep is a position: the ordinal the migration preserved for each retained
+/// journal line (`order: store`, the line's index in the one file the plan was migrated from) and
+/// the provider's own `position.store` for each record made since. The three variants are ordered
+/// as the store was written: everything the migration retained, then everything its imported
+/// anchor holds, then everything recorded after the cut-over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum StorePosition {
+    /// The ordinal of a retained legacy journal line in the journal it came from.
+    Retained(u64),
+    /// The place of one preserved envelope in the imported anchor, which carries no position of
+    /// its own — its own order is all there is, and it is kept.
+    Anchor(u64),
+    /// The provider's store-wide position of a record made after the cut-over.
+    Recorded(u64),
+}
+
 impl PlanBackend {
-    /// Retained journal entries followed by the provider's actual recorded event suffix.
+    /// Retained journal entries followed by the provider's actual recorded event suffix, each with
+    /// the position the store keeps it at ([`StorePosition`]).
     fn entries_of(
         &self,
         entity: &aep_domain::entity::EntityId,
         id: &ArtifactId,
-    ) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
+    ) -> Result<(
+        Vec<(StorePosition, aep_backend_markdown::journal::Entry)>,
+        usize,
+    )> {
         let mut entries = Vec::new();
         let mut unreadable = 0;
         if let Self::Eventlog(backend) = self {
             let lines = backend.with_store(|store| {
-                store.legacy_journal_for_subject("aep.entity", &entity.to_string())
+                store.legacy_journal_in_store_order("aep.entity", &entity.to_string())
             })?;
-            for line in lines {
+            for (ordinal, line) in lines {
                 let entry = serde_json::from_slice::<aep_backend_markdown::journal::Entry>(&line)
                     .ok()
                     .or_else(|| {
@@ -618,14 +644,31 @@ impl PlanBackend {
                         entry_from_event(self, id, &event)
                     });
                 match entry {
-                    Some(entry) if entry.artifact == *id => entries.push(entry),
+                    Some(entry) if entry.artifact == *id => {
+                        entries.push((StorePosition::Retained(ordinal), entry));
+                    }
                     _ => unreadable += 1,
                 }
             }
+            let recorded = backend.with_store(|store| {
+                store.events_in_store_order("aep.entity", &entity.to_string())
+            })?;
+            for (index, (position, event)) in recorded.into_iter().enumerate() {
+                // Evidence preserved in the imported anchor carries no position of its own; the
+                // anchor's order is all there is and it is kept as it stands.
+                let position = position.map_or(StorePosition::Anchor(index as u64), |position| {
+                    StorePosition::Recorded(position)
+                });
+                match entry_from_event(self, id, &event) {
+                    Some(entry) => entries.push((position, entry)),
+                    None => unreadable += 1,
+                }
+            }
+            return Ok((entries, unreadable));
         }
-        for event in self.events_of(entity)? {
+        for (index, event) in self.events_of(entity)?.into_iter().enumerate() {
             match entry_from_event(self, id, &event) {
-                Some(entry) => entries.push(entry),
+                Some(entry) => entries.push((StorePosition::Recorded(index as u64), entry)),
                 None => unreadable += 1,
             }
         }
@@ -894,21 +937,55 @@ impl Opened {
     /// A SQLite or Postgres plan answers nothing here, as it always has: it never had a journal to
     /// go stale, and *no outcomes rather than a wrong number* is the invariant [`outcomes_of`]
     /// states. An artifact the contract will not answer for is left out rather than guessed at.
-    fn history_of<'a>(
+    fn positioned_history_of<'a>(
         &self,
         ids: impl IntoIterator<Item = &'a ArtifactId>,
-    ) -> Vec<aep_backend_markdown::journal::Entry> {
+    ) -> Vec<(StorePosition, aep_backend_markdown::journal::Entry)> {
         if let Some(store) = self.journal() {
-            return aep_backend_markdown::journal::read(store.root()).0;
+            // A plan whose record the journal is keeps the order the store was written in as the
+            // file's own line order, and that is its store-wide position.
+            return aep_backend_markdown::journal::read(store.root())
+                .0
+                .into_iter()
+                .enumerate()
+                .map(|(line, entry)| (StorePosition::Retained(line as u64), entry))
+                .collect();
         }
         if !matches!(self.plan, Plan::Eventlog { .. }) {
             return Vec::new();
         }
-        ids.into_iter()
-            .collect::<BTreeSet<&ArtifactId>>()
+        let mut ordered: Vec<(StorePosition, ArtifactId, aep_backend_markdown::journal::Entry)> =
+            ids.into_iter()
+                .collect::<BTreeSet<&ArtifactId>>()
+                .into_iter()
+                .filter_map(|id| {
+                    Some((id.clone(), positioned_entries_from_the_contract(self, id).ok()?))
+                })
+                .flat_map(|(id, (entries, _))| {
+                    entries
+                        .into_iter()
+                        .map(move |(position, entry)| (position, id.clone(), entry))
+                })
+                .collect();
+        // The store's own position first, so two records about two artifacts are in the order the
+        // store was written in and not in the order their artifacts' ids sort in. The id is kept
+        // as the last resort, so an authority that answered two entries the same position — which
+        // it does not — still answers the same list twice.
+        ordered.sort_by(|left, right| (left.0, &left.1).cmp(&(right.0, &right.1)));
+        ordered
             .into_iter()
-            .filter_map(|id| entries_from_the_contract(self, id).ok())
-            .flat_map(|(entries, _)| entries)
+            .map(|(position, _, entry)| (position, entry))
+            .collect()
+    }
+
+    /// The same history, with the entries alone.
+    fn history_of<'a>(
+        &self,
+        ids: impl IntoIterator<Item = &'a ArtifactId>,
+    ) -> Vec<aep_backend_markdown::journal::Entry> {
+        self.positioned_history_of(ids)
+            .into_iter()
+            .map(|(_, entry)| entry)
             .collect()
     }
 }
@@ -1222,7 +1299,7 @@ fn evidence_from_events(
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
     let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for entry in backend.entries_of(&target, id)?.0 {
+    for (_, entry) in backend.entries_of(&target, id)?.0 {
         if let Change::Evidence { kind, .. } = entry.change {
             *counted.entry(kind).or_default() += 1;
         }
@@ -3586,6 +3663,8 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     let mut opened = open(&args.location, true)?;
 
     let not_here = opened.missing(&id);
+    refuse_an_edge_a_record_rests_on(&opened, &id, relation, &target)?;
+
     let stored = opened
         .report
         .documents
@@ -5573,8 +5652,10 @@ enum Ordinal {
     /// The line the journal recorded it on, for a plan whose record the journal is.
     Line(usize),
     /// The instant the authority recorded its creation, as epoch milliseconds, for an Eventlog
-    /// plan.
-    At(u64),
+    /// plan, and the position the store keeps that record at — which is what tells two rounds
+    /// recorded in one second apart. The authority writes its instants to the second, so the
+    /// instant alone fell to the id and put two rounds back to front (`review-2`, finding 3).
+    At(u64, StorePosition),
 }
 
 /// The reviews of `subject`, oldest first.
@@ -5618,8 +5699,11 @@ fn reviews_of<'a>(
             .collect()
     } else {
         let mut recorded = BTreeMap::new();
-        let ids = found.iter().map(|stored| &stored.document.frontmatter.id);
-        for entry in opened.history_of(ids) {
+        let ids: Vec<&ArtifactId> = found
+            .iter()
+            .map(|stored| &stored.document.frontmatter.id)
+            .collect();
+        for (position, entry) in opened.positioned_history_of(ids) {
             let Change::Created { .. } = entry.change else {
                 continue;
             };
@@ -5628,7 +5712,7 @@ fn reviews_of<'a>(
             };
             recorded
                 .entry(entry.artifact)
-                .or_insert(Ordinal::At(at.epoch_millis()));
+                .or_insert(Ordinal::At(at.epoch_millis(), position));
         }
         recorded
     };
@@ -6808,6 +6892,73 @@ fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
         .collect()
 }
 
+/// Refuses to take back an edge a recorded evidence record rests on, naming the records.
+///
+/// A `review_outcome` is written on the **reviewed** artifact and names the review, and the
+/// evidence verb refuses to record one on an artifact the review does not `reviews`
+/// ([`review_outcome_of`]). That check held at write time and nothing held it afterwards: `unrelate`
+/// took the edge back and the record stayed in the store, named by a review that no longer reviews
+/// the artifact it sits on — `show` listed it nowhere, `review-value` counted it nowhere, and
+/// `validate --strict` reported the answered review as one nobody acted on. This is the symmetric
+/// half of the same rule.
+///
+/// It is a rule about the store and not about one backend: markdown, hybrid and Eventlog plans all
+/// make it. A SQLite or Postgres plan answers no history here and so refuses nothing, which is the
+/// same *no outcomes rather than a wrong number* position [`outcomes_of`] takes rather than a
+/// second rule. `reviews` is the only relation a record names — a `review_outcome` is the only
+/// evidence kind carrying an artifact id — so it is the only edge with anything resting on it, and
+/// the history read is made for that relation alone and for the one artifact the record sits on.
+fn refuse_an_edge_a_record_rests_on(
+    opened: &Opened,
+    id: &ArtifactId,
+    relation: RelationKind,
+    target: &ArtifactRef,
+) -> Result<()> {
+    if relation != RelationKind::Reviews {
+        return Ok(());
+    }
+    let resting = outcomes_resting_on(opened, id, target.id());
+    if resting.is_empty() {
+        return Ok(());
+    }
+    let listed = resting
+        .iter()
+        .map(|record| format!("  - {record}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    bail!(
+        "`{id}` cannot stop reviewing `{target}`: a `review_outcome` recorded on `{target}` names \
+         it, and taking the edge back would leave that record in the store with nothing that reads \
+         it — `{id}` would be reported as a review nobody acted on while the store holds what \
+         became of it. The record(s) resting on this edge:\n{listed}"
+    )
+}
+
+/// Every recorded `review_outcome` on `subject` that names `review`: the records that rest on the
+/// `reviews` edge between the two, written for a refusal that has to name them.
+fn outcomes_resting_on(opened: &Opened, review: &ArtifactId, subject: &ArtifactId) -> Vec<String> {
+    use aep_backend_markdown::journal::Change;
+
+    opened
+        .history_of(std::iter::once(subject))
+        .into_iter()
+        .filter_map(|entry| match entry.change {
+            Change::Evidence {
+                review: Some(named),
+                outcome: Some(outcome),
+                source,
+                ..
+            } if &named == review && entry.artifact == *subject => Some(format!(
+                "`review_outcome` {} from {}, observed {}",
+                outcome.as_str(),
+                source,
+                entry.at
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Issues the `RecordEvidence` command that records one observation.
 // These are the eight independent fields in the persisted evidence command; combining them into
 // an untyped bag would weaken the existing command contract.
@@ -7408,10 +7559,13 @@ fn history_from_the_contract(args: &StoreArgs, id: &ArtifactId) -> Result<ExitCo
 /// The **only** reading path `explain` has, in every store, and the one `history` takes wherever
 /// there is no journal file to read instead. A question the store answers must have one answer: a
 /// second way of reading the same events is a second answer waiting to drift from the first.
-fn entries_from_the_contract(
+fn positioned_entries_from_the_contract(
     opened: &Opened,
     id: &ArtifactId,
-) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
+) -> Result<(
+    Vec<(StorePosition, aep_backend_markdown::journal::Entry)>,
+    usize,
+)> {
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
@@ -7427,6 +7581,18 @@ fn entries_from_the_contract(
     let entity = block_on(backend.resolve(&locator)).with_context(|| opened.missing(id))?;
 
     backend.entries_of(&entity, id)
+}
+
+/// The same reading, with the position the store keeps each entry at ([`StorePosition`]).
+fn entries_from_the_contract(
+    opened: &Opened,
+    id: &ArtifactId,
+) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
+    let (entries, unreadable) = positioned_entries_from_the_contract(opened, id)?;
+    Ok((
+        entries.into_iter().map(|(_, entry)| entry).collect(),
+        unreadable,
+    ))
 }
 
 /// `protocol artifact explain`

@@ -33,15 +33,32 @@ belongs in the commit message or in `docs/design/`.
   left under the projection by migration. An evidence record, a `review_outcome` or a review
   written after the cut-over was invisible to the first four, so the first evidence-gated move on
   a migrated store was refused for evidence the store was holding; the fifth was empty on every
-  migrated plan, including for a review the frozen journal still records. `findings` orders the
-  rounds of a migrated plan by the instant the authority recorded each review's creation, the id
-  breaking a same-second tie, so two rounds whose ids sort against the order they happened in
-  (`zulu` then `alpha`) are compared the right way round. The authority is read for the
+  migrated plan, including for a review the frozen journal still records. These verbs now read
+  that history in the order the **store** was written in and not in the order the artifacts' ids
+  sort in: the authority keeps history per entity and writes its instants to the second, so a
+  reader that concatenated per-artifact histories listed a review's outcomes by subject id while
+  calling them oldest first, and two rounds recorded in one second were compared back to front.
+  The order is the position the store itself keeps each record at — the ordinal the migration
+  preserved for every retained journal line, then the provider's own store-wide position for
+  everything recorded since — so `plan artifact show`, `findings` and `review-value` answer a
+  migrated plan in the order its records were made, whatever second they carry and whatever their
+  artifacts are called. The authority is read for the
   `review-result` documents and the artifacts they `reviews`, and for nothing else — a plan with
   no `review-result` reads it for none — so what these verbs cost a migrated plan is one history
   read per review and per reviewed artifact, not one per artifact in the store. Markdown and
   hybrid plans are unchanged; a SQLite or Postgres plan still reports no outcomes rather than a
   wrong number.
+
+- `plan artifact unrelate <review-result> reviews <artifact>` is now **refused** while a
+  `review_outcome` recorded on that artifact names that review, and the refusal lists the records
+  resting on the edge. An outcome is written on the reviewed artifact and is found through the
+  `reviews` edge, and the evidence verb already refuses to record one where the edge is absent —
+  but nothing held the edge afterwards, so taking it back left what became of the review in the
+  store read by nothing, while `validate --strict` reported the answered review as one nobody
+  acted on. The guard is a rule about the store and not about one backend: markdown, hybrid and
+  Eventlog plans all make it. A SQLite or Postgres plan answers no history for the artifact and so
+  refuses nothing, which is the same *no outcomes rather than a wrong number* position those
+  plans already take.
 
 - Migration dry-run and apply now discover foreign destination paths before durable writes and
   refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by

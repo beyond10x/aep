@@ -471,31 +471,11 @@ impl StateProvider for EventlogPlanningStore {
 
 impl EventProvider for EventlogPlanningStore {
     fn events(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
-        let subject = Subject::new(entity, id).map_err(async_error)?;
-        let history = self
-            .bridge
-            .history(&subject, CallWait::Forever)
-            .map_err(read_error)?;
-        let mut events = Vec::new();
-        if let HistoryOrigin::Imported(anchor) = history.origin {
-            for evidence in anchor.evidence {
-                match evidence {
-                    LegacyEvidence::Envelope(envelope) => {
-                        events.extend(envelope.entry.events().iter().cloned());
-                    }
-                    LegacyEvidence::Decision(decision) => events.extend(decision.events),
-                    LegacyEvidence::Event(event) => events.push(event),
-                }
-            }
-        }
-        for record in history.records {
-            if let RecordedEntry::Decision(commit) = record.entry {
-                if let Some(document) = decision_document(&commit) {
-                    events.extend(document.events);
-                }
-            }
-        }
-        Ok(events)
+        Ok(self
+            .events_in_store_order(entity, id)?
+            .into_iter()
+            .map(|(_, event)| event)
+            .collect())
     }
 }
 
@@ -780,6 +760,26 @@ impl EventlogPlanningStore {
         entity: &str,
         id: &str,
     ) -> Result<Vec<Vec<u8>>, StoreError> {
+        Ok(self
+            .legacy_journal_in_store_order(entity, id)?
+            .into_iter()
+            .map(|(_, line)| line)
+            .collect())
+    }
+
+    /// The same retained lines, each with the ordinal the migration preserved for it.
+    ///
+    /// The ordinal is the line's index in the single `journal.jsonl` the store was migrated from,
+    /// and the coordinate declares `order: store` for it — so it orders two lines about *different*
+    /// subjects, which is the one thing the authority's per-entity history and its
+    /// second-granularity instants cannot do. A reader that concatenated per-subject histories put
+    /// a review's outcomes in subject-id order and called it oldest first; this is what it needs
+    /// instead. The bytes and the join are validated exactly as before: only the key is kept.
+    pub fn legacy_journal_in_store_order(
+        &self,
+        entity: &str,
+        id: &str,
+    ) -> Result<Vec<(u64, Vec<u8>)>, StoreError> {
         Subject::new(entity, id).map_err(async_error)?;
         let snapshot = self
             .bridge
@@ -848,7 +848,55 @@ impl EventlogPlanningStore {
                 ));
             }
         }
-        Ok(lines.into_values().collect())
+        Ok(lines.into_iter().collect())
+    }
+
+    /// Every event one subject's history stands for, each with the store-wide position the
+    /// provider keeps the record at, or `None` for evidence preserved in the imported anchor.
+    ///
+    /// The single reading path behind [`EventProvider::events`], which drops the positions: a
+    /// second traversal of the same history would be a second answer waiting to drift from the
+    /// first. `StoredRecord::position.store` is monotone across the whole logical store, so it
+    /// orders records about different subjects — the authority's own instants are written to the
+    /// second and two records made in one second are otherwise indistinguishable.
+    pub fn events_in_store_order(
+        &self,
+        entity: &str,
+        id: &str,
+    ) -> Result<Vec<(Option<u64>, DomainEvent)>, StoreError> {
+        let subject = Subject::new(entity, id).map_err(async_error)?;
+        let history = self
+            .bridge
+            .history(&subject, CallWait::Forever)
+            .map_err(read_error)?;
+        let mut events = Vec::new();
+        if let HistoryOrigin::Imported(anchor) = history.origin {
+            for evidence in anchor.evidence {
+                match evidence {
+                    LegacyEvidence::Envelope(envelope) => {
+                        events.extend(envelope.entry.events().iter().cloned().map(|e| (None, e)));
+                    }
+                    LegacyEvidence::Decision(decision) => {
+                        events.extend(decision.events.into_iter().map(|e| (None, e)));
+                    }
+                    LegacyEvidence::Event(event) => events.push((None, event)),
+                }
+            }
+        }
+        for record in history.records {
+            let position = record.position.store;
+            if let RecordedEntry::Decision(commit) = record.entry {
+                if let Some(document) = decision_document(&commit) {
+                    events.extend(
+                        document
+                            .events
+                            .into_iter()
+                            .map(|event| (Some(position), event)),
+                    );
+                }
+            }
+        }
+        Ok(events)
     }
 
     /// Reads complete imported envelopes for one destination from a fresh validated authority.

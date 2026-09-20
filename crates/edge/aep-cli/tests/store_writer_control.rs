@@ -3151,3 +3151,374 @@ fn validate_reports_an_eventlog_projection_whose_ownership_marker_was_edited() {
     );
     fs::remove_dir_all(root).expect("remove disposable fixture");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Independent verification pass 2 over `task:evidence-on-hand-v2-journal` (f3a06a0ca). The ground
+// pass 1 did not cover: `Opened::history_of(ids)` reads the authority **one artifact at a time, in
+// id order**, where the journal it replaces was one file in write order. Every caller that
+// promised an order or a completeness over the journal now gets neither from the authority.
+// ---------------------------------------------------------------------------------------------
+
+/// A legacy Markdown plan holding `story:one`, `story:zulu` and one review of both of them.
+///
+/// Two subjects is the smallest shape that can tell `Opened::history_of`'s per-artifact reads
+/// apart from the single journal file they replace: `story:one` sorts before `story:zulu`, so a
+/// reader that concatenates the two histories in id order answers in an order the store never
+/// wrote in.
+fn a_review_of_two_subjects_before_migration(root: &PathBuf) {
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, second, error) = run(
+        root,
+        &[
+            "plan", "artifact", "new", "story", "zulu", "--title", "Zulu", "--format", "json",
+        ],
+    );
+    assert!(success, "the second subject: {second} {error}");
+    let (success, review, error) = run(
+        root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "pair",
+            "--title",
+            "One review of two things",
+            "--owner",
+            "agent:pair",
+            "--relate",
+            "reviews:story:one",
+            "--relate",
+            "reviews:story:zulu",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "a review of both subjects: {review} {error}");
+}
+
+/// Record what became of `review-result:pair` on `reviewed`, before the migration.
+fn what_became_of_the_pair_review(root: &PathBuf, reviewed: &str, outcome: &str, source: &str) {
+    let (success, answered, error) = run(
+        root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            reviewed,
+            "--kind",
+            "review_outcome",
+            "--review",
+            "review-result:pair",
+            "--outcome",
+            outcome,
+            "--source",
+            source,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "what became of the review, recorded on {reviewed}: {answered} {error}"
+    );
+}
+
+/// The `outcomes` array `plan artifact show` prints for `review-result:pair`.
+fn outcomes_shown_for_the_pair_review(root: &PathBuf) -> Vec<serde_json::Value> {
+    let (success, shown, error) = run(
+        root,
+        &[
+            "plan",
+            "artifact",
+            "show",
+            "review-result:pair",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "show on the review: {shown} {error}");
+    shown["outcomes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| panic!("what became of the review: {shown}"))
+}
+
+/// **`plan artifact show` lists a review's outcomes oldest first, and a migration must not
+/// reorder records nobody touched.**
+///
+/// `outcomes_of` is documented "Every recorded outcome of one review, oldest first", and the
+/// CHANGELOG entry this unit adds says the outcomes `show` lists "now come from the authority
+/// rather than from the legacy `journal.jsonl`" with "Markdown and hybrid plans unchanged". The
+/// journal is one file in the order the store was written in, so oldest-first came free from it.
+/// The authority keeps history **per entity**, and `Opened::history_of` reads the ids it is given
+/// through a `BTreeSet` and concatenates the results — so the outcomes of a review of two subjects
+/// come back grouped by the subjects' ids, not in the order the store recorded them.
+///
+/// The same two records, written once before the migration and never touched again, are listed in
+/// one order by the Markdown plan and in the other by the Eventlog plan it becomes. Whichever
+/// order is meant, one of the two verbs is answering a question about time with an answer sorted
+/// by name.
+#[test]
+fn the_outcomes_of_a_review_of_two_subjects_keep_their_order_across_a_migration() {
+    let (root, selector) = project();
+    a_review_of_two_subjects_before_migration(&root);
+    // `story:zulu` is answered first and `story:one` second, so the order the store recorded in
+    // and the order the subjects' ids sort in are opposites.
+    what_became_of_the_pair_review(&root, "story:zulu", "fixed", "human:first");
+    what_became_of_the_pair_review(&root, "story:one", "no-op", "human:second");
+
+    let before = outcomes_shown_for_the_pair_review(&root);
+    assert_eq!(
+        before.len(),
+        2,
+        "both records, before the migration: {before:?}"
+    );
+    assert_eq!(
+        before[0]["reviewed"], "story:zulu",
+        "the control: the Markdown plan lists the record it took first, first: {before:?}"
+    );
+
+    apply_selected_source(&root, &selector, "review-2-outcome-order");
+
+    let after = outcomes_shown_for_the_pair_review(&root);
+    assert_eq!(
+        after.len(),
+        2,
+        "the migration did not change which records exist: {after:?}"
+    );
+    assert_eq!(
+        after[0]["reviewed"], "story:zulu",
+        "`story:zulu` was answered before `story:one` and the Markdown plan said so; the Eventlog \
+         plan reads the authority one subject at a time in id order and concatenates, so the same \
+         two untouched records come back newest first, and `outcomes_of` is documented oldest \
+         first: {after:?}"
+    );
+    assert_eq!(
+        after, before,
+        "the same records, in the same order: {after:?}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **The edge a `review_outcome` rests on cannot be taken back while the record names it.**
+///
+/// `outcomes_of` and `reviews_without_an_outcome` read the authority for the artifacts the review
+/// **currently** `reviews`. A `review_outcome` is written on the reviewed artifact, and the
+/// evidence verb checks the edge when the record is made (`review_outcome_of`) — so the guard
+/// existed at write time and nothing held it afterwards: `unrelate` took the edge back and the
+/// record stayed in the authority, read by nobody. The review was answered and `validate --strict`
+/// reported it as one nobody acted on.
+///
+/// The symmetric half of the write-time check is the store rule, so it holds for every store and
+/// not only for the Eventlog arm: the same fixture asserts the refusal on the Markdown plan and
+/// again on the Eventlog plan the migration produces, and asserts in both that the outcome is
+/// still listed and the review is still answered. A review of **two** subjects, because a review
+/// of one cannot have its only `reviews` edge taken back either — the graph rule refuses that one,
+/// which is a different refusal for a different reason.
+#[test]
+fn an_outcome_on_an_artifact_a_review_no_longer_reviews_survives_a_migration() {
+    let (root, selector) = project();
+    a_review_of_two_subjects_before_migration(&root);
+    what_became_of_the_pair_review(&root, "story:zulu", "fixed", "human:first");
+    let take_the_edge_back = [
+        "plan",
+        "artifact",
+        "unrelate",
+        "review-result:pair",
+        "reviews",
+        "story:zulu",
+        "--format",
+        "json",
+    ];
+
+    let (success, printed, refusal) = run_for_status(&root, &take_the_edge_back);
+    assert!(
+        !success,
+        "the control: a `review_outcome` on `story:zulu` names `review-result:pair`, so the edge \
+         it rests on is not the caller's to take back: {printed} {refusal}"
+    );
+    let said = format!("{printed}{refusal}");
+    assert!(
+        said.contains("review_outcome") && said.contains("story:zulu"),
+        "the refusal names the record that rests on the edge: {said}"
+    );
+
+    let before = outcomes_shown_for_the_pair_review(&root);
+    assert_eq!(
+        before.len(),
+        1,
+        "the control: the Markdown plan still answers what became of the review, and the refusal \
+         changed nothing: {before:?}"
+    );
+
+    apply_selected_source(&root, &selector, "review-2-unrelated-outcome");
+
+    let (success, printed, refusal) = run_for_status(&root, &take_the_edge_back);
+    assert!(
+        !success,
+        "the guard is a store rule, not a journal one: the Eventlog plan refuses the same edge \
+         for the same record: {printed} {refusal}"
+    );
+    let said = format!("{printed}{refusal}");
+    assert!(
+        said.contains("review_outcome") && said.contains("story:zulu"),
+        "the refusal names the record that rests on the edge, after the migration too: {said}"
+    );
+
+    let after = outcomes_shown_for_the_pair_review(&root);
+    assert_eq!(
+        after.len(),
+        1,
+        "one `review_outcome` naming `review-result:pair` is in the authority and the Markdown \
+         plan listed it; the Eventlog plan reads the artifacts the review `reviews`, and the edge \
+         the record rests on is still declared: {after:?}"
+    );
+    let (_, validated, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "validate",
+            "--strict",
+            "--outcome-within",
+            "0",
+            "--format",
+            "json",
+        ],
+    );
+    let without = validated
+        .get("without_an_outcome")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !without.iter().any(|finding| finding
+            .as_str()
+            .is_some_and(|text| text.contains("review-result:pair"))),
+        "the review was answered and the record is still in the store; validate reports it as one \
+         nobody acted on: {validated} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// Every journal entry about a `review-result` given the same recorded instant.
+///
+/// Two commands issued back to back already land in one second — the two `review_outcome` records
+/// of `the_outcomes_of_a_review_of_two_subjects_keep_their_order_across_a_migration` both came
+/// back `at` `…:32:00Z` — so this pins what the wall clock would otherwise decide, and pins it in
+/// the one file that is the plan's record before the migration freezes it.
+fn both_rounds_recorded_in_one_second(root: &std::path::Path) {
+    let journal = root.join(".engineering/planning/journal.jsonl");
+    let text = fs::read_to_string(&journal).expect("the legacy journal");
+    let mut rewritten = String::new();
+    for line in text.lines() {
+        let mut entry: serde_json::Value = serde_json::from_str(line).expect("a journal entry");
+        if entry["artifact"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("review-result:"))
+        {
+            entry["at"] = serde_json::json!("2026-02-02T02:02:02Z");
+        }
+        rewritten.push_str(&entry.to_string());
+        rewritten.push('\n');
+    }
+    fs::write(&journal, rewritten).expect("the legacy journal, one second wide");
+}
+
+/// One round of review of `story:one`, recorded before the migration.
+fn a_round_of_review(root: &PathBuf, name: &str) {
+    let owner = format!("agent:{name}");
+    let (success, round, error) = run(
+        root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            name,
+            "--title",
+            "A round",
+            "--owner",
+            &owner,
+            "--relate",
+            "reviews:story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "the round {name}: {round} {error}");
+}
+
+/// **Two rounds recorded in one second are compared in the order they were recorded, after a
+/// migration as before it.**
+///
+/// This unit's own fix takes the order from "the instant the authority recorded each review's
+/// creation, the id breaking a same-second tie" (CHANGELOG). The authority's instants are written
+/// to the second (`aep-backend-entity` says so of the seal's `recorded_at`), so the tie-break is
+/// not an edge case: two rounds recorded in one second fall back to the id, and where the ids sort
+/// against the order they happened in the ledger is the wrong way round again — reporting every
+/// finding the second round resolved as new, which is the ledger the unit exists to stop.
+///
+/// The Markdown plan the store was before the migration answers correctly for exactly these two
+/// documents, from the journal's line order, and that is the control: the migration is what loses
+/// the order, and `website/docs/reference/cli.md:99` promises "the two most recent `review-result`
+/// records" without a window in which it does not hold.
+#[test]
+fn two_rounds_recorded_in_one_second_are_compared_in_the_order_they_happened() {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    a_round_of_review(&root, "zulu");
+    a_round_of_review(&root, "alpha");
+    both_rounds_recorded_in_one_second(&root);
+
+    let ledger = [
+        "plan",
+        "artifact",
+        "findings",
+        "story:one",
+        "--format",
+        "json",
+    ];
+    let (success, before, error) = run(&root, &ledger);
+    assert!(success, "the ledger before the migration: {before} {error}");
+    assert_eq!(before["reviews"], 2, "{before}");
+    assert_eq!(
+        before["from"], "review-result:zulu",
+        "the control: the Markdown plan takes the order from the journal's line order, which is \
+         the order the store was written in: {before}"
+    );
+
+    apply_selected_source(&root, &selector, "review-2-same-second-rounds");
+
+    let (success, after, error) = run(&root, &ledger);
+    assert!(success, "the ledger after the migration: {after} {error}");
+    assert_eq!(after["reviews"], 2, "{after}");
+    assert_eq!(
+        after["from"], "review-result:zulu",
+        "`review-result:zulu` was recorded first and the Markdown plan said so; both rounds carry \
+         the same recorded instant, the authority keeps instants to the second, and the id \
+         tie-break puts `alpha` first — so the migration turns the ledger back to front and every \
+         finding the second round resolved is reported as new: {after}"
+    );
+    assert_eq!(after["to"], "review-result:alpha", "{after}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
