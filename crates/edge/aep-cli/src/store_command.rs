@@ -1572,6 +1572,63 @@ fn projection_inventory(
     Ok((inventory, watermark))
 }
 
+/// Whether the projection under `projection_root` is the one the authority under
+/// `authority_root` last published.
+///
+/// Decided from the facts `verify` reads before it answers `projection_drift`: the owned inventory
+/// under the projection's ownership marker digests to a watermark the authority recorded; that
+/// watermark names this authority and covers its own inventory digest; and the snapshot it names
+/// is one the authority's own history reaches. `Err` says which of those failed, as prose rather
+/// than a [`CommandRefusalCodeV1`], because the caller is `validate` — it accumulates findings and
+/// refuses nothing.
+pub(crate) fn projection_current(
+    authority_root: &Path,
+    projection_root: &Path,
+    selected: &aep_domain::project::PlanningAuthority,
+) -> Result<()> {
+    let authority = AuthorityCoordinateV1 {
+        logical_scope: AuthorityValueV1::new(&selected.logical_scope)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        tenant: AuthorityValueV1::new(&selected.tenant).map_err(|error| anyhow::anyhow!(error))?,
+        stream_identity: AuthorityValueV1::new(&selected.stream_identity)
+            .map_err(|error| anyhow::anyhow!(error))?,
+    };
+    let snapshot = aep_backend_eventlog::complete_file_snapshot(
+        authority_root,
+        entity_eventlog::Authority {
+            logical_scope: selected.logical_scope.clone(),
+            tenant: selected.tenant.clone(),
+            stream_identity: selected.stream_identity.clone(),
+        },
+    )
+    .map_err(|error| anyhow::anyhow!("the authority could not be read whole: {error}"))?;
+    let (_, watermark) = projection_inventory(projection_root, &snapshot)?;
+    if watermark.authority != authority {
+        anyhow::bail!("the projection's watermark names another authority");
+    }
+    if watermark.watermark_digest
+        != aep_planning_migration::projection_watermark_digest(
+            watermark.authority_snapshot,
+            watermark.projection_inventory_digest,
+        )
+    {
+        anyhow::bail!("the projection's watermark does not cover its own inventory digest");
+    }
+    let prior =
+        aep_planning_migration::before_projection_watermark(&snapshot, watermark.authority_snapshot)
+            .map_err(|_| {
+                anyhow::anyhow!("the authority reaches no snapshot the projection's watermark names")
+            })?;
+    let (prior_id, _) = aep_planning_migration::authority_snapshot_identity(&authority, &prior)
+        .map_err(|_| {
+            anyhow::anyhow!("the snapshot the projection's watermark names has no identity")
+        })?;
+    if prior_id != watermark.authority_snapshot {
+        anyhow::bail!("the snapshot the projection's watermark names is not the authority's");
+    }
+    Ok(())
+}
+
 fn destination_request(args: &AuthorityArgs) -> Result<DestinationRequestV2> {
     let logical_scope =
         AuthorityValueV1::new(&args.authority_scope).context("invalid --authority-scope")?;

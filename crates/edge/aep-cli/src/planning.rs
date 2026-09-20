@@ -847,6 +847,27 @@ impl Opened {
             None => evidence_from_events(self.backend()?, id),
         }
     }
+
+    /// The journal, for a plan whose record it is.
+    ///
+    /// A markdown or hybrid plan writes `journal.jsonl` beside its documents, and every question
+    /// about its history — drift, a forged revision, what a move rested on — is answered from it.
+    /// An Eventlog plan keeps its record in the authority, and the journal under its projection is
+    /// the **migrated store's**, frozen where the migration left it: no governed command advances
+    /// it. Read as the plan's own it makes every write since look like a hand edit — on
+    /// 2026-09-19 one `move` on a migrated store had `validate` report the document as drifted
+    /// from a log that ended before the move and as claiming a revision no write produced, while
+    /// `plan store verify` on the same tree answered `current`. So an Eventlog plan answers here
+    /// as a SQLite or Postgres plan does: no journal, and the contract answers its history.
+    fn journal(&self) -> Option<&MarkdownStore> {
+        match &self.plan {
+            Plan::Eventlog { .. } => None,
+            Plan::Markdown { .. }
+            | Plan::Sqlite { .. }
+            | Plan::Postgres { .. }
+            | Plan::Hybrid { .. } => self.files.as_ref(),
+        }
+    }
 }
 
 // The projection callback deliberately retains the complete typed failure rather than erasing the
@@ -5670,7 +5691,7 @@ fn print_ledger(ledger: &FindingsLedger) {
 fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
     use aep_backend_markdown::journal::Change;
 
-    let Some(store) = opened.files.as_ref() else {
+    let Some(store) = opened.journal() else {
         return Vec::new();
     };
     let entries = aep_backend_markdown::journal::read(store.root()).0;
@@ -6019,15 +6040,43 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
         })
         .collect();
     // The journal and the event log are a markdown plan's; a SQLite or Postgres plan keeps its
-    // history in the store and the contract answers it, so there is no second record to reconcile.
-    let (drift_findings, forged_findings, deleted_findings, pre_provider) = match &opened.files {
-        Some(store) => {
-            let log = log_findings(store.root(), report, &held);
-            problems.extend(log.problems);
-            (log.drift, log.forged, log.deleted, log.pre_provider)
+    // history in the store and the contract answers it, so there is no second record to reconcile
+    // — and the journal under an Eventlog plan's projection is not one either: it is the migrated
+    // store's, and it ends where the migration did (`Opened::journal`).
+    let (mut drift_findings, forged_findings, deleted_findings, pre_provider) =
+        match opened.journal() {
+            Some(store) => {
+                let log = log_findings(store.root(), report, &held);
+                problems.extend(log.problems);
+                (log.drift, log.forged, log.deleted, log.pre_provider)
+            }
+            None => (Vec::new(), Vec::new(), Vec::new(), 0),
+        };
+    // An Eventlog plan's drift is the projection's, and the authority decides it: every command
+    // publishes a watermark over the documents it wrote, so a projection whose owned files digest
+    // to no watermark the authority holds was changed by something that was not a command. It is
+    // the fact `plan store verify` reports as `projection_drift`, asked here so that `validate`
+    // neither invents drift from the frozen journal nor stops seeing the real kind.
+    if let Plan::Eventlog {
+        authority_root,
+        projection_root,
+        authority,
+    } = &opened.plan
+    {
+        if let Err(disagreement) =
+            crate::store_command::projection_current(authority_root, projection_root, authority)
+        {
+            let finding = format!(
+                "the projection {} drifted from its authority: {disagreement:#} — an edit made \
+                 outside a command is a change nothing decided; `aep plan store verify` names the \
+                 mismatch, and `aep plan store rebuild --authority-snapshot <id>` writes the \
+                 projection the authority holds",
+                projection_root.display()
+            );
+            problems.push(finding.clone());
+            drift_findings.push(finding);
         }
-        None => (Vec::new(), Vec::new(), Vec::new(), 0),
-    };
+    }
 
     // Closed on somebody's word, and the store knows the difference. A move whose provenance is
     // `asserted` reached this status because a caller said the evidence existed; one that is
@@ -6035,8 +6084,7 @@ fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &
     // outright would stop anybody closing a story the day a runner is down — and reporting only the
     // second as evidence is what makes the first honest rather than invisible.
     let entries = opened
-        .files
-        .as_ref()
+        .journal()
         .map(|store| aep_backend_markdown::journal::read(store.root()).0)
         .unwrap_or_default();
     let mut asserted: Vec<String> = Vec::new();

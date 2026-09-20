@@ -11,6 +11,14 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- `plan artifact validate` on an Eventlog plan no longer reconciles documents against the legacy
+  `journal.jsonl` left under the projection by migration, which reported every governed move as
+  drift and a forged revision while `plan store verify` answered `current`. The journal-derived
+  advisories (`closed_on_an_assertion`, `without_an_outcome`, `pre_provider`) answer for an
+  Eventlog plan as they do for SQLite and Postgres. Drift on an Eventlog plan is now the
+  projection's, decided by the authority's own watermark — the same fact `plan store verify`
+  reports as `projection_drift` — so a projection edited outside a command is still a problem.
+
 - Migration dry-run and apply now discover foreign destination paths before durable writes and
   refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by
   captured or watermarked evidence, so valid foreign Markdown survives rebuilds and collisions

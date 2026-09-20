@@ -1302,3 +1302,155 @@ fn public_already_idle_custody_applies_retries_and_rebuilds_without_stop_witness
     );
     fs::remove_dir_all(root).expect("remove already-idle fixture");
 }
+
+/// A legacy Markdown plan with one story, migrated through the public path, then moved once
+/// through the public command path.
+///
+/// The fixture for `validate` on an Eventlog plan. The legacy journal is written in both shapes
+/// the projection can carry — the journal's own `created` entry and the `DomainEvent` a real
+/// legacy write appends — because `drift::detect` reads the second per artifact and the journal's
+/// reconciliation reads the first. After migration that file is the migrated store's record,
+/// frozen where the migration left it; the move is recorded by the authority alone.
+fn migrated_eventlog_plan_after_one_governed_move(migration: &str) -> (PathBuf, PathBuf) {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, recorded, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:one",
+            "--kind",
+            "test_result",
+            "--source",
+            "legacy-check",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "legacy evidence write: {recorded} {error}");
+    apply_selected_source(&root, &selector, migration);
+    let validate = ["plan", "artifact", "validate", "--format", "json"];
+    let (success, before, error) = run(&root, &validate);
+    assert!(success, "validate right after migration: {before} {error}");
+    assert_eq!(before["problems"], serde_json::json!([]), "{before}");
+    let identity = format!("{migration}-move");
+    let (success, moved, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "proposed",
+            "--command-identity",
+            &identity,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "governed move on the Eventlog plan: {moved} {error}"
+    );
+    assert_eq!(moved["format"], "aep.planning-mutation/1", "{moved}");
+    assert_eq!(moved["outcome"]["kind"], "complete", "{moved}");
+    (root, selector)
+}
+
+#[test]
+fn validate_answers_a_migrated_eventlog_plan_from_its_authority_not_the_frozen_legacy_journal() {
+    let (root, selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-governed-move");
+    let selector_text = selector.to_string_lossy().into_owned();
+    let verify = [
+        "plan",
+        "store",
+        "verify",
+        "--project",
+        &selector_text,
+        "--format",
+        "json",
+    ];
+    let (success, verified, error) = run(&root, &verify);
+    assert!(success, "verify after the move: {verified} {error}");
+    assert_eq!(
+        verified["outcome"]["value"]["projection"]["drift"], "current",
+        "{verified}"
+    );
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        success,
+        "validate called a governed move a hand edit: {after} {error}"
+    );
+    assert_eq!(after["problems"], serde_json::json!([]), "{after}");
+    assert!(after.get("drift").is_none(), "{after}");
+    assert!(after.get("forged").is_none(), "{after}");
+    assert_eq!(after["pre_provider"], 0, "{after}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+#[test]
+fn validate_reports_a_hand_edited_eventlog_projection_as_drift_decided_by_the_authority() {
+    let (root, selector) = migrated_eventlog_plan_after_one_governed_move("validate-v2-hand-edit");
+    let projected = root.join(".engineering/planning/story/one.md");
+    let text = fs::read_to_string(&projected).expect("projected story");
+    assert!(text.contains("status: proposed"), "{text}");
+    fs::write(
+        &projected,
+        text.replace("status: proposed", "status: active"),
+    )
+    .expect("an edit made outside a command");
+    let (success, edited, error) =
+        run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "a hand-edited projection passed validate: {edited} {error}"
+    );
+    let drift = edited["drift"].as_array().expect("drift findings");
+    assert_eq!(drift.len(), 1, "{edited}");
+    let finding = drift[0].as_str().expect("a finding is text");
+    assert!(
+        finding.contains("drifted from its authority") && finding.contains("plan store verify"),
+        "{finding}"
+    );
+    assert_eq!(
+        edited["problems"].as_array().expect("problems").len(),
+        1,
+        "{edited}"
+    );
+    assert!(edited.get("forged").is_none(), "{edited}");
+    let selector_text = selector.to_string_lossy().into_owned();
+    let (success, verified, error) = run(
+        &root,
+        &[
+            "plan",
+            "store",
+            "verify",
+            "--project",
+            &selector_text,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        !success,
+        "verify agrees the projection drifted: {verified} {error}"
+    );
+    assert!(
+        verified.to_string().contains("projection_drift"),
+        "{verified}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
