@@ -875,30 +875,38 @@ impl Opened {
         }
     }
 
-    /// Every history entry this plan holds, for a question asked over the whole store.
+    /// The history of the artifacts `ids` names, and of no other artifact in the store.
     ///
-    /// *When was each artifact created*, *what became of this review* — the journal answers both,
-    /// for the plan whose record it is ([`Opened::journal`]). An Eventlog plan's record is its
-    /// authority, and the journal under its projection is the migrated store's: every record
-    /// written after the cut-over is simply absent from it, so `review-value` counted no outcome
-    /// and `show` listed none for a review answered after a migration. The authority keeps its
-    /// history per entity, so it is gathered one artifact at a time through
-    /// [`entries_from_the_contract`] — the reading `history` and `explain` already make, and
-    /// deliberately the only one there is.
+    /// *When was this review recorded*, *what became of it* — the journal answers both, for the
+    /// plan whose record it is ([`Opened::journal`]), and it is one file read once: the caller
+    /// filters it. An Eventlog plan's record is its authority, and the journal under its
+    /// projection is the migrated store's: every record written after the cut-over is simply
+    /// absent from it, so `review-value` counted no outcome and `show` listed none for a review
+    /// answered after a migration. The authority keeps its history per entity, so it is read one
+    /// artifact at a time through [`entries_from_the_contract`] — the reading `history` and
+    /// `explain` already make, and deliberately the only one there is — and **only for the ids
+    /// named**, each once. Those reads are where these verbs spend their time: the first cut of
+    /// this read every artifact in the store for a question about its reviews, and `validate` on
+    /// a fourteen-document migrated plan spent 50 s in them on top of the 102 s opening the plan
+    /// took. So the caller names exactly the artifacts its question is about, and a question about
+    /// no artifact reads nothing.
     ///
     /// A SQLite or Postgres plan answers nothing here, as it always has: it never had a journal to
     /// go stale, and *no outcomes rather than a wrong number* is the invariant [`outcomes_of`]
     /// states. An artifact the contract will not answer for is left out rather than guessed at.
-    fn history_entries(&self) -> Vec<aep_backend_markdown::journal::Entry> {
+    fn history_of<'a>(
+        &self,
+        ids: impl IntoIterator<Item = &'a ArtifactId>,
+    ) -> Vec<aep_backend_markdown::journal::Entry> {
         if let Some(store) = self.journal() {
             return aep_backend_markdown::journal::read(store.root()).0;
         }
         if !matches!(self.plan, Plan::Eventlog { .. }) {
             return Vec::new();
         }
-        self.report
-            .documents
-            .keys()
+        ids.into_iter()
+            .collect::<BTreeSet<&ArtifactId>>()
+            .into_iter()
             .filter_map(|id| entries_from_the_contract(self, id).ok())
             .flat_map(|(entries, _)| entries)
             .collect()
@@ -5514,41 +5522,116 @@ fn reviews(stored: &aep_backend_markdown::StoredDocument, subject: &ArtifactId) 
         })
 }
 
+/// Every `review-result` the plan holds.
+fn review_results(
+    opened: &Opened,
+) -> impl Iterator<Item = &aep_backend_markdown::StoredDocument> {
+    opened
+        .report
+        .documents
+        .values()
+        .filter(|stored| stored.document.frontmatter.kind == ArtifactKind::ReviewResult)
+}
+
+/// The artifacts `review` declares it `reviews` — the ones its outcome is written on.
+///
+/// A `review_outcome` is a record **about the reviewed artifact** that names the review
+/// ([`evidence_through_a_command`] takes the reviewed id, and the review as what it `answers`),
+/// and the evidence verb refuses to record one on an artifact the review does not `reviews`. So
+/// what became of a review is in its subjects' history, and its own history holds only when it
+/// was recorded.
+fn subjects_of(
+    review: &aep_backend_markdown::StoredDocument,
+) -> impl Iterator<Item = &ArtifactId> {
+    review
+        .document
+        .frontmatter
+        .relations
+        .iter()
+        .filter(|relation| relation.kind == RelationKind::Reviews)
+        .map(|relation| relation.target.id())
+}
+
+/// The store's history behind every review it holds: each review's own record, whose `Created`
+/// entry is when it was recorded, and each of its subjects', where its outcomes are.
+///
+/// Through [`Opened::history_of`], so on an Eventlog plan the authority is read for these
+/// artifacts and no others — a plan with no `review-result` reads it for nothing, and `validate`,
+/// which asks this on every run, costs a plan without reviews no authority read at all.
+fn review_history(opened: &Opened) -> Vec<aep_backend_markdown::journal::Entry> {
+    opened.history_of(review_results(opened).flat_map(|review| {
+        std::iter::once(&review.document.frontmatter.id).chain(subjects_of(review))
+    }))
+}
+
+/// Where a plan's own record puts a review, for the order [`reviews_of`] answers in.
+///
+/// One variant per kind of record, and a plan has one kind, so the two are never compared with
+/// each other; `Ord` across them exists only so the sort key has a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Ordinal {
+    /// The line the journal recorded it on, for a plan whose record the journal is.
+    Line(usize),
+    /// The instant the authority recorded its creation, as epoch milliseconds, for an Eventlog
+    /// plan.
+    At(u64),
+}
+
 /// The reviews of `subject`, oldest first.
 ///
-/// Ordered by **log order** and not by the instants the documents carry, for the reason
-/// [`joined`] gives: `at` is when the caller says they looked, it is written to the second, and
-/// two reviews recorded in one second have the same one. What the journal holds is the order the
-/// store was actually written in, which is the order a second round happened in. A plan whose
-/// journal says nothing about a review falls back to the id, so the answer is at least stable.
+/// Ordered by **when the store recorded them** and not by the instants the documents carry, for
+/// the reason [`joined`] gives: `at` is when the caller says they looked, it is written to the
+/// second, and two reviews recorded in one second have the same one. A plan whose journal is its
+/// record ([`Opened::journal`]) holds the order the store was actually written in, which is the
+/// order a second round happened in, and that is the order here. An Eventlog plan's record is its
+/// authority, which keeps history per entity and no order across entities; what it does hold is
+/// the instant it recorded each review's `Created` entry, and that — read through
+/// [`Opened::history_of`] for the reviews of `subject` and for nothing else — is the order here,
+/// with the id breaking a same-second tie. A review the record says nothing about falls to the
+/// id, so the answer is at least stable.
 ///
-/// The journal, and only where it is this plan's own record ([`Opened::journal`]). On a migrated
-/// Eventlog plan the file under the projection holds every review recorded before the cut-over
-/// and nothing about one recorded since, which is a **partial** order — and `Option`'s ordering
-/// puts the reviews it says nothing about first, so the second round sorted ahead of the first and
-/// the pair `findings` compares by default was the two the wrong way round. A plan whose record is
-/// the authority takes the stable fallback instead.
+/// The frozen journal under a migrated Eventlog plan's projection is **not** consulted: it holds
+/// every review recorded before the cut-over and nothing about one recorded since, which is a
+/// partial order, and `Option`'s ordering put the reviews it said nothing about first — the
+/// second round sorted ahead of the first, and the pair `findings` compares by default was the
+/// two the wrong way round. Falling to the id alone was no answer either: rounds named for their
+/// reviewers, `zulu` then `alpha`, sort against the order they happened in, and the ledger called
+/// every finding the second round resolved new.
 fn reviews_of<'a>(
     opened: &'a Opened,
     subject: &ArtifactId,
 ) -> Vec<&'a aep_backend_markdown::StoredDocument> {
-    let order: BTreeMap<ArtifactId, usize> = opened
-        .journal()
-        .map(|store| {
-            aep_backend_markdown::journal::read(store.root())
-                .0
-                .into_iter()
-                .enumerate()
-                .map(|(index, entry)| (entry.artifact, index))
-                .collect()
-        })
-        .unwrap_or_default();
+    use aep_backend_markdown::journal::Change;
+
     let mut found: Vec<&aep_backend_markdown::StoredDocument> = opened
         .report
         .documents
         .values()
         .filter(|stored| reviews(stored, subject))
         .collect();
+    let order: BTreeMap<ArtifactId, Ordinal> = if let Some(store) = opened.journal() {
+        aep_backend_markdown::journal::read(store.root())
+            .0
+            .into_iter()
+            .enumerate()
+            .map(|(index, entry)| (entry.artifact, Ordinal::Line(index)))
+            .collect()
+    } else {
+        let mut recorded = BTreeMap::new();
+        let ids = found.iter().map(|stored| &stored.document.frontmatter.id);
+        for entry in opened.history_of(ids) {
+            let Change::Created { .. } = entry.change else {
+                continue;
+            };
+            let Ok(at) = instant(&entry.at) else {
+                continue;
+            };
+            recorded
+                .entry(entry.artifact)
+                .or_insert(Ordinal::At(at.epoch_millis()));
+        }
+        recorded
+    };
     found.sort_by(|left, right| {
         let key = |stored: &aep_backend_markdown::StoredDocument| {
             (
@@ -5730,7 +5813,7 @@ fn print_ledger(ledger: &FindingsLedger) {
 /// out rather than guessed at: a document predating the event log is already its own reported
 /// class, and reporting it twice under a second heading would say two things about one gap.
 ///
-/// The history, and not the journal file ([`Opened::history_entries`]). Reading only the journal
+/// The history, and not the journal file ([`review_history`]). Reading only the journal
 /// emptied this class outright on every migrated Eventlog plan — including a review recorded
 /// *before* the cut-over, whose creation the frozen journal still holds and whose document the
 /// authority holds — while `website/docs/reference/cli.md` promises the class unconditionally. A
@@ -5738,7 +5821,7 @@ fn print_ledger(ledger: &FindingsLedger) {
 fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
     use aep_backend_markdown::journal::Change;
 
-    let entries = opened.history_entries();
+    let entries = review_history(opened);
     let mut created: BTreeMap<ArtifactId, String> = BTreeMap::new();
     let mut answered: BTreeSet<ArtifactId> = BTreeSet::new();
     for entry in entries {
@@ -5839,13 +5922,13 @@ struct ReviewRecords {
 
 /// The store's own history, read once for both things the table needs from it.
 ///
-/// Through [`Opened::history_entries`], so a migrated Eventlog plan is counted from its authority
-/// and not from the journal the migration froze under its projection.
+/// Through [`review_history`], so a migrated Eventlog plan is counted from its authority and not
+/// from the journal the migration froze under its projection.
 fn review_records(opened: &Opened) -> ReviewRecords {
     use aep_backend_markdown::journal::Change;
 
     let mut records = ReviewRecords::default();
-    for entry in opened.history_entries() {
+    for entry in review_history(opened) {
         match entry.change {
             Change::Created { .. } => {
                 records.created.entry(entry.artifact).or_insert(entry.at);
@@ -6688,16 +6771,23 @@ fn review_outcome_of<'a>(
 ///
 /// Read from the store's history rather than from the reviewed artifact's own evidence count,
 /// because the count says *how many `review_outcome` records* and this question is *which
-/// review*. [`Opened::history_entries`] is where that history is: the journal for the plan whose
+/// review*. [`Opened::history_of`] is where that history is: the journal for the plan whose
 /// record it is, the authority for an Eventlog plan — whose projected journal ends at the
-/// migration, so a review answered after the cut-over read as one nobody ever acted on. A SQLite
-/// or Postgres plan answers no outcomes here rather than a wrong number, which is invariant 5
-/// rather than a gap nobody wrote down.
+/// migration, so a review answered after the cut-over read as one nobody ever acted on — read for
+/// the artifacts the review `reviews`, where its outcomes are written ([`subjects_of`]), and for
+/// no others. A SQLite or Postgres plan answers no outcomes here rather than a wrong number, which
+/// is invariant 5 rather than a gap nobody wrote down.
 fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
     use aep_backend_markdown::journal::Change;
 
+    let subjects = opened
+        .report
+        .documents
+        .get(review)
+        .into_iter()
+        .flat_map(subjects_of);
     opened
-        .history_entries()
+        .history_of(subjects)
         .into_iter()
         .filter_map(|entry| match entry.change {
             Change::Evidence {

@@ -2037,3 +2037,1117 @@ fn strict_validate_reports_a_pre_migration_review_without_an_outcome_on_an_event
     );
     fs::remove_dir_all(root).expect("remove disposable fixture");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Independent verification pass 1 over `task:evidence-on-hand-v2-journal` (11cc13e10).
+//
+// Every case below asserts an invariant the unit's own contract or its CHANGELOG entry states.
+// Nothing above this line is altered, skipped or weakened.
+// ---------------------------------------------------------------------------------------------
+
+/// The same command, kept as its exit status and its raw streams, for a case whose subject is a
+/// refusal: a refused move is not obliged to put a document on stdout, and a helper that insists
+/// on parsing one would report a missing refusal as a panic.
+fn run_for_status(root: &PathBuf, args: &[&str]) -> (bool, String, String) {
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("AEP runs");
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// A lifecycle whose last rung asks for two records of one kind, for a case about how many the
+/// store thinks it holds.
+fn a_rung_asking_for_two(root: &std::path::Path, kind: &str) {
+    fs::create_dir_all(root.join("protocols/artifacts/lifecycles")).expect("lifecycle directory");
+    fs::write(
+        root.join("protocols/artifacts/lifecycles/story.yaml"),
+        format!(
+            "kind: story\n\
+             initial: draft\n\
+             transitions:\n  \
+               draft: [proposed]\n  \
+               proposed: [signed]\n  \
+               signed: []\n\
+             requires:\n  \
+               signed:\n    \
+                 - evidence: {kind}\n      \
+                   at_least: 2\n"
+        ),
+    )
+    .expect("a guarded rung");
+}
+
+/// **A record made before the migration is on hand exactly once after it.**
+///
+/// `Opened::evidence_on_hand` now answers an Eventlog plan from the contract
+/// (`evidence_from_events`), and `PlanBackend::entries_of` builds that answer from two sources in
+/// sequence: the journal lines the migration retained in the authority, and then the provider's
+/// own events. A pre-migration record that the migration both retained *and* imported as an event
+/// is therefore a candidate to be counted twice, and this count is the input to an evidence gate:
+/// a rung asking for two would open on one.
+///
+/// The fixture records exactly one `test_result` before the cut-over, so the number here is one.
+#[test]
+fn evidence_recorded_before_a_migration_is_counted_once_by_a_gated_rung() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("review-1-evidence-counted-once");
+    a_rung_asking_for_two(&root, "test_result");
+
+    let (success, explained, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "explain",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "explain on the migrated plan: {explained} {error}");
+    assert_eq!(
+        explained["next"],
+        serde_json::json!([
+            {"status": "signed", "needs": [{"kind": "test_result", "at_least": 2, "held": 1}]}
+        ]),
+        "the fixture recorded one `test_result` before the migration and none since; a larger \
+         count is that one record counted twice — once from the journal the migration retained \
+         and once from the event it was imported as — and the gate is what reads it: {explained}"
+    );
+
+    let (success, stdout, stderr) = run_for_status(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "signed",
+            "--command-identity",
+            "review-1-evidence-counted-once-signed",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        !success,
+        "the rung asks for two `test_result` records, the store holds one, and the move was \
+         admitted: {stdout} {stderr}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **The same evidence command, issued twice under one `--command-identity`, is one record.**
+///
+/// Command identity is what makes a retried write safe, and on a migrated plan the count that
+/// decides a gated move is now assembled by reading the authority's history rather than by
+/// reading a journal line per write. A retry that lands as a second entry would pay for a rung
+/// nobody recorded twice.
+#[test]
+fn a_retried_evidence_command_on_a_migrated_plan_is_counted_once() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("review-1-retried-evidence");
+    a_rung_asking_for_two(&root, "approval");
+    let record = [
+        "plan",
+        "artifact",
+        "evidence",
+        "story:one",
+        "--kind",
+        "approval",
+        "--source",
+        "human:reviewer",
+        "--command-identity",
+        "review-1-retried-evidence-approval",
+        "--format",
+        "json",
+    ];
+    let (success, first, error) = run(&root, &record);
+    assert!(success, "the first attempt: {first} {error}");
+    // The retry is allowed to be admitted as the same record or refused as a repeat; what it may
+    // not do is add a second one, so its outcome is reported rather than asserted.
+    let (retried, retry_out, retry_error) = run_for_status(&root, &record);
+
+    let (success, explained, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "explain",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "explain after the retry: {explained} {error}");
+    assert_eq!(
+        explained["next"],
+        serde_json::json!([
+            {"status": "signed", "needs": [{"kind": "approval", "at_least": 2, "held": 1}]}
+        ]),
+        "one approval was recorded, under one command identity, and the retry (admitted: \
+         {retried}) made it two on hand — a rung asking for two opens on one record: \
+         {explained} / {retry_out} {retry_error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// Two rounds on a migrated plan, whose **ids sort the opposite way round to when they happened**:
+/// the first round is `review-result:zulu`, recorded before the cut-over, and the second is
+/// `review-result:alpha`, recorded after it.
+///
+/// The implementor's own fixture names the first round `alpha` and the second `beta`, where the id
+/// order and the round order agree, so it cannot tell an order taken from the store's history
+/// apart from one taken from the id.
+fn migrated_plan_whose_rounds_sort_against_their_order(migration: &str) -> PathBuf {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, first, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "zulu",
+            "--title",
+            "First round",
+            "--owner",
+            "agent:zulu",
+            "--relate",
+            "reviews:story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "the first round, recorded before the migration: {first} {error}"
+    );
+    apply_selected_source(&root, &selector, migration);
+    let identity = format!("{migration}-second-round");
+    let (success, second, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "alpha",
+            "--title",
+            "Second round",
+            "--owner",
+            "agent:alpha",
+            "--relate",
+            "reviews:story:one",
+            "--command-identity",
+            &identity,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "the second round, recorded after the migration: {second} {error}"
+    );
+    root
+}
+
+/// **The ledger compares the first round against the second on a migrated plan.**
+///
+/// The CHANGELOG entry this unit adds says that on an Eventlog plan "the order `plan artifact
+/// findings` compares two rounds in ... now come[s] from the authority rather than from the legacy
+/// `journal.jsonl`". `reviews_of` reads `Opened::journal`, which is `None` for an Eventlog plan, so
+/// the order it actually takes comes from neither: every review falls to the id tiebreak. Where two
+/// rounds are named by their reviewer rather than by their number, the ledger then reports the
+/// second round as the earlier one — which is the same wrong-way-round ledger, calling every
+/// resolved finding new, that the fix is written to stop.
+#[test]
+fn the_findings_ledger_on_a_migrated_plan_compares_the_first_round_as_the_earlier_one() {
+    let root = migrated_plan_whose_rounds_sort_against_their_order("review-1-round-order");
+    let (success, ledger, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "findings",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "the ledger over two rounds: {ledger} {error}");
+    assert_eq!(ledger["reviews"], 2, "{ledger}");
+    assert_eq!(
+        ledger["from"], "review-result:zulu",
+        "`review-result:zulu` is the round recorded before the migration and `review-result:alpha` \
+         the one recorded after it; the ledger compares them by id instead of by when the store \
+         recorded them, so the second round is being read as the first: {ledger}"
+    );
+    assert_eq!(ledger["to"], "review-result:alpha", "{ledger}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **A review answered before the migration is answered exactly once after it, and is not
+/// reported as one nobody acted on.**
+///
+/// The quadrant the unit's own cases leave open: they record a `review_outcome` *after* the
+/// cut-over (`show`, `review-value`) and a review *without* one from before it
+/// (`validate --strict`). A `review_outcome` recorded before the migration reaches every reader
+/// only through the journal lines the migration retained in the authority, which
+/// `PlanBackend::entries_of` reads ahead of the provider's own events — so it is the record that
+/// is counted twice if the import also stands for it as an event, and the record that goes
+/// missing if the retained line does not read back as an `Entry`. Three verbs change their answer
+/// either way: `show` lists the outcome once, `review-value` counts it once, and `validate
+/// --strict` does not report the review as unanswered.
+#[test]
+#[allow(clippy::too_many_lines)] // One pre-migration record, asked of the three verbs that read it.
+fn a_review_answered_before_the_migration_is_answered_once_after_it() {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, review, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "old",
+            "--title",
+            "Old round",
+            "--owner",
+            "agent:old",
+            "--relate",
+            "reviews:story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a review recorded before the migration: {review} {error}"
+    );
+    let (success, answered, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:one",
+            "--kind",
+            "review_outcome",
+            "--review",
+            "review-result:old",
+            "--outcome",
+            "fixed",
+            "--source",
+            "human:maintainer",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "what became of it, recorded before the migration: {answered} {error}"
+    );
+    apply_selected_source(&root, &selector, "review-1-pre-migration-outcome");
+
+    let (success, shown, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "show",
+            "review-result:old",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "show on the migrated plan: {shown} {error}");
+    let outcomes = shown["outcomes"].as_array().expect("what became of it");
+    assert_eq!(
+        outcomes.len(),
+        1,
+        "one `review_outcome` was recorded before the migration; zero is the retained journal \
+         line left unread, two is the same record read once from the retained line and again from \
+         an event: {shown}"
+    );
+    assert_eq!(outcomes[0]["outcome"], "fixed", "{shown}");
+    assert_eq!(outcomes[0]["source"], "human:maintainer", "{shown}");
+
+    let (success, table, error) = run(
+        &root,
+        &["plan", "artifact", "review-value", "--format", "json"],
+    );
+    assert!(success, "the review-value table: {table} {error}");
+    let rows = table["reviewers"].as_array().expect("one row per reviewer");
+    assert_eq!(rows.len(), 1, "{table}");
+    assert_eq!(
+        rows[0]["fixed"], 1,
+        "the outcome recorded before the migration is counted once, not zero times and not \
+         twice: {table}"
+    );
+
+    let (_, validated, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "validate",
+            "--strict",
+            "--outcome-within",
+            "0",
+            "--format",
+            "json",
+        ],
+    );
+    let without = validated
+        .get("without_an_outcome")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !without.iter().any(|finding| finding
+            .as_str()
+            .is_some_and(|text| text.contains("review-result:old"))),
+        "the review was answered before the migration, and validate reports it as one nobody \
+         acted on: {validated} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Independent verification pass 2 over `task:validate-v2-projection-awareness` (11cc13e10), adopted
+// here. Five cases stand as written; four that were red against 11cc13e10 assert today's behaviour
+// and name `story:strict-advisory-classes-on-an-eventlog-plan` as the story that inverts them.
+// ---------------------------------------------------------------------------------------------
+
+/// The `closed_on_an_assertion` entries `validate` reported, as plain strings.
+fn closed_on_an_assertion(summary: &serde_json::Value) -> Vec<String> {
+    summary
+        .get("closed_on_an_assertion")
+        .and_then(serde_json::Value::as_array)
+        .map(|notes| {
+            notes
+                .iter()
+                .filter_map(|note| note.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// A legacy Markdown plan whose one story was moved on **asserted** evidence, then migrated.
+///
+/// The move is made through the public command path before the cut-over, so the legacy journal
+/// records it as resting on an assertion — and the migration retains those journal lines in the
+/// authority, which is where `Opened::history_of` reads a migrated plan's history from.
+fn migrated_eventlog_plan_whose_legacy_move_rested_on_an_assertion(
+    migration: &str,
+) -> (PathBuf, serde_json::Value) {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    let (success, moved, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "proposed",
+            "--evidence",
+            "test_result=1",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a move on asserted evidence before the migration: {moved} {error}"
+    );
+    let (_, before, error) = run(
+        &root,
+        &[
+            "plan", "artifact", "validate", "--strict", "--format", "json",
+        ],
+    );
+    assert!(
+        closed_on_an_assertion(&before)
+            .iter()
+            .any(|note| note.contains("story:one")),
+        "the fixture never made an assertion the Markdown plan itself reports: {before} {error}"
+    );
+    apply_selected_source(&root, &selector, migration);
+    (root, before)
+}
+
+/// **A status closed on an assertion before the migration is reported by nothing once the plan
+/// is an Eventlog plan — today.**
+///
+/// `closed_on_an_assertion` is one of the classes `--strict` turns into exit 1. It is built from
+/// `Opened::journal()`, which is `None` for every Eventlog plan, because the journal under the
+/// projection is the migrated store's and stops where the migration did; the authority holds the
+/// move's `decided_on` in the retained journal lines, but reading it for every artifact is the
+/// store-wide read this unit removed, and no cheaper equivalent exists yet. The operator decided
+/// that the class is documented as not computed on an Eventlog plan for now, and the faithful port
+/// is `story:strict-advisory-classes-on-an-eventlog-plan`. This case pins today's answer: the fixture
+/// asserts the Markdown plan reported the move before the cut-over, and after it the class is
+/// empty and `--strict` exits 0. **When the story lands, invert these two assertions; never
+/// loosen them and never `#[ignore]` this case.**
+#[test]
+fn a_status_closed_on_an_assertion_before_migration_is_reported_by_nothing_today() {
+    let (root, before) =
+        migrated_eventlog_plan_whose_legacy_move_rested_on_an_assertion("validate-v2-asserted-pre");
+    let (success, after, error) = run(
+        &root,
+        &[
+            "plan", "artifact", "validate", "--strict", "--format", "json",
+        ],
+    );
+    assert_eq!(after["artifacts"], 1, "the migrated plan holds it: {after}");
+    assert!(
+        closed_on_an_assertion(&after).is_empty(),
+        "`closed_on_an_assertion` is not computed on an Eventlog plan today, and this run computed \
+         it — `story:strict-advisory-classes-on-an-eventlog-plan` is the port; when it lands, invert this \
+         assertion to `.any(|note| note.contains(\"story:one\"))`: before {before}, after {after} \
+         {error}"
+    );
+    assert!(
+        success,
+        "with no class computed, `--strict` has nothing to refuse on today; when \
+         `story:strict-advisory-classes-on-an-eventlog-plan` lands this becomes `!success`: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **A status closed on an assertion *after* the migration is reported by nothing today, while
+/// the store itself knows.**
+///
+/// The governed move is made on the Eventlog plan itself, so the record is an authority event
+/// carrying the move's `decided_on`, which `PlanBackend::entries_of` reads and `explain` prints.
+/// `validate` builds `closed_on_an_assertion` from `Opened::journal()`, `None` here, so the class
+/// is empty and `--strict` exits 0 — the operator's decision for now, with the faithful port as
+/// `story:strict-advisory-classes-on-an-eventlog-plan`. The `explain` assertion is the control: the fact is
+/// in the store, and it is `validate` that does not read it. **When the story lands, invert the
+/// last two assertions; never loosen them and never `#[ignore]` this case.**
+#[test]
+fn a_status_closed_on_an_assertion_after_migration_is_reported_by_nothing_today() {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    apply_selected_source(&root, &selector, "validate-v2-asserted-post");
+    let (success, moved, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "move",
+            "story:one",
+            "--to",
+            "proposed",
+            "--evidence",
+            "test_result=1",
+            "--command-identity",
+            "validate-v2-asserted-post-move",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a governed move on asserted evidence after the migration: {moved} {error}"
+    );
+    let (success, after, error) = run(
+        &root,
+        &[
+            "plan", "artifact", "validate", "--strict", "--format", "json",
+        ],
+    );
+    let (_, explained, explain_error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "explain",
+            "story:one",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        explained.to_string().contains("asserted"),
+        "the store itself knows the move rested on an assertion: {explained} {explain_error}"
+    );
+    assert!(
+        closed_on_an_assertion(&after).is_empty(),
+        "`closed_on_an_assertion` is not computed on an Eventlog plan today, and this run computed \
+         it for a governed move — `story:strict-advisory-classes-on-an-eventlog-plan` is the port; when it \
+         lands, invert this assertion to `.any(|note| note.contains(\"story:one\"))`: {after} \
+         {error}"
+    );
+    assert!(
+        success,
+        "with no class computed, `--strict` has nothing to refuse on today; when \
+         `story:strict-advisory-classes-on-an-eventlog-plan` lands this becomes `!success`: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **A review recorded *after* the migration and never answered is reported too.**
+///
+/// The adopted case covers a review whose creation instant the frozen journal still holds. This is
+/// the other half: a `review-result` created on the Eventlog plan itself, whose creation is an
+/// authority event and nothing else, asked for at `--outcome-within 0` so that the instant rather
+/// than the age decides. If `Opened::history_of` cannot date a post-migration document, the
+/// class is half alive and the half that is missing is the half that grows.
+#[test]
+fn strict_validate_reports_a_post_migration_review_without_an_outcome_on_an_eventlog_plan() {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    apply_selected_source(&root, &selector, "validate-v2-review-after");
+    let (success, review, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "fresh",
+            "--title",
+            "After the cut-over",
+            "--owner",
+            "agent:fresh",
+            "--relate",
+            "reviews:story:one",
+            "--command-identity",
+            "validate-v2-review-after-new",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        success,
+        "a review recorded after the migration: {review} {error}"
+    );
+    let (success, after, error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "validate",
+            "--strict",
+            "--outcome-within",
+            "0",
+            "--format",
+            "json",
+        ],
+    );
+    assert_eq!(after["artifacts"], 2, "the plan holds both: {after}");
+    let without = after
+        .get("without_an_outcome")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        without.iter().any(|note| note
+            .as_str()
+            .is_some_and(|text| text.contains("review-result:fresh"))),
+        "a review recorded after the migration and never answered is dated by nothing, so the \
+         class skips it: {after} {error}"
+    );
+    assert!(
+        !success,
+        "--strict must refuse on a review with no recorded outcome: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// Two owned projection files wrong at once — one edited, one deleted.
+///
+/// The boundary above the unit's own single-fault cases: `projection_current` answers one
+/// `Result`, so the question is whether the second fault can mask the first, and whether the exit
+/// status still says the plan is not clean. Neither fault may be swallowed.
+#[test]
+fn validate_reports_an_eventlog_projection_with_one_file_edited_and_another_deleted() {
+    let (root, selector) = project();
+    fs::write(root.join(".engineering/planning/story/two.md"),
+        "---\nformat: aep.planning-md/1\nid: story:two\nkind: story\nstatus: draft\ntitle: Two\nrelations: []\nrevision: 1\n---\n")
+        .expect("second legacy story");
+    let one = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    let two = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:two", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{one}\n{two}\n"),
+    )
+    .expect("legacy journal");
+    apply_selected_source(&root, &selector, "validate-v2-two-faults");
+    let (success, clean, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(success, "validate right after migration: {clean} {error}");
+    assert_eq!(clean["problems"], serde_json::json!([]), "{clean}");
+    let edited = root.join(".engineering/planning/story/one.md");
+    let text = fs::read_to_string(&edited).expect("projected story");
+    fs::write(&edited, text.replace("status: draft", "status: active"))
+        .expect("an edit made outside a command");
+    fs::remove_file(root.join(".engineering/planning/story/two.md"))
+        .expect("a deletion made outside a command");
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "two owned files wrong at once and validate passed: {after} {error}"
+    );
+    let drift = after
+        .get("drift")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !drift.is_empty(),
+        "neither fault is reported as drift: {after} {error}"
+    );
+    assert!(
+        !after["problems"].as_array().expect("problems").is_empty(),
+        "neither fault is a problem: {after} {error}"
+    );
+    // The unit's contract is *one* authority-decided finding in each list, whatever the number of
+    // owned files that disagree: the projection is compared as a whole. Measured, not eyeballed.
+    assert_eq!(
+        drift.len(),
+        1,
+        "two faults, and the projection is still compared as one whole: {after}"
+    );
+    assert_eq!(
+        after["problems"].as_array().expect("problems").len(),
+        1,
+        "{after}"
+    );
+    eprintln!("two faults at once, validate answered: {after}");
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// The projection's ownership marker removed: the file that decides what `projection_current`
+/// digests at all.
+///
+/// With it gone there is nothing to compare, and the one answer `validate` must not give is that
+/// the plan is clean — a check whose input can be deleted to silence it is not a check.
+#[test]
+fn validate_reports_an_eventlog_projection_whose_ownership_marker_was_removed() {
+    let (root, selector) = project();
+    let created = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{created}\n"),
+    )
+    .expect("legacy journal");
+    apply_selected_source(&root, &selector, "validate-v2-marker-removed");
+    let marker = root.join(".engineering/planning/.aep-projection-ownership.json");
+    assert!(
+        marker.is_file(),
+        "the migration published an ownership marker at {}",
+        marker.display()
+    );
+    fs::remove_file(&marker).expect("the marker removed outside a command");
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "the projection's ownership marker was deleted and validate called the plan clean: \
+         {after} {error}"
+    );
+    assert!(
+        !after["problems"].as_array().expect("problems").is_empty(),
+        "a projection with no ownership marker is no problem: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// Like [`run`], for a command whose answer may not be JSON: the exit status, whatever JSON stdout
+/// held, and both streams as text. A case about a plan whose projection is *gone* must not panic
+/// inside its own fixture when the edge answers with prose on stderr instead.
+fn run_expecting_any(root: &PathBuf, args: &[&str]) -> (bool, Option<serde_json::Value>, String) {
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("AEP runs");
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    (
+        output.status.success(),
+        serde_json::from_slice(&output.stdout).ok(),
+        format!("stdout: {stdout} / stderr: {stderr}"),
+    )
+}
+
+/// `story:one` given one real event through the command path, so the legacy log has heard of it
+/// and it is *not* a document predating the event log. The compact journal line the other
+/// fixtures write is a journal entry and not an event, and `drift::detect` counts events.
+fn story_one_with_one_recorded_event(root: &PathBuf) {
+    let one = serde_json::json!({
+        "at": "2026-01-01T00:00:00Z", "actor": "human:fixture",
+        "artifact": "story:one", "kind": "story", "revision": 1,
+        "change": {"change": "created", "status": "draft"}
+    });
+    fs::write(
+        root.join(".engineering/planning/journal.jsonl"),
+        format!("{one}\n"),
+    )
+    .expect("legacy journal that knows only story:one");
+    let (success, recorded, error) = run(
+        root,
+        &[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:one",
+            "--kind",
+            "test_result",
+            "--source",
+            "legacy-check",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(success, "legacy evidence write: {recorded} {error}");
+}
+
+/// A second legacy story with **no journal line and no event at all** — a document written before
+/// the log existed, which the Markdown plan reports as *predating the event log*.
+fn a_second_legacy_story_the_journal_never_heard_of(root: &PathBuf) {
+    fs::write(
+        root.join(".engineering/planning/story/two.md"),
+        "---\nformat: aep.planning-md/1\nid: story:two\nkind: story\nstatus: draft\ntitle: \
+         Two\nrelations: []\nrevision: 1\n---\n",
+    )
+    .expect("a legacy story the journal never recorded");
+    story_one_with_one_recorded_event(root);
+}
+
+/// **A document predating the journal is reported as predating the event log by nothing once the
+/// plan is an Eventlog plan — today.**
+///
+/// `pre_provider` is one of the classes `--strict` refuses on (`strictly_refused`). `findings`
+/// takes the count from `log_findings`, which runs only when `Opened::journal()` is `Some`, so on
+/// every Eventlog plan it is `0` by construction rather than measured. The operator decided the
+/// class is documented as not computed on an Eventlog plan for now; the faithful port is
+/// `story:strict-advisory-classes-on-an-eventlog-plan`. The fixture asserts the Markdown plan reports the
+/// document before the migration, which is the control, and pins the `0` and the exit 0 after it.
+/// **When the story lands, invert the last two assertions; never loosen them and never `#[ignore]`
+/// this case.**
+#[test]
+fn a_document_predating_the_journal_is_reported_by_nothing_today_on_an_eventlog_plan() {
+    let (root, selector) = project();
+    a_second_legacy_story_the_journal_never_heard_of(&root);
+    let strict = [
+        "plan", "artifact", "validate", "--strict", "--format", "json",
+    ];
+    let (success, before, error) = run(&root, &strict);
+    assert_eq!(
+        before["pre_provider"], 1,
+        "the fixture never made a document the Markdown plan reports as predating the log: \
+         {before} {error}"
+    );
+    assert!(
+        !success,
+        "--strict on the Markdown plan refuses on the class: {before} {error}"
+    );
+    apply_selected_source(&root, &selector, "validate-v2-pre-provider");
+    let (_, history, history_error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "history",
+            "story:two",
+            "--format",
+            "json",
+        ],
+    );
+    let (success, after, error) = run(&root, &strict);
+    assert_eq!(
+        after["artifacts"], 2,
+        "the migrated plan holds both: {after}"
+    );
+    assert_eq!(
+        after["pre_provider"], 0,
+        "`pre_provider` is `0` by construction on an Eventlog plan today, and this run measured it \
+         — `story:strict-advisory-classes-on-an-eventlog-plan` is the port; when it lands, this becomes \
+         `1` — the authority's history of the document reads {history} {history_error}: before \
+         {before}, after {after} {error}"
+    );
+    assert!(
+        success,
+        "with the class not computed, `--strict` has nothing to refuse on today; when \
+         `story:strict-advisory-classes-on-an-eventlog-plan` lands this becomes `!success`: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// **A review the journal never heard of is named by neither journal class once the plan is an
+/// Eventlog plan — today — and only the prose-only findings class still names it.**
+///
+/// On a Markdown plan a `review-result` with no journal line is reported once, as a document
+/// predating the event log, and `reviews_without_an_outcome` leaves it out on purpose — its own
+/// doc comment says reporting it twice "would say two things about one gap". Once the plan is
+/// Eventlog the first class is `0` by construction, and the second cannot date the review either:
+/// the authority holds no `Created` entry for a document the migration imported without a journal
+/// line, so at `--outcome-within 0` it is left out rather than guessed at. A review nobody ever
+/// answered has fallen out of both classes; what still names it is `without_findings`, because its
+/// body is prose only, and that is the class `--strict` refuses on here. The operator decided the
+/// two classes are documented as not computed on an Eventlog plan for now; the faithful port is
+/// `story:strict-advisory-classes-on-an-eventlog-plan`. **When the story lands, invert the `predating`/
+/// `without_an_outcome` assertion; never loosen it and never `#[ignore]` this case.**
+#[test]
+fn a_pre_journal_review_nobody_answered_is_named_by_neither_journal_class_today() {
+    let (root, selector) = project();
+    fs::create_dir_all(root.join(".engineering/planning/review-result")).expect("review directory");
+    fs::write(
+        root.join(".engineering/planning/review-result/old.md"),
+        "---\nformat: aep.planning-md/1\nid: review-result:old\nkind: review-result\nstatus: \
+         active\ntitle: Old\nrelations:\n- reviews: story:one\nrevision: 1\n---\n# Old\n\nProse \
+         only.\n",
+    )
+    .expect("a legacy review the journal never recorded");
+    story_one_with_one_recorded_event(&root);
+    let strict = [
+        "plan",
+        "artifact",
+        "validate",
+        "--strict",
+        "--outcome-within",
+        "0",
+        "--format",
+        "json",
+    ];
+    let (_, before, error) = run(&root, &strict);
+    assert_eq!(
+        before["pre_provider"], 1,
+        "the Markdown plan reports the review as predating the log: {before} {error}"
+    );
+    apply_selected_source(&root, &selector, "validate-v2-pre-journal-review");
+    let (_, history, history_error) = run(
+        &root,
+        &[
+            "plan",
+            "artifact",
+            "history",
+            "review-result:old",
+            "--format",
+            "json",
+        ],
+    );
+    let (success, after, error) = run(&root, &strict);
+    assert_eq!(
+        after["artifacts"], 2,
+        "the migrated plan holds both: {after}"
+    );
+    let predating = after["pre_provider"].as_u64().unwrap_or_default();
+    let without_an_outcome = after
+        .get("without_an_outcome")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|notes| {
+            notes.iter().any(|note| {
+                note.as_str()
+                    .is_some_and(|text| text.contains("review-result:old"))
+            })
+        });
+    assert!(
+        predating == 0 && !without_an_outcome,
+        "a review the journal never recorded and nobody answered is named by neither journal class \
+         on an Eventlog plan today, and this run named it — `story:strict-advisory-classes-on-an-eventlog-plan` \
+         is the port; when it lands, invert this to `predating > 0 || without_an_outcome` — the \
+         authority's history of it reads {history} {history_error}: before {before}, after {after} \
+         {error}"
+    );
+    let prose_only = after
+        .get("without_findings")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|notes| {
+            notes.iter().any(|note| {
+                note.as_str()
+                    .is_some_and(|text| text.contains("review-result:old"))
+            })
+        });
+    assert!(
+        prose_only && !success,
+        "the one class that names the review today is the prose-only findings class, and it is \
+         what `--strict` refuses on — neither journal class is involved: {after} {error}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// The projection directory removed whole, authority and selector left in place.
+///
+/// Above the marker case: nothing under the projection root exists to digest, and the plan's
+/// documents still come from the authority, so `validate` can load the plan and must then say the
+/// projection is not what the authority published — as `verify` does. The two verbs read the same
+/// facts (`projection_current` is `verify`'s check, asked by `validate`), so they must not answer
+/// differently here.
+#[test]
+fn validate_reports_an_eventlog_plan_whose_projection_directory_is_missing() {
+    let (root, selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-projection-gone");
+    let projection = root.join(".engineering/planning");
+    fs::remove_dir_all(&projection).expect("the projection removed outside a command");
+    let selector_text = selector.to_string_lossy().into_owned();
+    let (verify_success, verified, verify_error) = run(
+        &root,
+        &[
+            "plan",
+            "store",
+            "verify",
+            "--project",
+            &selector_text,
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        !verify_success,
+        "verify called a missing projection current: {verified} {verify_error}"
+    );
+    let (success, after, streams) =
+        run_expecting_any(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "the projection directory is gone and validate called the plan clean: {after:?} — verify \
+         said {verified} — {streams}"
+    );
+    let after = after.unwrap_or_else(|| {
+        panic!(
+            "validate refused a plan whose projection is gone but did not answer as a validation \
+             — verify said {verified} — {streams}"
+        )
+    });
+    let drift = after
+        .get("drift")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(
+        drift.len(),
+        1,
+        "one authority-decided finding, as for an edited or deleted owned file: {after}"
+    );
+    assert!(
+        drift[0]
+            .as_str()
+            .is_some_and(|text| text.contains("drifted from its authority")),
+        "{after}"
+    );
+    assert_eq!(
+        after["problems"].as_array().expect("problems").len(),
+        1,
+        "{after}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}
+
+/// The ownership marker edited to disown the projected story, the story itself untouched.
+///
+/// The marker decides what `projection_current` digests, so an edit that shortens its list is an
+/// attempt to shrink the check to a set of files nothing published. The inventory over the
+/// remaining files digests to no watermark the authority holds, and the answer must be the same
+/// one an edited owned file gets.
+#[test]
+fn validate_reports_an_eventlog_projection_whose_ownership_marker_was_edited() {
+    let (root, _selector) =
+        migrated_eventlog_plan_after_one_governed_move("validate-v2-marker-edited");
+    let marker = root.join(".engineering/planning/.aep-projection-ownership.json");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&marker).expect("ownership marker"))
+            .expect("the marker is JSON");
+    let owned = value["owned"]
+        .as_array_mut()
+        .expect("the marker lists owned files");
+    let listed = owned.len();
+    owned.retain(|entry| entry["path"] != "story/one.md");
+    assert_eq!(
+        owned.len(),
+        listed - 1,
+        "the marker listed the projected story before the edit: {value}"
+    );
+    let mut bytes = serde_json::to_vec(&value).expect("marker bytes");
+    bytes.push(b'\n');
+    fs::write(&marker, bytes).expect("the marker edited outside a command");
+    let (success, after, error) = run(&root, &["plan", "artifact", "validate", "--format", "json"]);
+    assert!(
+        !success,
+        "the marker no longer lists story/one.md and validate called the plan clean: {after} \
+         {error}"
+    );
+    let drift = after
+        .get("drift")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(drift.len(), 1, "{after}");
+    assert!(
+        drift[0]
+            .as_str()
+            .is_some_and(|text| text.contains("drifted from its authority")),
+        "{after}"
+    );
+    fs::remove_dir_all(root).expect("remove disposable fixture");
+}

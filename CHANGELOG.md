@@ -13,25 +13,35 @@ belongs in the commit message or in `docs/design/`.
 
 - `plan artifact validate` on an Eventlog plan no longer reconciles documents against the legacy
   `journal.jsonl` left under the projection by migration, which reported every governed move as
-  drift and a forged revision while `plan store verify` answered `current`. The journal-derived
-  advisories (`closed_on_an_assertion`, `without_an_outcome`, `pre_provider`) answer for an
-  Eventlog plan as they do for SQLite and Postgres. Drift on an Eventlog plan is now the
-  projection's, decided by the authority's own watermark — the same fact `plan store verify`
-  reports as `projection_drift` — so an owned projection file edited or deleted by hand is
-  reported. A document added at a path the authority's ownership marker does not list is digested
-  by neither side and is still reported by nothing; that gap is
-  `story:unowned-document-in-eventlog-projection-is-reported`.
+  drift and a forged revision while `plan store verify` answered `current`. Drift on an Eventlog
+  plan is now the projection's, decided by the authority's own watermark — the same fact
+  `plan store verify` reports as `projection_drift` — so an owned projection file edited or
+  deleted by hand, an ownership marker edited or removed, and a projection directory that is gone
+  are each reported. Of the `--strict` advisory classes, `closed_on_an_assertion` and
+  `pre_provider` are **not computed** on an Eventlog plan: both read the projection's journal,
+  which stops at the migration, and the authority offers no equivalent short of reading every
+  artifact's history. `without_an_outcome` is computed from the authority, bounded to the
+  `review-result` documents and the artifacts they `reviews`. The faithful port of all three is
+  `story:strict-advisory-classes-on-an-eventlog-plan`. A document added at a path the authority's
+  ownership marker does not list is digested by neither side and is still reported by nothing;
+  that gap is `story:unowned-document-in-eventlog-projection-is-reported`.
 
 - On an Eventlog plan, the evidence a move is judged against, the outcomes `plan artifact show`
   lists for a review, the reviewer totals in `plan artifact review-value`, the order
   `plan artifact findings` compares two rounds in, and the reviews-without-an-outcome class of
-  `plan artifact validate --strict` now come from the authority rather than from the legacy
-  `journal.jsonl` left under the projection by migration. An evidence record, a `review_outcome`
-  or a review written after the cut-over was invisible to the first four, so the first
-  evidence-gated move on a migrated store was refused for evidence the store was holding; the
-  fifth was empty on every migrated plan, including for a review the frozen journal still records.
-  Markdown and hybrid plans are unchanged; a SQLite or Postgres plan still reports no outcomes
-  rather than a wrong number.
+  `plan artifact validate` now come from the authority rather than from the legacy `journal.jsonl`
+  left under the projection by migration. An evidence record, a `review_outcome` or a review
+  written after the cut-over was invisible to the first four, so the first evidence-gated move on
+  a migrated store was refused for evidence the store was holding; the fifth was empty on every
+  migrated plan, including for a review the frozen journal still records. `findings` orders the
+  rounds of a migrated plan by the instant the authority recorded each review's creation, the id
+  breaking a same-second tie, so two rounds whose ids sort against the order they happened in
+  (`zulu` then `alpha`) are compared the right way round. The authority is read for the
+  `review-result` documents and the artifacts they `reviews`, and for nothing else — a plan with
+  no `review-result` reads it for none — so what these verbs cost a migrated plan is one history
+  read per review and per reviewed artifact, not one per artifact in the store. Markdown and
+  hybrid plans are unchanged; a SQLite or Postgres plan still reports no outcomes rather than a
+  wrong number.
 
 - Migration dry-run and apply now discover foreign destination paths before durable writes and
   refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by
