@@ -11,6 +11,26 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- `aep plan store migrate dry-run` and `apply` now build the source's artifact graph with the
+  workspace members its `.engineering/workspace.yaml` declares, exactly as `plan artifact validate`
+  and every other read command already did. A relation into a declared member is a crossing an
+  assembly resolves; the mapper built the graph with no members at all, so that crossing read as a
+  dangling edge and the whole migration was refused against a store every other command called
+  valid. A relation into a member the workspace does **not** declare is still a dangling edge and
+  is still refused: a migrated store whose relations dangle for real is worse than a refusal. The
+  declaration is read at the command edge and handed to the mapper as data, and it decides
+  admission only — no migrated record depends on it — so a store with no workspace file maps
+  exactly as before. The crossing itself survives migration as the artifact's own relation and is
+  read back from the Eventlog authority unchanged.
+
+- A migration refusal that comes from the mapper now carries the mapper's coordinate instead of the
+  selector's. Every mapping refusal was reported as `semantic_mismatch` at the `--project` selector
+  path, so a receipt named the file that chose the store and never the document that did not map.
+  A refusal naming a captured Markdown node is now reported at that node's store-relative path
+  (`kind: source`, `markdown_path`), and one about the source as a whole at the source root — the
+  Markdown root, the SQLite database, the Postgres endpoint or the hybrid side. The selector
+  coordinate is left to selector failures.
+
 - Opening an Eventlog plan now costs the authority **one** capture, not one per record. Hydration
   asks the store for the ids of each of its four kinds and then reads every id it was given, and
   every one of those reads was a separate capture of the whole authority — which re-reads and

@@ -13,6 +13,7 @@ use aep_domain::entity::{
 };
 use aep_domain::ids::RelationId;
 use aep_domain::time::Timestamp;
+use aep_domain::workspace::MemberName;
 use entity_core::{DomainEvent, EntityInstance};
 use entity_store::asynchronous::{
     HistoryOrigin, ImportedRecordEvidence, KnownLegacyOrder, LegacyAnchor, LegacyCompleteness,
@@ -106,21 +107,56 @@ pub enum MappingError {
     },
 }
 
+impl MappingError {
+    /// The exact source coordinate the refusal is about.
+    ///
+    /// A caller reporting a mapping refusal has to be able to name where it happened. Collapsing
+    /// every variant to one code at the caller's own coordinate is what made the workspace defect
+    /// below take a day to find: the receipt named the selector, which was not what failed.
+    pub fn coordinate(&self) -> &str {
+        match self {
+            Self::Incomplete { coordinate }
+            | Self::Invalid { coordinate }
+            | Self::MissingTerminal { coordinate } => coordinate,
+        }
+    }
+}
+
 /// Maps a complete Markdown read into explicit unrecorded subject boundaries.
 ///
 /// Markdown has complete current state but no provider-complete mixed record order. Each boundary
 /// therefore says `available_evidence_only` and `per_kind_only`; it does not fabricate history.
-pub fn markdown_boundaries(report: &StoreReport) -> Result<Vec<SubjectHistory>, MappingError> {
+///
+/// `members` is the workspace declaration beside the store, exactly as every ordinary read command
+/// supplies it. See [`markdown_boundaries_raw`] for why it is a parameter rather than a read.
+pub fn markdown_boundaries(
+    report: &StoreReport,
+    members: &[MemberName],
+) -> Result<Vec<SubjectHistory>, MappingError> {
     if let Some(failure) = report.failures.first() {
         return Err(MappingError::Incomplete {
             coordinate: failure.path.display().to_string(),
         });
     }
-    markdown_runtime_boundaries(&report.documents)
+    markdown_runtime_boundaries(&report.documents, members)
 }
 
 /// Maps the exact bytes retained by a complete raw capture, without reopening the source tree.
-pub fn markdown_boundaries_raw(raw: &MarkdownRawV1) -> Result<Vec<SubjectHistory>, MappingError> {
+///
+/// `members` is what the store's `.engineering/workspace.yaml` declares. It is supplied by the
+/// caller and never read here: this crate reopens nothing, and the declaration lives beside the
+/// store rather than inside it, so it is not in the capture. It is admission input only — the
+/// graph it gates is discarded, and no produced record depends on it — so a store whose
+/// declaration changed between capture and mapping still maps to the same bytes.
+///
+/// Passing an empty slice is what a store with no workspace file declares, and it is the defect
+/// this parameter exists to close: the mapper used to pass empty unconditionally, so a relation
+/// into a declared member read as a dangling edge and the whole migration was refused, while every
+/// ordinary read command on the same store answered that it was valid.
+pub fn markdown_boundaries_raw(
+    raw: &MarkdownRawV1,
+    members: &[MemberName],
+) -> Result<Vec<SubjectHistory>, MappingError> {
     let mut documents = BTreeMap::new();
     for node in &raw.nodes {
         let MarkdownNodeKindV1::Regular(file) = &node.node else {
@@ -163,7 +199,36 @@ pub fn markdown_boundaries_raw(raw: &MarkdownRawV1) -> Result<Vec<SubjectHistory
             });
         }
     }
-    markdown_runtime_boundaries(&documents)
+    markdown_runtime_boundaries(&documents, members)
+}
+
+/// The document a graph defect belongs to, so a refusal names a file somebody can open.
+///
+/// `ValidationError::location` is dotted document form — `artifacts.<id>.relations[2]` — and an
+/// artifact id may itself contain `.`, so the id is recovered by matching the documents that were
+/// read rather than by splitting on the first separator. A defect that names no document read here
+/// falls back to the whole graph, which is still more than the selector.
+fn graph_coordinate(
+    errors: &aep_domain::ValidationErrors,
+    documents: &BTreeMap<aep_domain::artifact::ArtifactId, StoredDocument>,
+) -> String {
+    errors
+        .as_slice()
+        .iter()
+        .find_map(|error| {
+            let location = error.location.strip_prefix("artifacts.")?;
+            documents
+                .iter()
+                .filter(|(artifact, _)| {
+                    let name = artifact.to_string();
+                    location
+                        .strip_prefix(&name)
+                        .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '[']))
+                })
+                .max_by_key(|(artifact, _)| artifact.to_string().len())
+                .map(|(_, stored)| stored.relative_path.clone())
+        })
+        .unwrap_or_else(|| "markdown/graph".to_owned())
 }
 
 /// Maps Markdown's document-shaped current state into the four-kind identity representation used
@@ -172,15 +237,23 @@ pub fn markdown_boundaries_raw(raw: &MarkdownRawV1) -> Result<Vec<SubjectHistory
 #[allow(clippy::too_many_lines)] // One pass keeps document, body and relation mapping adjacent.
 fn markdown_runtime_boundaries(
     documents: &BTreeMap<aep_domain::artifact::ArtifactId, StoredDocument>,
+    members: &[MemberName],
 ) -> Result<Vec<SubjectHistory>, MappingError> {
     let report = StoreReport {
         documents: documents.clone(),
         files_read: documents.len(),
         failures: Vec::new(),
     };
-    report.graph().map_err(|_| MappingError::Invalid {
-        coordinate: "markdown/graph".to_owned(),
-    })?;
+    // `graph_in_workspace`, not `graph`: the same call every ordinary read command makes
+    // (`planning.rs` `artifact validate`, `graph`, `board`, `explain`, …). A relation into a
+    // member this store declares is a crossing an assembly resolves, not a dangling edge; a
+    // relation into a member it does *not* declare stays a dangling edge and is still refused,
+    // because a store migrated with edges that dangle for real is worse than a refusal.
+    report
+        .graph_in_workspace(members.iter().cloned())
+        .map_err(|errors| MappingError::Invalid {
+            coordinate: graph_coordinate(&errors, documents),
+        })?;
 
     let mut identities = BTreeMap::new();
     for (artifact, stored) in documents {
@@ -981,4 +1054,118 @@ fn nonnegative(value: i64, coordinate: &str) -> Result<u64, MappingError> {
     u64::try_from(value).map_err(|_| MappingError::Invalid {
         coordinate: coordinate.to_owned(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aep_contract::migration::{HexBytesV1, MarkdownNodeV1, RegularMarkdownNodeV1};
+
+    fn member(name: &str) -> MemberName {
+        MemberName::parse(name).expect("a member name")
+    }
+
+    fn node(relative: &str, text: &str) -> MarkdownNodeV1 {
+        MarkdownNodeV1 {
+            relative: HostPathV1::Unix(HexBytesV1::new(relative.as_bytes().to_vec())),
+            node: MarkdownNodeKindV1::Regular(RegularMarkdownNodeV1 {
+                bytes: HexBytesV1::new(text.as_bytes().to_vec()),
+            }),
+        }
+    }
+
+    /// One local story and one that points into `other`, which only a workspace can declare.
+    fn crossing_capture() -> MarkdownRawV1 {
+        MarkdownRawV1 {
+            nodes: vec![
+                node(
+                    "story/local.md",
+                    "---\nformat: aep.planning-md/1\nid: story:local\nkind: story\nstatus: draft\n\
+                     title: Local\nrelations: []\nrevision: 1\n---\n",
+                ),
+                node(
+                    "story/crossing.md",
+                    "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\n\
+                     status: draft\ntitle: Crossing\nrelations:\n\
+                     - informed_by: other/story:theirs\nrevision: 1\n---\n",
+                ),
+            ],
+        }
+    }
+
+    #[test]
+    fn a_relation_into_a_declared_member_is_a_crossing_and_maps() {
+        let histories = markdown_boundaries_raw(&crossing_capture(), &[member("other")])
+            .expect("the declaration every ordinary read command reads admits the crossing");
+        assert_eq!(histories.len(), 2);
+    }
+
+    #[test]
+    fn a_relation_into_a_member_nobody_declared_is_a_dangling_edge_and_is_refused() {
+        // The bound this fix must not cross: a store whose relations genuinely dangle is worse
+        // migrated than refused. With no declaration, and with a *different* member declared, the
+        // same edge dangles and the refusal stands.
+        for members in [Vec::new(), vec![member("mistyped")]] {
+            let error = markdown_boundaries_raw(&crossing_capture(), &members)
+                .expect_err("an undeclared member leaves the edge pointing at nothing");
+            assert_eq!(
+                error,
+                MappingError::Invalid {
+                    coordinate: "story/crossing.md".to_owned(),
+                },
+                "the refusal names the document that carries the edge, for members {members:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_graph_defect_that_names_no_document_read_falls_back_to_the_graph() {
+        let orphan = MarkdownRawV1 {
+            nodes: vec![node(
+                "story/orphan.md",
+                "---\nformat: aep.planning-md/1\nid: story:orphan\nkind: story\nstatus: draft\n\
+                 title: Orphan\nrelations:\n- derived_from: epic:absent\nrevision: 1\n---\n",
+            )],
+        };
+        // The defect is located at `artifacts.story:orphan.relations[0]`, which *is* a document
+        // that was read, so it resolves; `epic:absent` is the target and never becomes the
+        // coordinate.
+        assert_eq!(
+            markdown_boundaries_raw(&orphan, &[]).expect_err("an edge to nothing is not a graph"),
+            MappingError::Invalid {
+                coordinate: "story/orphan.md".to_owned(),
+            }
+        );
+        assert_eq!(
+            graph_coordinate(
+                &aep_domain::ValidationErrors::new().with(aep_domain::ValidationError::new(
+                    aep_domain::ValidationCode::UndeclaredReference,
+                    "members.other",
+                    "nothing that was read",
+                )),
+                &BTreeMap::new(),
+            ),
+            "markdown/graph",
+            "a defect naming no document read still names the graph, never the selector"
+        );
+    }
+
+    #[test]
+    fn every_refusal_variant_can_name_its_coordinate() {
+        // The accessor is exhaustive by construction — the compiler refuses a new variant that
+        // does not answer — so this asserts the answer, not the enumeration.
+        for error in [
+            MappingError::Incomplete {
+                coordinate: "story/one.md".to_owned(),
+            },
+            MappingError::Invalid {
+                coordinate: "story/one.md".to_owned(),
+            },
+            MappingError::MissingTerminal {
+                coordinate: "story/one.md".to_owned(),
+            },
+        ] {
+            assert_eq!(error.coordinate(), "story/one.md", "{error}");
+        }
+    }
 }

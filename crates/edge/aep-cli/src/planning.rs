@@ -2207,7 +2207,7 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
 /// A store with no workspace file declares no members, so every member-qualified target is a
 /// dangling edge — which is what makes a misspelled member name a defect rather than a crossing
 /// nobody can check.
-fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
+pub(crate) fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
     // `load_workspace` joins the project directory itself; joining it here too looked right and
     // pointed at `.engineering/.engineering/workspace.yaml`, so every member read as undeclared and
     // every crossing as a dangling edge.

@@ -15,17 +15,20 @@ use aep_contract::migration::{
     BackendKindV1, CommandRefusalCodeV1, CommandRefusalV1, DestinationRequestV2,
     DestinationRequirementsV2, DiagnosticCoordinateV1, DigestV1, DryRunAdmittedV2, DryRunFormatV2,
     DryRunOutcomeV2, DryRunRefusedV1, DryRunResultV2, EventlogSourceCoordinateV1, HistorySummaryV1,
-    HybridPolicyWordsV1, HybridSourceCoordinateV1, InspectionFormatV1, InspectionObservedV1,
-    InspectionOutcomeV1, InspectionReadinessV1, InspectionResultV1, IntentDigestV1,
-    InventoryCountsV1, LegacyRawCaptureV1, MappingFormatV1, MappingIdentityV1,
-    MarkdownSourceCoordinateV1, MigrationIdV1, MigrationIntentFormatV2, MigrationIntentV2,
-    MigrationReceiptV1, ObservationOutcomeV1, PostgresReplicaCoordinateV1, PresenceV1,
-    ProjectVersionV1, ProjectionDriftV1, ProjectionInventoryDigestV1, ProjectionObservationV1,
-    ProjectionWatermarkV1, RebuildFormatV1, RebuildOutcomeV1, RebuildRefusedV1, RebuildResultV1,
-    RebuildUncertainV1, RebuiltV1, RefusedV1, SelectionV1, SelectorDiagnosticV1,
-    SourceCoordinateV1, SourceSnapshotIdV1, SqlReplicaCoordinateV1, SqliteReplicaCoordinateV1,
-    SqliteSourceCoordinateV1, VerificationFormatV1, VerificationMismatchV1, VerificationOutcomeV1,
-    VerificationRefusedV1, VerificationResultV1, VerifiedV1,
+    HybridPolicyWordsV1, HybridSideRootCoordinateV1, HybridSideV1, HybridSourceCoordinateV1,
+    InspectionFormatV1, InspectionObservedV1, InspectionOutcomeV1, InspectionReadinessV1,
+    InspectionResultV1, IntentDigestV1, InventoryCountsV1, LegacyRawCaptureV1,
+    MarkdownPathCoordinateV1, MarkdownRawV1, MarkdownRootCoordinateV1, MappingFormatV1,
+    MappingIdentityV1, MarkdownSourceCoordinateV1, MigrationIdV1, MigrationIntentFormatV2,
+    MigrationIntentV2, MigrationReceiptV1, ObservationOutcomeV1, PhysicalCoordinateV1,
+    PostgresEndpointRootCoordinateV1, PostgresReplicaCoordinateV1, PresenceV1, ProjectVersionV1,
+    ProjectionDriftV1, ProjectionInventoryDigestV1, ProjectionObservationV1, ProjectionWatermarkV1,
+    RebuildFormatV1, RebuildOutcomeV1, RebuildRefusedV1, RebuildResultV1, RebuildUncertainV1,
+    RebuiltV1, RefusedV1, RootCoordinateV1, SelectionV1, SelectorDiagnosticV1, SourceCoordinateV1,
+    SourceDiagnosticV1, SourceSnapshotIdV1, SqlReplicaCoordinateV1, SqliteDatabaseRootCoordinateV1,
+    SqliteReplicaCoordinateV1, SqliteSourceCoordinateV1, VerificationFormatV1,
+    VerificationMismatchV1, VerificationOutcomeV1, VerificationRefusedV1, VerificationResultV1,
+    VerifiedV1,
 };
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
@@ -307,7 +310,7 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
     }
     let histories = match mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
         Ok(value) => value,
-        Err(code) => return apply_refusal(common, migration_id, code),
+        Err(refusal) => return apply_refusal_at(common, migration_id, *refusal),
     };
     if captured.source != PresenceV1::Present(intent.source_coordinate.clone()) {
         return apply_refusal(common, migration_id, CommandRefusalCodeV1::SourceUnreadable);
@@ -533,11 +536,12 @@ fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
     }
     let histories = match mapped_histories_for_source(
         &intent.source_coordinate,
+        &resolved.declared_members(),
         &complete.capture,
         complete.raw_snapshot_id,
     ) {
         Ok(value) => value,
-        Err(code) => return refuse(code),
+        Err(refusal) => return apply_refusal_at(common, migration_id.clone(), *refusal),
     };
     let inputs = aep_planning_migration::ApplyInputs {
         intent,
@@ -564,6 +568,20 @@ fn apply_refusal(
     migration_id: MigrationIdV1,
     code: CommandRefusalCodeV1,
 ) -> ApplyResultV1 {
+    let refusal = selector_refusal(common, code);
+    apply_refusal_at(common, migration_id, refusal)
+}
+
+/// The same refusal, at a coordinate the caller already knows.
+///
+/// Every refusal used to be attached to the selector, whatever produced it. A mapping refusal
+/// reported at `--project` names the file that chose the store rather than the record that did not
+/// map, and the receipt then says neither what failed nor where.
+fn apply_refusal_at(
+    common: &CommonArgs,
+    migration_id: MigrationIdV1,
+    refusal: CommandRefusalV1,
+) -> ApplyResultV1 {
     let last_proved_phase = resolve(common)
         .ok()
         .and_then(|resolved| current_phase_for_migration(&resolved.engineering, &migration_id))
@@ -573,7 +591,7 @@ fn apply_refusal(
         outcome: ApplyOutcomeV1::Refused(ApplyRefusedV1 {
             migration_id,
             last_proved_phase,
-            refusals: vec![selector_refusal(common, code)],
+            refusals: vec![refusal],
         }),
     }
 }
@@ -1210,8 +1228,8 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
             )
         }
     };
-    if let Err(code) = mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
-        return dry_refusal(common, PresenceV1::Present(selection), code);
+    if let Err(refusal) = mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
+        return dry_refusal_at(PresenceV1::Present(selection), *refusal);
     }
     let source_snapshot = SourceSnapshotIdV1(complete.raw_snapshot_id);
     let mut comparison = Vec::new();
@@ -1279,10 +1297,7 @@ fn migration_foreign_content(
 fn capture_refusals(
     observation: &aep_contract::migration::RawCaptureObservationV1,
 ) -> Vec<CommandRefusalV1> {
-    use aep_contract::migration::{
-        CaptureRefusalCodeV1, PhaseResultV1, PhysicalCoordinateV1, RootCoordinateV1,
-        SourceDiagnosticV1,
-    };
+    use aep_contract::migration::{CaptureRefusalCodeV1, PhaseResultV1};
     let fallback = || {
         vec![CommandRefusalV1 {
             code: CommandRefusalCodeV1::SourceUnreadable,
@@ -1328,11 +1343,20 @@ fn dry_refusal(
     selection: PresenceV1<SelectionV1>,
     code: CommandRefusalCodeV1,
 ) -> DryRunResultV2 {
+    let refusal = selector_refusal(common, code);
+    dry_refusal_at(selection, refusal)
+}
+
+/// The same refusal, at a coordinate the caller already knows. See [`apply_refusal_at`].
+fn dry_refusal_at(
+    selection: PresenceV1<SelectionV1>,
+    refusal: CommandRefusalV1,
+) -> DryRunResultV2 {
     DryRunResultV2 {
         format: DryRunFormatV2,
         outcome: DryRunOutcomeV2::Refused(DryRunRefusedV1 {
             selection,
-            refusals: vec![selector_refusal(common, code)],
+            refusals: vec![refusal],
         }),
     }
 }
@@ -1677,6 +1701,16 @@ impl Resolved {
         }
     }
 
+    /// The workspace members declared beside this store.
+    ///
+    /// The same list `planning.rs` hands `graph_in_workspace` for `artifact validate`, `graph`,
+    /// `board` and every other ordinary read. It is read here, at the edge, and handed to the
+    /// mapper as data: the declaration lives beside the store rather than inside it, so it is not
+    /// in the capture, and the mapper reopens nothing.
+    fn declared_members(&self) -> Vec<aep_domain::workspace::MemberName> {
+        crate::planning::declared_members(self.engineering.parent().unwrap_or(&self.engineering))
+    }
+
     fn capture(
         &self,
     ) -> std::result::Result<
@@ -1926,26 +1960,110 @@ fn inventory(report: &StoreReport, unrecorded: bool) -> InventoryFacts {
     }
 }
 
+/// The legacy source itself, as a diagnostic coordinate.
+///
+/// For a refusal that is about the source as a whole rather than one retained record. Still the
+/// source, and still not the selector: `--project` names the file that chose this store, and a
+/// store that does not map is not a selector defect.
+fn source_root_coordinate(source: &SourceCoordinateV1) -> DiagnosticCoordinateV1 {
+    let root = match source {
+        SourceCoordinateV1::Markdown(markdown) => RootCoordinateV1::MarkdownRoot(
+            MarkdownRootCoordinateV1 {
+                root: markdown.root.clone(),
+            },
+        ),
+        SourceCoordinateV1::Sqlite(sqlite) => {
+            RootCoordinateV1::SqliteDatabase(SqliteDatabaseRootCoordinateV1 {
+                database: sqlite.database.clone(),
+            })
+        }
+        SourceCoordinateV1::Postgres(postgres) => {
+            RootCoordinateV1::PostgresEndpoint(PostgresEndpointRootCoordinateV1 {
+                endpoint: PresenceV1::Present(postgres.endpoint.clone()),
+                endpoint_id: PresenceV1::Present(postgres.endpoint_id),
+            })
+        }
+        SourceCoordinateV1::Hybrid(_) => hybrid_root(HybridSideV1::Local),
+        // An Eventlog source is already the destination shape; acquisition refuses it before any
+        // mapping, so this arm names the observation rather than inventing a root.
+        SourceCoordinateV1::Eventlog(_) => RootCoordinateV1::Observation,
+    };
+    DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+        coordinate: PhysicalCoordinateV1::Root(root),
+    })
+}
+
+fn hybrid_root(side: HybridSideV1) -> RootCoordinateV1 {
+    RootCoordinateV1::HybridSide(HybridSideRootCoordinateV1 { side })
+}
+
+fn hybrid_side_coordinate(side: HybridSideV1) -> DiagnosticCoordinateV1 {
+    DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+        coordinate: PhysicalCoordinateV1::Root(hybrid_root(side)),
+    })
+}
+
+fn source_refusal(
+    source: &SourceCoordinateV1,
+    code: CommandRefusalCodeV1,
+) -> Box<CommandRefusalV1> {
+    Box::new(CommandRefusalV1 {
+        code,
+        at: source_root_coordinate(source),
+    })
+}
+
+/// A Markdown mapping refusal, at the coordinate the mapper named.
+///
+/// The mapper's coordinates are store-relative paths of the nodes it read — `story/one.md`,
+/// `journal.jsonl` — plus a few that name the whole read, such as `markdown/graph`. A coordinate
+/// matching a captured node becomes that node; anything else becomes the source root. Nothing is
+/// invented: the node list decides, so a synthetic coordinate is never published as a file path.
+fn markdown_mapping_refusal(
+    source: &SourceCoordinateV1,
+    raw: &MarkdownRawV1,
+    error: &aep_planning_migration::MappingError,
+) -> Box<CommandRefusalV1> {
+    let relative = host_path(Path::new(error.coordinate()));
+    let at = if raw.nodes.iter().any(|node| node.relative == relative) {
+        DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+            coordinate: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 { relative }),
+        })
+    } else {
+        source_root_coordinate(source)
+    };
+    Box::new(CommandRefusalV1 {
+        code: CommandRefusalCodeV1::SemanticMismatch,
+        at,
+    })
+}
+
 fn mapped_histories(
     resolved: &Resolved,
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
-) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, CommandRefusalCodeV1> {
-    mapped_histories_for_source(&resolved.selection.source, capture, snapshot)
+) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, Box<CommandRefusalV1>> {
+    mapped_histories_for_source(
+        &resolved.selection.source,
+        &resolved.declared_members(),
+        capture,
+        snapshot,
+    )
 }
 
 fn mapped_histories_for_source(
     source: &SourceCoordinateV1,
+    members: &[aep_domain::workspace::MemberName],
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
-) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, CommandRefusalCodeV1> {
+) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, Box<CommandRefusalV1>> {
     let histories = match capture {
         LegacyRawCaptureV1::Markdown(raw) => {
             let SourceCoordinateV1::Markdown(_) = source else {
-                return Err(CommandRefusalCodeV1::SemanticMismatch);
+                return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch));
             };
-            aep_planning_migration::markdown_boundaries_raw(raw)
-                .map_err(|_| CommandRefusalCodeV1::SemanticMismatch)?
+            aep_planning_migration::markdown_boundaries_raw(raw, members)
+                .map_err(|error| markdown_mapping_refusal(source, raw, &error))?
         }
         LegacyRawCaptureV1::Sqlite(raw) | LegacyRawCaptureV1::Postgres(raw) => {
             if !matches!(
@@ -1956,38 +2074,46 @@ fn mapped_histories_for_source(
                         LegacyRawCaptureV1::Postgres(_)
                     )
             ) {
-                return Err(CommandRefusalCodeV1::SemanticMismatch);
+                return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch));
             }
             aep_planning_migration::sql_boundaries(raw, &snapshot.as_wire())
-                .map_err(|_| CommandRefusalCodeV1::SemanticMismatch)?
+                .map_err(|_| source_refusal(source, CommandRefusalCodeV1::SemanticMismatch))?
         }
         LegacyRawCaptureV1::Hybrid(raw) => {
             if matches!(&raw.divergences,
                 aep_contract::migration::FileImageV1::Present(value) if !value.bytes.as_bytes().is_empty())
             {
-                return Err(CommandRefusalCodeV1::DivergentHybrid);
+                return Err(Box::new(CommandRefusalV1 {
+                    code: CommandRefusalCodeV1::DivergentHybrid,
+                    at: hybrid_side_coordinate(HybridSideV1::Divergences),
+                }));
             }
             if !matches!(source, SourceCoordinateV1::Hybrid(_)) {
-                return Err(CommandRefusalCodeV1::SemanticMismatch);
+                return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch));
             }
-            let local = aep_planning_migration::markdown_boundaries_raw(&raw.local)
-                .map_err(|_| CommandRefusalCodeV1::SemanticMismatch)?;
+            let local = aep_planning_migration::markdown_boundaries_raw(&raw.local, members)
+                .map_err(|error| markdown_mapping_refusal(source, &raw.local, &error))?;
             let replica = aep_planning_migration::sql_boundaries(&raw.replica, &snapshot.as_wire())
-                .map_err(|_| CommandRefusalCodeV1::SemanticMismatch)?;
+                .map_err(|_| {
+                    Box::new(CommandRefusalV1 {
+                        code: CommandRefusalCodeV1::SemanticMismatch,
+                        at: hybrid_side_coordinate(HybridSideV1::Replica),
+                    })
+                })?;
             let local_terminal = terminal_instances(&local);
             let replica_terminal = terminal_instances(&replica);
             if local_terminal != replica_terminal {
-                return Err(CommandRefusalCodeV1::DivergentHybrid);
+                return Err(source_refusal(source, CommandRefusalCodeV1::DivergentHybrid));
             }
             match raw.policy.authority.as_str() {
                 "local" => local,
                 "replica" => replica,
-                _ => return Err(CommandRefusalCodeV1::SemanticMismatch),
+                _ => return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch)),
             }
         }
     };
     aep_planning_migration::boundaries_with_authoritative_evidence(histories, capture, snapshot)
-        .map_err(|_| CommandRefusalCodeV1::SemanticMismatch)
+        .map_err(|_| source_refusal(source, CommandRefusalCodeV1::SemanticMismatch))
 }
 
 fn terminal_instances(
@@ -2768,6 +2894,343 @@ mod tests {
         fs::write(&selector, selected_bytes).expect("restore selected selector");
 
         let _ = fs::remove_dir_all(project);
+    }
+
+
+    /// The workspace members declared beside the fixture store, read exactly as every ordinary
+    /// planning read command reads them.
+    fn fixture_members(project: &Path) -> Vec<aep_domain::workspace::MemberName> {
+        aep_project::project::load_workspace(project).map_or_else(
+            |_| Vec::new(),
+            |workspace| {
+                workspace.map_or_else(Vec::new, |workspace| {
+                    workspace
+                        .members
+                        .iter()
+                        .map(|member| member.name.clone())
+                        .collect()
+                })
+            },
+        )
+    }
+
+    fn write_crossing_story(planning: &Path, target: &str) {
+        fs::create_dir_all(planning.join("story")).expect("story source");
+        fs::write(
+            planning.join("story/crossing.md"),
+            format!(
+                "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\nstatus: draft\n\
+                 title: A story that names another repository\nrelations:\n\
+                 - informed_by: {target}\nrevision: 1\n---\n# Story\n\nBody.\n"
+            ),
+        )
+        .expect("crossing planning source");
+    }
+
+    fn flattened(value: &impl Serialize) -> String {
+        let bytes = serde_json::to_vec(value).expect("result serialises");
+        let node = OrderedNodeSeed
+            .deserialize(&mut serde_json::Deserializer::from_slice(&bytes))
+            .expect("result flattens");
+        let mut rendered = String::new();
+        flatten("", &node, &mut rendered);
+        rendered
+    }
+
+    /// `story:migration-mapper-reads-the-declared-workspace`.
+    ///
+    /// The AEP store is the only one of six real cutovers that declares workspace members, and it
+    /// carries a relation into one of them. Every ordinary read command builds the graph with the
+    /// declaration and the store is valid; the mapper built it without, so the crossing read as a
+    /// dangling edge and the whole migration was refused.
+    #[test]
+    fn a_relation_crossing_into_a_declared_member_migrates_and_reads_back_unchanged() {
+        let project = std::env::temp_dir().join(format!(
+            "aep-cli-workspace-crossing-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engineering = project.join(".engineering");
+        let planning = engineering.join("planning");
+        let selector = engineering.join("project.yaml");
+        fs::create_dir_all(&planning).expect("planning source");
+        fs::create_dir_all(project.join("protocols")).expect("protocol source");
+        fs::write(
+            &selector,
+            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+        )
+        .expect("legacy selector");
+        // The declaration that makes the crossing a crossing rather than a dangling edge.
+        fs::write(
+            engineering.join("workspace.yaml"),
+            "version: aep.workspace/1\nmembers:\n  - name: other\n    source: ../other\n",
+        )
+        .expect("workspace declaration");
+        write_crossing_story(&planning, "other/story:theirs");
+
+        let members = fixture_members(&project);
+        assert_eq!(members.len(), 1, "the fixture declares exactly one member");
+        let before = MarkdownStore::open(&planning).load();
+        before
+            .graph_in_workspace(members.clone())
+            .expect("the Markdown store is valid under its own declaration");
+        let artifact: aep_domain::artifact::ArtifactId =
+            "story:crossing".parse().expect("artifact id");
+        let source_relations = before
+            .documents
+            .get(&artifact)
+            .expect("the crossing document loaded")
+            .document
+            .frontmatter
+            .relations
+            .clone();
+
+        let common = CommonArgs {
+            project: Some(selector.clone()),
+            format: StoreOutputFormat::Json,
+        };
+        let destination = DestinationRequestV2::ProviderAssigned {
+            logical_scope: AuthorityValueV1::new("planning-workspace-test").expect("scope"),
+            tenant: AuthorityValueV1::new("tenant-workspace-test").expect("tenant"),
+        };
+
+        let preview = dry_run(&common, destination.clone());
+        let DryRunOutcomeV2::Admitted(preview) = preview.outcome else {
+            panic!(
+                "the mapper reads the declaration every ordinary read command reads: {:?}",
+                preview.outcome
+            )
+        };
+        assert_eq!(preview.inventory.subjects, 1);
+        assert_eq!(preview.inventory.relations, 1);
+
+        let applied = apply_with_control(
+            &common,
+            destination,
+            preview.source_snapshot.0,
+            MigrationIdV1::new("cli-workspace-crossing").expect("migration"),
+            &DisposableWriterControl,
+        );
+        let ApplyOutcomeV1::Complete(_) = applied.outcome else {
+            panic!("the declared crossing applies: {:?}", applied.outcome)
+        };
+
+        // The crossing survives migration as the artifact's own relation ...
+        let projected =
+            fs::read_to_string(planning.join("story/crossing.md")).expect("published projection");
+        assert!(
+            projected.contains("- informed_by: other/story:theirs"),
+            "the crossing survives migration: {projected}"
+        );
+        // ... the migrated store still validates under the declaration the Markdown store had ...
+        let after = MarkdownStore::open(&planning).load();
+        assert!(after.is_clean(), "{:?}", after.failures);
+        after
+            .graph_in_workspace(members)
+            .expect("the migrated store is a graph under the same declaration");
+        // ... and the Eventlog arm reads the artifact back identically.
+        let ordinary = resolve(&common).expect("the selected v2 selector reopens");
+        let backend = ordinary
+            .plan
+            .open_backend()
+            .expect("the selected Eventlog authority opens")
+            .expect("a durable backend is selected");
+        let eventlog = crate::planning::report_from_backend(&backend).expect("Eventlog report");
+        assert_eq!(
+            eventlog
+                .documents
+                .get(&artifact)
+                .expect("the crossing artifact is in the Eventlog authority")
+                .document
+                .frontmatter
+                .relations,
+            source_relations,
+            "the Eventlog arm reads the crossing back exactly as the Markdown store held it"
+        );
+
+        let _ = fs::remove_dir_all(project);
+    }
+
+    /// `story:migration-mapper-reads-the-declared-workspace`, second defect.
+    ///
+    /// A mapper refusal was mapped to `semantic_mismatch` at the *selector* coordinate, so the
+    /// receipt named neither the document nor the reason — which is why the first defect took a
+    /// day to find. The selector coordinate belongs to selector failures.
+    #[test]
+    fn a_mapper_refusal_names_the_document_it_read_and_not_the_selector() {
+        let project = std::env::temp_dir().join(format!(
+            "aep-cli-mapper-coordinate-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engineering = project.join(".engineering");
+        let planning = engineering.join("planning");
+        let selector = engineering.join("project.yaml");
+        fs::create_dir_all(&planning).expect("planning source");
+        fs::create_dir_all(project.join("protocols")).expect("protocol source");
+        fs::write(
+            &selector,
+            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+        )
+        .expect("legacy selector");
+        // No workspace declaration, so `other/story:theirs` is a genuinely dangling edge and the
+        // refusal is correct. What it must not do is refuse without saying where.
+        write_crossing_story(&planning, "other/story:theirs");
+
+        let common = CommonArgs {
+            project: Some(selector),
+            format: StoreOutputFormat::Json,
+        };
+        let result = dry_run(
+            &common,
+            DestinationRequestV2::ProviderAssigned {
+                logical_scope: AuthorityValueV1::new("planning-coordinate-test").expect("scope"),
+                tenant: AuthorityValueV1::new("tenant-coordinate-test").expect("tenant"),
+            },
+        );
+        let DryRunOutcomeV2::Refused(ref refused) = result.outcome else {
+            panic!("an undeclared member is a dangling edge and is refused")
+        };
+        assert_eq!(refused.refusals.len(), 1);
+        assert_eq!(
+            refused.refusals[0].code,
+            CommandRefusalCodeV1::SemanticMismatch
+        );
+        assert_eq!(
+            refused.refusals[0].at,
+            DiagnosticCoordinateV1::Source(aep_contract::migration::SourceDiagnosticV1 {
+                coordinate: aep_contract::migration::PhysicalCoordinateV1::MarkdownPath(
+                    aep_contract::migration::MarkdownPathCoordinateV1 {
+                        relative: host_path(Path::new("story/crossing.md")),
+                    }
+                ),
+            }),
+            "a mapper refusal carries the mapper's coordinate, not the selector's"
+        );
+
+        let wire = HexBytesV1::new(b"story/crossing.md".to_vec()).as_wire();
+        let json = serde_json::to_string(&result).expect("result serialises");
+        assert!(
+            json.contains("\"kind\":\"markdown_path\"") && json.contains(&wire),
+            "--format json carries the coordinate as a field: {json}"
+        );
+        let text = flattened(&result);
+        assert!(
+            text.lines().any(|line| line
+                .starts_with("outcome.value.refusals[0].at.value.coordinate.value.relative")
+                && line.contains(&wire)),
+            "plain output carries the coordinate as text: {text}"
+        );
+
+        let _ = fs::remove_dir_all(project);
+    }
+
+
+    /// The mapper names a captured node by its store-relative path, and names a few things that
+    /// are the whole read — `markdown/graph`, `markdown/path` — with words that are not paths.
+    /// Publishing one of those as a file path would be a coordinate nobody can open.
+    #[test]
+    fn a_mapper_coordinate_is_a_captured_node_or_it_is_the_source_root() {
+        let root = host_path(Path::new("/nowhere/.engineering/planning"));
+        let source = SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 { root: root.clone() });
+        let raw = MarkdownRawV1 {
+            nodes: vec![aep_contract::migration::MarkdownNodeV1 {
+                relative: host_path(Path::new("story/one.md")),
+                node: aep_contract::migration::MarkdownNodeKindV1::Regular(
+                    aep_contract::migration::RegularMarkdownNodeV1 {
+                        bytes: HexBytesV1::new(Vec::new()),
+                    },
+                ),
+            }],
+        };
+        let at = |coordinate: &str| {
+            markdown_mapping_refusal(
+                &source,
+                &raw,
+                &aep_planning_migration::MappingError::Invalid {
+                    coordinate: coordinate.to_owned(),
+                },
+            )
+        };
+
+        assert_eq!(
+            at("story/one.md").at,
+            DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+                coordinate: PhysicalCoordinateV1::MarkdownPath(MarkdownPathCoordinateV1 {
+                    relative: host_path(Path::new("story/one.md")),
+                }),
+            }),
+            "a coordinate that is a captured node is published as that node"
+        );
+        for synthetic in ["markdown/graph", "markdown/path", "story/absent.md"] {
+            assert_eq!(
+                at(synthetic).at,
+                DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+                    coordinate: PhysicalCoordinateV1::Root(RootCoordinateV1::MarkdownRoot(
+                        MarkdownRootCoordinateV1 { root: root.clone() }
+                    )),
+                }),
+                "`{synthetic}` names no captured node, so it is not published as a file path"
+            );
+        }
+    }
+
+    /// The class the selector-coordinate defect belonged to: a refusal about the *source* must
+    /// never be reported at the selector. `source_root_coordinate` is exhaustive over
+    /// `SourceCoordinateV1` by construction — a new source kind will not compile until it answers
+    /// — and this asserts every existing answer is a source coordinate.
+    #[test]
+    fn every_legacy_source_kind_names_itself_and_never_the_selector() {
+        let path = host_path(Path::new("/nowhere"));
+        let endpoint = aep_contract::migration::PostgresEndpointV1 {
+            hosts: Vec::new(),
+            database: "planning".to_owned(),
+            schema: "public".to_owned(),
+        };
+        let sources = [
+            SourceCoordinateV1::Markdown(MarkdownSourceCoordinateV1 { root: path.clone() }),
+            SourceCoordinateV1::Sqlite(SqliteSourceCoordinateV1 {
+                database: path.clone(),
+            }),
+            SourceCoordinateV1::Postgres(aep_contract::migration::PostgresSourceCoordinateV1 {
+                endpoint_id: endpoint.endpoint_id(),
+                endpoint,
+            }),
+            SourceCoordinateV1::Hybrid(HybridSourceCoordinateV1 {
+                local_root: path.clone(),
+                replica: SqlReplicaCoordinateV1::Sqlite(SqliteReplicaCoordinateV1 {
+                    database: path.clone(),
+                }),
+                divergence_file: path.clone(),
+                policy: PresenceV1::Missing,
+            }),
+            SourceCoordinateV1::Eventlog(EventlogSourceCoordinateV1 {
+                authority_root: path,
+            }),
+        ];
+        for source in &sources {
+            let refusal = source_refusal(source, CommandRefusalCodeV1::SemanticMismatch);
+            assert!(
+                matches!(refusal.at, DiagnosticCoordinateV1::Source(_)),
+                "a source refusal names the source: {source:?} produced {:?}",
+                refusal.at
+            );
+        }
+        assert_eq!(
+            source_root_coordinate(&sources[0]),
+            DiagnosticCoordinateV1::Source(SourceDiagnosticV1 {
+                coordinate: PhysicalCoordinateV1::Root(RootCoordinateV1::MarkdownRoot(
+                    MarkdownRootCoordinateV1 {
+                        root: host_path(Path::new("/nowhere")),
+                    }
+                )),
+            })
+        );
+        assert_eq!(
+            source_root_coordinate(&sources[3]),
+            hybrid_side_coordinate(HybridSideV1::Local),
+            "a hybrid mapping refusal that is not about one record is about the authoritative side"
+        );
     }
 
     #[test]
