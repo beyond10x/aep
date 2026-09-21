@@ -9,10 +9,13 @@
 
 #![allow(missing_docs)]
 
+#[cfg(test)]
+mod retained_snapshot_tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use aep_backend_entity::{EntityBackend, Identity, PlanningCommit, PlanningStore};
 use entity_core::{Decision, DomainEvent, EntityDefinition, EntityInstance, Registry};
@@ -26,7 +29,9 @@ use entity_eventlog::{
 };
 use entity_eventlog::{Authority, EventlogOperationContext};
 use entity_executor::{BatchAction, CreateRequest, ExecuteRequest};
-use entity_store::asynchronous::{AsyncRecordedReader, CompleteStoreSnapshot, SubjectHistory};
+use entity_store::asynchronous::{
+    AppendOutcome, AsyncRecordedReader, CompleteStoreSnapshot, StoredBatch, SubjectHistory,
+};
 use entity_store::asynchronous::{BatchKey, HistoryOrigin, LegacyEvidence, RecordedEntry, Subject};
 use entity_store::{
     AtomicCommit, EventProvider, Expect, HistoryProvider, RecordedCommit, RecordedObservation,
@@ -431,37 +436,184 @@ pub fn open(
         },
     )
     .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))?;
-    let store = EventlogPlanningStore { bridge, authority };
+    let store = EventlogPlanningStore::new(bridge, authority);
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())
 }
 
-/// Synchronous compatibility facade over the public recorded Eventlog bridge.
-pub struct EventlogPlanningStore {
-    bridge: RecordedEventlogBridge,
-    authority: Authority,
+/// Every provider call an [`EventlogPlanningStore`] makes, named once.
+///
+/// The production implementation forwards to [`RecordedEventlogBridge`]. It is a trait because
+/// the cost of this store is measured in *calls*, not in latency: each read below is one
+/// `capture_tenant` on the authority, and a capture re-reads and re-hashes every bound object —
+/// about 11 MB for the migrated planning store. How many a read path makes is observable only by
+/// counting them, and a test counts them through this.
+pub trait RecordedPlanningProvider {
+    /// One consistent capture of the whole logical store.
+    fn complete_snapshot(&self, scope: &str) -> Result<CompleteStoreSnapshot, SyncReadError>;
+    /// One subject's terminal state.
+    fn load(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError>;
+    /// One subject's mixed history.
+    fn history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError>;
+    /// One previously committed named batch.
+    fn lookup_batch(&self, key: &BatchKey) -> Result<Option<StoredBatch>, SyncReadError>;
+    /// One ordered atomic recorded batch.
+    fn batch(
+        &self,
+        context: EventlogOperationContext,
+        key: BatchKey,
+        actions: Vec<BatchAction>,
+    ) -> Result<AppendOutcome, SyncExecutionError>;
+    /// One observation at a subject's current revision.
+    fn observe(
+        &self,
+        context: EventlogOperationContext,
+        observation: RecordedObservation,
+    ) -> Result<AppendOutcome, SyncExecutionError>;
 }
 
-impl StateProvider for EventlogPlanningStore {
+impl RecordedPlanningProvider for RecordedEventlogBridge {
+    fn complete_snapshot(&self, scope: &str) -> Result<CompleteStoreSnapshot, SyncReadError> {
+        Self::complete_snapshot(self, scope, CallWait::Forever)
+    }
+
+    fn load(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
+        Self::load(self, subject, CallWait::Forever)
+    }
+
+    fn history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
+        Self::history(self, subject, CallWait::Forever)
+    }
+
+    fn lookup_batch(&self, key: &BatchKey) -> Result<Option<StoredBatch>, SyncReadError> {
+        Self::lookup_batch(self, key, CallWait::Forever)
+    }
+
+    fn batch(
+        &self,
+        context: EventlogOperationContext,
+        key: BatchKey,
+        actions: Vec<BatchAction>,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        self.operation(context)
+            .batch(key, actions, CallWait::Forever)
+    }
+
+    fn observe(
+        &self,
+        context: EventlogOperationContext,
+        observation: RecordedObservation,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        self.operation(context)
+            .observe(observation, CallWait::Forever)
+    }
+}
+
+/// Synchronous compatibility facade over the public recorded Eventlog bridge.
+pub struct EventlogPlanningStore<P = RecordedEventlogBridge> {
+    provider: P,
+    authority: Authority,
+    /// The last complete capture this handle took, held until a write goes through this handle.
+    ///
+    /// A complete capture already carries, per subject, both the terminal state `load` answers
+    /// with and the history `history` answers with (`entity-store`'s `SubjectSnapshot`), and it
+    /// costs the provider exactly what a single-subject read costs: one `capture_tenant`. So a
+    /// hydration that asks for `ids` and then reads every subject it named can be one capture
+    /// instead of one per record, and it is also *one* instant rather than one per record.
+    ///
+    /// It is never held across a write through this handle: every write calls [`Self::retire`]
+    /// after appending, so no read answers from a view the write invalidated, and a write that
+    /// reads before it appends — a planning batch validates the legacy boundaries and resolves
+    /// its revision expectations — retires it first as well, so those checks see the authority as
+    /// it is rather than as this handle last saw it.
+    retained: Mutex<Option<Arc<CompleteStoreSnapshot>>>,
+}
+
+impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
+    fn new(provider: P, authority: Authority) -> Self {
+        Self {
+            provider,
+            authority,
+            retained: Mutex::new(None),
+        }
+    }
+
+    /// The complete capture this handle answers from, taking one if it holds none.
+    fn snapshot(&self) -> Result<Arc<CompleteStoreSnapshot>, SyncReadError> {
+        if let Some(held) = self.retained.lock().expect("retained capture").as_ref() {
+            return Ok(Arc::clone(held));
+        }
+        let captured = Arc::new(
+            self.provider
+                .complete_snapshot(&self.authority.logical_scope)?,
+        );
+        let mut slot = self.retained.lock().expect("retained capture");
+        Ok(Arc::clone(slot.get_or_insert(captured)))
+    }
+
+    /// Drops the retained capture. A write through this handle does this on both sides of its
+    /// append.
+    fn retire(&self) {
+        self.retained.lock().expect("retained capture").take();
+    }
+
+    /// One subject's terminal state, from the retained capture when this handle holds one.
+    ///
+    /// A handle that has captured nothing makes the single-subject read instead: one `load` and
+    /// one complete capture cost the provider the same one `capture_tenant`, and the complete one
+    /// additionally materializes every subject, which a caller reading one row never needs.
+    fn terminal(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
+        let held = self.retained.lock().expect("retained capture").clone();
+        match held {
+            Some(snapshot) => Ok(snapshot
+                .histories
+                .iter()
+                .find(|value| value.history.subject == *subject)
+                .map(|value| value.terminal.clone())),
+            None => self.provider.load(subject),
+        }
+    }
+
+    /// One subject's history, from the retained capture when this handle holds one.
+    ///
+    /// A subject the capture does not name gets the empty genesis history the provider answers
+    /// an unknown subject with, so the two paths cannot disagree about an absent subject.
+    fn subject_history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
+        let held = self.retained.lock().expect("retained capture").clone();
+        match held {
+            Some(snapshot) => Ok(snapshot
+                .histories
+                .iter()
+                .find(|value| value.history.subject == *subject)
+                .map_or_else(
+                    || SubjectHistory {
+                        subject: subject.clone(),
+                        origin: HistoryOrigin::Genesis,
+                        records: Vec::new(),
+                    },
+                    |value| value.history.clone(),
+                )),
+            None => self.provider.history(subject),
+        }
+    }
+}
+
+impl<P: RecordedPlanningProvider> StateProvider for EventlogPlanningStore<P> {
     fn load(&self, entity: &str, id: &str) -> Result<Option<EntityInstance>, StoreError> {
         let subject = Subject::new(entity, id).map_err(async_error)?;
-        self.bridge
-            .load(&subject, CallWait::Forever)
+        self.terminal(&subject)
             .map_err(read_error)?
             .map(unpack)
             .transpose()
     }
 
     fn ids(&self, entity: &str) -> Result<Vec<String>, StoreError> {
-        let snapshot = self
-            .bridge
-            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
-            .map_err(read_error)?;
+        let snapshot = self.snapshot().map_err(read_error)?;
         let mut ids: Vec<_> = snapshot
             .histories
-            .into_iter()
+            .iter()
             .filter(|snapshot| snapshot.history.subject.entity == entity)
-            .map(|snapshot| snapshot.history.subject.id)
+            .map(|snapshot| snapshot.history.subject.id.clone())
             .collect();
         ids.sort();
         ids.dedup();
@@ -469,7 +621,7 @@ impl StateProvider for EventlogPlanningStore {
     }
 }
 
-impl EventProvider for EventlogPlanningStore {
+impl<P: RecordedPlanningProvider> EventProvider for EventlogPlanningStore<P> {
     fn events(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
         Ok(self
             .events_in_store_order(entity, id)?
@@ -479,17 +631,14 @@ impl EventProvider for EventlogPlanningStore {
     }
 }
 
-impl HistoryProvider for EventlogPlanningStore {
+impl<P: RecordedPlanningProvider> HistoryProvider for EventlogPlanningStore<P> {
     fn records(
         &self,
         entity: &str,
         id: &str,
     ) -> Result<Vec<entity_store::Envelope<entity_core::DecisionRecord>>, StoreError> {
         let subject = Subject::new(entity, id).map_err(async_error)?;
-        let history = self
-            .bridge
-            .history(&subject, CallWait::Forever)
-            .map_err(read_error)?;
+        let history = self.subject_history(&subject).map_err(read_error)?;
         Ok(history
             .records
             .into_iter()
@@ -502,10 +651,7 @@ impl HistoryProvider for EventlogPlanningStore {
 
     fn observations(&self, entity: &str, id: &str) -> Result<Vec<RecordedObservation>, StoreError> {
         let subject = Subject::new(entity, id).map_err(async_error)?;
-        let history = self
-            .bridge
-            .history(&subject, CallWait::Forever)
-            .map_err(read_error)?;
+        let history = self.subject_history(&subject).map_err(read_error)?;
         Ok(history
             .records
             .into_iter()
@@ -517,7 +663,7 @@ impl HistoryProvider for EventlogPlanningStore {
     }
 }
 
-impl Store for EventlogPlanningStore {
+impl<P: RecordedPlanningProvider> Store for EventlogPlanningStore<P> {
     fn history(&self) -> Option<&dyn HistoryProvider> {
         Some(self)
     }
@@ -567,16 +713,22 @@ impl Store for EventlogPlanningStore {
             observation.envelope.causation.as_ref(),
             &observation.envelope.recorded_at,
         );
-        self.bridge
-            .operation(context)
-            .observe(observation.clone(), CallWait::Forever)
-            .map_err(execution_error)?;
+        // An observation reads nothing before it appends, so only the retained capture behind it
+        // has to go: a read after this must not answer from before it.
+        let outcome = self.provider.observe(context, observation.clone());
+        self.retire();
+        outcome.map_err(execution_error)?;
         let _ = subject;
         Ok(())
     }
 }
 
-impl PlanningStore for EventlogPlanningStore {
+impl<P: RecordedPlanningProvider> PlanningStore for EventlogPlanningStore<P> {
+    /// Commits every member in order or commits none, against the authority as it is now.
+    ///
+    /// The retained capture is retired on both sides of the append: before, so the boundary
+    /// validation and the revision expectations below read the current authority rather than
+    /// whatever this handle last saw; after, so no later read answers from before the write.
     fn commit_planning_batch(
         &mut self,
         commits: &[PlanningCommit],
@@ -584,6 +736,29 @@ impl PlanningStore for EventlogPlanningStore {
         if commits.is_empty() {
             return Ok(None);
         }
+        self.retire();
+        let outcome = self.append_planning_batch(commits);
+        self.retire();
+        outcome
+    }
+
+    fn recover_planning_receipt(
+        &self,
+        key: &str,
+    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError> {
+        Ok(self
+            .provider
+            .lookup_batch(&BatchKey::Named(key.to_owned()))
+            .map_err(read_error)?
+            .map(|batch| batch.receipt))
+    }
+}
+
+impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
+    fn append_planning_batch(
+        &self,
+        commits: &[PlanningCommit],
+    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError> {
         let reserved = self
             .validate_legacy_boundaries()
             .map_err(StoreError::Backend)?;
@@ -652,22 +827,10 @@ impl PlanningStore for EventlogPlanningStore {
             }
         }
         let outcome = self
-            .bridge
-            .operation(context)
-            .batch(BatchKey::Named(key), actions, CallWait::Forever)
+            .provider
+            .batch(context, BatchKey::Named(key), actions)
             .map_err(execution_error)?;
         Ok(outcome.receipt().cloned())
-    }
-
-    fn recover_planning_receipt(
-        &self,
-        key: &str,
-    ) -> Result<Option<entity_store::asynchronous::CommitReceipt>, StoreError> {
-        Ok(self
-            .bridge
-            .lookup_batch(&BatchKey::Named(key.to_owned()), CallWait::Forever)
-            .map_err(read_error)?
-            .map(|batch| batch.receipt))
     }
 }
 
@@ -719,7 +882,7 @@ struct LegacyRosterValue {
     roster_digest: aep_contract::migration::DigestV1,
 }
 
-impl EventlogPlanningStore {
+impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
     /// AEP entity revisions do not advance for evidence, while the containing ER row does.
     /// A retry uses the actual predecessor of its original record, preserving ER's request
     /// comparison instead of rebuilding an expectation from the latest physical revision.
@@ -728,10 +891,7 @@ impl EventlogPlanningStore {
         subject: &Subject,
         record_id: &str,
     ) -> Result<(u64, u64), StoreError> {
-        let history = self
-            .bridge
-            .history(subject, CallWait::Forever)
-            .map_err(read_error)?;
+        let history = self.subject_history(subject).map_err(read_error)?;
         let mut prior = match history.origin {
             HistoryOrigin::Imported(anchor) => Some(anchor.instance),
             HistoryOrigin::Genesis => None,
@@ -781,10 +941,7 @@ impl EventlogPlanningStore {
         id: &str,
     ) -> Result<Vec<(u64, Vec<u8>)>, StoreError> {
         Subject::new(entity, id).map_err(async_error)?;
-        let snapshot = self
-            .bridge
-            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
-            .map_err(read_error)?;
+        let snapshot = self.snapshot().map_err(read_error)?;
         validate_legacy_boundary_snapshot(&snapshot, &self.authority)
             .map_err(StoreError::Backend)?;
         if !selected_history_uses_markdown(&snapshot).map_err(StoreError::Backend)? {
@@ -865,10 +1022,7 @@ impl EventlogPlanningStore {
         id: &str,
     ) -> Result<Vec<(Option<u64>, DomainEvent)>, StoreError> {
         let subject = Subject::new(entity, id).map_err(async_error)?;
-        let history = self
-            .bridge
-            .history(&subject, CallWait::Forever)
-            .map_err(read_error)?;
+        let history = self.subject_history(&subject).map_err(read_error)?;
         let mut events = Vec::new();
         if let HistoryOrigin::Imported(anchor) = history.origin {
             for evidence in anchor.evidence {
@@ -926,10 +1080,7 @@ impl EventlogPlanningStore {
     }
 
     fn read_legacy_evidence(&self) -> Result<Vec<ImportedLegacyEvidence>, StoreError> {
-        let snapshot = self
-            .bridge
-            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
-            .map_err(read_error)?;
+        let snapshot = self.snapshot().map_err(read_error)?;
         validated_legacy_boundary_snapshot(&snapshot, &self.authority)
             .map(|validated| validated.evidence)
             .map_err(StoreError::Backend)
@@ -940,8 +1091,7 @@ impl EventlogPlanningStore {
     /// boundary value cannot silently disable history lookup or collision protection.
     fn validate_legacy_boundaries(&self) -> Result<BTreeSet<String>, String> {
         let snapshot = self
-            .bridge
-            .complete_snapshot(&self.authority.logical_scope, CallWait::Forever)
+            .snapshot()
             .map_err(|error| format!("reading legacy boundary evidence: {error:?}"))?;
         validate_legacy_boundary_snapshot(&snapshot, &self.authority)
     }

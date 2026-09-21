@@ -23,6 +23,7 @@ version = "0.55.0"
 dependencies = [
  "aep-backend-entity",
  "aep-contract",
+ "aep-domain",
  "entity-core",
  "entity-eventlog",
  "entity-executor",
