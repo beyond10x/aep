@@ -129,8 +129,8 @@ belongs in the commit message or in `docs/design/`.
 ### Changed
 
 - The Eventlog providers and the Entity Runtime crates are pinned to the qualified vector
-  `db608cd4152e6a2370e8ef0e3a562d7a829cf34a` and
-  `97d6edfb5cccdadbe142399dc31da7d5d851a529`. The file provider verifies the committed history and
+  `76aad5e3790e302e6c7f348a4fe4d9229cd17bce` and
+  `8569da24405da850544fa92daf1077892a53aac9`. The file provider verifies the committed history and
   every bound object once, when the store is opened, and a later transaction re-checks only what
   changed on disk: it re-reads the raw committed bytes to prove the prefix is still the one it
   verified, and opens no object it does not touch. A command that makes one transaction per
