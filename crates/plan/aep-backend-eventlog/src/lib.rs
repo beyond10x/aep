@@ -31,6 +31,7 @@ use entity_eventlog::{Authority, EventlogOperationContext};
 use entity_executor::{BatchAction, CreateRequest, ExecuteRequest};
 use entity_store::asynchronous::{
     AppendOutcome, AsyncRecordedReader, CompleteStoreSnapshot, StoredBatch, SubjectHistory,
+    SubjectSnapshot,
 };
 use entity_store::asynchronous::{BatchKey, HistoryOrigin, LegacyEvidence, RecordedEntry, Subject};
 use entity_store::{
@@ -509,11 +510,46 @@ impl RecordedPlanningProvider for RecordedEventlogBridge {
     }
 }
 
+/// One complete capture, with the index a single-subject read looks itself up in.
+///
+/// A read names one `(entity, id)` pair — which is exactly a [`Subject`] — and the provider
+/// answers a capture as a flat list of per-subject snapshots. The index is keyed by the whole
+/// subject, so there is no lookup in this type that names only half the key and none that can
+/// fall back on position: a read for one kind cannot be answered with another kind's row, and a
+/// read for a subject the capture does not name resolves to nothing rather than to the first
+/// entry. The capture itself is kept beside it because the scans — `ids`, and the legacy
+/// boundary joins — walk every entry rather than look one up.
+struct RetainedSnapshot {
+    capture: Arc<CompleteStoreSnapshot>,
+    by_subject: BTreeMap<Subject, usize>,
+}
+
+impl RetainedSnapshot {
+    /// Indexes one capture by the subject each of its entries is about.
+    fn index(capture: CompleteStoreSnapshot) -> Self {
+        let by_subject = capture
+            .histories
+            .iter()
+            .enumerate()
+            .map(|(at, value)| (value.history.subject.clone(), at))
+            .collect();
+        Self {
+            capture: Arc::new(capture),
+            by_subject,
+        }
+    }
+
+    /// What this capture holds about exactly the subject asked for, if it names it at all.
+    fn subject(&self, subject: &Subject) -> Option<&SubjectSnapshot> {
+        self.capture.histories.get(*self.by_subject.get(subject)?)
+    }
+}
+
 /// Synchronous compatibility facade over the public recorded Eventlog bridge.
 pub struct EventlogPlanningStore<P = RecordedEventlogBridge> {
     provider: P,
     authority: Authority,
-    /// The last complete capture this handle took, held until a write goes through this handle.
+    /// The complete capture this handle answers from, indexed by subject.
     ///
     /// A complete capture already carries, per subject, both the terminal state `load` answers
     /// with and the history `history` answers with (`entity-store`'s `SubjectSnapshot`), and it
@@ -521,12 +557,28 @@ pub struct EventlogPlanningStore<P = RecordedEventlogBridge> {
     /// hydration that asks for `ids` and then reads every subject it named can be one capture
     /// instead of one per record, and it is also *one* instant rather than one per record.
     ///
-    /// It is never held across a write through this handle: every write calls [`Self::retire`]
-    /// after appending, so no read answers from a view the write invalidated, and a write that
-    /// reads before it appends — a planning batch validates the legacy boundaries and resolves
-    /// its revision expectations — retires it first as well, so those checks see the authority as
-    /// it is rather than as this handle last saw it.
-    retained: Mutex<Option<Arc<CompleteStoreSnapshot>>>,
+    /// **Its life.** It is retained from `open`, which validates the legacy boundaries and so
+    /// takes the first capture before a caller is given anything; it is retired by a write
+    /// through this handle; and the next read after that write captures again. There is no
+    /// reachable state in which a handle a caller holds has captured nothing — [`Self::terminal`]
+    /// and [`Self::subject_history`] still read the provider directly when this slot is empty,
+    /// which is the state between a write and the next read.
+    ///
+    /// **Its scope is one command.** A read answers about the authority as it was at this
+    /// capture's instant, so every read on one handle is mutually consistent, and a row another
+    /// writer appends afterwards is invisible to this handle until a write through it retires the
+    /// capture. That is sound only because no holder in this repository outlives one command:
+    /// `aep serve` holds a `StoreLocation` and opens a handle per request, the writer-control
+    /// `hold` process holds no store, `DrivenPlan` and `FileProjectionPublisher` open a fresh
+    /// handle per call, and `EventlogMutationLedger` holds a path rather than a store. A holder
+    /// that wants to outlive one command must reopen rather than keep one of these alive: this
+    /// type has no way to notice a foreign write.
+    ///
+    /// A subject the capture does not name is never answered out of it — not with the first entry
+    /// it holds, and not with a synthesized empty history. The read falls through to the
+    /// provider, so an unknown subject is answered exactly as the bridge answers it and a subject
+    /// written after the capture is answered as it actually is.
+    retained: Mutex<Option<Arc<RetainedSnapshot>>>,
 }
 
 impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
@@ -540,15 +592,25 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
 
     /// The complete capture this handle answers from, taking one if it holds none.
     fn snapshot(&self) -> Result<Arc<CompleteStoreSnapshot>, SyncReadError> {
+        Ok(Arc::clone(&self.retained_snapshot()?.capture))
+    }
+
+    /// The same capture with its per-subject index, taking one if this handle holds none.
+    fn retained_snapshot(&self) -> Result<Arc<RetainedSnapshot>, SyncReadError> {
         if let Some(held) = self.retained.lock().expect("retained capture").as_ref() {
             return Ok(Arc::clone(held));
         }
-        let captured = Arc::new(
+        let captured = Arc::new(RetainedSnapshot::index(
             self.provider
                 .complete_snapshot(&self.authority.logical_scope)?,
-        );
+        ));
         let mut slot = self.retained.lock().expect("retained capture");
         Ok(Arc::clone(slot.get_or_insert(captured)))
+    }
+
+    /// The capture this handle is holding right now, if it is holding one.
+    fn held(&self) -> Option<Arc<RetainedSnapshot>> {
+        self.retained.lock().expect("retained capture").clone()
     }
 
     /// Drops the retained capture. A write through this handle does this on both sides of its
@@ -557,42 +619,35 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
         self.retained.lock().expect("retained capture").take();
     }
 
-    /// One subject's terminal state, from the retained capture when this handle holds one.
+    /// One subject's terminal state, from the retained capture when that capture names it.
     ///
-    /// A handle that has captured nothing makes the single-subject read instead: one `load` and
-    /// one complete capture cost the provider the same one `capture_tenant`, and the complete one
-    /// additionally materializes every subject, which a caller reading one row never needs.
+    /// Anything else is the provider's to answer: a handle between a write and its next read
+    /// holds no capture, and a capture taken before another writer appended does not name what
+    /// that writer wrote. One `load` and one complete capture cost the provider the same one
+    /// `capture_tenant`, so falling through costs a read that answers about a subject nobody
+    /// captured exactly what the single-subject read cost before this handle held anything.
     fn terminal(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
-        let held = self.retained.lock().expect("retained capture").clone();
-        match held {
-            Some(snapshot) => Ok(snapshot
-                .histories
-                .iter()
-                .find(|value| value.history.subject == *subject)
-                .map(|value| value.terminal.clone())),
+        match self
+            .held()
+            .and_then(|held| held.subject(subject).map(|value| value.terminal.clone()))
+        {
+            Some(terminal) => Ok(Some(terminal)),
             None => self.provider.load(subject),
         }
     }
 
-    /// One subject's history, from the retained capture when this handle holds one.
+    /// One subject's history, from the retained capture when that capture names it.
     ///
-    /// A subject the capture does not name gets the empty genesis history the provider answers
-    /// an unknown subject with, so the two paths cannot disagree about an absent subject.
+    /// A subject the capture does not name is asked of the provider rather than answered out of
+    /// the capture: an absent subject is the bridge's `history` answer for one, never a genesis
+    /// this handle synthesized, so "this capture does not name it" is never served as "nothing
+    /// ever wrote it".
     fn subject_history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
-        let held = self.retained.lock().expect("retained capture").clone();
-        match held {
-            Some(snapshot) => Ok(snapshot
-                .histories
-                .iter()
-                .find(|value| value.history.subject == *subject)
-                .map_or_else(
-                    || SubjectHistory {
-                        subject: subject.clone(),
-                        origin: HistoryOrigin::Genesis,
-                        records: Vec::new(),
-                    },
-                    |value| value.history.clone(),
-                )),
+        match self
+            .held()
+            .and_then(|held| held.subject(subject).map(|value| value.history.clone()))
+        {
+            Some(history) => Ok(history),
             None => self.provider.history(subject),
         }
     }

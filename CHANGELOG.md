@@ -15,17 +15,20 @@ belongs in the commit message or in `docs/design/`.
   asks the store for the ids of each of its four kinds and then reads every id it was given, and
   every one of those reads was a separate capture of the whole authority — which re-reads and
   re-hashes every bound object, so the same bytes were read once per record. The store now holds
-  the complete capture its first read takes and answers the reads that follow from it, until a
-  write goes through the same handle retires it. Counted through the provider on a three-artifact
-  authority, one open went from **11 provider reads to 1** (5 complete captures, 3 terminal reads
-  and 3 history reads, to a single complete capture); the cost of an open was `5 + 2N` captures
-  for `N` artifacts and is now 1. It is also one consistent instant rather than one per record. A
-  handle that has captured nothing still makes the single-subject read for a single-subject
-  question, which costs the authority the same one capture and materializes nothing else. The
-  three commit paths and `observe` retire the held capture, and a commit retires it before its own
-  validation as well, so a write is never decided against, and no read ever answers from, an
-  authority the write has already changed. Markdown, hybrid, SQLite and Postgres plans are
-  unchanged.
+  the complete capture opening the plan takes — opening validates the legacy boundaries, and that
+  is the capture — and answers the reads that follow from it. Counted through the provider on a
+  three-artifact authority, one open went from **11 provider reads to 1** (5 complete captures, 3
+  terminal reads and 3 history reads, to a single complete capture); the cost of an open was
+  `5 + 2N` captures for `N` artifacts and is now 1. It is also one consistent instant rather than
+  one per record: every read on one plan handle answers about the authority as it was when that
+  handle opened, and a caller that wants a later instant opens the plan again. A subject the
+  capture does not name — one nothing ever wrote, or one another writer added after the capture
+  was taken — is read from the authority rather than answered out of the capture, so an unknown
+  artifact is answered exactly as the authority answers it and never as one that was never
+  written. The three commit paths and `observe` retire the held capture, and a commit retires it
+  before its own validation as well, so a write is never decided against, and no read ever
+  answers from, an authority the write has already changed; the read after a write captures
+  again. Markdown, hybrid, SQLite and Postgres plans are unchanged.
 
 - `plan artifact validate` on an Eventlog plan no longer reconciles documents against the legacy
   `journal.jsonl` left under the projection by migration, which reported every governed move as
