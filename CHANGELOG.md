@@ -11,6 +11,44 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- `plan store migrate apply` imports a store in time proportional to its size instead of to its
+  square. The import asked the provider to establish one legacy boundary at a time, and each ask
+  captured and re-verified the whole destination twice, so every further subject cost more than the
+  last: on a copy of a 448-artifact planning store — **7,810 imported boundaries**, 17.4 per
+  artifact, because every source journal record contributes an evidence pair — the import made
+  **15,620 captures** and ran for hours. It now establishes the whole batch through one call, which
+  takes one capture to verify against, one atomic append group, and one capture to verify the
+  result: **3 captures for the import, whatever its size**, and every blob bound inside the group's
+  own barrier rather than on its own path.
+
+  Measured on this workstation (i9-10900K, no SHA-NI), three runs each on a fresh copy, in process
+  against a disposable authority:
+
+  | store | artifacts | imported boundaries | apply before | apply after |
+  | --- | ---: | ---: | ---: | ---: |
+  | ESS | 448 | 7,810 | ~8.5 h (projected from the measured curve; the real cutover was abandoned at 4 h 39 m) | **118.8 s · 124.4 s · 128.9 s** |
+  | Eventlog | 64 | 1,014 | 353.1 s | **10.5 s · 10.6 s** |
+
+  Seconds per imported boundary no longer rise with the number already imported: on a synthetic
+  fixture it fell from 15.6 ms at 64 subjects to 11.9 ms at 256, where before it rose from 66.6 ms
+  to 91.7 ms.
+
+  What the migration writes is unchanged. On the same 64-artifact copy, the batched and the
+  unbatched import produce byte-identical projected documents and the same
+  `projection_inventory_digest`, `source_config_digest` and mapping digests; the receipt fields that
+  differ between them differ between two batched runs as well, because they carry the freshly minted
+  authority identity of each run.
+
+  This needs Entity Runtime `b652c6ca` and Eventlog `7fbd37cf`.
+
+- `plan store migrate apply` publishes its projection from the capture it already took to verify
+  the import, instead of capturing the authority three more times. Publishing opened the store it
+  renders from, asked the authority which files it had captured, and asked whether the watermark
+  was already committed — each a full capture, and the migration had just captured that same
+  authority with nothing written to it since. On the 448-artifact copy the projection phase fell
+  from **61.7 s to 35.7 s** and CPU for the whole apply from **117.6 s to 90.3 s**; captures made
+  through the provider boundary fell from 11 to 9. The published documents are byte-identical.
+
 - A relation qualified with **this store's own** declared member name is a local edge again, on
   every path that reads one. A workspace file that names its own repository is the ordinary shape —
   this one's names `engineering-protocols` with `source: ..`, deliberately — and under it

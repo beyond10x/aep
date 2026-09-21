@@ -331,6 +331,90 @@ fn opening_a_populated_authority_costs_one_capture_not_one_per_record() {
     );
 }
 
+/// A handle opened on a capture its caller already holds asks the provider for nothing at all.
+///
+/// One capture per open is the floor only for a caller that has none. The migration has one: it
+/// captures the destination to verify what it imported, and the projection that follows opens the
+/// same authority with nothing written to it in between. That open re-read and re-hashed every
+/// bound blob — on the 448-artifact store, 7,815 of them and 174 MB — to be told what the
+/// verification capture had already said.
+///
+/// The count here is **zero**, not one, and that is the whole property: `1` is what this costs
+/// without a seeded capture, and the case above measures that same open at `1`.
+#[test]
+fn opening_on_a_capture_the_caller_holds_costs_the_provider_nothing() {
+    let provider = CountingProvider::default();
+    for n in 1..=3 {
+        let (subject, instance) = artifact(n);
+        provider.put(subject, instance);
+    }
+
+    // The caller's capture — a migration's verification snapshot, taken once.
+    let taken = store(provider.clone())
+        .snapshot()
+        .expect("the caller captures the authority once");
+    let after_taking = provider.calls();
+    assert_eq!(
+        after_taking.reads(),
+        1,
+        "the caller's own capture is one read: {after_taking:?}"
+    );
+
+    // Exactly what `open_with_snapshot` does with it.
+    let handle = store(provider.clone());
+    handle.seed(CompleteStoreSnapshot::clone(&taken));
+    handle
+        .validate_legacy_boundaries()
+        .expect("no legacy boundaries to disagree with");
+    let backend = EntityBackend::over(handle).expect("the seeded store hydrates");
+    drop(backend);
+
+    assert_eq!(
+        provider.calls(),
+        after_taking,
+        "opening and hydrating on a capture the caller already holds must reach the provider \
+         zero further times; it reached it {:?} against {after_taking:?} before",
+        provider.calls()
+    );
+}
+
+/// A seeded handle answers what an unseeded one answers, subject for subject.
+///
+/// The saving is only worth taking if the answers are the same ones. A capture handed in is the
+/// same shape as a capture taken, so a read served from it cannot differ — this is the case that
+/// says so rather than assuming it.
+#[test]
+fn a_seeded_handle_answers_exactly_what_a_capturing_handle_answers() {
+    let provider = CountingProvider::default();
+    for n in 1..=3 {
+        let (subject, instance) = artifact(n);
+        provider.put(subject, instance);
+    }
+    let taken = store(provider.clone())
+        .snapshot()
+        .expect("the caller captures the authority once");
+
+    let capturing = store(provider.clone());
+    let seeded = store(provider.clone());
+    seeded.seed(CompleteStoreSnapshot::clone(&taken));
+
+    let ids = capturing.ids(STORED_AS).expect("ids");
+    assert_eq!(ids, seeded.ids(STORED_AS).expect("seeded ids"));
+    assert!(!ids.is_empty(), "the fixture has subjects to compare");
+    for id in &ids {
+        assert_eq!(
+            capturing.load(STORED_AS, id).expect("load"),
+            seeded.load(STORED_AS, id).expect("seeded load"),
+            "terminal state of {id} differs between a taken and a handed-in capture"
+        );
+        assert_eq!(
+            capturing.records(STORED_AS, id).expect("records"),
+            seeded.records(STORED_AS, id).expect("seeded records"),
+            "history of {id} differs between a taken and a handed-in capture"
+        );
+    }
+}
+
 /// The retained capture is per handle, not per call: a second read of the same thing is free.
 #[test]
 fn a_second_read_after_a_capture_asks_the_provider_nothing() {

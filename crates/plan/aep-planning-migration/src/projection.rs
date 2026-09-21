@@ -17,6 +17,7 @@ use aep_domain::entity::EntityRef;
 
 use crate::durable::{ProjectionError, ProjectionPublication, ProjectionPublisher};
 use entity_eventlog::{Authority, EventlogOperationContext};
+use entity_store::asynchronous::CompleteStoreSnapshot;
 use time::OffsetDateTime;
 
 const PROJECTION_OWNERSHIP_FILE: &str = ".aep-projection-ownership.json";
@@ -49,6 +50,15 @@ pub struct FileProjectionPublisher {
     authority_path: PathBuf,
     authority: AuthorityCoordinateV1,
     projection_root: PathBuf,
+    /// A complete capture of this authority the caller already holds, if it holds one.
+    ///
+    /// Publishing reads the authority three times — to open the store it renders from, to learn
+    /// which files the authority itself captured, and to see whether this watermark is already
+    /// committed — and a migration's caller has just captured that same authority to verify what
+    /// it imported, with nothing written to it since. Each of those reads costs a full capture:
+    /// on a 448-artifact store, 7,815 blobs and 174 MB re-read and re-hashed to learn what the
+    /// verification capture already said.
+    held: Option<CompleteStoreSnapshot>,
 }
 
 pub struct StagedProjection {
@@ -77,6 +87,27 @@ impl FileProjectionPublisher {
             authority_path,
             authority,
             projection_root,
+            held: None,
+        }
+    }
+
+    /// [`Self::new`], publishing from a capture the caller already took of this authority.
+    ///
+    /// The caller asserts that nothing has been written to the authority since it took `held`.
+    /// A migration can: it captures to verify its import, and between that capture and this call
+    /// it renames the authority directory, writes its own phase journal and replaces the
+    /// selector — none of which is a write to the authority.
+    pub fn with_snapshot(
+        authority_path: PathBuf,
+        authority: AuthorityCoordinateV1,
+        projection_root: PathBuf,
+        held: CompleteStoreSnapshot,
+    ) -> Self {
+        Self {
+            authority_path,
+            authority,
+            projection_root,
+            held: Some(held),
         }
     }
 
@@ -85,12 +116,21 @@ impl FileProjectionPublisher {
         &self,
         authority_snapshot: AuthoritySnapshotIdV1,
     ) -> Result<StagedProjection, ProjectionError> {
-        let backend = aep_backend_eventlog::open(
-            self.authority_path.clone(),
-            self.authority.logical_scope.as_str().to_owned(),
-            self.authority.tenant.as_str().to_owned(),
-            self.authority.stream_identity.as_str().to_owned(),
-        )
+        let backend = match self.held.clone() {
+            Some(held) => aep_backend_eventlog::open_with_snapshot(
+                self.authority_path.clone(),
+                self.authority.logical_scope.as_str().to_owned(),
+                self.authority.tenant.as_str().to_owned(),
+                self.authority.stream_identity.as_str().to_owned(),
+                held,
+            ),
+            None => aep_backend_eventlog::open(
+                self.authority_path.clone(),
+                self.authority.logical_scope.as_str().to_owned(),
+                self.authority.tenant.as_str().to_owned(),
+                self.authority.stream_identity.as_str().to_owned(),
+            ),
+        }
         .map_err(|_| ProjectionError::NotPublished)?;
         let page = block_on(backend.query(&EntityQuery {
             organisation: Some(aep_backend_markdown::backend::ORGANISATION.to_owned()),
@@ -149,15 +189,18 @@ impl FileProjectionPublisher {
             owned.push((relative, bytes, OWNED_FILE_MODE));
         }
         owned.sort_by(|left, right| left.0.cmp(&right.0));
-        let complete = aep_backend_eventlog::complete_file_snapshot(
-            &self.authority_path,
-            Authority {
-                logical_scope: self.authority.logical_scope.as_str().to_owned(),
-                tenant: self.authority.tenant.as_str().to_owned(),
-                stream_identity: self.authority.stream_identity.as_str().to_owned(),
-            },
-        )
-        .map_err(|_| ProjectionError::NotPublished)?;
+        let complete = match self.held.clone() {
+            Some(held) => held,
+            None => aep_backend_eventlog::complete_file_snapshot(
+                &self.authority_path,
+                Authority {
+                    logical_scope: self.authority.logical_scope.as_str().to_owned(),
+                    tenant: self.authority.tenant.as_str().to_owned(),
+                    stream_identity: self.authority.stream_identity.as_str().to_owned(),
+                },
+            )
+            .map_err(|_| ProjectionError::NotPublished)?,
+        };
         let known_watermarks = projection_watermarks(&complete, &self.authority);
         let captured_owned = captured_markdown_files(&complete)?;
         let preserved_foreign_paths = preserve_foreign(
@@ -201,14 +244,24 @@ impl FileProjectionPublisher {
             tenant: self.authority.tenant.as_str().to_owned(),
             stream_identity: self.authority.stream_identity.as_str().to_owned(),
         };
-        let recovering = aep_backend_eventlog::read_file_control(
-            self.authority_path.clone(),
-            authority.clone(),
-            aep_backend_eventlog::PROJECTION_METADATA_AS,
-            &staged.identity,
-        )
-        .map_err(|_| ProjectionError::Uncertain)?
-        .is_some();
+        // Whether this exact watermark is already committed. `read_file_control` answers it with
+        // a fresh capture of the whole authority plus the subject's named reservation batch; only
+        // the existence of the subject is read here, and a capture the caller already holds names
+        // every subject the authority has.
+        let recovering = match &self.held {
+            Some(held) => held.histories.iter().any(|subject| {
+                subject.history.subject.entity == aep_backend_eventlog::PROJECTION_METADATA_AS
+                    && subject.history.subject.id == staged.identity
+            }),
+            None => aep_backend_eventlog::read_file_control(
+                self.authority_path.clone(),
+                authority.clone(),
+                aep_backend_eventlog::PROJECTION_METADATA_AS,
+                &staged.identity,
+            )
+            .map_err(|_| ProjectionError::Uncertain)?
+            .is_some(),
+        };
         aep_backend_eventlog::write_file_control(
             self.authority_path.clone(),
             authority,
@@ -1169,6 +1222,89 @@ mod tests {
         assert_ne!(
             stale_reconstruction, covered,
             "removing W cannot hide any later business or control subject"
+        );
+    }
+
+    /// Publishing from a capture the caller holds writes what publishing from a fresh one writes.
+    ///
+    /// Speed is the cheap half. `with_snapshot` reads the authority through a capture it was
+    /// handed instead of three it takes, and the only thing that makes that worth doing is that
+    /// the documents on disk afterwards are the same documents. Two fixtures rather than one,
+    /// because the first publication writes its watermark to the authority and a second
+    /// publication would no longer be reading an unchanged one.
+    #[test]
+    fn publishing_from_a_held_capture_writes_what_publishing_from_a_fresh_one_writes() {
+        let capturing = Fixture::new();
+        capturing.create_story();
+        let fresh = FileProjectionPublisher::new(
+            capturing.authority_path.clone(),
+            capturing.authority.clone(),
+            capturing.projection_root.clone(),
+        );
+        let (capturing_id, _) = crate::durable::authority_snapshot_identity(
+            &capturing.authority,
+            &capturing.snapshot(),
+        )
+        .expect("identity of the captured authority");
+        let from_fresh = fresh.publish(capturing_id).expect("fresh publication");
+
+        let seeded = Fixture::new();
+        seeded.create_story();
+        let held = seeded.snapshot();
+        let (seeded_id, _) = crate::durable::authority_snapshot_identity(&seeded.authority, &held)
+            .expect("identity of the held authority");
+        let reused = FileProjectionPublisher::with_snapshot(
+            seeded.authority_path.clone(),
+            seeded.authority.clone(),
+            seeded.projection_root.clone(),
+            held,
+        );
+        let from_held = reused
+            .publish(seeded_id)
+            .expect("publication from a held capture");
+
+        assert_eq!(
+            from_fresh.inventory_digest, from_held.inventory_digest,
+            "the inventory a publication describes does not depend on where its capture came from"
+        );
+        assert_eq!(
+            from_fresh.replaced_owned_paths, from_held.replaced_owned_paths,
+            "the same owned paths are published either way"
+        );
+        assert_eq!(
+            from_fresh.preserved_foreign_paths, from_held.preserved_foreign_paths,
+            "the same foreign paths are preserved either way"
+        );
+
+        let documents = |root: &Path| {
+            let mut found = BTreeMap::new();
+            let mut pending = vec![root.to_path_buf()];
+            while let Some(directory) = pending.pop() {
+                for entry in fs::read_dir(&directory).expect("published directory") {
+                    let path = entry.expect("published entry").path();
+                    if path.is_dir() {
+                        pending.push(path);
+                    } else if path.extension().is_some_and(|kind| kind == "md") {
+                        let relative = path
+                            .strip_prefix(root)
+                            .expect("published under the root")
+                            .to_string_lossy()
+                            .into_owned();
+                        found.insert(relative, fs::read(&path).expect("published document"));
+                    }
+                }
+            }
+            found
+        };
+        let published = documents(&capturing.projection_root);
+        assert!(
+            !published.is_empty(),
+            "the fixture publishes at least one document to compare"
+        );
+        assert_eq!(
+            published,
+            documents(&seeded.projection_root),
+            "every published document is byte-identical whichever capture it was rendered from"
         );
     }
 

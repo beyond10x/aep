@@ -790,10 +790,15 @@ where
             preserved_foreign_paths: 0,
         }
     } else {
-        let projection = crate::projection::FileProjectionPublisher::new(
+        // The capture taken to verify the import describes the authority this projection reads,
+        // and nothing has been written to the authority since: the phases between are a rename of
+        // its directory, this migration's own phase journal and the selector file. Publishing
+        // from it rather than re-capturing is three fewer full captures of every bound blob.
+        let projection = crate::projection::FileProjectionPublisher::with_snapshot(
             input.destination_path.clone(),
             bound_authority.clone(),
             input.projection_path.clone(),
+            snapshot.clone(),
         );
         let publication = projection.publish(authority_snapshot)?;
         after_effect(MigrationPhaseV1::ProjectionPublished)?;

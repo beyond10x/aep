@@ -9,6 +9,7 @@
 
 #![allow(missing_docs)]
 
+pub mod counting;
 #[cfg(test)]
 mod retained_snapshot_tests;
 
@@ -196,25 +197,47 @@ pub fn provision_file(
     })
 }
 
+/// [`import_file_anchors`], with the caller between this crate and the backend — see
+/// [`with_async_store_through`].
+pub fn import_file_anchors_through<W>(
+    path: &Path,
+    authority: Authority,
+    context: EventlogOperationContext,
+    histories: Vec<SubjectHistory>,
+    wrap: W,
+) -> Result<Vec<bool>, String>
+where
+    W: FnOnce(
+        Arc<dyn entity_eventlog::EventlogBackend>,
+    ) -> Arc<dyn entity_eventlog::EventlogBackend>,
+{
+    with_async_store_through(path, authority, wrap, |store| async move {
+        let outcomes = store
+            .operation(context)
+            .import_anchors(histories)
+            .await
+            .map_err(|error| format!("importing Eventlog boundary: {error:?}"))?;
+        Ok(outcomes
+            .into_iter()
+            .map(|outcome| outcome.replayed)
+            .collect())
+    })
+}
+
 /// Imports exact legacy subject boundaries into an already provisioned file authority.
+///
+/// The whole batch is one call. Asking once per subject cost one full capture of the destination
+/// per subject and one transaction per subject, so a migration paid work proportional to what it
+/// had already imported for every further subject: the 7,810 boundaries of a 448-artifact store
+/// measured at hours rather than seconds. `import_anchors` writes the same anchors, blob keys and
+/// receipts in the same subject streams, under one capture and one atomic append group.
 pub fn import_file_anchors(
     path: &Path,
     authority: Authority,
     context: EventlogOperationContext,
     histories: Vec<SubjectHistory>,
 ) -> Result<Vec<bool>, String> {
-    with_async_store(path, authority, |store| async move {
-        let operation = store.operation(context);
-        let mut replayed = Vec::with_capacity(histories.len());
-        for history in histories {
-            let outcome = operation
-                .import_anchor(history)
-                .await
-                .map_err(|error| format!("importing Eventlog boundary: {error:?}"))?;
-            replayed.push(outcome.replayed);
-        }
-        Ok(replayed)
-    })
+    import_file_anchors_through(path, authority, context, histories, |backend| backend)
 }
 
 /// Obtains the adapter's provider-complete logical snapshot.
@@ -386,6 +409,28 @@ where
     F: FnOnce(EventlogRecordedStore) -> Fut,
     Fut: std::future::Future<Output = Result<T, String>>,
 {
+    with_async_store_through(path, authority, |backend| backend, operation)
+}
+
+/// `with_async_store`, with the caller between this crate and the backend it opens.
+///
+/// The one caller that needs this is a test counting what an operation costs the provider — see
+/// [`crate::counting::CountingBackend`]. `wrap` sees the same backend the ordinary path builds,
+/// and the ordinary path is this function with `wrap` as the identity, so a counted run and an
+/// uncounted one differ by the counter and nothing else.
+pub fn with_async_store_through<T, F, Fut, W>(
+    path: &Path,
+    authority: Authority,
+    wrap: W,
+    operation: F,
+) -> Result<T, String>
+where
+    F: FnOnce(EventlogRecordedStore) -> Fut,
+    Fut: std::future::Future<Output = Result<T, String>>,
+    W: FnOnce(
+        Arc<dyn entity_eventlog::EventlogBackend>,
+    ) -> Arc<dyn entity_eventlog::EventlogBackend>,
+{
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(|error| format!("constructing Eventlog operation runtime: {error}"))?;
@@ -399,7 +444,7 @@ where
             .attach_inline_existing(Arc::new(ErRecordedProjector::new()))
             .await
             .map_err(|error| format!("attaching Eventlog projection: {error}"))?;
-        let backend: Arc<dyn entity_eventlog::EventlogBackend> = concrete;
+        let backend = wrap(concrete as Arc<dyn entity_eventlog::EventlogBackend>);
         let store = EventlogRecordedStore::open(backend, authority, CAPTURE_LIMITS)
             .await
             .map_err(|error| format!("opening recorded Eventlog authority: {error}"))?;
@@ -438,6 +483,49 @@ pub fn open(
     )
     .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))?;
     let store = EventlogPlanningStore::new(bridge, authority);
+    store.validate_legacy_boundaries()?;
+    EntityBackend::over(store).map_err(|error| error.to_string())
+}
+
+/// [`open`], answering from a capture the caller already took.
+///
+/// The handle retains `snapshot` instead of taking one, so opening and every read that follows
+/// cost the authority nothing — including the legacy-boundary validation, which is checked
+/// against the supplied capture exactly as it is against one this handle took.
+///
+/// The caller is asserting that `snapshot` is a complete capture of *this* authority and that
+/// nothing has been written to it since. That is the same claim a handle makes about its own
+/// retained capture; the difference is only who took it.
+///
+/// # Errors
+/// The bridge refusing to start, or the supplied capture failing legacy-boundary validation.
+pub fn open_with_snapshot(
+    path: PathBuf,
+    logical_scope: String,
+    tenant: String,
+    stream_identity: String,
+    snapshot: CompleteStoreSnapshot,
+) -> Result<EventlogBackend, String> {
+    let authority = Authority {
+        logical_scope,
+        tenant,
+        stream_identity,
+    };
+    let registry = registry()?;
+    let bridge = RecordedEventlogBridge::start(
+        registry,
+        EventlogRecordedStoreOwner::File {
+            path,
+            authority: authority.clone(),
+            limits: CAPTURE_LIMITS,
+        },
+        BridgeConfig {
+            queue_capacity: NonZeroU16::new(32).expect("nonzero queue"),
+        },
+    )
+    .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))?;
+    let store = EventlogPlanningStore::new(bridge, authority);
+    store.seed(snapshot);
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())
 }
@@ -606,6 +694,19 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
         ));
         let mut slot = self.retained.lock().expect("retained capture");
         Ok(Arc::clone(slot.get_or_insert(captured)))
+    }
+
+    /// Seeds this handle's retained capture with one its caller already holds.
+    ///
+    /// The caller's obligation is the one [`Self::retained`] already documents for a capture this
+    /// handle took itself: it describes the authority at one instant, and nothing written after
+    /// that instant is visible through this handle. A migration is the case this exists for — it
+    /// captures the destination to verify what it imported, and the projection that follows reads
+    /// the same authority with nothing written to it in between, so a second capture of 7,815
+    /// blobs re-reads and re-hashes 174 MB to learn what the first one already said.
+    fn seed(&self, capture: CompleteStoreSnapshot) {
+        *self.retained.lock().expect("retained capture") =
+            Some(Arc::new(RetainedSnapshot::index(capture)));
     }
 
     /// The capture this handle is holding right now, if it is holding one.

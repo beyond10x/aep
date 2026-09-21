@@ -696,7 +696,7 @@ dependencies = [
 [[package]]
 name = "entity-core"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "serde",
  "serde_json",
@@ -705,7 +705,7 @@ dependencies = [
 [[package]]
 name = "entity-eventlog"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-executor",
@@ -723,7 +723,7 @@ dependencies = [
 [[package]]
 name = "entity-executor"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -733,7 +733,7 @@ dependencies = [
 [[package]]
 name = "entity-postgres"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-query",
@@ -746,7 +746,7 @@ dependencies = [
 [[package]]
 name = "entity-query"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -757,7 +757,7 @@ dependencies = [
 [[package]]
 name = "entity-remote"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -768,7 +768,7 @@ dependencies = [
 [[package]]
 name = "entity-sqlite"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -780,7 +780,7 @@ dependencies = [
 [[package]]
 name = "entity-store"
 version = "0.18.1"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=8569da24405da850544fa92daf1077892a53aac9#8569da24405da850544fa92daf1077892a53aac9"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=b652c6cacfb577ba427e5058600beceb501e64b9#b652c6cacfb577ba427e5058600beceb501e64b9"
 dependencies = [
  "entity-core",
  "fs2",
@@ -797,7 +797,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "eventlog-core"
 version = "0.2.1"
-source = "git+https://github.com/beyond10x/eventlog?rev=76aad5e3790e302e6c7f348a4fe4d9229cd17bce#76aad5e3790e302e6c7f348a4fe4d9229cd17bce"
+source = "git+https://github.com/beyond10x/eventlog?rev=7fbd37cf8c6d914670554fde358207b1d612a982#7fbd37cf8c6d914670554fde358207b1d612a982"
 dependencies = [
  "serde",
  "serde_json",
@@ -810,7 +810,7 @@ dependencies = [
 [[package]]
 name = "eventlog-file"
 version = "0.2.1"
-source = "git+https://github.com/beyond10x/eventlog?rev=76aad5e3790e302e6c7f348a4fe4d9229cd17bce#76aad5e3790e302e6c7f348a4fe4d9229cd17bce"
+source = "git+https://github.com/beyond10x/eventlog?rev=7fbd37cf8c6d914670554fde358207b1d612a982#7fbd37cf8c6d914670554fde358207b1d612a982"
 dependencies = [
  "eventlog-core",
  "serde",
