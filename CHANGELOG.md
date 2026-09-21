@@ -126,6 +126,19 @@ belongs in the commit message or in `docs/design/`.
 - Public harness integration, concepts and transcript guides now route model-backed runs and
   native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
 
+### Changed
+
+- The Eventlog providers and the Entity Runtime crates are pinned to the qualified vector
+  `db608cd4152e6a2370e8ef0e3a562d7a829cf34a` and
+  `97d6edfb5cccdadbe142399dc31da7d5d851a529`. The file provider verifies the committed history and
+  every bound object once, when the store is opened, and a later transaction re-checks only what
+  changed on disk: it re-reads the raw committed bytes to prove the prefix is still the one it
+  verified, and opens no object it does not touch. A command that makes one transaction per
+  artifact no longer pays the whole store for each one — `plan artifact list` over a 64-artifact
+  migrated plan made 218 transactions, 227,452 object reads and 2,863 MB of I/O for a 16 MB store.
+  Stored bytes, guarded append, receipts, recovery and every refusal are unchanged; a committed
+  frame damaged in place after the store was opened still refuses without altering the history.
+
 ## [0.55.0] — 2026-09-10
 
 ### Added

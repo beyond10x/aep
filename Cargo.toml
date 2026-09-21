@@ -77,16 +77,16 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 # every runtime crate; `cargo xtask deps` (the gate's `dep-check`) fails if the lockfile ever says otherwise.
 # These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
 # reproducible and upgrades reversible across the kernel and every provider.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99", features = ["file", "sync-bridge"] }
-entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "8b1757365f628338cf697f53deb9ce76acd25a99" }
-eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "f802eb8b01b44ba04a93394b20f0c07391f7757a" }
-eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "f802eb8b01b44ba04a93394b20f0c07391f7757a" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529", features = ["file", "sync-bridge"] }
+entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "97d6edfb5cccdadbe142399dc31da7d5d851a529" }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "db608cd4152e6a2370e8ef0e3a562d7a829cf34a" }
+eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "db608cd4152e6a2370e8ef0e3a562d7a829cf34a" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
