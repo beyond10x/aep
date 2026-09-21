@@ -30,6 +30,13 @@ belongs in the commit message or in `docs/design/`.
   answers from, an authority the write has already changed; the read after a write captures
   again. Markdown, hybrid, SQLite and Postgres plans are unchanged.
 
+  Measured on a migrated 64-artifact planning store — `events.jsonl` 3,273,126 bytes, 1,113 bound
+  objects totalling 11,384,593 bytes — against the previous build of this CLI, the two binaries
+  interleaved on the same copy: `plan artifact list` **76.2 s to 1.25 s** (medians of three;
+  77.6 / 74.5 / 76.2 against 1.25 / 1.21 / 1.26) and `plan artifact history` **74.6 s to 1.14 s**.
+  `plan store verify` is 2.47 s either way, because it was always one transaction. The JSON that
+  `list` returns is byte-identical between the two.
+
 - `plan artifact validate` on an Eventlog plan no longer reconciles documents against the legacy
   `journal.jsonl` left under the projection by migration, which reported every governed move as
   drift and a forged revision while `plan store verify` answered `current`. Drift on an Eventlog
