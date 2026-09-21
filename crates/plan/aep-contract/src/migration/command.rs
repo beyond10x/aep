@@ -278,6 +278,13 @@ pub enum ConfigFieldV1 {
     Profiles,
     Schemas,
     Providers,
+    /// `.engineering/workspace.yaml`, the members this repository declares.
+    ///
+    /// Beside the selector rather than inside it, and read by every command that judges a
+    /// cross-repository relation. A file that exists and does not parse is refused at this
+    /// coordinate, so the receipt names the file that is wrong instead of an artifact document
+    /// that is not.
+    Workspace,
 }
 
 /// Durable migration component coordinate.
@@ -441,7 +448,19 @@ pub struct SelectionV1 {
 pub struct InventoryCountsV1 {
     pub subjects: u64,
     pub entities: u64,
+    /// Relation records the migration imports.
+    ///
+    /// Counted from what the mapper will produce, not from the source frontmatter. A declared
+    /// relation whose target is another workspace member has no destination entity in the
+    /// authority, so it is never a record here — it is a `workspace_crossings`, and the two sum to
+    /// what the source declares.
     pub relations: u64,
+    /// Declared relations whose target is a member the workspace declares.
+    ///
+    /// They survive as the authored relation data retained in the subject entity, not as relation
+    /// records. Reported separately so an operator's receipt cannot promise a record the migration
+    /// will not deliver: on the AEP store, 564 authored relations are 563 records and 1 crossing.
+    pub workspace_crossings: u64,
     pub audit_records: u64,
     pub applied_commands: u64,
     pub complete_envelopes: u64,

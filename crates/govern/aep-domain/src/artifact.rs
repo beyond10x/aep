@@ -1310,6 +1310,27 @@ impl ArtifactRelation {
             .into(),
         )
     }
+
+    /// Whether this edge leaves the manifest for a member `members` declares.
+    ///
+    /// The one spelling of the rule. [`ArtifactGraph::build_in_workspace`] asks it to decide that
+    /// a target outside this manifest is not a defect, and a migration asks it to decide that such
+    /// an edge is a *crossing* rather than a relation record it is going to import — two questions
+    /// that have to have the same answer, because a receipt promising a record the mapper will not
+    /// produce is a promise nobody can check afterwards.
+    ///
+    /// A target naming a member this workspace does **not** declare is not a crossing: that is a
+    /// misspelled member name, and it stays a dangling edge.
+    pub fn crosses_to_a_declared_member<'a, M>(&self, members: M) -> bool
+    where
+        M: IntoIterator<Item = &'a MemberName>,
+    {
+        self.target.id().member().is_some_and(|member| {
+            members
+                .into_iter()
+                .any(|declared| declared.as_str() == member)
+        })
+    }
 }
 
 impl fmt::Display for ArtifactRelation {
@@ -2510,9 +2531,7 @@ impl ArtifactGraph {
                 // could be hidden behind a `/`, and a misspelled member name passed silently in a
                 // plain single-repository store.
                 let crosses_to_a_declared_member =
-                    relation.target.id().member().is_some_and(|member| {
-                        self.members.iter().any(|known| known.as_str() == member)
-                    });
+                    relation.crosses_to_a_declared_member(&self.members);
                 if !crosses_to_a_declared_member
                     && !self.artifacts.contains_key(relation.target.id())
                 {

@@ -304,23 +304,34 @@
     },
     "ConfigFieldV1": {
       "description": "Project configuration field coordinate.",
-      "type": "string",
-      "enum": [
-        "version",
-        "store",
-        "planning_scope",
-        "planning_tenant",
-        "planning_identity",
-        "protocol",
-        "profile",
-        "protocols",
-        "artifacts",
-        "task",
-        "state",
-        "principles",
-        "profiles",
-        "schemas",
-        "providers"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "version",
+            "store",
+            "planning_scope",
+            "planning_tenant",
+            "planning_identity",
+            "protocol",
+            "profile",
+            "protocols",
+            "artifacts",
+            "task",
+            "state",
+            "principles",
+            "profiles",
+            "schemas",
+            "providers"
+          ]
+        },
+        {
+          "description": "`.engineering/workspace.yaml`, the members this repository declares.\n\nBeside the selector rather than inside it, and read by every command that judges a cross-repository relation. A file that exists and does not parse is refused at this coordinate, so the receipt names the file that is wrong instead of an artifact document that is not.",
+          "type": "string",
+          "enum": [
+            "workspace"
+          ]
+        }
       ]
     },
     "DiagnosticCoordinateV1": {
@@ -692,7 +703,8 @@
         "entities",
         "raw_evidence_items",
         "relations",
-        "subjects"
+        "subjects",
+        "workspace_crossings"
       ],
       "properties": {
         "applied_commands": {
@@ -731,11 +743,18 @@
           "minimum": 0.0
         },
         "relations": {
+          "description": "Relation records the migration imports.\n\nCounted from what the mapper will produce, not from the source frontmatter. A declared relation whose target is another workspace member has no destination entity in the authority, so it is never a record here — it is a `workspace_crossings`, and the two sum to what the source declares.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
         },
         "subjects": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "workspace_crossings": {
+          "description": "Declared relations whose target is a member the workspace declares.\n\nThey survive as the authored relation data retained in the subject entity, not as relation records. Reported separately so an operator's receipt cannot promise a record the migration will not deliver: on the AEP store, 564 authored relations are 563 records and 1 crossing.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0

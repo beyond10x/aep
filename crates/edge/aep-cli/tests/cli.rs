@@ -1060,6 +1060,69 @@ fn a_repository_with_no_workspace_file_is_not_an_error() {
     );
 }
 
+/// A workspace file that exists and does not parse is refused, naming the file and the reason.
+///
+/// `story:migration-mapper-reads-the-declared-workspace`, amended acceptance, item 3, on the read
+/// side. **Unknown differs from false** (`AGENTS.md` invariant 5): read as *this store declares no
+/// members*, a mistyped declaration turned every crossing into a dangling edge and `validate`
+/// named each innocent artifact document instead of the one file that is wrong. The migration and
+/// the read commands share one reader, so they refuse the same way.
+#[test]
+fn an_unparseable_workspace_file_is_refused_naming_the_file_and_the_reason() {
+    let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("workspace-unparseable");
+    let _ = std::fs::remove_dir_all(&root);
+    let planning = root.join(".engineering/planning/story");
+    std::fs::create_dir_all(&planning).expect("scratch store");
+    std::fs::create_dir_all(root.join("protocols")).expect("scratch protocols");
+    std::fs::write(
+        root.join(".engineering/project.yaml"),
+        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+    )
+    .expect("selector");
+    // A closed format with one key misspelled: the mistake `deny_unknown_fields` exists to catch,
+    // and the one an operator makes editing a workspace by hand.
+    std::fs::write(
+        root.join(".engineering/workspace.yaml"),
+        "version: aep.workspace/1\nmembers:\n  - name: other\n    sourcz: ../other\n",
+    )
+    .expect("declaration");
+    std::fs::write(
+        planning.join("crossing.md"),
+        "---\nformat: aep.planning-md/1\nid: story:crossing\nkind: story\nstatus: draft\n\
+         title: A story that names another repository\nrelations:\n\
+         - informed_by: other/story:theirs\nrevision: 1\n---\n",
+    )
+    .expect("crossing source");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args(["plan", "artifact", "validate", "--store"])
+        .arg(root.join(".engineering/planning"))
+        .output()
+        .expect("the protocol binary runs");
+    let printed = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !output.status.success(),
+        "a declaration that does not parse is a refusal, not a clean store: {printed}"
+    );
+    assert!(
+        printed.contains("workspace.yaml"),
+        "the refusal names the file that is wrong: {printed}"
+    );
+    assert!(
+        printed.contains("sourcz"),
+        "the refusal names the parse error: {printed}"
+    );
+    assert!(
+        !printed.contains("story/crossing.md"),
+        "the refusal does not name the artifact document, which is correct: {printed}"
+    );
+}
+
 /// Builds a two-member workspace on disk and returns its root.
 fn two_member_workspace(name: &str, docs: &[(&str, &str, &str)]) -> std::path::PathBuf {
     let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);

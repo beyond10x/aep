@@ -534,9 +534,15 @@ fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
     if complete.raw_snapshot_id != requested_snapshot {
         return refuse(CommandRefusalCodeV1::SnapshotChanged);
     }
+    let members = match resolved.declared_members() {
+        Ok(value) => value,
+        Err(_) => {
+            return apply_refusal_at(common, migration_id.clone(), *workspace_refusal());
+        }
+    };
     let histories = match mapped_histories_for_source(
         &intent.source_coordinate,
-        &resolved.declared_members(),
+        &members,
         &complete.capture,
         complete.raw_snapshot_id,
     ) {
@@ -897,7 +903,21 @@ fn inspect(common: &CommonArgs) -> InspectionResultV1 {
     if matches!(resolved.plan, crate::planning::Plan::Eventlog { .. }) {
         return inspect_eventlog(common, resolved);
     }
-    match resolved.inventory().map(|facts| (resolved, facts)) {
+    let members = match resolved.declared_members() {
+        Ok(value) => value,
+        Err(_) => {
+            return InspectionResultV1 {
+                format: InspectionFormatV1,
+                outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                    refusals: vec![*workspace_refusal()],
+                }),
+            }
+        }
+    };
+    match resolved
+        .inventory(&members)
+        .map(|facts| (resolved, facts))
+    {
         Ok((resolved, facts)) => InspectionResultV1 {
             format: InspectionFormatV1,
             outcome: InspectionOutcomeV1::Observed(InspectionObservedV1 {
@@ -1173,7 +1193,16 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
         }
     };
     let selection = resolved.selection.clone();
-    let facts = match resolved.inventory() {
+    // Read once, at the edge, before anything counts or maps. A declaration that does not parse is
+    // refused here at the file that is wrong rather than at whichever artifact document would then
+    // have read as a dangling edge.
+    let members = match resolved.declared_members() {
+        Ok(value) => value,
+        Err(_) => {
+            return dry_refusal_at(PresenceV1::Present(selection), *workspace_refusal());
+        }
+    };
+    let facts = match resolved.inventory(&members) {
         Ok(facts) if facts.clean => facts,
         Ok(_) => {
             return dry_refusal(
@@ -1707,7 +1736,14 @@ impl Resolved {
     /// `board` and every other ordinary read. It is read here, at the edge, and handed to the
     /// mapper as data: the declaration lives beside the store rather than inside it, so it is not
     /// in the capture, and the mapper reopens nothing.
-    fn declared_members(&self) -> Vec<aep_domain::workspace::MemberName> {
+    ///
+    /// # Errors
+    ///
+    /// A `workspace.yaml` that exists and does not parse. Refused here rather than read as *this
+    /// store declares no members*: that reading turns every crossing into a dangling edge and
+    /// produces a receipt naming an artifact document that is correct, which is byte-identical to
+    /// the receipt a store with no declaration gets. Unknown differs from false.
+    fn declared_members(&self) -> Result<Vec<aep_domain::workspace::MemberName>> {
         crate::planning::declared_members(self.engineering.parent().unwrap_or(&self.engineering))
     }
 
@@ -1768,7 +1804,10 @@ impl Resolved {
         }
     }
 
-    fn inventory(&self) -> Result<InventoryFacts> {
+    fn inventory(
+        &self,
+        members: &[aep_domain::workspace::MemberName],
+    ) -> Result<InventoryFacts> {
         let report = match &self.plan {
             crate::planning::Plan::Markdown { root }
             | crate::planning::Plan::Hybrid { root, .. } => {
@@ -1787,6 +1826,7 @@ impl Resolved {
                 self.plan,
                 crate::planning::Plan::Markdown { .. } | crate::planning::Plan::Hybrid { .. }
             ),
+            members,
         ))
     }
 }
@@ -1936,18 +1976,38 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
     })
 }
 
-fn inventory(report: &StoreReport, unrecorded: bool) -> InventoryFacts {
+/// What the migration will import, counted as two kinds rather than one.
+///
+/// `relations` used to be every authored relation in the source frontmatter, and the mapper
+/// imports only those whose target is itself a captured document: on a store that declares members
+/// and carries a crossing, the receipt promised one relation record per crossing more than the
+/// authority ever received, and no count taken afterwards revealed it, because the post-migration
+/// read agrees with the larger number through the retained body copy. The crossings are counted
+/// here in their own right — not dropped — so the two figures still add up to what the source
+/// declares and an operator can check either one.
+fn inventory(
+    report: &StoreReport,
+    unrecorded: bool,
+    members: &[aep_domain::workspace::MemberName],
+) -> InventoryFacts {
     let subjects = report.documents.len() as u64;
-    let relations = report
-        .documents
-        .values()
-        .map(|stored| stored.document.frontmatter.relations.len() as u64)
-        .sum();
+    let mut relations = 0_u64;
+    let mut workspace_crossings = 0_u64;
+    for stored in report.documents.values() {
+        for relation in &stored.document.frontmatter.relations {
+            if relation.crosses_to_a_declared_member(members) {
+                workspace_crossings += 1;
+            } else {
+                relations += 1;
+            }
+        }
+    }
     InventoryFacts {
         inventory: InventoryCountsV1 {
             subjects,
             entities: subjects,
             relations,
+            workspace_crossings,
             raw_evidence_items: report.files_read as u64,
             ..InventoryCountsV1::default()
         },
@@ -2038,17 +2098,28 @@ fn markdown_mapping_refusal(
     })
 }
 
+/// A `workspace.yaml` that exists and does not parse, as a refusal.
+///
+/// At the file that is wrong. Read as *this store declares no members* it produced a refusal
+/// byte-identical to the one a store with no declaration gets — `semantic_mismatch` naming
+/// whichever artifact document happened to carry the first crossing — so the operator was pointed
+/// at a document that is correct and told nothing about the file that is not.
+fn workspace_refusal() -> Box<CommandRefusalV1> {
+    Box::new(CommandRefusalV1 {
+        code: CommandRefusalCodeV1::InvalidProject,
+        at: DiagnosticCoordinateV1::Config(aep_contract::migration::ConfigDiagnosticV1 {
+            field: aep_contract::migration::ConfigFieldV1::Workspace,
+        }),
+    })
+}
+
 fn mapped_histories(
     resolved: &Resolved,
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
 ) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, Box<CommandRefusalV1>> {
-    mapped_histories_for_source(
-        &resolved.selection.source,
-        &resolved.declared_members(),
-        capture,
-        snapshot,
-    )
+    let members = resolved.declared_members().map_err(|_| workspace_refusal())?;
+    mapped_histories_for_source(&resolved.selection.source, &members, capture, snapshot)
 }
 
 fn mapped_histories_for_source(
@@ -2944,6 +3015,9 @@ mod tests {
     /// declaration and the store is valid; the mapper built it without, so the crossing read as a
     /// dangling edge and the whole migration was refused.
     #[test]
+    // One ordered cutover: admission, the receipt's two counts, the authority's relation surface,
+    // the retained relation data and the read back. Splitting it would measure five stores.
+    #[allow(clippy::too_many_lines)]
     fn a_relation_crossing_into_a_declared_member_migrates_and_reads_back_unchanged() {
         let project = std::env::temp_dir().join(format!(
             "aep-cli-workspace-crossing-{}-{}",
@@ -3002,7 +3076,16 @@ mod tests {
             )
         };
         assert_eq!(preview.inventory.subjects, 1);
-        assert_eq!(preview.inventory.relations, 1);
+        // The receipt promises what the migration delivers. The one authored relation is a
+        // crossing, so it is counted as one — not as a relation record the authority will never
+        // receive — and the two counts still sum to what the source declares.
+        assert_eq!(preview.inventory.relations, 0);
+        assert_eq!(preview.inventory.workspace_crossings, 1);
+        assert_eq!(
+            preview.inventory.relations + preview.inventory.workspace_crossings,
+            source_relations.len() as u64,
+            "every authored relation is counted exactly once"
+        );
 
         let applied = apply_with_control(
             &common,
@@ -3048,8 +3131,577 @@ mod tests {
             "the Eventlog arm reads the crossing back exactly as the Markdown store held it"
         );
 
+        // ... the authority's own relation surface is asserted, so this case can no longer pass
+        // by the projection's body merge alone. A crossing has no destination entity here, so the
+        // authority holds no `aep.relation` row for it — that is the model boundary, stated — and
+        // what carries it across is the authored relation data retained in the subject's body.
+        {
+            use aep_contract::query::{QueryService, RelationQuery};
+
+            let locator = aep_domain::entity::EntityLocator::new(
+                aep_backend_markdown::backend::ORGANISATION,
+                aep_backend_markdown::backend::SPACE,
+                artifact.namespace(),
+                artifact.name(),
+            )
+            .expect("the crossing artifact has an address");
+            let entity = block_on(QueryService::resolve(&backend, &locator))
+                .expect("the crossing artifact is in the migrated authority");
+            let edges = block_on(QueryService::relations(
+                &backend,
+                &RelationQuery {
+                    source: Some(aep_domain::entity::EntityRef::new(entity.clone())),
+                    ..RelationQuery::default()
+                },
+            ))
+            .expect("the authority answers for the edges leaving the crossing artifact");
+            assert!(
+                edges.items.is_empty(),
+                "a relation record naming a foreign workspace member is a model change this \
+                 cutover does not make: {:?}",
+                edges.items
+            );
+            let envelope = block_on(QueryService::get(
+                &backend,
+                &aep_domain::entity::EntityRef::new(entity),
+                aep_contract::QueryConsistency::Current,
+            ))
+            .expect("the crossing subject reads back");
+            let body = serde_json::to_value(&envelope.data).expect("the subject body serialises");
+            assert_eq!(
+                body["relations"],
+                serde_json::to_value(&source_relations).expect("the authored relations serialise"),
+                "the crossing survives migration as the authored relation data in the subject's \
+                 body: {body}"
+            );
+        }
+
+
         let _ = fs::remove_dir_all(project);
     }
+
+    /// `story:migration-mapper-reads-the-declared-workspace`, amended acceptance, item 3.
+    ///
+    /// The receipt names the file that is wrong. A `workspace.yaml` that exists and does not parse
+    /// used to be read as *this store declares no members*, which turned the crossing into a
+    /// dangling edge and produced `semantic_mismatch` at whichever artifact document carried it —
+    /// a refusal byte-identical to the one a store with no declaration at all gets, pointing the
+    /// operator at a document that is correct.
+    #[test]
+    fn an_unparseable_declaration_is_refused_at_the_workspace_file() {
+        let project = std::env::temp_dir().join(format!(
+            "aep-cli-unparseable-declaration-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engineering = project.join(".engineering");
+        let planning = engineering.join("planning");
+        let selector = engineering.join("project.yaml");
+        fs::create_dir_all(&planning).expect("planning source");
+        fs::create_dir_all(project.join("protocols")).expect("protocol source");
+        fs::write(
+            &selector,
+            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+        )
+        .expect("legacy selector");
+        fs::write(
+            engineering.join("workspace.yaml"),
+            "version: aep.workspace/1\nmembers:\n  - name: other\n    sourcz: ../other\n",
+        )
+        .expect("a declaration with one key misspelled");
+        write_crossing_story(&planning, "other/story:theirs");
+
+        let common = CommonArgs {
+            project: Some(selector),
+            format: StoreOutputFormat::Json,
+        };
+        let result = dry_run(
+            &common,
+            DestinationRequestV2::ProviderAssigned {
+                logical_scope: AuthorityValueV1::new("planning-declaration-test").expect("scope"),
+                tenant: AuthorityValueV1::new("tenant-declaration-test").expect("tenant"),
+            },
+        );
+        let _ = fs::remove_dir_all(&project);
+
+        let DryRunOutcomeV2::Refused(ref refused) = result.outcome else {
+            panic!("a declaration that does not parse is refused, not read as an empty one")
+        };
+        assert_eq!(refused.refusals.len(), 1);
+        assert_eq!(
+            refused.refusals[0].code,
+            CommandRefusalCodeV1::InvalidProject,
+            "the store is not semantically wrong; its workspace declaration is"
+        );
+        assert_eq!(
+            refused.refusals[0].at,
+            DiagnosticCoordinateV1::Config(aep_contract::migration::ConfigDiagnosticV1 {
+                field: aep_contract::migration::ConfigFieldV1::Workspace,
+            }),
+            "the refusal names `workspace.yaml`, not an artifact document and not the selector"
+        );
+    }
+
+
+    /// Both arms of one cutover of a store that declares a member and carries a crossing into it.
+    ///
+    /// The migration runs in process through [`apply_with_control`] against a disposable writer,
+    /// which is the same call `plan store migrate apply` makes. Each read-path case below opens
+    /// the *same* fixture twice — once as the Markdown store, once as the Eventlog authority the
+    /// migration produced — and compares the value that read path builds, not a rendering of it.
+    struct CrossingArms {
+        project: PathBuf,
+        planning: PathBuf,
+        common: CommonArgs,
+        members: Vec<aep_domain::workspace::MemberName>,
+        artifact: aep_domain::artifact::ArtifactId,
+    }
+
+    impl CrossingArms {
+        fn build(name: &str) -> Self {
+            let project = std::env::temp_dir().join(format!(
+                "aep-cli-crossing-arms-{name}-{}-{}",
+                std::process::id(),
+                NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+            ));
+            let engineering = project.join(".engineering");
+            let planning = engineering.join("planning");
+            let selector = engineering.join("project.yaml");
+            fs::create_dir_all(&planning).expect("planning source");
+            fs::create_dir_all(project.join("protocols")).expect("protocol source");
+            fs::write(
+                &selector,
+                "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+            )
+            .expect("legacy selector");
+            fs::write(
+                engineering.join("workspace.yaml"),
+                "version: aep.workspace/1\nmembers:\n  - name: other\n    source: ../other\n",
+            )
+            .expect("workspace declaration");
+            write_one_story(&planning, "A local story");
+            write_crossing_story(&planning, "other/story:theirs");
+
+            let members = crate::planning::declared_members(&project)
+                .expect("the fixture declaration parses");
+            assert_eq!(members.len(), 1, "the fixture declares exactly one member");
+            Self {
+                project,
+                planning,
+                common: CommonArgs {
+                    project: Some(selector),
+                    format: StoreOutputFormat::Json,
+                },
+                members,
+                artifact: "story:crossing".parse().expect("artifact id"),
+            }
+        }
+
+        /// The location every ordinary read command would resolve for this store.
+        fn location(&self) -> crate::planning::StoreLocation {
+            crate::planning::StoreLocation::at(Some(self.planning.clone()), None)
+        }
+
+        /// The Markdown arm, opened the way the read commands open it.
+        fn markdown(&self, with_backend: bool) -> crate::planning::Opened {
+            crate::planning::open_plan(
+                crate::planning::Plan::Markdown {
+                    root: self.planning.clone(),
+                },
+                &self.location(),
+                with_backend,
+            )
+            .expect("the Markdown arm opens")
+        }
+
+        /// Runs the cutover in process, exactly as `plan store migrate apply` runs it.
+        fn migrate(&self) {
+            let destination = DestinationRequestV2::ProviderAssigned {
+                logical_scope: AuthorityValueV1::new("planning-arms-test").expect("scope"),
+                tenant: AuthorityValueV1::new("tenant-arms-test").expect("tenant"),
+            };
+            let preview = dry_run(&self.common, destination.clone());
+            let DryRunOutcomeV2::Admitted(preview) = preview.outcome else {
+                panic!("the declared crossing is admitted: {:?}", preview.outcome)
+            };
+            let applied = apply_with_control(
+                &self.common,
+                destination,
+                preview.source_snapshot.0,
+                MigrationIdV1::new("cli-crossing-arms").expect("migration"),
+                &DisposableWriterControl,
+            );
+            let ApplyOutcomeV1::Complete(_) = applied.outcome else {
+                panic!("the declared crossing applies: {:?}", applied.outcome)
+            };
+        }
+
+        /// The Eventlog arm, opened the way the read commands open it once the selector is v2.
+        fn eventlog(&self, with_backend: bool) -> crate::planning::Opened {
+            let resolved = resolve(&self.common).expect("the selected v2 selector reopens");
+            crate::planning::open_plan(resolved.plan, &self.location(), with_backend)
+                .expect("the Eventlog arm opens")
+        }
+
+        fn discard(self) {
+            let _ = fs::remove_dir_all(&self.project);
+        }
+    }
+
+    /// The crossing, as a read path's own value spells it, on whichever arm.
+    fn crossing_targets(value: &serde_json::Value) -> Vec<String> {
+        value
+            .as_array()
+            .expect("a read path writes relations as an array")
+            .iter()
+            .map(|relation| relation["target"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    }
+
+    /// `story:migration-mapper-reads-the-declared-workspace`, amended acceptance, read path 1 of 5.
+    ///
+    /// `show` builds what it prints with [`crate::planning::shown_from`]. The crossing has no
+    /// destination entity in the migrated authority and therefore no `aep.relation` row, so the
+    /// only thing that can carry it across is the authored relation data retained in the subject
+    /// entity's body. This asserts that `show` answers identically on both arms.
+    #[test]
+    fn show_lists_the_crossing_identically_on_both_arms() {
+        let arms = CrossingArms::build("show");
+        let config = aep_project::project::load_config(&arms.project).ok();
+        let before = arms.markdown(false);
+        let markdown = serde_json::to_value(crate::planning::shown_from(
+            before
+                .report
+                .documents
+                .get(&arms.artifact)
+                .expect("the crossing document loaded"),
+            config.as_ref(),
+        ))
+        .expect("`show` serialises");
+        drop(before);
+
+        arms.migrate();
+
+        let after = arms.eventlog(false);
+        let eventlog = serde_json::to_value(crate::planning::shown_from(
+            after
+                .report
+                .documents
+                .get(&arms.artifact)
+                .expect("the crossing artifact is in the Eventlog authority"),
+            config.as_ref(),
+        ))
+        .expect("`show` serialises");
+        drop(after);
+        arms.discard();
+
+        assert_eq!(
+            crossing_targets(&markdown["relations"]),
+            vec!["other/story:theirs".to_owned()],
+            "the Markdown arm is the control and must hold the crossing: {markdown}"
+        );
+        assert_eq!(
+            markdown["relations"], eventlog["relations"],
+            "`show` lists the crossing identically on both arms"
+        );
+    }
+
+    /// Read path 2 of 5: `list --format json`.
+    ///
+    /// `Listed::relations` is a documented `jq` shape, so a crossing missing from it is a consumer
+    /// reading a shorter list after a cutover than before it.
+    #[test]
+    fn list_json_lists_the_crossing_identically_on_both_arms() {
+        let arms = CrossingArms::build("list");
+        let ladders = arms.location().lifecycles().unwrap_or_default();
+
+        let before = arms.markdown(false);
+        let blocked = crate::planning::blockers_by_target(&before.report, ladders.lifecycles());
+        let markdown = serde_json::to_value(
+            crate::planning::select(&before.report, &blocked, None, None, None)
+                .expect("`list` selects"),
+        )
+        .expect("`list --format json` serialises");
+        drop(before);
+
+        arms.migrate();
+
+        let after = arms.eventlog(false);
+        let blocked = crate::planning::blockers_by_target(&after.report, ladders.lifecycles());
+        let eventlog = serde_json::to_value(
+            crate::planning::select(&after.report, &blocked, None, None, None)
+                .expect("`list` selects"),
+        )
+        .expect("`list --format json` serialises");
+        drop(after);
+        arms.discard();
+
+        let row_of = |listed: &serde_json::Value| -> serde_json::Value {
+            listed
+                .as_array()
+                .expect("`list` writes an array")
+                .iter()
+                .find(|row| row["id"] == "story:crossing")
+                .expect("the crossing artifact is listed")
+                .clone()
+        };
+        assert_eq!(
+            crossing_targets(&row_of(&markdown)["relations"]),
+            vec!["other/story:theirs".to_owned()],
+            "the Markdown arm is the control and must hold the crossing: {markdown}"
+        );
+        assert_eq!(
+            row_of(&markdown)["relations"],
+            row_of(&eventlog)["relations"],
+            "`list --format json` lists the crossing identically on both arms"
+        );
+    }
+
+    /// Read path 3 of 5: `graph`.
+    ///
+    /// The graph is the read that refused the whole migration before this unit, so it is the one
+    /// that must not quietly answer with one edge fewer afterwards.
+    #[test]
+    fn graph_lists_the_crossing_identically_on_both_arms() {
+        let arms = CrossingArms::build("graph");
+
+        let before = arms.markdown(false);
+        let markdown = serde_json::to_value(
+            before
+                .report
+                .graph_in_workspace(arms.members.clone())
+                .expect("the Markdown store is a graph under its own declaration"),
+        )
+        .expect("`graph --format json` serialises");
+        drop(before);
+
+        arms.migrate();
+
+        let after = arms.eventlog(false);
+        let eventlog = serde_json::to_value(
+            after
+                .report
+                .graph_in_workspace(arms.members.clone())
+                .expect("the migrated store is a graph under the same declaration"),
+        )
+        .expect("`graph --format json` serialises");
+        drop(after);
+        arms.discard();
+
+        // A serialised graph is its artifacts, keyed by id (`ArtifactGraph` is `transparent`), and
+        // an edge is its document form `{<relation>: <artifact-ref>}`.
+        let edges_of = |graph: &serde_json::Value| -> serde_json::Value {
+            graph["story:crossing"]["relations"].clone()
+        };
+        let targets_of = |edges: &serde_json::Value| -> Vec<String> {
+            edges
+                .as_array()
+                .expect("`graph` writes relations as an array")
+                .iter()
+                .filter_map(|edge| {
+                    edge.as_object()
+                        .and_then(|entry| entry.values().next())
+                        .and_then(|target| target.as_str())
+                        .map(ToOwned::to_owned)
+                })
+                .collect()
+        };
+        assert_eq!(
+            targets_of(&edges_of(&markdown)),
+            vec!["other/story:theirs".to_owned()],
+            "the Markdown arm is the control and must hold the crossing: {markdown}"
+        );
+        assert_eq!(
+            edges_of(&markdown),
+            edges_of(&eventlog),
+            "`graph` carries the crossing identically on both arms"
+        );
+    }
+
+    /// Read path 4 of 5: `validate`.
+    ///
+    /// `validate` reports what the graph refuses. A crossing lost in migration would not show up
+    /// here as a missing edge — it would show up as nothing at all, which is why the assertion is
+    /// on the relations the same accumulation read, not only on the problem list.
+    #[test]
+    fn validate_reads_the_crossing_identically_on_both_arms() {
+        let arms = CrossingArms::build("validate");
+        let registry = arms.location().lifecycles().unwrap_or_default();
+
+        let before = arms.markdown(false);
+        let markdown_problems =
+            serde_json::to_value(crate::planning::findings(&before, &registry, &arms.project))
+                .expect("`validate` serialises")["problems"]
+                .clone();
+        let markdown_relations = before
+            .report
+            .documents
+            .get(&arms.artifact)
+            .expect("the crossing document loaded")
+            .document
+            .frontmatter
+            .relations
+            .clone();
+        drop(before);
+
+        arms.migrate();
+
+        let after = arms.eventlog(false);
+        let eventlog_problems =
+            serde_json::to_value(crate::planning::findings(&after, &registry, &arms.project))
+                .expect("`validate` serialises")["problems"]
+                .clone();
+        let eventlog_relations = after
+            .report
+            .documents
+            .get(&arms.artifact)
+            .expect("the crossing artifact is in the Eventlog authority")
+            .document
+            .frontmatter
+            .relations
+            .clone();
+        drop(after);
+        arms.discard();
+
+        assert_eq!(
+            markdown_relations.len(),
+            1,
+            "the Markdown arm is the control and must hold the crossing"
+        );
+        assert_eq!(
+            markdown_relations, eventlog_relations,
+            "`validate` judges the same edges on both arms"
+        );
+        assert_eq!(
+            markdown_problems, eventlog_problems,
+            "a declared crossing is a problem on neither arm: {markdown_problems} \
+             against {eventlog_problems}"
+        );
+    }
+
+    /// Read path 5 of 5: `history`.
+    ///
+    /// `history` lists *changes*, and a relation appears in one only as a `related` entry. The
+    /// question this case asks is therefore the one that can be answered: no relation the Markdown
+    /// arm's history named is missing from the migrated arm's, and the store view `history` itself
+    /// opens still carries the crossing.
+    #[test]
+    fn history_loses_no_relation_the_markdown_arm_recorded() {
+        use aep_backend_markdown::journal::Change;
+
+        let related = |entries: &[aep_backend_markdown::journal::Entry]| -> Vec<String> {
+            let mut targets: Vec<String> = entries
+                .iter()
+                .filter_map(|entry| match &entry.change {
+                    Change::Related { target, .. } => Some(target.clone()),
+                    _ => None,
+                })
+                .collect();
+            targets.sort();
+            targets
+        };
+
+        let arms = CrossingArms::build("history");
+        let (markdown_entries, _) =
+            aep_backend_markdown::journal::history(&arms.planning, &arms.artifact);
+        let markdown_related = related(&markdown_entries);
+
+        arms.migrate();
+
+        // `with_backend: true`, exactly as `history_from_the_contract` opens it.
+        let after = arms.eventlog(true);
+        let (eventlog_entries, unreadable) =
+            crate::planning::entries_from_the_contract(&after, &arms.artifact)
+                .expect("the migrated authority answers for the crossing artifact");
+        let eventlog_related = related(&eventlog_entries);
+        let eventlog_relations = after
+            .report
+            .documents
+            .get(&arms.artifact)
+            .expect("the crossing artifact is in the store `history` opened")
+            .document
+            .frontmatter
+            .relations
+            .clone();
+        drop(after);
+        arms.discard();
+
+        assert_eq!(unreadable, 0, "every migrated event reads as one entry");
+        for target in &markdown_related {
+            assert!(
+                eventlog_related.contains(target),
+                "the migrated history dropped the `related` entry naming {target}: \
+                 {eventlog_related:?}"
+            );
+        }
+        assert_eq!(
+            eventlog_relations
+                .iter()
+                .map(|relation| relation.target.to_string())
+                .collect::<Vec<_>>(),
+            vec!["other/story:theirs".to_owned()],
+            "the store view `history` opens still carries the crossing"
+        );
+    }
+
+    /// The authority's relation surface answers the same on both arms — it never held the crossing.
+    ///
+    /// The `continue` at `mapping.rs:324` that skips a relation with no destination entity is not
+    /// the migration inventing a rule. `aep-backend-memory/src/seed.rs:94` skips exactly the same
+    /// edges when the **Markdown** plan is hydrated, with the same reason written above it, so
+    /// `aep entity relations` — the one read path that answers from relation records alone — held
+    /// no record for a crossing before the cutover either. Nothing is lost at migration, and this
+    /// is what makes the amended acceptance a statement about the model rather than a concession.
+    #[test]
+    fn the_relation_surface_holds_no_crossing_on_either_arm() {
+        use aep_contract::query::{QueryService, RelationQuery};
+
+        let arms = CrossingArms::build("surface");
+        let edges = |opened: &crate::planning::Opened| -> usize {
+            let backend = opened.backend().expect("the arm was opened with a backend");
+            let locator = aep_domain::entity::EntityLocator::new(
+                aep_backend_markdown::backend::ORGANISATION,
+                aep_backend_markdown::backend::SPACE,
+                arms.artifact.namespace(),
+                arms.artifact.name(),
+            )
+            .expect("the crossing artifact has an address");
+            let entity = block_on(QueryService::resolve(backend, &locator))
+                .expect("the crossing artifact is in this arm");
+            block_on(QueryService::relations(
+                backend,
+                &RelationQuery {
+                    source: Some(aep_domain::entity::EntityRef::new(entity)),
+                    ..RelationQuery::default()
+                },
+            ))
+            .expect("the arm answers for the edges leaving the crossing artifact")
+            .items
+            .len()
+        };
+
+        let before = arms.markdown(true);
+        let markdown = edges(&before);
+        drop(before);
+
+        arms.migrate();
+
+        let after = arms.eventlog(true);
+        let eventlog = edges(&after);
+        drop(after);
+        arms.discard();
+
+        assert_eq!(
+            markdown, 0,
+            "the Markdown plan's relation surface never held the crossing either"
+        );
+        assert_eq!(
+            eventlog, markdown,
+            "the cutover changes nothing about which edges are relation records"
+        );
+    }
+
+
 
     /// `story:migration-mapper-reads-the-declared-workspace`, second defect.
     ///

@@ -20,8 +20,31 @@ belongs in the commit message or in `docs/design/`.
   is still refused: a migrated store whose relations dangle for real is worse than a refusal. The
   declaration is read at the command edge and handed to the mapper as data, and it decides
   admission only — no migrated record depends on it — so a store with no workspace file maps
-  exactly as before. The crossing itself survives migration as the artifact's own relation and is
-  read back from the Eventlog authority unchanged.
+  exactly as before. The crossing itself survives migration as the artifact's own relation data,
+  carried in the subject entity, and `show`, `list --format json`, `graph`, `validate` and the
+  store `history` reads back list it identically on both arms. It is **not** a relation record: the
+  authority's relation surface has no notion of a member outside it, so no record is invented for
+  a destination that is not there.
+
+- The dry-run and apply receipts now count workspace crossings separately from relation records, as
+  `inventory.workspace_crossings` beside `inventory.relations`. `inventory.relations` was counted
+  from the source's frontmatter while the migration imports only the relations whose target is
+  itself a captured document, so a store that declares members and carries a crossing was promised
+  one relation record per crossing more than the authority ever received — and no count taken
+  afterwards revealed it, because the post-migration read agrees with the larger number through the
+  retained relation data. The two figures now sum to what the source declares: a store with 564
+  authored relations and one crossing reports 563 and 1.
+
+- A `.engineering/workspace.yaml` that exists and does not parse is now refused rather than read as
+  a store that declares nothing. Every read of the declaration turned a failure into an empty
+  member list, so a single misspelled key silently disabled every declared member: `plan artifact
+  validate` reported each cross-repository relation as a dangling edge and named the artifact
+  documents, which are correct, and `plan store migrate dry-run` refused with a receipt
+  byte-identical to the one a repository with no workspace file gets. The migration now refuses at
+  `kind: config`, `field: workspace` with `invalid_project`, and the read commands report the file
+  and the parse error. A repository with **no** workspace file is unchanged and is still not an
+  error. The driven-plan read (`aep_driver::PlanSource`) answers with a member list and has nowhere
+  to put a reason, so it still reads an unreadable declaration as an empty one.
 
 - A migration refusal that comes from the mapper now carries the mapper's coordinate instead of the
   selector's. Every mapping refusal was reported as `semantic_mismatch` at the `--project` selector

@@ -190,7 +190,7 @@ impl StoreLocation {
     /// A tree with no `artifacts/lifecycles/` is not an error — it yields an empty registry, and
     /// every kind then gets [`ArtifactLifecycle::permissive`]. That is what makes the store usable
     /// in a repository that has not adopted the document tree yet.
-    fn lifecycles(&self) -> Result<aep_engine::Registry> {
+    pub(crate) fn lifecycles(&self) -> Result<aep_engine::Registry> {
         crate::load(&self.document_root()?)
     }
 }
@@ -464,8 +464,14 @@ impl aep_driver::PlanSource for DrivenPlan {
 
     /// What `<project>/.engineering/workspace.yaml` declares, so a relation into another
     /// repository is judged the same way `protocol artifact validate` judges it.
+    ///
+    /// A declaration that does not parse cannot be refused here: [`aep_driver::PlanSource`]
+    /// answers with a member list and has nowhere to put a reason. The driver therefore still
+    /// reads an unreadable declaration as an empty one, and `validate` — which does refuse — is
+    /// where an operator finds out. Giving the trait a fallible answer is a change to
+    /// `crates/drive/aep-driver`, outside this unit.
     fn declared_members(&self) -> Vec<aep_domain::workspace::MemberName> {
-        declared_members(&self.project)
+        declared_members(&self.project).unwrap_or_default()
     }
 }
 
@@ -547,7 +553,7 @@ fn hybrid_backend_for(
 
     let policy =
         aep_backend_hybrid::policy_from(policy).map_err(|error| anyhow::anyhow!("{error}"))?;
-    let members = declared_members(&args.repository_root());
+    let members = declared_members(&args.repository_root())?;
     let lifecycles = args.lifecycles()?.lifecycles().clone();
     let opened = match replica {
         Replica::Sqlite(path) => {
@@ -838,20 +844,20 @@ impl aep_contract::query::QueryService for PlanBackend {
 /// has none, so its documents are built from the contract's entities — the same mapping the
 /// markdown projection applies on a write — and every read verb is then one function over a
 /// `StoreReport`, whichever store it came from (`story:store-selection-in-project-yaml`).
-struct Opened {
+pub(crate) struct Opened {
     plan: Plan,
     /// The contract over the plan. Absent for a markdown plan opened to read: building it hydrates
     /// the store and refuses a plan that does not build a graph, and `validate` exists to report
     /// exactly that plan rather than be refused by it.
     backend: Option<PlanBackend>,
-    report: StoreReport,
+    pub(crate) report: StoreReport,
     /// The files, for a markdown plan: the journal, the drift check and the path of a document.
     files: Option<MarkdownStore>,
 }
 
 impl Opened {
     /// The contract, for a verb that writes or asks the store what it recorded.
-    fn backend(&self) -> Result<&PlanBackend> {
+    pub(crate) fn backend(&self) -> Result<&PlanBackend> {
         self.backend
             .as_ref()
             .context("the plan was opened to read its documents, not to command it")
@@ -1143,7 +1149,7 @@ fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
 /// `args` is read only when `with_backend` is set — building a backend needs the workspace and the
 /// ladders the writing verbs carry — so a caller that only reads may pass a location that answers
 /// nothing else.
-fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
+pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
     match &plan {
         Plan::Markdown { root } => {
             let store = MarkdownStore::open(root.clone());
@@ -2207,22 +2213,35 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
 /// A store with no workspace file declares no members, so every member-qualified target is a
 /// dangling edge — which is what makes a misspelled member name a defect rather than a crossing
 /// nobody can check.
-pub(crate) fn declared_members(root: &Path) -> Vec<aep_domain::workspace::MemberName> {
+///
+/// # Errors
+///
+/// A `workspace.yaml` that exists and does not parse. **Unknown differs from false**: reading that
+/// file as *this store declares nothing* produces a refusal byte-identical to having no
+/// declaration at all, naming an artifact document that is correct rather than the file that is
+/// wrong. `load_workspace` already draws the line — `Ok(None)` for absent, `Err` for present and
+/// unreadable — and this is the reader that used to throw it away.
+pub(crate) fn declared_members(root: &Path) -> Result<Vec<aep_domain::workspace::MemberName>> {
     // `load_workspace` joins the project directory itself; joining it here too looked right and
     // pointed at `.engineering/.engineering/workspace.yaml`, so every member read as undeclared and
     // every crossing as a dangling edge.
-    aep_project::project::load_workspace(root).map_or_else(
-        |_| Vec::new(),
-        |workspace| {
-            workspace.map_or_else(Vec::new, |workspace| {
-                workspace
-                    .members
-                    .iter()
-                    .map(|member| member.name.clone())
-                    .collect()
-            })
-        },
-    )
+    let workspace = aep_project::project::load_workspace(root)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| {
+            format!(
+                "{} declares this repository's workspace members and could not be read",
+                root.join(project_directory())
+                    .join(aep_domain::workspace::WORKSPACE_FILE)
+                    .display()
+            )
+        })?;
+    Ok(workspace.map_or_else(Vec::new, |workspace| {
+        workspace
+            .members
+            .iter()
+            .map(|member| member.name.clone())
+            .collect()
+    }))
 }
 
 /// The artifact graph a planning store describes, for the entity surface to seed from.
@@ -2238,7 +2257,7 @@ pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
         .and_then(Path::parent)
         .unwrap_or(Path::new("."));
     report
-        .graph_in_workspace(declared_members(repository))
+        .graph_in_workspace(declared_members(repository)?)
         .map_err(|errors| anyhow::anyhow!("{errors}"))
         .with_context(|| format!("reading the planning store at {}", root.display()))
 }
@@ -2360,7 +2379,7 @@ fn markdown_backend_for(
 ) -> Result<aep_backend_markdown::backend::MarkdownBackend> {
     aep_backend_markdown::backend::MarkdownBackend::open(
         root,
-        declared_members(&args.repository_root()),
+        declared_members(&args.repository_root())?,
         clock_at_the_edge(),
         command_actor()?,
         // The ladders this store's kinds declare. Without them the backend falls back to the
@@ -2858,8 +2877,14 @@ fn lifecycle_findings(
     repository: &Path,
     lifecycles: &aep_domain::artifact::LifecycleRegistry,
 ) -> Vec<String> {
+    // A declaration that does not parse is the same answer as a store that does not build a graph:
+    // nothing. Every write verb that reaches here has already been refused at
+    // `markdown_backend_for`, which reads the same declaration and does not swallow the failure.
+    let Ok(members) = declared_members(repository) else {
+        return Vec::new();
+    };
     report
-        .graph_in_workspace(declared_members(repository))
+        .graph_in_workspace(members)
         .map(|graph| {
             graph
                 .validate_lifecycles(lifecycles)
@@ -3487,7 +3512,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     // store that has to be repaired by hand after an edge went in is a store people stop using.
     if let Err(errors) = opened
         .report
-        .graph_in_workspace(declared_members(&args.repository_root()))
+        .graph_in_workspace(declared_members(&args.repository_root())?)
     {
         outln!("`{id} {relation} {target}` would not build a graph:");
         for error in errors.as_slice() {
@@ -3694,7 +3719,7 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     // store people stop using.
     if let Err(errors) = opened
         .report
-        .graph_in_workspace(declared_members(&args.repository_root()))
+        .graph_in_workspace(declared_members(&args.repository_root())?)
     {
         outln!("taking back `{id} {relation} {target}` would not build a graph:");
         for error in errors.as_slice() {
@@ -4610,7 +4635,7 @@ fn print_waves(derived: &waves::Derivation) {
 ///
 /// Lifted so the two cannot drift: a field added here appears in the terminal and in the browser at
 /// once, and a field added to only one of them is the defect this shape exists to prevent.
-fn shown_from(
+pub(crate) fn shown_from(
     stored: &aep_backend_markdown::StoredDocument,
     providers: Option<&aep_domain::project::ProjectConfig>,
 ) -> Shown {
@@ -5413,7 +5438,7 @@ fn graph(args: &StoreLocation, format: PlanningGraphFormat) -> Result<ExitCode> 
     let opened = open(args, false)?;
     let graph = match opened
         .report
-        .graph_in_workspace(declared_members(&args.repository_root()))
+        .graph_in_workspace(declared_members(&args.repository_root())?)
     {
         Ok(graph) => graph,
         Err(errors) => {
@@ -6208,6 +6233,32 @@ fn validate(args: &StoreArgs, strict: bool, outcome_within: u64) -> Result<ExitC
     ))
 }
 
+/// What the graph and the declaration beside it say, as `validate` prints it.
+///
+/// A `workspace.yaml` that does not parse is a problem of its own, reported as one rather than
+/// swallowed into an empty member list: every crossing would then read as a dangling edge and
+/// `validate` would name each innocent artifact document instead of the one file that is wrong.
+/// Accumulated, not returned, because that is what this verb does with every other defect.
+fn graph_problems(
+    report: &StoreReport,
+    registry: &aep_engine::Registry,
+    repository_root: &Path,
+) -> Vec<String> {
+    let members = match declared_members(repository_root) {
+        Ok(members) => members,
+        Err(error) => return vec![format!("{error:#}")],
+    };
+    match report.graph_in_workspace(members) {
+        Ok(graph) => graph
+            .validate_lifecycles(registry.lifecycles())
+            .as_slice()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        Err(errors) => errors.as_slice().iter().map(ToString::to_string).collect(),
+    }
+}
+
 /// Everything `validate` reports, decided about a plan somebody has already opened.
 ///
 /// Split out of [`validate`] so `aep doctor` can answer *would `validate` pass* from the same
@@ -6218,20 +6269,15 @@ fn validate(args: &StoreArgs, strict: bool, outcome_within: u64) -> Result<ExitC
 /// `repository_root` is the repository the plan sits in, and it is a parameter rather than
 /// something derived here because it decides which workspace manifest names the members a
 /// cross-repository relation may point at.
-fn findings(opened: &Opened, registry: &aep_engine::Registry, repository_root: &Path) -> Summary {
+pub(crate) fn findings(
+    opened: &Opened,
+    registry: &aep_engine::Registry,
+    repository_root: &Path,
+) -> Summary {
     let report = &opened.report;
 
     let mut problems: Vec<String> = report.failures.iter().map(ToString::to_string).collect();
-    match report.graph_in_workspace(declared_members(repository_root)) {
-        Ok(graph) => problems.extend(
-            graph
-                .validate_lifecycles(registry.lifecycles())
-                .as_slice()
-                .iter()
-                .map(ToString::to_string),
-        ),
-        Err(errors) => problems.extend(errors.as_slice().iter().map(ToString::to_string)),
-    }
+    problems.extend(graph_problems(report, registry, repository_root));
 
     // The journal against the files. A status the journal does not account for, and an entry naming
     // an artifact this store does not hold, are the two ways the record can be wrong — and on
@@ -7584,7 +7630,7 @@ fn positioned_entries_from_the_contract(
 }
 
 /// The same reading, with the position the store keeps each entry at ([`StorePosition`]).
-fn entries_from_the_contract(
+pub(crate) fn entries_from_the_contract(
     opened: &Opened,
     id: &ArtifactId,
 ) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
@@ -8133,7 +8179,7 @@ fn parse_relation(value: &str) -> Result<(RelationKind, ArtifactRef)> {
 /// tree that declares no ladders at all. That is what makes unblocking *a move like any other*:
 /// `protocol artifact move <blocker> --to cleared` lifts it, the journal keeps the record that
 /// something was ever stuck, and nothing had to be edited out of a file.
-fn blockers_by_target(
+pub(crate) fn blockers_by_target(
     report: &StoreReport,
     lifecycles: &aep_domain::artifact::LifecycleRegistry,
 ) -> BTreeMap<ArtifactId, Vec<Blocking>> {
@@ -8200,7 +8246,7 @@ fn blocked_marker(blockers: &[Blocking]) -> Option<String> {
 }
 
 /// The artifacts a listing verb was asked for, in id order.
-fn select(
+pub(crate) fn select(
     report: &StoreReport,
     blocked: &BTreeMap<ArtifactId, Vec<Blocking>>,
     kind: Option<&str>,

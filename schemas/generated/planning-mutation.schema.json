@@ -427,23 +427,34 @@
     },
     "ConfigFieldV1": {
       "description": "Project configuration field coordinate.",
-      "type": "string",
-      "enum": [
-        "version",
-        "store",
-        "planning_scope",
-        "planning_tenant",
-        "planning_identity",
-        "protocol",
-        "profile",
-        "protocols",
-        "artifacts",
-        "task",
-        "state",
-        "principles",
-        "profiles",
-        "schemas",
-        "providers"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "version",
+            "store",
+            "planning_scope",
+            "planning_tenant",
+            "planning_identity",
+            "protocol",
+            "profile",
+            "protocols",
+            "artifacts",
+            "task",
+            "state",
+            "principles",
+            "profiles",
+            "schemas",
+            "providers"
+          ]
+        },
+        {
+          "description": "`.engineering/workspace.yaml`, the members this repository declares.\n\nBeside the selector rather than inside it, and read by every command that judges a cross-repository relation. A file that exists and does not parse is refused at this coordinate, so the receipt names the file that is wrong instead of an artifact document that is not.",
+          "type": "string",
+          "enum": [
+            "workspace"
+          ]
+        }
       ]
     },
     "CreatedResultV1": {
