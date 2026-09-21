@@ -167,6 +167,77 @@ impl fmt::Display for Workspace {
     }
 }
 
+/// Where a store stands in a workspace: which members it can reach, and **which one it is**.
+///
+/// The crossing rule needs both halves, and it needs them together. A declaration that names this
+/// repository as one of its own members is the ordinary shape — this repository's own
+/// `.engineering/workspace.yaml` does it deliberately, *"named explicitly rather than implied, so
+/// every artifact in the assembled graph carries a member and none of them is the special one that
+/// does not"* — and under that declaration `engineering-protocols/story:x`, read inside
+/// `engineering-protocols`, is [`WorkspaceRef`]'s long spelling of this store's own `story:x`. An
+/// answer computed from the member list alone cannot tell it from a crossing, so it counts a local
+/// edge as leaving the repository and exempts a dangling one from the check that would have caught
+/// it.
+///
+/// This type exists so the two inputs cannot separate. They were separate — the list travelled and
+/// the identity did not — and every reader that asked the question asked it with half the facts.
+///
+/// [`Membership::default`] is *no workspace at all*: nothing declared, and this store is nobody.
+/// That is the safe reading for a plain single-repository store, where a member-qualified target is
+/// a target nothing can resolve and therefore a defect.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Membership {
+    own: Option<MemberName>,
+    declared: BTreeSet<MemberName>,
+}
+
+impl Membership {
+    /// The members `declared`, read from the store that is `own`.
+    ///
+    /// `own` is the member whose `source` resolves to the repository being read. `None` says the
+    /// reader does not know, which is different from *this store is not a member*: both answer the
+    /// same way here, and the caller that does know is the one place the difference can be made.
+    pub fn new<M: IntoIterator<Item = MemberName>>(own: Option<MemberName>, declared: M) -> Self {
+        Self {
+            own,
+            declared: declared.into_iter().collect(),
+        }
+    }
+
+    /// The members `declared`, read from a store that is none of them.
+    ///
+    /// For a reader outside the workspace, and for a fixture that means *these members exist and
+    /// this store is not one of them*. A store that **is** one of them must say so with
+    /// [`Membership::new`]; nothing can recover it afterwards.
+    pub fn declaring<M: IntoIterator<Item = MemberName>>(declared: M) -> Self {
+        Self::new(None, declared)
+    }
+
+    /// The member this store is, when it is one of the members declared beside it.
+    #[must_use]
+    pub const fn own(&self) -> Option<&MemberName> {
+        self.own.as_ref()
+    }
+
+    /// Every member the declaration names, in name order.
+    #[must_use]
+    pub const fn declared(&self) -> &BTreeSet<MemberName> {
+        &self.declared
+    }
+
+    /// Whether `member` names the store this membership was read in.
+    #[must_use]
+    pub fn is_own(&self, member: &str) -> bool {
+        self.own.as_ref().is_some_and(|own| own.as_str() == member)
+    }
+
+    /// Whether the declaration names `member` at all, this store included.
+    #[must_use]
+    pub fn declares(&self, member: &str) -> bool {
+        self.declared.iter().any(|name| name.as_str() == member)
+    }
+}
+
 /// A workspace document, as parsed.
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

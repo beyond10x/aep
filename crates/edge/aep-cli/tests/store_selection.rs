@@ -140,7 +140,7 @@ impl Pair {
         std::fs::create_dir_all(&planning).expect("an empty store");
         let files = MarkdownBackend::open(
             &planning,
-            std::iter::empty(),
+            aep_domain::workspace::Membership::default(),
             at,
             actor.clone(),
             LifecycleRegistry::default(),
@@ -168,7 +168,7 @@ impl Pair {
             &planning,
             replica,
             HYBRID_POLICY,
-            std::iter::empty(),
+            aep_domain::workspace::Membership::default(),
             at,
             actor.clone(),
             LifecycleRegistry::default(),

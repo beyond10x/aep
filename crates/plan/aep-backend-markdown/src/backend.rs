@@ -54,7 +54,7 @@ use aep_domain::audit::AuditRecord;
 use aep_domain::command::Command;
 use aep_domain::entity::{ActorRef, EntityId, EntityLocator, EntityRef, EntityType};
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 
 use crate::projection::MarkdownProjection;
 use crate::provider::MarkdownProvider;
@@ -100,13 +100,13 @@ impl MarkdownBackend {
     /// If the store cannot be read cleanly, if its edges do not resolve, or if seeding refuses.
     pub fn open(
         root: impl AsRef<Path>,
-        members: impl IntoIterator<Item = MemberName>,
+        membership: Membership,
         at: Timestamp,
         actor: ActorRef,
         lifecycles: aep_domain::artifact::LifecycleRegistry,
     ) -> Result<Self, CommandError> {
         let provider = MarkdownProvider::open(root.as_ref());
-        let projection = MarkdownProjection::new(members, at, actor, lifecycles);
+        let projection = MarkdownProjection::new(membership, at, actor, lifecycles);
         Ok(Self(EntityBackend::shaped(provider, projection)?))
     }
 

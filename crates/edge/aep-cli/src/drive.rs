@@ -2196,7 +2196,7 @@ pub fn position(
         );
     }
     let graph = report
-        .graph_in_workspace(aep_driver::run::PlanSource::declared_members(&inputs.store))
+        .graph_in_workspace(aep_driver::run::PlanSource::membership(&inputs.store))
         .map_err(|errors| {
             anyhow::anyhow!(
                 "{}",

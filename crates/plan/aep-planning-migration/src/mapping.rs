@@ -13,7 +13,7 @@ use aep_domain::entity::{
 };
 use aep_domain::ids::RelationId;
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 use entity_core::{DomainEvent, EntityInstance};
 use entity_store::asynchronous::{
     HistoryOrigin, ImportedRecordEvidence, KnownLegacyOrder, LegacyAnchor, LegacyCompleteness,
@@ -127,35 +127,41 @@ impl MappingError {
 /// Markdown has complete current state but no provider-complete mixed record order. Each boundary
 /// therefore says `available_evidence_only` and `per_kind_only`; it does not fabricate history.
 ///
-/// `members` is the workspace declaration beside the store, exactly as every ordinary read command
-/// supplies it. See [`markdown_boundaries_raw`] for why it is a parameter rather than a read.
+/// `membership` is the workspace declaration beside the store **and which member this store is**,
+/// exactly as every ordinary read command supplies it. See [`markdown_boundaries_raw`] for why it
+/// is a parameter rather than a read.
 pub fn markdown_boundaries(
     report: &StoreReport,
-    members: &[MemberName],
+    membership: &Membership,
 ) -> Result<Vec<SubjectHistory>, MappingError> {
     if let Some(failure) = report.failures.first() {
         return Err(MappingError::Incomplete {
             coordinate: failure.path.display().to_string(),
         });
     }
-    markdown_runtime_boundaries(&report.documents, members)
+    markdown_runtime_boundaries(&report.documents, membership)
 }
 
 /// Maps the exact bytes retained by a complete raw capture, without reopening the source tree.
 ///
-/// `members` is what the store's `.engineering/workspace.yaml` declares. It is supplied by the
-/// caller and never read here: this crate reopens nothing, and the declaration lives beside the
-/// store rather than inside it, so it is not in the capture. It is admission input only — the
-/// graph it gates is discarded, and no produced record depends on it — so a store whose
-/// declaration changed between capture and mapping still maps to the same bytes.
+/// `membership` is what the store's `.engineering/workspace.yaml` declares **and which of those
+/// members this store is**. It is supplied by the caller and never read here: this crate reopens
+/// nothing, and the declaration lives beside the store rather than inside it, so it is not in the
+/// capture. A store whose declaration changed between capture and mapping still maps to the same
+/// bytes for the same `membership`.
 ///
-/// Passing an empty slice is what a store with no workspace file declares, and it is the defect
+/// [`Membership::default`] is what a store with no workspace file declares, and it is the defect
 /// this parameter exists to close: the mapper used to pass empty unconditionally, so a relation
 /// into a declared member read as a dangling edge and the whole migration was refused, while every
 /// ordinary read command on the same store answered that it was valid.
+///
+/// The **own** half is not admission input only. A target naming this store's own member is a
+/// local edge with a destination entity in this authority, so it decides a produced record: the
+/// two spellings of one local edge must import the same relation record, and a dangling edge
+/// behind this store's own member name must still refuse the store.
 pub fn markdown_boundaries_raw(
     raw: &MarkdownRawV1,
-    members: &[MemberName],
+    membership: &Membership,
 ) -> Result<Vec<SubjectHistory>, MappingError> {
     let mut documents = BTreeMap::new();
     for node in &raw.nodes {
@@ -199,7 +205,7 @@ pub fn markdown_boundaries_raw(
             });
         }
     }
-    markdown_runtime_boundaries(&documents, members)
+    markdown_runtime_boundaries(&documents, membership)
 }
 
 /// The document a graph defect belongs to, so a refusal names a file somebody can open.
@@ -237,7 +243,7 @@ fn graph_coordinate(
 #[allow(clippy::too_many_lines)] // One pass keeps document, body and relation mapping adjacent.
 fn markdown_runtime_boundaries(
     documents: &BTreeMap<aep_domain::artifact::ArtifactId, StoredDocument>,
-    members: &[MemberName],
+    membership: &Membership,
 ) -> Result<Vec<SubjectHistory>, MappingError> {
     let report = StoreReport {
         documents: documents.clone(),
@@ -250,7 +256,7 @@ fn markdown_runtime_boundaries(
     // relation into a member it does *not* declare stays a dangling edge and is still refused,
     // because a store migrated with edges that dangle for real is worse than a refusal.
     report
-        .graph_in_workspace(members.iter().cloned())
+        .graph_in_workspace(membership.clone())
         .map_err(|errors| MappingError::Invalid {
             coordinate: graph_coordinate(&errors, documents),
         })?;
@@ -321,7 +327,13 @@ fn markdown_runtime_boundaries(
         )?);
 
         for (ordinal, declared) in document.frontmatter.relations.iter().enumerate() {
-            let Some(target) = identities.get(declared.target.id()) else {
+            // Resolved first: a target naming **this store's own** member is an artifact of this
+            // store, spelled the long way, and its destination entity is right here in
+            // `identities` under the unqualified id. Looking it up as written counted a local edge
+            // as a crossing, so one spelling of an edge imported a relation record and the other
+            // imported nothing.
+            let target = declared.target.id().local_to(membership.own());
+            let Some(target) = identities.get(target.as_ref()) else {
                 // Workspace crossings have no destination entity in this authority. The exact
                 // frontmatter relation remains in the entity body and is restored by projection.
                 continue;
@@ -1061,8 +1073,8 @@ mod tests {
     use super::*;
     use aep_contract::migration::{HexBytesV1, MarkdownNodeV1, RegularMarkdownNodeV1};
 
-    fn member(name: &str) -> MemberName {
-        MemberName::parse(name).expect("a member name")
+    fn member(name: &str) -> aep_domain::workspace::MemberName {
+        aep_domain::workspace::MemberName::parse(name).expect("a member name")
     }
 
     fn node(relative: &str, text: &str) -> MarkdownNodeV1 {
@@ -1095,8 +1107,11 @@ mod tests {
 
     #[test]
     fn a_relation_into_a_declared_member_is_a_crossing_and_maps() {
-        let histories = markdown_boundaries_raw(&crossing_capture(), &[member("other")])
-            .expect("the declaration every ordinary read command reads admits the crossing");
+        let histories = markdown_boundaries_raw(
+            &crossing_capture(),
+            &Membership::declaring([member("other")]),
+        )
+        .expect("the declaration every ordinary read command reads admits the crossing");
         assert_eq!(histories.len(), 2);
     }
 
@@ -1106,7 +1121,8 @@ mod tests {
         // migrated than refused. With no declaration, and with a *different* member declared, the
         // same edge dangles and the refusal stands.
         for members in [Vec::new(), vec![member("mistyped")]] {
-            let error = markdown_boundaries_raw(&crossing_capture(), &members)
+            let membership = Membership::declaring(members.clone());
+            let error = markdown_boundaries_raw(&crossing_capture(), &membership)
                 .expect_err("an undeclared member leaves the edge pointing at nothing");
             assert_eq!(
                 error,
@@ -1131,7 +1147,8 @@ mod tests {
         // that was read, so it resolves; `epic:absent` is the target and never becomes the
         // coordinate.
         assert_eq!(
-            markdown_boundaries_raw(&orphan, &[]).expect_err("an edge to nothing is not a graph"),
+            markdown_boundaries_raw(&orphan, &Membership::default())
+                .expect_err("an edge to nothing is not a graph"),
             MappingError::Invalid {
                 coordinate: "story/orphan.md".to_owned(),
             }

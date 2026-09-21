@@ -21,7 +21,7 @@ use aep_contract::migration::{
     HexBytesV1, HostPathV1, MarkdownNodeKindV1, MarkdownNodeV1, MarkdownRawV1,
     RegularMarkdownNodeV1,
 };
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::{MemberName, Membership};
 use aep_planning_migration::markdown_boundaries_raw;
 
 const RELATION_ENTITY: &str = "aep.relation";
@@ -79,7 +79,7 @@ fn relation_subjects(histories: &[entity_store::asynchronous::SubjectHistory]) -
 /// about the assertion, the fixture or the accessor is what decides the crossing case below.
 #[test]
 fn a_relation_to_a_local_artifact_is_migrated_as_a_relation_record() {
-    let histories = markdown_boundaries_raw(&capture("story:local"), &[])
+    let histories = markdown_boundaries_raw(&capture("story:local"), &Membership::default())
         .expect("a relation between two local artifacts is an ordinary edge");
     assert_eq!(
         relation_subjects(&histories).len(),
@@ -105,8 +105,11 @@ fn a_relation_to_a_local_artifact_is_migrated_as_a_relation_record() {
 /// own record, which is what every read path then answers from.
 #[test]
 fn a_declared_crossing_is_migrated_as_the_subject_s_own_relation_data() {
-    let histories = markdown_boundaries_raw(&capture("other/story:theirs"), &[member("other")])
-        .expect("the declaration every ordinary read command reads admits the crossing");
+    let histories = markdown_boundaries_raw(
+        &capture("other/story:theirs"),
+        &Membership::declaring([member("other")]),
+    )
+    .expect("the declaration every ordinary read command reads admits the crossing");
 
     // The admission half, so a failure below cannot be mistaken for the refusal this unit fixed.
     assert_eq!(
@@ -161,9 +164,13 @@ fn a_declared_crossing_is_migrated_as_the_subject_s_own_relation_data() {
 /// here so it can never again be a difference nobody counted.
 #[test]
 fn a_crossing_and_a_local_edge_do_not_migrate_to_the_same_number_of_relation_records() {
-    let local = markdown_boundaries_raw(&capture("story:local"), &[]).expect("local edge maps");
-    let crossing = markdown_boundaries_raw(&capture("other/story:theirs"), &[member("other")])
-        .expect("declared crossing maps");
+    let local = markdown_boundaries_raw(&capture("story:local"), &Membership::default())
+        .expect("local edge maps");
+    let crossing = markdown_boundaries_raw(
+        &capture("other/story:theirs"),
+        &Membership::declaring([member("other")]),
+    )
+    .expect("declared crossing maps");
     assert_eq!(
         relation_subjects(&local).len(),
         1,

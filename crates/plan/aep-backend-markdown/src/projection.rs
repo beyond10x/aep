@@ -48,7 +48,7 @@ use aep_domain::entity::{ActorRef, EntityId, EntityRef};
 use aep_domain::ids::IdempotencyKey;
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 
 use crate::backend::{BODY_KEY, ORGANISATION, SPACE};
 use crate::document::PlanningDocument;
@@ -60,7 +60,7 @@ use crate::store::{StoreReport, StoredDocument};
 /// The plan's shape over a [`PlanStore`].
 #[derive(Debug, Clone)]
 pub struct MarkdownProjection {
-    members: Vec<MemberName>,
+    membership: Membership,
     at: Timestamp,
     actor: ActorRef,
     lifecycles: aep_domain::artifact::LifecycleRegistry,
@@ -129,13 +129,13 @@ struct Observation {
 impl MarkdownProjection {
     /// The plan's shape, seeding on open with `at` and `actor`, holding kinds to `lifecycles`.
     pub fn new(
-        members: impl IntoIterator<Item = MemberName>,
+        membership: Membership,
         at: Timestamp,
         actor: ActorRef,
         lifecycles: aep_domain::artifact::LifecycleRegistry,
     ) -> Self {
         Self {
-            members: members.into_iter().collect(),
+            membership,
             at,
             actor,
             lifecycles,
@@ -538,7 +538,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
         let report = documents_of(store)?;
         let graph = report
-            .graph_in_workspace(self.members.clone())
+            .graph_in_workspace(self.membership.clone())
             .map_err(|errors| CommandError::Conflict {
                 reason: format!("the plan does not build a graph: {errors}"),
             })?;

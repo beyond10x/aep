@@ -308,7 +308,19 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
     if complete.raw_snapshot_id != requested_snapshot {
         return apply_refusal(common, migration_id, CommandRefusalCodeV1::SnapshotChanged);
     }
-    let histories = match mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
+    // Read once, here, and handed to both the mapper and the receipt: the crossing count the
+    // receipt publishes has to come from the same declaration the mapper mapped under, or the two
+    // halves of one cutover answer from different files.
+    let membership = match resolved.membership() {
+        Ok(value) => value,
+        Err(_) => return apply_refusal_at(common, migration_id, *workspace_refusal()),
+    };
+    let histories = match mapped_histories_for_source(
+        &resolved.selection.source,
+        &membership,
+        &complete.capture,
+        complete.raw_snapshot_id,
+    ) {
         Ok(value) => value,
         Err(refusal) => return apply_refusal_at(common, migration_id, *refusal),
     };
@@ -331,13 +343,22 @@ pub(crate) fn apply_with_control<C: aep_planning_migration::WriterControl>(
         source_capture_digest: complete.transcript_digest,
         histories,
     };
-    execute_apply(common, &resolved, migration_id, &inputs, control, guard)
+    execute_apply(
+        common,
+        &resolved,
+        &membership,
+        migration_id,
+        &inputs,
+        control,
+        guard,
+    )
 }
 
 #[allow(clippy::manual_let_else)]
 fn execute_apply<C: aep_planning_migration::WriterControl>(
     common: &CommonArgs,
     resolved: &Resolved,
+    membership: &aep_domain::workspace::Membership,
     migration_id: MigrationIdV1,
     inputs: &aep_planning_migration::ApplyInputs,
     control: &C,
@@ -422,7 +443,7 @@ fn execute_apply<C: aep_planning_migration::WriterControl>(
                 )
             }
         };
-    let facts = inventory_from_histories(&snapshot.histories);
+    let facts = inventory_from_histories(&snapshot.histories, membership);
     let current_authority = receipt.authority.clone();
     ApplyResultV1 {
         format: ApplyFormatV1,
@@ -450,6 +471,71 @@ fn migration_root(engineering: &Path, migration_id: &MigrationIdV1) -> Result<Pa
     Ok(engineering.join("migrations").join(migration_key))
 }
 
+/// The three paths a resumed migration writes to, derived once and checked against the intent.
+struct ResumePaths {
+    staging: PathBuf,
+    destination: PathBuf,
+    projection: PathBuf,
+}
+
+/// The recorded intent, when it is the one *this* invocation is resuming.
+///
+/// Every check here asks the same question — does the intent on disk still describe this
+/// invocation — and none of them is about the store's contents. Read together so the resume body
+/// stays about what it does rather than about what it refuses.
+fn resumable_intent(
+    resolved: &Resolved,
+    destination_request: &DestinationRequestV2,
+    requested_snapshot: DigestV1,
+    migration_id: &MigrationIdV1,
+    migration_root: &Path,
+) -> std::result::Result<(MigrationIntentV2, ResumePaths), CommandRefusalCodeV1> {
+    let Some(intent) = fs::read(migration_root.join("intent.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<MigrationIntentV2>(&bytes).ok())
+    else {
+        return Err(CommandRefusalCodeV1::IntentConflict);
+    };
+    if &intent.migration_id != migration_id
+        || intent.source_snapshot != SourceSnapshotIdV1(requested_snapshot)
+        || &intent.destination_request != destination_request
+        || intent.mapping != mapping_identity()
+        || intent.selector_version != ProjectVersionV1::V2
+        || aep_planning_migration::intent_digest_v2(&intent).ok() != Some(intent.intent_digest)
+    {
+        return Err(CommandRefusalCodeV1::IntentConflict);
+    }
+
+    let paths = ResumePaths {
+        staging: migration_root.join("stage/authority"),
+        destination: resolved.engineering.join("state"),
+        projection: resolved.engineering.join("planning"),
+    };
+    if intent.migration_root != host_path(migration_root)
+        || intent.staging_path != host_path(&paths.staging)
+        || intent.destination_path != host_path(&paths.destination)
+        || intent.projection_path != host_path(&paths.projection)
+    {
+        return Err(CommandRefusalCodeV1::IntentConflict);
+    }
+
+    match &resolved.plan {
+        crate::planning::Plan::Eventlog {
+            authority_root,
+            projection_root,
+            ..
+        } if authority_root == &paths.destination && projection_root == &paths.projection => {}
+        crate::planning::Plan::Eventlog { .. } => {
+            return Err(CommandRefusalCodeV1::AuthorityIdentityMismatch);
+        }
+        _ if resolved.selection.selector_digest == intent.selector_digest
+            && resolved.selection.config_digest == intent.config_digest
+            && resolved.selection.source == intent.source_coordinate => {}
+        _ => return Err(CommandRefusalCodeV1::SelectorChanged),
+    }
+    Ok((intent, paths))
+}
+
 #[allow(clippy::manual_let_else)]
 fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
     common: &CommonArgs,
@@ -461,48 +547,21 @@ fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
     control: &C,
 ) -> ApplyResultV1 {
     let refuse = |code| apply_refusal(common, migration_id.clone(), code);
-    let intent = match fs::read(migration_root.join("intent.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<MigrationIntentV2>(&bytes).ok())
-    {
-        Some(value) => value,
-        None => return refuse(CommandRefusalCodeV1::IntentConflict),
+    let (intent, paths) = match resumable_intent(
+        resolved,
+        destination_request,
+        requested_snapshot,
+        &migration_id,
+        &migration_root,
+    ) {
+        Ok(value) => value,
+        Err(code) => return refuse(code),
     };
-    if intent.migration_id != migration_id
-        || intent.source_snapshot != SourceSnapshotIdV1(requested_snapshot)
-        || &intent.destination_request != destination_request
-        || intent.mapping != mapping_identity()
-        || intent.selector_version != ProjectVersionV1::V2
-        || aep_planning_migration::intent_digest_v2(&intent).ok() != Some(intent.intent_digest)
-    {
-        return refuse(CommandRefusalCodeV1::IntentConflict);
-    }
-
-    let staging_path = migration_root.join("stage/authority");
-    let destination_path = resolved.engineering.join("state");
-    let projection_path = resolved.engineering.join("planning");
-    if intent.migration_root != host_path(&migration_root)
-        || intent.staging_path != host_path(&staging_path)
-        || intent.destination_path != host_path(&destination_path)
-        || intent.projection_path != host_path(&projection_path)
-    {
-        return refuse(CommandRefusalCodeV1::IntentConflict);
-    }
-
-    match &resolved.plan {
-        crate::planning::Plan::Eventlog {
-            authority_root,
-            projection_root,
-            ..
-        } if authority_root == &destination_path && projection_root == &projection_path => {}
-        crate::planning::Plan::Eventlog { .. } => {
-            return refuse(CommandRefusalCodeV1::AuthorityIdentityMismatch);
-        }
-        _ if resolved.selection.selector_digest == intent.selector_digest
-            && resolved.selection.config_digest == intent.config_digest
-            && resolved.selection.source == intent.source_coordinate => {}
-        _ => return refuse(CommandRefusalCodeV1::SelectorChanged),
-    }
+    let ResumePaths {
+        staging: staging_path,
+        destination: destination_path,
+        projection: projection_path,
+    } = paths;
 
     let mut guard = match control.acquire(&intent) {
         Ok(value) => value,
@@ -534,15 +593,12 @@ fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
     if complete.raw_snapshot_id != requested_snapshot {
         return refuse(CommandRefusalCodeV1::SnapshotChanged);
     }
-    let members = match resolved.declared_members() {
-        Ok(value) => value,
-        Err(_) => {
-            return apply_refusal_at(common, migration_id.clone(), *workspace_refusal());
-        }
+    let Ok(membership) = resolved.membership() else {
+        return apply_refusal_at(common, migration_id.clone(), *workspace_refusal());
     };
     let histories = match mapped_histories_for_source(
         &intent.source_coordinate,
-        &members,
+        &membership,
         &complete.capture,
         complete.raw_snapshot_id,
     ) {
@@ -560,7 +616,15 @@ fn resume_apply_with_control<C: aep_planning_migration::WriterControl>(
         source_capture_digest: complete.transcript_digest,
         histories,
     };
-    execute_apply(common, resolved, migration_id, &inputs, control, guard)
+    execute_apply(
+        common,
+        resolved,
+        &membership,
+        migration_id,
+        &inputs,
+        control,
+        guard,
+    )
 }
 
 fn compact_json_line(value: &impl Serialize) -> Result<Vec<u8>> {
@@ -631,6 +695,21 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
                 PresenceV1::Missing,
                 CommandRefusalCodeV1::SourceUnreadable,
             )
+        }
+    };
+    // Read once, here: the rebuilt authority observation publishes the same two counts the cutover
+    // did, and they are only the same two when they are computed under the same declaration.
+    let membership = match resolved.membership() {
+        Ok(value) => value,
+        Err(_) => {
+            return RebuildResultV1 {
+                format: RebuildFormatV1,
+                outcome: RebuildOutcomeV1::Refused(RebuildRefusedV1 {
+                    requested_snapshot: requested,
+                    current_snapshot: PresenceV1::Missing,
+                    refusals: vec![*workspace_refusal()],
+                }),
+            }
         }
     };
     let crate::planning::Plan::Eventlog {
@@ -841,7 +920,7 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
             CommandRefusalCodeV1::AuthoritySnapshotChanged,
         );
     }
-    let facts = inventory_from_histories(&current.histories);
+    let facts = inventory_from_histories(&current.histories, &membership);
     RebuildResultV1 {
         format: RebuildFormatV1,
         outcome: RebuildOutcomeV1::Rebuilt(RebuiltV1 {
@@ -903,7 +982,7 @@ fn inspect(common: &CommonArgs) -> InspectionResultV1 {
     if matches!(resolved.plan, crate::planning::Plan::Eventlog { .. }) {
         return inspect_eventlog(common, resolved);
     }
-    let members = match resolved.declared_members() {
+    let membership = match resolved.membership() {
         Ok(value) => value,
         Err(_) => {
             return InspectionResultV1 {
@@ -915,7 +994,7 @@ fn inspect(common: &CommonArgs) -> InspectionResultV1 {
         }
     };
     match resolved
-        .inventory(&members)
+        .inventory(&membership)
         .map(|facts| (resolved, facts))
     {
         Ok((resolved, facts)) => InspectionResultV1 {
@@ -949,6 +1028,20 @@ fn inspect(common: &CommonArgs) -> InspectionResultV1 {
 
 #[allow(clippy::manual_let_else, clippy::too_many_lines)]
 fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResultV1 {
+    // The declaration is beside the store whichever backend is selected, so an Eventlog `inspect`
+    // reads it exactly as the Markdown one does — and refuses the same way. Answering from an
+    // empty member list here is what made `workspace_crossings` a hard zero on this receipt.
+    let membership = match resolved.membership() {
+        Ok(value) => value,
+        Err(_) => {
+            return InspectionResultV1 {
+                format: InspectionFormatV1,
+                outcome: InspectionOutcomeV1::Refused(RefusedV1 {
+                    refusals: vec![*workspace_refusal()],
+                }),
+            }
+        }
+    };
     let crate::planning::Plan::Eventlog {
         authority_root,
         projection_root,
@@ -1015,7 +1108,7 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
                 }
             }
         };
-    let facts = inventory_from_histories(&snapshot.histories);
+    let facts = inventory_from_histories(&snapshot.histories, &membership);
     let projection = projection_inventory(projection_root, &snapshot)
         .ok()
         .and_then(|(inventory_digest, watermark)| {
@@ -1196,13 +1289,13 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
     // Read once, at the edge, before anything counts or maps. A declaration that does not parse is
     // refused here at the file that is wrong rather than at whichever artifact document would then
     // have read as a dangling edge.
-    let members = match resolved.declared_members() {
+    let membership = match resolved.membership() {
         Ok(value) => value,
         Err(_) => {
             return dry_refusal_at(PresenceV1::Present(selection), *workspace_refusal());
         }
     };
-    let facts = match resolved.inventory(&members) {
+    let facts = match resolved.inventory(&membership) {
         Ok(facts) if facts.clean => facts,
         Ok(_) => {
             return dry_refusal(
@@ -1257,7 +1350,14 @@ fn dry_run(common: &CommonArgs, destination_request: DestinationRequestV2) -> Dr
             )
         }
     };
-    if let Err(refusal) = mapped_histories(&resolved, &complete.capture, complete.raw_snapshot_id) {
+    // The membership read at the top of this command, not a second read of the same file: the
+    // receipt's counts and the mapping it previews have to answer from one declaration.
+    if let Err(refusal) = mapped_histories_for_source(
+        &resolved.selection.source,
+        &membership,
+        &complete.capture,
+        complete.raw_snapshot_id,
+    ) {
         return dry_refusal_at(PresenceV1::Present(selection), *refusal);
     }
     let source_snapshot = SourceSnapshotIdV1(complete.raw_snapshot_id);
@@ -1405,6 +1505,18 @@ fn verify(common: &CommonArgs) -> VerificationResultV1 {
             )
         }
     };
+    // Read once, here, for the same reason the other three receipts read it: the two counts this
+    // verb publishes are the two the cutover published, and they are only the same two when they
+    // are computed under the same declaration.
+    let membership = match resolved.membership() {
+        Ok(value) => value,
+        Err(_) => {
+            return verification_refusal_at(
+                PresenceV1::Present(resolved.selection),
+                *workspace_refusal(),
+            )
+        }
+    };
     let crate::planning::Plan::Eventlog {
         authority_root,
         projection_root,
@@ -1532,7 +1644,7 @@ fn verify(common: &CommonArgs) -> VerificationResultV1 {
             return verification_mismatch(resolved.selection, CommandRefusalCodeV1::ReceiptConflict)
         }
     };
-    let facts = inventory_from_histories(&first.histories);
+    let facts = inventory_from_histories(&first.histories, &membership);
     let authority_observation = AuthorityObservationV1 {
         authority: authority.clone(),
         snapshot_id: current_id,
@@ -1568,6 +1680,24 @@ fn verification_refusal(
         outcome: VerificationOutcomeV1::Refused(VerificationRefusedV1 {
             selection,
             refusals: vec![selector_refusal(common, code)],
+        }),
+    }
+}
+
+/// A verification refusal at an exact coordinate rather than at the selector.
+///
+/// The sibling of [`verification_refusal`] for the one refusal whose coordinate is a config file
+/// and not the selector: an unreadable `workspace.yaml`. The selector is correct in that case, and
+/// naming it is the reading this unit exists to remove.
+fn verification_refusal_at(
+    selection: PresenceV1<SelectionV1>,
+    refusal: CommandRefusalV1,
+) -> VerificationResultV1 {
+    VerificationResultV1 {
+        format: VerificationFormatV1,
+        outcome: VerificationOutcomeV1::Refused(VerificationRefusedV1 {
+            selection,
+            refusals: vec![refusal],
         }),
     }
 }
@@ -1730,12 +1860,12 @@ impl Resolved {
         }
     }
 
-    /// The workspace members declared beside this store.
+    /// Where this store stands in the workspace declared beside it.
     ///
-    /// The same list `planning.rs` hands `graph_in_workspace` for `artifact validate`, `graph`,
-    /// `board` and every other ordinary read. It is read here, at the edge, and handed to the
-    /// mapper as data: the declaration lives beside the store rather than inside it, so it is not
-    /// in the capture, and the mapper reopens nothing.
+    /// The same value `planning.rs` hands `graph_in_workspace` for `artifact validate`, `graph`,
+    /// `board` and every other ordinary read — from the same reader, not a second one. It is read
+    /// here, at the edge, and handed to the mapper as data: the declaration lives beside the store
+    /// rather than inside it, so it is not in the capture, and the mapper reopens nothing.
     ///
     /// # Errors
     ///
@@ -1743,8 +1873,8 @@ impl Resolved {
     /// store declares no members*: that reading turns every crossing into a dangling edge and
     /// produces a receipt naming an artifact document that is correct, which is byte-identical to
     /// the receipt a store with no declaration gets. Unknown differs from false.
-    fn declared_members(&self) -> Result<Vec<aep_domain::workspace::MemberName>> {
-        crate::planning::declared_members(self.engineering.parent().unwrap_or(&self.engineering))
+    fn membership(&self) -> Result<aep_domain::workspace::Membership> {
+        crate::planning::declared_membership(self.engineering.parent().unwrap_or(&self.engineering))
     }
 
     fn capture(
@@ -1806,7 +1936,7 @@ impl Resolved {
 
     fn inventory(
         &self,
-        members: &[aep_domain::workspace::MemberName],
+        membership: &aep_domain::workspace::Membership,
     ) -> Result<InventoryFacts> {
         let report = match &self.plan {
             crate::planning::Plan::Markdown { root }
@@ -1826,7 +1956,7 @@ impl Resolved {
                 self.plan,
                 crate::planning::Plan::Markdown { .. } | crate::planning::Plan::Hybrid { .. }
             ),
-            members,
+            membership,
         ))
     }
 }
@@ -1988,14 +2118,14 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
 fn inventory(
     report: &StoreReport,
     unrecorded: bool,
-    members: &[aep_domain::workspace::MemberName],
+    membership: &aep_domain::workspace::Membership,
 ) -> InventoryFacts {
     let subjects = report.documents.len() as u64;
     let mut relations = 0_u64;
     let mut workspace_crossings = 0_u64;
     for stored in report.documents.values() {
         for relation in &stored.document.frontmatter.relations {
-            if relation.crosses_to_a_declared_member(members) {
+            if relation.crosses_to_a_declared_member(membership) {
                 workspace_crossings += 1;
             } else {
                 relations += 1;
@@ -2113,18 +2243,9 @@ fn workspace_refusal() -> Box<CommandRefusalV1> {
     })
 }
 
-fn mapped_histories(
-    resolved: &Resolved,
-    capture: &LegacyRawCaptureV1,
-    snapshot: DigestV1,
-) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, Box<CommandRefusalV1>> {
-    let members = resolved.declared_members().map_err(|_| workspace_refusal())?;
-    mapped_histories_for_source(&resolved.selection.source, &members, capture, snapshot)
-}
-
 fn mapped_histories_for_source(
     source: &SourceCoordinateV1,
-    members: &[aep_domain::workspace::MemberName],
+    membership: &aep_domain::workspace::Membership,
     capture: &LegacyRawCaptureV1,
     snapshot: DigestV1,
 ) -> std::result::Result<Vec<entity_store::asynchronous::SubjectHistory>, Box<CommandRefusalV1>> {
@@ -2133,7 +2254,7 @@ fn mapped_histories_for_source(
             let SourceCoordinateV1::Markdown(_) = source else {
                 return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch));
             };
-            aep_planning_migration::markdown_boundaries_raw(raw, members)
+            aep_planning_migration::markdown_boundaries_raw(raw, membership)
                 .map_err(|error| markdown_mapping_refusal(source, raw, &error))?
         }
         LegacyRawCaptureV1::Sqlite(raw) | LegacyRawCaptureV1::Postgres(raw) => {
@@ -2162,7 +2283,7 @@ fn mapped_histories_for_source(
             if !matches!(source, SourceCoordinateV1::Hybrid(_)) {
                 return Err(source_refusal(source, CommandRefusalCodeV1::SemanticMismatch));
             }
-            let local = aep_planning_migration::markdown_boundaries_raw(&raw.local, members)
+            let local = aep_planning_migration::markdown_boundaries_raw(&raw.local, membership)
                 .map_err(|error| markdown_mapping_refusal(source, &raw.local, &error))?;
             let replica = aep_planning_migration::sql_boundaries(&raw.replica, &snapshot.as_wire())
                 .map_err(|_| {
@@ -2329,8 +2450,51 @@ fn intended_v2_selector(resolved: &Resolved, authority: &AuthorityCoordinateV1) 
     Ok(output.into_bytes())
 }
 
+/// The authored relations one imported subject carries that cross to another declared member.
+///
+/// The **same** predicate the dry-run receipt counts with, asked of the **same** authored relation
+/// list: `instance_of` retains `relations:` verbatim in the subject's body and projection reads it
+/// back, so the list in the authority is the list in the frontmatter. A relation that is not a
+/// crossing became an `aep.relation` subject and is counted there; one that is a crossing has no
+/// destination entity here and is counted only from the body. The two therefore still add to what
+/// the source declares, which is what the pair's published description promises.
+///
+/// It is read from the authority rather than carried forward from the dry-run receipt because
+/// `verify`, `projection rebuild` and an Eventlog `inspect` have no source to read: the selector
+/// is v2 and the Markdown tree is gone. A receipt that can only be right on one of the four
+/// commands is the shape this count already had.
+fn crossings_in_body(
+    terminal: &entity_core::EntityInstance,
+    membership: &aep_domain::workspace::Membership,
+) -> u64 {
+    // `fields.document.fields.relations`, and each step of that path is somebody's decision:
+    // the Eventlog authority wraps every subject's terminal value under `document`
+    // (`aep-backend-eventlog/src/lib.rs:346`, and how `projection.rs:281` reads a watermark back),
+    // and inside it `instance_of` retains the frontmatter `relations:` list verbatim so a
+    // projection can write the document out again unchanged. A subject that carries no relations
+    // — a projection watermark, a legacy evidence blob, a story with none — has no such key and
+    // contributes nothing.
+    terminal
+        .fields
+        .get("document")
+        .and_then(|document| document.get("fields"))
+        .and_then(|fields| fields.get("relations"))
+        .and_then(|value| {
+            serde_json::from_value::<Vec<aep_domain::artifact::ArtifactRelation>>(value.clone())
+                .ok()
+        })
+        .map(|relations| {
+            relations
+                .iter()
+                .filter(|relation| relation.crosses_to_a_declared_member(membership))
+                .count() as u64
+        })
+        .unwrap_or_default()
+}
+
 fn inventory_from_histories(
     histories: &[entity_store::asynchronous::SubjectSnapshot],
+    membership: &aep_domain::workspace::Membership,
 ) -> InventoryFacts {
     let mut inventory = InventoryCountsV1::default();
     let mut history = HistorySummaryV1::default();
@@ -2341,7 +2505,10 @@ fn inventory_from_histories(
             aep_backend_entity::AUDIT_AS => inventory.audit_records += 1,
             aep_backend_entity::APPLIED_AS => inventory.applied_commands += 1,
             aep_backend_eventlog::INVOCATION_AS | "aep.planning-import-boundary" => {}
-            _ => inventory.entities += 1,
+            _ => {
+                inventory.entities += 1;
+                inventory.workspace_crossings += crossings_in_body(&subject.terminal, membership);
+            }
         }
         match &subject.history.origin {
             entity_store::asynchronous::HistoryOrigin::Genesis => history.complete_recorded += 1,
@@ -2422,7 +2589,7 @@ mod tests {
         let report = MarkdownStore::open(planning).load();
         assert!(report.is_clean(), "seed source must be clean");
         let graph = report
-            .graph_in_workspace(Vec::<aep_domain::workspace::MemberName>::new())
+            .graph_in_workspace(aep_domain::workspace::Membership::default())
             .expect("seed source graph");
         let backend =
             aep_backend_sqlite::SqliteBackend::open(database).expect("SQLite fixture opens");
@@ -2481,7 +2648,7 @@ mod tests {
         let report = MarkdownStore::open(planning).load();
         assert!(report.is_clean(), "seed source must be clean");
         let graph = report
-            .graph_in_workspace(Vec::<aep_domain::workspace::MemberName>::new())
+            .graph_in_workspace(aep_domain::workspace::Membership::default())
             .expect("seed source graph");
         let backend =
             aep_backend_postgres::PostgresBackend::connect(url).expect("PostgreSQL fixture opens");
@@ -2970,19 +3137,10 @@ mod tests {
 
     /// The workspace members declared beside the fixture store, read exactly as every ordinary
     /// planning read command reads them.
-    fn fixture_members(project: &Path) -> Vec<aep_domain::workspace::MemberName> {
-        aep_project::project::load_workspace(project).map_or_else(
-            |_| Vec::new(),
-            |workspace| {
-                workspace.map_or_else(Vec::new, |workspace| {
-                    workspace
-                        .members
-                        .iter()
-                        .map(|member| member.name.clone())
-                        .collect()
-                })
-            },
-        )
+    fn fixture_membership(project: &Path) -> aep_domain::workspace::Membership {
+        // Through the command's own reader, not a copy of it: a fixture that reads the declaration
+        // its own way cannot see the question the command asks, which is which member this is.
+        crate::planning::declared_membership(project).expect("the fixture declaration parses")
     }
 
     fn write_crossing_story(planning: &Path, target: &str) {
@@ -3042,11 +3200,20 @@ mod tests {
         .expect("workspace declaration");
         write_crossing_story(&planning, "other/story:theirs");
 
-        let members = fixture_members(&project);
-        assert_eq!(members.len(), 1, "the fixture declares exactly one member");
+        let membership = fixture_membership(&project);
+        assert_eq!(
+            membership.declared().len(),
+            1,
+            "the fixture declares exactly one member"
+        );
+        assert_eq!(
+            membership.own(),
+            None,
+            "and the fixture store is not that member, so its edge really does cross out"
+        );
         let before = MarkdownStore::open(&planning).load();
         before
-            .graph_in_workspace(members.clone())
+            .graph_in_workspace(membership.clone())
             .expect("the Markdown store is valid under its own declaration");
         let artifact: aep_domain::artifact::ArtifactId =
             "story:crossing".parse().expect("artifact id");
@@ -3109,7 +3276,7 @@ mod tests {
         let after = MarkdownStore::open(&planning).load();
         assert!(after.is_clean(), "{:?}", after.failures);
         after
-            .graph_in_workspace(members)
+            .graph_in_workspace(membership)
             .expect("the migrated store is a graph under the same declaration");
         // ... and the Eventlog arm reads the artifact back identically.
         let ordinary = resolve(&common).expect("the selected v2 selector reopens");
@@ -3253,12 +3420,38 @@ mod tests {
         project: PathBuf,
         planning: PathBuf,
         common: CommonArgs,
-        members: Vec<aep_domain::workspace::MemberName>,
+        membership: aep_domain::workspace::Membership,
         artifact: aep_domain::artifact::ArtifactId,
     }
 
     impl CrossingArms {
         fn build(name: &str) -> Self {
+            Self::build_with(
+                name,
+                "version: aep.workspace/1\nmembers:\n  - name: other\n    source: ../other\n",
+                "other/story:theirs",
+                None,
+            )
+        }
+
+        /// The same fixture, declared the way this repository's own `workspace.yaml` is: one
+        /// member, `source: ..`, and that member **is** this store. Its edge is written
+        /// `mine/story:one`, which is this store's own `story:one`.
+        fn build_declaring_itself(name: &str) -> Self {
+            Self::build_with(
+                name,
+                "version: aep.workspace/1\nmembers:\n  - name: mine\n    source: ..\n",
+                "mine/story:one",
+                Some("mine"),
+            )
+        }
+
+        fn build_with(
+            name: &str,
+            declaration: &str,
+            target: &str,
+            expected_own: Option<&str>,
+        ) -> Self {
             let project = std::env::temp_dir().join(format!(
                 "aep-cli-crossing-arms-{name}-{}-{}",
                 std::process::id(),
@@ -3274,17 +3467,22 @@ mod tests {
                 "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
             )
             .expect("legacy selector");
-            fs::write(
-                engineering.join("workspace.yaml"),
-                "version: aep.workspace/1\nmembers:\n  - name: other\n    source: ../other\n",
-            )
-            .expect("workspace declaration");
+            fs::write(engineering.join("workspace.yaml"), declaration)
+                .expect("workspace declaration");
             write_one_story(&planning, "A local story");
-            write_crossing_story(&planning, "other/story:theirs");
+            write_crossing_story(&planning, target);
 
-            let members = crate::planning::declared_members(&project)
-                .expect("the fixture declaration parses");
-            assert_eq!(members.len(), 1, "the fixture declares exactly one member");
+            let membership = fixture_membership(&project);
+            assert_eq!(
+                membership.declared().len(),
+                1,
+                "the fixture declares exactly one member"
+            );
+            assert_eq!(
+                membership.own().map(aep_domain::workspace::MemberName::as_str),
+                expected_own,
+                "which member this store is decides whether `{target}` leaves the repository"
+            );
             Self {
                 project,
                 planning,
@@ -3292,7 +3490,7 @@ mod tests {
                     project: Some(selector),
                     format: StoreOutputFormat::Json,
                 },
-                members,
+                membership,
                 artifact: "story:crossing".parse().expect("artifact id"),
             }
         }
@@ -3315,7 +3513,10 @@ mod tests {
         }
 
         /// Runs the cutover in process, exactly as `plan store migrate apply` runs it.
-        fn migrate(&self) {
+        ///
+        /// Returns the two receipts an operator reads in order — the dry-run's and the apply's —
+        /// so a case can compare what the cutover promised with what it reported afterwards.
+        fn migrate(&self) -> (InventoryCountsV1, ApplyCompleteV1) {
             let destination = DestinationRequestV2::ProviderAssigned {
                 logical_scope: AuthorityValueV1::new("planning-arms-test").expect("scope"),
                 tenant: AuthorityValueV1::new("tenant-arms-test").expect("tenant"),
@@ -3331,9 +3532,10 @@ mod tests {
                 MigrationIdV1::new("cli-crossing-arms").expect("migration"),
                 &DisposableWriterControl,
             );
-            let ApplyOutcomeV1::Complete(_) = applied.outcome else {
+            let ApplyOutcomeV1::Complete(complete) = applied.outcome else {
                 panic!("the declared crossing applies: {:?}", applied.outcome)
             };
+            (preview.inventory, complete)
         }
 
         /// The Eventlog arm, opened the way the read commands open it once the selector is v2.
@@ -3346,6 +3548,82 @@ mod tests {
         fn discard(self) {
             let _ = fs::remove_dir_all(&self.project);
         }
+    }
+
+    /// Every receipt that publishes the two counts publishes the **same** two.
+    ///
+    /// `InventoryCountsV1`'s own description of the pair is that "the two sum to what the source
+    /// declares". `inventory_from_histories` never assigned the crossing half, so `apply`,
+    /// `verify`, `projection rebuild` and an Eventlog `inspect` each published `0` for a store
+    /// whose dry-run receipt — same store, same declaration, minutes earlier — published `1`. The
+    /// documented procedure is dry-run, read the receipt, apply, read the receipt: the number
+    /// changed between them with nothing said.
+    ///
+    /// Asserted **per side**, never as a sum. The dry-run split is one `if`/`else` over one
+    /// iteration, so `relations + workspace_crossings` always equals the source there, and on the
+    /// four receipts below the sum was `relations + 0` — which is also a sum, just the wrong one.
+    /// Only the sides say which.
+    #[test]
+    fn every_receipt_that_publishes_the_two_counts_publishes_the_same_two() {
+        let arms = CrossingArms::build("counts");
+        let (preview, applied) = arms.migrate();
+
+        // What the cutover promised, per side. One authored relation, and it crosses out.
+        assert_eq!(
+            (preview.relations, preview.workspace_crossings),
+            (0, 1),
+            "the dry-run receipt splits the store's one authored relation: {preview:?}"
+        );
+
+        let applied_counts = &applied.current.inventory;
+        assert_eq!(
+            (applied_counts.relations, applied_counts.workspace_crossings),
+            (0, 1),
+            "the apply receipt reports the same two counts the dry-run receipt did: \
+             {applied_counts:?}"
+        );
+
+        let verified = verify(&arms.common);
+        let VerificationOutcomeV1::Verified(verified) = verified.outcome else {
+            panic!("the migrated store verifies: {:?}", verified.outcome)
+        };
+        let verified_counts = &verified.authority.inventory;
+        assert_eq!(
+            (verified_counts.relations, verified_counts.workspace_crossings),
+            (0, 1),
+            "`verify` reports the same two counts: {verified_counts:?}"
+        );
+
+        let inspected = inspect(&arms.common);
+        let InspectionOutcomeV1::Observed(inspected) = inspected.outcome else {
+            panic!("the migrated store inspects: {:?}", inspected.outcome)
+        };
+        assert_eq!(
+            (
+                inspected.inventory.relations,
+                inspected.inventory.workspace_crossings
+            ),
+            (0, 1),
+            "an Eventlog `inspect` reports the same two counts: {:?}",
+            inspected.inventory
+        );
+
+        let rebuilt = rebuild_with_control(
+            &arms.common,
+            applied.current.snapshot_id,
+            &DisposableWriterControl,
+        );
+        let RebuildOutcomeV1::Rebuilt(rebuilt) = rebuilt.outcome else {
+            panic!("the projection rebuilds: {:?}", rebuilt.outcome)
+        };
+        let rebuilt_counts = &rebuilt.authority.inventory;
+        assert_eq!(
+            (rebuilt_counts.relations, rebuilt_counts.workspace_crossings),
+            (0, 1),
+            "`projection rebuild` reports the same two counts: {rebuilt_counts:?}"
+        );
+
+        arms.discard();
     }
 
     /// The crossing, as a read path's own value spells it, on whichever arm.
@@ -3469,7 +3747,7 @@ mod tests {
         let markdown = serde_json::to_value(
             before
                 .report
-                .graph_in_workspace(arms.members.clone())
+                .graph_in_workspace(arms.membership.clone())
                 .expect("the Markdown store is a graph under its own declaration"),
         )
         .expect("`graph --format json` serialises");
@@ -3481,7 +3759,7 @@ mod tests {
         let eventlog = serde_json::to_value(
             after
                 .report
-                .graph_in_workspace(arms.members.clone())
+                .graph_in_workspace(arms.membership.clone())
                 .expect("the migrated store is a graph under the same declaration"),
         )
         .expect("`graph --format json` serialises");
@@ -3699,6 +3977,77 @@ mod tests {
             eventlog, markdown,
             "the cutover changes nothing about which edges are relation records"
         );
+    }
+
+    /// The same question for an edge into the member this store **is**: a relation record, on both
+    /// arms.
+    ///
+    /// The mirror of the case above, and the one that decides the defect. `mine/story:one` read in
+    /// `mine` is this store's own `story:one` — `WorkspaceRef`'s long spelling of a local edge —
+    /// so the relation surface holds it on the Markdown arm (`seed.rs` resolves the target before
+    /// asking whether it names a member) and on the Eventlog arm (the mapper resolves it before
+    /// looking the destination entity up). Counted **per arm**, because the defect was that one
+    /// arm answered differently from the other and no total said so.
+    #[test]
+    fn a_self_member_edge_is_a_relation_record_on_both_arms() {
+        use aep_contract::query::{QueryService, RelationQuery};
+
+        let arms = CrossingArms::build_declaring_itself("self-surface");
+        let edges = |opened: &crate::planning::Opened| -> usize {
+            let backend = opened.backend().expect("the arm was opened with a backend");
+            let locator = aep_domain::entity::EntityLocator::new(
+                aep_backend_markdown::backend::ORGANISATION,
+                aep_backend_markdown::backend::SPACE,
+                arms.artifact.namespace(),
+                arms.artifact.name(),
+            )
+            .expect("the artifact has an address");
+            let entity = block_on(QueryService::resolve(backend, &locator))
+                .expect("the artifact is in this arm");
+            block_on(QueryService::relations(
+                backend,
+                &RelationQuery {
+                    source: Some(aep_domain::entity::EntityRef::new(entity)),
+                    ..RelationQuery::default()
+                },
+            ))
+            .expect("the arm answers for the edges leaving the artifact")
+            .items
+            .len()
+        };
+
+        let before = arms.markdown(true);
+        let markdown = edges(&before);
+        drop(before);
+
+        let (preview, applied) = arms.migrate();
+
+        let after = arms.eventlog(true);
+        let eventlog = edges(&after);
+        drop(after);
+
+        assert_eq!(
+            markdown, 1,
+            "`mine/story:one` names this store's own `story:one`, so the Markdown arm's relation \
+             surface holds it exactly as it holds the unqualified spelling"
+        );
+        assert_eq!(
+            eventlog, 1,
+            "and the migrated authority holds it too; the cutover changes nothing about which \
+             edges are relation records"
+        );
+        assert_eq!(
+            (preview.relations, preview.workspace_crossings),
+            (1, 0),
+            "nothing crosses out of this store, and the dry-run receipt says so: {preview:?}"
+        );
+        let applied_counts = &applied.current.inventory;
+        assert_eq!(
+            (applied_counts.relations, applied_counts.workspace_crossings),
+            (1, 0),
+            "and the apply receipt says the same: {applied_counts:?}"
+        );
+        arms.discard();
     }
 
 

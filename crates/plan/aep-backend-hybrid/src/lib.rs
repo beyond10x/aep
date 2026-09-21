@@ -46,7 +46,7 @@ use aep_domain::command::Command;
 use aep_domain::entity::{ActorRef, EntityId, EntityLocator, EntityRef, EntityType};
 use aep_domain::project::HybridPolicy;
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 use entity_core::{Decision, DomainEvent, EntityInstance};
 use entity_remote::Hybrid;
 use entity_store::{
@@ -297,7 +297,7 @@ impl<R: AtomicBatchStore> HybridBackend<R> {
     /// Opens the plan at `root` with `replica` under `policy`, hydrating the contract from what the
     /// composite holds and remembering every divergence an earlier process wrote beside the plan.
     ///
-    /// `members`, `at`, `actor` and `lifecycles` are the markdown projection's, as for
+    /// `membership`, `at`, `actor` and `lifecycles` are the markdown projection's, as for
     /// `MarkdownBackend::open`.
     ///
     /// # Errors
@@ -308,7 +308,7 @@ impl<R: AtomicBatchStore> HybridBackend<R> {
         root: impl AsRef<Path>,
         replica: R,
         policy: Policy,
-        members: impl IntoIterator<Item = MemberName>,
+        membership: Membership,
         at: Timestamp,
         actor: ActorRef,
         lifecycles: aep_domain::artifact::LifecycleRegistry,
@@ -318,7 +318,7 @@ impl<R: AtomicBatchStore> HybridBackend<R> {
         for divergence in read_divergences(root)? {
             composite.remember(divergence);
         }
-        let projection = MarkdownProjection::new(members, at, actor, lifecycles);
+        let projection = MarkdownProjection::new(membership, at, actor, lifecycles);
         Ok(Self(EntityBackend::shaped(composite, projection)?))
     }
 

@@ -92,9 +92,11 @@ fn the_dry_run_inventory_is_the_number_of_relations_the_migration_imports() {
         .as_u64()
         .expect("the receipt carries a relation inventory");
 
-    let members = vec![MemberName::parse("other").expect("a member name")];
+    let membership = aep_domain::workspace::Membership::declaring([
+        MemberName::parse("other").expect("a member name")
+    ]);
     let histories =
-        aep_planning_migration::markdown_boundaries_raw(&capture_of(&project), &members)
+        aep_planning_migration::markdown_boundaries_raw(&capture_of(&project), &membership)
             .expect("the same capture the command mapped");
     let imported = histories
         .iter()

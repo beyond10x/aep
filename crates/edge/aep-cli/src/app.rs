@@ -1215,7 +1215,7 @@ fn markdown_conformance_backend(
     let root = scratch_or(store)?;
     let backend = aep_backend_markdown::backend::MarkdownBackend::open(
         &root,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         planning::clock_at_the_edge(),
         planning::command_actor()?,
         aep_domain::artifact::LifecycleRegistry::default(),
@@ -1327,7 +1327,7 @@ fn hybrid_conformance_backend(
         &root,
         replica,
         policy,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         planning::clock_at_the_edge(),
         planning::command_actor()?,
         aep_domain::artifact::LifecycleRegistry::default(),

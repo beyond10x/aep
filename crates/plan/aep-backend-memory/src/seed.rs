@@ -85,7 +85,11 @@ pub fn from_manifest<B: CommandService<Command = Command>>(
             .expect("the first pass stored every artifact in the manifest")
             .clone();
         for relation in &artifact.relations {
-            let target_id = relation.target.id();
+            // A target naming **this store's own** member is this store's artifact written the
+            // long way, and it seeds like any local edge — otherwise the spelling an author chose
+            // would decide whether the relation surface holds the edge.
+            let target_id = relation.target.id().local_to(graph.membership().own());
+            let target_id = target_id.as_ref();
             // **A crossing is not a dangling edge.** A target naming another member lives in
             // another store by construction; seeding one repository cannot resolve it, and failing
             // here made every verb that opens a backend refuse on a store holding a legitimate

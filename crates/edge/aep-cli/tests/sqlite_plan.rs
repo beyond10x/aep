@@ -17,7 +17,7 @@ use aep_contract::testing::block_on;
 use aep_contract::QueryConsistency;
 use aep_domain::entity::{ActorRef, EntityRef};
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -26,20 +26,32 @@ fn repository_root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// The workspace members this repository declares, so a cross-repository edge is a crossing and not
-/// a dangling reference — the same list `protocol artifact` reads.
-fn declared_members(root: &Path) -> Vec<MemberName> {
-    aep_project::project::load_workspace(root).map_or_else(
-        |_| Vec::new(),
-        |workspace| {
-            workspace.map_or_else(Vec::new, |workspace| {
-                workspace
-                    .members
-                    .iter()
-                    .map(|member| member.name.clone())
-                    .collect()
-            })
-        },
+/// Where this repository's store stands in the workspace it declares: who it is, and who else it
+/// names — the same value `protocol artifact` reads.
+///
+/// `own` matters here and not only in principle: this repository's own declaration names itself
+/// (`engineering-protocols`, `source: ..`), so without it an edge written
+/// `engineering-protocols/story:x` in this very store would seed as a crossing on one arm.
+/// `crate::planning::declared_membership` is the reader the commands use and is not reachable from
+/// an integration test; this mirrors its rule — the member whose path source resolves to this
+/// repository — and nothing else.
+fn declared_membership(root: &Path) -> Membership {
+    let Ok(Some(workspace)) = aep_project::project::load_workspace(root) else {
+        return Membership::default();
+    };
+    let engineering = root.join(".engineering");
+    let here = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let own = workspace
+        .members
+        .iter()
+        .find(|member| {
+            aep_project::project::resolve_member(member, &engineering)
+                .is_ok_and(|path| path.canonicalize().unwrap_or(path) == here)
+        })
+        .map(|member| member.name.clone());
+    Membership::new(
+        own,
+        workspace.members.iter().map(|member| member.name.clone()),
     )
 }
 
@@ -47,12 +59,12 @@ fn declared_members(root: &Path) -> Vec<MemberName> {
 fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history() {
     let root = repository_root();
     let planning = root.join(".engineering/planning");
-    let members = declared_members(&root);
+    let membership = declared_membership(&root);
     let store = MarkdownStore::open(&planning);
     let report = store.load();
     assert!(report.is_clean(), "this repository's plan reads cleanly");
     let graph = report
-        .graph_in_workspace(members.clone())
+        .graph_in_workspace(membership.clone())
         .expect("the plan is a graph");
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
@@ -79,7 +91,7 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
     // same commands in the same order, so the identities and the history must agree.
     let markdown = MarkdownBackend::open(
         &planning,
-        members,
+        membership,
         at,
         actor,
         aep_domain::artifact::LifecycleRegistry::default(),

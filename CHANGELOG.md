@@ -11,6 +11,28 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
+- A relation qualified with **this store's own** declared member name is a local edge again, on
+  every path that reads one. A workspace file that names its own repository is the ordinary shape —
+  this one's names `engineering-protocols` with `source: ..`, deliberately — and under it
+  `engineering-protocols/story:x` is `WorkspaceRef`'s long spelling of this store's `story:x`. Every
+  reader answered from the member list alone, which cannot tell that case from a crossing, so
+  `plan store migrate dry-run` counted a local edge as a `workspace_crossing` and imported no
+  relation record for it, `plan artifact validate` printed `valid` for a store whose only edge was a
+  dangling `own-member/story:typo`, and the migration admitted that store. The rule is now one
+  rule with the member it is read in as an input: an edge into this store's own member is local,
+  resolved here and dangling if its target is absent; an edge into another declared member is a
+  crossing; anything else is a misspelling and a dangling edge. `aep workspace crossings` no longer
+  lists an edge from a member to itself.
+
+- `plan store migrate apply`, `plan store migrate verify`, `plan store projection rebuild` and
+  `plan store inspect` on a migrated store now publish `inventory.workspace_crossings` instead of a
+  hard `0`. The count was assigned only on the dry-run path, so four of the five receipts carrying
+  the field reported `relations + 0` against a published description promising that the two sum to
+  what the source declares — the number changed between the dry-run receipt and the apply receipt
+  of one cutover, with nothing said. All four now count it from the same rule and the same authored
+  relation list. An unreadable `workspace.yaml` is refused on those paths at `field: workspace`, as
+  it already was on `dry-run`.
+
 - `aep plan store migrate dry-run` and `apply` now build the source's artifact graph with the
   workspace members its `.engineering/workspace.yaml` declares, exactly as `plan artifact validate`
   and every other read command already did. A relation into a declared member is a crossing an

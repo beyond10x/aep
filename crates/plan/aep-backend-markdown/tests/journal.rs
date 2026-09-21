@@ -400,7 +400,7 @@ fn a_move_made_by_a_driven_session_is_journalled_as_the_agents_and_not_the_opera
     let session = ActorRef::parse("agent:W4-3.1").expect("an actor");
     let store = MarkdownBackend::open(
         &root,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
         session.clone(),
         aep_domain::artifact::LifecycleRegistry::default(),

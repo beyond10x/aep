@@ -32,7 +32,7 @@ fn ladders() -> aep_domain::artifact::LifecycleRegistry {
 fn backend(name: &str) -> MarkdownBackend {
     MarkdownBackend::open(
         scratch(name),
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
         ActorRef::parse("human:conformance").expect("a well-formed actor"),
         ladders(),
@@ -145,8 +145,14 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
-        .expect("the store opens");
+    let store = MarkdownBackend::open(
+        &root,
+        aep_domain::workspace::Membership::default(),
+        at,
+        actor.clone(),
+        ladders(),
+    )
+    .expect("the store opens");
 
     let locator = EntityLocator::parse("ep://planning/store/story/one").expect("a locator");
     let id = block_on(store.resolve(&locator)).expect("the seeded entity resolves");
@@ -209,8 +215,14 @@ fn a_created_entity_becomes_a_document_this_store_holds() {
     let root = scratch("created");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
-        .expect("an empty store opens");
+    let store = MarkdownBackend::open(
+        &root,
+        aep_domain::workspace::Membership::default(),
+        at,
+        actor.clone(),
+        ladders(),
+    )
+    .expect("an empty store opens");
 
     let payload = Command::CreateEntity(CreateEntity {
         entity_type: EntityType::parse("aep.story/v1").expect("a type"),
@@ -266,7 +278,7 @@ fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let store = MarkdownBackend::open(
         &root,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         at,
         ActorRef::parse("human:operator").expect("an actor"),
         ladders(),
@@ -303,8 +315,14 @@ fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
-        .expect("the store opens");
+    let store = MarkdownBackend::open(
+        &root,
+        aep_domain::workspace::Membership::default(),
+        at,
+        actor.clone(),
+        ladders(),
+    )
+    .expect("the store opens");
 
     let one = block_on(
         store.resolve(&EntityLocator::parse("ep://planning/store/story/one").expect("a locator")),
@@ -382,8 +400,14 @@ fn a_status_off_the_ladder_is_refused_however_it_arrives() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders)
-        .expect("the store opens");
+    let store = MarkdownBackend::open(
+        &root,
+        aep_domain::workspace::Membership::default(),
+        at,
+        actor.clone(),
+        ladders,
+    )
+    .expect("the store opens");
 
     let id = block_on(
         store.resolve(&EntityLocator::parse("ep://planning/store/story/one").expect("a locator")),
@@ -439,8 +463,14 @@ fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
     let root = scratch("prose");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(&root, std::iter::empty(), at, actor.clone(), ladders())
-        .expect("an empty store opens");
+    let store = MarkdownBackend::open(
+        &root,
+        aep_domain::workspace::Membership::default(),
+        at,
+        actor.clone(),
+        ladders(),
+    )
+    .expect("an empty store opens");
 
     let context = |name: &str| {
         CommandContext::new(
