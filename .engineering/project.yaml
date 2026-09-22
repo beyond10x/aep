@@ -1,15 +1,1 @@
-version: aep.project/1
-
-# The protocol tree is this repository itself. Every path here is resolved against the `.engineering`
-# directory (`crates/govern/aep-domain/src/project.rs`, `ProjectPaths::resolved`), so the repository root —
-# the directory holding `protocols/`, `principles/`, `workflows/`, `profiles/` and
-# `artifacts/lifecycles/` — is `..`, one level up. An adopting project normally names a pinned Git
-# repository source; this repository uses the local form because it is the tree being loaded.
-protocol: adp/1
-profile: development.standard
-protocols: ..
-
-summary: >-
-  The protocol repository, planned in its own store: the harness family — the reference driver, the
-  planning store's road to being a backend, and the evidence that says a story is done — kept as
-  markdown under .engineering/planning/.
+{"version":"aep.project/2","protocol":"adp/1","profile":"development.standard","summary":"The protocol repository, planned in its own store: the harness family — the reference driver, the planning store's road to being a backend, and the evidence that says a story is done — kept as markdown under .engineering/planning/.","protocols":"..","store":{"eventlog":{"path":"state","projection":"planning"}},"planning_scope":"aep","planning_tenant":"planning","planning_identity":"01a0cae6-7e88-710c-8913-d70d29cb7b4c"}

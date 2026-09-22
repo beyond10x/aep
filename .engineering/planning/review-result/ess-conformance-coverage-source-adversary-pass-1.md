@@ -25,7 +25,7 @@ The unstaged, untracked addition is `crates/observe/aep-ess-evidence/tests/cover
 
 ## 1. Scope and test-first order
 
-This first implementation pass covers exact frozen subject `48efe3783b559caf17f7d70510935e253d8b3d6f`, base `4ecc1b63b53bbfcb31fd55f277e62643083375b1`, branch `impl/ess-conformance-coverage`, in `/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage`. The full installed adversary 0.8.0 charter, repository AGENTS, complete unit work order/story, accepted AEP binding, all six immutable binding inputs, full 47-path diff, original new tests and touched public callers were read before writing the first case. Read-only ESS owners were additionally inspected to resolve inherited optional-field and Node semantics; their exact hashes are in `logs/read-only-ess-owners.sha256`.
+This first implementation pass covers exact frozen subject `48efe3783b559caf17f7d70510935e253d8b3d6f`, base `4ecc1b63b53bbfcb31fd55f277e62643083375b1`, branch `impl/ess-conformance-coverage`, in `~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage`. The full installed adversary 0.8.0 charter, repository AGENTS, complete unit work order/story, accepted AEP binding, all six immutable binding inputs, full 47-path diff, original new tests and touched public callers were read before writing the first case. Read-only ESS owners were additionally inspected to resolve inherited optional-field and Node semantics; their exact hashes are in `logs/read-only-ess-owners.sha256`.
 
 The before count is the supplied implementor measurement: 1,360 passed, zero failed/ignored over 65 summaries, from report SHA256 `266914db656135b55418d436dd8e1bbf5403f569cc738473ccfd2a62385d3717`. No baseline suite was run before the new case. The first authored file hash is retained, together with its helper-corrected hash immediately before the first behavioral execution.
 
@@ -42,8 +42,8 @@ The first attempt did not execute a case: the independent digest helper assumed 
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass1 parent_lineage_accepts_omitted_nested_defaults -- --exact --nocapture
-   Compiling aep-domain v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-domain)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-domain v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-domain)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
 error[E0277]: the trait bound `Array<u8, UInt<UInt<UInt<UInt<..., ...>, ...>, ...>, ...>>: LowerHex` is not satisfied
   --> crates/observe/aep-ess-evidence/tests/coverage_adversary_pass1.rs:11:41
    |
@@ -62,7 +62,7 @@ error[E0277]: the trait bound `Array<u8, UInt<UInt<UInt<UInt<..., ...>, ...>, ..
              compiler_builtins::math::libm_math::support::hex_float::hex_fmt::Hex<T>
              i128
            and 12 others
-   = note: the full name for the type has been written to '/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/target/debug/deps/coverage_adversary_pass1-d99d6b146cc9dd4c.long-type-8176063059937299242.txt'
+   = note: the full name for the type has been written to '~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/target/debug/deps/coverage_adversary_pass1-d99d6b146cc9dd4c.long-type-8176063059937299242.txt'
    = note: consider using `--verbose` to print the full type name to the console
 
 For more information about this error, try `rustc --explain E0277`.
@@ -74,7 +74,7 @@ The helper-corrected first behavioral case ran alone before any suite. Its verba
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass1 parent_lineage_accepts_omitted_nested_defaults -- --exact --nocapture
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
     Finished `test` profile [unoptimized] target(s) in 0.20s
      Running tests/coverage_adversary_pass1.rs (target/debug/deps/coverage_adversary_pass1-d99d6b146cc9dd4c)
 
@@ -100,7 +100,7 @@ The remaining adapter cases were then authored and executed, followed by the two
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass1 -- --nocapture
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
     Finished `test` profile [unoptimized] target(s) in 0.27s
      Running tests/coverage_adversary_pass1.rs (target/debug/deps/coverage_adversary_pass1-d99d6b146cc9dd4c)
 
@@ -132,24 +132,24 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; 
 error: test failed, to rerun pass `-p aep-ess-evidence --test coverage_adversary_pass1`
 elapsed_seconds=0.287
 cargo test --locked -p aep-cli --test ess_conformance_coverage adversary_coverage_ -- --nocapture
-   Compiling aep-domain v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-domain)
-   Compiling aep-contract v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-contract)
-   Compiling aep-driver-spec v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-driver-spec)
-   Compiling aep-render v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-render)
-   Compiling aep-backend-memory v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-memory)
-   Compiling aep-backend-entity v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-entity)
-   Compiling aep-engine v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-engine)
-   Compiling aep-backend-markdown v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-markdown)
-   Compiling aep-backend-postgres v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-postgres)
-   Compiling aep-backend-sqlite v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-sqlite)
-   Compiling aep-conformance v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-conformance)
-   Compiling aep-schema v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-schema)
-   Compiling aep-driver v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-driver)
-   Compiling aep-project v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-project)
-   Compiling aep-backend-hybrid v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-hybrid)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
-   Compiling trace-spec v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/trace-spec)
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
+   Compiling aep-domain v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-domain)
+   Compiling aep-contract v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-contract)
+   Compiling aep-driver-spec v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-driver-spec)
+   Compiling aep-render v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-render)
+   Compiling aep-backend-memory v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-memory)
+   Compiling aep-backend-entity v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-entity)
+   Compiling aep-engine v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/govern/aep-engine)
+   Compiling aep-backend-markdown v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-markdown)
+   Compiling aep-backend-postgres v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-postgres)
+   Compiling aep-backend-sqlite v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-sqlite)
+   Compiling aep-conformance v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-conformance)
+   Compiling aep-schema v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-schema)
+   Compiling aep-driver v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/drive/aep-driver)
+   Compiling aep-project v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-project)
+   Compiling aep-backend-hybrid v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/plan/aep-backend-hybrid)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling trace-spec v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/trace-spec)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
     Finished `test` profile [unoptimized] target(s) in 16.94s
      Running tests/ess_conformance_coverage.rs (target/debug/deps/ess_conformance_coverage-e32be10b1f0a589e)
 
@@ -168,8 +168,8 @@ The authoritative command was run directly with `--no-fail-fast` so every assign
 
 ```text
 cargo test --locked -p aep-domain -p aep-engine -p aep-ess-evidence -p aep-schema -p aep-cli --no-fail-fast
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
     Finished `test` profile [unoptimized] target(s) in 0.70s
      Running unittests src/aep.rs (target/debug/deps/aep-1b91394d0d0670f1)
 
@@ -2036,7 +2036,7 @@ c8915db5eccd5886c9a38958409adf4f4b557af4ab2d7d2de32d4f73f52752c0  crates/edge/ae
 
 The complete ordered execution manifest is `target/ess-conformance-coverage/adversary-pass-1/execution-manifest.json`, SHA256 `f50d7f00d4ce6f79c639f63154ec82a28d084cd6e14a6caa06e0fcb58c88590f`. Its raw log/fixture file catalog is `execution-files.sha256`, SHA256 `1aac4dca2022dc9beed38c90258e4c55c92223c0d65a40c39ec3fc3efc91e56c`. The catalog includes every retained command/output/exit/count file, complete frozen and added-test diffs, input/preservation hashes and the newly executed engine/inspection fixtures. The report is separately hashed to avoid a self-referential manifest. Read-only ESS owner inspection and binding/source verification are not counted as test execution.
 
-The sole assigned outside-worktree output root was **`/home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-1-tmp`**, set as TMPDIR for Cargo and the required existing outside-project tests. `logs/outside-retained-files.txt` lists retained leaf files; temporary leaves created and removed by the inherited test/runtime lifecycle were not individually traced. No external store, repository, shared target, new daemon, integration or install was used. Build output stayed under this unit's `target`; newly authored fixtures and all review/report output stayed under `target/ess-conformance-coverage/adversary-pass-1`. The full existing suite additionally uses its inherited local `target` fixture paths. No agent cleanup was performed. Final measured free space was 14,617,993,216 bytes, above the 8 GiB floor; the lowest sampled value during this pass was 14,603,894,784 bytes.
+The sole assigned outside-worktree output root was **`~/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-1-tmp`**, set as TMPDIR for Cargo and the required existing outside-project tests. `logs/outside-retained-files.txt` lists retained leaf files; temporary leaves created and removed by the inherited test/runtime lifecycle were not individually traced. No external store, repository, shared target, new daemon, integration or install was used. Build output stayed under this unit's `target`; newly authored fixtures and all review/report output stayed under `target/ess-conformance-coverage/adversary-pass-1`. The full existing suite additionally uses its inherited local `target` fixture paths. No agent cleanup was performed. Final measured free space was 14,617,993,216 bytes, above the 8 GiB floor; the lowest sampled value during this pass was 14,603,894,784 bytes.
 
 All source and scratch writes are relinquished with this immutable report. Root owns any correction, Git/store recording, generated delivery work, later review, integration and cleanup.
 

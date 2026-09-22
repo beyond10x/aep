@@ -39,3 +39,5 @@ website/static/lab/
 # per-run spend, which a public tree should not carry. The readable account of a run is its wave
 # page (docs/plan/). Decision recorded in docs/plan/gap-register.md — delete this line to reverse.
 .engineering/runs/
+.engineering/.aep-planning-writer*.lock
+.engineering/migrations/

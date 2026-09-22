@@ -22,7 +22,7 @@ The pure optional reader admits original report/2 and suite/1–4 pairs, retains
 
 ## Gate environment correction
 
-The first complete suite ran 1,841 cases before stopping at an existing aep-project test: 1,840 passed, one failed, none ignored. Its fixture assumed `std::env::temp_dir()` had no project ancestor, but the assigned TMPDIR was inside this managed AEP checkout. No production or test source was changed. Root reassigned gate TMPDIR/GOTMPDIR to `/home/timo/.cache/ess-review/2026-09-06-resume/aep-gate-tmp`; the exact previously failing case passed, followed by the full workspace suite and every remaining gate command. The first nine passing step records are retained; failed `results.json`, original logs, focused correction and final `resolved-results.json` all remain available.
+The first complete suite ran 1,841 cases before stopping at an existing aep-project test: 1,840 passed, one failed, none ignored. Its fixture assumed `std::env::temp_dir()` had no project ancestor, but the assigned TMPDIR was inside this managed AEP checkout. No production or test source was changed. Root reassigned gate TMPDIR/GOTMPDIR to `~/.cache/ess-review/2026-09-06-resume/aep-gate-tmp`; the exact previously failing case passed, followed by the full workspace suite and every remaining gate command. The first nine passing step records are retained; failed `results.json`, original logs, focused correction and final `resolved-results.json` all remain available.
 
 The installed older CLI correctly refused the additive evidence vocabulary before opening the planning store. Completion records use this frozen source's freshly built `target/debug/aep`; the installed binary was not replaced. This is observed compatibility behavior, not a reason to reinterpret the new vocabulary for an old engine.
 
@@ -221,7 +221,7 @@ The installed older CLI correctly refused the additive evidence vocabulary befor
 
 ## Retention and remaining migration work
 
-Exact argv, times, stdout/stderr and exits are in `target/ess-conformance-v2-counts/final-gate`. The complete unit handoff and review archive is `/home/timo/.cache/ess-review/2026-09-06-resume/aep-count-reader-evidence.tar.gz`: 3,043 verified evidence files, SHA-256 `bb7667d85405e2eae4b0eb8ae21f5b34561b48f5d1697cb4ffcb47f00685c41f`. Its adjacent manifest binds file hashes and eight excluded disposable cache directories. No symlink fixture was omitted. Existing shared dependency caches are incidental infrastructure effects; no shared build target or replacement cache daemon was used. No owned test process remains.
+Exact argv, times, stdout/stderr and exits are in `target/ess-conformance-v2-counts/final-gate`. The complete unit handoff and review archive is `~/.cache/ess-review/2026-09-06-resume/aep-count-reader-evidence.tar.gz`: 3,043 verified evidence files, SHA-256 `bb7667d85405e2eae4b0eb8ae21f5b34561b48f5d1697cb4ffcb47f00685c41f`. Its adjacent manifest binds file hashes and eight excluded disposable cache directories. No symlink fixture was omitted. Existing shared dependency caches are incidental infrastructure effects; no shared build target or replacement cache daemon was used. No owned test process remains.
 
 Per-agent token and tool-use counters are unavailable from the resumed harness rather than estimated. Measured command durations remain in the reports. The coordinator owns all store, Git, publication and lifecycle writes.
 
