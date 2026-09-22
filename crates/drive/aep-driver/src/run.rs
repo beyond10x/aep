@@ -540,18 +540,23 @@ pub trait PlanSource {
     /// Where the plan is, for a note in the run's report.
     fn describe(&self) -> String;
 
-    /// The workspace members this plan is allowed to point at.
+    /// Where this plan's store stands in the workspace beside it.
     ///
     /// A relation into another repository is a **declared** edge when the workspace manifest names
     /// the member and a dangling one otherwise, and only the caller knows which — the driver reads
-    /// no manifest. Defaulting to none keeps a bare store's behaviour: nothing is declared, so a
-    /// crossing edge is dangling, which is what a store with no workspace beside it means.
+    /// no manifest. It also carries which member the store itself is, because a manifest that
+    /// names its own repository makes `own/story:x` another spelling of this store's `story:x`,
+    /// and a reader that cannot tell counts a local edge as leaving the repository.
+    /// [`Membership::default`] keeps a bare store's behaviour: nothing is declared, so a crossing
+    /// edge is dangling, which is what a store with no workspace beside it means.
     ///
     /// It exists because the two readers disagreed: `protocol artifact validate` called this
     /// repository's own store valid while `protocol drive` refused to start on it, both correct
     /// about a different question and only one of them told the truth about the store.
-    fn declared_members(&self) -> Vec<aep_domain::workspace::MemberName> {
-        Vec::new()
+    ///
+    /// [`Membership::default`]: aep_domain::workspace::Membership::default
+    fn membership(&self) -> aep_domain::workspace::Membership {
+        aep_domain::workspace::Membership::default()
     }
 }
 
@@ -1253,7 +1258,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             return Err(report.failures.iter().map(ToString::to_string).collect());
         }
         report
-            .graph_in_workspace(self.store.declared_members())
+            .graph_in_workspace(self.store.membership())
             .map_err(|errors| {
                 errors
                     .as_slice()

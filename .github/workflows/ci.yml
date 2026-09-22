@@ -45,7 +45,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -53,15 +53,17 @@ jobs:
       - name: Fetch the annotated release record
         run: git fetch --tags --force --prune origin
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
-      - name: Install the declared MSRV toolchain
-        run: rustup toolchain install 1.85.0 --profile minimal
+      - name: Install the declared MSRV toolchains
+        run: |
+          rustup toolchain install 1.85.0 --profile minimal
+          rustup toolchain install 1.91.0 --profile minimal
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           # go-task 3.52.0 declares this exact minimum. GOTOOLCHAIN is deliberately local below,
           # so the setup version and the pinned task runner must move together.
@@ -76,14 +78,14 @@ jobs:
           go install github.com/go-task/task/v3/cmd/task@v3.52.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         if: ${{ !inputs.source_release }}
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: website/package-lock.json
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Run the repository gate
         run: task ${{ inputs.source_release && 'check-source' || 'check' }}

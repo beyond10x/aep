@@ -147,10 +147,15 @@ fn move_it(serving: &Serving, request: &Request, id: &str) -> Response {
     let Some(to) = asked.get("to").and_then(serde_json::Value::as_str) else {
         return Response::refusal(400, "a move names the status to reach, as `to`");
     };
-    let now = planning::now_at_the_edge();
-    match planning::moved_by(&serving.location, id, to, &now) {
+    let command_identity = asked
+        .get("command_identity")
+        .and_then(serde_json::Value::as_str);
+    let decided_on = asked
+        .get("decided_on")
+        .and_then(serde_json::Value::as_str);
+    match planning::moved_by(&serving.location, id, to, decided_on, command_identity) {
         Ok(outcome) => {
-            let status = if outcome.was_refused() { 409 } else { 200 };
+            let status = outcome.http_status();
             match serde_json::to_string(&outcome) {
                 Ok(body) => Response::json(status, body),
                 Err(error) => {
@@ -173,6 +178,15 @@ mod tests {
             token: "abc123".to_owned(),
             port: 8899,
             read_only,
+        }
+    }
+
+    fn serving_store(store: std::path::PathBuf) -> Serving {
+        Serving {
+            location: planning::StoreLocation::at(Some(store), None),
+            token: "abc123".to_owned(),
+            port: 8899,
+            read_only: false,
         }
     }
 
@@ -223,6 +237,39 @@ mod tests {
             "the refusal names the flag that caused it: {}",
             answer.body
         );
+    }
+
+    #[test]
+    fn a_served_mutation_uses_the_shared_new_build_writer_fence() {
+        let store = std::env::temp_dir().join(format!(
+            "aep-served-writer-fence-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&store);
+        std::fs::create_dir_all(store.join("story")).expect("fixture store");
+        std::fs::write(
+            store.join("story/one.md"),
+            "---\nformat: aep.planning-md/1\nid: story:one\nkind: story\nstatus: draft\ntitle: One\nrelations: []\nrevision: 1\n---\n",
+        )
+        .expect("fixture document");
+        let paused_writer =
+            crate::planning_writer_fence::PlanningWriterFence::acquire_explicit(&store)
+                .expect("another admitted writer pauses");
+        let asked = request(
+            "POST /api/artifact/story:one/move?t=abc123 HTTP/1.1\r\n\
+             Host: 127.0.0.1:8899\r\nContent-Length: 15\r\n\r\n{\"to\":\"active\"}",
+        );
+        let answer = answer(&serving_store(store.clone()), &asked);
+        assert_eq!(answer.status, 400);
+        assert!(
+            answer
+                .body
+                .contains("another admitted planning writer or migration holds"),
+            "{}",
+            answer.body
+        );
+        drop(paused_writer);
+        let _ = std::fs::remove_dir_all(store);
     }
 
     #[test]

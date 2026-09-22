@@ -18,6 +18,7 @@
 //! thing to the protocol; only the graph is normative. This is why AEP can be adopted without
 //! moving anybody's documents.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::str::FromStr;
@@ -28,7 +29,7 @@ use crate::facts::{FactPath, FactStore, FactValue};
 use crate::ids::{ProviderId, RepositoryRef};
 use crate::node::Node;
 use crate::time::Timestamp;
-use crate::workspace::MemberName;
+use crate::workspace::{MemberName, Membership};
 
 /// Identifier of an artifact, written `<namespace>:<name>`, such as `design:passkeys-auth`.
 ///
@@ -51,6 +52,38 @@ impl ArtifactId {
     #[must_use]
     pub fn member(&self) -> Option<&str> {
         self.namespace.split_once('/').map(|(member, _)| member)
+    }
+
+    /// This id as the store that **is** `own` spells it.
+    ///
+    /// `engineering-protocols/story:local` read inside `engineering-protocols` is `story:local`:
+    /// [`crate::workspace::WorkspaceRef`] defines `member/kind:name` as *that member's* artifact
+    /// wherever it is read from, so read inside that member it is an artifact of this store,
+    /// written the long way. Every other id — one naming another member, one naming no member, and
+    /// every id at all when `own` is `None` — is returned untouched.
+    ///
+    /// It exists because the spelling an author chose must not decide anything. Resolving the two
+    /// spellings differently made `engineering-protocols/story:local` import no relation record
+    /// while `story:local` imported one, and let a dangling
+    /// `engineering-protocols/story:typo-that-does-not-exist` past the check that refuses
+    /// `story:typo-that-does-not-exist`.
+    #[must_use]
+    pub fn local_to(&self, own: Option<&MemberName>) -> Cow<'_, Self> {
+        let Some(own) = own else {
+            return Cow::Borrowed(self);
+        };
+        match self.namespace.split_once('/') {
+            // `!rest.is_empty()`: `own/:name` parses as an id whose namespace ends in the
+            // separator, and stripping it would build an id with no namespace at all — a value
+            // `ArtifactId::new` refuses and nothing downstream expects.
+            Some((member, rest)) if member == own.as_str() && !rest.is_empty() => {
+                Cow::Owned(Self {
+                    namespace: rest.to_owned(),
+                    name: self.name.clone(),
+                })
+            }
+            _ => Cow::Borrowed(self),
+        }
     }
 
     /// Parses an artifact id.
@@ -1310,6 +1343,29 @@ impl ArtifactRelation {
             .into(),
         )
     }
+
+    /// Whether this edge leaves the manifest for **another** member `membership` declares.
+    ///
+    /// The one spelling of the rule. [`ArtifactGraph::build_in_workspace`] asks it to decide that
+    /// a target outside this manifest is not a defect, and a migration asks it to decide that such
+    /// an edge is a *crossing* rather than a relation record it is going to import — two questions
+    /// that have to have the same answer, because a receipt promising a record the mapper will not
+    /// produce is a promise nobody can check afterwards.
+    ///
+    /// Three cases, and the rule needs [`Membership`] rather than a member list because the first
+    /// two cannot be told apart without knowing which member this store is:
+    ///
+    /// * a target naming **this store's own** member is a local edge. It resolves against this
+    ///   manifest under its unqualified id ([`ArtifactId::local_to`]), it is imported as a relation
+    ///   record, and it is dangling when this manifest does not declare it.
+    /// * a target naming **another declared** member is a crossing, left for an assembly.
+    /// * a target naming **anything else** is a misspelled member name and stays a dangling edge.
+    pub fn crosses_to_a_declared_member(&self, membership: &Membership) -> bool {
+        self.target
+            .id()
+            .member()
+            .is_some_and(|member| !membership.is_own(member) && membership.declares(member))
+    }
 }
 
 impl fmt::Display for ArtifactRelation {
@@ -2288,17 +2344,18 @@ impl LifecycleRegistry {
 #[serde(transparent)]
 pub struct ArtifactGraph {
     artifacts: BTreeMap<ArtifactId, Artifact>,
-    /// The members a workspace declares, when this graph was built inside one.
+    /// Where this store stands in the workspace it was built inside: who it is, and who else it
+    /// can reach.
     ///
-    /// Empty for a plain single-repository store, which is the common case and the safe default:
-    /// with no workspace, a member-qualified target is a target this manifest cannot possibly
-    /// resolve, and saying nothing about it would let `entity-runtme/story:typo` pass as a
-    /// deliberate crossing rather than the misspelling it is.
+    /// [`Membership::default`] for a plain single-repository store, which is the common case and
+    /// the safe default: with no workspace, a member-qualified target is a target this manifest
+    /// cannot possibly resolve, and saying nothing about it would let `entity-runtme/story:typo`
+    /// pass as a deliberate crossing rather than the misspelling it is.
     ///
     /// Not serialised: a serialised graph is its artifacts, and which workspace it happened to be
     /// validated inside is not a property of the graph.
     #[serde(skip)]
-    members: BTreeSet<MemberName>,
+    membership: Membership,
 }
 
 impl ArtifactGraph {
@@ -2334,23 +2391,27 @@ impl ArtifactGraph {
         errors.into_result(graph)
     }
 
-    /// The same, for a graph built inside a workspace that declares `members`.
+    /// The same, for a graph built inside a workspace, from the store `membership` describes.
     ///
-    /// A relation targeting one of them is a crossing and is left for an [`Assembly`] to resolve;
-    /// one targeting anything else is checked here exactly as a local target is.
+    /// A relation targeting **another** declared member is a crossing and is left for an
+    /// [`Assembly`] to resolve; one targeting the member this store **is** names an artifact of
+    /// this store, and is checked here exactly as its unqualified spelling would be; one targeting
+    /// anything else is checked here exactly as a local target is.
     ///
     /// [`Assembly`]: https://docs.rs/aep-backend-markdown
     ///
     /// # Errors
     ///
     /// The same defects [`ArtifactGraph::build`] rejects.
-    pub fn build_in_workspace<I, M>(artifacts: I, members: M) -> Result<Self, ValidationErrors>
+    pub fn build_in_workspace<I>(
+        artifacts: I,
+        membership: Membership,
+    ) -> Result<Self, ValidationErrors>
     where
         I: IntoIterator<Item = Artifact>,
-        M: IntoIterator<Item = MemberName>,
     {
         let mut graph = Self::new();
-        graph.members = members.into_iter().collect();
+        graph.membership = membership;
         let mut errors = ValidationErrors::new();
 
         for artifact in artifacts {
@@ -2381,9 +2442,18 @@ impl ArtifactGraph {
         self.artifacts.get(id)
     }
 
+    /// Where this graph stands in the workspace it was built inside.
+    #[must_use]
+    pub const fn membership(&self) -> &Membership {
+        &self.membership
+    }
+
     /// The artifact a reference points at.
+    ///
+    /// A reference qualified with this store's own member name is this store's artifact written
+    /// the long way, so it resolves here — the spelling an author chose decides nothing.
     pub fn resolve(&self, reference: &ArtifactRef) -> Option<&Artifact> {
-        self.get(reference.id())
+        self.get(reference.id().local_to(self.membership.own()).as_ref())
     }
 
     /// Every artifact, in id order.
@@ -2438,7 +2508,7 @@ impl ArtifactGraph {
         };
         artifact
             .targets(relation)
-            .filter_map(|target| self.get(target.id()))
+            .filter_map(|target| self.get(target.id().local_to(self.membership.own()).as_ref()))
             .collect()
     }
 
@@ -2449,7 +2519,11 @@ impl ArtifactGraph {
     pub fn inverse(&self, id: &ArtifactId, relation: RelationKind) -> Vec<&Artifact> {
         self.artifacts
             .values()
-            .filter(|artifact| artifact.targets(relation).any(|target| target.id() == id))
+            .filter(|artifact| {
+                artifact
+                    .targets(relation)
+                    .any(|target| target.id().local_to(self.membership.own()).as_ref() == id)
+            })
             .collect()
     }
 
@@ -2509,13 +2583,16 @@ impl ArtifactGraph {
                 // exempting it was a hole: with no workspace file at all, every dangling edge
                 // could be hidden behind a `/`, and a misspelled member name passed silently in a
                 // plain single-repository store.
+                //
+                // The member this workspace declares as **this store** is the third case, and it
+                // reopened that hole in full: a declaration that names its own repository — which
+                // this one's does, deliberately — put every dangling edge one prefix away from
+                // passing. `local_to` resolves such a target to the artifact it actually names,
+                // which is an artifact of this manifest, so it is checked here like any other.
+                let target = relation.target.id().local_to(self.membership.own());
                 let crosses_to_a_declared_member =
-                    relation.target.id().member().is_some_and(|member| {
-                        self.members.iter().any(|known| known.as_str() == member)
-                    });
-                if !crosses_to_a_declared_member
-                    && !self.artifacts.contains_key(relation.target.id())
-                {
+                    relation.crosses_to_a_declared_member(&self.membership);
+                if !crosses_to_a_declared_member && !self.artifacts.contains_key(target.as_ref()) {
                     errors.push(
                         ValidationError::new(
                             ValidationCode::UndeclaredReference,
@@ -2531,7 +2608,9 @@ impl ArtifactGraph {
                         ),
                     );
                 }
-                if relation.target.id() == &artifact.id {
+                // Against the resolved target, for the same reason: `own/story:x` on `story:x` is
+                // the same edge as `story:x` on `story:x`, spelled the long way.
+                if target.as_ref() == &artifact.id {
                     errors.push(ValidationError::new(
                         ValidationCode::SelfReference,
                         location,
@@ -3187,7 +3266,7 @@ mod tests {
                     reference("entity-runtime/story:provider-spi"),
                 ),
             ],
-            [MemberName::parse("entity-runtime").expect("a name")],
+            Membership::declaring([MemberName::parse("entity-runtime").expect("a name")]),
         )
         .expect("a member-qualified target is outside this manifest by construction");
 
@@ -3243,13 +3322,146 @@ mod tests {
                     reference("entity-runtme/story:provider-spi"),
                 ),
             ],
-            [MemberName::parse("entity-runtime").expect("a name")],
+            Membership::declaring([MemberName::parse("entity-runtime").expect("a name")]),
         )
         .expect_err("the workspace declares `entity-runtime`, not `entity-runtme`");
         assert!(
             dangling.to_string().contains("does not declare"),
             "{dangling}"
         );
+    }
+
+    /// The membership of a store whose workspace names it, the shape this repository's own
+    /// `.engineering/workspace.yaml` has: `engineering-protocols` with `source: ..`, beside others.
+    fn naming_itself() -> Membership {
+        Membership::new(
+            Some(MemberName::parse("engineering-protocols").expect("a name")),
+            [
+                MemberName::parse("engineering-protocols").expect("a name"),
+                MemberName::parse("entity-runtime").expect("a name"),
+            ],
+        )
+    }
+
+    #[test]
+    fn a_target_naming_this_store_s_own_member_is_a_local_edge_and_not_a_crossing() {
+        // Which side the edge lands on, per edge. The member list is identical for both targets;
+        // only the member named differs, and that is the whole rule.
+        let own = ArtifactRelation {
+            kind: RelationKind::DependsOn,
+            target: reference("engineering-protocols/story:beta"),
+        };
+        let other = ArtifactRelation {
+            kind: RelationKind::DependsOn,
+            target: reference("entity-runtime/story:provider-spi"),
+        };
+        let misspelled = ArtifactRelation {
+            kind: RelationKind::DependsOn,
+            target: reference("entity-runtme/story:provider-spi"),
+        };
+        let membership = naming_itself();
+
+        assert!(
+            !own.crosses_to_a_declared_member(&membership),
+            "`engineering-protocols/story:beta` read inside `engineering-protocols` is this \
+             store's own `story:beta`; nothing crosses out of the repository"
+        );
+        assert!(
+            other.crosses_to_a_declared_member(&membership),
+            "another declared member is the crossing a workspace exists to carry"
+        );
+        assert!(
+            !misspelled.crosses_to_a_declared_member(&membership),
+            "a member nobody declares is a typo, not a crossing"
+        );
+        assert_eq!(
+            own.target.id().local_to(membership.own()).as_ref(),
+            &ArtifactId::new("story:beta").expect("id"),
+            "the long spelling resolves to the id this manifest declares"
+        );
+        assert_eq!(
+            other.target.id().local_to(membership.own()).as_ref(),
+            other.target.id(),
+            "another member's id is left exactly as written"
+        );
+    }
+
+    #[test]
+    fn a_self_member_qualified_edge_resolves_against_this_manifest() {
+        let graph = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("engineering-protocols/story:beta"),
+                ),
+                artifact("story:beta", "story", ArtifactStatus::Draft),
+            ],
+            naming_itself(),
+        )
+        .expect("the target is an artifact of this manifest, written the long way");
+
+        let alpha = ArtifactId::new("story:alpha").expect("id");
+        let beta = ArtifactId::new("story:beta").expect("id");
+        assert_eq!(
+            graph
+                .related(&alpha, RelationKind::DependsOn)
+                .iter()
+                .map(|artifact| artifact.id.to_string())
+                .collect::<Vec<_>>(),
+            vec!["story:beta".to_owned()],
+            "the edge is walked like any local edge"
+        );
+        assert_eq!(
+            graph
+                .inverse(&beta, RelationKind::DependsOn)
+                .iter()
+                .map(|artifact| artifact.id.to_string())
+                .collect::<Vec<_>>(),
+            vec!["story:alpha".to_owned()],
+            "and it is walked backwards too"
+        );
+        assert_eq!(
+            graph
+                .resolve(&reference("engineering-protocols/story:beta"))
+                .map(|artifact| artifact.id.to_string()),
+            Some("story:beta".to_owned()),
+            "and the reference resolves to the artifact it names"
+        );
+    }
+
+    #[test]
+    fn a_dangling_edge_behind_this_store_s_own_member_name_is_still_dangling() {
+        // The hole `validate_edges` says it closes, reopened by a workspace that names itself:
+        // prefix any dangling edge with this store's own member name and the check was skipped.
+        let dangling = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("engineering-protocols/story:missing"),
+                ),
+            ],
+            naming_itself(),
+        )
+        .expect_err("no document declares `story:missing`, whichever way the edge is spelled");
+        assert!(
+            dangling.to_string().contains("does not declare"),
+            "{dangling}"
+        );
+    }
+
+    #[test]
+    fn an_edge_from_an_artifact_to_its_own_member_qualified_self_is_a_self_reference() {
+        let looping = ArtifactGraph::build_in_workspace(
+            [
+                artifact("story:alpha", "story", ArtifactStatus::Draft).with_relation(
+                    RelationKind::DependsOn,
+                    reference("engineering-protocols/story:alpha"),
+                ),
+            ],
+            naming_itself(),
+        )
+        .expect_err("`engineering-protocols/story:alpha` read here is `story:alpha` itself");
+        assert!(looping.to_string().contains("itself"), "{looping}");
     }
 
     #[test]

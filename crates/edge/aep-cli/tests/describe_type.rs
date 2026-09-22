@@ -72,7 +72,7 @@ fn every_backend_reports_the_same_ladder_for_every_planning_kind() {
     std::fs::create_dir_all(&scratch).expect("a scratch store");
     let markdown = MarkdownBackend::open(
         &scratch,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
         ActorRef::parse("human:operator").expect("an actor"),
         ladders.clone(),

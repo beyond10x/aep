@@ -1,0 +1,2115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ApplyResultV1",
+  "type": "object",
+  "required": [
+    "format",
+    "outcome"
+  ],
+  "properties": {
+    "format": {
+      "$ref": "#/definitions/ApplyFormatV1"
+    },
+    "outcome": {
+      "$ref": "#/definitions/ApplyOutcomeV1"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "ApplyCompleteV1": {
+      "type": "object",
+      "required": [
+        "current",
+        "receipt"
+      ],
+      "properties": {
+        "current": {
+          "$ref": "#/definitions/AuthorityObservationV1"
+        },
+        "receipt": {
+          "$ref": "#/definitions/MigrationReceiptV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApplyFormatV1": {
+      "description": "The scalar literal aep.planning-migration-apply/1.",
+      "type": "string",
+      "enum": [
+        "aep.planning-migration-apply/1"
+      ]
+    },
+    "ApplyOutcomeV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "complete"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ApplyCompleteV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "recoverable"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ApplyRecoverableV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "uncertain"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ApplyUncertainV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "refused"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ApplyRefusedV1"
+            }
+          }
+        }
+      ]
+    },
+    "ApplyRecoverableV1": {
+      "type": "object",
+      "required": [
+        "authority",
+        "intent_digest",
+        "last_proved_phase",
+        "migration_id",
+        "original_receipt",
+        "refusals"
+      ],
+      "properties": {
+        "authority": {
+          "$ref": "#/definitions/PresenceV1_of_AuthorityCoordinateV1"
+        },
+        "intent_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "last_proved_phase": {
+          "$ref": "#/definitions/MigrationPhaseV1"
+        },
+        "migration_id": {
+          "type": "string"
+        },
+        "original_receipt": {
+          "$ref": "#/definitions/PresenceV1_of_MigrationReceiptV1"
+        },
+        "refusals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CommandRefusalV1"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApplyRefusedV1": {
+      "type": "object",
+      "required": [
+        "last_proved_phase",
+        "migration_id",
+        "refusals"
+      ],
+      "properties": {
+        "last_proved_phase": {
+          "$ref": "#/definitions/PresenceV1_of_MigrationPhaseV1"
+        },
+        "migration_id": {
+          "type": "string"
+        },
+        "refusals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CommandRefusalV1"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApplyUncertainV1": {
+      "type": "object",
+      "required": [
+        "intent_digest",
+        "last_proved_phase",
+        "migration_id",
+        "refusals"
+      ],
+      "properties": {
+        "intent_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "last_proved_phase": {
+          "$ref": "#/definitions/PresenceV1_of_MigrationPhaseV1"
+        },
+        "migration_id": {
+          "type": "string"
+        },
+        "refusals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CommandRefusalV1"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "AuthorityCoordinateV1": {
+      "description": "Exact public Eventlog adapter authority tuple.",
+      "type": "object",
+      "required": [
+        "logical_scope",
+        "stream_identity",
+        "tenant"
+      ],
+      "properties": {
+        "logical_scope": {
+          "type": "string"
+        },
+        "stream_identity": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AuthorityDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "authority",
+        "record_id",
+        "subject"
+      ],
+      "properties": {
+        "authority": {
+          "$ref": "#/definitions/AuthorityCoordinateV1"
+        },
+        "record_id": {
+          "$ref": "#/definitions/PresenceV1_of_String"
+        },
+        "subject": {
+          "$ref": "#/definitions/PresenceV1_of_SubjectCoordinateV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AuthorityObservationV1": {
+      "type": "object",
+      "required": [
+        "authority",
+        "capture_digest",
+        "history",
+        "inventory",
+        "snapshot_id"
+      ],
+      "properties": {
+        "authority": {
+          "$ref": "#/definitions/AuthorityCoordinateV1"
+        },
+        "capture_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "history": {
+          "$ref": "#/definitions/HistorySummaryV1"
+        },
+        "inventory": {
+          "$ref": "#/definitions/InventoryCountsV1"
+        },
+        "snapshot_id": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CatalogFamilyV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "objects"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "table_definition"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "columns"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "primary_key"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unique_keys"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "checks"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "indexes"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "foreign_objects"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CommandRefusalCodeV1": {
+      "description": "Stable command refusal vocabulary.",
+      "type": "string",
+      "enum": [
+        "unknown_project_version",
+        "invalid_project",
+        "unknown_field",
+        "path_outside_project",
+        "path_alias",
+        "nested_store_paths",
+        "foreign_content",
+        "projection_is_not_authority",
+        "legacy_source_retired",
+        "ownership_uncertain",
+        "source_unreadable",
+        "source_unstable",
+        "pending_legacy_intent",
+        "unsupported_schema",
+        "incomplete_inventory",
+        "missing_definitions",
+        "semantic_mismatch",
+        "divergent_hybrid",
+        "snapshot_changed",
+        "config_changed",
+        "selector_changed",
+        "writer_exclusion_unavailable",
+        "intent_conflict",
+        "foreign_stage",
+        "destination_conflict",
+        "provision_uncertain",
+        "import_conflict",
+        "import_uncertain",
+        "verification_mismatch",
+        "publish_uncertain",
+        "selector_uncertain",
+        "projection_conflict",
+        "projection_drift",
+        "authority_identity_mismatch",
+        "authority_snapshot_changed",
+        "incomplete_publication",
+        "receipt_conflict",
+        "command_identity_conflict",
+        "committed_projection_failure",
+        "output_failure"
+      ]
+    },
+    "CommandRefusalV1": {
+      "type": "object",
+      "required": [
+        "at",
+        "code"
+      ],
+      "properties": {
+        "at": {
+          "$ref": "#/definitions/DiagnosticCoordinateV1"
+        },
+        "code": {
+          "$ref": "#/definitions/CommandRefusalCodeV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "#/definitions/ConfigFieldV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigFieldV1": {
+      "description": "Project configuration field coordinate.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "version",
+            "store",
+            "planning_scope",
+            "planning_tenant",
+            "planning_identity",
+            "protocol",
+            "profile",
+            "protocols",
+            "artifacts",
+            "task",
+            "state",
+            "principles",
+            "profiles",
+            "schemas",
+            "providers"
+          ]
+        },
+        {
+          "description": "`.engineering/workspace.yaml`, the members this repository declares.\n\nBeside the selector rather than inside it, and read by every command that judges a cross-repository relation. A file that exists and does not parse is refused at this coordinate, so the receipt names the file that is wrong instead of an artifact document that is not.",
+          "type": "string",
+          "enum": [
+            "workspace"
+          ]
+        }
+      ]
+    },
+    "DiagnosticCoordinateV1": {
+      "description": "Closed diagnostic coordinate; public results carry no provider prose.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "selector"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SelectorDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "config"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/ConfigDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "source"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SourceDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "migration"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MigrationDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "destination"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PathDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "projection"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PathDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "authority"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/AuthorityDiagnosticV1"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "output"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/OutputDiagnosticV1"
+            }
+          }
+        }
+      ]
+    },
+    "DigestV1": {
+      "description": "A canonical SHA-256 digest with its algorithm prefix.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "HexBytesV1": {
+      "description": "Exact bytes encoded as lowercase hexadecimal pairs after hex:.",
+      "type": "string",
+      "pattern": "^hex:(?:[0-9a-f]{2})*$"
+    },
+    "HistorySummaryV1": {
+      "type": "object",
+      "required": [
+        "complete_recorded",
+        "partial",
+        "unrecorded"
+      ],
+      "properties": {
+        "complete_recorded": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partial": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "unrecorded": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "HostPathV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unix"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HexBytesV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "windows"
+              ]
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HybridSideRootCoordinateV1": {
+      "type": "object",
+      "required": [
+        "side"
+      ],
+      "properties": {
+        "side": {
+          "$ref": "#/definitions/HybridSideV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HybridSideV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "local"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "replica"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "divergences"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "InventoryCountsV1": {
+      "type": "object",
+      "required": [
+        "applied_commands",
+        "audit_records",
+        "bare_decisions",
+        "bare_events",
+        "complete_envelopes",
+        "entities",
+        "raw_evidence_items",
+        "relations",
+        "subjects",
+        "workspace_crossings"
+      ],
+      "properties": {
+        "applied_commands": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "audit_records": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "bare_decisions": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "bare_events": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "complete_envelopes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "entities": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "raw_evidence_items": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "relations": {
+          "description": "Relation records the migration imports.\n\nCounted from what the mapper will produce, not from the source frontmatter. A declared relation whose target is another workspace member has no destination entity in the authority, so it is never a record here — it is a `workspace_crossings`, and the two sum to what the source declares.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "subjects": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "workspace_crossings": {
+          "description": "Declared relations whose target is a member the workspace declares.\n\nThey survive as the authored relation data retained in the subject entity, not as relation records. Reported separately so an operator's receipt cannot promise a record the migration will not deliver: on the AEP store, 564 authored relations are 563 records and 1 crossing.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "MappingFormatV1": {
+      "description": "The scalar literal aep.planning-import/1.",
+      "type": "string",
+      "enum": [
+        "aep.planning-import/1"
+      ]
+    },
+    "MappingIdentityV1": {
+      "type": "object",
+      "required": [
+        "definition_digests",
+        "mapping_version"
+      ],
+      "properties": {
+        "definition_digests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DigestV1"
+          }
+        },
+        "mapping_version": {
+          "$ref": "#/definitions/MappingFormatV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MarkdownPathCoordinateV1": {
+      "type": "object",
+      "required": [
+        "relative"
+      ],
+      "properties": {
+        "relative": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MarkdownRootCoordinateV1": {
+      "type": "object",
+      "required": [
+        "root"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MarkdownSpanCoordinateV1": {
+      "type": "object",
+      "required": [
+        "length",
+        "relative",
+        "start"
+      ],
+      "properties": {
+        "length": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "relative": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "MigrationComponentV1": {
+      "description": "Durable migration component coordinate.",
+      "type": "string",
+      "enum": [
+        "intent",
+        "ownership",
+        "phase_prepared",
+        "phase_destination_provisioned",
+        "phase_imported",
+        "phase_verified",
+        "phase_published",
+        "phase_selected",
+        "phase_projection_published",
+        "phase_complete",
+        "current",
+        "receipt",
+        "recovery_capture"
+      ]
+    },
+    "MigrationDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "component",
+        "migration_id"
+      ],
+      "properties": {
+        "component": {
+          "$ref": "#/definitions/MigrationComponentV1"
+        },
+        "migration_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MigrationPhaseV1": {
+      "description": "Last durably established migration phase.",
+      "type": "string",
+      "enum": [
+        "prepared",
+        "destination_provisioned",
+        "imported",
+        "verified",
+        "published",
+        "selected",
+        "projection_published",
+        "complete"
+      ]
+    },
+    "MigrationReceiptFormatV1": {
+      "description": "The scalar literal aep.planning-migration-receipt/1.",
+      "type": "string",
+      "enum": [
+        "aep.planning-migration-receipt/1"
+      ]
+    },
+    "MigrationReceiptV1": {
+      "type": "object",
+      "required": [
+        "authority",
+        "covered_authority_snapshot",
+        "format",
+        "import_comparison_digest",
+        "intent_digest",
+        "mapping",
+        "migration_id",
+        "projection_inventory_digest",
+        "receipt_digest",
+        "selected_selector_digest",
+        "source_config_digest",
+        "source_snapshot"
+      ],
+      "properties": {
+        "authority": {
+          "$ref": "#/definitions/AuthorityCoordinateV1"
+        },
+        "covered_authority_snapshot": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "format": {
+          "$ref": "#/definitions/MigrationReceiptFormatV1"
+        },
+        "import_comparison_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "intent_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "mapping": {
+          "$ref": "#/definitions/MappingIdentityV1"
+        },
+        "migration_id": {
+          "type": "string"
+        },
+        "projection_inventory_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "receipt_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "selected_selector_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "source_config_digest": {
+          "$ref": "#/definitions/DigestV1"
+        },
+        "source_snapshot": {
+          "$ref": "#/definitions/DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OutputDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "stream"
+      ],
+      "properties": {
+        "stream": {
+          "$ref": "#/definitions/OutputStreamV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OutputStreamV1": {
+      "type": "string",
+      "enum": [
+        "stdout",
+        "stderr"
+      ]
+    },
+    "PathDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PhysicalCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "root"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/RootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "markdown_path"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MarkdownPathCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "markdown_span"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MarkdownSpanCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sql_table"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqlTableCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sql_row"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqlRowCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sql_column"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqlColumnCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sql_physical_row"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqlPhysicalRowCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sql_catalog"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqlCatalogCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PostgresEndpointRootCoordinateV1": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "endpoint_id"
+      ],
+      "properties": {
+        "endpoint": {
+          "$ref": "#/definitions/PresenceV1_of_PostgresEndpointV1"
+        },
+        "endpoint_id": {
+          "$ref": "#/definitions/PresenceV1_of_DigestV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostgresEndpointV1": {
+      "type": "object",
+      "required": [
+        "database",
+        "hosts",
+        "schema"
+      ],
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PostgresHostV1"
+          }
+        },
+        "schema": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PostgresHostV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "tcp"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/TcpPostgresHostV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "unix"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/UnixPostgresHostV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PostgresTupleLocatorV1": {
+      "type": "object",
+      "required": [
+        "block",
+        "offset",
+        "table_oid"
+      ],
+      "properties": {
+        "block": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "table_oid": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "PresenceV1_of_AuthorityCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/AuthorityCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_DigestV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/DigestV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_MigrationPhaseV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MigrationPhaseV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_MigrationReceiptV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MigrationReceiptV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_PostgresEndpointV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PostgresEndpointV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_String": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_SubjectCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SubjectCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PresenceV1_of_uint64": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "missing"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "present"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RootCoordinateV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "observation"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "selector"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SelectorRootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "effective_config"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "markdown_root"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/MarkdownRootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sqlite_database"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/SqliteDatabaseRootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "postgres_endpoint"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PostgresEndpointRootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "hybrid_side"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/HybridSideRootCoordinateV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SelectorDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectorRootCoordinateV1": {
+      "type": "object",
+      "required": [
+        "project_file",
+        "project_root"
+      ],
+      "properties": {
+        "project_file": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "project_root": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceDiagnosticV1": {
+      "type": "object",
+      "required": [
+        "coordinate"
+      ],
+      "properties": {
+        "coordinate": {
+          "$ref": "#/definitions/PhysicalCoordinateV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqlCatalogCoordinateV1": {
+      "type": "object",
+      "required": [
+        "family",
+        "namespace",
+        "row",
+        "table"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/definitions/CatalogFamilyV1"
+        },
+        "namespace": {
+          "$ref": "#/definitions/PresenceV1_of_String"
+        },
+        "row": {
+          "$ref": "#/definitions/PresenceV1_of_uint64"
+        },
+        "table": {
+          "$ref": "#/definitions/PresenceV1_of_String"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqlColumnCoordinateV1": {
+      "type": "object",
+      "required": [
+        "column",
+        "key",
+        "table"
+      ],
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "key": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SqlKeyPartV1"
+          }
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqlKeyPartV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "text"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "integer"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SqlPhysicalLocatorV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "sqlite_row_id"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The explicitly declared variant tag.",
+              "type": "string",
+              "enum": [
+                "postgres_tuple"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/PostgresTupleLocatorV1"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SqlPhysicalRowCoordinateV1": {
+      "type": "object",
+      "required": [
+        "locator",
+        "table"
+      ],
+      "properties": {
+        "locator": {
+          "$ref": "#/definitions/SqlPhysicalLocatorV1"
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqlRowCoordinateV1": {
+      "type": "object",
+      "required": [
+        "key",
+        "table"
+      ],
+      "properties": {
+        "key": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SqlKeyPartV1"
+          }
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqlTableCoordinateV1": {
+      "type": "object",
+      "required": [
+        "table"
+      ],
+      "properties": {
+        "table": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SqliteDatabaseRootCoordinateV1": {
+      "type": "object",
+      "required": [
+        "database"
+      ],
+      "properties": {
+        "database": {
+          "$ref": "#/definitions/HostPathV1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SubjectCoordinateV1": {
+      "type": "object",
+      "required": [
+        "entity",
+        "id"
+      ],
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TcpPostgresHostV1": {
+      "type": "object",
+      "required": [
+        "host",
+        "port"
+      ],
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnixPostgresHostV1": {
+      "type": "object",
+      "required": [
+        "directory",
+        "port"
+      ],
+      "properties": {
+        "directory": {
+          "$ref": "#/definitions/HostPathV1"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -9,6 +9,290 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.57.0] — 2026-09-22
+
+### Added
+
+- `plan store writer-control hold` binds a local foreground operator custody session to one
+  migration or projection rebuild. Public apply, matching retry and rebuild now require that live
+  control and recheck its selected source or authority before effects. Operators with an already
+  idle writer set can affirm it explicitly with `--already-idle`; that fresh custody mode creates
+  no observed-stop witness and must be asserted again after interruption.
+
+- Pure planning migration capture values preserve partial observations, validate capture
+  phases and discovered-table catalogs, and compute deterministic digests and changed sets.
+  The raw capture document schema is available in the generated schema roster.
+
+### Changed
+
+- The Eventlog providers and the Entity Runtime crates are pinned to the qualified vector
+  `76aad5e3790e302e6c7f348a4fe4d9229cd17bce` and
+  `8569da24405da850544fa92daf1077892a53aac9`. The file provider verifies the committed history and
+  every bound object once, when the store is opened, and a later transaction re-checks only what
+  changed on disk: it re-reads the raw committed bytes to prove the prefix is still the one it
+  verified, and opens no object it does not touch. A command that makes one transaction per
+  artifact no longer pays the whole store for each one — `plan artifact list` over a 64-artifact
+  migrated plan made 218 transactions, 227,452 object reads and 2,863 MB of I/O for a 16 MB store.
+  Stored bytes, guarded append, receipts, recovery and every refusal are unchanged; a committed
+  frame damaged in place after the store was opened still refuses without altering the history.
+
+- The runtime and provider pins name released commits rather than revisions that existed on one
+  workstation. `entity-*` moves to **Entity Runtime 0.19.0**
+  (`344123905de987110d3b419b1ee8d6ee6ae768c4`) and `eventlog-core`/`eventlog-file` to
+  **Eventlog 0.3.0** (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Until now a clean clone could
+  not resolve this workspace at all. The two move together on purpose: Entity Runtime 0.19.0 itself
+  pins Eventlog 0.3.0, and `cargo xtask deps` checks runtime-revision uniqueness but has no rule
+  for `eventlog`, so leaving the direct pin behind would put two `eventlog-core` versions in one
+  lockfile with nothing to catch it.
+
+- A capture handed to `aep_backend_eventlog::open_with_snapshot` — and to
+  `FileProjectionPublisher::with_snapshot` — now travels with the authority it was taken from, as
+  the new `HeldCapture` that `capture_held` returns. A `CompleteStoreSnapshot` names none of the
+  three values an `Authority` is: its `scope` is the caller's own label echoed back and its
+  `coverage` is a constant, so a genuine complete capture of a *different* authority sharing this
+  one's logical scope was accepted, and the handle then answered reads out of the wrong store.
+  `capture_held` is the only constructor, so the authority a `HeldCapture` names is always the one
+  it was captured from.
+
+- `FileProjectionPublisher::publish_current` refuses on a publisher built by `with_snapshot`. It
+  publishes the current authority and proves it by capturing before staging and again after; a
+  seeded publisher stages from its held capture between those two fresh ones, so the comparison
+  agreed and the watermark was written asserting a projection inventory for a snapshot whose
+  content had not been projected. The refusal is internal — no command reaches it, so it mints no
+  new refusal code.
+
+- A relation qualified with **this store's own** declared member name is a local edge again, on
+  every path that reads one. A workspace file that names its own repository is the ordinary shape —
+  this one's names `engineering-protocols` with `source: ..`, deliberately — and under it
+  `engineering-protocols/story:x` is `WorkspaceRef`'s long spelling of this store's `story:x`. Every
+  reader answered from the member list alone, which cannot tell that case from a crossing, so
+  `plan store migrate dry-run` counted a local edge as a `workspace_crossing` and imported no
+  relation record for it, `plan artifact validate` printed `valid` for a store whose only edge was a
+  dangling `own-member/story:typo`, and the migration admitted that store. The rule is now one
+  rule with the member it is read in as an input: an edge into this store's own member is local,
+  resolved here and dangling if its target is absent; an edge into another declared member is a
+  crossing; anything else is a misspelling and a dangling edge. `aep workspace crossings` no longer
+  lists an edge from a member to itself.
+
+- `plan store migrate apply`, `plan store migrate verify`, `plan store projection rebuild` and
+  `plan store inspect` on a migrated store now publish `inventory.workspace_crossings` instead of a
+  hard `0`. The count was assigned only on the dry-run path, so four of the five receipts carrying
+  the field reported `relations + 0` against a published description promising that the two sum to
+  what the source declares — the number changed between the dry-run receipt and the apply receipt
+  of one cutover, with nothing said. All four now count it from the same rule and the same authored
+  relation list. An unreadable `workspace.yaml` is refused on those paths at `field: workspace`, as
+  it already was on `dry-run`.
+
+- The dry-run and apply receipts now count workspace crossings separately from relation records, as
+  `inventory.workspace_crossings` beside `inventory.relations`. `inventory.relations` was counted
+  from the source's frontmatter while the migration imports only the relations whose target is
+  itself a captured document, so a store that declares members and carries a crossing was promised
+  one relation record per crossing more than the authority ever received — and no count taken
+  afterwards revealed it, because the post-migration read agrees with the larger number through the
+  retained relation data. The two figures now sum to what the source declares: a store with 564
+  authored relations and one crossing reports 563 and 1.
+
+- A migration refusal that comes from the mapper now carries the mapper's coordinate instead of the
+  selector's. Every mapping refusal was reported as `semantic_mismatch` at the `--project` selector
+  path, so a receipt named the file that chose the store and never the document that did not map.
+  A refusal naming a captured Markdown node is now reported at that node's store-relative path
+  (`kind: source`, `markdown_path`), and one about the source as a whole at the source root — the
+  Markdown root, the SQLite database, the Postgres endpoint or the hybrid side. The selector
+  coordinate is left to selector failures.
+
+### Fixed
+
+- `plan store migrate apply` imports a store in time proportional to its size instead of to its
+  square. The import asked the provider to establish one legacy boundary at a time, and each ask
+  captured and re-verified the whole destination twice, so every further subject cost more than the
+  last: on a copy of a 448-artifact planning store — **7,810 imported boundaries**, 17.4 per
+  artifact, because every source journal record contributes an evidence pair — the import made
+  **15,620 captures** and ran for hours. It now establishes the whole batch through one call, which
+  takes one capture to verify against, one atomic append group, and one capture to verify the
+  result: **3 captures for the import, whatever its size**, and every blob bound inside the group's
+  own barrier rather than on its own path.
+
+  Measured on this workstation (i9-10900K, no SHA-NI), three runs each on a fresh copy, in process
+  against a disposable authority:
+
+  | store | artifacts | imported boundaries | apply before | apply after |
+  | --- | ---: | ---: | ---: | ---: |
+  | ESS | 448 | 7,810 | ~8.5 h (projected from the measured curve; the real cutover was abandoned at 4 h 39 m) | **118.8 s · 124.4 s · 128.9 s** |
+  | Eventlog | 64 | 1,014 | 353.1 s | **10.5 s · 10.6 s** |
+
+  Seconds per imported boundary no longer rise with the number already imported: on a synthetic
+  fixture it fell from 15.6 ms at 64 subjects to 11.9 ms at 256, where before it rose from 66.6 ms
+  to 91.7 ms.
+
+  What the migration writes is unchanged. On the same 64-artifact copy, the batched and the
+  unbatched import produce byte-identical projected documents and the same projection inventory,
+  source configuration and mapping digests; the receipt fields that differ between them differ
+  between two batched runs as well, because they carry the freshly minted authority identity of
+  each run.
+
+  This needs Entity Runtime 0.19.0 and Eventlog 0.3.0, which this release pins.
+
+- `plan store migrate apply` publishes its projection from the capture it already took to verify
+  the import, instead of capturing the authority three more times. Publishing opened the store it
+  renders from, asked the authority which files it had captured, and asked whether the watermark
+  was already committed — each a full capture, and the migration had just captured that same
+  authority with nothing written to it since. On the 448-artifact copy the projection phase fell
+  from **61.7 s to 35.7 s** and CPU for the whole apply from **117.6 s to 90.3 s**; captures made
+  through the provider boundary fell from 11 to 9. The published documents are byte-identical.
+
+- `aep plan store migrate dry-run` and `apply` now build the source's artifact graph with the
+  workspace members its `.engineering/workspace.yaml` declares, exactly as `plan artifact validate`
+  and every other read command already did. A relation into a declared member is a crossing an
+  assembly resolves; the mapper built the graph with no members at all, so that crossing read as a
+  dangling edge and the whole migration was refused against a store every other command called
+  valid. A relation into a member the workspace does **not** declare is still a dangling edge and
+  is still refused: a migrated store whose relations dangle for real is worse than a refusal. The
+  declaration is read at the command edge and handed to the mapper as data, and it decides
+  admission only — no migrated record depends on it — so a store with no workspace file maps
+  exactly as before. The crossing itself survives migration as the artifact's own relation data,
+  carried in the subject entity, and `show`, `list --format json`, `graph`, `validate` and the
+  store `history` reads back list it identically on both arms. It is **not** a relation record: the
+  authority's relation surface has no notion of a member outside it, so no record is invented for
+  a destination that is not there.
+
+- A `.engineering/workspace.yaml` that exists and does not parse is now refused rather than read as
+  a store that declares nothing. Every read of the declaration turned a failure into an empty
+  member list, so a single misspelled key silently disabled every declared member: `plan artifact
+  validate` reported each cross-repository relation as a dangling edge and named the artifact
+  documents, which are correct, and `plan store migrate dry-run` refused with a receipt
+  byte-identical to the one a repository with no workspace file gets. The migration now refuses at
+  `kind: config`, `field: workspace` with `invalid_project`, and the read commands report the file
+  and the parse error. A repository with **no** workspace file is unchanged and is still not an
+  error. The driven-plan read (`aep_driver::PlanSource`) answers with a member list and has nowhere
+  to put a reason, so it still reads an unreadable declaration as an empty one.
+
+- Opening an Eventlog plan now costs the authority **one** capture, not one per record. Hydration
+  asks the store for the ids of each of its four kinds and then reads every id it was given, and
+  every one of those reads was a separate capture of the whole authority — which re-reads and
+  re-hashes every bound object, so the same bytes were read once per record. The store now holds
+  the complete capture opening the plan takes — opening validates the legacy boundaries, and that
+  is the capture — and answers the reads that follow from it. Counted through the provider on a
+  three-artifact authority, one open went from **11 provider reads to 1** (5 complete captures, 3
+  terminal reads and 3 history reads, to a single complete capture); the cost of an open was
+  `5 + 2N` captures for `N` artifacts and is now 1. It is also one consistent instant rather than
+  one per record: every read on one plan handle answers about the authority as it was when that
+  handle opened, and a caller that wants a later instant opens the plan again. A subject the
+  capture does not name — one nothing ever wrote, or one another writer added after the capture
+  was taken — is read from the authority rather than answered out of the capture, so an unknown
+  artifact is answered exactly as the authority answers it and never as one that was never
+  written. The three commit paths and `observe` retire the held capture, and a commit retires it
+  before its own validation as well, so a write is never decided against, and no read ever
+  answers from, an authority the write has already changed; the read after a write captures
+  again. Markdown, hybrid, SQLite and Postgres plans are unchanged.
+
+  Measured on a migrated 64-artifact planning store — `events.jsonl` 3,273,126 bytes, 1,113 bound
+  objects totalling 11,384,593 bytes — against the previous build of this CLI, the two binaries
+  interleaved on the same copy: `plan artifact list` **76.2 s to 1.25 s** (medians of three;
+  77.6 / 74.5 / 76.2 against 1.25 / 1.21 / 1.26) and `plan artifact history` **74.6 s to 1.14 s**.
+  `plan store verify` is 2.47 s either way, because it was always one transaction. The JSON that
+  `list` returns is byte-identical between the two.
+
+- `plan artifact validate` on an Eventlog plan no longer reconciles documents against the legacy
+  `journal.jsonl` left under the projection by migration, which reported every governed move as
+  drift and a forged revision while `plan store verify` answered `current`. Drift on an Eventlog
+  plan is now the projection's, decided by the authority's own watermark — the same fact
+  `plan store verify` reports as `projection_drift` — so an owned projection file edited or
+  deleted by hand, an ownership marker edited or removed, and a projection directory that is gone
+  are each reported. Of the `--strict` advisory classes, `closed_on_an_assertion` and
+  `pre_provider` are **not computed** on an Eventlog plan: both read the projection's journal,
+  which stops at the migration, and the authority offers no equivalent short of reading every
+  artifact's history. `without_an_outcome` is computed from the authority, bounded to the
+  `review-result` documents and the artifacts they `reviews`. The faithful port of all three is
+  `story:strict-advisory-classes-on-an-eventlog-plan`. A document added at a path the authority's
+  ownership marker does not list is digested by neither side and is still reported by nothing;
+  that gap is `story:unowned-document-in-eventlog-projection-is-reported`.
+
+- On an Eventlog plan, the evidence a move is judged against, the outcomes `plan artifact show`
+  lists for a review, the reviewer totals in `plan artifact review-value`, the order
+  `plan artifact findings` compares two rounds in, and the reviews-without-an-outcome class of
+  `plan artifact validate` now come from the authority rather than from the legacy `journal.jsonl`
+  left under the projection by migration. An evidence record, a `review_outcome` or a review
+  written after the cut-over was invisible to the first four, so the first evidence-gated move on
+  a migrated store was refused for evidence the store was holding; the fifth was empty on every
+  migrated plan, including for a review the frozen journal still records. These verbs now read
+  that history in the order the **store** was written in and not in the order the artifacts' ids
+  sort in: the authority keeps history per entity and writes its instants to the second, so a
+  reader that concatenated per-artifact histories listed a review's outcomes by subject id while
+  calling them oldest first, and two rounds recorded in one second were compared back to front.
+  The order is the position the store itself keeps each record at — the ordinal the migration
+  preserved for every retained journal line, then the provider's own store-wide position for
+  everything recorded since — so `plan artifact show`, `findings` and `review-value` answer a
+  migrated plan in the order its records were made, whatever second they carry and whatever their
+  artifacts are called. The authority is read for the
+  `review-result` documents and the artifacts they `reviews`, and for nothing else — a plan with
+  no `review-result` reads it for none — so what these verbs cost a migrated plan is one history
+  read per review and per reviewed artifact, not one per artifact in the store. Markdown and
+  hybrid plans are unchanged; a SQLite or Postgres plan still reports no outcomes rather than a
+  wrong number.
+
+- `plan artifact unrelate <review-result> reviews <artifact>` is now **refused** while a
+  `review_outcome` recorded on that artifact names that review, and the refusal lists the records
+  resting on the edge. An outcome is written on the reviewed artifact and is found through the
+  `reviews` edge, and the evidence verb already refuses to record one where the edge is absent —
+  but nothing held the edge afterwards, so taking it back left what became of the review in the
+  store read by nothing, while `validate --strict` reported the answered review as one nobody
+  acted on. The guard is a rule about the store and not about one backend: markdown, hybrid and
+  Eventlog plans all make it. A SQLite or Postgres plan answers no history for the artifact and so
+  refuses nothing, which is the same *no outcomes rather than a wrong number* position those
+  plans already take.
+
+- Migration dry-run and apply now discover foreign destination paths before durable writes and
+  refuse symlink or hard-link substitutions during recovery. Projection ownership is proved by
+  captured or watermarked evidence, so valid foreign Markdown survives rebuilds and collisions
+  refuse explicitly. Projection inventories and recovery comparisons include Unix permission
+  modes, and replica-authoritative hybrid history no longer exposes the losing local journal.
+
+- Migrated Markdown history remains visible through ordinary history, explanation and evidence
+  reads, including both legacy journal shapes and later recorded writes. Evidence writes retain
+  the artifact's revision independently of the recorded storage revision, and projection failures
+  after a commit return a recoverable committed result.
+
+- SQLite planning storage selects the exact bundled `rusqlite` 0.40.2 line shared with Entity
+  Runtime and Eventlog consumers. Plan formats, storage semantics and Rust minimums are unchanged.
+
+- PostgreSQL capture retains completed catalog and row families, rejected cells and physical
+  tuple coordinates on failure. Unresolved endpoints preserve earlier hybrid observations;
+  later reads stop at the failure. Data reads use the admitted schema explicitly.
+
+- SQLite migration catalog refusals retain completed table observations and the failing DDL;
+  hybrid captures retain their earlier local observations and stop subsequent reads. Migration
+  command refusals carry the observed source coordinate instead of a selector-only diagnostic.
+  Catalog acquisition reads primary and unique keys separately; malformed data rows retain their
+  exact cells and physical rowid alongside the valid prefix, without reading later row families.
+
+- Filesystem capture retains earlier scans and hybrid phases when a later read fails, records
+  foreign nodes without following their links, and reports the exact changed paths for unstable
+  Markdown sources. Refused observations retain invalid path units with explicit diagnostics and
+  may retain a hybrid prefix before its PostgreSQL source coordinate has been resolved; complete
+  captures still require admitted paths and resolved coordinates.
+
+- SQL migration observes and admits physical catalog declarations before decoding provider
+  rows, retaining column, constraint and index metadata instead of supplying a schema template.
+
+- Explicit legacy `--store` selection refuses an Eventlog project's derived planning projection,
+  including an empty projection, instead of reopening it as writable Markdown authority.
+
+- Project-selected planning writers and explicit `--store` writers now contend on the same
+  canonical Markdown-store fence, including the Markdown side of a hybrid. The project selector
+  fence remains held, and unrelated explicit stores remain independent. This cooperative fence
+  does not establish exclusion of older writers that do not implement it.
+
+- Raw capture validation checks present sources on preflight refusals, requires exact
+  source and foreign-node refusal coordinates, preserves the dedicated root pending-batch
+  refusal for both host path encodings, and accumulates supplied-capture defects when
+  phase reconstruction fails.
+
+- Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed
+  evidence, including intermediate commits and merged side branches.
+
+- Public harness integration, concepts and transcript guides now route model-backed runs and
+  native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
+
 ## [0.56.0] — 2026-09-18
 
 ### Added

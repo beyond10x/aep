@@ -9,10 +9,10 @@
 //!   drives them with [`aep_contract::testing::block_on`], which busy-polls and is documented as
 //!   belonging "in tests and in synchronous backends, nowhere else". `axum`/`hyper`/`tokio` would
 //!   make this the first crate here to need a reactor, for a listener that answers one operator.
-//! * **The declared MSRV.** `rust-version = "1.85"`, and `task msrv` builds the whole workspace on
-//!   it with `--locked`. The modern HTTP stack tracks above that, and the break arrives through the
-//!   lockfile with no commit of ours touching a line of Rust — which has already happened once here,
-//!   via `idna_adapter`.
+//! * **The declared MSRV.** Pure libraries remain at Rust 1.85; the provider-backed CLI runtime is
+//!   declared at Rust 1.91. `task msrv` builds both closures with `--locked`. A modern HTTP stack
+//!   tracks above those floors, and the break arrives through the lockfile with no commit of ours
+//!   touching a line of Rust — which has already happened once here, via `idna_adapter`.
 //! * **Surface nobody asked for.** This server answers a browser on loopback. It does not need
 //!   TLS, HTTP/2, keep-alive, compression, multipart or a router.
 //!

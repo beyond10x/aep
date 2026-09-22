@@ -48,7 +48,7 @@ use aep_domain::entity::{ActorRef, EntityId, EntityRef};
 use aep_domain::ids::IdempotencyKey;
 use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
-use aep_domain::workspace::MemberName;
+use aep_domain::workspace::Membership;
 
 use crate::backend::{BODY_KEY, ORGANISATION, SPACE};
 use crate::document::PlanningDocument;
@@ -60,7 +60,7 @@ use crate::store::{StoreReport, StoredDocument};
 /// The plan's shape over a [`PlanStore`].
 #[derive(Debug, Clone)]
 pub struct MarkdownProjection {
-    members: Vec<MemberName>,
+    membership: Membership,
     at: Timestamp,
     actor: ActorRef,
     lifecycles: aep_domain::artifact::LifecycleRegistry,
@@ -129,13 +129,13 @@ struct Observation {
 impl MarkdownProjection {
     /// The plan's shape, seeding on open with `at` and `actor`, holding kinds to `lifecycles`.
     pub fn new(
-        members: impl IntoIterator<Item = MemberName>,
+        membership: Membership,
         at: Timestamp,
         actor: ActorRef,
         lifecycles: aep_domain::artifact::LifecycleRegistry,
     ) -> Self {
         Self {
-            members: members.into_iter().collect(),
+            membership,
             at,
             actor,
             lifecycles,
@@ -538,7 +538,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
         let report = documents_of(store)?;
         let graph = report
-            .graph_in_workspace(self.members.clone())
+            .graph_in_workspace(self.membership.clone())
             .map_err(|errors| CommandError::Conflict {
                 reason: format!("the plan does not build a graph: {errors}"),
             })?;
@@ -725,7 +725,24 @@ pub fn document_from_entity(
     let kind: aep_domain::artifact::ArtifactKind = artifact.namespace().parse().ok()?;
     let mut frontmatter = PlanningFrontmatter::new(artifact, kind, "draft".parse().ok()?);
     apply_body(&mut frontmatter, data);
-    frontmatter.relations = relations.to_vec();
+    // A migrated Markdown crossing has no local destination entity and therefore cannot be
+    // represented by the identity backend's `aep.relation` row. The import keeps the exact
+    // authored relation in the entity body. Merge that retained source value with ordinary local
+    // relation rows so rebuilding a projection neither drops crossings nor duplicates local edges.
+    let mut projected_relations = match data {
+        Node::Map(fields) => fields
+            .get("relations")
+            .and_then(|node| serde_json::to_value(node).ok())
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    for relation in relations {
+        if !projected_relations.contains(relation) {
+            projected_relations.push(relation.clone());
+        }
+    }
+    frontmatter.relations = projected_relations;
     frontmatter.revision = revision;
     let body = match data {
         Node::Map(fields) => match fields.get(BODY_KEY) {

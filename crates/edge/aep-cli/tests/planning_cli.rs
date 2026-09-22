@@ -4,8 +4,12 @@
 //! a plan is a tree of files, and a test that called the library would not catch an argument that
 //! never reaches it, a `--format` declared twice, or a document written to the wrong path.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+use fs2::FileExt as _;
+use sha2::{Digest as _, Sha256};
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -260,6 +264,201 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
         "{}",
         stdout(&validated)
     );
+}
+
+#[test]
+fn an_explicit_v2_projection_is_never_reopened_as_markdown_authority() {
+    let project = scratch("aep-plan-explicit-v2-projection");
+    let engineering = project.join(".engineering");
+    let projection = engineering.join("planning");
+    std::fs::create_dir_all(&projection).expect("empty projection");
+    write(
+        &engineering.join("project.yaml"),
+        "version: aep.project/2\nprotocol: adp/1\nprofile: development.standard\n\
+         planning_scope: aep.planning\nplanning_tenant: planning-main\n\
+         planning_identity: stream-01\n",
+    );
+
+    // Both an empty and a deleted projection remain derived, even when selected from elsewhere.
+    for deleted in [false, true] {
+        if deleted {
+            std::fs::remove_dir(&projection).expect("delete the empty projection");
+        }
+        let created = protocol(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            "must-refuse",
+            "--title",
+            "Must refuse",
+            "--store",
+            printable(&projection),
+        ]);
+        assert_ne!(code(&created), 0, "{}", stdout(&created));
+        assert!(
+            stderr(&created).contains("cannot open an Eventlog projection as Markdown authority"),
+            "{}",
+            stderr(&created)
+        );
+        assert!(!projection.join("story/must-refuse.md").exists());
+    }
+    #[cfg(unix)]
+    {
+        let alias = project.join("metadata-alias");
+        std::os::unix::fs::symlink(&engineering, &alias).expect("metadata directory alias");
+        let aliased_projection = alias.join("planning");
+        let refused = protocol(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            "must-refuse",
+            "--title",
+            "Must refuse",
+            "--store",
+            printable(&aliased_projection),
+        ]);
+        assert_ne!(code(&refused), 0);
+        assert!(
+            stderr(&refused).contains("cannot open an Eventlog projection as Markdown authority"),
+            "{}",
+            stderr(&refused)
+        );
+        assert!(!projection.exists());
+    }
+}
+
+#[test]
+fn an_explicit_canonical_store_contends_with_the_project_writer_fence() {
+    let project = scratch("aep-plan-project-explicit-writer-fence");
+    let engineering = project.join(".engineering");
+    let planning = engineering.join("planning");
+    std::fs::create_dir_all(&planning).expect("fixture store");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(engineering.join(".aep-planning-writer.lock"))
+        .expect("project writer fence opens");
+    file.try_lock_exclusive()
+        .expect("project writer holds the fence");
+
+    let args = [
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "racing",
+        "--title",
+        "Racing",
+        "--store",
+        printable(&planning),
+    ];
+    let racing = protocol(&args);
+    assert_ne!(
+        code(&racing),
+        0,
+        "the explicit spelling bypassed the project lock"
+    );
+    assert!(
+        stderr(&racing).contains("another admitted planning writer"),
+        "{}",
+        stderr(&racing)
+    );
+    assert!(!planning.join("story/racing.md").exists());
+    drop(file);
+    let released = protocol(&args);
+    assert_eq!(code(&released), 0, "{}", stderr(&released));
+    assert!(planning.join("story/racing.md").exists());
+}
+
+#[test]
+fn a_paused_explicit_store_writer_excludes_a_second_cli_process() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    let store = scratch("aep-plan-cross-process-writer-fence");
+    copy_tree(&root().join(FIXTURE), &store);
+    let canonical = store.canonicalize().expect("fixture canonicalises");
+    let digest = Sha256::digest(canonical.as_os_str().as_encoded_bytes());
+    let digest = digest
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            write!(output, "{byte:02x}").expect("writing to a string cannot fail");
+            output
+        });
+    let lock = canonical
+        .parent()
+        .expect("fixture has a parent")
+        .join(format!(".aep-planning-writer-{digest}.lock"));
+
+    let mut paused = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        .args([
+            "plan",
+            "artifact",
+            "body",
+            "story:passkey-login",
+            "--from",
+            "-",
+            "--store",
+            printable(&store),
+        ])
+        .current_dir(root())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the paused writer starts");
+
+    let mut observed_held = false;
+    for _ in 0..100 {
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock)
+        {
+            if file.try_lock_exclusive().is_err() {
+                observed_held = true;
+                break;
+            }
+            file.unlock().expect("the probe releases its lock");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(observed_held, "the first CLI process never held {lock:?}");
+
+    let racing = protocol_in(
+        &root(),
+        &[
+            "plan",
+            "artifact",
+            "set",
+            "story:passkey-login",
+            "--title",
+            "Racing title",
+            "--store",
+            printable(&store),
+        ],
+    );
+    assert_ne!(code(&racing), 0, "a second process must not enter");
+    assert!(
+        stderr(&racing).contains("another admitted planning writer or migration holds"),
+        "{}",
+        stderr(&racing)
+    );
+
+    paused
+        .stdin
+        .take()
+        .expect("paused standard input")
+        .write_all(b"# Replacement body\n")
+        .expect("the first writer resumes");
+    let completed = paused.wait_with_output().expect("the first writer exits");
+    assert_eq!(code(&completed), 0, "{}", stderr(&completed));
+    std::fs::remove_file(lock).expect("retired test lock is removed");
 }
 
 #[test]

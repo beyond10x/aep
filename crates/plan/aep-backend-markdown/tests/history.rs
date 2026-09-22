@@ -31,7 +31,7 @@ fn scratch(name: &str) -> PathBuf {
 fn open(root: &Path, at: u64) -> MarkdownBackend {
     MarkdownBackend::open(
         root,
-        std::iter::empty(),
+        aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(at),
         ActorRef::parse("human:operator").expect("an actor"),
         aep_domain::artifact::LifecycleRegistry::default(),

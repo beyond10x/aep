@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectionWatermarkV1",
+  "description": "Authority-owned join proving which complete snapshot a Markdown projection represents.",
+  "type": "object",
+  "required": [
+    "authority",
+    "authority_snapshot",
+    "format",
+    "projection_inventory_digest",
+    "watermark_digest"
+  ],
+  "properties": {
+    "authority": {
+      "$ref": "#/definitions/AuthorityCoordinateV1"
+    },
+    "authority_snapshot": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "format": {
+      "$ref": "#/definitions/ProjectionWatermarkFormatV1"
+    },
+    "projection_inventory_digest": {
+      "$ref": "#/definitions/DigestV1"
+    },
+    "watermark_digest": {
+      "$ref": "#/definitions/DigestV1"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AuthorityCoordinateV1": {
+      "description": "Exact public Eventlog adapter authority tuple.",
+      "type": "object",
+      "required": [
+        "logical_scope",
+        "stream_identity",
+        "tenant"
+      ],
+      "properties": {
+        "logical_scope": {
+          "type": "string"
+        },
+        "stream_identity": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DigestV1": {
+      "description": "A canonical SHA-256 digest with its algorithm prefix.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ProjectionWatermarkFormatV1": {
+      "description": "The scalar literal aep.planning-projection-watermark/1.",
+      "type": "string",
+      "enum": [
+        "aep.planning-projection-watermark/1"
+      ]
+    }
+  }
+}

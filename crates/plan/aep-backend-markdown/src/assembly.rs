@@ -166,7 +166,11 @@ impl Assembly {
         for (member, id, document) in self.documents() {
             for relation in &document.document.frontmatter.relations {
                 let target = relation.target.id();
-                if target.member().is_none() {
+                // A target naming **this** member is this member's own artifact written the long
+                // way, exactly as an unqualified one is: `WorkspaceRef` reads `member/kind:name`
+                // as that member's artifact wherever it is read from, and it is being read there.
+                // Reporting it listed an edge crossing from a member to itself.
+                if target.member().is_none_or(|named| named == member.as_str()) {
                     continue;
                 }
                 // An id that parsed as an artifact but not as a workspace reference names more

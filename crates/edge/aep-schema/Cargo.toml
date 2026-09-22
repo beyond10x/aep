@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+aep-contract.workspace = true
 aep-domain.workspace = true
 
 # The planning store's frontmatter is published as a schema from here, the way every other document

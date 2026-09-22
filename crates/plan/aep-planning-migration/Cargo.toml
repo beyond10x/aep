@@ -1,0 +1,32 @@
+[package]
+name = "aep-planning-migration"
+description = "Durable planning authority migration orchestration."
+version.workspace = true
+edition.workspace = true
+rust-version = "1.91"
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+aep-backend-eventlog.workspace = true
+aep-backend-markdown.workspace = true
+aep-contract.workspace = true
+aep-domain.workspace = true
+entity-core.workspace = true
+entity-eventlog.workspace = true
+entity-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+postgres.workspace = true
+rusqlite.workspace = true
+sha2 = "0.11"
+time = { version = "0.3", features = ["formatting"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+# The projection cases count captures charged at their own sites inside the backend crate.
+aep-backend-eventlog = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

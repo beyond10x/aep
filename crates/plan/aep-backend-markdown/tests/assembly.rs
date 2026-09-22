@@ -243,6 +243,31 @@ fn a_relation_that_stays_inside_its_member_is_not_a_crossing() {
 }
 
 #[test]
+fn a_relation_qualified_with_its_own_member_name_is_not_a_crossing_either() {
+    // The long spelling of the same edge. `WorkspaceRef` defines `one/story:beta`, read in `one`,
+    // as `one`'s own `story:beta`, so it does not leave the member and `workspace crossings` must
+    // not list it — listing it reports an edge crossing from a member to itself, which is not an
+    // edge a workspace exists to carry and not one anybody has to resolve.
+    let one = scratch("cross-self-local/planning");
+    write_with_relation(&one, "story:alpha", "Alpha", "depends_on", "one/story:beta");
+    write(&one, "story:beta", "Beta");
+
+    let assembly = Assembly::read([(member("one"), one.as_path())]);
+    assert!(
+        assembly.crossing_relations().is_empty(),
+        "`one/story:beta` read in `one` is `one`'s own `story:beta`: {:?}",
+        assembly
+            .crossing_relations()
+            .iter()
+            .map(|crossing| format!(
+                "{}/{} -> {} ({})",
+                crossing.from_member, crossing.from, crossing.to, crossing.resolution
+            ))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn a_cycle_that_only_exists_once_two_members_are_read_together_is_found() {
     // The case nothing looked for. Each member validates cleanly on its own: `one/story:alpha
     // blocks two/story:beta` is a crossing, and so is the edge back. The loop exists only in the
