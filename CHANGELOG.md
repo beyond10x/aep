@@ -11,6 +11,95 @@ belongs in the commit message or in `docs/design/`.
 
 ## [0.57.0] — 2026-09-22
 
+### Added
+
+- `plan store writer-control hold` binds a local foreground operator custody session to one
+  migration or projection rebuild. Public apply, matching retry and rebuild now require that live
+  control and recheck its selected source or authority before effects. Operators with an already
+  idle writer set can affirm it explicitly with `--already-idle`; that fresh custody mode creates
+  no observed-stop witness and must be asserted again after interruption.
+
+- Pure planning migration capture values preserve partial observations, validate capture
+  phases and discovered-table catalogs, and compute deterministic digests and changed sets.
+  The raw capture document schema is available in the generated schema roster.
+
+### Changed
+
+- The Eventlog providers and the Entity Runtime crates are pinned to the qualified vector
+  `76aad5e3790e302e6c7f348a4fe4d9229cd17bce` and
+  `8569da24405da850544fa92daf1077892a53aac9`. The file provider verifies the committed history and
+  every bound object once, when the store is opened, and a later transaction re-checks only what
+  changed on disk: it re-reads the raw committed bytes to prove the prefix is still the one it
+  verified, and opens no object it does not touch. A command that makes one transaction per
+  artifact no longer pays the whole store for each one — `plan artifact list` over a 64-artifact
+  migrated plan made 218 transactions, 227,452 object reads and 2,863 MB of I/O for a 16 MB store.
+  Stored bytes, guarded append, receipts, recovery and every refusal are unchanged; a committed
+  frame damaged in place after the store was opened still refuses without altering the history.
+
+- The runtime and provider pins name released commits rather than revisions that existed on one
+  workstation. `entity-*` moves to **Entity Runtime 0.19.0**
+  (`344123905de987110d3b419b1ee8d6ee6ae768c4`) and `eventlog-core`/`eventlog-file` to
+  **Eventlog 0.3.0** (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Until now a clean clone could
+  not resolve this workspace at all. The two move together on purpose: Entity Runtime 0.19.0 itself
+  pins Eventlog 0.3.0, and `cargo xtask deps` checks runtime-revision uniqueness but has no rule
+  for `eventlog`, so leaving the direct pin behind would put two `eventlog-core` versions in one
+  lockfile with nothing to catch it.
+
+- A capture handed to `aep_backend_eventlog::open_with_snapshot` — and to
+  `FileProjectionPublisher::with_snapshot` — now travels with the authority it was taken from, as
+  the new `HeldCapture` that `capture_held` returns. A `CompleteStoreSnapshot` names none of the
+  three values an `Authority` is: its `scope` is the caller's own label echoed back and its
+  `coverage` is a constant, so a genuine complete capture of a *different* authority sharing this
+  one's logical scope was accepted, and the handle then answered reads out of the wrong store.
+  `capture_held` is the only constructor, so the authority a `HeldCapture` names is always the one
+  it was captured from.
+
+- `FileProjectionPublisher::publish_current` refuses on a publisher built by `with_snapshot`. It
+  publishes the current authority and proves it by capturing before staging and again after; a
+  seeded publisher stages from its held capture between those two fresh ones, so the comparison
+  agreed and the watermark was written asserting a projection inventory for a snapshot whose
+  content had not been projected. The refusal is internal — no command reaches it, so it mints no
+  new refusal code.
+
+- A relation qualified with **this store's own** declared member name is a local edge again, on
+  every path that reads one. A workspace file that names its own repository is the ordinary shape —
+  this one's names `engineering-protocols` with `source: ..`, deliberately — and under it
+  `engineering-protocols/story:x` is `WorkspaceRef`'s long spelling of this store's `story:x`. Every
+  reader answered from the member list alone, which cannot tell that case from a crossing, so
+  `plan store migrate dry-run` counted a local edge as a `workspace_crossing` and imported no
+  relation record for it, `plan artifact validate` printed `valid` for a store whose only edge was a
+  dangling `own-member/story:typo`, and the migration admitted that store. The rule is now one
+  rule with the member it is read in as an input: an edge into this store's own member is local,
+  resolved here and dangling if its target is absent; an edge into another declared member is a
+  crossing; anything else is a misspelling and a dangling edge. `aep workspace crossings` no longer
+  lists an edge from a member to itself.
+
+- `plan store migrate apply`, `plan store migrate verify`, `plan store projection rebuild` and
+  `plan store inspect` on a migrated store now publish `inventory.workspace_crossings` instead of a
+  hard `0`. The count was assigned only on the dry-run path, so four of the five receipts carrying
+  the field reported `relations + 0` against a published description promising that the two sum to
+  what the source declares — the number changed between the dry-run receipt and the apply receipt
+  of one cutover, with nothing said. All four now count it from the same rule and the same authored
+  relation list. An unreadable `workspace.yaml` is refused on those paths at `field: workspace`, as
+  it already was on `dry-run`.
+
+- The dry-run and apply receipts now count workspace crossings separately from relation records, as
+  `inventory.workspace_crossings` beside `inventory.relations`. `inventory.relations` was counted
+  from the source's frontmatter while the migration imports only the relations whose target is
+  itself a captured document, so a store that declares members and carries a crossing was promised
+  one relation record per crossing more than the authority ever received — and no count taken
+  afterwards revealed it, because the post-migration read agrees with the larger number through the
+  retained relation data. The two figures now sum to what the source declares: a store with 564
+  authored relations and one crossing reports 563 and 1.
+
+- A migration refusal that comes from the mapper now carries the mapper's coordinate instead of the
+  selector's. Every mapping refusal was reported as `semantic_mismatch` at the `--project` selector
+  path, so a receipt named the file that chose the store and never the document that did not map.
+  A refusal naming a captured Markdown node is now reported at that node's store-relative path
+  (`kind: source`, `markdown_path`), and one about the source as a whole at the source root — the
+  Markdown root, the SQLite database, the Postgres endpoint or the hybrid side. The selector
+  coordinate is left to selector failures.
+
 ### Fixed
 
 - `plan store migrate apply` imports a store in time proportional to its size instead of to its
@@ -36,28 +125,12 @@ belongs in the commit message or in `docs/design/`.
   to 91.7 ms.
 
   What the migration writes is unchanged. On the same 64-artifact copy, the batched and the
-  unbatched import produce byte-identical projected documents and the same
-  `projection_inventory_digest`, `source_config_digest` and mapping digests; the receipt fields that
-  differ between them differ between two batched runs as well, because they carry the freshly minted
-  authority identity of each run.
+  unbatched import produce byte-identical projected documents and the same projection inventory,
+  source configuration and mapping digests; the receipt fields that differ between them differ
+  between two batched runs as well, because they carry the freshly minted authority identity of
+  each run.
 
-  This needs Entity Runtime `b652c6ca` and Eventlog `7fbd37cf`.
-
-- A capture handed to `aep_backend_eventlog::open_with_snapshot` — and to
-  `FileProjectionPublisher::with_snapshot` — now travels with the authority it was taken from, as
-  the new `HeldCapture` that `capture_held` returns. A `CompleteStoreSnapshot` names none of the
-  three values an `Authority` is: its `scope` is the caller's own label echoed back and its
-  `coverage` is a constant, so a genuine complete capture of a *different* authority sharing this
-  one's logical scope was accepted, and the handle then answered reads out of the wrong store.
-  `capture_held` is the only constructor, so the authority a `HeldCapture` names is always the one
-  it was captured from.
-
-- `FileProjectionPublisher::publish_current` refuses on a publisher built by `with_snapshot`. It
-  publishes the current authority and proves it by capturing before staging and again after; a
-  seeded publisher stages from its held capture between those two fresh ones, so the comparison
-  agreed and the watermark was written asserting a projection inventory for a snapshot whose
-  content had not been projected. The refusal is internal — no command reaches it, so it mints no
-  new refusal code.
+  This needs Entity Runtime 0.19.0 and Eventlog 0.3.0, which this release pins.
 
 - `plan store migrate apply` publishes its projection from the capture it already took to verify
   the import, instead of capturing the authority three more times. Publishing opened the store it
@@ -66,28 +139,6 @@ belongs in the commit message or in `docs/design/`.
   authority with nothing written to it since. On the 448-artifact copy the projection phase fell
   from **61.7 s to 35.7 s** and CPU for the whole apply from **117.6 s to 90.3 s**; captures made
   through the provider boundary fell from 11 to 9. The published documents are byte-identical.
-
-- A relation qualified with **this store's own** declared member name is a local edge again, on
-  every path that reads one. A workspace file that names its own repository is the ordinary shape —
-  this one's names `engineering-protocols` with `source: ..`, deliberately — and under it
-  `engineering-protocols/story:x` is `WorkspaceRef`'s long spelling of this store's `story:x`. Every
-  reader answered from the member list alone, which cannot tell that case from a crossing, so
-  `plan store migrate dry-run` counted a local edge as a `workspace_crossing` and imported no
-  relation record for it, `plan artifact validate` printed `valid` for a store whose only edge was a
-  dangling `own-member/story:typo`, and the migration admitted that store. The rule is now one
-  rule with the member it is read in as an input: an edge into this store's own member is local,
-  resolved here and dangling if its target is absent; an edge into another declared member is a
-  crossing; anything else is a misspelling and a dangling edge. `aep workspace crossings` no longer
-  lists an edge from a member to itself.
-
-- `plan store migrate apply`, `plan store migrate verify`, `plan store projection rebuild` and
-  `plan store inspect` on a migrated store now publish `inventory.workspace_crossings` instead of a
-  hard `0`. The count was assigned only on the dry-run path, so four of the five receipts carrying
-  the field reported `relations + 0` against a published description promising that the two sum to
-  what the source declares — the number changed between the dry-run receipt and the apply receipt
-  of one cutover, with nothing said. All four now count it from the same rule and the same authored
-  relation list. An unreadable `workspace.yaml` is refused on those paths at `field: workspace`, as
-  it already was on `dry-run`.
 
 - `aep plan store migrate dry-run` and `apply` now build the source's artifact graph with the
   workspace members its `.engineering/workspace.yaml` declares, exactly as `plan artifact validate`
@@ -104,15 +155,6 @@ belongs in the commit message or in `docs/design/`.
   authority's relation surface has no notion of a member outside it, so no record is invented for
   a destination that is not there.
 
-- The dry-run and apply receipts now count workspace crossings separately from relation records, as
-  `inventory.workspace_crossings` beside `inventory.relations`. `inventory.relations` was counted
-  from the source's frontmatter while the migration imports only the relations whose target is
-  itself a captured document, so a store that declares members and carries a crossing was promised
-  one relation record per crossing more than the authority ever received — and no count taken
-  afterwards revealed it, because the post-migration read agrees with the larger number through the
-  retained relation data. The two figures now sum to what the source declares: a store with 564
-  authored relations and one crossing reports 563 and 1.
-
 - A `.engineering/workspace.yaml` that exists and does not parse is now refused rather than read as
   a store that declares nothing. Every read of the declaration turned a failure into an empty
   member list, so a single misspelled key silently disabled every declared member: `plan artifact
@@ -123,14 +165,6 @@ belongs in the commit message or in `docs/design/`.
   and the parse error. A repository with **no** workspace file is unchanged and is still not an
   error. The driven-plan read (`aep_driver::PlanSource`) answers with a member list and has nowhere
   to put a reason, so it still reads an unreadable declaration as an empty one.
-
-- A migration refusal that comes from the mapper now carries the mapper's coordinate instead of the
-  selector's. Every mapping refusal was reported as `semantic_mismatch` at the `--project` selector
-  path, so a receipt named the file that chose the store and never the document that did not map.
-  A refusal naming a captured Markdown node is now reported at that node's store-relative path
-  (`kind: source`, `markdown_path`), and one about the source as a whole at the source root — the
-  Markdown root, the SQLite database, the Postgres endpoint or the hybrid side. The selector
-  coordinate is left to selector failures.
 
 - Opening an Eventlog plan now costs the authority **one** capture, not one per record. Hydration
   asks the store for the ids of each of its four kinds and then reads every id it was given, and
@@ -218,20 +252,6 @@ belongs in the commit message or in `docs/design/`.
   the artifact's revision independently of the recorded storage revision, and projection failures
   after a commit return a recoverable committed result.
 
-### Added
-
-- `plan store writer-control hold` binds a local foreground operator custody session to one
-  migration or projection rebuild. Public apply, matching retry and rebuild now require that live
-  control and recheck its selected source or authority before effects. Operators with an already
-  idle writer set can affirm it explicitly with `--already-idle`; that fresh custody mode creates
-  no observed-stop witness and must be asserted again after interruption.
-
-- Pure planning migration capture values preserve partial observations, validate capture
-  phases and discovered-table catalogs, and compute deterministic digests and changed sets.
-  The raw capture document schema is available in the generated schema roster.
-
-### Fixed
-
 - SQLite planning storage selects the exact bundled `rusqlite` 0.40.2 line shared with Entity
   Runtime and Eventlog consumers. Plan formats, storage semantics and Rust minimums are unchanged.
 
@@ -272,28 +292,6 @@ belongs in the commit message or in `docs/design/`.
 
 - Public harness integration, concepts and transcript guides now route model-backed runs and
   native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
-
-### Changed
-
-- The Eventlog providers and the Entity Runtime crates are pinned to the qualified vector
-  `76aad5e3790e302e6c7f348a4fe4d9229cd17bce` and
-  `8569da24405da850544fa92daf1077892a53aac9`. The file provider verifies the committed history and
-  every bound object once, when the store is opened, and a later transaction re-checks only what
-  changed on disk: it re-reads the raw committed bytes to prove the prefix is still the one it
-  verified, and opens no object it does not touch. A command that makes one transaction per
-  artifact no longer pays the whole store for each one — `plan artifact list` over a 64-artifact
-  migrated plan made 218 transactions, 227,452 object reads and 2,863 MB of I/O for a 16 MB store.
-  Stored bytes, guarded append, receipts, recovery and every refusal are unchanged; a committed
-  frame damaged in place after the store was opened still refuses without altering the history.
-
-- The runtime and provider pins name released commits rather than revisions that existed on one
-  workstation. `entity-*` moves to **Entity Runtime 0.19.0**
-  (`344123905de987110d3b419b1ee8d6ee6ae768c4`) and `eventlog-core`/`eventlog-file` to
-  **Eventlog 0.3.0** (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Until now a clean clone could
-  not resolve this workspace at all. The two move together on purpose: Entity Runtime 0.19.0 itself
-  pins Eventlog 0.3.0, and `cargo xtask deps` checks runtime-revision uniqueness but has no rule
-  for `eventlog`, so leaving the direct pin behind would put two `eventlog-core` versions in one
-  lockfile with nothing to catch it.
 
 ## [0.56.0] — 2026-09-18
 

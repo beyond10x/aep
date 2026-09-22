@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "aep-backend-entity"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-memory",
  "aep-conformance",
@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-eventlog"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-eventlog",
@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-hybrid"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-markdown",
@@ -55,7 +55,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-markdown"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-memory",
@@ -74,7 +74,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-memory"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-postgres"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-conformance",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "aep-backend-sqlite"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-conformance",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "aep-cli"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-eventlog",
@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "aep-client"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -165,7 +165,7 @@ dependencies = [
 
 [[package]]
 name = "aep-conformance"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-memory",
  "aep-contract",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "aep-contract"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "aep-domain"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "proptest",
  "schemars",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-domain",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "aep-driver-spec"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "schemars",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "aep-engine"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -244,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "aep-ess-evidence"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "serde",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "aep-planning-migration"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-eventlog",
  "aep-backend-markdown",
@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "aep-profile-development"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "aep-profile-operations"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-contract",
  "aep-domain",
@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "aep-project"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "aep-driver-spec",
@@ -311,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "aep-render"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "serde_yaml",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aep-schema"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-backend-markdown",
  "aep-contract",
@@ -1990,7 +1990,7 @@ dependencies = [
 
 [[package]]
 name = "trace-domain"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "regex",
  "schemars",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "trace-spec"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-domain",
  "serde",
@@ -2252,7 +2252,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "aep-schema",
  "anyhow",
