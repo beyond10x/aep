@@ -5581,6 +5581,12 @@ struct LogFindings {
     deleted: Vec<String>,
     /// Documents with no events at all.
     pre_provider: usize,
+    /// Where the journal's own hash chain stops holding. A problem; see [`log_findings`].
+    chain_broken: Vec<String>,
+    /// Journal records sealed into the chain and checked.
+    chain_verified: usize,
+    /// Journal lines written before the store chained its journal. Not a finding.
+    chain_uncovered: usize,
 }
 
 /// The documents against the event log (wave G, story 4), and the journal against the files.
@@ -5591,6 +5597,28 @@ struct LogFindings {
 /// the provider and is none of them. The journal's older reconciliation covers the same log's
 /// status and revision by entry, so a document either check names is not named twice, and an
 /// orphan the log knows as deleted is said once, as that.
+///
+/// # And the journal against itself
+///
+/// Every check above reconciles the documents with the journal, which catches an actor who edits
+/// one of them. It catches nothing at all from an actor who edits **both** consistently: writing
+/// `revision: 99` into `story/x.md` and appending a matching event line made `validate` print
+/// `valid` and exit 0, with `--strict` set (gap register `docs/plan/gap-register.md:108`,
+/// reproduced 2026-09-17). `aep_backend_markdown::chain` closes that by linking each record to the
+/// one before it, and a break is a **problem** — the hard tier, failing without `--strict`.
+///
+/// That tier is argued rather than assumed. The reported-not-failed tier holds states an honest
+/// store can legitimately be in: a status closed on an assertion, a document predating the event
+/// log, a story with no scope, a review written before the findings block existed. A broken chain
+/// is not one of those. The only writer that seals is `chain::append_sealed`, and it always writes
+/// a record that links, so a mismatch means bytes in the journal changed after they were sealed —
+/// which no operator workflow produces. It is the same class as a forged revision and a deletion,
+/// both already hard failures, and it is what stops the first of those being routed around.
+///
+/// A journal with **no** chain is not a finding of any tier — not a problem, not a `--strict`
+/// class, not a line unless there is something to say. Every store in this workspace was written
+/// before the chain existed, and a check that went red on six correct repositories the day it
+/// landed is a check somebody mutes.
 fn log_findings(
     root: &Path,
     report: &aep_backend_markdown::store::StoreReport,
@@ -5625,12 +5653,18 @@ fn log_findings(
     problems.extend(drift_findings.iter().cloned());
     problems.extend(forged_findings.iter().cloned());
     problems.extend(deleted_findings.iter().cloned());
+    let chain = aep_backend_markdown::chain::verify(root);
+    let chain_broken: Vec<String> = chain.broken.iter().map(ToString::to_string).collect();
+    problems.extend(chain_broken.iter().cloned());
     LogFindings {
         problems,
         drift: drift_findings,
         forged: forged_findings,
         deleted: deleted_findings,
         pre_provider: drift.pre_provider,
+        chain_broken,
+        chain_verified: chain.covered,
+        chain_uncovered: chain.uncovered,
     }
 }
 
@@ -6339,15 +6373,23 @@ pub(crate) fn findings(
     // history in the store and the contract answers it, so there is no second record to reconcile
     // — and the journal under an Eventlog plan's projection is not one either: it is the migrated
     // store's, and it ends where the migration did (`Opened::journal`).
-    let (mut drift_findings, forged_findings, deleted_findings, pre_provider) =
-        match opened.journal() {
-            Some(store) => {
-                let log = log_findings(store.root(), report, &held);
-                problems.extend(log.problems);
-                (log.drift, log.forged, log.deleted, log.pre_provider)
-            }
-            None => (Vec::new(), Vec::new(), Vec::new(), 0),
-        };
+    let mut log = match opened.journal() {
+        Some(store) => {
+            let log = log_findings(store.root(), report, &held);
+            problems.extend(log.problems.iter().cloned());
+            log
+        }
+        None => LogFindings {
+            problems: Vec::new(),
+            drift: Vec::new(),
+            forged: Vec::new(),
+            deleted: Vec::new(),
+            pre_provider: 0,
+            chain_broken: Vec::new(),
+            chain_verified: 0,
+            chain_uncovered: 0,
+        },
+    };
     // An Eventlog plan's drift is the projection's, and the authority decides it: every command
     // publishes a watermark over the documents it wrote, so a projection whose owned files digest
     // to no watermark the authority holds was changed by something that was not a command. It is
@@ -6370,7 +6412,7 @@ pub(crate) fn findings(
                 projection_root.display()
             );
             problems.push(finding.clone());
-            drift_findings.push(finding);
+            log.drift.push(finding);
         }
     }
 
@@ -6420,10 +6462,13 @@ pub(crate) fn findings(
         artifacts: report.documents.len(),
         problems,
         closed_on_an_assertion: asserted,
-        drift: drift_findings,
-        forged: forged_findings,
-        deleted: deleted_findings,
-        pre_provider,
+        drift: log.drift,
+        forged: log.forged,
+        deleted: log.deleted,
+        pre_provider: log.pre_provider,
+        chain_broken: log.chain_broken,
+        chain_verified: log.chain_verified,
+        chain_uncovered: log.chain_uncovered,
         without_findings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
@@ -6526,6 +6571,17 @@ fn print_validation(summary: &Summary, strict: bool) {
     if summary.pre_provider > 0 {
         outln!("{} document(s) predate the event log", summary.pre_provider);
     }
+    // The journal's own coverage, said out loud for the reason the line above is: a reader who
+    // sees `valid` should be able to tell whether the record behind it is sealed or merely
+    // consistent with itself. Printed whenever the journal holds anything at all, so a store where
+    // the chain has not started reads as *not covered* rather than as *checked*.
+    if summary.chain_verified > 0 || summary.chain_uncovered > 0 {
+        outln!(
+            "journal chain: {} record(s) sealed and verified, {} line(s) predating the chain",
+            summary.chain_verified,
+            summary.chain_uncovered
+        );
+    }
     // Reported, and deliberately **not** counted as a problem. Refusing an assertion outright would
     // stop anybody closing a story on the day a runner is down, which is the day it matters most.
     // What it must not be is invisible.
@@ -6578,10 +6634,14 @@ fn print_validation(summary: &Summary, strict: bool) {
 
 /// The classes `--strict` fails on, named, in the order the report prints them.
 ///
-/// Drift, a forged revision and a deletion are already problems, so they already fail; they are
-/// here anyway, because a caller reading *why* a strict run refused should not have to know which
-/// of the classes happened to be counted twice — and because a future edit that stopped counting
-/// one as a problem must not quietly stop `--strict` refusing it.
+/// Drift, a forged revision, a deletion and a broken journal chain are already problems, so they
+/// already fail; they are here anyway, because a caller reading *why* a strict run refused should
+/// not have to know which of the classes happened to be counted twice — and because a future edit
+/// that stopped counting one as a problem must not quietly stop `--strict` refusing it.
+///
+/// A journal the chain does **not** cover is not here and must not be added. It is the one count
+/// on the report that says *this was written before the check existed*, and promoting it would
+/// turn every store in the workspace red on the day the chain landed.
 fn strictly_refused(summary: &Summary) -> Vec<String> {
     let mut refusing = Vec::new();
     for (label, count) in [
@@ -6593,6 +6653,7 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         ("drifted", summary.drift.len()),
         ("forged revision", summary.forged.len()),
         ("deleted", summary.deleted.len()),
+        ("broken journal chain", summary.chain_broken.len()),
         (
             "recording no findings block",
             summary.without_findings.len(),
@@ -8771,6 +8832,24 @@ pub(crate) struct Summary {
     deleted: Vec<String>,
     /// Documents with no events at all — they predate the provider, which is not a defect.
     pre_provider: usize,
+    /// Where the journal's own hash chain stops holding. Counted as a problem.
+    ///
+    /// The check the other three do not make: drift, a forged revision and a deletion all
+    /// reconcile a document against the journal, and all three are silent when the journal was
+    /// edited to agree with the document. At most one entry, because a chain that is broken says
+    /// nothing about what follows the break and ninety findings for one edit would bury the one
+    /// that names the place.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    chain_broken: Vec<String>,
+    /// Journal records sealed into the chain and checked against it.
+    chain_verified: usize,
+    /// Journal lines written before this store chained its journal.
+    ///
+    /// Reported and **not** a problem, and deliberately not a `--strict` class either. Every store
+    /// in this workspace is entirely uncovered on the day the chain landed; *the chain says nothing
+    /// about this line* and *this line was tampered with* are different answers, and a check that
+    /// confused them would go red on six correct repositories at once.
+    chain_uncovered: usize,
     /// Stories past their ladder's first rung and still short of its end that declare no `scope`.
     ///
     /// Reported and **not** counted as a problem, and deliberately not a `--strict` class either.

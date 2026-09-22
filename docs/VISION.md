@@ -119,6 +119,17 @@ key and no attestation anywhere in the workspace. A proposed shape now exists �
 [`docs/plan/gap-register.md`](plan/gap-register.md) D-3 — and is not accepted, so this is a gap with
 an owner rather than a horizon.
 
+One thing standing near D-3 has landed, and it is worth keeping apart from it rather than allowed to
+read as progress against it. A markdown plan's `journal.jsonl` is now a hash chain: each record
+carries the digest of the record before it, and `aep plan artifact validate` walks the chain and
+fails at the exact record where it stops holding, naming that record
+([`crates/plan/aep-backend-markdown/src/chain.rs`](../crates/plan/aep-backend-markdown/src/chain.rs)).
+That is tamper-evidence **within** a log, and it is not attestation. The chain is computed from the
+bytes it protects, so it does not detect a log replaced wholesale, and it does not detect one
+truncated at the tail; and it prevents nothing, because prevention needs to know who wrote a file.
+Both limits close only by holding the head of the chain somewhere the log does not control, which is
+D-3 — still proposed, still carrying no signature and no key.
+
 ## Where this stands
 
 This vision does not maintain a component-status table. The surfaces that can keep the answer

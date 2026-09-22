@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.57.0] — 2026-09-22
+
 ### Fixed
 
 - `plan store migrate apply` imports a store in time proportional to its size instead of to its
@@ -283,6 +285,39 @@ belongs in the commit message or in `docs/design/`.
   migrated plan made 218 transactions, 227,452 object reads and 2,863 MB of I/O for a 16 MB store.
   Stored bytes, guarded append, receipts, recovery and every refusal are unchanged; a committed
   frame damaged in place after the store was opened still refuses without altering the history.
+
+- The runtime and provider pins name released commits rather than revisions that existed on one
+  workstation. `entity-*` moves to **Entity Runtime 0.19.0**
+  (`344123905de987110d3b419b1ee8d6ee6ae768c4`) and `eventlog-core`/`eventlog-file` to
+  **Eventlog 0.3.0** (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Until now a clean clone could
+  not resolve this workspace at all. The two move together on purpose: Entity Runtime 0.19.0 itself
+  pins Eventlog 0.3.0, and `cargo xtask deps` checks runtime-revision uniqueness but has no rule
+  for `eventlog`, so leaving the direct pin behind would put two `eventlog-core` versions in one
+  lockfile with nothing to catch it.
+
+## [0.56.0] — 2026-09-18
+
+### Added
+
+- A markdown plan's `journal.jsonl` is now a hash chain: every record `aep` appends carries the
+  digest of the record before it and a digest of its own bytes, written under a lock and flushed
+  before the lock is released. `aep plan artifact validate` walks the chain and fails, naming the
+  exact record, when one has been edited, inserted, removed or reordered — which closes the case a
+  document and its journal were edited *together* to agree on a revision no command produced.
+  A journal written before this exists is reported as not covered and is not a finding of any tier,
+  including under `--strict`; the first record appended to one seals every line before it as a
+  block, so the older lines become tamper-evident without being rewritten. This detects tampering
+  within a log, and it prevents nothing. It does not detect a log replaced wholesale, and it does
+  not detect one truncated at the tail; a chain is computed from the bytes it protects, so both need
+  the head recorded somewhere the log does not control — gap register D-3, still proposed.
+
+### Fixed
+
+- Shared Gates 0.1.1 rejects non-automation commit authors before scanning or reusing signed
+  evidence, including intermediate commits and merged side branches.
+
+- Public harness integration, concepts and transcript guides now route model-backed runs and
+  native transition hooks through `metaharness aep drive`, matching the 0.55.0 execution boundary.
 
 ## [0.55.0] — 2026-09-10
 

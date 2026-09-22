@@ -41,6 +41,16 @@
 //! were re-recorded with the line and the `unscoped` key. Nothing else moved — it is reported, never
 //! failed on, so the exit status and every other recording are what 0.28.0 produced.
 //!
+//! On 2026-09-17 (the journal's hash chain) `validate` gained a coverage line: how many journal
+//! records are sealed into the chain and checked against it, and how many lines predate it. This
+//! fixture is 0.28.0's journal, written years before the chain existed, so it reads `0 record(s)
+//! sealed and verified, 11 line(s) predating the chain` — and that is the recording's other job
+//! here. A store older than the check **validates**, exit 0, with no finding of any tier: *the
+//! chain does not cover this* and *this was tampered with* are different answers, and the
+//! recording is what stops a later edit confusing them. `reads/validate.text` carries the line and
+//! `reads/validate.json` the two counts; nothing else moved, and the exit status is what 0.28.0
+//! produced.
+//!
 //! The journal is compared by what it says and not by its bytes: an entry carries the instant it
 //! was written and the user who wrote it, and since wave G a new line is the runtime's event rather
 //! than the 0.19.0 entry — `journal::read` answers the same entries for both, which is what
