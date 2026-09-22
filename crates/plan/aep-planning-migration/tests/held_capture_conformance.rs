@@ -34,7 +34,6 @@ use aep_domain::node::Node;
 use aep_domain::time::Timestamp;
 use aep_planning_migration::{authority_snapshot_identity, FileProjectionPublisher};
 use entity_eventlog::{Authority, EventlogOperationContext};
-use entity_store::asynchronous::CompleteStoreSnapshot;
 use time::OffsetDateTime;
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
@@ -148,8 +147,10 @@ impl Fixture {
         block_on(backend.execute(envelope)).expect("update projected story");
     }
 
-    fn snapshot(&self) -> CompleteStoreSnapshot {
-        aep_backend_eventlog::complete_file_snapshot(&self.authority_path, self.adapter_authority())
+    // ADAPTED for the correction-2 fix, and only here: `with_snapshot` now takes the capture
+    // together with the authority it was taken from. Every assertion below is this case's own.
+    fn snapshot(&self) -> aep_backend_eventlog::HeldCapture {
+        aep_backend_eventlog::capture_held(&self.authority_path, self.adapter_authority())
             .expect("capture complete authority")
     }
 }
@@ -215,7 +216,7 @@ fn a_held_capture_stages_every_byte_a_fresh_capture_stages() {
     let fixture = Fixture::new();
     fixture.create_story();
     let held = fixture.snapshot();
-    let (identity, _) = authority_snapshot_identity(&fixture.authority, &held)
+    let (identity, _) = authority_snapshot_identity(&fixture.authority, held.snapshot())
         .expect("authority snapshot identity");
 
     let fresh_root = fixture.root.join("planning-fresh");
@@ -281,7 +282,7 @@ fn a_seeded_stage_answers_from_the_capture_and_not_from_the_authority() {
     fixture.create_story();
     let held = fixture.snapshot();
     let (held_identity, _) =
-        authority_snapshot_identity(&fixture.authority, &held).expect("held identity");
+        authority_snapshot_identity(&fixture.authority, held.snapshot()).expect("held identity");
 
     fixture.update_story_title("Written After The Capture");
 
@@ -328,8 +329,8 @@ fn a_seeded_stage_answers_from_the_capture_and_not_from_the_authority() {
         fresh_root.clone(),
     );
     let current = fixture.snapshot();
-    let (current_identity, _) =
-        authority_snapshot_identity(&fixture.authority, &current).expect("current identity");
+    let (current_identity, _) = authority_snapshot_identity(&fixture.authority, current.snapshot())
+        .expect("current identity");
     fresh.stage(current_identity).expect("fresh stage");
     let fresh_rendered = every_file(&stage_directory(&fresh_root, current_identity))
         .iter()
@@ -366,8 +367,8 @@ fn publishing_the_current_authority_from_a_seed_does_not_publish_a_stale_one_sil
 
     fixture.update_story_title("Written After The Capture");
     let current = fixture.snapshot();
-    let (current_identity, _) =
-        authority_snapshot_identity(&fixture.authority, &current).expect("current identity");
+    let (current_identity, _) = authority_snapshot_identity(&fixture.authority, current.snapshot())
+        .expect("current identity");
 
     let projection_root = fixture.root.join("planning");
     let seeded = FileProjectionPublisher::with_snapshot(

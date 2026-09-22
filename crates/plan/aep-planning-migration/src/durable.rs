@@ -678,8 +678,11 @@ where
         journal.establish(MigrationPhaseV1::Imported, imported)?;
     }
 
-    let snapshot = aep_backend_eventlog::complete_file_snapshot(authority_path, authority.clone())
+    // Captured with its provenance, because the projection below is seeded with it and a seeded
+    // handle must be able to check that the capture and the authority are the same store.
+    let held = aep_backend_eventlog::capture_held(authority_path, authority.clone())
         .map_err(ApplyError::Eventlog)?;
+    let snapshot = held.snapshot().clone();
     let (authority_snapshot, authority_capture) = if journal.is_at_least(MigrationPhaseV1::Verified)
     {
         let record = journal.establish(MigrationPhaseV1::Verified, Vec::new())?;
@@ -798,7 +801,7 @@ where
             input.destination_path.clone(),
             bound_authority.clone(),
             input.projection_path.clone(),
-            snapshot.clone(),
+            held.clone(),
         );
         let publication = projection.publish(authority_snapshot)?;
         after_effect(MigrationPhaseV1::ProjectionPublished)?;

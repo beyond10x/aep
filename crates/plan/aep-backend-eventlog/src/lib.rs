@@ -9,6 +9,13 @@
 
 #![allow(missing_docs)]
 
+/// Test-support scaffolding: counting seams over the provider and the backend.
+///
+/// Behind the off-by-default `test-support` feature, because it is not product surface. It is a
+/// feature rather than `cfg(test)` because the cases that use it are integration tests — and
+/// because `aep-planning-migration`'s cases count captures charged inside this crate, which
+/// `cfg(test)` cannot reach from another crate at all.
+#[cfg(feature = "test-support")]
 pub mod counting;
 #[cfg(test)]
 mod retained_snapshot_tests;
@@ -199,7 +206,7 @@ pub fn provision_file(
 
 /// [`import_file_anchors`], with the caller between this crate and the backend — see
 /// [`with_async_store_through`].
-pub fn import_file_anchors_through<W>(
+pub(crate) fn import_file_anchors_through<W>(
     path: &Path,
     authority: Authority,
     context: EventlogOperationContext,
@@ -221,6 +228,23 @@ where
             .into_iter()
             .map(|outcome| outcome.replayed)
             .collect())
+    })
+}
+
+/// [`import_file_anchors_through`], public only in a test-support build.
+///
+/// # Errors
+/// Whatever the import refuses.
+#[cfg(feature = "test-support")]
+pub fn import_file_anchors_counted(
+    path: &Path,
+    authority: Authority,
+    context: EventlogOperationContext,
+    histories: Vec<SubjectHistory>,
+    calls: Arc<counting::BackendCalls>,
+) -> Result<Vec<bool>, String> {
+    import_file_anchors_through(path, authority, context, histories, move |backend| {
+        Arc::new(counting::CountingBackend::new(backend, calls))
     })
 }
 
@@ -390,6 +414,8 @@ pub fn write_file_control(
 }
 
 fn control_bridge(path: PathBuf, authority: Authority) -> Result<RecordedEventlogBridge, String> {
+    #[cfg(feature = "test-support")]
+    crate::counting::sites::charge_control_bridge();
     RecordedEventlogBridge::start(
         registry()?,
         EventlogRecordedStoreOwner::File {
@@ -418,7 +444,7 @@ where
 /// [`crate::counting::CountingBackend`]. `wrap` sees the same backend the ordinary path builds,
 /// and the ordinary path is this function with `wrap` as the identity, so a counted run and an
 /// uncounted one differ by the counter and nothing else.
-pub fn with_async_store_through<T, F, Fut, W>(
+pub(crate) fn with_async_store_through<T, F, Fut, W>(
     path: &Path,
     authority: Authority,
     wrap: W,
@@ -431,6 +457,8 @@ where
         Arc<dyn entity_eventlog::EventlogBackend>,
     ) -> Arc<dyn entity_eventlog::EventlogBackend>,
 {
+    #[cfg(feature = "test-support")]
+    crate::counting::sites::charge_capture();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(|error| format!("constructing Eventlog operation runtime: {error}"))?;
@@ -498,37 +526,116 @@ pub fn open_with_snapshot(
     logical_scope: String,
     tenant: String,
     stream_identity: String,
-    snapshot: CompleteStoreSnapshot,
+    held: HeldCapture,
 ) -> Result<EventlogBackend, String> {
     let authority = Authority {
         logical_scope,
         tenant,
         stream_identity,
     };
-    validate_seed(&snapshot, &authority)?;
+    validate_seed(&held, &authority)?;
     let bridge = start_bridge(path, &authority)?;
     let store = EventlogPlanningStore::new(bridge, authority);
-    store.seed(snapshot);
+    store.seed(held.into_snapshot());
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())
 }
 
-/// Refuses a seed that is not a complete capture of exactly this authority's logical scope.
+/// A complete capture together with the authority it was taken from.
 ///
-/// Completeness is what makes a retained capture answer every read at one instant, and the scope
-/// is what makes it this authority's. Neither is inferable from the value: `CompleteStoreSnapshot`
-/// carries its own [`StoreCoverage`] precisely because a provider may answer a narrower one.
-fn validate_seed(snapshot: &CompleteStoreSnapshot, authority: &Authority) -> Result<(), String> {
-    if snapshot.coverage != entity_store::asynchronous::StoreCoverage::CompleteSnapshot {
+/// A [`CompleteStoreSnapshot`] does not say which store it describes. Its `scope` is the string
+/// its caller passed in, echoed back, and its `coverage` is a constant the provider writes into
+/// every capture it returns; there is no tenant in it and no stream identity — of the three values
+/// an [`Authority`] is, a capture names none. So "is this capture this authority's?" cannot be
+/// answered from the capture, and a genuine complete capture of a *different* authority sharing
+/// this one's logical scope is indistinguishable from this one's by inspection.
+///
+/// That is what this type is for: the provenance travels with the capture, recorded by the call
+/// that took it. There is no constructor from parts — [`capture_held`] is the only way to make
+/// one — so the authority a `HeldCapture` names is always the authority it was captured from.
+#[derive(Debug, Clone)]
+pub struct HeldCapture {
+    authority: Authority,
+    snapshot: CompleteStoreSnapshot,
+}
+
+impl HeldCapture {
+    /// The capture itself.
+    #[must_use]
+    pub const fn snapshot(&self) -> &CompleteStoreSnapshot {
+        &self.snapshot
+    }
+
+    /// The authority this capture was taken from.
+    #[must_use]
+    pub const fn authority(&self) -> &Authority {
+        &self.authority
+    }
+
+    /// The capture, by value.
+    #[must_use]
+    pub fn into_snapshot(self) -> CompleteStoreSnapshot {
+        self.snapshot
+    }
+}
+
+#[cfg(feature = "test-support")]
+impl HeldCapture {
+    /// A capture-with-provenance from parts, for cases that need a seed the capturing path
+    /// cannot produce — a narrower coverage, or a scope its authority does not carry.
+    ///
+    /// Behind `test-support`, so a product build has no way to say a capture is of an authority
+    /// it was not taken from; [`capture_held`] is the only constructor that exists there.
+    #[must_use]
+    pub const fn from_parts(authority: Authority, snapshot: CompleteStoreSnapshot) -> Self {
+        Self {
+            authority,
+            snapshot,
+        }
+    }
+}
+
+/// Captures an authority and records which authority the capture is of.
+///
+/// [`complete_file_snapshot`] with its provenance kept. A caller that intends to hand the capture
+/// to [`open_with_snapshot`] takes it this way, so the handle it seeds can check that the capture
+/// and the authority are the same store.
+///
+/// # Errors
+/// Whatever [`complete_file_snapshot`] refuses.
+pub fn capture_held(path: &Path, authority: Authority) -> Result<HeldCapture, String> {
+    let snapshot = complete_file_snapshot(path, authority.clone())?;
+    Ok(HeldCapture {
+        authority,
+        snapshot,
+    })
+}
+
+/// Refuses a seed that is not a complete capture of exactly this authority.
+///
+/// All three components of the [`Authority`] are compared, not the capture's `scope` field: that
+/// field is a caller-supplied label the provider echoes, and two authorities of one store share
+/// it — every cutover in this wave ran one logical scope per repository with the tenant
+/// `planning`, so `stream_identity` is the only component that tells two of them apart, and it is
+/// not in a capture at all. `coverage` is checked too, because a narrower capture would put
+/// subjects that existed at its instant on the fall-through path.
+fn validate_seed(held: &HeldCapture, authority: &Authority) -> Result<(), String> {
+    if held.snapshot.coverage != entity_store::asynchronous::StoreCoverage::CompleteSnapshot {
         return Err(format!(
             "seeded capture is not a complete snapshot: {:?}",
-            snapshot.coverage
+            held.snapshot.coverage
         ));
     }
-    if snapshot.scope != authority.logical_scope {
+    if held.authority != *authority {
+        return Err(format!(
+            "seeded capture is of authority {:?}, not this one {authority:?}",
+            held.authority
+        ));
+    }
+    if held.snapshot.scope != authority.logical_scope {
         return Err(format!(
             "seeded capture is of logical scope {:?}, not this authority's {:?}",
-            snapshot.scope, authority.logical_scope
+            held.snapshot.scope, authority.logical_scope
         ));
     }
     Ok(())
@@ -551,6 +658,7 @@ fn start_bridge(path: PathBuf, authority: &Authority) -> Result<RecordedEventlog
 }
 
 /// The selected AEP backend over a bridge whose every call is counted.
+#[cfg(feature = "test-support")]
 pub type CountedEventlogBackend = EntityBackend<
     EventlogPlanningStore<counting::CountingPlanningProvider<RecordedEventlogBridge>>,
     Identity,
@@ -569,12 +677,13 @@ pub type CountedEventlogBackend = EntityBackend<
 ///
 /// # Errors
 /// Whatever the path being counted refuses.
+#[cfg(feature = "test-support")]
 pub fn open_counted(
     path: PathBuf,
     logical_scope: String,
     tenant: String,
     stream_identity: String,
-    seed: Option<CompleteStoreSnapshot>,
+    seed: Option<HeldCapture>,
     calls: Arc<counting::ProviderCalls>,
 ) -> Result<CountedEventlogBackend, String> {
     let authority = Authority {
@@ -591,7 +700,7 @@ pub fn open_counted(
         authority,
     );
     if let Some(seed) = seed {
-        store.seed(seed);
+        store.seed(seed.into_snapshot());
     }
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())

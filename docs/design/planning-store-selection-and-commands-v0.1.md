@@ -362,8 +362,8 @@ subject components.
 `provision_uncertain`, `import_conflict`, `import_uncertain`, `verification_mismatch`,
 `publish_uncertain`, `selector_uncertain`, `projection_conflict`, `projection_drift`,
 `authority_identity_mismatch`, `authority_snapshot_changed`, `incomplete_publication`,
-`receipt_conflict`, `command_identity_conflict`, `committed_projection_failure`,
-`output_failure`, and `held_capture_not_current`.
+`receipt_conflict`, `command_identity_conflict`, `committed_projection_failure`, and
+`output_failure`.
 
 `CommandRefusalV1` has `code: CommandRefusalCodeV1` and `at: DiagnosticCoordinateV1`. Public output
 contains no free-form `detail`; the text renderer derives fixed English from the code and coordinate.

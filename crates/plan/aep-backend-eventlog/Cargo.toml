@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+# Counting seams and capture-site probes for tests. Never on in a product build.
+test-support = []
+
 [dependencies]
 aep-backend-entity.workspace = true
 aep-contract.workspace = true
@@ -24,6 +28,8 @@ tokio = { version = "1", features = ["rt"] }
 
 [dev-dependencies]
 aep-domain.workspace = true
+# This crate's own integration tests count what its seams are asked for.
+aep-backend-eventlog = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

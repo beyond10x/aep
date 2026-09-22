@@ -467,3 +467,65 @@ impl<P: RecordedPlanningProvider> RecordedPlanningProvider for CountingPlanningP
         self.inner.observe(context, observation)
     }
 }
+
+/// What this crate asked the authority for on **this thread**, by entry point.
+///
+/// Two of the migration's capture sites are not store reads and no decorator can see them: the
+/// projection's `complete` step calls [`crate::complete_file_snapshot`], and `commit`'s
+/// `recovering` step calls [`crate::read_file_control`]. Each is a full capture of the authority
+/// and each is skipped when a held capture answers instead — 12.17 s of one 27.3 s saving sits
+/// behind the first of them — so what guards them has to observe the capture at its own site.
+///
+/// The counters are charged where those entry points open the authority, and they are
+/// thread-local so that cases running in parallel in one test binary do not see each other's.
+pub mod sites {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OPENS: Cell<AuthorityOpens> = const { Cell::new(AuthorityOpens::NONE) };
+    }
+
+    /// How many times this crate opened the authority for a fresh read, by entry point.
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+    pub struct AuthorityOpens {
+        /// Whole-authority captures: `complete_file_snapshot`, `import_file_anchors`, and the
+        /// other `with_async_store` entry points.
+        pub captures: usize,
+        /// Control-row bridges: `read_file_control` and `write_file_control`.
+        pub control_bridges: usize,
+    }
+
+    impl AuthorityOpens {
+        const NONE: Self = Self {
+            captures: 0,
+            control_bridges: 0,
+        };
+    }
+
+    pub(crate) fn charge_capture() {
+        OPENS.with(|opens| {
+            let mut value = opens.get();
+            value.captures += 1;
+            opens.set(value);
+        });
+    }
+
+    pub(crate) fn charge_control_bridge() {
+        OPENS.with(|opens| {
+            let mut value = opens.get();
+            value.control_bridges += 1;
+            opens.set(value);
+        });
+    }
+
+    /// Zeroes this thread's counters and returns what they held.
+    pub fn take_authority_opens() -> AuthorityOpens {
+        OPENS.with(|opens| opens.replace(AuthorityOpens::NONE))
+    }
+
+    /// This thread's counters, left in place.
+    #[must_use]
+    pub fn authority_opens() -> AuthorityOpens {
+        OPENS.with(Cell::get)
+    }
+}

@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use aep_backend_eventlog::counting::{BackendCallCounts, BackendCalls, CountingBackend};
+use aep_backend_eventlog::counting::{BackendCallCounts, BackendCalls};
 use entity_core::EntityInstance;
 use entity_eventlog::{Authority, EventlogOperationContext};
 use entity_store::asynchronous::{
@@ -105,13 +105,12 @@ fn import_counting(
     histories: Vec<SubjectHistory>,
 ) -> (Vec<bool>, BackendCallCounts) {
     let calls = Arc::new(BackendCalls::default());
-    let recorded = Arc::clone(&calls);
-    let replayed = aep_backend_eventlog::import_file_anchors_through(
+    let replayed = aep_backend_eventlog::import_file_anchors_counted(
         root,
         authority.clone(),
         context(request),
         histories,
-        move |backend| Arc::new(CountingBackend::new(backend, recorded)),
+        Arc::clone(&calls),
     )
     .expect("the batch imports");
     (replayed, calls.read())

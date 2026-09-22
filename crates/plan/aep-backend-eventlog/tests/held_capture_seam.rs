@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use aep_backend_eventlog::counting::ProviderCalls;
 use entity_eventlog::{Authority, EventlogOperationContext};
-use entity_store::asynchronous::{CompleteStoreSnapshot, StoreCoverage};
+use entity_store::asynchronous::StoreCoverage;
 use serde_json::json;
 use time::OffsetDateTime;
 
@@ -78,8 +78,8 @@ fn provisioned(name: &str) -> (PathBuf, Authority) {
     (root, authority)
 }
 
-fn snapshot(root: &Path, authority: &Authority) -> CompleteStoreSnapshot {
-    aep_backend_eventlog::complete_file_snapshot(root, authority.clone())
+fn snapshot(root: &Path, authority: &Authority) -> aep_backend_eventlog::HeldCapture {
+    aep_backend_eventlog::capture_held(root, authority.clone())
         .expect("the caller captures the authority")
 }
 
@@ -147,8 +147,9 @@ fn a_seeded_open_asks_the_bridge_for_no_capture_and_an_unseeded_one_asks_for_exa
 #[test]
 fn a_seed_that_is_not_a_complete_capture_is_refused() {
     let (root, authority) = provisioned("partial");
-    let mut partial = snapshot(&root, &authority);
-    partial.coverage = StoreCoverage::ExplicitSet;
+    let mut narrowed = snapshot(&root, &authority).into_snapshot();
+    narrowed.coverage = StoreCoverage::ExplicitSet;
+    let partial = aep_backend_eventlog::HeldCapture::from_parts(authority.clone(), narrowed);
 
     let refusal = aep_backend_eventlog::open_with_snapshot(
         root.clone(),
@@ -171,8 +172,9 @@ fn a_seed_that_is_not_a_complete_capture_is_refused() {
 #[test]
 fn a_seed_of_another_logical_scope_is_refused() {
     let (root, authority) = provisioned("scope");
-    let mut foreign = snapshot(&root, &authority);
-    foreign.scope = "planning-somewhere-else".to_owned();
+    let mut relabelled = snapshot(&root, &authority).into_snapshot();
+    relabelled.scope = "planning-somewhere-else".to_owned();
+    let foreign = aep_backend_eventlog::HeldCapture::from_parts(authority.clone(), relabelled);
 
     let refusal = aep_backend_eventlog::open_with_snapshot(
         root.clone(),

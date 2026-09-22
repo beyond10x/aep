@@ -22,6 +22,7 @@ name = "aep-backend-eventlog"
 version = "0.55.0"
 dependencies = [
  "aep-backend-entity",
+ "aep-backend-eventlog",
  "aep-contract",
  "aep-domain",
  "entity-core",

@@ -17,7 +17,6 @@ use aep_domain::entity::EntityRef;
 
 use crate::durable::{ProjectionError, ProjectionPublication, ProjectionPublisher};
 use entity_eventlog::{Authority, EventlogOperationContext};
-use entity_store::asynchronous::CompleteStoreSnapshot;
 use time::OffsetDateTime;
 
 const PROJECTION_OWNERSHIP_FILE: &str = ".aep-projection-ownership.json";
@@ -58,7 +57,7 @@ pub struct FileProjectionPublisher {
     /// it imported, with nothing written to it since. Each of those reads costs a full capture:
     /// on a 448-artifact store, 7,815 blobs and 174 MB re-read and re-hashed to learn what the
     /// verification capture already said.
-    held: Option<CompleteStoreSnapshot>,
+    held: Option<aep_backend_eventlog::HeldCapture>,
 }
 
 pub struct StagedProjection {
@@ -101,7 +100,7 @@ impl FileProjectionPublisher {
         authority_path: PathBuf,
         authority: AuthorityCoordinateV1,
         projection_root: PathBuf,
-        held: CompleteStoreSnapshot,
+        held: aep_backend_eventlog::HeldCapture,
     ) -> Self {
         Self {
             authority_path,
@@ -189,8 +188,8 @@ impl FileProjectionPublisher {
             owned.push((relative, bytes, OWNED_FILE_MODE));
         }
         owned.sort_by(|left, right| left.0.cmp(&right.0));
-        let complete = match self.held.clone() {
-            Some(held) => held,
+        let complete = match self.held.as_ref() {
+            Some(held) => held.snapshot().clone(),
             None => aep_backend_eventlog::complete_file_snapshot(
                 &self.authority_path,
                 Authority {
@@ -249,7 +248,7 @@ impl FileProjectionPublisher {
         // the existence of the subject is read here, and a capture the caller already holds names
         // every subject the authority has.
         let recovering = match &self.held {
-            Some(held) => held.histories.iter().any(|subject| {
+            Some(held) => held.snapshot().histories.iter().any(|subject| {
                 subject.history.subject.entity == aep_backend_eventlog::PROJECTION_METADATA_AS
                     && subject.history.subject.id == staged.identity
             }),
@@ -292,7 +291,11 @@ impl FileProjectionPublisher {
     /// Publishes the exact current complete authority once, or recovers the already committed
     /// watermark for it. No invocation-ledger write may follow this call.
     ///
-    /// **Refused on a publisher built by [`Self::with_snapshot`].** This publishes *the current
+    /// **Refused on a publisher built by [`Self::with_snapshot`].** The refusal is internal: no
+    /// command reaches it, so it mints no wire vocabulary. `apply` builds its publisher with
+    /// `with_snapshot` and calls [`Self::publish`]; the one production caller of this method
+    /// builds its publisher with [`Self::new`] and rewrites any projection-failure code it gets.
+    /// This publishes *the current
     /// authority* and establishes that by capturing before staging and again after and comparing
     /// the two identities; a seeded publisher stages from its held capture, between two captures
     /// that never read it, so the comparison agrees while the documents published are the ones
@@ -308,7 +311,7 @@ impl FileProjectionPublisher {
             return Err((
                 zero_snapshot(),
                 projection_failure(
-                    CommandRefusalCodeV1::HeldCaptureNotCurrent,
+                    CommandRefusalCodeV1::VerificationMismatch,
                     ProjectionFailureReasonV1::InventoryMismatch,
                     &self.projection_root,
                 ),
@@ -1017,6 +1020,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    use aep_backend_eventlog::counting::sites;
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::testing::block_on;
     use aep_domain::command::{Command, CreateEntity, UpdateEntity};
@@ -1158,11 +1162,13 @@ mod tests {
         }
 
         fn snapshot(&self) -> entity_store::asynchronous::CompleteStoreSnapshot {
-            aep_backend_eventlog::complete_file_snapshot(
-                &self.authority_path,
-                self.adapter_authority(),
-            )
-            .expect("capture complete disposable authority")
+            self.held().into_snapshot()
+        }
+
+        /// The same capture, with the authority it was taken from recorded alongside it.
+        fn held(&self) -> aep_backend_eventlog::HeldCapture {
+            aep_backend_eventlog::capture_held(&self.authority_path, self.adapter_authority())
+                .expect("capture complete disposable authority")
         }
     }
 
@@ -1244,6 +1250,109 @@ mod tests {
         );
     }
 
+    /// Staging from a held capture takes no capture of the authority; staging without one takes one.
+    ///
+    /// This is the `complete` site, and nothing else in the suite sees it. The staged bytes come
+    /// from `query` on the seeded handle, so a revert of this one site alone leaves every
+    /// identity case and every byte comparison green — and the review-1 measurement puts
+    /// 12.17 s → 0.27 s of a 27.3 s saving behind it. It is not a store read, so the seeded
+    /// handle's own counter cannot see it either. What sees it is a counter charged where this
+    /// crate opens the authority, inside `complete_file_snapshot`'s own path.
+    #[test]
+    fn staging_from_a_held_capture_takes_no_capture_of_the_authority() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let held = fixture.held();
+        let (identity, _) =
+            crate::durable::authority_snapshot_identity(&fixture.authority, held.snapshot())
+                .expect("identity of the held authority");
+
+        let seeded = FileProjectionPublisher::with_snapshot(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.root.join("planning-seeded"),
+            held,
+        );
+        let _ = sites::take_authority_opens();
+        seeded.stage(identity).expect("the seeded stage");
+        let seeded_opens = sites::take_authority_opens();
+
+        let fresh = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.root.join("planning-fresh"),
+        );
+        let _ = sites::take_authority_opens();
+        fresh.stage(identity).expect("the capture-taking stage");
+        let fresh_opens = sites::take_authority_opens();
+
+        assert_eq!(
+            fresh_opens.captures, 1,
+            "staging without a held capture takes exactly one capture of the authority, and this \
+             number is here so that the zero below is a saving rather than an absence: {fresh_opens:?}"
+        );
+        assert_eq!(
+            seeded_opens.captures, 0,
+            "staging from a held capture takes none: {seeded_opens:?}"
+        );
+    }
+
+    /// Committing from a held capture opens no bridge to ask what is already published.
+    ///
+    /// The `recovering` site. `read_file_control` captures the whole authority to learn whether
+    /// one control subject exists, and a held capture already names every subject there is. Like
+    /// the `complete` site it is invisible to every other case here: it changes no published
+    /// byte, and a revert of it alone leaves the suite green. Two fixtures, because `commit`
+    /// writes its watermark and the second commit would no longer be reading an unchanged one.
+    #[test]
+    fn committing_from_a_held_capture_opens_no_bridge_to_ask_what_is_already_published() {
+        let seeded_fixture = Fixture::new();
+        seeded_fixture.create_story();
+        let held = seeded_fixture.held();
+        let (seeded_identity, _) =
+            crate::durable::authority_snapshot_identity(&seeded_fixture.authority, held.snapshot())
+                .expect("identity of the held authority");
+        let seeded = FileProjectionPublisher::with_snapshot(
+            seeded_fixture.authority_path.clone(),
+            seeded_fixture.authority.clone(),
+            seeded_fixture.projection_root.clone(),
+            held,
+        );
+        let staged = seeded.stage(seeded_identity).expect("the seeded stage");
+        let _ = sites::take_authority_opens();
+        seeded.commit(staged).expect("the seeded commit");
+        let seeded_opens = sites::take_authority_opens();
+
+        let fresh_fixture = Fixture::new();
+        fresh_fixture.create_story();
+        let (fresh_identity, _) = crate::durable::authority_snapshot_identity(
+            &fresh_fixture.authority,
+            &fresh_fixture.snapshot(),
+        )
+        .expect("identity of the fresh authority");
+        let fresh = FileProjectionPublisher::new(
+            fresh_fixture.authority_path.clone(),
+            fresh_fixture.authority.clone(),
+            fresh_fixture.projection_root.clone(),
+        );
+        let staged = fresh
+            .stage(fresh_identity)
+            .expect("the capture-taking stage");
+        let _ = sites::take_authority_opens();
+        fresh.commit(staged).expect("the capture-taking commit");
+        let fresh_opens = sites::take_authority_opens();
+
+        assert_eq!(
+            fresh_opens.control_bridges, 2,
+            "committing without a held capture opens two control bridges — one to ask whether \
+             this watermark is already committed, one to write it: {fresh_opens:?}"
+        );
+        assert_eq!(
+            seeded_opens.control_bridges, 1,
+            "committing from a held capture opens only the one that writes: {seeded_opens:?}"
+        );
+    }
+
     /// `publish_current` on a seeded publisher is refused, and the refusal names the seeded path.
     ///
     /// `publish_current` publishes *the current authority* and proves it did by capturing before
@@ -1257,13 +1366,12 @@ mod tests {
     fn a_seeded_publisher_refuses_to_publish_the_current_authority() {
         let fixture = Fixture::new();
         fixture.create_story();
-        let held = fixture.snapshot();
 
         let seeded = FileProjectionPublisher::with_snapshot(
             fixture.authority_path.clone(),
             fixture.authority.clone(),
             fixture.projection_root.clone(),
-            held,
+            fixture.held(),
         );
 
         let (snapshot, failure) = seeded
@@ -1271,9 +1379,10 @@ mod tests {
             .expect_err("a publisher holding a capture cannot answer for the current authority");
         assert_eq!(
             failure.code,
-            CommandRefusalCodeV1::HeldCaptureNotCurrent,
-            "the refusal names the seeded path rather than a condition of the authority, because \
-             the authority may be exactly what the seed says and the answer is still refused"
+            CommandRefusalCodeV1::VerificationMismatch,
+            "the publisher cannot verify that what it would publish is the current authority, \
+             which is what this call promises; no new wire code is minted for it, because no \
+             command can reach this refusal"
         );
         assert_eq!(
             failure.at,
@@ -1329,9 +1438,10 @@ mod tests {
 
         let seeded = Fixture::new();
         seeded.create_story();
-        let held = seeded.snapshot();
-        let (seeded_id, _) = crate::durable::authority_snapshot_identity(&seeded.authority, &held)
-            .expect("identity of the held authority");
+        let held = seeded.held();
+        let (seeded_id, _) =
+            crate::durable::authority_snapshot_identity(&seeded.authority, held.snapshot())
+                .expect("identity of the held authority");
         let reused = FileProjectionPublisher::with_snapshot(
             seeded.authority_path.clone(),
             seeded.authority.clone(),

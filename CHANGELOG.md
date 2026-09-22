@@ -11,12 +11,6 @@ belongs in the commit message or in `docs/design/`.
 
 ### Fixed
 
-- `plan store migrate apply` can refuse with a new code, `held_capture_not_current`. It is
-  consumer-visible: `CommandRefusalCodeV1` gained a variant, so a consumer matching that
-  vocabulary exhaustively sees one more. It is raised when a publisher built on a capture the
-  caller holds is asked to publish the current authority instead — the answer is refused rather
-  than served from the held capture under a fresh snapshot's identity.
-
 - `plan store migrate apply` imports a store in time proportional to its size instead of to its
   square. The import asked the provider to establish one legacy boundary at a time, and each ask
   captured and re-verified the whole destination twice, so every further subject cost more than the
@@ -47,14 +41,21 @@ belongs in the commit message or in `docs/design/`.
 
   This needs Entity Runtime `b652c6ca` and Eventlog `7fbd37cf`.
 
-- `FileProjectionPublisher::publish_current` refuses on a publisher built by `with_snapshot`, with
-  the new `CommandRefusalCodeV1::held_capture_not_current`. `publish_current` publishes the current
-  authority and proves it by capturing before staging and again after; a seeded publisher stages
-  from its held capture between those two fresh ones, so the comparison agreed and the watermark
-  was written asserting a projection inventory for a snapshot whose content had not been
-  projected. `aep_backend_eventlog::open_with_snapshot` likewise refuses a seed that is not a
-  complete capture of that authority's logical scope, rather than retaining it and answering some
-  reads from it and the rest from the authority as it is now.
+- A capture handed to `aep_backend_eventlog::open_with_snapshot` — and to
+  `FileProjectionPublisher::with_snapshot` — now travels with the authority it was taken from, as
+  the new `HeldCapture` that `capture_held` returns. A `CompleteStoreSnapshot` names none of the
+  three values an `Authority` is: its `scope` is the caller's own label echoed back and its
+  `coverage` is a constant, so a genuine complete capture of a *different* authority sharing this
+  one's logical scope was accepted, and the handle then answered reads out of the wrong store.
+  `capture_held` is the only constructor, so the authority a `HeldCapture` names is always the one
+  it was captured from.
+
+- `FileProjectionPublisher::publish_current` refuses on a publisher built by `with_snapshot`. It
+  publishes the current authority and proves it by capturing before staging and again after; a
+  seeded publisher stages from its held capture between those two fresh ones, so the comparison
+  agreed and the watermark was written asserting a projection inventory for a snapshot whose
+  content had not been projected. The refusal is internal — no command reaches it, so it mints no
+  new refusal code.
 
 - `plan store migrate apply` publishes its projection from the capture it already took to verify
   the import, instead of capturing the authority three more times. Publishing opened the store it
