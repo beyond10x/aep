@@ -420,6 +420,7 @@ pub enum CommandRefusalCodeV1 {
     CommandIdentityConflict,
     CommittedProjectionFailure,
     OutputFailure,
+    HeldCaptureNotCurrent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

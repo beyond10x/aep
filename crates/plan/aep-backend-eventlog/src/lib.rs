@@ -469,19 +469,7 @@ pub fn open(
         tenant,
         stream_identity,
     };
-    let registry = registry()?;
-    let bridge = RecordedEventlogBridge::start(
-        registry,
-        EventlogRecordedStoreOwner::File {
-            path,
-            authority: authority.clone(),
-            limits: CAPTURE_LIMITS,
-        },
-        BridgeConfig {
-            queue_capacity: NonZeroU16::new(32).expect("nonzero queue"),
-        },
-    )
-    .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))?;
+    let bridge = start_bridge(path, &authority)?;
     let store = EventlogPlanningStore::new(bridge, authority);
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())
@@ -493,12 +481,18 @@ pub fn open(
 /// cost the authority nothing — including the legacy-boundary validation, which is checked
 /// against the supplied capture exactly as it is against one this handle took.
 ///
-/// The caller is asserting that `snapshot` is a complete capture of *this* authority and that
-/// nothing has been written to it since. That is the same claim a handle makes about its own
-/// retained capture; the difference is only who took it.
+/// The caller is asserting that nothing has been written to the authority since it took
+/// `snapshot`. That the capture is *complete*, and of *this* authority's logical scope, is not
+/// taken on the caller's word: it is checked here, so that a seeded handle names every subject
+/// that existed at the capture's instant exactly as a handle that captured for itself does. A
+/// partial or foreign seed would put subjects that did exist on the fall-through path, and the
+/// caller's reads would span two instants without saying so — see
+/// `EventlogPlanningStore`'s `retained` field, whose documentation and this paragraph now
+/// state the same rule.
 ///
 /// # Errors
-/// The bridge refusing to start, or the supplied capture failing legacy-boundary validation.
+/// A seed that is not a complete capture of this authority's logical scope, the bridge refusing to
+/// start, or the supplied capture failing legacy-boundary validation.
 pub fn open_with_snapshot(
     path: PathBuf,
     logical_scope: String,
@@ -511,9 +505,39 @@ pub fn open_with_snapshot(
         tenant,
         stream_identity,
     };
-    let registry = registry()?;
-    let bridge = RecordedEventlogBridge::start(
-        registry,
+    validate_seed(&snapshot, &authority)?;
+    let bridge = start_bridge(path, &authority)?;
+    let store = EventlogPlanningStore::new(bridge, authority);
+    store.seed(snapshot);
+    store.validate_legacy_boundaries()?;
+    EntityBackend::over(store).map_err(|error| error.to_string())
+}
+
+/// Refuses a seed that is not a complete capture of exactly this authority's logical scope.
+///
+/// Completeness is what makes a retained capture answer every read at one instant, and the scope
+/// is what makes it this authority's. Neither is inferable from the value: `CompleteStoreSnapshot`
+/// carries its own [`StoreCoverage`] precisely because a provider may answer a narrower one.
+fn validate_seed(snapshot: &CompleteStoreSnapshot, authority: &Authority) -> Result<(), String> {
+    if snapshot.coverage != entity_store::asynchronous::StoreCoverage::CompleteSnapshot {
+        return Err(format!(
+            "seeded capture is not a complete snapshot: {:?}",
+            snapshot.coverage
+        ));
+    }
+    if snapshot.scope != authority.logical_scope {
+        return Err(format!(
+            "seeded capture is of logical scope {:?}, not this authority's {:?}",
+            snapshot.scope, authority.logical_scope
+        ));
+    }
+    Ok(())
+}
+
+/// One bridge over the file provider at `path`, as both `open` paths start one.
+fn start_bridge(path: PathBuf, authority: &Authority) -> Result<RecordedEventlogBridge, String> {
+    RecordedEventlogBridge::start(
+        registry()?,
         EventlogRecordedStoreOwner::File {
             path,
             authority: authority.clone(),
@@ -523,9 +547,52 @@ pub fn open_with_snapshot(
             queue_capacity: NonZeroU16::new(32).expect("nonzero queue"),
         },
     )
-    .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))?;
-    let store = EventlogPlanningStore::new(bridge, authority);
-    store.seed(snapshot);
+    .map_err(|error| format!("opening recorded Eventlog planning authority: {error:?}"))
+}
+
+/// The selected AEP backend over a bridge whose every call is counted.
+pub type CountedEventlogBackend = EntityBackend<
+    EventlogPlanningStore<counting::CountingPlanningProvider<RecordedEventlogBridge>>,
+    Identity,
+>;
+
+/// [`open`] and [`open_with_snapshot`], over a bridge that counts what it is asked for.
+///
+/// This is the seam a case needs to tell "answered from the seed" from "re-captured and got the
+/// same answer". The two paths differ in exactly one provider call and in nothing a caller can
+/// see in the values they return, so the difference is observable only by counting — and the
+/// backend decorator cannot count it, because these opens build their provider inside Entity
+/// Runtime rather than taking one from this crate.
+///
+/// `seed` is `Some` for the [`open_with_snapshot`] path and `None` for the [`open`] path;
+/// everything else about the two is this function.
+///
+/// # Errors
+/// Whatever the path being counted refuses.
+pub fn open_counted(
+    path: PathBuf,
+    logical_scope: String,
+    tenant: String,
+    stream_identity: String,
+    seed: Option<CompleteStoreSnapshot>,
+    calls: Arc<counting::ProviderCalls>,
+) -> Result<CountedEventlogBackend, String> {
+    let authority = Authority {
+        logical_scope,
+        tenant,
+        stream_identity,
+    };
+    if let Some(seed) = seed.as_ref() {
+        validate_seed(seed, &authority)?;
+    }
+    let bridge = start_bridge(path, &authority)?;
+    let store = EventlogPlanningStore::new(
+        counting::CountingPlanningProvider::new(bridge, calls),
+        authority,
+    );
+    if let Some(seed) = seed {
+        store.seed(seed);
+    }
     store.validate_legacy_boundaries()?;
     EntityBackend::over(store).map_err(|error| error.to_string())
 }
@@ -666,6 +733,15 @@ pub struct EventlogPlanningStore<P = RecordedEventlogBridge> {
     /// it holds, and not with a synthesized empty history. The read falls through to the
     /// provider, so an unknown subject is answered exactly as the bridge answers it and a subject
     /// written after the capture is answered as it actually is.
+    ///
+    /// **A held capture names every subject that existed at its instant**, whichever way the
+    /// capture got here, so the only subject the fall-through can reach while one is held is a
+    /// subject that did not exist then — the foreign write named above. A capture this handle took
+    /// is a complete snapshot of this authority's logical scope by construction; one handed in by
+    /// [`open_with_snapshot`] is checked to be the same thing before it is seeded, because a
+    /// partial capture, or a complete capture of a different scope, would put subjects that *did*
+    /// exist at that instant on the fall-through path, and one caller's set of reads would then
+    /// silently span two instants with nothing to say which read came from which.
     retained: Mutex<Option<Arc<RetainedSnapshot>>>,
 }
 

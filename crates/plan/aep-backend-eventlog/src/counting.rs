@@ -13,7 +13,17 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use entity_core::EntityInstance;
+use entity_eventlog::sync::{SyncExecutionError, SyncReadError};
 use entity_eventlog::EventlogBackend;
+use entity_eventlog::EventlogOperationContext;
+use entity_executor::BatchAction;
+use entity_store::asynchronous::{
+    AppendOutcome, BatchKey, CompleteStoreSnapshot, StoredBatch, Subject, SubjectHistory,
+};
+use entity_store::RecordedObservation;
+
+use crate::RecordedPlanningProvider;
 use eventlog_core::{
     AppendGroup, AppendGroupResult, AppendResult, AtomicEventStore, BoxFuture, CaptureError,
     CaptureLimits, CatchUpProgress, Claim, ClaimedCommand, CommandMeta, ConsistentTenantCapture,
@@ -334,5 +344,126 @@ impl EventStore for CountingBackend {
         tenant: &'a TenantId,
     ) -> BoxFuture<'a, Result<String, EventLogError>> {
         self.inner.stream_identity(tenant)
+    }
+}
+
+/// Every provider call one planning handle made, by kind.
+///
+/// [`CountingBackend`] counts the provider calls this crate makes through
+/// [`crate::with_async_store_through`], which is the path `complete_file_snapshot` and the import
+/// take. It is blind to the other one: [`crate::open`] and [`crate::open_with_snapshot`] reach the
+/// authority through `RecordedEventlogBridge::start`, which builds its own provider inside Entity
+/// Runtime, so a backend decorator never sees it — and those are exactly the opens whose captures
+/// the held-capture path exists to remove. This counts that path, at the seam
+/// [`crate::RecordedPlanningProvider`] already defines.
+#[derive(Debug, Default)]
+pub struct ProviderCalls {
+    snapshots: AtomicUsize,
+    loads: AtomicUsize,
+    histories: AtomicUsize,
+    lookups: AtomicUsize,
+    batches: AtomicUsize,
+    observations: AtomicUsize,
+}
+
+/// One reading of [`ProviderCalls`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ProviderCallCounts {
+    /// Complete captures of the authority. The number this unit is about.
+    pub snapshots: usize,
+    /// Single-subject terminal reads.
+    pub loads: usize,
+    /// Single-subject history reads.
+    pub histories: usize,
+    /// Named batch lookups.
+    pub lookups: usize,
+    /// Recorded atomic batches.
+    pub batches: usize,
+    /// Recorded observations.
+    pub observations: usize,
+}
+
+impl ProviderCalls {
+    /// Reads every counter at once.
+    #[must_use]
+    pub fn read(&self) -> ProviderCallCounts {
+        ProviderCallCounts {
+            snapshots: self.snapshots.load(Ordering::Relaxed),
+            loads: self.loads.load(Ordering::Relaxed),
+            histories: self.histories.load(Ordering::Relaxed),
+            lookups: self.lookups.load(Ordering::Relaxed),
+            batches: self.batches.load(Ordering::Relaxed),
+            observations: self.observations.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Every read, which is what a capture-shaped cost is counted in.
+    #[must_use]
+    pub fn reads(&self) -> usize {
+        let counts = self.read();
+        counts.snapshots + counts.loads + counts.histories + counts.lookups
+    }
+}
+
+/// A [`RecordedPlanningProvider`] that counts what it is asked for and otherwise changes nothing.
+pub struct CountingPlanningProvider<P> {
+    inner: P,
+    calls: Arc<ProviderCalls>,
+}
+
+impl<P> CountingPlanningProvider<P> {
+    /// Wraps `inner`, recording every call into `calls`.
+    pub const fn new(inner: P, calls: Arc<ProviderCalls>) -> Self {
+        Self { inner, calls }
+    }
+}
+
+impl<P> std::fmt::Debug for CountingPlanningProvider<P> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CountingPlanningProvider")
+            .field("calls", &self.calls.read())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<P: RecordedPlanningProvider> RecordedPlanningProvider for CountingPlanningProvider<P> {
+    fn complete_snapshot(&self, scope: &str) -> Result<CompleteStoreSnapshot, SyncReadError> {
+        self.calls.snapshots.fetch_add(1, Ordering::Relaxed);
+        self.inner.complete_snapshot(scope)
+    }
+
+    fn load(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
+        self.calls.loads.fetch_add(1, Ordering::Relaxed);
+        self.inner.load(subject)
+    }
+
+    fn history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
+        self.calls.histories.fetch_add(1, Ordering::Relaxed);
+        self.inner.history(subject)
+    }
+
+    fn lookup_batch(&self, key: &BatchKey) -> Result<Option<StoredBatch>, SyncReadError> {
+        self.calls.lookups.fetch_add(1, Ordering::Relaxed);
+        self.inner.lookup_batch(key)
+    }
+
+    fn batch(
+        &self,
+        context: EventlogOperationContext,
+        key: BatchKey,
+        actions: Vec<BatchAction>,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        self.calls.batches.fetch_add(1, Ordering::Relaxed);
+        self.inner.batch(context, key, actions)
+    }
+
+    fn observe(
+        &self,
+        context: EventlogOperationContext,
+        observation: RecordedObservation,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        self.calls.observations.fetch_add(1, Ordering::Relaxed);
+        self.inner.observe(context, observation)
     }
 }

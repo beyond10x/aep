@@ -291,10 +291,29 @@ impl FileProjectionPublisher {
 
     /// Publishes the exact current complete authority once, or recovers the already committed
     /// watermark for it. No invocation-ledger write may follow this call.
+    ///
+    /// **Refused on a publisher built by [`Self::with_snapshot`].** This publishes *the current
+    /// authority* and establishes that by capturing before staging and again after and comparing
+    /// the two identities; a seeded publisher stages from its held capture, between two captures
+    /// that never read it, so the comparison agrees while the documents published are the ones
+    /// the seed named. The result would be a watermark asserting a projection inventory for an
+    /// authority snapshot whose content was not projected, which
+    /// `before_projection_watermark` and `projection_watermarks` then trust. A seeded publisher
+    /// publishes through [`Self::publish`] only.
     #[allow(clippy::result_large_err, clippy::too_many_lines)] // The refusal carries its exact snapshot and typed projection diagnostic.
     pub fn publish_current(
         &self,
     ) -> Result<ProjectionPublishedV1, (AuthoritySnapshotIdV1, ProjectionFailureV1)> {
+        if self.held.is_some() {
+            return Err((
+                zero_snapshot(),
+                projection_failure(
+                    CommandRefusalCodeV1::HeldCaptureNotCurrent,
+                    ProjectionFailureReasonV1::InventoryMismatch,
+                    &self.projection_root,
+                ),
+            ));
+        }
         let adapter = || Authority {
             logical_scope: self.authority.logical_scope.as_str().to_owned(),
             tenant: self.authority.tenant.as_str().to_owned(),
@@ -1223,6 +1242,66 @@ mod tests {
             stale_reconstruction, covered,
             "removing W cannot hide any later business or control subject"
         );
+    }
+
+    /// `publish_current` on a seeded publisher is refused, and the refusal names the seeded path.
+    ///
+    /// `publish_current` publishes *the current authority* and proves it did by capturing before
+    /// staging and again after and comparing the two identities. Both captures are fresh; a seeded
+    /// publisher stages from its held capture in between. So the comparison agrees, no refusal
+    /// fires, and the watermark is written asserting a projection inventory for an authority
+    /// snapshot whose content was not what was published — which `before_projection_watermark`
+    /// and `projection_watermarks` then trust downstream. The types permit the combination and
+    /// nothing in the repository makes it, so the refusal is what keeps it from being made.
+    #[test]
+    fn a_seeded_publisher_refuses_to_publish_the_current_authority() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let held = fixture.snapshot();
+
+        let seeded = FileProjectionPublisher::with_snapshot(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+            held,
+        );
+
+        let (snapshot, failure) = seeded
+            .publish_current()
+            .expect_err("a publisher holding a capture cannot answer for the current authority");
+        assert_eq!(
+            failure.code,
+            CommandRefusalCodeV1::HeldCaptureNotCurrent,
+            "the refusal names the seeded path rather than a condition of the authority, because \
+             the authority may be exactly what the seed says and the answer is still refused"
+        );
+        assert_eq!(
+            failure.at,
+            DiagnosticCoordinateV1::Projection(PathDiagnosticV1 {
+                path: host_path(&fixture.projection_root),
+            }),
+            "coordinated at the projection root, as every projection failure is"
+        );
+        assert_eq!(
+            snapshot,
+            zero_snapshot(),
+            "and names no authority snapshot, because it captured none"
+        );
+        assert!(
+            !fixture.projection_root.exists(),
+            "a refused publication writes nothing"
+        );
+
+        // The control: the same call on the same authority, from a publisher that holds no
+        // capture, publishes. The refusal is about the seed and about nothing else.
+        let fresh = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        fresh
+            .publish_current()
+            .expect("an unseeded publisher still publishes the current authority");
     }
 
     /// Publishing from a capture the caller holds writes what publishing from a fresh one writes.

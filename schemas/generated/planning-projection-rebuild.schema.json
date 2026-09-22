@@ -260,7 +260,8 @@
         "receipt_conflict",
         "command_identity_conflict",
         "committed_projection_failure",
-        "output_failure"
+        "output_failure",
+        "held_capture_not_current"
       ]
     },
     "CommandRefusalV1": {
