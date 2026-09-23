@@ -9,6 +9,19 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- An Eventlog planning write opens its authority once. The plan, the invocation ledger, the
+  post-commit capture and both projection publications now read and write through the one
+  session the command opened with its plan, instead of reopening the file authority for every
+  ledger read and write, every watermark and every complete capture — eighteen opens for one
+  `plan artifact move` on the 448-artifact ESS store, each re-verifying the whole history.
+  Publishing stages from its own first capture and asks whether its watermark exists of its
+  verifying second one; recovery after a crash checks only the newest watermark, the only one
+  that can match; and the staged documents are written several at once, each still synced
+  before it is renamed. Every read is still a fresh capture, and guarded append, receipts,
+  post-commit verification, the projected bytes and every refusal are unchanged.
+
 ## [0.57.0] — 2026-09-22
 
 ### Added

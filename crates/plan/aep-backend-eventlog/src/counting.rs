@@ -493,13 +493,36 @@ pub mod sites {
         pub captures: usize,
         /// Control-row bridges: `read_file_control` and `write_file_control`.
         pub control_bridges: usize,
+        /// Sessions opened: [`crate::AuthoritySession::open`], and the planning opens built on it.
+        pub sessions: usize,
+        /// Read calls made through an already open session — each answered from a fresh capture
+        /// of the authority, none of them an open of it.
+        pub session_reads: usize,
     }
 
     impl AuthorityOpens {
         const NONE: Self = Self {
             captures: 0,
             control_bridges: 0,
+            sessions: 0,
+            session_reads: 0,
         };
+    }
+
+    pub(crate) fn charge_session() {
+        OPENS.with(|opens| {
+            let mut value = opens.get();
+            value.sessions += 1;
+            opens.set(value);
+        });
+    }
+
+    pub(crate) fn charge_session_read() {
+        OPENS.with(|opens| {
+            let mut value = opens.get();
+            value.session_reads += 1;
+            opens.set(value);
+        });
     }
 
     pub(crate) fn charge_capture() {

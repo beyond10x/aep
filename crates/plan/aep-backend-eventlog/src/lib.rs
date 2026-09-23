@@ -311,7 +311,15 @@ pub fn read_file_control(
     entity: &str,
     identity: &str,
 ) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
-    let bridge = control_bridge(path, authority)?;
+    read_control_on(&control_bridge(path, authority)?, entity, identity)
+}
+
+/// [`read_file_control`] over a bridge the caller already holds.
+fn read_control_on(
+    bridge: &RecordedEventlogBridge,
+    entity: &str,
+    identity: &str,
+) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
     let subject = Subject::new(entity, identity)
         .map_err(|error| format!("invalid invocation identity: {error}"))?;
     let instance = bridge
@@ -370,7 +378,28 @@ pub fn write_file_control(
     expected_revision: Option<u64>,
     context: EventlogOperationContext,
 ) -> Result<entity_store::asynchronous::CommitReceipt, String> {
-    let bridge = control_bridge(path, authority)?;
+    write_control_on(
+        &control_bridge(path, authority)?,
+        entity,
+        identity,
+        batch_key,
+        document,
+        expected_revision,
+        context,
+    )
+}
+
+/// [`write_file_control`] over a bridge the caller already holds.
+#[allow(clippy::needless_pass_by_value)] // The owned identity, key, document and context are moved into the recorded batch.
+fn write_control_on(
+    bridge: &RecordedEventlogBridge,
+    entity: &str,
+    identity: String,
+    batch_key: String,
+    document: Value,
+    expected_revision: Option<u64>,
+    context: EventlogOperationContext,
+) -> Result<entity_store::asynchronous::CommitReceipt, String> {
     let subject = Subject::new(entity, &identity)
         .map_err(|error| format!("invalid invocation identity: {error}"))?;
     let recording = Recording {
@@ -497,10 +526,7 @@ pub fn open(
         tenant,
         stream_identity,
     };
-    let bridge = start_bridge(path, &authority)?;
-    let store = EventlogPlanningStore::new(bridge, authority);
-    store.validate_legacy_boundaries()?;
-    EntityBackend::over(store).map_err(|error| error.to_string())
+    AuthoritySession::open(path, authority)?.open_backend()
 }
 
 /// [`open`], answering from a capture the caller already took.
@@ -534,11 +560,7 @@ pub fn open_with_snapshot(
         stream_identity,
     };
     validate_seed(&held, &authority)?;
-    let bridge = start_bridge(path, &authority)?;
-    let store = EventlogPlanningStore::new(bridge, authority);
-    store.seed(held.into_snapshot());
-    store.validate_legacy_boundaries()?;
-    EntityBackend::over(store).map_err(|error| error.to_string())
+    AuthoritySession::open(path, authority)?.open_backend_with_snapshot(held)
 }
 
 /// A complete capture together with the authority it was taken from.
@@ -639,6 +661,202 @@ fn validate_seed(held: &HeldCapture, authority: &Authority) -> Result<(), String
         ));
     }
     Ok(())
+}
+
+/// One opened authority, shared by every read and write one command makes of it.
+///
+/// **Why one.** Opening the file authority is the expensive part of every call this crate makes:
+/// the provider re-reads and re-chains its whole history and re-hashes every bound object, and
+/// Entity Runtime then captures the tenant once to check the binding before it answers anything.
+/// On the 448-artifact ESS store that is 7–10 s per open, and one `plan artifact move` opened it
+/// eighteen times — eight control-row bridges, three planning bridges and seven complete
+/// captures, about 160 s of a 356 s move. A session opens it once and every later call reuses
+/// the verified provider view.
+///
+/// **What it does not change.** Every read is still a fresh capture of the authority as it is
+/// now: a session holds a connection, not an answer. Every write still goes through Entity
+/// Runtime's guarded append, hash chain and post-commit verification exactly as a freshly opened
+/// bridge's would, and a write another process appends is seen by the next read, because the
+/// provider extends its view only after verifying that the committed prefix is the one it
+/// already verified.
+///
+/// **Its scope is one command**, like [`EventlogPlanningStore`]'s retained capture: a holder
+/// that outlives a command must open a new one.
+#[derive(Clone)]
+pub struct AuthoritySession {
+    path: PathBuf,
+    authority: Authority,
+    bridge: Arc<RecordedEventlogBridge>,
+}
+
+impl std::fmt::Debug for AuthoritySession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AuthoritySession")
+            .field("path", &self.path)
+            .field("authority", &self.authority)
+            .finish_non_exhaustive()
+    }
+}
+
+impl AuthoritySession {
+    /// Opens the authority at `path` once.
+    ///
+    /// # Errors
+    /// The provider refusing to open, or Entity Runtime refusing the binding.
+    pub fn open(path: PathBuf, authority: Authority) -> Result<Self, String> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session();
+        let bridge = Arc::new(start_bridge(path.clone(), &authority)?);
+        Ok(Self {
+            path,
+            authority,
+            bridge,
+        })
+    }
+
+    /// The authority this session opened.
+    #[must_use]
+    pub const fn authority(&self) -> &Authority {
+        &self.authority
+    }
+
+    /// Where the authority lives.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// One fresh complete capture: [`complete_file_snapshot`] without reopening the authority.
+    ///
+    /// # Errors
+    /// The capture failing.
+    pub fn complete_snapshot(&self) -> Result<CompleteStoreSnapshot, String> {
+        RecordedPlanningProvider::complete_snapshot(self, &self.authority.logical_scope)
+            .map_err(|error| format!("capturing complete Eventlog authority: {error:?}"))
+    }
+
+    /// [`capture_held`] without reopening the authority.
+    ///
+    /// # Errors
+    /// The capture failing.
+    pub fn capture_held(&self) -> Result<HeldCapture, String> {
+        Ok(HeldCapture {
+            authority: self.authority.clone(),
+            snapshot: self.complete_snapshot()?,
+        })
+    }
+
+    /// [`read_file_control`] without reopening the authority.
+    ///
+    /// # Errors
+    /// As [`read_file_control`].
+    pub fn read_control(
+        &self,
+        entity: &str,
+        identity: &str,
+    ) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session_read();
+        read_control_on(&self.bridge, entity, identity)
+    }
+
+    /// [`write_file_control`] without reopening the authority.
+    ///
+    /// # Errors
+    /// As [`write_file_control`].
+    pub fn write_control(
+        &self,
+        entity: &str,
+        identity: String,
+        batch_key: String,
+        document: Value,
+        expected_revision: Option<u64>,
+        context: EventlogOperationContext,
+    ) -> Result<entity_store::asynchronous::CommitReceipt, String> {
+        write_control_on(
+            &self.bridge,
+            entity,
+            identity,
+            batch_key,
+            document,
+            expected_revision,
+            context,
+        )
+    }
+
+    /// [`open`] over this session: the planning backend, sharing this session's connection.
+    ///
+    /// # Errors
+    /// As [`open`].
+    pub fn open_backend(&self) -> Result<EventlogBackend, String> {
+        let store = EventlogPlanningStore::new(self.clone(), self.authority.clone());
+        store.validate_legacy_boundaries()?;
+        EntityBackend::over(store).map_err(|error| error.to_string())
+    }
+
+    /// [`open_with_snapshot`] over this session.
+    ///
+    /// # Errors
+    /// As [`open_with_snapshot`].
+    pub fn open_backend_with_snapshot(&self, held: HeldCapture) -> Result<EventlogBackend, String> {
+        validate_seed(&held, &self.authority)?;
+        let store = EventlogPlanningStore::new(self.clone(), self.authority.clone());
+        store.seed(held.into_snapshot());
+        store.validate_legacy_boundaries()?;
+        EntityBackend::over(store).map_err(|error| error.to_string())
+    }
+}
+
+impl RecordedPlanningProvider for AuthoritySession {
+    fn complete_snapshot(&self, scope: &str) -> Result<CompleteStoreSnapshot, SyncReadError> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session_read();
+        RecordedPlanningProvider::complete_snapshot(&*self.bridge, scope)
+    }
+
+    fn load(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session_read();
+        RecordedPlanningProvider::load(&*self.bridge, subject)
+    }
+
+    fn history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session_read();
+        RecordedPlanningProvider::history(&*self.bridge, subject)
+    }
+
+    fn lookup_batch(&self, key: &BatchKey) -> Result<Option<StoredBatch>, SyncReadError> {
+        #[cfg(feature = "test-support")]
+        crate::counting::sites::charge_session_read();
+        RecordedPlanningProvider::lookup_batch(&*self.bridge, key)
+    }
+
+    fn batch(
+        &self,
+        context: EventlogOperationContext,
+        key: BatchKey,
+        actions: Vec<BatchAction>,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        RecordedPlanningProvider::batch(&*self.bridge, context, key, actions)
+    }
+
+    fn observe(
+        &self,
+        context: EventlogOperationContext,
+        observation: RecordedObservation,
+    ) -> Result<AppendOutcome, SyncExecutionError> {
+        RecordedPlanningProvider::observe(&*self.bridge, context, observation)
+    }
+}
+
+impl EventlogPlanningStore<AuthoritySession> {
+    /// The session this store reads and writes through, for the rest of the command to share.
+    #[must_use]
+    pub fn session(&self) -> AuthoritySession {
+        self.provider.clone()
+    }
 }
 
 /// One bridge over the file provider at `path`, as both `open` paths start one.
@@ -810,7 +1028,7 @@ impl RetainedSnapshot {
 }
 
 /// Synchronous compatibility facade over the public recorded Eventlog bridge.
-pub struct EventlogPlanningStore<P = RecordedEventlogBridge> {
+pub struct EventlogPlanningStore<P = AuthoritySession> {
     provider: P,
     authority: Authority,
     /// The complete capture this handle answers from, indexed by subject.

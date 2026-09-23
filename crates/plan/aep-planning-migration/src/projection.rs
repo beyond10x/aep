@@ -58,6 +58,12 @@ pub struct FileProjectionPublisher {
     /// on a 448-artifact store, 7,815 blobs and 174 MB re-read and re-hashed to learn what the
     /// verification capture already said.
     held: Option<aep_backend_eventlog::HeldCapture>,
+    /// The open authority every read and write goes through, when the caller holds one.
+    ///
+    /// Without it each read and each watermark write opens the file authority afresh, and an
+    /// open re-verifies the authority's whole history before it answers — 7–10 s apiece on the
+    /// ESS store, several times per publication.
+    session: Option<aep_backend_eventlog::AuthoritySession>,
 }
 
 pub struct StagedProjection {
@@ -87,7 +93,126 @@ impl FileProjectionPublisher {
             authority,
             projection_root,
             held: None,
+            session: None,
         }
+    }
+
+    /// [`Self::new`], reading and writing the authority through a session the caller holds.
+    ///
+    /// Every call still reads the authority as it is when it is made; the session saves the
+    /// open, not the capture. A session of another authority than `authority` is refused by the
+    /// first call that would use it.
+    pub fn over_session(
+        session: aep_backend_eventlog::AuthoritySession,
+        authority: AuthorityCoordinateV1,
+        projection_root: PathBuf,
+    ) -> Self {
+        Self {
+            authority_path: session.path().to_path_buf(),
+            authority,
+            projection_root,
+            held: None,
+            session: Some(session),
+        }
+    }
+
+    fn adapter_authority(&self) -> Authority {
+        Authority {
+            logical_scope: self.authority.logical_scope.as_str().to_owned(),
+            tenant: self.authority.tenant.as_str().to_owned(),
+            stream_identity: self.authority.stream_identity.as_str().to_owned(),
+        }
+    }
+
+    /// The session, refused when it opened another authority than this publisher names.
+    fn session(&self) -> Result<Option<&aep_backend_eventlog::AuthoritySession>, String> {
+        match &self.session {
+            Some(session) if *session.authority() != self.adapter_authority() => Err(format!(
+                "the session is of authority {:?}, not this publisher's {:?}",
+                session.authority(),
+                self.authority
+            )),
+            session => Ok(session.as_ref()),
+        }
+    }
+
+    /// One fresh complete capture of the authority, with its provenance.
+    fn capture_held(&self) -> Result<aep_backend_eventlog::HeldCapture, String> {
+        match self.session()? {
+            Some(session) => session.capture_held(),
+            None => {
+                aep_backend_eventlog::capture_held(&self.authority_path, self.adapter_authority())
+            }
+        }
+    }
+
+    /// The plan to render from: seeded from `seed` when there is one, otherwise read afresh.
+    fn open_plan(
+        &self,
+        seed: Option<aep_backend_eventlog::HeldCapture>,
+    ) -> Result<aep_backend_eventlog::EventlogBackend, String> {
+        match (self.session()?, seed) {
+            (Some(session), Some(seed)) => session.open_backend_with_snapshot(seed),
+            (Some(session), None) => session.open_backend(),
+            (None, Some(seed)) => aep_backend_eventlog::open_with_snapshot(
+                self.authority_path.clone(),
+                self.authority.logical_scope.as_str().to_owned(),
+                self.authority.tenant.as_str().to_owned(),
+                self.authority.stream_identity.as_str().to_owned(),
+                seed,
+            ),
+            (None, None) => aep_backend_eventlog::open(
+                self.authority_path.clone(),
+                self.authority.logical_scope.as_str().to_owned(),
+                self.authority.tenant.as_str().to_owned(),
+                self.authority.stream_identity.as_str().to_owned(),
+            ),
+        }
+    }
+
+    /// Whether the projection-metadata subject `identity` already exists, read afresh.
+    fn watermark_exists(&self, identity: &str) -> Result<bool, String> {
+        Ok(match self.session()? {
+            Some(session) => session
+                .read_control(aep_backend_eventlog::PROJECTION_METADATA_AS, identity)?
+                .is_some(),
+            None => aep_backend_eventlog::read_file_control(
+                self.authority_path.clone(),
+                self.adapter_authority(),
+                aep_backend_eventlog::PROJECTION_METADATA_AS,
+                identity,
+            )?
+            .is_some(),
+        })
+    }
+
+    fn write_watermark(
+        &self,
+        identity: String,
+        document: serde_json::Value,
+        context: EventlogOperationContext,
+    ) -> Result<(), String> {
+        match self.session()? {
+            Some(session) => session.write_control(
+                aep_backend_eventlog::PROJECTION_METADATA_AS,
+                identity.clone(),
+                identity,
+                document,
+                None,
+                context,
+            ),
+            None => aep_backend_eventlog::write_file_control(
+                self.authority_path.clone(),
+                self.adapter_authority(),
+                aep_backend_eventlog::PROJECTION_METADATA_AS,
+                identity.clone(),
+                identity,
+                document,
+                None,
+                context,
+            ),
+        }
+        .map(|_| ())
     }
 
     /// [`Self::new`], publishing from a capture the caller already took of this authority.
@@ -107,30 +232,38 @@ impl FileProjectionPublisher {
             authority,
             projection_root,
             held: Some(held),
+            session: None,
         }
     }
 
-    #[allow(clippy::too_many_lines)] // Staging keeps rendering, authority evidence, preservation, ownership, and the watermark in one ordered operation.
     pub fn stage(
         &self,
         authority_snapshot: AuthoritySnapshotIdV1,
     ) -> Result<StagedProjection, ProjectionError> {
-        let backend = match self.held.clone() {
-            Some(held) => aep_backend_eventlog::open_with_snapshot(
-                self.authority_path.clone(),
-                self.authority.logical_scope.as_str().to_owned(),
-                self.authority.tenant.as_str().to_owned(),
-                self.authority.stream_identity.as_str().to_owned(),
-                held,
-            ),
-            None => aep_backend_eventlog::open(
-                self.authority_path.clone(),
-                self.authority.logical_scope.as_str().to_owned(),
-                self.authority.tenant.as_str().to_owned(),
-                self.authority.stream_identity.as_str().to_owned(),
-            ),
-        }
-        .map_err(|_| ProjectionError::NotPublished)?;
+        self.stage_from(authority_snapshot, self.held.clone())
+    }
+
+    /// [`Self::stage`], rendering from `seed` when it is given and from a fresh read otherwise.
+    ///
+    /// Staging reads the authority twice: the plan it renders, and the complete capture whose
+    /// watermarks and captured files decide which existing files it may replace. A seed answers
+    /// both, so a seeded stage reads nothing. What the seed says about watermarks and captured
+    /// files is taken before the seed is handed to the plan, so it is not copied to be read twice.
+    #[allow(clippy::too_many_lines)] // Staging keeps rendering, authority evidence, preservation, ownership, and the watermark in one ordered operation.
+    fn stage_from(
+        &self,
+        authority_snapshot: AuthoritySnapshotIdV1,
+        seed: Option<aep_backend_eventlog::HeldCapture>,
+    ) -> Result<StagedProjection, ProjectionError> {
+        let seeded = seed.as_ref().map(|seed| {
+            (
+                projection_watermarks(seed.snapshot(), &self.authority),
+                captured_markdown_files(seed.snapshot()),
+            )
+        });
+        let backend = self
+            .open_plan(seed)
+            .map_err(|_| ProjectionError::NotPublished)?;
         let page = block_on(backend.query(&EntityQuery {
             organisation: Some(aep_backend_markdown::backend::ORGANISATION.to_owned()),
             space: Some(aep_backend_markdown::backend::SPACE.to_owned()),
@@ -146,7 +279,7 @@ impl FileProjectionPublisher {
         }
         fs::create_dir_all(&stage).map_err(|_| ProjectionError::NotPublished)?;
         let store = aep_backend_markdown::MarkdownStore::open(&stage);
-        let mut owned = Vec::new();
+        let mut rendered = Vec::new();
         for envelope in &page.items {
             let locator = &envelope.metadata.locator;
             let Ok(id) = ArtifactId::new(format!("{}:{}", locator.kind(), locator.key())) else {
@@ -178,30 +311,25 @@ impl FileProjectionPublisher {
             ) else {
                 continue;
             };
-            let relative = store.relative_path_for(&id);
-            let bytes = document.render().into_bytes();
-            store
-                .create(&document)
-                .map_err(|_| ProjectionError::NotPublished)?;
-            set_owned_file_mode(&stage.join(&relative))
-                .map_err(|_| ProjectionError::NotPublished)?;
-            owned.push((relative, bytes, OWNED_FILE_MODE));
+            rendered.push((store.relative_path_for(&id), document));
         }
+        write_staged_documents(&store, &stage, &rendered)?;
+        let mut owned = rendered
+            .into_iter()
+            .map(|(relative, document)| (relative, document.render().into_bytes(), OWNED_FILE_MODE))
+            .collect::<Vec<_>>();
         owned.sort_by(|left, right| left.0.cmp(&right.0));
-        let complete = match self.held.as_ref() {
-            Some(held) => held.snapshot().clone(),
-            None => aep_backend_eventlog::complete_file_snapshot(
-                &self.authority_path,
-                Authority {
-                    logical_scope: self.authority.logical_scope.as_str().to_owned(),
-                    tenant: self.authority.tenant.as_str().to_owned(),
-                    stream_identity: self.authority.stream_identity.as_str().to_owned(),
-                },
+        let (known_watermarks, captured_owned) = if let Some((known, captured)) = seeded {
+            (known, captured?)
+        } else {
+            let complete = self
+                .capture_held()
+                .map_err(|_| ProjectionError::NotPublished)?;
+            (
+                projection_watermarks(complete.snapshot(), &self.authority),
+                captured_markdown_files(complete.snapshot())?,
             )
-            .map_err(|_| ProjectionError::NotPublished)?,
         };
-        let known_watermarks = projection_watermarks(&complete, &self.authority);
-        let captured_owned = captured_markdown_files(&complete)?;
         let preserved_foreign_paths = preserve_foreign(
             &self.projection_root,
             &stage,
@@ -238,37 +366,39 @@ impl FileProjectionPublisher {
         &self,
         staged: StagedProjection,
     ) -> Result<ProjectionPublication, ProjectionError> {
-        let authority = Authority {
-            logical_scope: self.authority.logical_scope.as_str().to_owned(),
-            tenant: self.authority.tenant.as_str().to_owned(),
-            stream_identity: self.authority.stream_identity.as_str().to_owned(),
-        };
+        self.commit_knowing(
+            staged,
+            self.held
+                .as_ref()
+                .map(aep_backend_eventlog::HeldCapture::snapshot),
+        )
+    }
+
+    /// [`Self::commit`], answering whether the watermark exists from `current` when given one.
+    ///
+    /// `current` must name every subject the authority holds now — a held capture nothing has
+    /// been written after, or `publish_current`'s verifying capture, taken after staging.
+    fn commit_knowing(
+        &self,
+        staged: StagedProjection,
+        current: Option<&entity_store::asynchronous::CompleteStoreSnapshot>,
+    ) -> Result<ProjectionPublication, ProjectionError> {
         // Whether this exact watermark is already committed. `read_file_control` answers it with
         // a fresh capture of the whole authority plus the subject's named reservation batch; only
-        // the existence of the subject is read here, and a capture the caller already holds names
-        // every subject the authority has.
-        let recovering = match &self.held {
-            Some(held) => held.snapshot().histories.iter().any(|subject| {
+        // the existence of the subject is read here, and a capture of the authority as it is now
+        // names every subject the authority has.
+        let recovering = match current {
+            Some(current) => current.histories.iter().any(|subject| {
                 subject.history.subject.entity == aep_backend_eventlog::PROJECTION_METADATA_AS
                     && subject.history.subject.id == staged.identity
             }),
-            None => aep_backend_eventlog::read_file_control(
-                self.authority_path.clone(),
-                authority.clone(),
-                aep_backend_eventlog::PROJECTION_METADATA_AS,
-                &staged.identity,
-            )
-            .map_err(|_| ProjectionError::Uncertain)?
-            .is_some(),
+            None => self
+                .watermark_exists(&staged.identity)
+                .map_err(|_| ProjectionError::Uncertain)?,
         };
-        aep_backend_eventlog::write_file_control(
-            self.authority_path.clone(),
-            authority,
-            aep_backend_eventlog::PROJECTION_METADATA_AS,
-            staged.identity.clone(),
+        self.write_watermark(
             staged.identity,
             serde_json::to_value(&staged.watermark).map_err(|_| ProjectionError::NotPublished)?,
-            None,
             EventlogOperationContext {
                 subject: "aep-planning-projection".to_owned(),
                 actor: "aep-planning-projection".to_owned(),
@@ -294,8 +424,8 @@ impl FileProjectionPublisher {
     /// **Refused on a publisher built by [`Self::with_snapshot`].** The refusal is internal: no
     /// command reaches it, so it mints no wire vocabulary. `apply` builds its publisher with
     /// `with_snapshot` and calls [`Self::publish`]; the one production caller of this method
-    /// builds its publisher with [`Self::new`] and rewrites any projection-failure code it gets.
-    /// This publishes *the current
+    /// builds its publisher with [`Self::over_session`] and rewrites any projection-failure code
+    /// it gets. This publishes *the current
     /// authority* and establishes that by capturing before staging and again after and comparing
     /// the two identities; a seeded publisher stages from its held capture, between two captures
     /// that never read it, so the comparison agrees while the documents published are the ones
@@ -303,6 +433,11 @@ impl FileProjectionPublisher {
     /// authority snapshot whose content was not projected, which
     /// `before_projection_watermark` and `projection_watermarks` then trust. A seeded publisher
     /// publishes through [`Self::publish`] only.
+    ///
+    /// **This method stages from its own first capture**, which is not that hazard: the
+    /// documents rendered are the first capture's, and the second capture proving the first
+    /// current is exactly the proof that they are the current authority's. For the same reason
+    /// the second capture answers whether the watermark already exists.
     #[allow(clippy::result_large_err, clippy::too_many_lines)] // The refusal carries its exact snapshot and typed projection diagnostic.
     pub fn publish_current(
         &self,
@@ -317,13 +452,7 @@ impl FileProjectionPublisher {
                 ),
             ));
         }
-        let adapter = || Authority {
-            logical_scope: self.authority.logical_scope.as_str().to_owned(),
-            tenant: self.authority.tenant.as_str().to_owned(),
-            stream_identity: self.authority.stream_identity.as_str().to_owned(),
-        };
-        let first = aep_backend_eventlog::complete_file_snapshot(&self.authority_path, adapter())
-            .map_err(|_| {
+        let first = self.capture_held().map_err(|_| {
             (
                 zero_snapshot(),
                 projection_failure(
@@ -333,18 +462,20 @@ impl FileProjectionPublisher {
                 ),
             )
         })?;
-        let (current, _) = crate::durable::authority_snapshot_identity(&self.authority, &first)
-            .map_err(|_| {
-                (
-                    zero_snapshot(),
-                    projection_failure(
-                        CommandRefusalCodeV1::VerificationMismatch,
-                        ProjectionFailureReasonV1::InventoryMismatch,
-                        &self.projection_root,
-                    ),
-                )
-            })?;
+        let (current, _) =
+            crate::durable::authority_snapshot_identity(&self.authority, first.snapshot())
+                .map_err(|_| {
+                    (
+                        zero_snapshot(),
+                        projection_failure(
+                            CommandRefusalCodeV1::VerificationMismatch,
+                            ProjectionFailureReasonV1::InventoryMismatch,
+                            &self.projection_root,
+                        ),
+                    )
+                })?;
         let mut candidates = first
+            .snapshot()
             .histories
             .iter()
             .filter_map(|subject| {
@@ -360,10 +491,27 @@ impl FileProjectionPublisher {
             })
             .collect::<Vec<_>>();
         candidates.sort_by_key(|(position, _)| *position);
-        for (_, watermark) in candidates.into_iter().rev() {
-            let Ok(prior) =
-                crate::durable::before_projection_watermark(&first, watermark.authority_snapshot)
-            else {
+        // Only the newest watermark can be the one a crash left unpublished, and only while
+        // nothing has been recorded after it. A watermark W names the authority as it was before
+        // W was written; the authority less W still holds every record appended after W — a
+        // newer watermark, or any later write — which that authority could not have held, so
+        // its identity cannot match. Checking anyway cost a copy and a full transcript digest of
+        // the whole authority per watermark the store had ever recorded, two more per write.
+        let last_recorded = first
+            .snapshot()
+            .histories
+            .iter()
+            .flat_map(|subject| &subject.history.records)
+            .map(|record| record.position.store)
+            .max();
+        for (position, watermark) in candidates.into_iter().rev().take(1) {
+            if last_recorded != Some(position) {
+                continue;
+            }
+            let Ok(prior) = crate::durable::before_projection_watermark(
+                first.snapshot(),
+                watermark.authority_snapshot,
+            ) else {
                 continue;
             };
             let Ok((prior_id, _)) =
@@ -401,30 +549,30 @@ impl FileProjectionPublisher {
             });
         }
         let staged = self
-            .stage(current)
+            .stage_from(current, Some(first))
             .map_err(|error| (current, projection_error(error, &self.projection_root)))?;
-        let second = aep_backend_eventlog::complete_file_snapshot(&self.authority_path, adapter())
-            .map_err(|_| {
-                (
-                    current,
-                    projection_failure(
-                        CommandRefusalCodeV1::SourceUnreadable,
-                        ProjectionFailureReasonV1::Io,
-                        &self.projection_root,
-                    ),
-                )
-            })?;
-        let (second_id, _) = crate::durable::authority_snapshot_identity(&self.authority, &second)
-            .map_err(|_| {
-                (
-                    current,
-                    projection_failure(
-                        CommandRefusalCodeV1::VerificationMismatch,
-                        ProjectionFailureReasonV1::InventoryMismatch,
-                        &self.projection_root,
-                    ),
-                )
-            })?;
+        let second = self.capture_held().map_err(|_| {
+            (
+                current,
+                projection_failure(
+                    CommandRefusalCodeV1::SourceUnreadable,
+                    ProjectionFailureReasonV1::Io,
+                    &self.projection_root,
+                ),
+            )
+        })?;
+        let (second_id, _) =
+            crate::durable::authority_snapshot_identity(&self.authority, second.snapshot())
+                .map_err(|_| {
+                    (
+                        current,
+                        projection_failure(
+                            CommandRefusalCodeV1::VerificationMismatch,
+                            ProjectionFailureReasonV1::InventoryMismatch,
+                            &self.projection_root,
+                        ),
+                    )
+                })?;
         if second_id != current {
             return Err((
                 second_id,
@@ -437,7 +585,7 @@ impl FileProjectionPublisher {
         }
         let inventory_digest = staged.inventory_digest;
         let watermark_digest = staged.watermark.watermark_digest;
-        self.commit(staged)
+        self.commit_knowing(staged, Some(second.snapshot()))
             .map_err(|error| (current, projection_error(error, &self.projection_root)))?;
         Ok(ProjectionPublishedV1 {
             authority_snapshot: current,
@@ -505,6 +653,56 @@ impl ProjectionPublisher for FileProjectionPublisher {
         let staged = self.stage(authority_snapshot)?;
         self.commit(staged)
     }
+}
+
+/// Writes every staged document through [`aep_backend_markdown::MarkdownStore::create`], several
+/// at once.
+///
+/// Each file is written exactly as before — to a temporary, synced, renamed, then given its owned
+/// mode — and the call fails if any one of them fails. What runs concurrently is the waiting for
+/// those syncs: one after another they were about 5 s of every publication of the 448 ESS
+/// documents, and a write publishes twice. Two documents at one path are refused before anything
+/// is written, because `create`'s own refusal of an existing file is a check-then-rename that
+/// two concurrent writers of one path could both pass.
+fn write_staged_documents(
+    store: &aep_backend_markdown::MarkdownStore,
+    stage: &Path,
+    documents: &[(String, aep_backend_markdown::PlanningDocument)],
+) -> Result<(), ProjectionError> {
+    let mut paths = BTreeSet::new();
+    if !documents
+        .iter()
+        .all(|(relative, _)| paths.insert(relative.as_str()))
+    {
+        return Err(ProjectionError::NotPublished);
+    }
+    let workers = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get)
+        .clamp(1, 8);
+    let chunk = documents.len().div_ceil(workers).max(1);
+    std::thread::scope(|scope| {
+        let writers = documents
+            .chunks(chunk)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    for (relative, document) in chunk {
+                        store
+                            .create(document)
+                            .map_err(|_| ProjectionError::NotPublished)?;
+                        set_owned_file_mode(&stage.join(relative))
+                            .map_err(|_| ProjectionError::NotPublished)?;
+                    }
+                    Ok(())
+                })
+            })
+            .collect::<Vec<_>>();
+        writers.into_iter().try_for_each(|writer| {
+            writer
+                .join()
+                .map_err(|_| ProjectionError::NotPublished)
+                .and_then(|written| written)
+        })
+    })
 }
 
 fn preserve_foreign(
@@ -1351,6 +1549,158 @@ mod tests {
             seeded_opens.control_bridges, 1,
             "committing from a held capture opens only the one that writes: {seeded_opens:?}"
         );
+    }
+
+    /// Retitles the fixture's story through `backend`, as a CLI child command does.
+    fn retitle(backend: &aep_backend_eventlog::EventlogBackend, identity: &str, title: &str) {
+        let target = block_on(backend.resolve(
+            &EntityLocator::parse("ep://planning/store/story/projected").expect("locator"),
+        ))
+        .expect("resolve projected story");
+        let command = Command::UpdateEntity(UpdateEntity {
+            target: EntityRef::new(target),
+            changes: BTreeMap::from([("title".to_owned(), Node::from(title))]),
+        });
+        let context = CommandContext::new(
+            format!("req-{identity}").parse().expect("request"),
+            format!("key-{identity}").parse().expect("idempotency key"),
+            ActorRef::parse("human:projection-test").expect("actor"),
+            "corr-retitle".parse().expect("correlation"),
+            Timestamp::from_epoch_millis(1_700_000_000_002),
+        );
+        let envelope = CommandEnvelope::new(
+            format!("cmd-{identity}").parse().expect("command"),
+            command.kind().as_str(),
+            command,
+            context,
+        );
+        block_on(backend.execute(envelope)).expect("retitle projected story");
+    }
+
+    /// One ordinary invocation opens its authority once, however often it reads and writes it.
+    ///
+    /// A `plan artifact move` on the 448-artifact ESS store spent about 160 s of 356 s opening
+    /// the same file authority eighteen times: a control-row bridge for every ledger read and
+    /// write and every watermark, a planning bridge for the plan and for each stage, and a fresh
+    /// provider for every complete capture — each open re-verifying the whole history before
+    /// answering anything. The command now opens one session with its plan and hands it to the
+    /// ledger and the publisher. No byte a reader can see says whether they used it, so the count
+    /// is the observation: after the session exists, the whole invocation — reservation, child,
+    /// post-commit capture, both publications and both ledger advances — opens nothing.
+    #[test]
+    #[allow(clippy::result_large_err)] // The publish callback returns the publisher's typed refusal.
+    fn an_ordinary_invocation_opens_its_authority_once_for_every_read_and_write() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let session = aep_backend_eventlog::AuthoritySession::open(
+            fixture.authority_path.clone(),
+            fixture.adapter_authority(),
+        )
+        .expect("open one session");
+        let backend = session.open_backend().expect("the plan over the session");
+        let publisher = FileProjectionPublisher::over_session(
+            session.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        let reservation = crate::mutation::reservation(
+            MigrationIdV1::new("one-session").expect("identity"),
+            fixture.authority.clone(),
+            br#"{"verb":"set","title":"Retitled"}"#,
+            &[br#"{"title":"Retitled"}"#.to_vec()],
+        )
+        .expect("a valid reservation");
+
+        let _ = sites::take_authority_opens();
+        let envelope = crate::mutation::execute_invocation(
+            &session,
+            reservation,
+            |planned| {
+                retitle(&backend, &planned.child_identity, "Retitled");
+                let commit_receipt = backend
+                    .last_commit_receipt()
+                    .expect("the child's commit receipt");
+                let snapshot = session
+                    .complete_snapshot()
+                    .expect("the post-commit capture");
+                let (authority_snapshot, _) =
+                    crate::durable::authority_snapshot_identity(&fixture.authority, &snapshot)
+                        .expect("the committed authority's identity");
+                Ok(crate::mutation::ExecutedChild {
+                    commit_receipt,
+                    result: PlanningMutationResultV1::FieldsSet(FieldsSetResultV1 {
+                        id: "story:projected".to_owned(),
+                        revision: 2,
+                        fields: vec!["title".to_owned()],
+                    }),
+                    authority_snapshot,
+                })
+            },
+            || publisher.publish_current(),
+        )
+        .expect("the invocation completes");
+        let opens = sites::take_authority_opens();
+
+        assert!(envelope.success(), "the invocation succeeds: {envelope:?}");
+        assert_eq!(
+            (opens.sessions, opens.captures, opens.control_bridges),
+            (0, 0, 0),
+            "an invocation over an open session opens no further session, fresh capture or \
+             control bridge: {opens:?}"
+        );
+        let projected = fs::read_to_string(fixture.projection_root.join("story/projected.md"))
+            .expect("the retitled story is projected");
+        assert!(
+            projected.contains("Retitled"),
+            "the projection shows the committed title:\n{projected}"
+        );
+    }
+
+    /// Publishing the current authority captures it twice: once to stage from, once to verify.
+    ///
+    /// `publish_current` proves what it published is the current authority by capturing before
+    /// and after staging and comparing the two identities. Staging used to take two more captures
+    /// of its own in between — one to open the plan it renders, one to learn which files the
+    /// authority captured and which watermarks it holds — and committing a third, to ask whether
+    /// the watermark already exists. Each of those is answered by the capture beside it: the
+    /// stage renders from the first, which the unchanged second then proves current, and the
+    /// second names every subject, the watermark included, that exists when it is written.
+    #[test]
+    fn publishing_through_a_session_captures_the_authority_twice_and_opens_it_never() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let session = aep_backend_eventlog::AuthoritySession::open(
+            fixture.authority_path.clone(),
+            fixture.adapter_authority(),
+        )
+        .expect("open one session");
+        let publisher = FileProjectionPublisher::over_session(
+            session,
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+
+        let _ = sites::take_authority_opens();
+        let publication = publisher.publish_current().expect("the publication");
+        let opens = sites::take_authority_opens();
+
+        assert_eq!(
+            opens.session_reads, 2,
+            "one capture to stage from and one to prove it current: {opens:?}"
+        );
+        assert_eq!(
+            (opens.sessions, opens.captures, opens.control_bridges),
+            (0, 0, 0),
+            "and no open of the authority at all: {opens:?}"
+        );
+        let (covered, _) = crate::durable::before_projection_watermark(
+            &fixture.snapshot(),
+            publication.authority_snapshot,
+        )
+        .and_then(|prior| crate::durable::authority_snapshot_identity(&fixture.authority, &prior))
+        .expect("the watermark covers the authority it was staged from");
+        assert_eq!(covered, publication.authority_snapshot);
+        assert!(fixture.projection_root.join("story/projected.md").is_file());
     }
 
     /// `publish_current` on a seeded publisher is refused, and the refusal names the seeded path.
