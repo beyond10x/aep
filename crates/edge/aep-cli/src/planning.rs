@@ -1050,18 +1050,27 @@ where
         &child_bytes,
     )?;
     let backend = opened.backend()?;
-    let publisher = aep_planning_migration::FileProjectionPublisher::new(
-        authority_root.clone(),
+    // One opened authority for the whole invocation: the plan's own, which the ledger, the
+    // post-commit capture and both publications read and write through instead of each opening
+    // the authority again.
+    let PlanBackend::Eventlog(plan) = backend else {
+        anyhow::bail!("an Eventlog plan opened a backend of another kind");
+    };
+    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
+    if session.path() != authority_root.as_path() {
+        anyhow::bail!(
+            "the Eventlog plan was opened at {}, not at its selected authority {}",
+            session.path().display(),
+            authority_root.display()
+        );
+    }
+    let publisher = aep_planning_migration::FileProjectionPublisher::over_session(
+        session.clone(),
         authority.clone(),
         projection_root.clone(),
     );
-    let adapter = || entity_eventlog::Authority {
-        logical_scope: authority.logical_scope.as_str().to_owned(),
-        tenant: authority.tenant.as_str().to_owned(),
-        stream_identity: authority.stream_identity.as_str().to_owned(),
-    };
-    let result = aep_planning_migration::execute_file_invocation(
-        authority_root.clone(),
+    let result = aep_planning_migration::execute_invocation(
+        &session,
         reservation,
         |planned| match execute(backend, planned) {
             Ok(result) => {
@@ -1070,9 +1079,7 @@ where
                         mutation_refusal(&authority, CommandRefusalCodeV1::ReceiptConflict),
                     ])
                 })?;
-                let snapshot =
-                    aep_backend_eventlog::complete_file_snapshot(authority_root, adapter())
-                        .map_err(|_| {
+                let snapshot = session.complete_snapshot().map_err(|_| {
                             aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
                                 mutation_refusal(
                                     &authority,

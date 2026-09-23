@@ -60,26 +60,39 @@ enum InvocationBusinessResult {
 }
 
 /// Eventlog-backed authoritative reservation and ordered receipt prefix.
+///
+/// Every read and write goes through the one [`aep_backend_eventlog::AuthoritySession`] the
+/// invocation holds, so recording a prefix or a result does not reopen the authority.
 pub struct EventlogMutationLedger {
-    path: PathBuf,
-    authority: AuthorityCoordinateV1,
+    session: aep_backend_eventlog::AuthoritySession,
     document: InvocationAuthorityDocument,
     revision: u64,
     reservation_receipt: CommitReceipt,
 }
 
 impl EventlogMutationLedger {
+    /// Reserves the invocation through `session`, or recovers the reservation it already made.
+    ///
+    /// # Errors
+    /// A session of another authority than the reservation names, a reservation for different
+    /// request bytes under this identity, or the authority refusing the read or the write.
     #[allow(clippy::needless_pass_by_value)] // The owned reservation becomes durable ledger state.
     pub fn reserve(
-        path: PathBuf,
+        session: &aep_backend_eventlog::AuthoritySession,
         reservation: InvocationReservationV1,
     ) -> Result<Self, MutationLedgerError> {
         reservation.validate()?;
         let identity = reservation.command_identity.as_str();
-        let authority = adapter_authority(&reservation.authority);
-        let existing =
-            aep_backend_eventlog::read_file_invocation(path.clone(), authority.clone(), identity)
-                .map_err(MutationLedgerError::Eventlog)?;
+        if *session.authority() != adapter_authority(&reservation.authority) {
+            return Err(MutationLedgerError::Eventlog(format!(
+                "the session is of authority {:?}, not the reserved {:?}",
+                session.authority(),
+                reservation.authority
+            )));
+        }
+        let existing = session
+            .read_control(aep_backend_eventlog::INVOCATION_AS, identity)
+            .map_err(MutationLedgerError::Eventlog)?;
         let (revision, document, receipt) = if let Some((revision, value, receipt)) = existing {
             let document: InvocationAuthorityDocument = serde_json::from_value(value)?;
             if document.reservation != reservation {
@@ -92,21 +105,20 @@ impl EventlogMutationLedger {
                 committed: Vec::new(),
                 result: PresenceV1::Missing,
             };
-            let receipt = aep_backend_eventlog::write_file_invocation(
-                path.clone(),
-                authority,
-                identity.to_owned(),
-                identity.to_owned(),
-                serde_json::to_value(&document)?,
-                None,
-                operation_context(identity, "reserve"),
-            )
-            .map_err(MutationLedgerError::Eventlog)?;
+            let receipt = session
+                .write_control(
+                    aep_backend_eventlog::INVOCATION_AS,
+                    identity.to_owned(),
+                    identity.to_owned(),
+                    serde_json::to_value(&document)?,
+                    None,
+                    operation_context(identity, "reserve"),
+                )
+                .map_err(MutationLedgerError::Eventlog)?;
             (1, document, receipt)
         };
         Ok(Self {
-            path,
-            authority: reservation.authority.clone(),
+            session: session.clone(),
             document,
             revision,
             reservation_receipt: receipt,
@@ -164,16 +176,16 @@ impl EventlogMutationLedger {
 
     fn advance(&mut self, suffix: &str) -> Result<(), MutationLedgerError> {
         let identity = self.document.reservation.command_identity.as_str();
-        aep_backend_eventlog::write_file_invocation(
-            self.path.clone(),
-            adapter_authority(&self.authority),
-            identity.to_owned(),
-            format!("{identity}:{suffix}"),
-            serde_json::to_value(&self.document)?,
-            Some(self.revision),
-            operation_context(identity, suffix),
-        )
-        .map_err(MutationLedgerError::Eventlog)?;
+        self.session
+            .write_control(
+                aep_backend_eventlog::INVOCATION_AS,
+                identity.to_owned(),
+                format!("{identity}:{suffix}"),
+                serde_json::to_value(&self.document)?,
+                Some(self.revision),
+                operation_context(identity, suffix),
+            )
+            .map_err(MutationLedgerError::Eventlog)?;
         self.revision += 1;
         Ok(())
     }
@@ -354,8 +366,12 @@ pub enum ChildExecutionFailure {
 /// publication. Reopening joins that durable result to the existing/recovered watermark without
 /// reexecuting a completed child.
 #[allow(clippy::too_many_lines, clippy::needless_pass_by_value)] // One coordinator keeps child execution, durable prefix and publication order explicit.
-pub fn execute_file_invocation<E, P>(
-    path: PathBuf,
+/// [`execute_file_invocation`], reading and writing the invocation's ledger through `session`.
+///
+/// # Errors
+/// As [`execute_file_invocation`].
+pub fn execute_invocation<E, P>(
+    session: &aep_backend_eventlog::AuthoritySession,
     reservation: InvocationReservationV1,
     mut execute: E,
     mut publish: P,
@@ -364,7 +380,7 @@ where
     E: FnMut(&PlannedCommandStepV1) -> Result<ExecutedChild, ChildExecutionFailure>,
     P: FnMut() -> Result<ProjectionPublishedV1, (AuthoritySnapshotIdV1, ProjectionFailureV1)>,
 {
-    let mut ledger = EventlogMutationLedger::reserve(path, reservation.clone())?;
+    let mut ledger = EventlogMutationLedger::reserve(session, reservation.clone())?;
     let reservation_receipt_digest = receipt_digest(&ledger.reservation_receipt())?;
     if let Some(result) = ledger.prior_result().cloned() {
         return publish_business_result(
@@ -508,6 +524,29 @@ where
         result,
         &mut publish,
     )
+}
+
+/// [`execute_invocation`] over a session this call opens on the reserved authority at `path`.
+///
+/// # Errors
+/// The authority refusing to open, and otherwise as [`execute_invocation`].
+pub fn execute_file_invocation<E, P>(
+    path: PathBuf,
+    reservation: InvocationReservationV1,
+    execute: E,
+    publish: P,
+) -> Result<PlanningMutationEnvelopeV1, MutationLedgerError>
+where
+    E: FnMut(&PlannedCommandStepV1) -> Result<ExecutedChild, ChildExecutionFailure>,
+    P: FnMut() -> Result<ProjectionPublishedV1, (AuthoritySnapshotIdV1, ProjectionFailureV1)>,
+{
+    reservation.validate()?;
+    let session = aep_backend_eventlog::AuthoritySession::open(
+        path,
+        adapter_authority(&reservation.authority),
+    )
+    .map_err(MutationLedgerError::Eventlog)?;
+    execute_invocation(&session, reservation, execute, publish)
 }
 
 fn publish_business_result<P>(
