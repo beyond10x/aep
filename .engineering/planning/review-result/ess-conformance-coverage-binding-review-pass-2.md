@@ -31,12 +31,12 @@ Every snapshot verified against its listed hash. Prior immutable report still ha
 
 | Owner | Original source | Bytes | SHA256 |
 |---|---|---:|---|
-| ess | /home/timo/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage.md | 73976 | `b8443b858bd35fb3236b3cdf2619f398648abfce800c83f5133a2b4d0abac512` |
-| ess | /home/timo/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage-transport.md | 13288 | `6b0e55e00f7d4d35979c3184949d993d15bd3016b510c4eddf05f6394d0073bf` |
-| ess | /home/timo/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/.engineering/planning/story/review-conformance-coverage.md | 8349 | `c0c16675bd98c13ac39fbc1cb86e73728fa11e3f975264a5bb4861127c0a9d04` |
-| aep | /home/timo/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/docs/design/ess-conformance-coverage-evidence.md | 19827 | `15d208bd723841f2343d6ea5c52bf543c1882e03e1be051b119ec7728d3479d2` |
-| aep | /home/timo/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/.engineering/planning/story/admit-ess-conformance-coverage.md | 10291 | `52c93f3d55001f05ba47268e4c7c87857e0f4367f7042874b03cad663e7641f6` |
-| atlas | /home/timo/.local/state/worktree/trees/b10x/atlas/wt-90ec680c6073/architecture/adr/0040-ess-complete-selection-evidence.md | 7123 | `d4f5ee85817c1b6518c2a25ad636d95fca2ce149fb02b2bd53e3413506e3e16c` |
+| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage.md | 73976 | `b8443b858bd35fb3236b3cdf2619f398648abfce800c83f5133a2b4d0abac512` |
+| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage-transport.md | 13288 | `6b0e55e00f7d4d35979c3184949d993d15bd3016b510c4eddf05f6394d0073bf` |
+| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/.engineering/planning/story/review-conformance-coverage.md | 8349 | `c0c16675bd98c13ac39fbc1cb86e73728fa11e3f975264a5bb4861127c0a9d04` |
+| aep | ~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/docs/design/ess-conformance-coverage-evidence.md | 19827 | `15d208bd723841f2343d6ea5c52bf543c1882e03e1be051b119ec7728d3479d2` |
+| aep | ~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/.engineering/planning/story/admit-ess-conformance-coverage.md | 10291 | `52c93f3d55001f05ba47268e4c7c87857e0f4367f7042874b03cad663e7641f6` |
+| atlas | ~/.local/state/worktree/trees/b10x/atlas/wt-90ec680c6073/architecture/adr/0040-ess-complete-selection-evidence.md | 7123 | `d4f5ee85817c1b6518c2a25ad636d95fca2ce149fb02b2bd53e3413506e3e16c` |
 
 Snapshot paths are specified in manifest.json beneath this report's ess/, aep/ and atlas/ directories. Baseline heads remain ESS `be0eefd7ec125d46bb3b664c4b95b8d638a2b1fe`, AEP `62ef3a73112143453319215b9aa31a6c9626ed5f`, and Atlas `34fa907ff3ffcbdbb6bbf37d4dd674c05904bb20`. File/line references below identify the frozen correction snapshots and the named repository owner.
 

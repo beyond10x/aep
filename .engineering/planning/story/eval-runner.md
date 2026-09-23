@@ -8,8 +8,8 @@ summary: protocol eval run drives metaharness as a tool, assembles the run manif
 owner: eval
 tags:
 - eval
-- harness
 - evidence
+- harness
 relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:eval-matrix-assembler

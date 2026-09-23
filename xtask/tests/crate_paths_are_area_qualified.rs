@@ -221,6 +221,11 @@ const EXCLUDED_PREFIXES: &[&str] = &[
     "crates/edge/aep-cli/fixtures/eval-",
     // The store: written by `aep artifact`, never by an editor. See the module documentation.
     ".engineering/planning/",
+    // The same store's authority since it moved to Eventlog: an append-only event log and
+    // content-addressed blobs. A body recorded in 2026-08 names the paths of 2026-08, and the
+    // digest that addresses it is computed over those bytes — so correcting one is not an edit,
+    // it is a different blob that nothing references.
+    ".engineering/state/",
 ];
 
 /// Whether this tracked path is out of the corpus, and why is in the two lists above.

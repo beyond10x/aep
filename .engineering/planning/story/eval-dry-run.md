@@ -8,8 +8,8 @@ summary: Four recorded streams go through the runner and the assembler and the m
 owner: eval
 tags:
 - eval
-- harness
 - evidence
+- harness
 relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:eval-runner

@@ -59,8 +59,8 @@ Focused invocations, in execution order:
 
 ```text
 cargo test --locked --offline -p aep-ess-evidence --test count_reader_pass1 decoded_duplicate_keys_refuse_in_report_and_arbitrary_nested_payload -- --exact --nocapture
-   Compiling aep-domain v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-domain)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
+   Compiling aep-domain v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-domain)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
     Finished `test` profile [unoptimized] target(s) in 10.04s
      Running tests/count_reader_pass1.rs (target/debug/deps/count_reader_pass1-3709f17a590149b8)
 
@@ -113,24 +113,24 @@ exit: 0
 
 ```text
 cargo test --locked --offline -p aep-cli --test count_reader_pass1 typed_batch_preserves_crlf_and_unicode_bytes_and_refuses_either_bad_position -- --exact --nocapture
-   Compiling aep-domain v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-domain)
-   Compiling aep-contract v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-contract)
-   Compiling aep-driver-spec v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-driver-spec)
-   Compiling aep-render v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-render)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
-   Compiling trace-spec v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/trace-spec)
-   Compiling aep-backend-memory v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-memory)
-   Compiling aep-engine v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-engine)
-   Compiling aep-conformance v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-conformance)
-   Compiling aep-backend-entity v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-entity)
-   Compiling aep-backend-markdown v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-markdown)
-   Compiling aep-backend-postgres v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-postgres)
-   Compiling aep-backend-sqlite v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-sqlite)
-   Compiling aep-schema v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-schema)
-   Compiling aep-backend-hybrid v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-hybrid)
-   Compiling aep-driver v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-driver)
-   Compiling aep-project v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-project)
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-domain v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-domain)
+   Compiling aep-contract v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-contract)
+   Compiling aep-driver-spec v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-driver-spec)
+   Compiling aep-render v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-render)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
+   Compiling trace-spec v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/trace-spec)
+   Compiling aep-backend-memory v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-memory)
+   Compiling aep-engine v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/govern/aep-engine)
+   Compiling aep-conformance v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-conformance)
+   Compiling aep-backend-entity v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-entity)
+   Compiling aep-backend-markdown v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-markdown)
+   Compiling aep-backend-postgres v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-postgres)
+   Compiling aep-backend-sqlite v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-sqlite)
+   Compiling aep-schema v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-schema)
+   Compiling aep-backend-hybrid v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/plan/aep-backend-hybrid)
+   Compiling aep-driver v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/drive/aep-driver)
+   Compiling aep-project v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-project)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
 warning: unused import: `aep_engine::engine::ProtocolEngine`
   --> crates/edge/aep-cli/tests/count_reader_pass1.rs:12:5
    |
@@ -170,7 +170,7 @@ exit: 101
 
 ```text
 cargo test --locked --offline -p aep-cli --test count_reader_pass1 exact_high_time_horizon_restore_and_changed_source_refusals_preserve_execution -- --exact --nocapture
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
 warning: unused import: `aep_engine::engine::ProtocolEngine`
   --> crates/edge/aep-cli/tests/count_reader_pass1.rs:12:5
    |
@@ -212,7 +212,7 @@ cargo test --locked --offline -p aep-cli --test count_reader_pass1 actual_inspec
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on package cache
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
 warning: unused import: `aep_engine::engine::ProtocolEngine`
   --> crates/edge/aep-cli/tests/count_reader_pass1.rs:12:5
    |
@@ -251,7 +251,7 @@ exit: 101
 
 ```text
 cargo test --locked --offline -p aep-cli --test count_reader_pass1 typed_batch_preserves_crlf_and_unicode_bytes_and_refuses_either_bad_position -- --exact --nocapture
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
     Finished `test` profile [unoptimized] target(s) in 0.80s
      Running tests/count_reader_pass1.rs (target/debug/deps/count_reader_pass1-4d19c18382a6d073)
 
@@ -301,7 +301,7 @@ exit: 101
 
 ```text
 cargo test --locked --offline -p aep-cli --test count_reader_pass1 actual_inspect_aliases_keep_full_u64_and_refuse_malformed_batch_without_partial_output -- --exact --nocapture
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
     Finished `test` profile [unoptimized] target(s) in 0.72s
      Running tests/count_reader_pass1.rs (target/debug/deps/count_reader_pass1-4d19c18382a6d073)
 
@@ -321,8 +321,8 @@ Command and combined stdout/stderr, verbatim:
 
 ```text
 cargo test --locked --offline --no-fail-fast -p aep-ess-evidence -p aep-domain -p aep-engine -p aep-schema -p aep-cli
-   Compiling aep-cli v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
-   Compiling aep-ess-evidence v0.54.0 (/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
+   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/edge/aep-cli)
+   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/crates/observe/aep-ess-evidence)
     Finished `test` profile [unoptimized] target(s) in 0.80s
      Running unittests src/aep.rs (target/debug/deps/aep-1b91394d0d0670f1)
 
@@ -2040,14 +2040,14 @@ The accepted design and complete frozen source diff were read before these cases
 All three new source paths are tests or test support under the assigned package directories. The tracked diff is empty and the complete untracked inventory is printed above. No old test, production source, manifest, lockfile, generated document, planning store, Git index/ref/object, registry or lifecycle entry was intentionally written by this review.
 
 Assigned scratch, logs, run script, focused report, output capture and fixture files remain beneath:
-`/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/target/ess-conformance-v2-counts/adversary-pass-1`.
+`~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/target/ess-conformance-v2-counts/adversary-pass-1`.
 
 Local compilation used the existing target at:
-`/home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/target`.
+`~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-v2-counts/target`.
 Inherited package tests also used their established in-tree test fixture locations; TMPDIR was the assigned scratch for child processes. No new build directory outside this worktree was selected.
 
 One observed pre-existing infrastructure metadata path outside the worktree was refreshed by Cargo during these runs:
-`/home/timo/.cargo/.global-cache` (size 1,007,616 bytes before and after; mtime moved from 2026-09-06 09:59:05.661875980 +0200 to at least 2026-09-06 10:02:49.329071322 +0200). No authored file was written outside the worktree. The ordinary Cargo lock files `/home/timo/.cargo/.package-cache` and `/home/timo/.cargo/.package-cache-mutate` retained their earlier mtimes. The inherited sccache socket was absent; RUSTC_WRAPPER and SCCACHE_SERVER_UDS were unset, and this review launched no cache daemon or shared build.
+`~/.cargo/.global-cache` (size 1,007,616 bytes before and after; mtime moved from 2026-09-06 09:59:05.661875980 +0200 to at least 2026-09-06 10:02:49.329071322 +0200). No authored file was written outside the worktree. The ordinary Cargo lock files `~/.cargo/.package-cache` and `~/.cargo/.package-cache-mutate` retained their earlier mtimes. The inherited sccache socket was absent; RUSTC_WRAPPER and SCCACHE_SERVER_UDS were unset, and this review launched no cache daemon or shared build.
 
 Both focused runner sessions and the full package runner exited. The full suite shell/Cargo/test PIDs 3803506, 3803572 and 3815725 were absent at final process inspection. No service, background test or integration process was left running by this review. Free space remained above the 8 GiB floor throughout observed checks; the final check reported 35 GiB available.
 

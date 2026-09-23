@@ -12,7 +12,7 @@ revision: 1
 
 Clean integration 58fe2f3e7bc1286d5de8f9bc6188da90ef9e8f8c contains the complete reader implementation, correction143ad4afc2d4ecb6f280bcad2932239bed5fbfd5 and both independent source-review test additions through00b6108d7656b3947fa8940015147b317338ad7c. Every one of the16 unchanged Taskfile gate steps returned0. Workspace tests passed2269cases,0failed/ignored,154summaries in204.210432894seconds; docs-check separately passed2cases. The actual Rust1.85 toolchain, schema drift, strict Clippy and Website build passed. PostgreSQL explicitly skipped because ENTITY_POSTGRES_URL was unset; no local database execution is claimed.
 
-The runner compared the complete tracked-source manifest after every step and at completion: no tracked bytes changed. The source gate ran from2026-09-06T15:27:34.342124Z through2026-09-06T15:33:27.361723Z. Source/toolchains, original argv, own statuses, timestamps, durations, raw logs and hashes are retained under target/ess-conformance-coverage/gate-58fe2f3e7bc1. The assigned external TMPDIR is /home/timo/.cache/ess-cov-aep-gate-tmp and remains owned for archival/cleanup.
+The runner compared the complete tracked-source manifest after every step and at completion: no tracked bytes changed. The source gate ran from2026-09-06T15:27:34.342124Z through2026-09-06T15:33:27.361723Z. Source/toolchains, original argv, own statuses, timestamps, durations, raw logs and hashes are retained under target/ess-conformance-coverage/gate-58fe2f3e7bc1. The assigned external TMPDIR is ~/.cache/ess-cov-aep-gate-tmp and remains owned for archival/cleanup.
 
 ## Independent review
 

@@ -4,7 +4,7 @@ id: story:namespaced-identity
 kind: story
 status: implemented
 title: An identity is unique across members, and an ambiguous one is refused
-summary: 'Two repositories can hold a story of the same name and mean different things. Decide the spelling once, and refuse an ambiguous reference by name rather than resolving it to the nearest match.'
+summary: Two repositories can hold a story of the same name and mean different things. Decide the spelling once, and refuse an ambiguous reference by name rather than resolving it to the nearest match.
 relations:
 - decomposes: epic:one-cli-many-repositories
 - depends_on: story:workspace-manifest
