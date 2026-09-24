@@ -9,6 +9,23 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.59.2] — 2026-09-24
+
+### Fixed
+
+- `render` over a store an older release published last no longer leaves the stage directory it
+  compared the older watermark in beside the projection. 0.59.1 did not remove that stage when
+  it fell through to publishing.
+
+## [0.59.1] — 2026-09-24
+
+### Fixed
+
+- `aep plan artifact render` re-renders a tree store whose last record is the projection
+  watermark an older release published. It re-staged that watermark to replay it, which can
+  never match an inventory another renderer wrote, and refused every store rendered by 0.58.0
+  as `ProjectionDrift`. It now publishes the current state, as a write does.
+
 ## [0.59.0] — 2026-09-24
 
 ### Added

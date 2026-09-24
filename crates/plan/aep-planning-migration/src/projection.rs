@@ -564,14 +564,14 @@ impl FileProjectionPublisher {
             if staged.inventory_digest != watermark.projection_inventory_digest
                 || staged.watermark.watermark_digest != watermark.watermark_digest
             {
-                return Err((
-                    prior_id,
-                    projection_failure(
-                        CommandRefusalCodeV1::ProjectionDrift,
-                        ProjectionFailureReasonV1::InventoryMismatch,
-                        &self.projection_root,
-                    ),
-                ));
+                // Nothing was recorded after W, so the business subjects W was staged from are
+                // the ones staged here: an inventory that differs was rendered by another
+                // release of the renderer. Replaying W cannot reproduce it; publish the current
+                // state below instead, which records its own watermark. The stage W was
+                // re-rendered into is not published, so it is removed rather than left beside
+                // the projection.
+                let _ = fs::remove_dir_all(staged.directory());
+                break;
             }
             self.commit(staged)
                 .map_err(|error| (prior_id, projection_error(error, &self.projection_root)))?;
