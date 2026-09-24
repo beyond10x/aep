@@ -97,11 +97,61 @@ pub(crate) enum StoreCommand {
         #[arg(long)]
         authority_snapshot: String,
     },
+    /// Create a planning store of typed entities on a tree authority, and the `aep.project/3`
+    /// selector that names it.
+    ///
+    /// Refuses when the project already has a selector or a non-empty authority directory: a new
+    /// store is created, never written over an existing one. An existing store reaches a tree
+    /// through the one-time export instead.
+    InitTree(InitTreeArgs),
+    /// Copy an `aep.project/2` store into a new tree store, once, for the cutover.
+    ///
+    /// The source is read and never written. Every artifact becomes its kind's typed entity under
+    /// its derived identity, every home path is rewritten, and the new `.engineering/` is written
+    /// beside the old one for the operator to swap in. The copy is checked artifact by artifact
+    /// against the source before it is reported.
+    Export(ExportArgs),
     /// Hold observed writer stop and operator no-restart custody in this foreground process.
     WriterControl {
         #[command(subcommand)]
         command: writer_control::WriterControlCommand,
     },
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct ExportArgs {
+    /// The source project's `.engineering/` directory, selecting an `aep.project/2` store.
+    #[arg(long)]
+    engineering: PathBuf,
+    /// The new `.engineering/` directory to write; it must not exist yet.
+    #[arg(long)]
+    into: PathBuf,
+    /// Where to write the map of old identities and home paths to what they became. It names
+    /// home directories, so it is kept outside every repository and must not exist yet.
+    #[arg(long)]
+    map: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct InitTreeArgs {
+    /// The project's `.engineering/` directory.
+    #[arg(long)]
+    engineering: PathBuf,
+    /// The store's logical scope.
+    #[arg(long)]
+    scope: String,
+    /// The Eventlog tenant the store is kept under.
+    #[arg(long, default_value = "planning")]
+    tenant: String,
+    /// The protocol the project adopts.
+    #[arg(long, default_value = "adp/1")]
+    protocol: String,
+    /// The profile the project adopts.
+    #[arg(long, default_value = "development.standard")]
+    profile: String,
+    /// Where the protocol documents are, relative to `.engineering/`.
+    #[arg(long, default_value = "..")]
+    protocols: String,
 }
 
 #[derive(Debug, Subcommand)]
@@ -143,6 +193,8 @@ where
     C: aep_planning_migration::WriterControl + aep_planning_migration::AuthorityWriterControl,
 {
     match command {
+        StoreCommand::InitTree(args) => init_tree(&args),
+        StoreCommand::Export(args) => export(&args),
         StoreCommand::Inspect(common) => {
             let result = inspect(&common);
             emit(&result, common.format)?;
@@ -716,6 +768,7 @@ fn rebuild_with_control<C: aep_planning_migration::AuthorityWriterControl>(
         authority_root,
         projection_root,
         authority: selected,
+        ..
     } = &resolved.plan
     else {
         return rebuild_refusal(
@@ -1046,6 +1099,7 @@ fn inspect_eventlog(common: &CommonArgs, resolved: Resolved) -> InspectionResult
         authority_root,
         projection_root,
         authority: selected,
+        ..
     } = &resolved.plan
     else {
         unreachable!("caller selected Eventlog")
@@ -1521,6 +1575,7 @@ fn verify(common: &CommonArgs) -> VerificationResultV1 {
         authority_root,
         projection_root,
         authority: selected,
+        ..
     } = &resolved.plan
     else {
         return verification_refusal(
@@ -2070,6 +2125,7 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
             authority_root,
             projection_root,
             authority,
+            ..
         } => (
             BackendKindV1::Eventlog,
             SourceCoordinateV1::Eventlog(EventlogSourceCoordinateV1 {
@@ -2086,6 +2142,11 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
     let project_version = match config.version {
         aep_domain::project::ProjectVersion::V1 => ProjectVersionV1::V1,
         aep_domain::project::ProjectVersion::V2 => ProjectVersionV1::V2,
+        // A tree authority is where the one-time export writes, not a store these migration
+        // verbs read from; the export has its own verb.
+        aep_domain::project::ProjectVersion::V3 => anyhow::bail!(
+            "`aep.project/3` selects a tree authority, which these migration verbs do not read"
+        ),
     };
     Ok(Resolved {
         plan,
@@ -5196,4 +5257,230 @@ fn flatten(path: &str, node: &OrderedNode, output: &mut String) {
             }
         }
     }
+}
+
+/// `aep plan store init-tree`.
+fn init_tree(args: &InitTreeArgs) -> Result<ExitCode> {
+    let selector = args.engineering.join(aep_domain::project::PROJECT_FILE);
+    if selector.exists() {
+        anyhow::bail!(
+            "{} already exists; a tree store is created for a project that has no selector yet",
+            selector.display()
+        );
+    }
+    let state = args.engineering.join("state");
+    if state.exists()
+        && std::fs::read_dir(&state)
+            .with_context(|| format!("reading {}", state.display()))?
+            .next()
+            .is_some()
+    {
+        anyhow::bail!("{} is not empty; nothing is written over an existing store", state.display());
+    }
+    std::fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
+    let identity =
+        aep_backend_eventlog::prepare_tree(&state, &args.tenant).map_err(|e| anyhow::anyhow!(e))?;
+    aep_backend_eventlog::provision_tree(
+        &state,
+        args.scope.clone(),
+        args.tenant.clone(),
+        identity.clone(),
+        aep_backend_eventlog::provisioning_context("aep-plan-store-init-tree"),
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    let document = serde_json::json!({
+        "version": aep_domain::project::PROJECT_VERSION_V3,
+        "protocol": args.protocol,
+        "profile": args.profile,
+        "protocols": args.protocols,
+        "store": { "eventlog": { "path": "state", "projection": "planning" } },
+        "planning_scope": args.scope,
+        "planning_tenant": args.tenant,
+        "planning_identity": identity,
+    });
+    std::fs::create_dir_all(args.engineering.join("planning"))
+        .with_context(|| format!("creating {}", args.engineering.join("planning").display()))?;
+    std::fs::write(&selector, serde_json::to_vec(&document)?)
+        .with_context(|| format!("writing {}", selector.display()))?;
+    println!("created a tree planning store at {} ({})", state.display(), identity);
+    Ok(ExitCode::SUCCESS)
+}
+
+#[allow(clippy::too_many_lines)] // Read, export, write the selector, then compare, in that order.
+fn export(args: &ExportArgs) -> Result<ExitCode> {
+    let crate::planning::Plan::Eventlog {
+        authority_root,
+        authority,
+        tree: None,
+        ..
+    } = crate::planning::Plan::for_project(&args.engineering)?
+    else {
+        anyhow::bail!(
+            "{} does not select an `aep.project/2` Eventlog store; only one is exported",
+            args.engineering.display()
+        );
+    };
+    if args.into.exists() {
+        anyhow::bail!("{} exists; the export writes a new directory", args.into.display());
+    }
+    if args.map.exists() {
+        anyhow::bail!("{} exists; the export writes a new map", args.map.display());
+    }
+    let repository = args
+        .engineering
+        .parent()
+        .map_or_else(|| args.engineering.clone(), Path::to_owned);
+    let lifecycles = crate::planning::StoreLocation::at(None, Some(repository.clone()))
+        .lifecycles()?
+        .lifecycles()
+        .clone();
+    let selector_path = args.engineering.join(aep_domain::project::PROJECT_FILE);
+    let mut selector: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&selector_path)
+            .with_context(|| format!("reading {}", selector_path.display()))?,
+    )
+    .with_context(|| format!("{} is not JSON", selector_path.display()))?;
+
+    let source = aep_backend_eventlog::AuthoritySession::open(
+        authority_root.clone(),
+        entity_eventlog::Authority {
+            logical_scope: authority.logical_scope.clone(),
+            tenant: authority.tenant.clone(),
+            stream_identity: authority.stream_identity.clone(),
+        },
+    )
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let state = args.into.join("state");
+    fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
+    let workspace = std::path::absolute(&repository)
+        .ok()
+        .and_then(|repository| repository.parent().map(Path::to_owned));
+    let report = aep_backend_eventlog::export_to_tree(
+        &source,
+        &state,
+        &authority.logical_scope,
+        &authority.tenant,
+        &lifecycles,
+        workspace.as_deref(),
+        std::env::var_os("HOME").map(PathBuf::from).as_deref(),
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    fs::write(
+        &args.map,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "identities": report.identities,
+            "home_paths": report.home_paths,
+        }))?,
+    )
+    .with_context(|| format!("writing {}", args.map.display()))?;
+
+    selector["version"] = aep_domain::project::PROJECT_VERSION_V3.into();
+    selector["planning_identity"] = report.stream_identity.clone().into();
+    fs::create_dir_all(args.into.join("planning"))
+        .with_context(|| format!("creating {}", args.into.join("planning").display()))?;
+    fs::write(
+        args.into.join(aep_domain::project::PROJECT_FILE),
+        serde_json::to_vec(&selector)?,
+    )
+    .with_context(|| format!("writing the selector in {}", args.into.display()))?;
+
+    let target = aep_backend_eventlog::open_tree(
+        state,
+        authority.logical_scope.clone(),
+        authority.tenant.clone(),
+        report.stream_identity.clone(),
+        lifecycles,
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
+    let source = source.open_backend().map_err(|e| anyhow::anyhow!(e))?;
+    let differences = export_differences(&source, &target, &report)?;
+    if !differences.is_empty() {
+        for difference in &differences {
+            eprintln!("  {difference}");
+        }
+        anyhow::bail!(
+            "the export into {} differs from the source in {} artifacts; it is left for inspection",
+            args.into.display(),
+            differences.len()
+        );
+    }
+    println!(
+        "exported {} artifacts and {} records into {} ({}); left behind {} operational records",
+        report.artifacts,
+        report.records,
+        args.into.display(),
+        report.stream_identity,
+        report.skipped
+    );
+    println!(
+        "rewrote {} identities and {} home paths; the map is {}",
+        report.identities.len(),
+        report.home_paths.len(),
+        args.map.display()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Every artifact the source holds that the export does not hold the same, field for field, once
+/// identities and home paths are rewritten.
+fn export_differences(
+    source: &aep_backend_eventlog::EventlogBackend,
+    target: &aep_backend_eventlog::EventlogBackend,
+    report: &aep_backend_eventlog::ExportReport,
+) -> Result<Vec<String>> {
+    use aep_contract::query::{EntityQuery, QueryService};
+    use aep_contract::testing::block_on;
+    let all = |backend: &aep_backend_eventlog::EventlogBackend| -> Result<Vec<aep_contract::query::EntityEnvelope>> {
+        let mut found = Vec::new();
+        let mut after = None;
+        loop {
+            let page = block_on(backend.query(&EntityQuery {
+                after: after.take(),
+                ..EntityQuery::default()
+            }))
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+            found.extend(page.items);
+            match page.next {
+                Some(next) => after = Some(next),
+                None => return Ok(found),
+            }
+        }
+    };
+    let held = all(source).context("listing the source")?;
+    let copied: std::collections::BTreeMap<String, _> = all(target)
+        .context("listing the export")?
+        .into_iter()
+        .map(|entity| (entity.metadata.locator.to_string(), entity))
+        .collect();
+    let mut replacements: Vec<(&String, &String)> =
+        report.identities.iter().chain(report.home_paths.iter()).collect();
+    replacements.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
+    let mut differences = Vec::new();
+    for entity in &held {
+        let locator = entity.metadata.locator.to_string();
+        let Some(copy) = copied.get(&locator) else {
+            differences.push(format!("{locator}: missing from the export"));
+            continue;
+        };
+        let mut expected = serde_json::to_string(&(&entity.metadata.id, &entity.data))?;
+        for (from, to) in &replacements {
+            expected = expected.replace(from.as_str(), to);
+        }
+        let expected: serde_json::Value = serde_json::from_str(&expected)?;
+        let actual = serde_json::to_value((&copy.metadata.id, &copy.data))?;
+        if expected != actual {
+            differences.push(format!("{locator}: its fields differ from the source"));
+        }
+        if copy.metadata.revision != entity.metadata.revision {
+            differences.push(format!("{locator}: its revision differs from the source"));
+        }
+    }
+    if copied.len() != held.len() {
+        differences.push(format!(
+            "the export holds {} artifacts and the source {}",
+            copied.len(),
+            held.len()
+        ));
+    }
+    Ok(differences)
 }

@@ -75,21 +75,20 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 # **once**, here, because two manifests each naming their own pin is how two kernels came to be
 # compiled into this workspace (0.5.2 under the markdown backend, 0.8.0 under the SQLite one) for
 # two releases. One line per crate, one pin for every runtime crate; `cargo xtask deps` (the gate's
-# `dep-check`) fails if the lockfile ever says otherwise — it has no such rule for `eventlog`, so
-# the two `eventlog` lines below move with the runtime ones by hand or the lockfile carries two.
+# `dep-check`) fails if the lockfile ever says otherwise, for the `eventlog` lines as well.
 # These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
-# reproducible and upgrades reversible across the kernel and every provider. The revisions below
-# are the commits Entity Runtime 0.19.0 and Eventlog 0.3.0 were released from.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33", features = ["file", "sync-bridge"] }
-entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "13f88d982f8ac90651e4023bdf6286332d042b33" }
-eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "ac6b1731654329d32f1e3c9cf164fefad6a5b46a" }
-eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "ac6b1731654329d32f1e3c9cf164fefad6a5b46a" }
+# reproducible and upgrades reversible across the kernel and every provider.
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4", features = ["file", "sync-bridge", "tree"] }
+entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
+eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
+eventlog-tree = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

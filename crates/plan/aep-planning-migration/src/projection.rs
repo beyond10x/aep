@@ -77,6 +77,11 @@ pub struct StagedProjection {
 }
 
 impl StagedProjection {
+    /// The directory the documents were rendered into.
+    pub fn directory(&self) -> &Path {
+        &self.stage
+    }
+
     pub fn inventory_digest(&self) -> ProjectionInventoryDigestV1 {
         self.inventory_digest
     }
@@ -330,16 +335,26 @@ impl FileProjectionPublisher {
                 captured_markdown_files(complete.snapshot())?,
             )
         };
+        let tree = self
+            .session
+            .as_ref()
+            .is_some_and(aep_backend_eventlog::AuthoritySession::is_tree);
         let preserved_foreign_paths = preserve_foreign(
             &self.projection_root,
             &stage,
             &owned,
             &known_watermarks,
             &captured_owned,
+            tree,
         )?;
         let inventory_digest =
             projection_inventory_digest(&owned).map_err(|_| ProjectionError::NotPublished)?;
-        write_projection_ownership(&stage, authority_snapshot, &owned)?;
+        // A tree authority's projection keeps no store-wide ownership file: every write would
+        // rewrite it, and two branches that both wrote would conflict on it. Every document the
+        // projection renders is the projection's, which the render check holds instead.
+        if !tree {
+            write_projection_ownership(&stage, authority_snapshot, &owned)?;
+        }
         let watermark = ProjectionWatermarkV1 {
             format: ProjectionWatermarkFormatV1,
             authority: self.authority.clone(),
@@ -711,11 +726,29 @@ fn preserve_foreign(
     new_owned: &[(String, Vec<u8>, u32)],
     known_watermarks: &[(AuthoritySnapshotIdV1, ProjectionInventoryDigestV1)],
     captured_owned: &BTreeMap<String, Vec<u8>>,
+    tree: bool,
 ) -> Result<u64, ProjectionError> {
     if !current.exists() {
         return Ok(0);
     }
-    let old_owned =
+    // Over a tree authority every planning document under the root is the projection's own: it
+    // is rendered from the typed entities on every publication and holds no foreign content.
+    let tree_owned = || -> Result<BTreeSet<String>, ProjectionError> {
+        let mut files = Vec::new();
+        collect_files(current, current, &mut files)?;
+        Ok(files
+            .into_iter()
+            .map(|(relative, _)| relative)
+            .filter(|relative| {
+                std::path::Path::new(relative)
+                    .extension()
+                    .is_some_and(|extension| extension == "md")
+            })
+            .collect())
+    };
+    let old_owned = if tree {
+        tree_owned()?
+    } else {
         match read_projection_ownership_for_rebuild(current, known_watermarks, new_owned)? {
             Some(owned) => owned
                 .into_iter()
@@ -728,7 +761,8 @@ fn preserve_foreign(
                 })
                 .map(|(path, _)| path.clone())
                 .collect(),
-        };
+        }
+    };
     let new_owned = new_owned
         .iter()
         .map(|(path, _, _)| path.clone())

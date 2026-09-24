@@ -31,6 +31,8 @@ aep-conformance.workspace = true
 # The transactional provider, so the suites run through this adapter over the store the SQLite
 # backend is an instantiation of — and not only over `MemoryStore`, which cannot lose a write.
 entity-sqlite.workspace = true
+# The repository's own lifecycle documents are YAML; the definition test reads every one of them.
+serde_yaml.workspace = true
 
 [lints]
 workspace = true

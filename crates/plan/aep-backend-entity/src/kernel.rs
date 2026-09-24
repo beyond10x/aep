@@ -238,7 +238,21 @@ pub fn definition_for(
         "lifecycle": { "initial": lifecycle.initial.as_str(), "states": states },
         "operations": operations,
     });
+    parse_definition(document)
+}
 
+/// The lifecycle's definition as the JSON document [`definition_for`] parses, for a caller that
+/// extends it — the typed planning definition in `crate::definition` adds fields and an edit.
+pub(crate) fn lifecycle_document(
+    kind: Option<&ArtifactKind>,
+    lifecycle: &ArtifactLifecycle,
+) -> Result<serde_json::Value, String> {
+    let definition = definition_for(kind, lifecycle)?;
+    serde_json::to_value(definition).map_err(|error| error.to_string())
+}
+
+/// Parse a definition document, naming the pin to raise when the kernel does not read it.
+pub(crate) fn parse_definition(document: serde_json::Value) -> Result<EntityDefinition, String> {
     serde_json::from_value(document).map_err(|error| {
         format!(
             "this lifecycle names something the kernel this build pins does not know: {error}. \

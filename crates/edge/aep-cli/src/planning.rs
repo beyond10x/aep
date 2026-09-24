@@ -244,6 +244,9 @@ pub(crate) enum Plan {
         authority_root: PathBuf,
         projection_root: PathBuf,
         authority: aep_domain::project::PlanningAuthority,
+        /// Set for an `aep.project/3` tree authority: the repository whose lifecycles give the
+        /// kinds it records as typed entities. `None` for an `aep.project/2` file authority.
+        tree: Option<PathBuf>,
     },
 }
 
@@ -342,6 +345,21 @@ impl Plan {
                 authority_root: path.clone(),
                 projection_root: projection.clone(),
                 authority: authority.clone(),
+                tree: None,
+            },
+            StoreConfig::EventlogTree {
+                path,
+                projection,
+                authority,
+            } => Self::Eventlog {
+                authority_root: path.clone(),
+                projection_root: projection.clone(),
+                authority: authority.clone(),
+                tree: Some(
+                    engineering
+                        .parent()
+                        .map_or_else(|| engineering.to_owned(), Path::to_owned),
+                ),
             },
         })
     }
@@ -394,6 +412,31 @@ impl Plan {
             Self::Eventlog {
                 authority_root,
                 authority,
+                tree: Some(repository),
+                ..
+            } => {
+                let lifecycles = StoreLocation::at(None, Some(repository.clone()))
+                    .lifecycles()
+                    .with_context(|| {
+                        format!("loading the lifecycles {} records typed", repository.display())
+                    })?
+                    .lifecycles()
+                    .clone();
+                Some(PlanBackend::Eventlog(
+                    aep_backend_eventlog::open_tree(
+                        authority_root.clone(),
+                        authority.logical_scope.clone(),
+                        authority.tenant.clone(),
+                        authority.stream_identity.clone(),
+                        lifecycles,
+                    )
+                    .map_err(|error| anyhow::anyhow!("{error}"))?,
+                ))
+            }
+            Self::Eventlog {
+                authority_root,
+                authority,
+                tree: None,
                 ..
             } => Some(PlanBackend::Eventlog(
                 aep_backend_eventlog::open(
@@ -509,6 +552,7 @@ fn describe_config(store: &aep_domain::project::StoreConfig) -> String {
         StoreConfig::Postgres { url } => format!("postgres: {}", redact(url)),
         StoreConfig::Hybrid { .. } => "hybrid".to_owned(),
         StoreConfig::Eventlog { path, .. } => format!("eventlog: {}", path.display()),
+        StoreConfig::EventlogTree { path, .. } => format!("eventlog tree: {}", path.display()),
     }
 }
 
@@ -1020,6 +1064,7 @@ where
         authority_root,
         projection_root,
         authority: selected,
+        ..
     } = &opened.plan
     else {
         return Ok(None);
@@ -1325,6 +1370,35 @@ fn evidence_from_events(
 pub(crate) enum ArtifactCommand {
     /// Create a plan item, and write it.
     New(NewArgs),
+    /// Render the projection of an `aep.project/3` tree store from its authority.
+    ///
+    /// Every write renders it already; this is for a projection a merge or an interrupted command
+    /// left behind its authority, which `validate --strict` reports as S5.
+    Render {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+    },
+    /// Join a plan item that two merged branches both changed, in an `aep.project/3` tree store.
+    ///
+    /// After `git merge`, an item both branches wrote has two heads and refuses every ordinary
+    /// write. This records one merge decision over every head that keeps the content of `--first`,
+    /// or of the one head whose files the `--onto` revision holds. Nothing is deleted: the other
+    /// branch's decisions stay in the history and are printed, so what is still wanted can be
+    /// issued again. The projection is re-rendered, which clears the item's `.md` conflict.
+    Resolve {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `story:passkey-login`.
+        id: String,
+        /// The digest of the head to keep.
+        #[arg(long)]
+        first: Option<String>,
+        /// The revision whose head is kept when `--first` is not given.
+        #[arg(long, default_value = "origin/main")]
+        onto: String,
+    },
     /// Move a plan item to another status, if its kind's lifecycle permits.
     ///
     /// Refused moves are printed with **every** status the artifact could have moved to instead,
@@ -1881,6 +1955,11 @@ pub(crate) enum ArtifactCommand {
         /// read against the clock **here**, at the edge, and the store decides nothing about it.
         #[arg(long, value_name = "DAYS", default_value_t = OUTCOME_DAYS)]
         outcome_within: u64,
+        /// For an `aep.project/3` tree store: the revision the authority is held to, so a file it
+        /// committed that was since deleted or rewritten, other than by redaction, is a problem.
+        /// A pull request's check passes its target branch, such as `origin/main`.
+        #[arg(long, value_name = "REVISION")]
+        against: Option<String>,
     },
     /// List the artifact kinds, marking the ones that are planning rather than output.
     ///
@@ -2033,6 +2112,18 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         .transpose()?;
     match command {
         ArtifactCommand::New(args) => create(&args),
+        ArtifactCommand::Resolve {
+            store,
+            id,
+            first,
+            onto,
+        } => resolve_fork(&store, &id, first.as_deref(), &onto),
+        ArtifactCommand::Render { store } => {
+            let opened = open(&store.location, true)?;
+            publish_tree_projection(&opened)?;
+            println!("rendered the projection");
+            Ok(ExitCode::SUCCESS)
+        }
         ArtifactCommand::Move {
             store,
             id,
@@ -2139,7 +2230,8 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             store,
             strict,
             outcome_within,
-        } => validate(&store, strict, outcome_within),
+            against,
+        } => validate(&store, strict, outcome_within, against.as_deref()),
         ArtifactCommand::History { store, id } => history(&store, &id),
         ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
@@ -2190,6 +2282,8 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
     match command {
         ArtifactCommand::New(args) => Some(&args.store.location),
         ArtifactCommand::Move { store, .. }
+        | ArtifactCommand::Resolve { store, .. }
+        | ArtifactCommand::Render { store }
         | ArtifactCommand::Relate { store, .. }
         | ArtifactCommand::Unrelate { store, .. }
         | ArtifactCommand::Body { store, .. }
@@ -6298,11 +6392,17 @@ fn print_review_value(table: &ReviewValueTable) {
 /// `story:completion-needs-evidence`'s recorded position — a store somebody is working in must be
 /// able to hold a status closed on an assertion, and a gate must be able to refuse one — so the
 /// caller who wants the second says so rather than the tool deciding for both.
-fn validate(args: &StoreArgs, strict: bool, outcome_within: u64) -> Result<ExitCode> {
+fn validate(
+    args: &StoreArgs,
+    strict: bool,
+    outcome_within: u64,
+    against: Option<&str>,
+) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let registry = args.lifecycles()?;
     let mut summary = findings(&opened, &registry, &args.repository_root());
     summary.without_an_outcome = reviews_without_an_outcome(&opened, outcome_within);
+    summary.problems.extend(tree_findings(&opened, against)?);
 
     match args.format {
         Format::Text => print_validation(&summary, strict),
@@ -6349,6 +6449,7 @@ fn graph_problems(
 /// `repository_root` is the repository the plan sits in, and it is a parameter rather than
 /// something derived here because it decides which workspace manifest names the members a
 /// cross-repository relation may point at.
+#[allow(clippy::too_many_lines)] // Every rule over one opened plan, in the order they are reported.
 pub(crate) fn findings(
     opened: &Opened,
     registry: &aep_engine::Registry,
@@ -6402,10 +6503,14 @@ pub(crate) fn findings(
     // to no watermark the authority holds was changed by something that was not a command. It is
     // the fact `plan store verify` reports as `projection_drift`, asked here so that `validate`
     // neither invents drift from the frozen journal nor stops seeing the real kind.
+    // A tree authority keeps no watermark inventory to hold the projection to: its documents are
+    // held to a fresh render instead (`tree_findings`, S5). This check opens a file authority, and
+    // pointing it at a tree would write a file store into the tree's directory.
     if let Plan::Eventlog {
         authority_root,
         projection_root,
         authority,
+        tree: None,
     } = &opened.plan
     {
         if let Err(disagreement) =
@@ -9351,4 +9456,315 @@ pub(crate) struct ServedRefusal {
     /// What the would-be store would have reported.
     #[serde(skip_serializing_if = "Option::is_none")]
     finding: Option<String>,
+}
+
+/// `aep plan artifact resolve`.
+fn resolve_fork(args: &StoreArgs, id: &str, first: Option<&str>, onto: &str) -> Result<ExitCode> {
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::entity::EntityLocator;
+
+    let id = artifact_id(id)?;
+    let opened = open(&args.location, true)?;
+    let Plan::Eventlog {
+        authority_root,
+        tree: Some(repository),
+        ..
+
+    } = &opened.plan
+    else {
+        bail!("`resolve` joins a fork in an `aep.project/3` tree store, and this plan is not one");
+    };
+    let PlanBackend::Eventlog(plan) = opened.backend()? else {
+        bail!("an Eventlog plan opened a backend of another kind");
+    };
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let entity = block_on(QueryService::resolve(plan, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+    let entity_id = entity.to_string();
+    let heads = plan
+        .with_store(|store| store.heads_of(&entity_id))
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    if heads.len() < 2 {
+        bail!("`{id}` has not forked; there is nothing to resolve");
+    }
+    let first = if let Some(first) = first {
+        first.to_owned()
+    } else {
+            let listing = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repository)
+                .args(["ls-tree", "-r", "--name-only", onto, "--"])
+                .arg(authority_root.strip_prefix(repository).unwrap_or(authority_root))
+                .output()
+                .with_context(|| format!("listing {onto} with git"))?;
+            if !listing.status.success() {
+                bail!(
+                    "`git ls-tree {onto}` failed; fetch it, or name the head to keep with \
+                     `--first` (heads: {})",
+                    heads.join(", ")
+                );
+            }
+            let listed = String::from_utf8_lossy(&listing.stdout);
+            let held: Vec<&String> = heads
+                .iter()
+                .filter(|head| listed.lines().any(|line| line.ends_with(&format!("/{head}.json"))))
+                .collect();
+            match held.as_slice() {
+                [only] => (*only).clone(),
+                [] => bail!(
+                    "no head of `{id}` is in {onto}; name the one to keep with `--first` \
+                     (heads: {})",
+                    heads.join(", ")
+                ),
+                _ => bail!(
+                    "every head of `{id}` is in {onto}; name the one to keep with `--first` \
+                     (heads: {})",
+                    heads.join(", ")
+                ),
+            }
+    };
+    let outcome = plan
+        .with_store(|store| store.resolve(&entity_id, &first, &now_at_the_edge()))
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    publish_tree_projection(&opened)?;
+
+    println!(
+        "resolved {id}: kept head {} at revision {}, joined {} heads",
+        outcome.first,
+        outcome.revision,
+        outcome.heads.len()
+    );
+    for record in &outcome.not_carried {
+        println!("  not carried over: {record}");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The rules only a tree authority has, as problems: its files (`eventlog verify` V1–V5, and V2
+/// against `against`), an artifact two branches forked (S3), a document that is not its render
+/// (S5) and an absolute home path in any committed planning file (S9).
+fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> {
+    let Plan::Eventlog {
+        authority_root,
+        projection_root,
+        authority: selected,
+        tree: Some(repository),
+    } = &opened.plan
+    else {
+        return Ok(Vec::new());
+    };
+    let mut problems = Vec::new();
+
+    let scratch = std::env::temp_dir().join(format!(
+        "aep-validate-{}-{}",
+        std::process::id(),
+        authority_root.display().to_string().len()
+    ));
+    let base = match against {
+        Some(revision) => {
+            let relative = authority_root.strip_prefix(repository).unwrap_or(authority_root);
+            Some(materialize(repository, revision, relative, &scratch)?.join(relative))
+        }
+        None => None,
+    };
+    for finding in aep_backend_eventlog::verify_tree(authority_root, base.as_deref()) {
+        problems.push(format!(
+            "{}: {} ({})",
+            finding.rule,
+            finding.detail,
+            finding.path.display()
+        ));
+    }
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    let Some(PlanBackend::Eventlog(plan)) = opened.plan.open_backend()? else {
+        return Ok(problems);
+    };
+    let forked = plan
+        .with_store(aep_backend_eventlog::EventlogPlanningStore::forked)
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    for (id, heads) in forked {
+        problems.push(format!(
+            "S3: entity {id} has forked into {} heads; run `aep plan artifact resolve` on it",
+            heads.len()
+        ));
+    }
+
+    let authority = aep_contract::migration::AuthorityCoordinateV1 {
+        logical_scope: aep_contract::migration::AuthorityValueV1::new(&selected.logical_scope)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        tenant: aep_contract::migration::AuthorityValueV1::new(&selected.tenant)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        stream_identity: aep_contract::migration::AuthorityValueV1::new(
+            &selected.stream_identity,
+        )
+        .map_err(|error| anyhow::anyhow!(error))?,
+    };
+    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
+    let snapshot = session
+        .complete_snapshot()
+        .map_err(|error| anyhow::anyhow!(error))?;
+    let (snapshot_id, _) = aep_planning_migration::authority_snapshot_identity(&authority, &snapshot)
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    let staged = aep_planning_migration::FileProjectionPublisher::over_session(
+        session,
+        authority,
+        projection_root.clone(),
+    )
+    .stage(snapshot_id)
+    .map_err(|error| anyhow::anyhow!("rendering the projection: {error:?}"))?;
+    let rendered = markdown_files(staged.directory());
+    let written = markdown_files(projection_root);
+    let _ = std::fs::remove_dir_all(staged.directory());
+    for (path, bytes) in &rendered {
+        match written.get(path) {
+            Some(held) if held == bytes => {}
+            Some(_) => problems.push(format!("S5: {path} is not the render of its artifact")),
+            None => problems.push(format!("S5: {path} is missing from the projection")),
+        }
+    }
+    for path in written.keys() {
+        if !rendered.contains_key(path) {
+            problems.push(format!("S5: {path} renders no artifact"));
+        }
+    }
+
+    for root in [authority_root, projection_root] {
+        for (path, bytes) in all_files(root) {
+            if let Some(found) = home_path_in(&String::from_utf8_lossy(&bytes)) {
+                problems.push(format!("S9: {path} carries the home path `{found}`"));
+            }
+        }
+    }
+    Ok(problems)
+}
+
+/// The files of `relative` at `revision`, extracted under `into`.
+fn materialize(
+    repository: &Path,
+    revision: &str,
+    relative: &Path,
+    into: &Path,
+) -> Result<PathBuf> {
+    use std::process::{Command, Stdio};
+    std::fs::create_dir_all(into).with_context(|| format!("creating {}", into.display()))?;
+    let mut archive = Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .args(["archive", revision, "--"])
+        .arg(relative)
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("running git archive")?;
+    let stdout = archive.stdout.take().context("git archive's output")?;
+    let status = Command::new("tar")
+        .arg("-x")
+        .arg("-C")
+        .arg(into)
+        .stdin(stdout)
+        .status()
+        .context("running tar")?;
+    let archived = archive.wait().context("waiting for git archive")?;
+    if !archived.success() || !status.success() {
+        bail!("{revision} could not be read for `--against`; fetch it first");
+    }
+    Ok(into.to_owned())
+}
+
+/// Every `.md` file under `root`, by its path relative to it.
+fn markdown_files(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    all_files(root)
+        .into_iter()
+        .filter(|(path, _)| Path::new(path).extension().is_some_and(|ext| ext == "md"))
+        .collect()
+}
+
+/// Every file under `root`, by its path relative to it. A writer's lock file and the tree's
+/// `.cache/` are not history and are never committed.
+fn all_files(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut found = std::collections::BTreeMap::new();
+    let mut stack = vec![root.to_owned()];
+    while let Some(directory) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path != root.join(".cache") {
+                    stack.push(path);
+                }
+            } else if path.file_name().is_some_and(|name| name != ".lock") {
+                let relative = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string();
+                found.insert(relative, std::fs::read(&path).unwrap_or_default());
+            }
+        }
+    }
+    found
+}
+
+/// The first absolute home path in `text`, in any of the spellings S9 names.
+fn home_path_in(text: &str) -> Option<String> {
+    for prefix in ["/home/", "/Users/", "c:\\users\\", "C:\\Users\\"] {
+        if let Some(start) = text.find(prefix) {
+            let rest = &text[start + prefix.len()..];
+            let user: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.').collect();
+            if !user.is_empty() && rest[user.len()..].starts_with(['/', '\\']) {
+                return Some(format!("{prefix}{user}"));
+            }
+        }
+    }
+    for literal in ["/root/", "~/", "$HOME/"] {
+        if text.contains(literal) {
+            return Some(literal.to_owned());
+        }
+    }
+    None
+}
+
+/// Render a tree store's projection from its authority, through the plan's own session.
+fn publish_tree_projection(opened: &Opened) -> Result<()> {
+    let Plan::Eventlog {
+        projection_root,
+        authority: selected,
+        tree: Some(_),
+        ..
+    } = &opened.plan
+    else {
+        bail!("only an `aep.project/3` tree store renders its projection this way");
+    };
+    let PlanBackend::Eventlog(plan) = opened.backend()? else {
+        bail!("an Eventlog plan opened a backend of another kind");
+    };
+    let authority = aep_contract::migration::AuthorityCoordinateV1 {
+        logical_scope: aep_contract::migration::AuthorityValueV1::new(&selected.logical_scope)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        tenant: aep_contract::migration::AuthorityValueV1::new(&selected.tenant)
+            .map_err(|error| anyhow::anyhow!(error))?,
+        stream_identity: aep_contract::migration::AuthorityValueV1::new(
+            &selected.stream_identity,
+        )
+        .map_err(|error| anyhow::anyhow!(error))?,
+    };
+    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
+    aep_planning_migration::FileProjectionPublisher::over_session(
+        session,
+        authority,
+        projection_root.clone(),
+    )
+    .publish_current()
+    .map_err(|error| anyhow::anyhow!("rendering the projection: {error:?}"))?;
+    Ok(())
 }

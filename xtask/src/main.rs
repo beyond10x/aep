@@ -697,10 +697,13 @@ fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
 /// # What is checked, and from where
 ///
 /// `Cargo.lock`, not the manifests. The lockfile is what is actually compiled, and a manifest that
-/// names a tag is only a request. Two rules, each with the offending lines in the message:
+/// names a tag is only a request. Three rules, each with the offending lines in the message:
 ///
 /// 1. no `entity-*` package appears at two versions;
-/// 2. every `entity-*` package comes from the same source — one tag, one commit.
+/// 2. every `entity-*` package comes from the same source — one tag, one commit;
+/// 3. every `eventlog-*` package comes from the same source. AEP pins Eventlog beside Entity
+///    Runtime, which pins its own; two sources here means AEP's pin is not the one the pinned
+///    Entity Runtime commit was built and tested against.
 ///
 /// The prefix is `entity-` because that is what `entity-runtime` publishes; the check would fire
 /// for any crate somebody added under that name, which is the right answer — a crate that is not
@@ -786,6 +789,8 @@ fn deps(root: &Path) -> Result<()> {
         );
     }
 
+    one_eventlog_pin(&lock)?;
+
     let names: Vec<&str> = by_name.keys().copied().collect();
     let (source, _) = sources.iter().next().expect("at least one source");
     println!(
@@ -793,6 +798,40 @@ fn deps(root: &Path) -> Result<()> {
         names.join(", "),
         packages[0].version
     );
+    Ok(())
+}
+
+/// Rule 3 of [`deps`]: every `eventlog-*` package comes from one source.
+///
+/// # Errors
+///
+/// When two sources are locked, naming each and the packages it supplies.
+fn one_eventlog_pin(lock: &str) -> Result<()> {
+    let eventlog = locked_packages(lock, EVENTLOG_PREFIX);
+    let mut eventlog_sources: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for package in &eventlog {
+        eventlog_sources
+            .entry(package.source.as_str())
+            .or_default()
+            .insert(package.name.as_str());
+    }
+    if eventlog_sources.len() > 1 {
+        let listed: Vec<String> = eventlog_sources
+            .iter()
+            .map(|(source, names)| {
+                format!(
+                    "  {} from {source}",
+                    names.iter().copied().collect::<Vec<_>>().join(", ")
+                )
+            })
+            .collect();
+        bail!(
+            "the `eventlog-*` crates come from more than one `eventlog` pin:\n{}\n\
+             AEP's Eventlog pin must be the one its Entity Runtime pin names, so the store the \
+             kernel was tested against is the store this workspace compiles.",
+            listed.join("\n")
+        );
+    }
     Ok(())
 }
 
@@ -853,6 +892,8 @@ struct LockedPackage {
 /// What `entity-runtime` publishes its crates as.
 const ENTITY_RUNTIME_PREFIX: &str = "entity-";
 const ESS_MODEL_PREFIX: &str = "ess-";
+/// What `eventlog` publishes its crates as.
+const EVENTLOG_PREFIX: &str = "eventlog-";
 
 /// A test asserting the same thing as one in another crate is not evidence of a difference.
 ///
@@ -2252,6 +2293,28 @@ source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
         );
         assert!(
             error.contains("tag=0.9.1") && error.contains("tag=0.8.0"),
+            "and both pins: {error}"
+        );
+    }
+
+    #[test]
+    fn an_eventlog_pin_other_than_the_runtimes_is_refused_naming_both() {
+        let lock = format!(
+            "{ONE_PIN}\n[[package]]\nname = \"eventlog-core\"\nversion = \"0.4.0\"\n\
+             source = \"git+https://github.com/beyond10x/eventlog?rev=aaa#aaa\"\n\n\
+             [[package]]\nname = \"eventlog-core\"\nversion = \"0.3.0\"\n\
+             source = \"git+https://github.com/beyond10x/eventlog?rev=bbb#bbb\"\n"
+        );
+        let root = lockfile_in_a_root(&lock);
+        let error = deps(root.path())
+            .expect_err("two eventlog pins must not pass")
+            .to_string();
+        assert!(
+            error.contains("more than one `eventlog` pin"),
+            "the message names the finding: {error}"
+        );
+        assert!(
+            error.contains("rev=aaa") && error.contains("rev=bbb"),
             "and both pins: {error}"
         );
     }

@@ -15,6 +15,7 @@ dependencies = [
  "entity-store",
  "serde",
  "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -23,6 +24,8 @@ version = "0.57.0"
 dependencies = [
  "aep-backend-entity",
  "aep-backend-eventlog",
+ "aep-backend-memory",
+ "aep-conformance",
  "aep-contract",
  "aep-domain",
  "entity-core",
@@ -31,8 +34,12 @@ dependencies = [
  "entity-store",
  "eventlog-core",
  "eventlog-file",
+ "eventlog-tree",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+ "tempfile",
  "time",
  "tokio",
 ]
@@ -528,6 +535,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+
+[[package]]
 name = "chacha20"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -696,8 +709,8 @@ dependencies = [
 
 [[package]]
 name = "entity-core"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "serde",
  "serde_json",
@@ -705,8 +718,8 @@ dependencies = [
 
 [[package]]
 name = "entity-eventlog"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-executor",
@@ -714,6 +727,7 @@ dependencies = [
  "entity-store",
  "eventlog-core",
  "eventlog-file",
+ "eventlog-tree",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -723,8 +737,8 @@ dependencies = [
 
 [[package]]
 name = "entity-executor"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -733,8 +747,8 @@ dependencies = [
 
 [[package]]
 name = "entity-postgres"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-query",
@@ -746,8 +760,8 @@ dependencies = [
 
 [[package]]
 name = "entity-query"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -757,8 +771,8 @@ dependencies = [
 
 [[package]]
 name = "entity-remote"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -768,8 +782,8 @@ dependencies = [
 
 [[package]]
 name = "entity-sqlite"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -780,8 +794,8 @@ dependencies = [
 
 [[package]]
 name = "entity-store"
-version = "0.19.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=13f88d982f8ac90651e4023bdf6286332d042b33#13f88d982f8ac90651e4023bdf6286332d042b33"
+version = "0.21.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
 dependencies = [
  "entity-core",
  "fs2",
@@ -796,9 +810,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "errno"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
 name = "eventlog-core"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/eventlog?rev=ac6b1731654329d32f1e3c9cf164fefad6a5b46a#ac6b1731654329d32f1e3c9cf164fefad6a5b46a"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
 dependencies = [
  "serde",
  "serde_json",
@@ -810,11 +834,37 @@ dependencies = [
 
 [[package]]
 name = "eventlog-file"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/eventlog?rev=ac6b1731654329d32f1e3c9cf164fefad6a5b46a#ac6b1731654329d32f1e3c9cf164fefad6a5b46a"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
 dependencies = [
  "eventlog-core",
  "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "time",
+ "tokio",
+]
+
+[[package]]
+name = "eventlog-sqlite"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
+dependencies = [
+ "eventlog-core",
+ "nix",
+ "rusqlite",
+ "serde_json",
+ "time",
+ "tokio",
+]
+
+[[package]]
+name = "eventlog-tree"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
+dependencies = [
+ "eventlog-core",
+ "eventlog-sqlite",
  "serde_json",
  "sha2 0.10.9",
  "time",
@@ -849,6 +899,12 @@ dependencies = [
  "regex-automata",
  "regex-syntax",
 ]
+
+[[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "find-msvc-tools"
@@ -1135,6 +1191,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-raw-sys"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1180,6 +1242,18 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys",
+]
+
+[[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]
@@ -1621,6 +1695,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustix"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys",
+ "windows-sys",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1855,6 +1942,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.3.4",
+ "once_cell",
+ "rustix",
+ "windows-sys",
 ]
 
 [[package]]
