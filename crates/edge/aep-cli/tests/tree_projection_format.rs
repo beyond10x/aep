@@ -237,4 +237,14 @@ fn render_upgrades_a_projection_an_older_release_published_last() {
         "a second render refused the projection the first one published: {}",
         text(&again)
     );
+    let left: Vec<String> = std::fs::read_dir(&engineering)
+        .expect("the .engineering directory reads")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("aep-stage"))
+        .collect();
+    assert!(
+        left.is_empty(),
+        "render left a stage directory beside the projection: {left:?}"
+    );
 }

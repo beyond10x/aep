@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `render` over a store an older release published last no longer leaves a
+  `planning.aep-stage-*` directory beside the projection. 0.59.1 re-staged the older watermark
+  to compare it and did not remove that stage when it fell through to publishing.
+
 ## [0.59.1] — 2026-09-24
 
 ### Fixed
