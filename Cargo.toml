@@ -78,14 +78,14 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 # `dep-check`) fails if the lockfile ever says otherwise, for the `eventlog` lines as well.
 # These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
 # reproducible and upgrades reversible across the kernel and every provider.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4", features = ["file", "sync-bridge", "tree"] }
-entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
+entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f", features = ["file", "sync-bridge", "tree"] }
+entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
 eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
 eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
 eventlog-tree = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }

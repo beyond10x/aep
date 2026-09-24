@@ -18,6 +18,8 @@
 #[cfg(feature = "test-support")]
 pub mod counting;
 #[cfg(test)]
+mod evidence_edit_tests;
+#[cfg(test)]
 mod retained_snapshot_tests;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -1486,6 +1488,16 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
                             found: Some(logical),
                         });
                     }
+                    // A tree store records an artifact of a kind no lifecycle declares under this
+                    // generic type, and what it observes about one is an observation too.
+                    if self.typed.is_some()
+                        && instance.entity == aep_backend_entity::STORED_AS
+                        && instance.revision == logical
+                    {
+                        actions.push(observation_action(&subject, physical, member)?);
+                        pending_revisions.insert(subject, (logical, physical));
+                        continue;
+                    }
                     let next = physical.checked_add(1).ok_or_else(|| {
                         StoreError::Backend("planning storage revision exhausted".to_owned())
                     })?;
@@ -1567,6 +1579,11 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
                         expected: member.commit.expect,
                         found: Some(logical),
                     });
+                }
+                if instance.revision == logical {
+                    actions.push(observation_action(&subject, physical, member)?);
+                    pending.insert(subject, (logical, physical));
+                    return Ok(());
                 }
                 let before = match pending.get(&subject) {
                     Some(_) => None,
@@ -1763,13 +1780,18 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
         self.retire();
         outcome.map_err(execution_error)?;
 
-        // What only the other heads reached: every record not an ancestor of `first`.
+        // What only the other heads reached: every decision not an ancestor of `first`. An
+        // observation is carried over whichever branch recorded it (design § 7 step 2) — the merge
+        // decision follows every tip, and its evidence is still read and counted — so none is
+        // listed for the operator to issue again, which would record it twice.
         let mut parents: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut ids: BTreeMap<String, String> = BTreeMap::new();
         for record in &history.records {
             if let Some(lineage) = &record.lineage {
                 parents.insert(lineage.digest.clone(), lineage.parents.clone());
-                ids.insert(lineage.digest.clone(), record.entry.record_id().to_owned());
+                if matches!(record.entry, RecordedEntry::Decision(_)) {
+                    ids.insert(lineage.digest.clone(), record.entry.record_id().to_owned());
+                }
             }
         }
         let mut reached = BTreeSet::new();
@@ -1997,18 +2019,36 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
                 }
             }
         }
-        for record in history.records {
-            let position = record.position.store;
-            if let RecordedEntry::Decision(commit) = record.entry {
-                if let Some(document) = decision_document(&commit) {
-                    events.extend(
-                        document
-                            .events
-                            .into_iter()
-                            .map(|event| (Some(position), event)),
-                    );
+        // Evidence a tree store recorded before it was an observation is in an `edit`'s document,
+        // and evidence recorded since is an observation's: both are read.
+        let records: Vec<_> = history
+            .records
+            .into_iter()
+            .map(|record| {
+                let position = record.position.store;
+                let lineage = record.lineage.map(|lineage| *lineage);
+                match record.entry {
+                    RecordedEntry::Decision(commit) => (
+                        position,
+                        lineage,
+                        false,
+                        decision_document(&commit).map(|document| document.events),
+                    ),
+                    RecordedEntry::Observation(observation) => {
+                        (position, lineage, true, observation_events(&observation))
+                    }
                 }
-            }
+            })
+            .collect();
+        for at in observed_order(&records) {
+            let (position, _, _, recorded) = &records[at];
+            events.extend(
+                recorded
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .map(|event| (Some(*position), event)),
+            );
         }
         Ok(events)
     }
@@ -2447,6 +2487,121 @@ pub(crate) fn decision_document(commit: &RecordedCommit) -> Option<PlanningDocum
         entity_core::DecisionCommand::LegacyImport => return None,
     };
     serde_json::from_value(document).ok()
+}
+
+/// What an observation about an artifact records: the events AEP wrote about it, which a decision
+/// would otherwise carry in its `document`.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ObservationDocument {
+    events: Vec<DomainEvent>,
+}
+
+/// A write that leaves AEP's revision of an artifact where it was — evidence about it, or a
+/// relation starting at it — as an Entity Runtime observation at the artifact's current revision
+/// (design § 4.1). It is not a decision, so it advances no revision, and on a tree store it makes
+/// no head: evidence on one branch and a move on another merge into one artifact.
+fn observation_action(
+    subject: &Subject,
+    physical: u64,
+    member: &PlanningCommit,
+) -> Result<BatchAction, StoreError> {
+    let record = serde_json::to_value(ObservationDocument {
+        events: member.commit.decision.record.events.clone(),
+    })
+    .map_err(|error| StoreError::Backend(format!("encoding an observation: {error}")))?;
+    let envelope = member
+        .recording
+        .seal(record)
+        .map_err(|error| StoreError::Backend(format!("recording an observation: {error}")))?;
+    Ok(BatchAction::Observe(RecordedObservation {
+        entity: subject.entity.clone(),
+        id: subject.id.clone(),
+        revision: physical,
+        envelope,
+    }))
+}
+
+/// One subject's records as [`EventlogPlanningStore::events_in_store_order`] reads them: the
+/// store position, the lineage, whether it is an observation, and the events it carries.
+type ReadRecord = (
+    u64,
+    Option<entity_store::asynchronous::Lineage>,
+    bool,
+    Option<Vec<DomainEvent>>,
+);
+
+/// The order a subject's records are read in: decisions in store order, and each observation just
+/// before the first decision that follows it in lineage.
+///
+/// What a move rested on is what the store had admitted when the move was made. On a tree store
+/// merged from two branches, store order puts evidence one branch recorded before a move the other
+/// branch made without it; lineage says which decisions an observation was known to. An
+/// observation no decision follows is read last, as recorded since the last move. A history
+/// without lineage throughout — a store that does not branch — keeps store order, which on such a
+/// store is the same thing.
+fn observed_order(records: &[ReadRecord]) -> Vec<usize> {
+    if records.iter().any(|(_, lineage, _, _)| lineage.is_none()) {
+        return (0..records.len()).collect();
+    }
+    let parents: BTreeMap<&str, &[String]> = records
+        .iter()
+        .filter_map(|(_, lineage, _, _)| lineage.as_ref())
+        .map(|lineage| (lineage.digest.as_str(), lineage.parents.as_slice()))
+        .collect();
+    let ancestors_of = |digest: &str| {
+        let mut reached = BTreeSet::new();
+        let mut stack: Vec<&str> = parents
+            .get(digest)
+            .into_iter()
+            .flat_map(|p| p.iter())
+            .map(String::as_str)
+            .collect();
+        while let Some(next) = stack.pop() {
+            if reached.insert(next) {
+                stack.extend(
+                    parents
+                        .get(next)
+                        .into_iter()
+                        .flat_map(|p| p.iter())
+                        .map(String::as_str),
+                );
+            }
+        }
+        reached
+    };
+    let mut order = Vec::with_capacity(records.len());
+    let mut pending: Vec<usize> = Vec::new();
+    for (at, (_, lineage, observation, _)) in records.iter().enumerate() {
+        if *observation {
+            pending.push(at);
+            continue;
+        }
+        let digest = lineage
+            .as_ref()
+            .map_or("", |lineage| lineage.digest.as_str());
+        let ancestors = ancestors_of(digest);
+        pending.retain(|&held| {
+            let known = records[held]
+                .1
+                .as_ref()
+                .is_some_and(|lineage| ancestors.contains(lineage.digest.as_str()));
+            if known {
+                order.push(held);
+            }
+            !known
+        });
+        order.push(at);
+    }
+    order.extend(pending);
+    order
+}
+
+/// The events an observation this backend recorded carries, or `None` for one it did not record.
+fn observation_events(observation: &RecordedObservation) -> Option<Vec<DomainEvent>> {
+    serde_json::from_value::<ObservationDocument>(observation.envelope.record.clone())
+        .ok()
+        .map(|document| document.events)
 }
 
 fn context_from_recording(recording: &Recording) -> EventlogOperationContext {

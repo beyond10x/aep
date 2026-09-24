@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: story:evidence-is-an-observation-on-a-tree-store
 kind: story
-status: draft
+status: implemented
 title: Evidence on a tree store is an observation that neither advances the revision nor forks the artifact
 relations:
 - decomposes: epic:planning-on-entity-runtime
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 ## Outcome
 

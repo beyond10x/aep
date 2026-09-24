@@ -21,6 +21,19 @@ belongs in the commit message or in `docs/design/`.
   each to every string it carries over, after the derived identities and before the home paths.
   The map it writes records them, and the projection comparison reads them as explained.
 
+### Changed
+
+- On a tree store (`aep.project/3`), `aep plan artifact evidence` records an Entity Runtime
+  observation at the artifact's current revision instead of an `edit` of it, and so does any
+  other write that leaves the artifact's revision unchanged, such as a relation starting at it.
+  Evidence on one branch and a move on another now merge into one artifact instead of a fork
+  that `validate` reports as S3. `move`, `explain`, `history` and `show` count evidence from
+  the observations and from the `edit`s a tree store recorded before, so existing stores read
+  as they did. The projection's bytes do not change: the rendered revision is AEP's, which
+  evidence never advanced.
+- Entity Runtime is pinned at 0.22.0 (`9ee145e8`), whose tree stores make only decisions
+  heads. Eventlog stays at 0.4.0.
+
 ### Fixed
 
 - `aep plan store export` rewrites inside the legacy bytes an `aep.project/2` store keeps

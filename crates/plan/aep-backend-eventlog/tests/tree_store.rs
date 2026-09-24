@@ -299,3 +299,216 @@ fn two_branches_that_each_created_a_story_merge_into_a_store_with_both() {
         "an identity was counted rather than derived: {stories:?}"
     );
 }
+
+fn run(backend: &TreeBackend, name: &str, payload: aep_domain::command::Command) {
+    use aep_contract::command::CommandService;
+    block_on(backend.execute(envelope(name, payload)))
+        .unwrap_or_else(|error| panic!("`{name}` was refused: {error}"));
+}
+
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    aep_contract::testing::block_on(future)
+}
+
+/// The id of the one story `name` names.
+fn story_id(backend: &TreeBackend, name: &str) -> aep_domain::entity::EntityId {
+    use aep_domain::entity::EntityLocator;
+    block_on(aep_contract::query::QueryService::resolve(
+        backend,
+        &EntityLocator::new("planning", "store", "story", name).unwrap(),
+    ))
+    .expect("the story resolves")
+}
+
+fn record_test_result(backend: &TreeBackend, name: &str, id: &aep_domain::entity::EntityId) {
+    use aep_domain::command::{Command, RecordEvidence};
+    use aep_domain::entity::EntityRef;
+    run(
+        backend,
+        name,
+        Command::RecordEvidence(RecordEvidence {
+            target: EntityRef::new(id.clone()),
+            kind: "test_result".to_owned(),
+            source: "task check".to_owned(),
+            reference: None,
+            review: None,
+            outcome: None,
+        }),
+    );
+}
+
+fn move_to(backend: &TreeBackend, name: &str, id: &aep_domain::entity::EntityId, to: &str) {
+    use aep_domain::command::{Command, MoveStatus};
+    use aep_domain::entity::EntityRef;
+    run(
+        backend,
+        name,
+        Command::MoveStatus(MoveStatus {
+            target: EntityRef::new(id.clone()),
+            to: to.to_owned(),
+            expected_revision: None,
+            decided_on: None,
+        }),
+    );
+}
+
+/// What the typed entity's own history holds: its decisions' revisions, and its observations'.
+fn typed_history(backend: &TreeBackend, id: &aep_domain::entity::EntityId) -> (Vec<u64>, Vec<u64>) {
+    use entity_store::HistoryProvider;
+    backend.with_store(|store| {
+        let decisions = store
+            .records("story", &id.to_string())
+            .expect("the decisions read")
+            .into_iter()
+            .map(|record| record.record.result.revision)
+            .collect();
+        let observations = store
+            .observations("story", &id.to_string())
+            .expect("the observations read")
+            .into_iter()
+            .map(|observation| observation.revision)
+            .collect();
+        (decisions, observations)
+    })
+}
+
+/// How many `test_result` records the history AEP reads counts for the story.
+fn test_results(backend: &TreeBackend, id: &aep_domain::entity::EntityId) -> usize {
+    backend
+        .with_store(|store| store.events_in_store_order("aep.entity", &id.to_string()))
+        .expect("the events read")
+        .into_iter()
+        .filter(|(_, event)| {
+            event.args.get("kind") == Some(&serde_json::json!("test_result"))
+                && event.args.get("source") == Some(&serde_json::json!("task check"))
+        })
+        .count()
+}
+
+#[test]
+fn evidence_on_a_tree_store_is_an_observation_that_leaves_the_revision_where_it_was() {
+    let directory = tempfile::tempdir().expect("directory");
+    let backend = provisioned(directory.path(), story_lifecycles());
+    create_story(&backend, "observed");
+    let id = story_id(&backend, "observed");
+    let (before, _) = typed_history(&backend, &id);
+
+    record_test_result(&backend, "evidence-observed", &id);
+
+    let (decisions, observations) = typed_history(&backend, &id);
+    assert_eq!(
+        decisions, before,
+        "recording evidence was a decision on the story, which advanced its revision"
+    );
+    assert_eq!(
+        observations,
+        vec![*before.last().expect("the creation")],
+        "the evidence is not one observation at the story's current revision"
+    );
+    assert_eq!(
+        test_results(&backend, &id),
+        1,
+        "the history AEP reads does not hold the evidence the observation recorded"
+    );
+    drop(backend);
+    assert_eq!(
+        test_results(&reopen(directory.path()), &id),
+        1,
+        "a second process does not read the evidence the first recorded"
+    );
+}
+
+#[test]
+fn evidence_on_one_branch_and_a_move_on_another_merge_without_forking_the_story() {
+    let base = tempfile::tempdir().expect("directory");
+    {
+        let backend = provisioned(base.path(), story_lifecycles());
+        create_story(&backend, "both");
+    }
+    let ours = tempfile::tempdir().expect("directory");
+    let theirs = tempfile::tempdir().expect("directory");
+    merge_into(base.path(), ours.path());
+    merge_into(base.path(), theirs.path());
+    let id = story_id(&reopen(ours.path()), "both");
+    record_test_result(&reopen(ours.path()), "evidence-both", &id);
+    move_to(&reopen(theirs.path()), "move-both", &id, "proposed");
+    merge_into(theirs.path(), ours.path());
+
+    let merged = reopen(ours.path());
+    let forked = merged
+        .with_store(aep_backend_eventlog::EventlogPlanningStore::forked)
+        .expect("the heads read");
+    assert!(
+        forked.is_empty(),
+        "evidence on one branch and a move on the other forked the story: {forked:?}"
+    );
+    assert_eq!(
+        test_results(&merged, &id),
+        1,
+        "the merge lost the evidence one branch recorded"
+    );
+    move_to(&merged, "move-both-on", &id, "active");
+    let entity = block_on(aep_contract::query::QueryService::get(
+        &merged,
+        &aep_domain::entity::EntityRef::new(id),
+        aep_contract::consistency::QueryConsistency::default(),
+    ))
+    .expect("the story reads");
+    assert_eq!(
+        entity
+            .data
+            .as_map()
+            .and_then(|data| data.get("status"))
+            .and_then(aep_domain::node::Node::as_text),
+        Some("active"),
+        "a write after the merge did not land on the one head both branches joined"
+    );
+}
+
+#[test]
+fn evidence_about_an_artifact_of_a_kind_no_lifecycle_declares_is_an_observation_too() {
+    use aep_domain::command::{Command, CreateEntity};
+    use aep_domain::entity::{EntityLocator, EntityType};
+    use aep_domain::node::Node;
+    use entity_store::HistoryProvider;
+
+    let directory = tempfile::tempdir().expect("directory");
+    let backend = provisioned(directory.path(), story_lifecycles());
+    let mut data = std::collections::BTreeMap::new();
+    data.insert("status".to_owned(), Node::from("open"));
+    data.insert("title".to_owned(), Node::from("Blocked"));
+    run(
+        &backend,
+        "create-blocker",
+        Command::CreateEntity(CreateEntity {
+            entity_type: EntityType::parse("aep.fixture-blocker/v1").unwrap(),
+            locator: EntityLocator::new("planning", "store", "fixture-blocker", "blocked").unwrap(),
+            data: Node::Map(data),
+        }),
+    );
+    let id = block_on(aep_contract::query::QueryService::resolve(
+        &backend,
+        &EntityLocator::new("planning", "store", "fixture-blocker", "blocked").unwrap(),
+    ))
+    .expect("the blocker resolves");
+    let decisions = |backend: &TreeBackend| {
+        backend
+            .with_store(|store| store.records("aep.entity", &id.to_string()))
+            .expect("the decisions read")
+            .len()
+    };
+    let before = decisions(&backend);
+
+    record_test_result(&backend, "evidence-blocker", &id);
+
+    assert_eq!(
+        decisions(&backend),
+        before,
+        "evidence about an artifact recorded under the generic type was a decision"
+    );
+    assert_eq!(
+        test_results(&backend, &id),
+        1,
+        "the history AEP reads does not hold the evidence about the blocker"
+    );
+}
