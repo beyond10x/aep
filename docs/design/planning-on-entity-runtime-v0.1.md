@@ -1,14 +1,15 @@
 # Planning artifacts as Entity Runtime entities on a mergeable Eventlog v0.1
 
-Status: proposed, 2026-09-24. Both review passes are folded in. Once accepted, it supersedes
-`eventlog-planning-authority-v0.1.md` for the planning store. It serves the ESS evolution plan:
+Status: accepted, 2026-09-24 (#17), with the implementation plan approved the same day. It
+supersedes `eventlog-planning-authority-v0.1.md` for the planning store. Released for it:
+Eventlog 0.4.0 and Entity Runtime 0.21.0; recorded as Atlas ADR 0063. It serves the ESS evolution plan:
 
 - ESS lowers to Entity Runtime (ER) definitions;
 - ER decides and records every change;
 - Eventlog persists it (`ESS-EVOLUTION.md` steps 3–5 and line 41).
 
-It needs `ESS-EVOLUTION.md` revision 2, because it reverses `:30` and `:53`, and it needs Atlas ADR
-0063 (§ 13 unit P1).
+It needed `ESS-EVOLUTION.md` revision 2, which amends step 4 (`:33`), step 5 (`:38`) and the
+interfaces (`:49`, `:53`), and Atlas ADR 0063 (§ 13 unit P1). Both exist.
 
 Sources:
 
@@ -52,7 +53,7 @@ Sources:
 | R6 | AEP's 16 suites, ER's recorded-execution suites and Eventlog's conformance pass over `eventlog-tree`; Eventlog's conformance runs filtered by the provider's declared capability profile | the three suites |
 | R7 | measured in a **fresh process**: `list` < 1 s and a single-artifact write < 2 s at 1,000 artifacts | bench (§ 10) |
 | R8 | reading an unchanged store hashes 0 bytes, including in a fresh process; a changed file is hashed once | Part B § B6 |
-| R9 | `validate --strict` is a required check from cutover, and `main` accepts no update that bypasses it | § 8 |
+| R9 | `validate` is a required check from cutover, and `main` accepts no update that bypasses it | § 8 |
 | R10 | each store is exported once, recovery appends included, and passes a history-fidelity check | § 9 |
 | R11 | no committed byte carries an absolute home path, by the same test Gates applies | S9 |
 | R12 | moving to SQLite or Postgres needs no schema change; a forked history is linearized with its origin recorded | round-trip suite |
@@ -93,11 +94,9 @@ Sources:
                                         one ER refusal record per refused command (E-R6), immutable
       groups/<kk>/<key-digest>.json     one per atomic group (= one command), immutable; COMMIT POINT
       blobs/<kk>/<digest>               content-addressed, immutable; used only above the size bound (E-R1)
-    .cache/                             untracked: verified.json, state/<head-set-digest>.json,
-                                        rebuilt inline projections, snapshots keyed by head digest
-    .lock                               untracked: one writer per checkout
-                                        (both ignored through the repository root .gitignore, so V1 sees no
-                                        extra tracked file under state/; review N15)
+    .cache/                             untracked: state/<stamp-digest>.{sqlite,json}, the kept replay
+                                        (§ 6); ignored by its own .cache/.gitignore, and V1 skips it
+    .lock                               untracked: one writer per checkout, skipped by V1 (review N15)
 ```
 
 Verified properties from the review lab:
@@ -130,7 +129,7 @@ There is one ER entity type per artifact kind: `aep.<kind>/1`.
 | fields | the kind's `aep-domain` artifact schema, as ER `FieldKind`s. `body` is `string` with `max_length` 1,048,576 bytes (**inferred** bound; ER has only `max_length`, `definition.rs:503-507`) |
 | identity | natural key `name`, unique within the type |
 | states and transitions | the kind's ladder from the lifecycle YAML, the input `kernel.rs` reads today |
-| evidence | an ER **observation** at the entity's current revision, as today (`aep-backend-entity/src/lib.rs:1116`; `ESS-EVOLUTION.md:30`), so it does not advance the revision. The shell derives the per-kind counts from the observations and passes them as `$args.evidence.<kind>`, as today (`kernel.rs:165-180`). A concurrent `move` and evidence record therefore do not conflict (review N7) |
+| evidence | designed: an ER **observation** at the entity's current revision, as today (`aep-backend-entity/src/lib.rs:1116`; `ESS-EVOLUTION.md:30`), so it does not advance the revision. The shell derives the per-kind counts from the observations and passes them as `$args.evidence.<kind>`, as today (`kernel.rs:165-180`). A concurrent `move` and evidence record therefore do not conflict (review N7). **Built so far: an `edit` of the typed entity**, which advances its revision, so a concurrent `move` and evidence record on two branches fork the artifact. Moving evidence to observations is open work (§ 13, A2 follow-up) |
 | relations | ER `RelationDefinition` + `Ref` fields. Existence is not checked by the kernel (`definition.rs:521-529`); see § 4.2 step 2 |
 
 **Operations: all 11 `aep_domain::command::Command` variants** (`aep-domain/src/command.rs:438-458`).
@@ -334,7 +333,7 @@ and each member's path and digest.
 3. Check each member's expectation against its stream heads. A forked stream accepts only `Merge { heads }` naming every head.
 4. Write each event file: temp file, `fsync`, `rename`.
 5. Write the group file: temp file, `fsync`, `rename`, then `fsync` the directory. **The group rename is the commit point.**
-6. Release the lock. The files just written stay out of `.cache/verified.json` for 2 s (Part B § B3 rule 4).
+6. Release the lock. No state is kept under `.cache/` while any file is less than 2 s old (Part B § B3 rule 4, § 6).
 
 - **Torn write:** an event file whose group file does not exist. Reads ignore it, and `eventlog repair` deletes it; `repair` is the only file deletion.
 - **Git does not stop a torn file** (review L6). The required check V3 does.
@@ -422,7 +421,9 @@ conflict).
 
 No event file is deleted or rewritten.
 
-## 8. `aep plan artifact validate --strict`
+## 8. `aep plan artifact validate` on a tree store
+
+As built, the rules below are problems in plain `validate`, which exits 1 on any of them. `--strict` keeps its existing meaning: it also refuses on the review advisories (a review with no findings block, a review with no recorded outcome). The required check and the pre-push hook therefore run plain `validate`: the stores being cut over carry such advisories from before (17 and 5 in eventlog, 4 and 1 in AEP, the same on `/2` and the tree), and a required `--strict` would be red from its first run.
 
 It runs `eventlog verify` V1–V5 against the merge base with the target, then:
 
@@ -440,11 +441,11 @@ It runs `eventlog verify` V1–V5 against the merge base with the target, then:
 
 **Required, with no bypass** (review H4):
 
-- On every adopting repository, `validate --strict` is a required status check on `main`, and "require branches to be up to date" is on.
+- On every adopting repository, `validate` is a required status check on `main`, and "require branches to be up to date" is on.
 - The ruleset's bypass list is empty for it, and non-PR updates to `main` are refused.
-- A repository pre-push hook runs `validate --strict` for any push that touches `.engineering/`. That covers the bot's direct pushes that `beyond10x/AGENTS.md` admits.
+- A repository pre-push hook runs `validate` for any push that touches `.engineering/`. That covers the bot's direct pushes that `beyond10x/AGENTS.md` admits.
   - `aep plan store install-hooks` installs the hook. Gates only preserves the hook chain; it never runs repository tools (`gates/README.md:21, :31`; review N5).
-  - The hook refuses when the installed `aep` is not the pinned version.
+  - The hook refuses when the installed `aep` is not the version that installed it, and when the pushed commit is not the clean checked-out tree, so the tree validated is the tree pushed.
 - Release cuts in the adopting repositories (`CHANGELOG` commits) go through a PR as well (review N13).
 - "Require up to date" gives "checked tree = merged tree" for PR merges (review Q4).
 
@@ -537,8 +538,8 @@ The sequence below is relative to the in-flight ESS 0.31.0, service-sdk 0.6.0 an
    - `journal.jsonl` and the ownership file removed;
    - `/3` selected;
    - the required check and ruleset;
-   - the Gates baseline move. This is an operator step: the org-secret write needs a personal account (review L3).
-8. Freeze lifted for that repository. The queued writes in `FOLLOW-UP.md` are replayed as ordinary commands.
+   - the Gates baseline move. Review L3 said the org-secret write needs a personal account; that is not tested. The bot tries first, and the operator does it only if GitHub refuses the App. The ruleset change is the bot's: its token reads `bypass_actors` as `[]`, which a token without administration write does not.
+8. Freeze lifted for that repository. The queued writes in `FOLLOW-UP.md` are replayed as ordinary commands. For AEP they include the `test_result` naming its release tag that `cargo xtask release` requires, since the store is frozen when the release is cut.
 
 The uncommitted Gates appended-tail scan is not needed by `eventlog-tree` stores. It stays useful
 for the `eventlog-file` runtime stores and the 26 `/1` repositories.
@@ -622,7 +623,7 @@ generated store.
 | A5 | aep | renderer `aep.planning-md/2`; ownership file removed | `aep-backend-eventlog/`, `aep-planning-migration/src/projection.rs:22, :1862` | A2 | render fixtures; no store-wide file |
 | A6 | aep | `aep.project/3`; `xtask deps` rule 3 | `crates/govern/aep-domain/src/project.rs`, `aep-cli/src/planning.rs:381-410`, `xtask/src/main.rs:712-800` | A2 | old-reader fixture; alias equivalence; rule 3 mutation-tested |
 | A7 | aep | export, `--verify`, home-path map, fixup hook | `aep-cli/src/store_command.rs`, reusing `planning.rs:615-700` | A2, A6 | fidelity on copies of the six stores |
-| A8 | aep + six repositories | `aep plan store install-hooks` (pre-push `validate --strict`, pinned-version check); cutover PRs (§ 9.5 step 7) | `aep-cli/src/store_command.rs`; per repository `.engineering/`, `project.yaml`, CI, ruleset, hook | V4, R6, AEP release | `validate --strict` required, green, no bypass |
+| A8 | aep + six repositories | `aep plan store install-hooks` (pre-push `validate`, pinned-version check); cutover PRs (§ 9.5 step 7) | `aep-cli/src/store_command.rs`; per repository `.engineering/`, `project.yaml`, CI, ruleset, hook | V4, R6, AEP release | `validate` required, green, no bypass |
 | A9 | ess, aep | AEP planning model as ESS spec, lowered | ess + aep | ESS phase C released | lowered definitions equal A1's |
 
 Parallelism:
@@ -669,7 +670,7 @@ was served intact without it.
 
 1. **`.cache/verified.json`**, written **under the writer lock** after a verification. It holds `{format, store, epoch, verifier_version, stamp_time, files: {path → {dev, ino, len, mtime_ns, ctime_ns}}, content_digest}`.
    - For `eventlog-file`: `events.jsonl`, `manifest.json` and the store directory. The directory's `mtime` moves when `append.json` or `privacy.json` appears (review M2).
-   - For `eventlog-tree`: every event and group file plus each directory; the fold goes in `.cache/state/<head-set-digest>.json`.
+   - For `eventlog-tree`, as built (§ 6): no `verified.json`. The fold goes in `.cache/state/<stamp-digest>.{sqlite,json}`, named by every history file's stamp, the projectors and the program; an open whose files all match loads it and anything else replays everything. Per-file verification of only the moved files (rule 2's last bullet) is not built.
 2. **Open, any process:**
    - `flock`;
    - `stat` the intent names, as `journal.rs:538` does;

@@ -195,6 +195,26 @@ impl StoreLocation {
     }
 }
 
+/// The lifecycle document tree the project at `repository` names in its `protocols` source,
+/// materialized where it is a pinned Git source. The repository itself is the right tree only when
+/// the project says `protocols: .`; a tree store must record every kind the project governs, so
+/// reading the wrong tree would record none of them typed.
+///
+/// # Errors
+///
+/// When the project's configuration cannot be read or its source cannot be materialized.
+pub(crate) fn protocols_of(repository: &Path) -> Result<PathBuf> {
+    aep_project::project::load_paths(repository)
+        .map(|paths| paths.protocols)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| {
+            format!(
+                "reading the protocol document source of {}",
+                repository.join(project_directory()).display()
+            )
+        })
+}
+
 /// An explicit legacy path cannot promote an Eventlog projection back to authority, even when
 /// empty or deleted. Inspect the selected path's project, rather than the caller's working
 /// directory, and also inspect the canonical target of an existing symbolic link.
@@ -415,7 +435,7 @@ impl Plan {
                 tree: Some(repository),
                 ..
             } => {
-                let lifecycles = StoreLocation::at(None, Some(repository.clone()))
+                let lifecycles = StoreLocation::at(None, Some(protocols_of(repository)?))
                     .lifecycles()
                     .with_context(|| {
                         format!("loading the lifecycles {} records typed", repository.display())

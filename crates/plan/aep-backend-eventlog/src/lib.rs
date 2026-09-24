@@ -1538,7 +1538,11 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
                     recording: member.recording.clone(),
                 }));
                 let mut physical = 1;
-                if kinds.initial(kind).as_deref() != Some(status.as_str()) {
+                // A body that names no status reaches the contract as `unknown`, which no ladder
+                // has; the entity then starts at its initial rung and the document keeps the word.
+                if kinds.initial(kind).as_deref() != Some(status.as_str())
+                    && kinds.has_status(kind, &status)
+                {
                     actions.push(BatchAction::Execute(ExecuteRequest {
                         subject: subject.clone(),
                         expected_revision: physical,

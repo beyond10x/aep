@@ -11,6 +11,14 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- A tree store reads its lifecycles from the project's `protocols` source, which may be a pinned
+  Git source, rather than from the repository directory, and types every kind AEP names: a kind
+  with no ladder of its own is held to the one the registry resolves or the permissive one. A
+  `<type>-blocker` stays a generic contract entity, and `export` names every kind it kept that
+  way.
+- `aep plan store install-hooks` writes a pre-push hook that runs `validate` for a push
+  touching `.engineering/`, pinned to the `aep` version that installed it, for the per-repository
+  cutover to tree stores.
 - `aep.project/3` keeps the plan as typed Entity Runtime entities on an `eventlog-tree` store
   that version control merges:
   - `aep plan store init-tree` creates one;
