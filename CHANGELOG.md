@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.59.0] — 2026-09-24
+
 ### Added
 
 - A tree store (`aep.project/3`) renders its projection as `format: aep.planning-md/2`, which
