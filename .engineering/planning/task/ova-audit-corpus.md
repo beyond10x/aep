@@ -68,4 +68,4 @@ audit degrades into a document read for plausibility.
 `.engineering/checks/check-corpus.sh`. C1–C9 are its rows.
 
 C4 is the load-bearing one: it expands the globs at check time and diffs both directions. C8 runs it
-against a copy of the tree under `${TMPDIR:-$HOME/.cache/claude-tmp}` with one file added.
+against a copy of the tree under `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6` with one file added.

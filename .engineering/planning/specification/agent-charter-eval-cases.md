@@ -228,7 +228,7 @@ Open Questions and is not the default.
 - **Never part of `task check`.** The live mode reaches the Claude API: network and money. The gate
   stays hermetic, exactly as the two evals beside it are kept out of it.
 - **Never `/tmp`.** The scratch directory is created under `$TMPDIR` (falling back to
-  `$HOME/.cache/claude-tmp`), survives the run, and its path is printed — as both siblings do.
+  `home-path:sha256:595d337ee531b7ec6c250fa3c256dc56ee9257b464b24ab72a1e33a3a5c17aa2`), survives the run, and its path is printed — as both siblings do.
 - **Model and turn bounds are environment overrides** with defaults, in the naming its siblings use
   (`EVAL_MODEL`, `EVAL_MAX_TURNS`), so a reviewer of this eval does not have to learn a second
   vocabulary.

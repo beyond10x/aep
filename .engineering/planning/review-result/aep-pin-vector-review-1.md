@@ -11,11 +11,11 @@ revision: 2
 # Independent verification pass 1 — task:aep-pin-verify-once-vector
 
 ```
-unit: task:aep-pin-verify-once-vector — AEP 8970d5baeb0f0299556d828ad9553bc1b23abcc5 and Entity Runtime 97d6edfb5cccdadbe142399dc31da7d5d851a529, in worktree ~/.local/state/worktree/trees/b10x/aep/ess-evolution-aep-pin-review-1-20260921 (detached, no tracked file modified)
+unit: task:aep-pin-verify-once-vector — AEP 8970d5baeb0f0299556d828ad9553bc1b23abcc5 and Entity Runtime 97d6edfb5cccdadbe142399dc31da7d5d851a529, in worktree home-path:sha256:90529f187410f43cb1a3b38a939179dc6d7d7de6c02377061eb5b040945f642c (detached, no tracked file modified)
 verdict: red
 cases: executed 2083→2091, red 1
 origin: introduced 1, pre-existing 1, undecided 1
-wrote-outside-worktree: 4 roots — this report, ~/.cache/ess-wave-v2/u5r1/tmp/, ~/.cache/ess-wave-v2/u5r1/base/, ~/.cache/ess-wave-v2/u5r1/er/; full list in §7
+wrote-outside-worktree: 4 roots — this report, home-path:sha256:87d12a4e4e63b7eded48304e6e00de9c8f6a9e4339c88a3d5b990664ba4af6ec, home-path:sha256:04c8d4dcbd367d8c367602d193c24cdecb6e637f8634ced792b71fe3e7fffc7a, home-path:sha256:74f8802e4dfb830cc771c3220fc3f466181956fa94eb17f0213791c7407e2ba0; full list in §7
 needs-coordinator: yes
 ```
 
@@ -35,7 +35,7 @@ acceptance statement naming an Entity Runtime commit that would reproduce the sp
 ## 1. The bound — `git --no-pager diff --stat` and `git status --porcelain`
 
 ```console
-$ cd ~/.local/state/worktree/trees/b10x/aep/ess-evolution-aep-pin-review-1-20260921
+$ cd home-path:sha256:90529f187410f43cb1a3b38a939179dc6d7d7de6c02377061eb5b040945f642c
 $ git --no-pager diff --stat
 $ git status --porcelain
 ?? .engineering/.aep-planning-writer-0384d94fbc8610ffe413df718e965d5c46a558d8c739f7b003489e94033b0beb.lock
@@ -66,7 +66,7 @@ empty. No `git` write command (`commit`, `add`, `stash`, `switch`, `checkout`, `
 ## 2. The cases I added, each run alone before any suite
 
 Eight cases in two files, all written before anything was run. `TMPDIR` =
-`~/.cache/ess-wave-v2/u5r1/tmp` (38 bytes, inside the 45-byte writer-control socket
+`home-path:sha256:90a239329f248d85bf4b55a3f25293da19eaab68eb65e460a4421b2e5368b365` (38 bytes, inside the 45-byte writer-control socket
 budget), `CARGO_NET_OFFLINE=true`, build directory `<worktree>/target`, `CARGO_TARGET_DIR` never
 set.
 
@@ -167,7 +167,7 @@ empty) — I added one test to `dep_tests` in the **scratch copy** of `xtask/src
 the worktree, handing `deps()` a lockfile that carries `eventlog-core` at two commits:
 
 ```console
-$ cd ~/.cache/ess-wave-v2/u5r1/base
+$ cd home-path:sha256:e3cfad9aec9384ab26e22b85eb7fa56d7464d5f85229dc5cbf0e2cc85a75be73
 $ cargo test --locked --offline -p xtask --bin xtask -- --exact --nocapture dep_tests::pin_review_probe_a_lockfile_with_two_eventlog_revs_passes_dep_check
 running 1 test
 entity-runtime is pinned once: entity-core at 0.18.1 (git+https://github.com/beyond10x/entity-runtime?rev=97d6edf#97d6edf)
@@ -181,12 +181,12 @@ EXIT=0
 
 ### Origin, settled by running at the base and never by moving the tree
 
-`git archive 051a19346f5dda4096c292b5b7b738320eb63ad3 | tar -x -C ~/.cache/ess-wave-v2/u5r1/base`,
+`git archive 051a19346f5dda4096c292b5b7b738320eb63ad3 | tar -x -C home-path:sha256:e3cfad9aec9384ab26e22b85eb7fa56d7464d5f85229dc5cbf0e2cc85a75be73`,
 my xtask test file copied in, nothing else changed. No `checkout`, `switch`, `stash`, `branch` or
 `worktree` command was run.
 
 ```console
-$ cd ~/.cache/ess-wave-v2/u5r1/base && cargo test --locked --offline -p xtask --test pin_review_one_git_url_one_rev
+$ cd home-path:sha256:e3cfad9aec9384ab26e22b85eb7fa56d7464d5f85229dc5cbf0e2cc85a75be73 && cargo test --locked --offline -p xtask --test pin_review_one_git_url_one_rev
 running 3 tests
 test the_dependency_guard_constrains_every_git_sourced_package_in_the_lockfile ... FAILED
 test no_workspace_member_hides_a_configuration_behind_a_feature_or_an_optional_dependency ... ok
@@ -433,7 +433,7 @@ The commit is 8970d5baeb0f0299556d828ad9553bc1b23abcc5 (AEP), with Entity Runtim
 
 ## 7. Every path written outside the worktree
 
-All under the assigned scratch `~/.cache/ess-wave-v2/u5r1/`; nothing in `/tmp`.
+All under the assigned scratch `home-path:sha256:08203f0004ed0b461abcdd9ef7019df3b28ec13b75354df312d30c13b860a2b4`; nothing in `/tmp`.
 
 - `tmp/case-a-head.log`, `case-b-head.log`, `case-d-head.log` — the three xtask cases run alone
 - `tmp/case-c1-head.log` … `case-c5-head.log` — the five AEP-edge cases run alone
@@ -478,7 +478,7 @@ them, trimming the fixture sizes, or dropping them is a call I do not get to mak
   verdict: CONFIRMED
   origin: introduced
   message: the entry says a command "no longer pays the whole store for each one" and then gives 218 transactions, 227,452 object reads and 2,863 MB with no before-marker, but the unit's own commit message and its own planning artifact both attribute those three numbers to the v1 provider; no post-pin number is published at all.
-- file: ~/.local/state/worktree/trees/b10x/aep/ess-evolution-aep-migration-20260915/.engineering/planning/task/aep-pin-verify-once-vector.md
+- file: home-path:sha256:3bbe861852c28b47a56c03e96079d6a0f4cdeaf2ba7ca88c8d5e02b15cd5e6fa
   category: acceptance
   severity: warning
   verdict: NEEDS-CHANGE

@@ -13,10 +13,10 @@ unit: task:validate-v2-projection-awareness
 verdict: red
 cases: executed 587→596, red 4
 origin: introduced 4, pre-existing 1, undecided 0
-wrote-outside-worktree: ~/.cache/ess-wave-v2/u1r2/logs/ (11 files), ~/.cache/ess-wave-v2/u1r2/tmp/ (assigned TMPDIR, +60 entries incl. 16 fixture roots), ~/.cache/claude-tmp/claude-1000/-home-timo-beyond10x/c8001a20-4b46-48ad-a4d3-7b494f288184/tasks/bup0902na.output (harness copy of the suite output), and this file
+wrote-outside-worktree: home-path:sha256:38e07107bd2f9bb9559849c037c28606dc203d3cb75fd510dee48f6f29faf090 (11 files), home-path:sha256:86706d42c5fbd252474d2153714afef1ece58aaaf3c6d6818798ab9c3f4801cf (assigned TMPDIR, +60 entries incl. 16 fixture roots), home-path:sha256:93f48363b69afcad4f43778135828bb8ba79a76b4e8812f2826a39101cd31a79 (harness copy of the suite output), and this file
 needs-coordinator: no
 
-Findings cover worktree `~/.local/state/worktree/trees/b10x/aep/ess-evolution-validate-v2-review-2-20260920`,
+Findings cover worktree `home-path:sha256:c501c8dd6de126ec8f3d7563e968c446a131a89596c556ba765b9bacb89718ba`,
 detached at `11cc13e10074eb409e213f2c91e1d1f95cd5231a` (af2af7e74 over base effef5b1a, plus unit 2's correction), plus
 677 test-only lines. Second and last pass; pass 1 is `review-1-report.md` beside this file.
 
@@ -71,7 +71,7 @@ running 1 test
 test strict_validate_reports_a_pre_migration_status_closed_on_an_assertion_on_an_eventlog_plan ... FAILED
 
 thread 'strict_validate_reports_a_pre_migration_status_closed_on_an_assertion_on_an_eventlog_plan' (1675659) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:2129:5:
-a status the Markdown plan reported as closed on an assertion is reported by nothing once the plan is Eventlog: before {"artifacts":1,"closed_on_an_assertion":["story:one reached proposed on an assertion rather than a record — the evidence was claimed, not held"],"files_read":1,"pre_provider":0,"problems":[],"store":"~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1675658-0/.engineering/planning"}, after {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1675658-0/.engineering/state (control-sql/control-sql-tenant/01a0c0b6-4a9a-77cd-8e51-7be187afec47)"} 
+a status the Markdown plan reported as closed on an assertion is reported by nothing once the plan is Eventlog: before {"artifacts":1,"closed_on_an_assertion":["story:one reached proposed on an assertion rather than a record — the evidence was claimed, not held"],"files_read":1,"pre_provider":0,"problems":[],"store":"home-path:sha256:addaa2b201abbb72ed089b764e195e1a980841feeaffb3db1c599a957aa0ddaa"}, after {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:03f23959952593d81a8e69b079795d8d394ac073dedce58e33c0188fa18ddafa (control-sql/control-sql-tenant/01a0c0b6-4a9a-77cd-8e51-7be187afec47)"} 
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 24 filtered out; finished in 2.24s
 EXIT=101
@@ -84,7 +84,7 @@ running 1 test
 test strict_validate_reports_a_post_migration_status_closed_on_an_assertion_on_an_eventlog_plan ... FAILED
 
 thread 'strict_validate_reports_a_post_migration_status_closed_on_an_assertion_on_an_eventlog_plan' (1675775) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:2206:5:
-a governed move made on asserted evidence after the migration is reported by no class: {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1675774-0/.engineering/state (control-sql/control-sql-tenant/01a0c0b6-567b-763f-b55c-1629dd56e92e)"} 
+a governed move made on asserted evidence after the migration is reported by no class: {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:6ea41a17ecacb3dbd1895b9a069cbcf2012e312c7b311f7363a10c1b6947697e (control-sql/control-sql-tenant/01a0c0b6-567b-763f-b55c-1629dd56e92e)"} 
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 24 filtered out; finished in 14.51s
 EXIT=101
@@ -122,7 +122,7 @@ running 1 test
 test strict_validate_reports_a_document_predating_the_journal_on_an_eventlog_plan ... FAILED
 
 thread 'strict_validate_reports_a_document_predating_the_journal_on_an_eventlog_plan' (1676282) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:2513:5:
-assertion `left == right` failed: a document the Markdown plan reported as predating the event log is reported by nothing once the plan is Eventlog — the authority's history of it reads [] : before {"artifacts":2,"files_read":2,"pre_provider":1,"problems":[],"store":"~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1676281-0/.engineering/planning"}, after {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1676281-0/.engineering/state (control-sql/control-sql-tenant/01a0c0b6-8f6f-7118-82df-2a012761711a)"} 
+assertion `left == right` failed: a document the Markdown plan reported as predating the event log is reported by nothing once the plan is Eventlog — the authority's history of it reads [] : before {"artifacts":2,"files_read":2,"pre_provider":1,"problems":[],"store":"home-path:sha256:faf46e5045918ddd72202479d8e1f010123032528b2aaa611434f4e945b2a69c"}, after {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:1fb94f4b468d496c19e6e085ffa68e72ffa203cd14f1dfcd7e5d53245c9480fe (control-sql/control-sql-tenant/01a0c0b6-8f6f-7118-82df-2a012761711a)"} 
   left: Number(0)
  right: 1
 
@@ -137,7 +137,7 @@ running 1 test
 test strict_validate_names_a_pre_journal_review_without_an_outcome_in_some_class_on_an_eventlog_plan ... FAILED
 
 thread 'strict_validate_names_a_pre_journal_review_without_an_outcome_in_some_class_on_an_eventlog_plan' (1676367) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:2590:5:
-a review the journal never recorded and nobody answered is named by no class once the plan is Eventlog — the authority's history of it reads [] : before {"artifacts":2,"files_read":2,"pre_provider":1,"problems":[],"store":"~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1676366-0/.engineering/planning","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]}, after {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/ess-wave-v2/u1r2/tmp/aep-public-writer-control-1676366-0/.engineering/state (control-sql/control-sql-tenant/01a0c0b6-9a1a-73f8-901c-571f5e8f10b8)","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]} 
+a review the journal never recorded and nobody answered is named by no class once the plan is Eventlog — the authority's history of it reads [] : before {"artifacts":2,"files_read":2,"pre_provider":1,"problems":[],"store":"home-path:sha256:56dbef0dd6f7ce3349f885672d59ec62f5905d33b1fc568d4c7ad4165233e351","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]}, after {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:d0e44ed507416ddc0b4d273e3cae132c7b1ed5e369669b18b7d4bd7429b94cab (control-sql/control-sql-tenant/01a0c0b6-9a1a-73f8-901c-571f5e8f10b8)","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]} 
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 24 filtered out; finished in 2.93s
 EXIT=101
@@ -219,7 +219,7 @@ Solo-run logs: `logs/case-1-…` to `logs/case-9-…`.
 ## 4. Suite — after the cases existed
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u1r2/tmp cargo test -p aep-cli --no-fail-fast
+$ TMPDIR=home-path:sha256:854acd7f81c75efc4298f4ca5f600dd65a97d56ac643bcbc67a2d2006388e583 cargo test -p aep-cli --no-fail-fast
 ```
 
 ```
@@ -274,19 +274,19 @@ cases existed. `<after>` = 596 = 587 + 9, so every added case was selected. `tes
 
 ## 6. Paths written outside the worktree
 
-1. `~/.cache/ess-wave-v2/u1r2/logs/` — 11 files: `case-1-asserted-pre.log`, `case-2-asserted-post.log`,
+1. `home-path:sha256:38e07107bd2f9bb9559849c037c28606dc203d3cb75fd510dee48f6f29faf090` — 11 files: `case-1-asserted-pre.log`, `case-2-asserted-post.log`,
    `case-3-review-post.log`, `case-4-two-faults.log`, `case-5-marker-removed.log`, `case-6-pre-provider.log`,
    `case-7-pre-journal-review.log`, `case-8-projection-gone.log`, `case-9-marker-edited.log`,
    `suite-nofailfast.log`, `clippy.log`.
-2. `~/.cache/ess-wave-v2/u1r2/tmp/` — the assigned `TMPDIR`: 295 → 355 entries, 23M in total, of which
+2. `home-path:sha256:86706d42c5fbd252474d2153714afef1ece58aaaf3c6d6818798ab9c3f4801cf` — the assigned `TMPDIR`: 295 → 355 entries, 23M in total, of which
    16 fixture roots are this pass's (red cases panic before their own cleanup):
    `aep-public-writer-control-{1663903,1664042,1666492,1666500,1672460,1672574,1675658,1675774,1676281,1676366}-0`
    and `aep-public-writer-control-1691522-{4,7,9,10,11,13}`. The 8 older roots (pids 1307625–1418061) predate this
    pass.
-3. `~/.cache/claude-tmp/claude-1000/-home-timo-beyond10x/c8001a20-4b46-48ad-a4d3-7b494f288184/tasks/bup0902na.output`
+3. `home-path:sha256:93f48363b69afcad4f43778135828bb8ba79a76b4e8812f2826a39101cd31a79`
    — the harness's copy of the background suite output.
 4. This report, at
-   `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/review-2-report.md`.
+   `home-path:sha256:2483e126ee770c034933292c1a1061d732452b18ec893be4bd847c7b0bc43df7`.
 
 Inside the worktree and outside git's view: `target/` (3.9G, left in place per the brief) and the two
 `.engineering/.aep-planning-writer*.lock` files named in §1. Nothing under `/tmp`. No planning-store write, no

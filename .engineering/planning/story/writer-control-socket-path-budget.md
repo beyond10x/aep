@@ -54,7 +54,7 @@ What that costs, and why it was not obvious:
   set `TMPDIR` to a 114-byte evidence directory and `evidence/c-rehearsal.sh` set it to `<copy
   root>/tmp`, 56 bytes. In both, every governed hold (apply, rebuild, retry) died at custody with an
   empty line and no message, and each was first read as a product failure or a rehearsal failure.
-  Both scripts now derive `TMPDIR` as `$HOME/.cache/<prefix>/<8 hex of the root>` and exit 7 before
+  Both scripts now derive `TMPDIR` as `home-path:sha256:d32eb29340c526b1c728315a6fadfa550c027f54cbc9a8e9f7898aad3d868109>/<8 hex of the root>` and exit 7 before
   the first hold if that path is over 45 bytes. The point for this story: the failure is
   indistinguishable from a real refusal until someone measures the path length.
 

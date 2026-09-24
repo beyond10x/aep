@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:migration-import-costs-one-capture-per-batch
 kind: story
-status: proposed
+status: implemented
 title: The migration import captures the destination once per batch, not once per subject
 relations:
 - serves: vision:O2
@@ -16,7 +16,7 @@ scope:
   path: crates/plan/aep-backend-eventlog/src/lib.rs
 - confidence: cited
   path: crates/plan/aep-planning-migration/src/durable.rs
-revision: 7
+revision: 9
 ---
 ## Outcome
 

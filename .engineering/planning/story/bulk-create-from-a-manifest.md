@@ -16,7 +16,7 @@ revision: 6
 backlog therefore runs it once per item, and every caller that does this has had to write the loop
 itself: `story-migration` in `beyond10x/agentplugins` is a six-step procedure whose fourth step is
 "call `new` once per row of the table you produced in step two", and the migration it drove in
-`sbf/acd` issued 22 of them.
+`an adopting project` issued 22 of them.
 
 The loop is not the hard part. What each caller reimplements is what to do when one of the 22 fails
 — whether to stop, whether to roll back the 14 that landed, and how to report a partial write — and

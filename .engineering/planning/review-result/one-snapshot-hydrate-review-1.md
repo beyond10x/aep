@@ -15,7 +15,7 @@ unit: story:eventlog-store-hydrates-from-one-snapshot — worktree ess-evolution
 verdict: red
 cases: executed 2091→2096, red 3
 origin: introduced 5, pre-existing 0, undecided 0
-wrote-outside-worktree: 10 paths under ~/.cache/ess-wave-v2/u7r1/ plus this report (§6)
+wrote-outside-worktree: 10 paths under home-path:sha256:6a958c039ef955defbc791b3f102be98edfcdd070133c09fccf69bd95206a602 plus this report (§6)
 needs-coordinator: yes
 ```
 
@@ -60,7 +60,7 @@ compare a history value served out of the capture (finding 4).
 
 ## 2. The cases I added, and their output when written
 
-Written before any suite run, each run **alone** first. `TMPDIR=~/.cache/ess-wave-v2/u7r1/tmp`
+Written before any suite run, each run **alone** first. `TMPDIR=home-path:sha256:3e4a9b72d160295d8f30ed16640f0ed308bb7961d3c21971022e2653fda89024`
 (38 bytes), `CARGO_NET_OFFLINE=true`, `CARGO_TARGET_DIR` never set.
 
 ### 2.1 `crates/plan/aep-backend-eventlog/tests/retained_capture_freshness.rs` — new file, 2 cases
@@ -136,7 +136,7 @@ EXIT=101
 was never moved:
 
 ```console
-$ cd ~/.cache/ess-wave-v2/u7r1/base   # git archive 1a5ceda4 | tar -x, plus this one test file
+$ cd home-path:sha256:bcdcdd3a1c6640cec0011d583f8c8409a08c579d7dc0b4ade0b631a3965c4cf7   # git archive 1a5ceda4 | tar -x, plus this one test file
 $ cargo test -p aep-backend-eventlog --test retained_capture_freshness
     Finished `test` profile [unoptimized + debuginfo] target(s) in 15.93s
      Running tests/retained_capture_freshness.rs (target/debug/deps/retained_capture_freshness-ebd7bf677924db49)
@@ -255,7 +255,7 @@ Lane `aep-backend-eventlog`: **executed 8 → 13, red 3, exit 101**. All eight o
 are still green; every red is one I added. The workspace figure in the header is 2091 + 5, derived
 from this measured delta — see `needs-coordinator`.
 
-Full log: `~/.cache/ess-wave-v2/u7r1/logs/lane-final-nff.log`.
+Full log: `home-path:sha256:b50f5a242007581745c2519ebd76f2651d4954a8af19ffac3fd84208ef89be0c`.
 
 ## 4. The four areas the brief named
 
@@ -302,10 +302,10 @@ trade, not a pure regression, and the sub-operator should weigh it as one.
 ### (b) Retirement on every write path — all eight mutations re-applied
 
 Applied one at a time to a **scratch copy** of the tree (`git archive HEAD` into
-`~/.cache/ess-wave-v2/u7r1/mutant`), never to the worktree. Driver
-`~/.cache/ess-wave-v2/u7r1/mutate.py` refuses any anchor that does not match exactly once
+`home-path:sha256:963a240b8cbf91751909642018093687cb1777ee2f8e209c94eb47e20c1f8635`), never to the worktree. Driver
+`home-path:sha256:612dd5daaa4914e286864c628c4f1b0e41b231bea257cd9887290d1756842730` refuses any anchor that does not match exactly once
 and byte-restores the file in a `finally`. Log
-`~/.cache/ess-wave-v2/u7r1/logs/mutations.log`.
+`home-path:sha256:3148823d8293359f9fa549c19a11b4aa66578fe349c441e9231fe0991aa9421b`.
 
 | # | mutation | cases that went red | still killed? |
 |---|---|---|---|
@@ -481,21 +481,21 @@ R2 a three-artifact plan hydrates as one artifact and the acceptance case still 
 ## 7. Every path I wrote outside the worktree
 
 ```
-~/.cache/ess-wave-v2/u7r1/tmp/                            TMPDIR, 38 bytes, assigned
-~/.cache/ess-wave-v2/u7r1/base/                           git archive 1a5ceda4 + one test file + its target/ (origin run)
-~/.cache/ess-wave-v2/u7r1/mutant/                         git archive HEAD + test files + lib.rs.pristine + its target/ (mutation probes)
-~/.cache/ess-wave-v2/u7r1/mutate.py                       the mutation driver
-~/.cache/ess-wave-v2/u7r1/patch_fixture.py                the fixture extension applied to the test file in §1
-~/.cache/ess-wave-v2/u7r1/logs/case-1.log                 case 1 alone, when written
-~/.cache/ess-wave-v2/u7r1/logs/case-2.log                 case 2 alone, when written
-~/.cache/ess-wave-v2/u7r1/logs/case-3.log                 case 3 alone, when written
-~/.cache/ess-wave-v2/u7r1/logs/case-4.log                 case 4 alone, when written
-~/.cache/ess-wave-v2/u7r1/logs/case-5.log                 case 5 alone, when written
-~/.cache/ess-wave-v2/u7r1/logs/base-origin.log            cases 1 and 2 at 1a5ceda4
-~/.cache/ess-wave-v2/u7r1/logs/mutations.log              M1–M8, R1, R2
-~/.cache/ess-wave-v2/u7r1/logs/mutations-r-killcase.log   R1 and R2 with the kill-cases present
-~/.cache/ess-wave-v2/u7r1/logs/lane-final.log             the lane, fail-fast
-~/.cache/ess-wave-v2/u7r1/logs/lane-final-nff.log         the lane, --no-fail-fast (§3)
+home-path:sha256:2f9d191c04ce531102cd74f4fa8e6dec5a3a34f1545f30de2276bc69991ce6bb                            TMPDIR, 38 bytes, assigned
+home-path:sha256:6bf2d39d321d0f6f421f3f6545dcc9f8447606eb8750602c512b7e3e433e98f6                           git archive 1a5ceda4 + one test file + its target/ (origin run)
+home-path:sha256:997a6c6e4579aa78046b2790d8723e47b37f651664b3a6257083330cc90fffc2                         git archive HEAD + test files + lib.rs.pristine + its target/ (mutation probes)
+home-path:sha256:612dd5daaa4914e286864c628c4f1b0e41b231bea257cd9887290d1756842730                       the mutation driver
+home-path:sha256:5cc9f1b0d68e28fb37925292a3265ea4bbd2df240366a297c79c901470a23433                the fixture extension applied to the test file in §1
+home-path:sha256:5de8680bcaa3bd6212aab8311d351941b7a15899efd47ea6f8e810cad4fa76a3                 case 1 alone, when written
+home-path:sha256:b511c8ce72f65e52ed9a1dacbbb99ef28f342aff8bd2a12a4143054de91d4098                 case 2 alone, when written
+home-path:sha256:9ceae7734ae1b51982fb83f7f856dcca14c389e9ee7126a94846b380174473fa                 case 3 alone, when written
+home-path:sha256:a5aa635d1a3b9d9149c590ea09a6055668105e19552b654d1bba145b112d1edd                 case 4 alone, when written
+home-path:sha256:2e0cb5742f05cf82f5e89736e8bad880d4b3dfbd011ac435f87d3303ae270269                 case 5 alone, when written
+home-path:sha256:3c0b022fd44463a3b5e7aeadd0a62da561ba490109112e4595e69df8367295a0            cases 1 and 2 at 1a5ceda4
+home-path:sha256:3148823d8293359f9fa549c19a11b4aa66578fe349c441e9231fe0991aa9421b              M1–M8, R1, R2
+home-path:sha256:d5cd908db6fabf01c87ffc0198b08588743222a7ccd50d2779283706b632ef47   R1 and R2 with the kill-cases present
+home-path:sha256:1d5430bf3230c2018a92e439f6e76ce82b8b0ead516a83f0f0da1b7b93e532c4             the lane, fail-fast
+home-path:sha256:b50f5a242007581745c2519ebd76f2651d4954a8af19ffac3fd84208ef89be0c         the lane, --no-fail-fast (§3)
 .ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-7-one-snapshot-hydrate/review-1-report.md   (this file)
 ```
 

@@ -25,7 +25,7 @@ requires:
 `"status": "failed", "scenarios_total": 24, "scenarios_failed": 12`. The rung counts records. It
 cannot ask that one of them *passed*.
 
-The observation, in `sbf/acd`:
+The observation, in `an adopting project`:
 
 ```console
 $ aep artifact move executable-system-specification:acd-v3 --to conforming
@@ -98,5 +98,5 @@ word that names a verdict.
 
 ## What the affected project did meanwhile
 
-`sbf/acd` moved the artifact back to `validated` and recorded why in its body. It moves by hand,
+`an adopting project` moved the artifact back to `validated` and recorded why in its body. It moves by hand,
 and not while anything is skipped.

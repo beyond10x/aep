@@ -29,8 +29,8 @@ migrated planning store made 218 transactions, 227,452 blob opens, read 2,863 MB
 `task:eventlog-provider-pin-verify-once` carries it into Entity Runtime. AEP pins both directly, so
 neither reaches the qualified binary until this task moves its ten `rev` values.
 
-Both revs exist on no remote. Cargo resolves them from `~/.cargo/git/db/eventlog-3661f9771fa6366c`
-and `~/.cargo/git/db/entity-runtime-98446cf7d1f27fe1` / `-fb33c5846d594547`, into which they have
+Both revs exist on no remote. Cargo resolves them from `home-path:sha256:528a788a7623ec02517dc24f59f3fa8a1f8abd54bfb455b6b6d9b1c17bc858aa`
+and `home-path:sha256:aa5cbac13b0c75610ae13878392c062f0e974e26696f1a582b87052409cc44fb` / `-fb33c5846d594547`, into which they have
 been fetched; every cargo invocation here runs `--offline`.
 
 ## Acceptance

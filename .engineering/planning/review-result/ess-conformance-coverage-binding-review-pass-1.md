@@ -30,12 +30,12 @@ All six snapshot hashes were checked against that manifest. Each full document a
 
 | Owner | Original source | Bytes | SHA256 |
 |---|---|---:|---|
-| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage.md | 73049 | `3443846603fc474a32217310f8e0d1c1885b2117ab9f9c472fde990034d3b5f8` |
-| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/docs/design/review-conformance-coverage-transport.md | 13288 | `6b0e55e00f7d4d35979c3184949d993d15bd3016b510c4eddf05f6394d0073bf` |
-| ess | ~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/.engineering/planning/story/review-conformance-coverage.md | 8098 | `c17f34d79ef3a14cc25713e89017c4c6e79a69b9396cee8946e72fce55f23cc2` |
-| aep | ~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/docs/design/ess-conformance-coverage-evidence.md | 15385 | `e9c0c84f249b5b6a32b69e53ecc16f1ee4f317402bc1e14be934f0de2cce163d` |
-| aep | ~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/.engineering/planning/story/admit-ess-conformance-coverage.md | 10288 | `e43116505aa1073f9a46d68694654a18b727182ad97defc1b7824dc586d4e63d` |
-| atlas | ~/.local/state/worktree/trees/b10x/atlas/wt-90ec680c6073/architecture/adr/0040-ess-complete-selection-evidence.md | 7123 | `d4f5ee85817c1b6518c2a25ad636d95fca2ce149fb02b2bd53e3413506e3e16c` |
+| ess | home-path:sha256:d610381eae78b88c2af2b0b4fc8270a031d804bff428556ebea28f900ba4c4d4 | 73049 | `3443846603fc474a32217310f8e0d1c1885b2117ab9f9c472fde990034d3b5f8` |
+| ess | home-path:sha256:268398418f457389d9cb820036107d2c5edf1de22a92c6ce6eb5af67c0cc6929 | 13288 | `6b0e55e00f7d4d35979c3184949d993d15bd3016b510c4eddf05f6394d0073bf` |
+| ess | home-path:sha256:2e9f66e127badfb2cbde89b0f6ccfa68d9941de86e56b04b411028af6e138b72 | 8098 | `c17f34d79ef3a14cc25713e89017c4c6e79a69b9396cee8946e72fce55f23cc2` |
+| aep | home-path:sha256:8656238c8f4ea05710738a84edb0b47003b6a7af797f3dbc004568d40bf2a0a0 | 15385 | `e9c0c84f249b5b6a32b69e53ecc16f1ee4f317402bc1e14be934f0de2cce163d` |
+| aep | home-path:sha256:8dc0c4f9624ec19685e372cf7c2676ee790b751435aad15a18f42a403da82610 | 10288 | `e43116505aa1073f9a46d68694654a18b727182ad97defc1b7824dc586d4e63d` |
+| atlas | home-path:sha256:7df9269199d348858672ca86bb21e078e238d752856987bca7b5d8e92c024e1e | 7123 | `d4f5ee85817c1b6518c2a25ad636d95fca2ce149fb02b2bd53e3413506e3e16c` |
 
 Snapshots are below this report's `ess/`, `aep/` and `atlas/` directories, at the paths specified verbatim in manifest.json. Baseline heads are ESS `be0eefd7ec125d46bb3b664c4b95b8d638a2b1fe`, AEP `62ef3a73112143453319215b9aa31a6c9626ed5f`, and Atlas `34fa907ff3ffcbdbb6bbf37d4dd674c05904bb20`. Findings refer to the frozen snapshot line numbers and repo-relative paths under the owner named below, not to later coordinator edits.
 

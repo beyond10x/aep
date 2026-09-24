@@ -20,7 +20,7 @@ does not reopen the accepted raw-capture transport or SQL capture decisions.
 
 ## Frozen review basis
 
-- AEP managed tree: `~/.local/state/worktree/trees/b10x/aep/ess-evolution-aep-migration-20260915`
+- AEP managed tree: `home-path:sha256:dfab3982d3e7b6821eb0210b98c1b7622c001f28c8261b27df894ad0540695bd`
 - AEP HEAD: `715e52a88df9abcfcdd35752c09ab64b1e5a3fb3`
 - Accepted owner outcome: `story-body.md`, SHA-256
   `9b2707c1596c6f2f683297aaf240401861ff2fc250b00f6fed9adaabb989cf32`

@@ -42,7 +42,7 @@ tree, and each is required to turn a **named** check red:
 | 8 | repoint a closed verdict from the declaration that settles it to a use site | `citations` |
 | 9 | repoint an open verdict onto the enum head, where a reader reads it as closed | `citations` |
 
-The whole thing runs against a copy under `${TMPDIR:-$HOME/.cache/claude-tmp}`. The real tree is not
+The whole thing runs against a copy under `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`. The real tree is not
 touched.
 
 ## Why
@@ -103,5 +103,5 @@ rather than a hypothetical one; see `task:ova-citations`.
 `.engineering/checks/check-mutation-proof.sh`. M1–M14 are its rows.
 
 It is the only check that runs other checks, and the only one that writes outside the repository. If
-it cannot make a copy — no writable `${TMPDIR:-$HOME/.cache/claude-tmp}` — that is a failed row, not
+it cannot make a copy — no writable `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6` — that is a failed row, not
 a skip.

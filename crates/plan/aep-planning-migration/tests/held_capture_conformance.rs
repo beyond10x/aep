@@ -198,12 +198,33 @@ fn every_file(root: &Path) -> BTreeMap<String, Vec<u8>> {
     found
 }
 
-/// The stage directory `stage` writes for one authority snapshot, beside `projection_root`.
-fn stage_directory(projection_root: &Path, snapshot: AuthoritySnapshotIdV1) -> PathBuf {
-    projection_root.with_extension(format!(
-        "aep-stage-{}",
-        snapshot.0.as_wire().trim_start_matches("sha256:")
-    ))
+/// Two stagings of one authority snapshot at once, as two concurrent `validate` runs make, each
+/// keep their own directory: neither removes or overwrites what the other is reading.
+#[test]
+fn two_stagings_of_one_snapshot_at_once_do_not_share_a_directory() {
+    let fixture = Fixture::new();
+    fixture.create_story();
+    let held = fixture.snapshot();
+    let (identity, _) = authority_snapshot_identity(&fixture.authority, held.snapshot())
+        .expect("authority snapshot identity");
+    let root = fixture.root.join("planning-shared");
+    let publisher = || {
+        FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            root.clone(),
+        )
+    };
+    let first = publisher().stage(identity).expect("first stage");
+    let before = every_file(first.directory());
+    let second = publisher().stage(identity).expect("second stage");
+    assert_ne!(first.directory(), second.directory());
+    assert!(!before.is_empty(), "the first stage rendered nothing");
+    assert_eq!(
+        every_file(first.directory()),
+        before,
+        "the second staging changed the first one's files"
+    );
 }
 
 /// Identity, on **one** authority at **one** instant, over **every** staged byte.
@@ -243,8 +264,8 @@ fn a_held_capture_stages_every_byte_a_fresh_capture_stages() {
         "the inventory digest must not depend on where the capture came from"
     );
 
-    let fresh_files = every_file(&stage_directory(&fresh_root, identity));
-    let seeded_files = every_file(&stage_directory(&seeded_root, identity));
+    let fresh_files = every_file(from_fresh.directory());
+    let seeded_files = every_file(from_seeded.directory());
     assert!(
         fresh_files.keys().any(|name| std::path::Path::new(name)
             .extension()
@@ -293,9 +314,9 @@ fn a_seeded_stage_answers_from_the_capture_and_not_from_the_authority() {
         seeded_root.clone(),
         held,
     );
-    let _staged = seeded.stage(held_identity).expect("seeded stage");
+    let staged = seeded.stage(held_identity).expect("seeded stage");
 
-    let staged_bytes = every_file(&stage_directory(&seeded_root, held_identity));
+    let staged_bytes = every_file(staged.directory());
     let rendered = staged_bytes
         .iter()
         .filter(|(name, _)| {
@@ -331,8 +352,8 @@ fn a_seeded_stage_answers_from_the_capture_and_not_from_the_authority() {
     let current = fixture.snapshot();
     let (current_identity, _) = authority_snapshot_identity(&fixture.authority, current.snapshot())
         .expect("current identity");
-    fresh.stage(current_identity).expect("fresh stage");
-    let fresh_rendered = every_file(&stage_directory(&fresh_root, current_identity))
+    let staged = fresh.stage(current_identity).expect("fresh stage");
+    let fresh_rendered = every_file(staged.directory())
         .iter()
         .filter(|(name, _)| {
             Path::new(name)

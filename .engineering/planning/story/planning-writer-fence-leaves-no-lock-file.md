@@ -17,7 +17,7 @@ persist and every tool that reports "lock file left behind" stops treating it as
 
 ## Why
 
-Observed 2026-09-21 in rehearsal run 3 (wave-validate-v2-20260920, copy `~/.cache/ess-c-reh-3`)
+Observed 2026-09-21 in rehearsal run 3 (wave-validate-v2-20260920, copy `home-path:sha256:33a89503aef363fe2509aefb7752c7e6ad48489f1b2a1c123b1c93dbad486964`)
 and on the real Eventlog planning store after the M4a cutover: two zero-byte files,
 `.engineering/.aep-planning-writer.lock` and `.engineering/.aep-planning-writer-<digest>.lock`,
 absent from the pre-cutover archive, present after the first writer-shaped command.

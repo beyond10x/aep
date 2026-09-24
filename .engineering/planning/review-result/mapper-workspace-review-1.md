@@ -15,7 +15,7 @@ unit: story:migration-mapper-reads-the-declared-workspace — worktree ess-evolu
 verdict: red
 cases: executed 643→655, red 4
 origin: introduced 5, pre-existing 0, undecided 0
-wrote-outside-worktree: 11 paths, all under ~/.cache/ess-wave-v2/u8r1/ — enumerated in part 6
+wrote-outside-worktree: 11 paths, all under home-path:sha256:d23a019c955d32cfe14a63bf49fde7eb438f7db8cbf8fef2b6c2f2053400c967 — enumerated in part 6
 needs-coordinator: yes — finding 1 is an acceptance clause that may not be implementable as written; the choice between correcting the code and correcting the story is not mine
 ```
 
@@ -92,7 +92,7 @@ return value is exactly `ApplyInputs.histories` (`store_command.rs:311→2041→
 destination authority does not receive.
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u8r1/tmp CARGO_NET_OFFLINE=true \
+$ TMPDIR=home-path:sha256:2c97128227ba80cf0787646f8bc7367a5024a8c9a597737ae3f96204756db5d6 CARGO_NET_OFFLINE=true \
   cargo test -p aep-planning-migration --test workspace_crossing_records
    Compiling aep-planning-migration v0.55.0 (…/ess-evolution-mapper-workspace-review-1-20260921/crates/plan/aep-planning-migration)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 16.40s
@@ -299,7 +299,7 @@ nor the reason"), reproduced one level up. `hex:73746f…` decodes to `story/cro
 ## 3. The suite, after the cases existed
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u8r1/tmp CARGO_NET_OFFLINE=true \
+$ TMPDIR=home-path:sha256:2c97128227ba80cf0787646f8bc7367a5024a8c9a597737ae3f96204756db5d6 CARGO_NET_OFFLINE=true \
   cargo test --no-fail-fast -p aep-planning-migration -p aep-cli
 …
      Running unittests src/lib.rs (target/debug/deps/aep_planning_migration-c4fba35e88409efc)
@@ -383,24 +383,24 @@ Covering worktree `ess-evolution-mapper-workspace-review-1-20260921` at commit
 
 ## 6. Every path written outside the worktree
 
-All under `~/.cache/ess-wave-v2/u8r1/`, the assigned scratch. Nothing under `/tmp`;
+All under `home-path:sha256:d23a019c955d32cfe14a63bf49fde7eb438f7db8cbf8fef2b6c2f2053400c967`, the assigned scratch. Nothing under `/tmp`;
 `TMPDIR` was exported to `…/u8r1/tmp` (38 bytes) for every cargo and binary invocation;
 `CARGO_TARGET_DIR` was never set; `CARGO_NET_OFFLINE=true` throughout.
 
 | path | what it is | still there |
 |---|---|---|
-| `~/.cache/ess-wave-v2/u8r1/tmp/` | `TMPDIR` for every cargo run and every `aep` invocation | yes |
-| `~/.cache/ess-wave-v2/u8r1/build.log` | the initial `--no-run` compile | yes |
-| `~/.cache/ess-wave-v2/u8r1/case-a.log` | area (a), the case run alone | yes |
-| `~/.cache/ess-wave-v2/u8r1/case-a2.log` | the inventory case run alone | yes |
-| `~/.cache/ess-wave-v2/u8r1/case-b.log` | area (b), run alone | yes |
-| `~/.cache/ess-wave-v2/u8r1/case-e.log` | areas (d)/(e), run alone | yes |
-| `~/.cache/ess-wave-v2/u8r1/case-int.log` | the invariant-5 case, run alone | yes |
-| `~/.cache/ess-wave-v2/u8r1/base-origin.log` | the origin run at `763d195be` | yes |
-| `~/.cache/ess-wave-v2/u8r1/er-dry.txt`, `el-dry.txt` | the two control-archive dry-runs | yes |
-| `~/.cache/ess-wave-v2/u8r1/suite.log`, `suite2.log` | the suite runs (`suite.log` stopped at the first failing target; `suite2.log` is the `--no-fail-fast` run quoted in part 3) | yes |
-| `~/.cache/ess-wave-v2/u8r1/base/` | the `git archive 763d195be` extraction and its 1.2 GB build directory, including `crates/plan/aep-planning-migration/tests/workspace_crossing_records_at_base.rs` | **deleted** after the origin run |
-| `~/.cache/ess-wave-v2/u8r1/ctl/` | the two verified control-archive extractions | **deleted** after the dry-runs |
+| `home-path:sha256:38e674ffef56bc71b1e64f0df74fd753944e6b0c3ac9cbef83e6425a2014f46f` | `TMPDIR` for every cargo run and every `aep` invocation | yes |
+| `home-path:sha256:ad584a6d2ec484f43137d3a947c2955553af225ee859ae8afff82685878970a9` | the initial `--no-run` compile | yes |
+| `home-path:sha256:835590b751f6c9f79230e5616a7c2afcf2bfaaf57a53109f8439f8070669db76` | area (a), the case run alone | yes |
+| `home-path:sha256:c43311b5d2ed0f1f68f4ab958d5ed61923af83cf96697085a4fee4df2eb7c4e3` | the inventory case run alone | yes |
+| `home-path:sha256:d8e9e2353ee44603ce1775db16ae08f5be8f03a1e7939b893694325aeb7bfe82` | area (b), run alone | yes |
+| `home-path:sha256:d2b43da2b0900c4d7342936dc6ac47eea702e20b48f3560bc50ad4e6a9e809e2` | areas (d)/(e), run alone | yes |
+| `home-path:sha256:a61389989e9e8596f8381c8b27df4f76899aa7574600e878a1301e5094e81d05` | the invariant-5 case, run alone | yes |
+| `home-path:sha256:cab02b15cb642ae406a15aaca8c39c1b5622c757984b3ce37e5799b5c5309a77` | the origin run at `763d195be` | yes |
+| `home-path:sha256:70bc9474dfa5d72a0d9b002e4c9934f08adb1f3363c621795214278129306307`, `el-dry.txt` | the two control-archive dry-runs | yes |
+| `home-path:sha256:e6703f1d7180cc602172bfbc077d538c6a71f78ece6a73462a750b6ec354528a`, `suite2.log` | the suite runs (`suite.log` stopped at the first failing target; `suite2.log` is the `--no-fail-fast` run quoted in part 3) | yes |
+| `home-path:sha256:da836ff767443ea14bd4cad8982650a4065500a15e1f92e3f5040b5b3a4cdc03` | the `git archive 763d195be` extraction and its 1.2 GB build directory, including `crates/plan/aep-planning-migration/tests/workspace_crossing_records_at_base.rs` | **deleted** after the origin run |
+| `home-path:sha256:495113cdc3cc6f9984a7c0ac825895f420a7c8b978efe3db94d6c9967511ec56` | the two verified control-archive extractions | **deleted** after the dry-runs |
 
 Scratch is 17 MB at hand-back. Disk was 29 GiB free at the start, reached a low of 22 GiB, and is
 36 GiB now; it never approached the 20 GiB stop.

@@ -24,6 +24,10 @@ belongs in the commit message or in `docs/design/`.
 - The export comparison replaces inside each string rather than in serialized JSON, so a path
   that JSON escapes is no longer reported as a difference, and a difference now names its JSON
   pointer and the text around it.
+- Two `aep plan artifact validate` runs on one tree store at once no longer fail each other. Each
+  staged its render of the projection in a directory named by the authority snapshot alone, so
+  one removed the stage the other was reading and reported every artifact as unrendered, or
+  refused with `NotPublished`. A stage directory now also carries the process and a counter.
 
 ## [0.58.0] — 2026-09-24
 

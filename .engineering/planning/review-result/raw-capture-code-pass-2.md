@@ -23,7 +23,7 @@ needs-coordinator: route the introduced pending-batch refusal finding for final 
 ```
 
 The worktree diff is test-only. `git diff --check` exited zero. The retained patch is
-`~/beyond10x/.ess-evolution/waves/0005-aep-migration/raw-capture-review-2/0007-test-only.diff`
+`home-path:sha256:cf9e32bab74a73f4931c08f1b029756501dfa6d053302a161c497d5cbdeb3496`
 with SHA-256 `147116a6ec40bafc14ceb66de3f0c564d49dc868f8e58cfb9ea452dd0206758b`.
 The existing four-case adversarial file was not edited and retains the coordinator-supplied SHA-256
 `45565b05cdc28324b6dc4c9aa7566de0279d0ec5a31c49eb0464edba71ef78b9`.
@@ -120,7 +120,7 @@ The finding covers corrected submitted commit `b3e29e4fab23a62d3d0e2de433f123225
 6. Paths written outside the worktree
 
 - `/var/tmp/ess-evolution-aep-raw-capture-review-2-20260915/` is the assigned TMPDIR and is empty after execution.
-- `~/beyond10x/.ess-evolution/waves/0005-aep-migration/raw-capture-review-2/` contains exactly `0001-pending-batch-refusal.command`, `.log`, `.exit`; `0002-affected-contract-schema.command`, `.log`, `.exit`; `0003-scoped-rustfmt.command`, `.log`, `.exit`; `0004-scoped-rustfmt-restored.command`, `.log`, `.exit`; `0005-source-examination.command`, `.log`, `.exit`; `0006-final-state.command`, `.log`, `.exit`; `0007-test-only-patch.command`, `.log`, `.exit`; `0007-test-only.diff`; and `review-report.md`.
+- `home-path:sha256:1b12b290c88a95dbc41ae7b073cc7d63691a55897501b81899881c5a3fc23c2c` contains exactly `0001-pending-batch-refusal.command`, `.log`, `.exit`; `0002-affected-contract-schema.command`, `.log`, `.exit`; `0003-scoped-rustfmt.command`, `.log`, `.exit`; `0004-scoped-rustfmt-restored.command`, `.log`, `.exit`; `0005-source-examination.command`, `.log`, `.exit`; `0006-final-state.command`, `.log`, `.exit`; `0007-test-only-patch.command`, `.log`, `.exit`; `0007-test-only.diff`; and `review-report.md`.
 
 The only build output is tree-local `target/` at 593,415,368 bytes. Final available space was
 20,317,724,672 bytes, above the 8 GiB stop threshold. All commands completed synchronously and no

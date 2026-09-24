@@ -23,7 +23,7 @@ needs-coordinator: route four introduced findings for correction and the require
 ```
 
 The diff is test-only. `git diff --check` exited zero. The retained patch is
-`~/beyond10x/.ess-evolution/waves/0005-aep-migration/raw-capture-review-1/0009-test-only.diff`.
+`home-path:sha256:038d910a86149a1a09c47bc86ff47fbd74e95c1f12637e0461e35bc0a96296d8`.
 
 2. Cases added
 
@@ -131,7 +131,7 @@ No repository acquisition/provider caller exists yet because the accepted unit d
 6. Paths written outside the worktree
 
 - `/var/tmp/ess-evolution-aep-raw-capture-review-1-20260915/` (assigned TMPDIR; empty after execution).
-- `~/beyond10x/.ess-evolution/waves/0005-aep-migration/raw-capture-review-1/` containing exactly: `0000-pre-execution.command`, `0000-pre-execution.exit`; `0001-known-method-preflight.command`, `.log`, `.exit`; `0002-root-coordinate-refusal.command`, `.log`, `.exit`; `0003-foreign-node-refusal.command`, `.log`, `.exit`; `0004-accumulated-capture-defects.command`, `.log`, `.exit`; `0005-scalar-schema-line-terminators.command`, `.log`, `.exit`; `0006-affected-suite.command`, `.log`, `.exit`; `0007-affected-suite-no-fail-fast.command`, `.log`, `.exit`; `0008-final-state.command`, `.log`, `.exit`; `0009-test-only.diff.command`, `0009-test-only.diff`, `0009-test-only.diff.exit`; and `review-report.md`.
+- `home-path:sha256:d575287ec5781005a690a733b003c1ee307b06d5323cc397d22a2168acd0a4c7` containing exactly: `0000-pre-execution.command`, `0000-pre-execution.exit`; `0001-known-method-preflight.command`, `.log`, `.exit`; `0002-root-coordinate-refusal.command`, `.log`, `.exit`; `0003-foreign-node-refusal.command`, `.log`, `.exit`; `0004-accumulated-capture-defects.command`, `.log`, `.exit`; `0005-scalar-schema-line-terminators.command`, `.log`, `.exit`; `0006-affected-suite.command`, `.log`, `.exit`; `0007-affected-suite-no-fail-fast.command`, `.log`, `.exit`; `0008-final-state.command`, `.log`, `.exit`; `0009-test-only.diff.command`, `0009-test-only.diff`, `0009-test-only.diff.exit`; and `review-report.md`.
 
 The only build output is the tree-local `target/` (535 MiB). All commands completed synchronously;
 there is no live execution handle. Free space after the final suite was 11,507,838,976 bytes, above the

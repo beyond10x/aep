@@ -8,11 +8,11 @@ relations:
 - reviews: story:eventlog-store-hydrates-from-one-snapshot
 revision: 2
 ---
-unit: story:eventlog-store-hydrates-from-one-snapshot — commit 2d4a93126e3a7c052b31cbf014a9c47834fb1555, worktree ~/.local/state/worktree/trees/b10x/aep/ess-evolution-one-snapshot-hydrate-review-2-20260921 (HEAD detached, no tracked non-test file modified)
+unit: story:eventlog-store-hydrates-from-one-snapshot — commit 2d4a93126e3a7c052b31cbf014a9c47834fb1555, worktree home-path:sha256:c2c8654daef6e67dc34a2b50295b370090297dbdf1ff4dd9c67f946d5fc68130 (HEAD detached, no tracked non-test file modified)
 verdict: red
 cases: executed 8→14, red 3
 origin: introduced 6, pre-existing 0, undecided 0
-wrote-outside-worktree: 2 roots — this report and ~/.cache/ess-wave-v2/u7r2/; full list in §6
+wrote-outside-worktree: 2 roots — this report and home-path:sha256:dc344759da85542d1d50c0340723c702f7c58387eb5acb25681033a2852d7ff2; full list in §6
 needs-coordinator: no
 
 **Five of sixteen one-line mutations to the code this unit added leave all eight shipped cases
@@ -51,7 +51,7 @@ cases it names** (§3). Area (c) and area (d) are clean and measured (§3).
 ## 1. `git --no-pager diff --stat` and `git status --porcelain` — proof of the bound
 
 ```
-$ cd ~/.local/state/worktree/trees/b10x/aep/ess-evolution-one-snapshot-hydrate-review-2-20260921
+$ cd home-path:sha256:c2c8654daef6e67dc34a2b50295b370090297dbdf1ff4dd9c67f946d5fc68130
 $ git --no-pager diff --stat
  .../src/retained_snapshot_tests.rs                 | 407 +++++++++++++++++++++
  1 file changed, 407 insertions(+)
@@ -69,7 +69,7 @@ deleted, renamed or weakened. `crates/plan/aep-backend-eventlog/src/retained_sna
 from inside the crate. No implementation file, manifest, lockfile, document or `.engineering/` path
 was touched, and no `git` write command (`commit`, `add`, `stash`, `switch`, `checkout`, `branch`,
 `worktree`) was run at any point. Every mutation in §3 was applied to a `git archive` extraction
-under `~/.cache/ess-wave-v2/u7r2/`, never to this worktree.
+under `home-path:sha256:dc344759da85542d1d50c0340723c702f7c58387eb5acb25681033a2852d7ff2`, never to this worktree.
 
 `cargo fmt -p aep-backend-eventlog -- --check` exits **0** and
 `cargo clippy -p aep-backend-eventlog --all-targets -- -D warnings` exits **0** with both of my
@@ -204,10 +204,10 @@ EXIT=101
 ```
 
 **Origin, run rather than read.** The same file, copied into a `git archive 1a5ceda4` extraction at
-`~/.cache/ess-wave-v2/u7r2/base` (this worktree never moved):
+`home-path:sha256:da4c8661a20dd8a1b0abae186518bab70d4eae8ae530083a666af8c83c4a439d` (this worktree never moved):
 
 ```console
-$ cd ~/.cache/ess-wave-v2/u7r2/base
+$ cd home-path:sha256:da4c8661a20dd8a1b0abae186518bab70d4eae8ae530083a666af8c83c4a439d
 $ cargo test -p aep-backend-eventlog --test retained_snapshot_review_two
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
      Running tests/retained_snapshot_review_two.rs (target/debug/deps/retained_snapshot_review_two-544b80df5abfcfb8)
@@ -228,7 +228,7 @@ run settles origin for red case 2, which asserts the same property against the c
 ### The question: which added lines can be deleted while the suite stays green
 
 Sixteen one-line changes to the code this unit added, applied to a `git archive 2d4a931` extraction
-under `~/.cache/ess-wave-v2/u7r2/mutate` — never to this worktree — each run against the
+under `home-path:sha256:c4e997dc8668da361797bf8dcd082a50eb1877471a53467f3a3ea63b2dd49ad4` — never to this worktree — each run against the
 **shipped** eight-case lane with my files absent, then the survivors run again with my appended
 file present and my two red-unmutated cases deselected. The tree is rewritten from a pristine copy
 before every row; the `restore` row is the control.
@@ -277,7 +277,7 @@ the one asked for, and returns it as that subject's state.** A6/A9 need an id pr
 kinds; A7/A10/A11 need nothing at all.
 
 The three cases I added kill all five, and which one kills which is in
-`~/.cache/ess-wave-v2/u7r2/mutations-withmine.log`.
+`home-path:sha256:acd04a6bd88fe5b1a742d173800fd62945720c56d57ed85953e5e3db9b19c111`.
 
 ### (a) Staleness on a long-lived handle — every holder, and how I found them
 
@@ -366,7 +366,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 EXIT=101
 ```
 
-Full output `~/.cache/ess-wave-v2/u7r2/suite.log`.
+Full output `home-path:sha256:ab371025f5f91c0ab26682c7d84ff7aa4abe25adeda9d9404e98a8ed7cc00ee0`.
 
 **executed 8 → 14.** `<before>` is 8, read from the `restore` row of §3 — this commit's sources with
 my files absent, in the `git archive 2d4a931` extraction, run *after* my cases existed; it agrees
@@ -452,15 +452,15 @@ the brief names, if a holder is ever added. F6: one comment line.
 
 ## 7. Every path written outside the worktree
 
-- `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-7-one-snapshot-hydrate/review-2-report.md` — this file, as the dispatch directs
-- `~/.cache/ess-wave-v2/u7r2/tmp/` — the `TMPDIR` every cargo command in this session used (38 bytes, under the brief's 45)
-- `~/.cache/ess-wave-v2/u7r2/` — `append-cases.rs`, `mutate.py`, `run-mutations.sh`,
+- `home-path:sha256:8f7df02632a8581f52f7d32702d7ebb5284cc18fd0db5e321cfdb1859146ca66` — this file, as the dispatch directs
+- `home-path:sha256:f36c7141068f10466e0758b000a386bfdf9e772bfa1275b7582aa5ade4520531` — the `TMPDIR` every cargo command in this session used (38 bytes, under the brief's 45)
+- `home-path:sha256:dc344759da85542d1d50c0340723c702f7c58387eb5acb25681033a2852d7ff2` — `append-cases.rs`, `mutate.py`, `run-mutations.sh`,
   `run-mine.sh`, `lib.rs.pristine`, `retained_snapshot_tests.rs.orig`, `warm-build.log`,
   `new-cases-alone.log`, `case-1-alone.log`, `case-2-alone.log`, `case-3-alone.log`, `suite.log`,
   `lane-after.log`, `mutations-shipped.log`, `mutations-withmine.log`, `fmt.log`, `clippy.log`
-- `~/.cache/ess-wave-v2/u7r2/mutate/` — a `git archive 2d4a931` extraction with its own
+- `home-path:sha256:112783d3824af821b7309c3e4128065c2223f5b3538b2ca219689347ddd5b62c` — a `git archive 2d4a931` extraction with its own
   `target/`, used for every mutation row in §3
-- `~/.cache/ess-wave-v2/u7r2/base/` — a `git archive 1a5ceda4` extraction with its own
+- `home-path:sha256:6185b03002f892b4a9ebf5fc7cad29736690abad5686d21ceb64189fbf06d1da` — a `git archive 1a5ceda4` extraction with its own
   `target/`, used for the origin run in §2
 - fixture authorities created by the integration case under `$TMPDIR`
   (`aep-retained-snapshot-review-two-<pid>-<n>`), removed by the case on success and left behind on

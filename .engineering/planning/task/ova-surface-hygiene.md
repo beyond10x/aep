@@ -47,7 +47,7 @@ a reviewer remembers.
 | H4 | `integrations/claude-code/eval/checks/run-checks.sh` is unchanged — `git diff --quiet` on that path succeeds. It is read as a model, never edited. |
 | H5 | No script under `.engineering/checks/` names a path under `.engineering/planning/`, or `.engineering/task-w4-2.yaml`, or the specification file. The only permitted route to store state is `protocol artifact list`. |
 | H6 | The whole suite runs to exit 0 with `jq`, `yq`, `curl`, `wget`, `nc`, `python`, `python3`, `node` and `cargo` shadowed by stubs that exit 127. |
-| H7 | No script under `.engineering/checks/` contains a literal `/tmp` path; every scratch path derives from `${TMPDIR:-$HOME/.cache/claude-tmp}`. |
+| H7 | No script under `.engineering/checks/` contains a literal `/tmp` path; every scratch path derives from `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`. |
 | H8 | A run with `TMPDIR` set to an empty scratch directory leaves nothing behind in it after the suite exits, on both the passing and the failing path. |
 | H9 | H5, H6 and H7 cover `run.sh` and every `check-*.sh`, including checks added later — the check enumerates the directory rather than a list. |
 

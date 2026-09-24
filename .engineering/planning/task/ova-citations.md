@@ -85,7 +85,7 @@ line that makes it open is `Named(String)` at 60. Both cells were repointed.
 
 `.engineering/checks/check-citations.sh`. I1–I13 are its rows.
 
-I9 copies the tree under `${TMPDIR:-$HOME/.cache/claude-tmp}`, deletes one cited fragment, and
+I9 copies the tree under `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`, deletes one cited fragment, and
 requires the check to exit non-zero there. `task:ova-mutation-proof` runs the same mutation as part
 of the four; the duplication is deliberate, because this check must be able to demonstrate its own
 discrimination without depending on the task that audits all four.

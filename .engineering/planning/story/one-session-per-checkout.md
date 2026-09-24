@@ -26,7 +26,7 @@ revision: 4
   `main` moved under the wave twice mid-integration.
 - `11727595#17370-#17397`: three sessions shared one checkout with uncommitted edits to
   `skills/planning/SKILL.md`; a peer's unformatted hunks made `fmt-check` red for everyone.
-- `4d4c15a4#274`: five worktrees and build dirs under `~/.cache/harness-wave` deleted mid-wave with five
+- `4d4c15a4#274`: five worktrees and build dirs under `home-path:sha256:c9b4a29c70118d6d7b16847048d915817c9384ab128f8b40318d83465ade94ce` deleted mid-wave with five
   agents in flight, cause unattributed.
 
 ## Acceptance

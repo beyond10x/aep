@@ -15,7 +15,7 @@ unit: story:migration-mapper-reads-the-declared-workspace — worktree ess-evolu
 verdict: red
 cases: executed 664→675, red 5
 origin: introduced 4, pre-existing 1, undecided 0
-wrote-outside-worktree: 14 paths, all under ~/.cache/ess-wave-v2/u8r2/ — enumerated in part 6
+wrote-outside-worktree: 14 paths, all under home-path:sha256:61f89f0f366b2ac36ef5f5a89fc046e95c5773985ca8951a8f536d8d71e8fd50 — enumerated in part 6
 needs-coordinator: yes — findings 1 and 2 share one root cause whose fix changes a shared domain predicate (`aep-domain`), which is outside this unit's cited scope; whether that lands here or as its own story is not mine to say
 ```
 
@@ -103,7 +103,7 @@ names *a* declared member. `mapping.rs:324` then skips the relation on the state
 **this** store's, that destination entity is in `identities` under its unqualified id.
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u8r2/tmp CARGO_NET_OFFLINE=true \
+$ TMPDIR=home-path:sha256:f64ce65dee915487863b8c73ddde32214b4126a693a1f9370594cdd7b05f377b CARGO_NET_OFFLINE=true \
   cargo test -p aep-planning-migration --test self_member_reference_is_not_a_crossing
      Running tests/self_member_reference_is_not_a_crossing.rs (target/debug/deps/self_member_reference_is_not_a_crossing-0767e4658194d67f)
 
@@ -269,7 +269,7 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ## 3. The suite, after the cases existed
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u8r2/tmp CARGO_NET_OFFLINE=true \
+$ TMPDIR=home-path:sha256:f64ce65dee915487863b8c73ddde32214b4126a693a1f9370594cdd7b05f377b CARGO_NET_OFFLINE=true \
   cargo test --no-fail-fast -p aep-planning-migration -p aep-cli
 …
 error: test failed, to rerun pass `-p aep-cli --test migration_counts_a_self_member_edge_as_a_crossing`
@@ -350,8 +350,8 @@ Covering worktree `ess-evolution-mapper-workspace-review-1-20260921` at commit
 
 ## 6. Every path I wrote outside the worktree
 
-All under `~/.cache/ess-wave-v2/u8r2/`, the assigned scratch. **Nothing under `/tmp`.**
-`TMPDIR=~/.cache/ess-wave-v2/u8r2/tmp` (**38 bytes**, inside the 45-byte `sun_path`
+All under `home-path:sha256:61f89f0f366b2ac36ef5f5a89fc046e95c5773985ca8951a8f536d8d71e8fd50`, the assigned scratch. **Nothing under `/tmp`.**
+`TMPDIR=home-path:sha256:f64ce65dee915487863b8c73ddde32214b4126a693a1f9370594cdd7b05f377b` (**38 bytes**, inside the 45-byte `sun_path`
 budget) was exported for every cargo and binary invocation; `CARGO_TARGET_DIR` was never set;
 `CARGO_NET_OFFLINE=true` throughout.
 
