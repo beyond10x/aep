@@ -9,8 +9,21 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan store export --fixup <file>` takes a JSON object of literal replacements and applies
+  each to every string it carries over, after the derived identities and before the home paths.
+  The map it writes records them, and the projection comparison reads them as explained.
+
 ### Fixed
 
+- `aep plan store export` rewrites inside the legacy bytes an `aep.project/2` store keeps
+  hex-encoded as migration provenance — the exact journal lines and the raw capture of the
+  markdown store — and binds each rewritten line to a new envelope digest through its coordinate
+  and the reservation roster. Before, home paths and fixup literals survived there verbatim.
+- The export comparison replaces inside each string rather than in serialized JSON, so a path
+  that JSON escapes is no longer reported as a difference, and a difference now names its JSON
+  pointer and the text around it.
 - Two `aep plan artifact validate` runs on one tree store at once no longer fail each other. Each
   staged its render of the projection in a directory named by the authority snapshot alone, so
   one removed the stage the other was reading and reported every artifact as unrendered, or

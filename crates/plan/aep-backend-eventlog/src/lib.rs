@@ -56,7 +56,7 @@ mod export;
 mod typed;
 /// The offline check of a tree authority's files, for the planning validation to run.
 pub use eventlog_tree::{verify as verify_tree, Finding as TreeFinding};
-pub use export::{export_to_tree, ExportReport};
+pub use export::{export_to_tree, ExportReport, ExportRewrites};
 pub use typed::{
     open_tree, prepare_tree, provision_tree, provisioning_context, TreeBackend, TypedKinds,
 };
