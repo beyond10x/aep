@@ -474,10 +474,8 @@ fn release_check(root: &Path) -> Result<()> {
         .current_dir(root)
         .output()
         .is_ok_and(|output| output.status.success());
-    let journal =
-        fs::read_to_string(root.join(".engineering/planning/journal.jsonl")).unwrap_or_default();
     let short = &commit[..commit.len().min(7)];
-    let gated = journal.lines().any(|line| {
+    let gated = planning_records(root).iter().any(|line| {
         line.contains("\"test_result\"") && (line.contains(&commit) || line.contains(short))
     });
 
@@ -508,7 +506,7 @@ fn release_check(root: &Path) -> Result<()> {
         (
             "planning store holds a test_result naming the tag's commit",
             gated,
-            format!("journal.jsonl, commit {short}"),
+            format!("planning store, commit {short}"),
         ),
     ];
     let mut missing = 0;
@@ -1075,6 +1073,20 @@ fn test_bodies(text: &str) -> Vec<(String, String)> {
         }
     }
     found
+}
+
+/// The planning store's records as text: each line of the `aep.project/2` journal, and each
+/// history file of an `aep.project/3` tree store, whose evidence is held in its blobs. The fold
+/// cache under `.cache/` is derived and is not read.
+fn planning_records(root: &Path) -> Vec<String> {
+    let journal =
+        fs::read_to_string(root.join(".engineering/planning/journal.jsonl")).unwrap_or_default();
+    let state = root.join(".engineering/state");
+    let tree = walk(&state.join("tenants"))
+        .into_iter()
+        .filter(|path| !path.components().any(|part| part.as_os_str() == ".cache"))
+        .filter_map(|path| fs::read_to_string(path).ok());
+    journal.lines().map(str::to_owned).chain(tree).collect()
 }
 
 /// Every file under `root`, recursively.
