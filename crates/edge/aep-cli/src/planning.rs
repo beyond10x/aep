@@ -9738,15 +9738,40 @@ fn holds_file(repository: &Path, revision: &str, path: &Path) -> Result<bool> {
     if !resolved.success() {
         bail!("{revision} could not be read for `--against`; fetch it first");
     }
-    let held = Command::new("git")
+    // `ls-tree` reads `path` from `repository`, as `git archive` does in `materialize`, so a
+    // project in a subdirectory of its Git repository finds its own store; a `<rev>:<path>`
+    // spelling would read it from the repository's top level instead.
+    let listed = Command::new("git")
         .arg("-C")
         .arg(repository)
-        .args(["cat-file", "-e"])
-        .arg(format!("{revision}:{}", path.display()))
+        .args(["ls-tree", "--object-only", revision, "--"])
+        .arg(path)
+        .stderr(Stdio::null())
+        .output()
+        .context("running git ls-tree")?;
+    if !listed.status.success() {
+        bail!("{revision} could not be read for `--against`; fetch it first");
+    }
+    let object = String::from_utf8_lossy(&listed.stdout).trim().to_owned();
+    if object.is_empty() {
+        return Ok(false);
+    }
+    // Listed but unreadable, as in a partial clone whose objects were not fetched: refused, so
+    // an absent file and a missing object are not the same answer.
+    let readable = Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .args(["cat-file", "-e", &object])
         .stderr(Stdio::null())
         .status()
         .context("running git cat-file")?;
-    Ok(held.success())
+    if !readable.success() {
+        bail!(
+            "{revision} lists {} but its object cannot be read; fetch it first",
+            path.display()
+        );
+    }
+    Ok(true)
 }
 
 /// The files of `relative` at `revision`, extracted under `into`.
