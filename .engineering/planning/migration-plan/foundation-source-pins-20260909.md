@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: migration-plan:foundation-source-pins-20260909
 kind: migration-plan
 status: draft

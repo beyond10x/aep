@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:eventlog-lifecycle-refusal-names-the-legal-moves
 kind: story
 status: draft

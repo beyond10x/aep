@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:wave-skill-applies-the-two-retros
 kind: story
 status: implemented

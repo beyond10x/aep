@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: migration-plan:aep-runtime-extraction
 kind: migration-plan
 status: implemented

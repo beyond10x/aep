@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:store-selection-in-project-yaml
 kind: story
 status: implemented

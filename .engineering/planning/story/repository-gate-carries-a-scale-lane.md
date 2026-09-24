@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:repository-gate-carries-a-scale-lane
 kind: story
 status: draft

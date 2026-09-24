@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: task:validate-v2-projection-awareness
 kind: task
 status: implemented

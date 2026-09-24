@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: epic:declared-configuration-invariants
 kind: epic
 status: draft

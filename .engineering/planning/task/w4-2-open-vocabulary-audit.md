@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: task:w4-2-open-vocabulary-audit
 kind: task
 status: draft

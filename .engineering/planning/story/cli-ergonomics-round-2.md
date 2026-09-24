@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:cli-ergonomics-round-2
 kind: story
 status: active

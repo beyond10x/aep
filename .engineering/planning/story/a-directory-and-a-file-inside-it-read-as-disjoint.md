@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:a-directory-and-a-file-inside-it-read-as-disjoint
 kind: story
 status: draft

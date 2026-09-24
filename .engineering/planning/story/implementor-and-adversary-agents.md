@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:implementor-and-adversary-agents
 kind: story
 status: draft

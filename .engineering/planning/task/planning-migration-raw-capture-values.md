@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: task:planning-migration-raw-capture-values
 kind: task
 status: implemented

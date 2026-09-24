@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:frame-subjects-from-the-step-map
 kind: story
 status: draft

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:skill-loads-before-the-store-is-touched
 kind: story
 status: implemented

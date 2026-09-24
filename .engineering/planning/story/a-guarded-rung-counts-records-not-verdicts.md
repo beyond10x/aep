@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:a-guarded-rung-counts-records-not-verdicts
 kind: story
 status: draft

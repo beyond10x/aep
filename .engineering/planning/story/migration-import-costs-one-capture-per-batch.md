@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:migration-import-costs-one-capture-per-batch
 kind: story
 status: implemented

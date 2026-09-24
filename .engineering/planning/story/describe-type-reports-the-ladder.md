@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:describe-type-reports-the-ladder
 kind: story
 status: implemented

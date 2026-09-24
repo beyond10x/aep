@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:findings-ledger-verb
 kind: story
 status: implemented

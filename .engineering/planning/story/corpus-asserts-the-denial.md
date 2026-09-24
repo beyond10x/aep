@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:corpus-asserts-the-denial
 kind: story
 status: implemented

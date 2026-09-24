@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:bulk-create-from-a-manifest
 kind: story
 status: draft

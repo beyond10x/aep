@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:design-principles-concrete-failure-and-code-example
 kind: story
 status: implemented
