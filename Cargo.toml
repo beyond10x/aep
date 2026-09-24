@@ -75,8 +75,7 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 # **once**, here, because two manifests each naming their own pin is how two kernels came to be
 # compiled into this workspace (0.5.2 under the markdown backend, 0.8.0 under the SQLite one) for
 # two releases. One line per crate, one pin for every runtime crate; `cargo xtask deps` (the gate's
-# `dep-check`) fails if the lockfile ever says otherwise — it has no such rule for `eventlog`, so
-# the two `eventlog` lines below move with the runtime ones by hand or the lockfile carries two.
+# `dep-check`) fails if the lockfile ever says otherwise, for the `eventlog` lines as well.
 # These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
 # reproducible and upgrades reversible across the kernel and every provider.
 entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "21bfc5780f29b687054bb18a793b9fde2cab46f4", default-features = false }

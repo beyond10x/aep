@@ -34,6 +34,8 @@ belongs in the commit message or in `docs/design/`.
 
 ### Changed
 
+- `cargo xtask deps` also refuses a lockfile whose `eventlog-*` crates come from more than one
+  source, so AEP's Eventlog pin is the one its Entity Runtime pin was built against.
 - Entity Runtime is pinned at 0.21.0 (`21bfc578`) and Eventlog at 0.4.0 (`70096af8`), the releases
   that add the tree store, forked subjects and recorded refusals this plan store uses.
 - An Eventlog planning write opens its authority once. The plan, the invocation ledger, the
