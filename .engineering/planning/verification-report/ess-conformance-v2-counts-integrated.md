@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: verification-report:ess-conformance-v2-counts-integrated
 kind: verification-report
 status: draft

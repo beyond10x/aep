@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:a-dropped-stream-does-not-end-a-run
 kind: story
 status: draft

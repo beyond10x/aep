@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:conformance-verb-takes-a-backend
 kind: story
 status: implemented

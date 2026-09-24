@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:admit-ess-conformance-coverage
 kind: story
 status: implemented

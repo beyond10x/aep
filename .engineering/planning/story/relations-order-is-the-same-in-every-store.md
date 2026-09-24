@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:relations-order-is-the-same-in-every-store
 kind: story
 status: draft

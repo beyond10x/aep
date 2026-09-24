@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:every-state-is-a-section
 kind: story
 status: implemented

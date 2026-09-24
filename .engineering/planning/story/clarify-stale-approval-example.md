@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:clarify-stale-approval-example
 kind: story
 status: implemented

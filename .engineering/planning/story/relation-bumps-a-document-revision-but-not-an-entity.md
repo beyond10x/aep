@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:relation-bumps-a-document-revision-but-not-an-entity
 kind: story
 status: implemented

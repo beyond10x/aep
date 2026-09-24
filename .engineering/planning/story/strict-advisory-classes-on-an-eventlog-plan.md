@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:strict-advisory-classes-on-an-eventlog-plan
 kind: story
 status: draft

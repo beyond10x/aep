@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:planning-writer-fence-leaves-no-lock-file
 kind: story
 status: draft

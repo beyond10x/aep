@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:aep-service-grouped-spellings
 kind: story
 status: active

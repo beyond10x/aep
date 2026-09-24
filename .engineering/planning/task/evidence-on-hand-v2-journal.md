@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: task:evidence-on-hand-v2-journal
 kind: task
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:prose-that-the-tree-contradicts
 kind: story
 status: active

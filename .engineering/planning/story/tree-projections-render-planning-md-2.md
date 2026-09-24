@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:tree-projections-render-planning-md-2
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:plugin-names-follow-agentplugins
 kind: story
 status: implemented

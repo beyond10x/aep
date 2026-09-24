@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:agreed-work-serves-an-objective
 kind: story
 status: implemented
