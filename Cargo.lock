@@ -709,8 +709,8 @@ dependencies = [
 
 [[package]]
 name = "entity-core"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "serde",
  "serde_json",
@@ -718,8 +718,8 @@ dependencies = [
 
 [[package]]
 name = "entity-eventlog"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-executor",
@@ -737,8 +737,8 @@ dependencies = [
 
 [[package]]
 name = "entity-executor"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -747,8 +747,8 @@ dependencies = [
 
 [[package]]
 name = "entity-postgres"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-query",
@@ -760,8 +760,8 @@ dependencies = [
 
 [[package]]
 name = "entity-query"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -771,8 +771,8 @@ dependencies = [
 
 [[package]]
 name = "entity-remote"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -782,8 +782,8 @@ dependencies = [
 
 [[package]]
 name = "entity-sqlite"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -794,8 +794,8 @@ dependencies = [
 
 [[package]]
 name = "entity-store"
-version = "0.21.0"
-source = "git+https://github.com/beyond10x/entity-runtime?rev=21bfc5780f29b687054bb18a793b9fde2cab46f4#21bfc5780f29b687054bb18a793b9fde2cab46f4"
+version = "0.22.0"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=9ee145e888368c668cdaaaa9fa22b8334149616f#9ee145e888368c668cdaaaa9fa22b8334149616f"
 dependencies = [
  "entity-core",
  "fs2",

@@ -129,7 +129,7 @@ There is one ER entity type per artifact kind: `aep.<kind>/1`.
 | fields | the kind's `aep-domain` artifact schema, as ER `FieldKind`s. `body` is `string` with `max_length` 1,048,576 bytes (**inferred** bound; ER has only `max_length`, `definition.rs:503-507`) |
 | identity | natural key `name`, unique within the type |
 | states and transitions | the kind's ladder from the lifecycle YAML, the input `kernel.rs` reads today |
-| evidence | designed: an ER **observation** at the entity's current revision, as today (`aep-backend-entity/src/lib.rs:1116`; `ESS-EVOLUTION.md:30`), so it does not advance the revision. The shell derives the per-kind counts from the observations and passes them as `$args.evidence.<kind>`, as today (`kernel.rs:165-180`). A concurrent `move` and evidence record therefore do not conflict (review N7). **Built so far: an `edit` of the typed entity**, which advances its revision, so a concurrent `move` and evidence record on two branches fork the artifact. Moving evidence to observations is open work (§ 13, A2 follow-up) |
+| evidence | designed: an ER **observation** at the entity's current revision, as today (`aep-backend-entity/src/lib.rs:1116`; `ESS-EVOLUTION.md:30`), so it does not advance the revision. The shell derives the per-kind counts from the observations and passes them as `$args.evidence.<kind>`, as today (`kernel.rs:165-180`). A concurrent `move` and evidence record therefore do not conflict (review N7). **Built (N7, on Entity Runtime 0.22.0, whose tree stores make only decisions heads):** `append_planning_batch` records any write that leaves AEP's revision unchanged — evidence, a relation's source — as an observation carrying the events AEP wrote, and `events_in_store_order` reads them beside the `edit`s tree stores recorded evidence as before, so the counts `move` reads are unchanged |
 | relations | ER `RelationDefinition` + `Ref` fields. Existence is not checked by the kernel (`definition.rs:521-529`); see § 4.2 step 2 |
 
 **Operations: all 11 `aep_domain::command::Command` variants** (`aep-domain/src/command.rs:438-458`).
@@ -636,6 +636,31 @@ Parallelism:
 - A3–A7 follow A2.
 - A8 goes repository by repository.
 
+## 14. As built (2026-09-24)
+
+| unit | state | where |
+|---|---|---|
+| P1 | done | `ESS-EVOLUTION.md` rev 2; Atlas ADR 0063 (atlas#50) |
+| B0 | dropped | § 6: the tree crate shares no code with `eventlog-file` |
+| B1, B3, B4 | done | Eventlog 0.4.0 |
+| B2 | decided otherwise | § B4: deferred capture hashes only what it hands out |
+| V1, V2 | done | Eventlog 0.4.0 |
+| V3 | done | `verify` and `repair` in 0.4.0; `copy` in eventlog#28 (not yet released) as `eventlog_tree::copy` (a library function: Eventlog has no CLI). Origins go to a `<prefix>_origins` table beside the events; a tenant capture does not carry them; Postgres has no copy |
+| R1, R3–R5, R7 | done | Entity Runtime 0.21.0 |
+| observation heads | done | Entity Runtime 0.22.0 (entity-runtime#34): only decisions make heads, so evidence on one branch and a move on another do not fork |
+| R2 | done | Entity Runtime 0.22.0 (entity-runtime#34): per-entity reads, R-151 amended; a tenant forgotten between the binding check and `stream_identity` can still be re-minted |
+| A1–A4, A6, A7 | done | AEP 0.58.0 (#18, #20, #21); export fixes #23, the concurrent-stage fix #22 |
+| A5 | done | aep#24: `aep.planning-md/2` is the tag change only; `head` has no defined value and is not written. Each repository re-renders once when its planning check moves to the release that renders `/2` |
+| A8 | done | cutovers: eventlog #27, entity-runtime #31, aep #22, ess #67, connectors #32, service-sdk #25; `planning validate` required in all six |
+| N7 | done | evidence is an ER observation at the current revision (AEP pinned at Entity Runtime 0.22.0); `resolve` carries observations over, and `explain` joins evidence to moves by lineage |
+| A9 | not in this plan | waits for ESS phase C |
+
+Found while cutting over, and fixed in the export (#23): the `/2` migration provenance kept the
+`/1` journal lines and markdown capture verbatim as hex, so home paths and fixup literals
+survived inside it. The export now rewrites inside hex text and rebinds the digests over those
+bytes. The eventlog and entity-runtime trees were exported before that fix; their hex holds
+`~/` home paths only (entity-runtime: 428), the same bytes their `/2` history already holds.
+
 ---
 
 # Part B: store read cost without re-hashing
@@ -705,6 +730,7 @@ Blob files are content-addressed and immutable.
 - Their stamps go in `verified.json`.
 - `blob()` (`lib.rs:647`) skips the SHA-256 when the stamp is equal and not omitted.
 - This decides eventlog `story:file-capture-blob-digests-without-rehashing` in favour of its option 2, plus rule 4.
+- **Not built as written (§ 14).** Eventlog decided that story the other way: `capture_tenant_deferred` binds digests without reading content, and the content is read and hashed by the read that hands it out (`eventlog/docs/design/file-provider.md`, *When bound content is read*). A caller that never asks for a binding's content never pays for it, which removes the cost this unit targeted without trusting stamps for content.
 
 ## B5. Many reads in one transaction (B3) and view retention (B4)
 
