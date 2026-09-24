@@ -11,6 +11,9 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- `aep plan store install-hooks` writes a pre-push hook that runs `validate --strict` for a push
+  touching `.engineering/`, pinned to the `aep` version that installed it, for the per-repository
+  cutover to tree stores.
 - `aep.project/3` keeps the plan as typed Entity Runtime entities on an `eventlog-tree` store
   that version control merges:
   - `aep plan store init-tree` creates one;

@@ -111,11 +111,26 @@ pub(crate) enum StoreCommand {
     /// beside the old one for the operator to swap in. The copy is checked artifact by artifact
     /// against the source before it is reported.
     Export(ExportArgs),
+    /// Install the repository's pre-push hook that validates a tree planning store.
+    ///
+    /// A push whose unpushed commits touch `.engineering/` runs `aep plan artifact validate
+    /// --strict` first, and is refused when the installed `aep` is not the version that installed
+    /// the hook or the tree validated is not the one pushed. The hook is written to the
+    /// repository's own `hooks/pre-push`; a hook manager that owns `core.hooksPath`, such as Gates,
+    /// runs it once it is reinstalled.
+    InstallHooks(InstallHooksArgs),
     /// Hold observed writer stop and operator no-restart custody in this foreground process.
     WriterControl {
         #[command(subcommand)]
         command: writer_control::WriterControlCommand,
     },
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct InstallHooksArgs {
+    /// Any path inside the repository.
+    #[arg(long, default_value = ".")]
+    repository: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -195,6 +210,7 @@ where
     match command {
         StoreCommand::InitTree(args) => init_tree(&args),
         StoreCommand::Export(args) => export(&args),
+        StoreCommand::InstallHooks(args) => install_hooks(&args),
         StoreCommand::Inspect(common) => {
             let result = inspect(&common);
             emit(&result, common.format)?;
@@ -5483,4 +5499,252 @@ fn export_differences(
         ));
     }
     Ok(differences)
+}
+
+/// The first line after the interpreter in a hook this command wrote. A hook without it is not
+/// ours and is never replaced.
+const HOOK_MARKER: &str = "# aep plan store install-hooks";
+
+/// The pre-push hook, pinned at `version`.
+fn pre_push_hook(version: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+{HOOK_MARKER} {version}
+# A push whose unpushed commits touch .engineering/ is validated strictly first.
+set -eu
+pinned="{version}"
+zero=0000000000000000000000000000000000000000
+touched=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if git log --format= --name-only "$local_sha" --not --remotes -- .engineering | grep -q .; then
+    touched="$local_sha"
+  fi
+done
+[ -n "$touched" ] || exit 0
+installed=$(aep --version | awk '{{print $NF}}')
+if [ "$installed" != "$pinned" ]; then
+  echo "pre-push: aep $installed is installed and this hook pins $pinned; install $pinned or re-run 'aep plan store install-hooks'" >&2
+  exit 1
+fi
+if [ "$(git rev-parse HEAD)" != "$touched" ] || [ -n "$(git status --porcelain -- .engineering)" ]; then
+  echo "pre-push: the pushed commit $touched is not the checked-out, clean tree; check it out to validate it" >&2
+  exit 1
+fi
+exec aep plan artifact validate --strict
+"#
+    )
+}
+
+fn install_hooks(args: &InstallHooksArgs) -> Result<ExitCode> {
+    use std::process::Command;
+    let git = |arguments: &[&str]| -> Result<String> {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&args.repository)
+            .args(arguments)
+            .output()
+            .context("running git")?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "git {} failed in {}: {}",
+                arguments.join(" "),
+                args.repository.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    };
+    let common = PathBuf::from(git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?);
+    let hooks = common.join("hooks");
+    fs::create_dir_all(&hooks).with_context(|| format!("creating {}", hooks.display()))?;
+    let path = hooks.join("pre-push");
+    let foreign = fs::read_to_string(&path)
+        .is_ok_and(|existing| existing.lines().nth(1).is_none_or(|line| !line.starts_with(HOOK_MARKER)));
+    if foreign {
+        anyhow::bail!(
+            "{} is another hook; nothing is written over it. Chain it by hand or move it aside",
+            path.display()
+        );
+    }
+    fs::write(&path, pre_push_hook(env!("CARGO_PKG_VERSION")))
+        .with_context(|| format!("writing {}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+            .with_context(|| format!("making {} executable", path.display()))?;
+    }
+    println!(
+        "installed {} at aep {}",
+        path.display(),
+        env!("CARGO_PKG_VERSION")
+    );
+    let configured = git(&["config", "--get", "core.hooksPath"]).unwrap_or_default();
+    if !configured.is_empty() && Path::new(&configured) != hooks {
+        println!(
+            "core.hooksPath is {configured}; re-run the manager that owns it (for Gates, \
+             `b10x-gates --repository <owner>/<repo> install`) so it runs this hook first"
+        );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod install_hooks_tests {
+    use super::{HOOK_MARKER, InstallHooksArgs, install_hooks, pre_push_hook};
+    use std::io::Write as _;
+    use std::process::Command;
+
+    /// A fresh repository under this crate's target directory, named for the test that asked.
+    fn repository(name: &str) -> std::path::PathBuf {
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../target/install-hooks")
+            .join(name);
+        std::fs::remove_dir_all(&directory).ok();
+        std::fs::create_dir_all(&directory).expect("the scratch directory is writable");
+        let status = Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .arg(&directory)
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+        directory
+    }
+
+    #[test]
+    fn the_hook_is_written_executable_pinned_and_replaced_only_when_it_is_ours() {
+        let directory = repository("pinned");
+        let args = InstallHooksArgs {
+            repository: directory.clone(),
+        };
+        install_hooks(&args).expect("the first install writes the hook");
+        let path = directory.as_path().join(".git/hooks/pre-push");
+        let written = std::fs::read_to_string(&path).expect("the hook exists");
+        assert_eq!(written, pre_push_hook(env!("CARGO_PKG_VERSION")));
+        assert!(written.lines().nth(1).is_some_and(|line| line.starts_with(HOOK_MARKER)));
+        assert!(written.contains("validate --strict"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).expect("stat").permissions().mode();
+            assert_eq!(mode & 0o111, 0o111, "the hook is executable");
+        }
+        install_hooks(&args).expect("reinstalling over its own hook is allowed");
+
+        std::fs::write(&path, "#!/bin/sh\nexit 0\n").expect("a foreign hook");
+        let refused = install_hooks(&args).expect_err("a foreign hook is not replaced");
+        assert!(refused.to_string().contains("another hook"), "{refused}");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("still there"),
+            "#!/bin/sh\nexit 0\n"
+        );
+    }
+
+    #[test]
+    fn a_planning_push_is_refused_when_the_installed_aep_is_not_the_pinned_one() {
+        let directory = repository("mismatched");
+        let run = |arguments: &[&str]| {
+            let status = Command::new("git")
+                .arg("-C")
+                .arg(&directory)
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+                .args(arguments)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {arguments:?}");
+        };
+        std::fs::create_dir_all(directory.join(".engineering")).expect("a planning directory");
+        std::fs::write(directory.join(".engineering/project.yaml"), "{}\n").expect("a file");
+        run(&["add", ".engineering"]);
+        run(&["commit", "-q", "-m", "x"]);
+        let head = String::from_utf8(
+            Command::new("git")
+                .arg("-C")
+                .arg(&directory)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .expect("git runs")
+                .stdout,
+        )
+        .expect("utf-8");
+        // An `aep` that reports another version, first on the path.
+        let bin = directory.join("bin");
+        std::fs::create_dir_all(&bin).expect("a bin directory");
+        std::fs::write(bin.join("aep"), "#!/bin/sh\necho aep 9.9.9\n").expect("a fake aep");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(bin.join("aep"), std::fs::Permissions::from_mode(0o755))
+                .expect("executable");
+        }
+        let hook = directory.join("hook.sh");
+        std::fs::write(&hook, pre_push_hook("1.2.3")).expect("the hook");
+        let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
+        let mut child = Command::new("sh")
+            .arg(&hook)
+            .current_dir(&directory)
+            .env("PATH", path)
+            .stdin(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("sh runs");
+        writeln!(
+            child.stdin.take().expect("stdin"),
+            "refs/heads/main {} refs/heads/main {}",
+            head.trim(),
+            "0".repeat(40)
+        )
+        .expect("the ref line");
+        let output = child.wait_with_output().expect("the hook exits");
+        assert!(!output.status.success(), "a mismatched aep refuses the push");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("aep 9.9.9 is installed") && stderr.contains("pins 1.2.3"), "{stderr}");
+    }
+
+    #[test]
+    fn a_push_that_touches_no_planning_file_is_not_validated() {
+        let directory = repository("untouched");
+        let run = |arguments: &[&str]| {
+            let status = Command::new("git")
+                .arg("-C")
+                .arg(directory.as_path())
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+                .args(arguments)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {arguments:?}");
+        };
+        std::fs::write(directory.as_path().join("README.md"), "x\n").expect("a file");
+        run(&["add", "README.md"]);
+        run(&["commit", "-q", "-m", "x"]);
+        let head = String::from_utf8(
+            Command::new("git")
+                .arg("-C")
+                .arg(directory.as_path())
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .expect("git runs")
+                .stdout,
+        )
+        .expect("utf-8");
+        let hook = directory.as_path().join("hook.sh");
+        std::fs::write(&hook, pre_push_hook("0.0.0-never")).expect("the hook");
+        let mut child = Command::new("sh")
+            .arg(&hook)
+            .current_dir(directory.as_path())
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .expect("sh runs");
+        writeln!(
+            child.stdin.take().expect("stdin"),
+            "refs/heads/main {} refs/heads/main {}",
+            head.trim(),
+            "0".repeat(40)
+        )
+        .expect("the ref line");
+        // A pinned version no aep has would refuse; exiting 0 shows it was never consulted.
+        assert!(child.wait().expect("the hook exits").success());
+    }
 }
