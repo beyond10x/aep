@@ -19,7 +19,7 @@ revision: 4
 ## Outcome
 
 Eighteen changes named by `docs/reviews/2026-08-30-wave-3-retro.md` (harness wave 3) and
-`~/.cache/substrate-wave/wave-retro-2026-08-30.md` (substrate wave) are in `skills/wave/SKILL.md`,
+`home-path:sha256:118e92b28ee9c740c386a00693685b9a06f5535e341a5bb388f378c140ba298c` (substrate wave) are in `skills/wave/SKILL.md`,
 `skills/wave/references/branch-and-merge.md` and a new `references/unit-brief.md`. Neither retro had
 reached the skill at `85c3e91` (`grep -c 'scratch\|tokens' skills/wave/SKILL.md` → 0).
 

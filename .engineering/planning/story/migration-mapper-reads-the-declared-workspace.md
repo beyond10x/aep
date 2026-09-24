@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:migration-mapper-reads-the-declared-workspace
 kind: story
-status: proposed
+status: active
 title: The migration mapper builds the artifact graph with the store's declared workspace members
 relations:
 - serves: vision:O2
@@ -19,7 +19,7 @@ scope:
   path: crates/plan/aep-contract/src/migration/command.rs
 - confidence: cited
   path: crates/plan/aep-planning-migration/src/mapping.rs
-revision: 10
+revision: 11
 ---
 ## Outcome
 

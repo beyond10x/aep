@@ -45,7 +45,7 @@ absent verifier into a green one.
 | N4 | The summary table is printed even when a check exits non-zero, writes to stderr, or kills itself. Shown with a check calling `exit 1` and one calling `kill -9 $$`. |
 | N5 | `bash .engineering/checks/run.sh <unit> <unit>` runs only the named units and its table has exactly those rows. An unknown unit name is a failed row, not a silent no-op. |
 | N6 | No check invocation reaches the network: `run.sh` contains no `curl`, `wget`, `nc`, `ssh` or `git fetch`/`clone`/`pull`, and the whole suite completes with those names shadowed by stubs that exit 127. |
-| N7 | Scratch files go under `${TMPDIR:-$HOME/.cache/claude-tmp}`. No literal `/tmp` path appears in `run.sh`, and a run with `TMPDIR` pointed at an empty scratch directory creates its temporaries there and removes them on exit. |
+| N7 | Scratch files go under `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`. No literal `/tmp` path appears in `run.sh`, and a run with `TMPDIR` pointed at an empty scratch directory creates its temporaries there and removes them on exit. |
 | N8 | At `establish_verifiers`, before any sibling task lands, the run exits non-zero with every row reading that no check exists. Recorded as the red baseline this suite is measured from. |
 | N9 | The summary table is printed when the runner's **own** scratch base cannot be created, not only when a check dies. Added by the adversarial pass. |
 
@@ -74,6 +74,6 @@ any other — every selected unit red, the reason under it, the table printed.
 `.engineering/checks/check-checks-runner.sh`. N1–N9 are its rows.
 
 N2–N5 and N7 exercise the runner against scratch check directories under
-`${TMPDIR:-$HOME/.cache/claude-tmp}`, never by mutating the real one. The check is the only member
+`${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`, never by mutating the real one. The check is the only member
 of the suite that runs the runner, so it must not run the full suite recursively: it invokes
 `run.sh` with an overridden checks directory.

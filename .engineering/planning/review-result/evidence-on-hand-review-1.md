@@ -9,11 +9,11 @@ relations:
 - reviews: task:evidence-on-hand-v2-journal
 revision: 1
 ---
-unit: task:evidence-on-hand-v2-journal — commit 11cc13e10074eb409e213f2c91e1d1f95cd5231a (base af2af7e74), worktree ~/.local/state/worktree/trees/b10x/aep/ess-evolution-evidence-on-hand-review-1-20260920 detached at that commit plus 403 test-only lines
+unit: task:evidence-on-hand-v2-journal — commit 11cc13e10074eb409e213f2c91e1d1f95cd5231a (base af2af7e74), worktree home-path:sha256:ab2661d0520012b3da0a3a044d25bcbfe52de26bc0055f931dacb2fef4d1e30a detached at that commit plus 403 test-only lines
 verdict: red
 cases: executed 587→591, red 1
 origin: introduced 2, pre-existing 0, undecided 0
-wrote-outside-worktree: ~/.cache/ess-wave-v2/u2r1/{tmp/,build.log,alone-*.log (4),clippy.log,clippy2.log,fmt.log,fmt2.log,suite.log} and this report (§6)
+wrote-outside-worktree: home-path:sha256:78816392475889d9a4b1112901e396d5fcc4cdc1ea7b4e7f303edbd3e7a8a47f,build.log,alone-*.log (4),clippy.log,clippy2.log,fmt.log,fmt2.log,suite.log} and this report (§6)
 needs-coordinator: yes — a cost-probe shell loop from the killed first attempt (zsh 1311658, started 23:00:01) is still alive and writing `probe-NN` stories into a fixture under the assigned scratch directory; stop it or let it finish (§6)
 
 ## 1. `git --no-pager diff --stat`
@@ -27,7 +27,7 @@ One path, a test file. No implementation file was edited, not even briefly; no p
 
 ## 2. Cases — `crates/edge/aep-cli/tests/store_writer_control.rs`
 
-Lines 2051–2319 were written by the killed first attempt and are kept as input; I changed one helper signature (`a_rung_asking_for_two`, :2066, `&PathBuf` → `&std::path::Path`) because clippy `-D warnings` refused the lane on `ptr_arg`. The case at :2321 is mine. All four existed before anything was run; each was run alone (`cargo test -p aep-cli --test store_writer_control -- --exact --test-threads=1 <name>`, `TMPDIR=~/.cache/ess-wave-v2/u2r1/tmp`) before the suite.
+Lines 2051–2319 were written by the killed first attempt and are kept as input; I changed one helper signature (`a_rung_asking_for_two`, :2066, `&PathBuf` → `&std::path::Path`) because clippy `-D warnings` refused the lane on `ptr_arg`. The case at :2321 is mine. All four existed before anything was run; each was run alone (`cargo test -p aep-cli --test store_writer_control -- --exact --test-threads=1 <name>`, `TMPDIR=home-path:sha256:26e28aa7c5760c20c13e1fe163bc6a08a5326d0c034e13ae90f67c547f9a1cb6`) before the suite.
 
 | line | case | asserts | now |
 | --- | --- | --- | --- |
@@ -74,7 +74,7 @@ EXIT=0
 Run after the cases above existed, nothing deselected:
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u2r1/tmp cargo test -p aep-cli --no-fail-fast
+$ TMPDIR=home-path:sha256:26e28aa7c5760c20c13e1fe163bc6a08a5326d0c034e13ae90f67c547f9a1cb6 cargo test -p aep-cli --no-fail-fast
 ```
 
 ```
@@ -89,7 +89,7 @@ tests/wave_derivation.rs: test result: ok. 13 passed; 0 failed
 EXIT=101
 ```
 
-`<before>` = 587 is the implementing state's `cases:` line; the count moved by exactly the four cases added, so the lane ran what was written. `cargo fmt -p aep-cli -- --check` exit 0 and `cargo clippy -p aep-cli --all-targets -- -D warnings` exit 0 after my additions (clippy was red once, on the kept helper's `&PathBuf`; fixed in the test file). Postgres lanes not exercised (`ENTITY_POSTGRES_URL` unset). Full log: `~/.cache/ess-wave-v2/u2r1/suite.log`.
+`<before>` = 587 is the implementing state's `cases:` line; the count moved by exactly the four cases added, so the lane ran what was written. `cargo fmt -p aep-cli -- --check` exit 0 and `cargo clippy -p aep-cli --all-targets -- -D warnings` exit 0 after my additions (clippy was red once, on the kept helper's `&PathBuf`; fixed in the test file). Postgres lanes not exercised (`ENTITY_POSTGRES_URL` unset). Full log: `home-path:sha256:641252b4ce35d5e337c686d5e6d709a6b0504d5ca64c4dc4b3fc8822adfd1f57`.
 
 ## 4. Findings (commit 11cc13e10, worktree above)
 
@@ -127,8 +127,8 @@ EXIT=101
 
 All under the assigned scratch parent except the last:
 
-1. `~/.cache/ess-wave-v2/u2r1/tmp/` — the assigned `TMPDIR` (created by me). Holds `aep-writer-control-*` socket directories (8), the fixture case 2a left behind (`aep-public-writer-control-1644783-0`, 3 artifacts, used for §4.2's timings and kept for the second pass), and `aep-public-writer-control-1298446-0` — the first attempt's cost-probe fixture, **still being written** by the orphan loop below.
-2. `~/.cache/ess-wave-v2/u2r1/build.log`, `alone-<case>.log` ×4, `clippy.log`, `clippy2.log`, `fmt.log`, `fmt2.log`, `suite.log` — one level above the assigned `tmp/`, which is a small deviation from the triple and is named here.
+1. `home-path:sha256:192b67b419c5a1a3c4a9ffe1dc9f2fc97e67d2dc61fb6468d2cbd08cc9be77d5` — the assigned `TMPDIR` (created by me). Holds `aep-writer-control-*` socket directories (8), the fixture case 2a left behind (`aep-public-writer-control-1644783-0`, 3 artifacts, used for §4.2's timings and kept for the second pass), and `aep-public-writer-control-1298446-0` — the first attempt's cost-probe fixture, **still being written** by the orphan loop below.
+2. `home-path:sha256:58a8ff50b839f573e27eba35b02528088fb096defb149cfe1fd1b3e86066ae66`, `alone-<case>.log` ×4, `clippy.log`, `clippy2.log`, `fmt.log`, `fmt2.log`, `suite.log` — one level above the assigned `tmp/`, which is a small deviation from the triple and is named here.
 3. This report, at the path the brief names.
 
 Nothing under `/tmp`. No planning-store write, no `aep plan artifact` write verb, no git write command, no worktree command other than the lease hooks for session `ess-u2r1-fable-20260920` (start, four heartbeats, end).

@@ -9,7 +9,7 @@ relations:
 - reviews: task:validate-v2-projection-awareness
 revision: 1
 ---
-unit: task:validate-v2-projection-awareness — commit af2af7e74c0230dbb5f8a202e68b719dbfbed7a4 (base effef5b1a30019f4c9c2e143abe614cc9d5db89b), worktree ~/.local/state/worktree/trees/b10x/aep/ess-evolution-validate-v2-review-1-20260920 at that commit plus 208 test-only lines
+unit: task:validate-v2-projection-awareness — commit af2af7e74c0230dbb5f8a202e68b719dbfbed7a4 (base effef5b1a30019f4c9c2e143abe614cc9d5db89b), worktree home-path:sha256:a23a1d1e1aacbefe3795051159bb659f123cea241d785ff98042170c2d4ebe99 at that commit plus 208 test-only lines
 verdict: red
 cases: executed 580→584, red 2
 origin: introduced 1, pre-existing 2, undecided 0
@@ -54,7 +54,7 @@ running 1 test
 test validate_reports_a_foreign_document_planted_in_an_eventlog_projection ... FAILED
 
 thread 'validate_reports_a_foreign_document_planted_in_an_eventlog_projection' (549844) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:1501:5:
-a planning document planted in the projection is a change nothing decided, and validate reported the plan clean: {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/aep-rev1-tmp/aep-public-writer-control-549843-0/.engineering/state (control-sql/control-sql-tenant/01a0c06c-e36d-7033-a038-621b9400f198)"} — verify said {"format":"aep.planning-verification/1","outcome":{"kind":"verified","value":{ … "projection":{"authority_snapshot":"sha256:f016aef9…","drift":"current","inventory_digest":"sha256:52d7dc99…", … }}}} —
+a planning document planted in the projection is a change nothing decided, and validate reported the plan clean: {"artifacts":1,"files_read":1,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:818ceb56d68d84bfea336f4ade412489b9595297b5d5278865095bf9df68304c (control-sql/control-sql-tenant/01a0c06c-e36d-7033-a038-621b9400f198)"} — verify said {"format":"aep.planning-verification/1","outcome":{"kind":"verified","value":{ … "projection":{"authority_snapshot":"sha256:f016aef9…","drift":"current","inventory_digest":"sha256:52d7dc99…", … }}}} —
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 13.68s
 ```
@@ -69,7 +69,7 @@ running 1 test
 test strict_validate_reports_a_pre_migration_review_without_an_outcome_on_an_eventlog_plan ... FAILED
 
 thread 'strict_validate_reports_a_pre_migration_review_without_an_outcome_on_an_eventlog_plan' (644350) panicked at crates/edge/aep-cli/tests/store_writer_control.rs:1656:5:
-a review recorded before the migration and never answered is reported by no class once the plan is Eventlog: {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store ~/.cache/aep-rev1-tmp/aep-public-writer-control-644349-0/.engineering/state (control-sql/control-sql-tenant/01a0c078-b44f-7326-899e-f1f478456f00)","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]}
+a review recorded before the migration and never answered is reported by no class once the plan is Eventlog: {"artifacts":2,"files_read":2,"pre_provider":0,"problems":[],"store":"the Eventlog store home-path:sha256:1dfe7dff9759383a2dab915fcd82ade55ce7c834bf0244311d089b3fbdb73389 (control-sql/control-sql-tenant/01a0c078-b44f-7326-899e-f1f478456f00)","without_findings":["review-result:old states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"]}
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 2.64s
 ```
@@ -222,17 +222,17 @@ Full logs: `scratch/suite.log`, `scratch/suite-nofailfast.log`.
 
 ## 6. Paths written outside the worktree
 
-1. `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/scratch/suite.log`
-2. `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/scratch/suite-nofailfast.log`
-3. `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/scratch/tmpdir-residue/` — 311 fixture directories and writer-lock files left by the package suite's own temp usage, moved here from (5)
-4. `~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/scratch/aep-public-writer-control-*` and `aep-writer-control-*` — four fixture roots left behind by the two red cases, which panic before their own cleanup
-5. `~/.cache/aep-rev1-tmp` — **the substitute `TMPDIR`**, created because the assigned
+1. `home-path:sha256:29dd2d006d31be7c24a84439ee8fd23ee692dd5cc2fe979b2cea4a340e835754`
+2. `home-path:sha256:4cfa2ccccb7676056979914ce87b85069692358b000dc946fc525da785b9c719`
+3. `home-path:sha256:4335e720018a95765df2e1bff71b67be50627609c16a521781110a4ade9dd661` — 311 fixture directories and writer-lock files left by the package suite's own temp usage, moved here from (5)
+4. `home-path:sha256:621133e389b2f5aa5a29b63994c0f61712640a8d39602af15d086f95e950bb5b` and `aep-writer-control-*` — four fixture roots left behind by the two red cases, which panic before their own cleanup
+5. `home-path:sha256:431dfd714f9bbf603b79e567127b2231b9c61ee03c4f360bbdd33eba913df38b` — **the substitute `TMPDIR`**, created because the assigned
    scratch path cannot serve as one (finding 3). Everything it held was moved into (3) and the
    directory was removed; it no longer exists. This is a deviation from the brief's triple and it
    is the one thing I could not settle without the coordinator.
 
 Also written: this report, at
-`~/beyond10x/.ess-evolution/waves/0005-aep-migration/wave-validate-v2-20260920/unit-1-validate-v2/review-1-report.md`.
+`home-path:sha256:39d4fe3cd372d6b4c9f9de4c2939819c4794280888ec2c1ed45155da6935b22b`.
 Nothing under `/tmp`. No planning-store write, no `aep plan artifact` write verb, no git write
 command, no worktree command other than the three lease hooks for session
 `review-1-validate-v2-20260920`.

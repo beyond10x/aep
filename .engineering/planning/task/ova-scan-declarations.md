@@ -62,6 +62,6 @@ turns the completeness check into noise, and a noisy check is one a future round
 
 `.engineering/checks/check-scan.sh`. S1–S9 are its rows.
 
-S7 copies `protocols/` into `${TMPDIR:-$HOME/.cache/claude-tmp}` and runs the scan against the copy
+S7 copies `protocols/` into `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6` and runs the scan against the copy
 via its root argument; the check fails if the scan cannot be pointed at a root, because a scan that
 can only read the live tree cannot be tested without mutating it.

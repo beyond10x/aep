@@ -44,7 +44,7 @@ Command/output verbatim; direct exit 0; elapsed 0.334 seconds.
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass2 comparison_cannot_drop_predicate_children_or_quantified_conditions -- --exact --nocapture
-   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
     Finished `test` profile [unoptimized] target(s) in 0.30s
      Running tests/coverage_adversary_pass2.rs (target/debug/deps/coverage_adversary_pass2-4772d1bcab942d1a)
 
@@ -62,7 +62,7 @@ Command/output verbatim; direct exit 0; elapsed 0.418 seconds.
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass2 -- --nocapture
-   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
     Finished `test` profile [unoptimized] target(s) in 0.37s
      Running tests/coverage_adversary_pass2.rs (target/debug/deps/coverage_adversary_pass2-4772d1bcab942d1a)
 
@@ -81,8 +81,8 @@ Command/output verbatim; direct exit 0; elapsed 9.679 seconds.
 
 ```text
 cargo test --locked -p aep-cli --test ess_conformance_coverage adversary_pass2_current_named_model_controls_both_decisions_after_graph_refresh_and_replay -- --exact --nocapture
-   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
-   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
+   Compiling aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
+   Compiling aep-cli v0.54.0 (home-path:sha256:feb9c133273810397c51813f527494ae89ce604fa3e22a2517bd8fb71347d017)
     Finished `test` profile [unoptimized] target(s) in 9.65s
      Running tests/ess_conformance_coverage.rs (target/debug/deps/ess_conformance_coverage-e32be10b1f0a589e)
 
@@ -102,8 +102,8 @@ Command/output verbatim; direct exit 0; elapsed 135.773 seconds.
 
 ```text
 cargo test --locked -p aep-domain -p aep-engine -p aep-ess-evidence -p aep-schema -p aep-cli --no-fail-fast
-   Compiling aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
-   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-cli v0.54.0 (home-path:sha256:feb9c133273810397c51813f527494ae89ce604fa3e22a2517bd8fb71347d017)
+   Compiling aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
     Finished `test` profile [unoptimized] target(s) in 0.68s
      Running unittests src/aep.rs (target/debug/deps/aep-1b91394d0d0670f1)
 
@@ -1916,8 +1916,8 @@ Command/output verbatim; direct exit 101; elapsed 0.351 seconds.
 
 ```text
 cargo clippy --locked -p aep-domain -p aep-engine -p aep-ess-evidence -p aep-schema -p aep-cli --all-targets -- -D warnings
-    Checking aep-cli v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/edge/aep-cli)
-    Checking aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+    Checking aep-cli v0.54.0 (home-path:sha256:feb9c133273810397c51813f527494ae89ce604fa3e22a2517bd8fb71347d017)
+    Checking aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
 error: this argument is passed by value, but not consumed in the function body
  --> crates/observe/aep-ess-evidence/tests/coverage_adversary_pass2.rs:9:21
   |
@@ -1943,7 +1943,7 @@ Command/output verbatim; direct exit 0; elapsed 0.385 seconds.
 
 ```text
 cargo test --locked -p aep-ess-evidence --test coverage_adversary_pass2 -- --nocapture
-   Compiling aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+   Compiling aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
     Finished `test` profile [unoptimized] target(s) in 0.34s
      Running tests/coverage_adversary_pass2.rs (target/debug/deps/coverage_adversary_pass2-4772d1bcab942d1a)
 
@@ -1969,7 +1969,7 @@ Command/output verbatim; direct exit 0; elapsed 0.275 seconds.
 
 ```text
 cargo clippy --locked -p aep-domain -p aep-engine -p aep-ess-evidence -p aep-schema -p aep-cli --all-targets -- -D warnings
-    Checking aep-ess-evidence v0.54.0 (~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage/crates/observe/aep-ess-evidence)
+    Checking aep-ess-evidence v0.54.0 (home-path:sha256:cff954d84a08e38de2cbf9589abfd8126b2682898ecfbdf287c2bc399a3ff4d5)
     Finished `dev` profile [unoptimized] target(s) in 0.23s
 elapsed_seconds=0.275
 ```
@@ -2003,7 +2003,7 @@ d5ee4f43d8527134997eaf7fc2ca30e9f4922dba1df2bebd38779d98029db873  docs/design/es
 8e893b1c13dbc7e0bbe71cc98caa75e7294effe9c0292face46567ffce750030  target/ess-conformance-coverage/adversary-pass-2/brief.md
 113b4f5efcd5f134b71435683851dec306cc58d624a28f7cbb25afebccdad652  target/ess-conformance-coverage/correction-pass-1/implementor-report.md
 d83f6aa2528da72ceffa71abcded5945ed17a3bdbf8ca7797665d51ea6fa2fad  target/ess-conformance-coverage/adversary-pass-1/adversary-report.md
-680ac11700dc215bf39201d7019b36277f8b260b673f99c6f09e8a4eb051f795  ~/.codex/plugins/cache/beyond10x/aep-drive/0.8.0/agents/adversary.md
+680ac11700dc215bf39201d7019b36277f8b260b673f99c6f09e8a4eb051f795  home-path:sha256:e82505babddc671cebf5b7f4c841d234b8ece153cba47dc082beaaf48b4a8210
 ```
 
 Frozen source manifest SHA256: `792437f1bdb462d4b947740d167307e6204c784a43318b6859e00badb91585b2` (`target/ess-conformance-coverage/correction-pass-1/source-before-suite.sha256`).
@@ -2021,7 +2021,7 @@ The lowest sampled free space was 12,388,122,624 bytes, above the required 8,589
 
 Outside-worktree writes
 
-The sole assigned outside path is the recursive TMPDIR `~/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-2-tmp`. Package tests created temporary fixtures there, including isolated simulated planning/run files used by the unchanged test suite; these are not writes to the project's actual planning store. `logs/outside-retained-files.txt` lists every one of the 2,236 retained file paths in full, and `logs/outside-retained-files.sha256` records each file's final bytes. Temporary files already removed by the tests were not traced individually; their authorized root is reported in full here. There was no agent cleanup. No other outside write destination was configured or intentionally written.
+The sole assigned outside path is the recursive TMPDIR `home-path:sha256:129850500f685dbd18566530e8e00498665fb27a016947ee48b28c99e3458597`. Package tests created temporary fixtures there, including isolated simulated planning/run files used by the unchanged test suite; these are not writes to the project's actual planning store. `logs/outside-retained-files.txt` lists every one of the 2,236 retained file paths in full, and `logs/outside-retained-files.sha256` records each file's final bytes. Temporary files already removed by the tests were not traced individually; their authorized root is reported in full here. There was no agent cleanup. No other outside write destination was configured or intentionally written.
 
 The execution manifest is `execution-manifest.json` (SHA256 `f9a38e6c5f010e984589c9fbf668335184baa905b1f9129cf3f02f2dcda1d7c1`), and its 68-entry retained log/fixture catalog is `execution-files.sha256` (SHA256 `f510fd8110d97c9b380a5eccd6c38522a237673a4e7285b59a20560c6e496c81`). These artifacts retain commands, outputs, direct statuses, counts, fixture inventories and source hashes; the catalog does not hash itself or this report. `sealed.sha256` binds the report, manifest, catalog and standalone matching `findings.yaml`. All report/test/scratch writes are relinquished on handoff.
 

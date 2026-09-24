@@ -31,7 +31,7 @@ measured against. Covers **R1–R4** and **R10** of the specification.
   json`) and a content digest of its file.
 - A committed `.gitignore` in the fixture excludes only paths the *harness* dirties, each with a
   comment naming what writes it. No pattern may also hide a write under `.engineering/planning/`.
-- The scratch directory is created under `$TMPDIR` (falling back to `$HOME/.cache/claude-tmp`),
+- The scratch directory is created under `$TMPDIR` (falling back to `home-path:sha256:595d337ee531b7ec6c250fa3c256dc56ee9257b464b24ab72a1e33a3a5c17aa2`),
   never `/tmp`, survives the run, and its path is printed.
 
 ## Why
@@ -47,7 +47,7 @@ Verifiable on its own, with **no API call** — the fixture build is reachable w
 
 | # | Acceptance |
 |---|---|
-| F1 | Building the fixture twice produces two directories, both under `$TMPDIR` or `$HOME/.cache/claude-tmp`, and prints each path. |
+| F1 | Building the fixture twice produces two directories, both under `$TMPDIR` or `home-path:sha256:595d337ee531b7ec6c250fa3c256dc56ee9257b464b24ab72a1e33a3a5c17aa2`, and prints each path. |
 | F2 | The fixture's store lists **7** artifacts, each at the status its committed source file carries — compared field by field, not counted. |
 | F3 | `protocol artifact validate` exits 0 inside the fixture. |
 | F4 | `git status --porcelain` inside the fixture is **empty**, and the build fails loudly if it is not. |

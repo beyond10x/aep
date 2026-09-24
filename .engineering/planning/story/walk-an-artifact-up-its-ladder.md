@@ -18,7 +18,7 @@ A migration knows where an artifact ends up — a bug analysis that says it land
 and it has to get there one `move` at a time, because `move` takes a single `--to` and the ladder
 allows one rung per call.
 
-The `sbf/acd` migration walked `draft → proposed → active` by hand for two stories. Nothing is wrong
+The `an adopting project` migration walked `draft → proposed → active` by hand for two stories. Nothing is wrong
 with the refusal that makes it necessary: guardrail 4 in the `planning` skill is right that jumping
 rungs hides which rung's evidence was never paid. What is missing is the verb that walks the rungs
 *and says what each one cost*, so a caller does not have to choose between two hand-written moves
@@ -38,5 +38,5 @@ and a wrong one.
 ## Evidence for the gap
 
 `crates/edge/aep-cli/src/planning.rs` — `move` takes one `--to` and validates it against the
-lifecycle. On `sbf/acd`, `story:presence-sync-race` needed two invocations to reach `active`, and
+lifecycle. On `an adopting project`, `story:presence-sync-race` needed two invocations to reach `active`, and
 the third to `implemented` was refused for want of a `test_result`.

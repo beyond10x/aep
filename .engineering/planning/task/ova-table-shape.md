@@ -67,5 +67,5 @@ table — without it the suite can be made green by deleting rows.
 
 `.engineering/checks/check-table-shape.sh`. T1–T8 are its rows.
 
-T7 runs against a copy under `${TMPDIR:-$HOME/.cache/claude-tmp}` with the data rows deleted, and
+T7 runs against a copy under `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6` with the data rows deleted, and
 requires the check to exit non-zero on that copy — a green result there is a failed row here.

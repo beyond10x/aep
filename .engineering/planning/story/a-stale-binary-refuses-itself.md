@@ -38,7 +38,7 @@ Six sessions, one failure shape (`SYNTHESIS.md` CL-1):
 - `ed007513#2664-#2751`: 0.26.0 two releases after 0.27.3 shipped; `artifact validate` gave a false `undeclared_reference`.
 - `9da4f51c#3300`: a build predating the journal — `history` reported nothing at revision 4, `validate` stayed green.
 - `3130470e#97`: the stale install reported 3 live stories as deleted.
-- `11727595#23267`, `9c286ad7#19`: 0.32.1 installed against a 0.33.0 tree; today `~/.cargo/bin/protocol`
+- `11727595#23267`, `9c286ad7#19`: 0.32.1 installed against a 0.33.0 tree; today `home-path:sha256:62df9213bb1e2eef4a51a9e80036d380852d0358e672bc00c8215e9468cc2284`
   was built 00:14 and `0.33.0` tagged 00:30.
 
 Landed so far: `--version` prints the workspace version (`ed007513#903`); H2 reads the store with the

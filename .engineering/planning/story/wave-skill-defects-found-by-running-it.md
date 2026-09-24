@@ -88,8 +88,8 @@ its trees standing pays nothing and the wave *after* it pays everything. Worse, 
 directory placed outside the worktree — which the same skill requires, so two trees never
 share one — survives `git worktree remove` untouched and is invisible to every `git`
 command there is. Measured on this machine on 2026-08-30: **14 GB** still standing at
-`~/.cache/claude-tmp/claude-1000/-home-operator-projects-engineering-protocols/ba00d8e0-.../scratchpad/eval/ws_eval`,
-last written **2026-08-24**, keyed to `~/projects/engineering-protocols` — a path that still
+`home-path:sha256:e220d61f5725b085fb371ab3c89c74443f239b829fae60cb77d5c000316a2f35`,
+last written **2026-08-24**, keyed to `home-path:sha256:dec166ff979020d1621d670b3e985e0c52f8844927bd91b4c3031d1b564117eb` — a path that still
 exists and holds `.git/` and `.claude/` and no working tree, so nothing in the checkout
 being worked on names it. Root filesystem at **91 %**, 75 G free of 848 G. **Fix: a closing step that reads
 the untracked records out, removes each worktree, removes each build directory by the name
@@ -257,7 +257,7 @@ wording.
 
 **And the number that keeps growing.** Defect 8 measured 14 GB of orphaned build directories.
 This wave's pre-flight measured 9.0 G of another repository's, and an adversary measured
-`~/.cache/claude-tmp` at **64 GB across 444 `protocol-drive-*` fixture trees** left by past runs,
+`home-path:sha256:19fe682f3fe83357c3f33ab05327e447fdadaec1c3d1d3429696b76deabf1d84` at **64 GB across 444 `protocol-drive-*` fixture trees** left by past runs,
 with the root filesystem at **96%, 38 G free**. None of it is this repository's and nothing prunes
 it. The cleanup step this story added covers a wave's own trees; **fixture trees written to
 `TMPDIR` by test harnesses are a second unswept surface nobody owns.**

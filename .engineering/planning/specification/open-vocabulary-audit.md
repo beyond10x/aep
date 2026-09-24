@@ -200,7 +200,7 @@ remove.
   restated as a checkable one (Acceptance criterion 7).
 - **`integrations/claude-code/eval/checks/run-checks.sh` is read as a model and not edited.**
 - **No network, no API, no money.** Every check is hermetic; the suite runs offline.
-- **Never `/tmp`** for scratch. `${TMPDIR:-$HOME/.cache/claude-tmp}`, as the model runner does.
+- **Never `/tmp`** for scratch. `${TMPDIR:-home-path:sha256:22fb0807eac4722ef87189d62f3aa4e588bb714d3a6a49f5886d994c069193f6`, as the model runner does.
 - **Three programs only**: `bash`, `git`, `protocol` — the set `drivers/development/checks.yaml`
   already requires on `PATH`. No check introduces a fourth dependency (no `yq`, no `jq` unless it is
   already required by the model runner).

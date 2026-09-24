@@ -22,11 +22,11 @@ A live spawn is refused, before any money is spent, when the `aep` the session w
 
 ## Context
 
-metaharness gives the session a constructed `PATH` — `$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin` — and never the runner's own. On 2026-09-03 the golden-path case ran with a 0.40.1 copy in `~/.local/bin` beside the 0.44.0 that launched it: step 3 was drafted by hand because `ess` was not there, and step 8 stopped at `aep doctor: unrecognized subcommand` after $10.96 had been spent. Nothing said the two binaries disagreed.
+metaharness gives the session a constructed `PATH` — `home-path:sha256:bf0ce980507453a72ff552e629263aad96884f583e2ab5794252f4e5b2956f19` — and never the runner's own. On 2026-09-03 the golden-path case ran with a 0.40.1 copy in `home-path:sha256:8d6708581526e2954aab593f4ba61464fb67c0e06c88062276127839a99834b9` beside the 0.44.0 that launched it: step 3 was drafted by hand because `ess` was not there, and step 8 stopped at `aep doctor: unrecognized subcommand` after $10.96 had been spent. Nothing said the two binaries disagreed.
 
 ## Acceptance
 
 - Before a live spawn the runner resolves `aep` on the child's `PATH` exactly as metaharness constructs it, reads its `--version`, and refuses a mismatch by name (`EVAL-RUN-017`) with both paths and both versions; an absent child `aep` is a printed warning.
 - A case whose `subject.skills` names `ess-schema:*` is refused (`EVAL-RUN-018`) when the child's `PATH` has no `ess`.
-- `--stream` ingestion is untouched; the test suite runs under a scratch `HOME` so a developer's own `~/.local/bin` does not decide what it reports.
-- `task install` refreshes a real `~/.local/bin/aep` and `~/.local/bin/protocol` after the cargo install.
+- `--stream` ingestion is untouched; the test suite runs under a scratch `HOME` so a developer's own `home-path:sha256:8d6708581526e2954aab593f4ba61464fb67c0e06c88062276127839a99834b9` does not decide what it reports.
+- `task install` refreshes a real `home-path:sha256:cef90161b133031771c367dcbcdceb37a5db96829f01764e96ff21a7d794a49e` and `home-path:sha256:1704d3049436c375381628177c71498f26ecba8b00b31041de3473daa206b278` after the cargo install.

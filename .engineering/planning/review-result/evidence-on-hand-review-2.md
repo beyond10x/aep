@@ -9,11 +9,11 @@ relations:
 - reviews: task:evidence-on-hand-v2-journal
 revision: 1
 ---
-unit: task:evidence-on-hand-v2-journal — commit f3a06a0cac43917408da629f2d6544dc8cb7db25 (base af2af7e74), worktree ~/.local/state/worktree/trees/b10x/aep/ess-evolution-evidence-on-hand-review-2-20260920 detached there plus 354 test-only lines
+unit: task:evidence-on-hand-v2-journal — commit f3a06a0cac43917408da629f2d6544dc8cb7db25 (base af2af7e74), worktree home-path:sha256:44543e4f97b8240f7e90df6661cecb50be64dfa98c4eb9aa9f432345288c0370 detached there plus 354 test-only lines
 verdict: red
 cases: executed 600→603, red 3
 origin: introduced 3, pre-existing 0, undecided 0
-wrote-outside-worktree: ~/.cache/ess-wave-v2/u2r2/{tmp/, build.log, alone-outcome-order.log, alone-unrelated-outcome.log, alone-same-second.log, alone-rerun.log, clippy.log, clippy2.log, fmt.log, fmt2.log, fmt3.log, base-planning.rs, suite.log} and this report (§6)
+wrote-outside-worktree: home-path:sha256:d7ff118363b90d626bb0ca733f8f00dfe4d9a13393032227fa9314b00795ffe5, build.log, alone-outcome-order.log, alone-unrelated-outcome.log, alone-same-second.log, alone-rerun.log, clippy.log, clippy2.log, fmt.log, fmt2.log, fmt3.log, base-planning.rs, suite.log} and this report (§6)
 needs-coordinator: yes — findings 1 and 2 route back to the implementor or become their own story; finding 3 is the pass-1 ordering defect narrowed rather than removed and the CHANGELOG discloses the narrowing, so whether it holds the unit is not mine to say (§4)
 
 ## 1. `git --no-pager diff --stat`
@@ -31,7 +31,7 @@ by the suite run; per the repository invariant they are named here and left as f
 
 All three were written before anything was run, and each was run **alone** before the suite
 (`cargo test -p aep-cli --test store_writer_control -- --exact --test-threads=1 <name>`,
-`TMPDIR=~/.cache/ess-wave-v2/u2r2/tmp`). Every case carries its own **Markdown control**:
+`TMPDIR=home-path:sha256:48a19c2de0c1268d0fc9db728c1971385c0108338bf971e14912c64990eb0773`). Every case carries its own **Markdown control**:
 the same store, the same records, asserted before the migration and again after it, so the case
 cannot be read as a disagreement about what the right answer is.
 
@@ -105,7 +105,7 @@ EXIT=101
 Run after the three cases above existed, nothing deselected:
 
 ```console
-$ TMPDIR=~/.cache/ess-wave-v2/u2r2/tmp cargo test -p aep-cli --no-fail-fast
+$ TMPDIR=home-path:sha256:48a19c2de0c1268d0fc9db728c1971385c0108338bf971e14912c64990eb0773 cargo test -p aep-cli --no-fail-fast
 ```
 
 ```
@@ -127,7 +127,7 @@ added, and the three failures are exactly those three — the lane's 29 pre-exis
 so nothing I wrote broke anything that was standing. `cargo fmt -p aep-cli -- --check` exit 0 and
 `cargo clippy -p aep-cli --all-targets -- -D warnings` exit 0 after my additions (clippy was red once,
 on `ptr_arg`, fixed in the test file). Postgres lanes not exercised (`ENTITY_POSTGRES_URL` unset).
-Full log: `~/.cache/ess-wave-v2/u2r2/suite.log`.
+Full log: `home-path:sha256:0d7d8ef64eec8db8e01305e378fb1a611438181636c175ffe7b49144484b91bf`.
 
 ## 4. Findings (commit f3a06a0ca, worktree above)
 
@@ -231,7 +231,7 @@ still compared by id, and the migration reverses a pair the Markdown plan had ri
 ### Authority reads on the fixture (brief item)
 
 Counted by reading, on the correction's 14-document fixture
-(`~/.cache/ess-wave-v2/u2r1/tmp/aep-public-writer-control-1298446-0`: `story:one`,
+(`home-path:sha256:526e0e7b0aa6b2f422d9b669e11207cf829c3839a08390744b05cca32c25bb2f`: `story:one`,
 `story:probe-01..11`, `review-result:zulu` and `:alpha`, both declaring `reviews: story:one` and
 nothing else):
 
@@ -290,9 +290,9 @@ to a read path removes reads or narrows them.
 
 All under the assigned scratch parent except the last:
 
-1. `~/.cache/ess-wave-v2/u2r2/tmp/` — the assigned `TMPDIR` (created by me), 19 MB of lane
+1. `home-path:sha256:8026a0e23dfabf75aa2905d0b1c9bce351e012ac3bb924144e0943d1e1368fd4` — the assigned `TMPDIR` (created by me), 19 MB of lane
    fixtures; the three cases of §2 remove their own fixtures, the rest is the ordinary lane debris.
-2. `~/.cache/ess-wave-v2/u2r2/{build.log, alone-outcome-order.log,
+2. `home-path:sha256:5d1ecf46710fb7df802c8aec6e963b5294a6fb19530e9861e0861a46cf37c08e, alone-outcome-order.log,
    alone-unrelated-outcome.log, alone-same-second.log, alone-rerun.log, clippy.log, clippy2.log,
    fmt.log, fmt2.log, fmt3.log, suite.log}` and `base-planning.rs` (the base file read out with
    `git show af2af7e74:…`, 372 KB) — one level above the assigned `tmp/`, which is a small deviation

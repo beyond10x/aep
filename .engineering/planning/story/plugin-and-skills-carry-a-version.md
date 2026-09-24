@@ -25,11 +25,11 @@ stage-1 report prints it.
 
 ## Context
 
-Audit of 2026-08-30 (`~/.cache/ep-session-audit/SYNTHESIS.md` PL-1), six independent sources:
+Audit of 2026-08-30 (`home-path:sha256:633ea233a9e268574f9ab6b61f4a951d70fdcabc8fe16cc1857db8dc52709ffc` PL-1), six independent sources:
 
 - `plugin.json` read `0.1.0` across 9 plugin commits and 968 changed lines since the installed commit
   `422966a` (`git diff --stat 422966a..HEAD -- integrations/claude-code`).
-- The marketplace install is disabled (`~/.claude/settings.json:47`); every skill load in every session
+- The marketplace install is disabled (`home-path:sha256:330321a263ee3e778c7865e37f1a37fe7df10aa2dc02a1e315dc3ceb0b0253ed`); every skill load in every session
   came from the checkout via `--plugin-dir` (27 `planning`, 9 `wave` loads).
 - Session `11727595`: installed cache carried a 203-line planning skill, "Five guardrails", 3 agents;
   the tree had 241 lines, "Six", 6 agents.

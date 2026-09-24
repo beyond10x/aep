@@ -26,7 +26,7 @@ Three days after ADR 0017 split `engineering-protocols`, the operator read `aep`
 part" and `adp` as "the workflows". The cause is naming: the only AEP-branded plugin is
 `aep-planning`, the execution plugin is branded `adp`, and 22 crates sit flat under `crates/` with
 nothing saying which of them are the protocol, which are the store, and which are the driver.
-Analysis: `~/.cache/beyond10x-notes/2026-09-03-aep-ess-structure.md`; plan: Atlas ADR to follow.
+Analysis: `home-path:sha256:72832b6cc0394f68b41c2907feb0f1dd84ae512843f6fcf90309afea591197e5`; plan: Atlas ADR to follow.
 
 ## Scope
 
