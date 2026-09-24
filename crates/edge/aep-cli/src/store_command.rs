@@ -5438,12 +5438,13 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
         );
     }
     println!(
-        "exported {} artifacts and {} records into {} ({}); left behind {} operational records",
+        "exported {} artifacts and {} records into {} ({}); left behind {} operational records; {} legacy evidence blobs rebound to their rewritten bytes",
         report.artifacts,
         report.records,
         args.into.display(),
         report.stream_identity,
-        report.skipped
+        report.skipped,
+        report.provenance
     );
     if !report.untyped.is_empty() {
         println!(
@@ -5507,14 +5508,13 @@ fn export_differences(
             differences.push(format!("{locator}: missing from the export"));
             continue;
         };
-        let mut expected = serde_json::to_string(&(&entity.metadata.id, &entity.data))?;
-        for (from, to) in &replacements {
-            expected = expected.replace(from.as_str(), to);
-        }
-        let expected: serde_json::Value = serde_json::from_str(&expected)?;
+        let expected = replaced(
+            &serde_json::to_value((&entity.metadata.id, &entity.data))?,
+            &replacements,
+        );
         let actual = serde_json::to_value((&copy.metadata.id, &copy.data))?;
-        if expected != actual {
-            differences.push(format!("{locator}: its fields differ from the source"));
+        if let Some(at) = first_difference(&expected, &actual, "") {
+            differences.push(format!("{locator}: its fields differ from the source at {at}"));
         }
         if copy.metadata.revision != entity.metadata.revision {
             differences.push(format!("{locator}: its revision differs from the source"));
@@ -5528,6 +5528,77 @@ fn export_differences(
         ));
     }
     Ok(differences)
+}
+
+/// `value` with every replacement applied inside each string and object key, longest first.
+/// Replacing in the serialized text instead misses a path whose characters JSON escapes.
+fn replaced(value: &serde_json::Value, replacements: &[(&String, &String)]) -> serde_json::Value {
+    use serde_json::Value;
+    let text = |text: &str| {
+        let mut out = text.to_owned();
+        for (from, to) in replacements {
+            if out.contains(from.as_str()) {
+                out = out.replace(from.as_str(), to);
+            }
+        }
+        out
+    };
+    match value {
+        Value::String(value) => Value::String(text(value)),
+        Value::Array(items) => Value::Array(items.iter().map(|item| replaced(item, replacements)).collect()),
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(key, field)| (text(key), replaced(field, replacements)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// The JSON pointer of the first place `expected` and `actual` part, with both values there, or
+/// nothing when they agree. A mismatch named only by its artifact cannot be acted on.
+fn first_difference(
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+    at: &str,
+) -> Option<String> {
+    use serde_json::Value;
+    match (expected, actual) {
+        (Value::Object(left), Value::Object(right)) => {
+            let keys: std::collections::BTreeSet<&String> = left.keys().chain(right.keys()).collect();
+            keys.into_iter().find_map(|key| {
+                let (Some(l), Some(r)) = (left.get(key), right.get(key)) else {
+                    return Some(format!("{at}/{key} (present on one side only)"));
+                };
+                first_difference(l, r, &format!("{at}/{key}"))
+            })
+        }
+        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => left
+            .iter()
+            .zip(right)
+            .enumerate()
+            .find_map(|(index, (l, r))| first_difference(l, r, &format!("{at}/{index}"))),
+        (Value::String(left), Value::String(right)) if left != right => {
+            let from = left
+                .char_indices()
+                .zip(right.chars())
+                .find(|((_, l), r)| l != r)
+                .map_or(left.len().min(right.len()), |((index, _), _)| index);
+            let start = left.floor_char_boundary(from.saturating_sub(60));
+            let near = |text: &str| -> String {
+                let end = text.ceil_char_boundary((from + 60).min(text.len()));
+                text.get(start..end).unwrap_or_default().to_owned()
+            };
+            Some(format!(
+                "{at}, byte {from}: expected {:?}, found {:?}",
+                near(left),
+                near(right)
+            ))
+        }
+        _ if expected == actual => None,
+        _ => Some(format!("{at}: expected {expected}, found {actual}")),
+    }
 }
 
 /// The first line after the interpreter in a hook this command wrote. A hook without it is not
@@ -5617,6 +5688,37 @@ fn install_hooks(args: &InstallHooksArgs) -> Result<ExitCode> {
         );
     }
     Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod export_comparison_tests {
+    use super::{first_difference, replaced};
+
+    #[test]
+    fn a_replacement_whose_text_json_escapes_is_applied_inside_the_string() {
+        let from = "dir/bad\\name.yaml".to_owned();
+        let to = "home-path:sha256:ab".to_owned();
+        let shorter = "dir".to_owned();
+        let digest = "home-path:sha256:cd".to_owned();
+        let replacements = vec![(&from, &to), (&shorter, &digest)];
+        let value = serde_json::json!({ "body": "see dir/bad\\name.yaml" });
+        assert_eq!(
+            replaced(&value, &replacements),
+            serde_json::json!({ "body": "see home-path:sha256:ab" })
+        );
+    }
+
+    #[test]
+    fn a_mismatch_is_named_by_its_pointer_and_the_text_around_it() {
+        let expected = serde_json::json!({ "a": [1, { "body": "same prefix, then this" }] });
+        let actual = serde_json::json!({ "a": [1, { "body": "same prefix, then that" }] });
+        let at = first_difference(&expected, &actual, "").expect("they differ");
+        assert!(at.starts_with("/a/1/body, byte 20:"), "{at}");
+        assert!(at.contains("\"same prefix, then this\""), "{at}");
+        assert_eq!(first_difference(&expected, &expected, ""), None);
+        let missing = first_difference(&expected, &serde_json::json!({}), "").expect("differs");
+        assert_eq!(missing, "/a (present on one side only)");
+    }
 }
 
 #[cfg(test)]

@@ -13,6 +13,12 @@
 //!
 //! Operational records — invocation reservations and projection watermarks — are not history and
 //! are left behind; the tree keeps neither.
+//!
+//! The provenance of the migration into `aep.project/2` — record coordinates, the exact legacy
+//! bytes, the id reservation roster and the raw capture of the markdown store — holds source text
+//! hex-encoded, and `history` reads the oldest events from it. The rewrites reach inside every
+//! hex value that is UTF-8 text, and the digests that bind those bytes are derived again from the
+//! rewritten bytes (`rebind_legacy`), so the graph still validates and names no home path.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -43,6 +49,8 @@ pub struct ExportReport {
     pub artifacts: usize,
     /// Other subjects copied as they were: relations, audit, applied commands, legacy evidence.
     pub records: usize,
+    /// Legacy evidence blobs whose rewritten bytes were bound to a new digest.
+    pub provenance: usize,
     /// Operational subjects left behind.
     pub skipped: usize,
     /// The artifact kinds copied as the generic contract entity because no typed entity exists
@@ -70,7 +78,7 @@ struct Rewrite<'a> {
 impl Rewrite<'_> {
     fn value(&mut self, value: &Value) -> Value {
         match value {
-            Value::String(text) => Value::String(self.text(text)),
+            Value::String(text) => Value::String(self.string(text)),
             Value::Array(items) => {
                 Value::Array(items.iter().map(|item| self.value(item)).collect())
             }
@@ -81,6 +89,23 @@ impl Rewrite<'_> {
             ),
             other => other.clone(),
         }
+    }
+
+    /// A string value: text, or legacy bytes as `hex:` whose UTF-8 text is rewritten the same way.
+    fn string(&mut self, text: &str) -> String {
+        if text.starts_with("hex:") {
+            let decoded = aep_contract::migration::HexBytesV1::parse(text)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes.into_bytes()).ok());
+            if let Some(decoded) = decoded {
+                let out = self.text(&decoded);
+                if out != decoded {
+                    return aep_contract::migration::HexBytesV1::new(out.into_bytes()).as_wire();
+                }
+            }
+            return text.to_owned();
+        }
+        self.text(text)
     }
 
     fn text(&mut self, text: &str) -> String {
@@ -367,6 +392,7 @@ pub fn export_to_tree(
         histories.push(history);
     }
     report.home_paths = rewrite.found;
+    report.provenance = rebind_legacy(&mut histories)?;
 
     let identity = crate::typed::prepare_tree(target, tenant)?;
     crate::typed::provision_tree(
@@ -407,6 +433,133 @@ pub fn export_to_tree(
     })?;
     report.stream_identity = identity;
     Ok(report)
+}
+
+/// Replace each string equal to a rebound digest by its new digest.
+fn replace_digests(value: &mut Value, rebound: &BTreeMap<String, String>) {
+    match value {
+        Value::String(text) => {
+            if let Some(new) = rebound.get(text.as_str()) {
+                new.clone_into(text);
+            }
+        }
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|item| replace_digests(item, rebound)),
+        Value::Object(map) => map
+            .values_mut()
+            .for_each(|item| replace_digests(item, rebound)),
+        _ => {}
+    }
+}
+
+/// A legacy roster's `roster_digest`, over its entries, its authority and its boundary.
+fn roster_digest(fields: &Value) -> Result<aep_contract::migration::DigestV1, String> {
+    use aep_contract::migration::{digest_parts_v1, DigestV1};
+    let text = |value: &Value, key: &str| -> Result<Vec<u8>, String> {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .map(|text| text.as_bytes().to_vec())
+            .ok_or_else(|| format!("legacy roster has no {key}"))
+    };
+    let mut parts = Vec::new();
+    for entry in fields
+        .get("entries")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "legacy roster has no entries".to_owned())?
+    {
+        parts.push(text(entry, "record_id")?);
+        parts.push(text(entry, "coordinate_subject_id")?);
+        parts.push(text(entry, "evidence_blob_subject_id")?);
+        let digest = DigestV1::parse(
+            entry
+                .get("envelope_digest")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        )
+        .map_err(|error| format!("legacy roster entry digest: {error:?}"))?;
+        parts.push(digest.as_bytes().to_vec());
+    }
+    let authority = fields
+        .get("authority")
+        .ok_or_else(|| "legacy roster has no authority".to_owned())?;
+    parts.push(text(authority, "logical_scope")?);
+    parts.push(text(authority, "tenant")?);
+    parts.push(text(authority, "stream_identity")?);
+    parts.push(text(fields, "boundary_id")?);
+    digest_parts_v1("aep.migration.legacy-id-reservations/1", &parts)
+        .map_err(|error| format!("digesting legacy roster: {error:?}"))
+}
+
+/// Derive again every digest that binds rewritten legacy bytes, and return how many changed.
+///
+/// A legacy evidence blob's `envelope_digest` is the digest of its `exact_bytes`, and its
+/// coordinate and roster entry repeat it; a roster's `roster_digest` covers its entries. The
+/// formulas are the ones `validated_legacy_boundary_snapshot` checks.
+fn rebind_legacy(histories: &mut [SubjectHistory]) -> Result<usize, String> {
+    use aep_contract::migration::{digest_parts_v1, HexBytesV1};
+    let mut rebound: BTreeMap<String, String> = BTreeMap::new();
+    for history in histories.iter_mut() {
+        if history.subject.entity != crate::LEGACY_EVIDENCE_AS {
+            continue;
+        }
+        let HistoryOrigin::Imported(anchor) = &mut history.origin else {
+            continue;
+        };
+        let fields = &mut anchor.instance.fields;
+        let bytes = fields
+            .get("exact_bytes")
+            .and_then(Value::as_str)
+            .map(HexBytesV1::parse)
+            .transpose()
+            .map_err(|error| format!("legacy evidence bytes: {error:?}"))?
+            .ok_or_else(|| "legacy evidence has no exact bytes".to_owned())?
+            .into_bytes();
+        let digest = digest_parts_v1(
+            "aep.migration.legacy-evidence/1",
+            std::slice::from_ref(&bytes),
+        )
+        .map_err(|error| format!("digesting legacy evidence: {error:?}"))?
+        .as_wire();
+        let held = fields
+            .get("envelope_digest")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        if held != digest {
+            rebound.insert(held, digest.clone());
+            fields.insert("envelope_digest".to_owned(), Value::String(digest));
+            fields.insert("byte_length".to_owned(), Value::from(bytes.len() as u64));
+        }
+    }
+    if rebound.is_empty() {
+        return Ok(0);
+    }
+    for history in histories.iter_mut() {
+        if !history.subject.entity.starts_with("aep.migration.") {
+            continue;
+        }
+        let HistoryOrigin::Imported(anchor) = &mut history.origin else {
+            continue;
+        };
+        let mut fields = Value::Object(std::mem::take(&mut anchor.instance.fields));
+        replace_digests(&mut fields, &rebound);
+        if history.subject.entity == crate::LEGACY_ROSTER_AS {
+            let digest = roster_digest(&fields)?;
+            if let Value::Object(map) = &mut fields {
+                map.insert("roster_digest".to_owned(), Value::String(digest.as_wire()));
+            }
+        }
+        if let Value::Object(map) = fields {
+            anchor.instance.fields = map;
+        }
+        let mut evidence =
+            serde_json::to_value(&anchor.evidence).map_err(|error| error.to_string())?;
+        replace_digests(&mut evidence, &rebound);
+        anchor.evidence = serde_json::from_value(evidence).map_err(|error| error.to_string())?;
+    }
+    Ok(rebound.len())
 }
 
 fn anchored(
@@ -474,6 +627,136 @@ mod tests {
         };
         let out = rewrite.text(text);
         (out, rewrite.found)
+    }
+
+    #[test]
+    fn a_home_path_and_a_fixup_inside_hex_legacy_bytes_are_rewritten_and_stay_hex() {
+        use aep_contract::migration::HexBytesV1;
+        let fixups = BTreeMap::from([("acme/x".to_owned(), "an adopting project".to_owned())]);
+        let mut rewrite = Rewrite {
+            identities: &BTreeMap::new(),
+            fixups: &fixups,
+            workspace: None,
+            home_directory: Some(PathBuf::from(home("ada"))),
+            found: BTreeMap::new(),
+        };
+        let raw = format!(
+            "{{\"ref\":\"{}\",\"in\":\"acme/x\"}}",
+            home("ada/.cache/notes.md")
+        );
+        let out = rewrite.string(&HexBytesV1::new(raw.into_bytes()).as_wire());
+        let decoded = String::from_utf8(
+            HexBytesV1::parse(&out)
+                .expect("the rewritten value is still hex")
+                .into_bytes(),
+        )
+        .expect("the rewritten bytes are still UTF-8");
+        assert!(!decoded.contains(&home("ada")), "{decoded}");
+        assert!(decoded.contains("\"ref\":\"home-path:sha256:"), "{decoded}");
+        assert!(
+            decoded.contains("\"in\":\"an adopting project\""),
+            "{decoded}"
+        );
+    }
+
+    #[test]
+    fn hex_bytes_that_are_not_text_or_need_no_rewrite_are_kept_as_they_were() {
+        use aep_contract::migration::HexBytesV1;
+        let mut rewrite = Rewrite {
+            identities: &BTreeMap::new(),
+            fixups: &BTreeMap::new(),
+            workspace: None,
+            home_directory: None,
+            found: BTreeMap::new(),
+        };
+        let binary = HexBytesV1::new(vec![0xff, 0xfe, b'/']).as_wire();
+        assert_eq!(rewrite.string(&binary), binary);
+        let clean = HexBytesV1::new(b"nothing to rewrite".to_vec()).as_wire();
+        assert_eq!(rewrite.string(&clean), clean);
+    }
+
+    #[test]
+    fn rewritten_legacy_bytes_are_bound_to_new_digests_through_coordinate_and_roster() {
+        use aep_contract::migration::{digest_parts_v1, DigestV1, HexBytesV1};
+        let digest = |bytes: &[u8]| {
+            digest_parts_v1("aep.migration.legacy-evidence/1", &[bytes.to_vec()])
+                .expect("digest")
+                .as_wire()
+        };
+        let old = digest(b"the original line");
+        let new_bytes = b"the rewritten line, longer".to_vec();
+        let instance = |entity: &str, id: &str, fields: Value| EntityInstance {
+            entity: entity.to_owned(),
+            version: 1,
+            id: id.to_owned(),
+            lifecycle_state: "recorded".to_owned(),
+            revision: 1,
+            fields: fields.as_object().cloned().expect("fields are an object"),
+        };
+        let history = |entity: &str, id: &str, fields: Value| {
+            anchored(
+                Subject::new(entity, id).expect("subject"),
+                instance(entity, id, fields),
+                Vec::new(),
+            )
+        };
+        let mut histories = vec![
+            history(
+                crate::LEGACY_COORDINATE_AS,
+                "coordinate-1",
+                serde_json::json!({ "envelope_digest": old }),
+            ),
+            history(
+                crate::LEGACY_EVIDENCE_AS,
+                "blob-1",
+                serde_json::json!({
+                    "exact_bytes": HexBytesV1::new(new_bytes.clone()).as_wire(),
+                    "byte_length": 17,
+                    "envelope_digest": old,
+                }),
+            ),
+            history(
+                crate::LEGACY_ROSTER_AS,
+                "roster-1",
+                serde_json::json!({
+                    "boundary_id": "boundary-1",
+                    "authority": { "logical_scope": "s", "tenant": "t", "stream_identity": "i" },
+                    "entries": [{
+                        "record_id": "record-1",
+                        "coordinate_subject_id": "coordinate-1",
+                        "evidence_blob_subject_id": "blob-1",
+                        "envelope_digest": old,
+                    }],
+                    "roster_digest": "stale",
+                }),
+            ),
+        ];
+        assert_eq!(rebind_legacy(&mut histories), Ok(1));
+        let fields = |index: usize| match &histories[index].origin {
+            HistoryOrigin::Imported(anchor) => Value::Object(anchor.instance.fields.clone()),
+            HistoryOrigin::Genesis => panic!("an export writes anchors"),
+        };
+        let new = digest(&new_bytes);
+        assert_eq!(fields(0)["envelope_digest"], new);
+        assert_eq!(fields(1)["envelope_digest"], new);
+        assert_eq!(fields(1)["byte_length"], new_bytes.len() as u64);
+        assert_eq!(fields(2)["entries"][0]["envelope_digest"], new);
+        let expected = digest_parts_v1(
+            "aep.migration.legacy-id-reservations/1",
+            &[
+                b"record-1".to_vec(),
+                b"coordinate-1".to_vec(),
+                b"blob-1".to_vec(),
+                DigestV1::parse(&new).expect("digest").as_bytes().to_vec(),
+                b"s".to_vec(),
+                b"t".to_vec(),
+                b"i".to_vec(),
+                b"boundary-1".to_vec(),
+            ],
+        )
+        .expect("digest")
+        .as_wire();
+        assert_eq!(fields(2)["roster_digest"], expected);
     }
 
     #[test]
