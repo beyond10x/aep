@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.58.0] — 2026-09-24
+
 ### Added
 
 - A tree store reads its lifecycles from the project's `protocols` source, which may be a pinned
@@ -28,7 +30,7 @@ belongs in the commit message or in `docs/design/`.
   - `aep plan artifact resolve` joins an artifact both branches changed, keeping one head and
     printing what the other decided;
   - `aep plan artifact render` rewrites the projection;
-  - `aep plan artifact validate --strict` adds the tree's own rules: the files verify, against
+  - `aep plan artifact validate` on a tree store adds the tree's own rules, whatever `--strict` says: the files verify, against
     `--against <revision>` too (V1–V5), no artifact has forked (S3), every `.md` is its
     artifact's render (S5) and no committed file carries a home path (S9).
 - `aep plan store export --engineering <dir> --into <dir> --map <file>` copies an
