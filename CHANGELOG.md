@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.59.1] — 2026-09-24
+
 ### Fixed
 
 - `aep plan artifact render` re-renders a tree store whose last record is the projection
