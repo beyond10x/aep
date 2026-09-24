@@ -145,6 +145,10 @@ pub(crate) struct ExportArgs {
     /// home directories, so it is kept outside every repository and must not exist yet.
     #[arg(long)]
     map: PathBuf,
+    /// A JSON object of literal replacements applied to every string on the way, such as a name
+    /// that may not enter this repository's history. Each is recorded in the map.
+    #[arg(long)]
+    fixup: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -5358,6 +5362,13 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
     )
     .with_context(|| format!("{} is not JSON", selector_path.display()))?;
 
+    let fixups: std::collections::BTreeMap<String, String> = match &args.fixup {
+        Some(path) => serde_json::from_str(
+            &fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?,
+        )
+        .with_context(|| format!("{} is not a JSON object of strings", path.display()))?,
+        None => std::collections::BTreeMap::new(),
+    };
     let source = aep_backend_eventlog::AuthoritySession::open(
         authority_root.clone(),
         entity_eventlog::Authority {
@@ -5372,14 +5383,18 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
     let workspace = std::path::absolute(&repository)
         .ok()
         .and_then(|repository| repository.parent().map(Path::to_owned));
+    let home_directory = std::env::var_os("HOME").map(PathBuf::from);
     let report = aep_backend_eventlog::export_to_tree(
         &source,
         &state,
         &authority.logical_scope,
         &authority.tenant,
         &lifecycles,
-        workspace.as_deref(),
-        std::env::var_os("HOME").map(PathBuf::from).as_deref(),
+        aep_backend_eventlog::ExportRewrites {
+            workspace: workspace.as_deref(),
+            home_directory: home_directory.as_deref(),
+            fixups: &fixups,
+        },
     )
     .map_err(|e| anyhow::anyhow!(e))?;
     fs::write(
@@ -5387,6 +5402,7 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
         serde_json::to_vec_pretty(&serde_json::json!({
             "identities": report.identities,
             "home_paths": report.home_paths,
+            "fixups": fixups,
         }))?,
     )
     .with_context(|| format!("writing {}", args.map.display()))?;
@@ -5410,7 +5426,7 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
     )
     .map_err(|e| anyhow::anyhow!(e))?;
     let source = source.open_backend().map_err(|e| anyhow::anyhow!(e))?;
-    let differences = export_differences(&source, &target, &report)?;
+    let differences = export_differences(&source, &target, &report, &fixups)?;
     if !differences.is_empty() {
         for difference in &differences {
             eprintln!("  {difference}");
@@ -5450,6 +5466,7 @@ fn export_differences(
     source: &aep_backend_eventlog::EventlogBackend,
     target: &aep_backend_eventlog::EventlogBackend,
     report: &aep_backend_eventlog::ExportReport,
+    fixups: &std::collections::BTreeMap<String, String>,
 ) -> Result<Vec<String>> {
     use aep_contract::query::{EntityQuery, QueryService};
     use aep_contract::testing::block_on;
@@ -5476,7 +5493,12 @@ fn export_differences(
         .map(|entity| (entity.metadata.locator.to_string(), entity))
         .collect();
     let mut replacements: Vec<(&String, &String)> =
-        report.identities.iter().chain(report.home_paths.iter()).collect();
+        report
+            .identities
+            .iter()
+            .chain(fixups.iter())
+            .chain(report.home_paths.iter())
+            .collect();
     replacements.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
     let mut differences = Vec::new();
     for entity in &held {

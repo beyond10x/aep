@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan store export --fixup <file>` takes a JSON object of literal replacements and applies
+  each to every string it carries over, after the derived identities and before the home paths.
+  The map it writes records them, and the projection comparison reads them as explained.
+
 ## [0.58.0] — 2026-09-24
 
 ### Added

@@ -59,6 +59,9 @@ pub struct ExportReport {
 /// Rewrites every string in a value: identities first, then home paths.
 struct Rewrite<'a> {
     identities: &'a BTreeMap<String, String>,
+    /// Literal text the operator replaces on the way, such as a name that may not enter public
+    /// history. Applied after the identities and before the home paths.
+    fixups: &'a BTreeMap<String, String>,
     workspace: Option<PathBuf>,
     home_directory: Option<PathBuf>,
     found: BTreeMap<String, String>,
@@ -82,7 +85,7 @@ impl Rewrite<'_> {
 
     fn text(&mut self, text: &str) -> String {
         let mut out = text.to_owned();
-        for (old, new) in self.identities {
+        for (old, new) in self.identities.iter().chain(self.fixups) {
             if out.contains(old.as_str()) {
                 out = out.replace(old.as_str(), new);
             }
@@ -247,10 +250,18 @@ fn rewrite_instance(
     serde_json::from_value(rewrite.value(&value)).map_err(|error| error.to_string())
 }
 
+/// What an export rewrites in every string it carries over, beside the derived identities.
+#[derive(Debug, Clone, Copy)]
+pub struct ExportRewrites<'a> {
+    /// The directory home paths under which are rewritten relative to it.
+    pub workspace: Option<&'a Path>,
+    /// The directory `~/` and `$HOME/` name.
+    pub home_directory: Option<&'a Path>,
+    /// Literal text replaced on the way, such as a name that may not enter public history.
+    pub fixups: &'a BTreeMap<String, String>,
+}
+
 /// Export the `aep.project/2` store `source` into a new tree authority at `target`.
-///
-/// `workspace` is the directory home paths under which are rewritten relative to it, and
-/// `home_directory` the one `~/` and `$HOME/` name.
 ///
 /// # Errors
 /// The source cannot be captured, a subject cannot be rewritten, or the tree refuses the import.
@@ -261,8 +272,7 @@ pub fn export_to_tree(
     logical_scope: &str,
     tenant: &str,
     lifecycles: &LifecycleRegistry,
-    workspace: Option<&Path>,
-    home_directory: Option<&Path>,
+    rewrites: ExportRewrites<'_>,
 ) -> Result<ExportReport, String> {
     let snapshot = source.complete_snapshot()?;
     let kinds = TypedKinds::of(lifecycles);
@@ -301,8 +311,9 @@ pub fn export_to_tree(
 
     let mut rewrite = Rewrite {
         identities: &report.identities.clone(),
-        workspace: workspace.map(Path::to_owned),
-        home_directory: home_directory.map(Path::to_owned),
+        fixups: rewrites.fixups,
+        workspace: rewrites.workspace.map(Path::to_owned),
+        home_directory: rewrites.home_directory.map(Path::to_owned),
         found: BTreeMap::new(),
     };
     let mut histories = Vec::new();
@@ -456,6 +467,7 @@ mod tests {
     ) -> (String, BTreeMap<String, String>) {
         let mut rewrite = Rewrite {
             identities,
+            fixups: &BTreeMap::new(),
             workspace: Some(PathBuf::from(home("ada/work"))),
             home_directory: Some(PathBuf::from(home("ada"))),
             found: BTreeMap::new(),
@@ -527,6 +539,22 @@ mod tests {
             entities[1].contains(STORED_AS),
             "another artifact's event keeps its type: {}",
             entities[1]
+        );
+    }
+
+    #[test]
+    fn a_fixup_replaces_its_literal_everywhere_and_nothing_else() {
+        let fixups = BTreeMap::from([("acme/x".to_owned(), "an adopting project".to_owned())]);
+        let mut rewrite = Rewrite {
+            identities: &BTreeMap::new(),
+            fixups: &fixups,
+            workspace: None,
+            home_directory: None,
+            found: BTreeMap::new(),
+        };
+        assert_eq!(
+            rewrite.text("in `acme/x` twice: acme/x; acme/y stays"),
+            "in `an adopting project` twice: an adopting project; acme/y stays"
         );
     }
 
