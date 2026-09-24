@@ -465,6 +465,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
 
     Ok(PlanningDocument {
         frontmatter: PlanningFrontmatter {
+            format: crate::frontmatter::PlanningFormat::V1,
             id: artifact,
             kind,
             status,

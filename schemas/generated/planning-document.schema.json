@@ -10,7 +10,7 @@
   ],
   "properties": {
     "format": {
-      "description": "The format version. Defaults to [`PLANNING_FORMAT`]; any other value is refused.",
+      "description": "The format version. Defaults to [`PLANNING_FORMAT`]; a value other than it or [`PLANNING_FORMAT_V2`] is refused.",
       "default": "aep.planning-md/1",
       "type": "string"
     },

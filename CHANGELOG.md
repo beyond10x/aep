@@ -11,6 +11,12 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
+- A tree store (`aep.project/3`) renders its projection as `format: aep.planning-md/2`, which
+  the planning-document parser reads; an `aep.project/2` store keeps rendering `/1`.
+  `validate` holds each document to the render of its own tag (S5), so an existing tree
+  projection stays valid until `aep plan artifact render` or the next write re-renders every
+  document in the new tag. Each repository on a tree store gets that re-render as its own
+  commit.
 - `aep plan store export --fixup <file>` takes a JSON object of literal replacements and applies
   each to every string it carries over, after the derived identities and before the home paths.
   The map it writes records them, and the projection comparison reads them as explained.
@@ -28,6 +34,11 @@ belongs in the commit message or in `docs/design/`.
   staged its render of the projection in a directory named by the authority snapshot alone, so
   one removed the stage the other was reading and reported every artifact as unrendered, or
   refused with `NotPublished`. A stage directory now also carries the process and a counter.
+- `aep plan artifact validate --against <revision>` on a tree store skips V2 when the revision
+  holds no tree store, such as the `aep.project/2` commit a cutover pull request is measured
+  against, and prints `V2 skipped: <revision> holds no tree store (<path>)`. Before, every file
+  of the `/2` store was reported as a deleted committed file. A revision Git cannot read is
+  still refused.
 
 ## [0.58.0] — 2026-09-24
 

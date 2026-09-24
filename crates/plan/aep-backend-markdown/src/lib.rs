@@ -103,5 +103,8 @@ pub use claim::{
     ClaimRejectionReason, ClaimScan, ClaimState, HorizonGrowth, DEFAULT_HORIZON_DAYS,
 };
 pub use document::{MoveRefusal, PlanningDocument, PlanningDocumentError};
-pub use frontmatter::{PlanningFrontmatter, RawPlanningFrontmatter, PLANNING_FORMAT};
+pub use frontmatter::{
+    PlanningFormat, PlanningFrontmatter, RawPlanningFrontmatter, PLANNING_FORMAT,
+    PLANNING_FORMAT_V2,
+};
 pub use store::{MarkdownStore, StoreError, StoreFailure, StoreReport, StoredDocument};
