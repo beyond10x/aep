@@ -86,8 +86,8 @@ Sources:
     store.json                          {format: "eventlog-tree/1", identity: <store id>}; written once at creation
     tenants/<tenant>/
       streams/
-        er.definition/<entity type>/<version:08>-<digest:16>.json    ER definition registrations
-        er.subject/<entity type>/<name>/<version:08>-<digest:16>.json
+        er.definition/<entity type>/<digest>.json          ER definition registrations
+        er.subject/<entity type>/<name>/<digest>.json
                                         one ER decision or observation per file, immutable
         er.refusal/<kk>/<key-digest>/00000001-<digest:16>.json
                                         one ER refusal record per refused command (E-R6), immutable
@@ -102,7 +102,7 @@ Sources:
 
 Verified properties from the review lab:
 
-- A `<version:08>` filename sorts numerically up to 99,999,999.
+- Event files are named by digest (§ 6, implementation decisions), so no filename carries an ordering.
 - Canonical JSON has no trailing newline and survives CRLF conversion.
 - A torn event file commits fine in Git. That is why V3 is a required check.
 
@@ -186,6 +186,36 @@ Otherwise refusal files would accumulate from reads.
 - `kernel.rs::decide` stays, because the 26 `aep.project/1` repositories (Markdown, SQLite, Postgres backends) still decide through it (review M17).
 - Both paths coexist until the `/1` migration design.
 
+### 4.2a How unit A2 maps AEP's store onto typed entities (implementation decision, 2026-09-24)
+
+AEP's contract logic (`aep-backend-memory` behind `EntityBackend`) stays as it is. The mapping lives
+at the one place AEP's writes reach Entity Runtime: `aep-backend-eventlog`'s `append_planning_batch`,
+`registry` and `unpack`.
+
+| AEP write (a `PlanningCommit` on `aep.entity`) | Entity Runtime action on subject `(<kind>, <id>)` |
+|---|---|
+| creation | `create` with the typed fields |
+| a change to title, summary, owner, tags, refs, scope, body or other keys | `edit` with every typed field, plus `document` |
+| a change of status | the ladder's operation named for the target status |
+| both in one command | `edit` then the move, in one batch |
+| an observation (evidence, a relation's source) | a `RecordedObservation`, which advances no revision |
+| relation, audit and applied-command records | unchanged: the one-field `document` types, until each has its own entity type |
+
+Details:
+
+- The **kind** comes from the metadata's `entity_type` (`aep.<kind>/v1`).
+- The **id** stays AEP's entity id.
+- A read of `aep.entity` resolves the kind by id from the retained capture.
+- Each typed entity also keeps a `document` field holding AEP's own packed metadata and events, as
+  today. `unpack` and `decision_document` therefore read history and audit unchanged, while Entity
+  Runtime validates the typed fields and the ladder on every write.
+- **Evidence preconditions** stay in AEP's kernel decision (§ 4.2 step 2): `append_planning_batch`
+  sees the decided result, not the counts.
+  - The stored definition therefore uses the ladder's transitions without its evidence rules.
+  - Passing the counts through `PlanningCommit` is follow-up work, not part of A2.
+- **Typed mode** is selected by `aep.project/3`. `/2` stores keep the `document` form, which is
+  what the export reads.
+
 ### 4.3 Identity
 
 Every persisted identifier is caller-supplied or derived. The memory backend's counters (`01MEM…`,
@@ -247,10 +277,39 @@ One file per key, `er.refusal/<kk>/<key-digest>/00000001-<digest>.json`.
 
 ## 6. `eventlog-tree` (eventlog repository)
 
-This is a sibling crate `crates/eventlog-tree`. It shares the lock and blob modules with
-`eventlog-file`, through an extraction that lands first as unit B0 (review N20). It is not a second format inside `eventlog-file/src/lib.rs`, which is 2,350 lines
-of manifest, sequence and prefix-hash authority (review Q2). The separate crate keeps
-`verify_once_review*.rs` and the six non-planning consumers of `eventlog-file` untouched.
+This is a sibling crate `crates/eventlog-tree`. It is not a second format inside
+`eventlog-file/src/lib.rs`, which is 2,350 lines of manifest, sequence and prefix-hash authority
+(review Q2). The separate crate keeps `verify_once_review*.rs` and the six non-planning consumers of
+`eventlog-file` untouched.
+
+**Implementation decisions (V2, 2026-09-24):**
+
+- **Engine.** Every read and projection is served by an in-memory `eventlog-sqlite` store. The tree's files are replayed into it at open, in § 6.3 order. This follows eventlog's invariant 2, "in-memory remains SQLite `:memory:`", and reuses a provider that already passes the shared conformance exercises.
+  - The tree layer adds only persistence, forks and the refusal of claims.
+  - `eventlog-sqlite` gains `restore_events`, `restored_pending` and `restore_stream_identity`, so a replay keeps original event ids, instants and tenant identities.
+  - While a replay is queued, `eventlog-sqlite` does not check an append's expectation, because it was checked when the event was first written.
+- **Versions are replay order.** A stream's version is its event's place in the § 6.3 order. So versions stay gapless like every other provider's, and a later copy to SQLite or Postgres keeps them.
+  - A merge can renumber the side that sorts second, so **no file stores its version**.
+  - Event files are named `<digest>.json`, not `<version>-<digest>.json`.
+  - This removes most of review H2: § 9.6's `copy` needs no renumbering, only the `origin` record of each event's parents.
+- **No shared-module extraction (B0 dropped).** The tree crate keeps its own writer lock (`std::fs::File::lock` on `.lock`) and its own content-addressed blob files. It shares no code with `eventlog-file`, so V2 and B1–B4 no longer touch the same files.
+- **Stream directories.** Every identifier becomes one path segment: bytes outside `[A-Za-z0-9._-]` become `%XX`, and a leading dot is escaped.
+- **Commands.** Each group file records what the engine was asked to expect, per member. A replay passes the same expectation again, so a retry still matches the group's request fingerprint.
+- **Cross-process writes.** Under the writer lock, a writer compares the set of group files with the one its state was built from. If another writer added one, it rebuilds the state before deciding. Reads serve the state as of open or of the last write.
+
+**Implementation decisions (read cost, 2026-09-24).** Measured on an export of this repository's own store (313 artifacts, 9,939 files, 57 MB of blobs), release build, no SHA-NI:
+
+| command | `aep.project/2` file store | tree, before | tree, after |
+|---|---|---|---|
+| `plan artifact list`, fresh process | 3.8 s | 5.1 s | 1.19 s (3.0 s on the first open after a change) |
+| `plan artifact new` | 23.0 s | — | 8.2 s |
+| `plan artifact validate --strict` | 12.6 s | 17.6 s | not re-measured |
+
+- **The fold is keyed by stamps, all or nothing.** `.cache/state/<key>.{sqlite,json}` holds the engine image (`SqliteEventStore::image` / `from_image`, rusqlite `serialize`) and the tree's heads, records and group-file set. `<key>` digests every history file's `{dev, ino, len, mtime_ns, ctime_ns}`, the registered projector names and the running executable's stamp. A projector has no version, so a rebuilt program replays once rather than trust a projection an older one wrote. There is no `verified.json`: an open whose listing and stamps all match loads the fold, and any other open replays and verifies everything. The per-file incremental verification of § B3 rule 2 for trees (review N19) is not built.
+- **Rule 4 as written.** No fold is kept while any file's `ctime` is within 2 s of the open, and none is kept if the listing changed while the replay ran. `.cache/.gitignore` is `*`; `verify` and `validate` S5/S9 skip `.cache/`.
+- **One replay per open.** `TreeEventStore::open_with_inline` registers ER's projector before the replay; `open` followed by `attach_inline_existing` replayed twice.
+- **An in-memory engine does not re-hash its own blobs.** `eventlog-sqlite` re-checked every blob's SHA-256 integrity column on each read; for a `:memory:` connection it now checks the metadata only, because its rows change only through its own statements. File databases are unchanged (mutation-tested: two file-database tests fail without the check). A blob group's fingerprint and its integrity column share one hash.
+- **Not done: the write path.** Of `new`'s 8.2 s, 36 % is `authority_snapshot_identity`, which serializes and hashes the whole store on every publish. Its value is persisted by the `/2` projection metadata, so replacing it is a coordinated change and waits for the cutover.
 
 ### 6.1 Event file
 
