@@ -52,6 +52,15 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Internal ordinary-authority subject type for invocation reservations and receipt prefixes.
 /// It is deliberately absent from the Markdown planning projection inventory.
+mod export;
+mod typed;
+/// The offline check of a tree authority's files, for the planning validation to run.
+pub use eventlog_tree::{verify as verify_tree, Finding as TreeFinding};
+pub use export::{export_to_tree, ExportReport};
+pub use typed::{
+    open_tree, prepare_tree, provision_tree, provisioning_context, TreeBackend, TypedKinds,
+};
+
 pub const INVOCATION_AS: &str = "aep.planning-invocation";
 /// Provider-owned projection join metadata. A watermark names the verified authority prefix that
 /// was projected; later complete captures retain this subject and its receipt like every other.
@@ -99,7 +108,7 @@ pub struct ImportedLegacyEvidence {
     pub exact_bytes: Vec<u8>,
 }
 
-const CAPTURE_LIMITS: eventlog_core::CaptureLimits = eventlog_core::CaptureLimits {
+pub(crate) const CAPTURE_LIMITS: eventlog_core::CaptureLimits = eventlog_core::CaptureLimits {
     max_events: 1_000_000,
     max_blobs: 1_000_000,
     max_projection_rows: 1_000_000,
@@ -687,6 +696,9 @@ pub struct AuthoritySession {
     path: PathBuf,
     authority: Authority,
     bridge: Arc<RecordedEventlogBridge>,
+    /// For a tree authority: the kinds recorded typed and the ladders they are held to, so every
+    /// backend this session opens reads and writes them as typed entities with derived identities.
+    typed: Option<(typed::TypedKinds, aep_domain::artifact::LifecycleRegistry)>,
 }
 
 impl std::fmt::Debug for AuthoritySession {
@@ -700,6 +712,42 @@ impl std::fmt::Debug for AuthoritySession {
 }
 
 impl AuthoritySession {
+    /// A session over a bridge its caller started: a tree store's, whose registry holds the
+    /// project's typed kinds.
+    pub(crate) fn over_bridge(
+        path: PathBuf,
+        authority: Authority,
+        bridge: RecordedEventlogBridge,
+        typed: (typed::TypedKinds, aep_domain::artifact::LifecycleRegistry),
+    ) -> Self {
+        Self {
+            path,
+            authority,
+            bridge: Arc::new(bridge),
+            typed: Some(typed),
+        }
+    }
+
+    /// Whether this session is over a tree authority of typed entities.
+    #[must_use]
+    pub const fn is_tree(&self) -> bool {
+        self.typed.is_some()
+    }
+
+    /// The store and shape this session's backends are opened with.
+    fn planning_store(&self) -> (EventlogPlanningStore, Identity) {
+        match &self.typed {
+            Some((kinds, lifecycles)) => (
+                EventlogPlanningStore::typed(self.clone(), self.authority.clone(), kinds.clone()),
+                Identity::with_lifecycles(lifecycles.clone()).with_natural_identities(),
+            ),
+            None => (
+                EventlogPlanningStore::new(self.clone(), self.authority.clone()),
+                Identity::default(),
+            ),
+        }
+    }
+
     /// Opens the authority at `path` once.
     ///
     /// # Errors
@@ -712,6 +760,7 @@ impl AuthoritySession {
             path,
             authority,
             bridge,
+            typed: None,
         })
     }
 
@@ -790,9 +839,9 @@ impl AuthoritySession {
     /// # Errors
     /// As [`open`].
     pub fn open_backend(&self) -> Result<EventlogBackend, String> {
-        let store = EventlogPlanningStore::new(self.clone(), self.authority.clone());
+        let (store, shape) = self.planning_store();
         store.validate_legacy_boundaries()?;
-        EntityBackend::over(store).map_err(|error| error.to_string())
+        EntityBackend::shaped(store, shape).map_err(|error| error.to_string())
     }
 
     /// [`open_with_snapshot`] over this session.
@@ -801,10 +850,10 @@ impl AuthoritySession {
     /// As [`open_with_snapshot`].
     pub fn open_backend_with_snapshot(&self, held: HeldCapture) -> Result<EventlogBackend, String> {
         validate_seed(&held, &self.authority)?;
-        let store = EventlogPlanningStore::new(self.clone(), self.authority.clone());
+        let (store, shape) = self.planning_store();
         store.seed(held.into_snapshot());
         store.validate_legacy_boundaries()?;
-        EntityBackend::over(store).map_err(|error| error.to_string())
+        EntityBackend::shaped(store, shape).map_err(|error| error.to_string())
     }
 }
 
@@ -1070,6 +1119,8 @@ pub struct EventlogPlanningStore<P = AuthoritySession> {
     /// exist at that instant on the fall-through path, and one caller's set of reads would then
     /// silently span two instants with nothing to say which read came from which.
     retained: Mutex<Option<Arc<RetainedSnapshot>>>,
+    /// The kinds this store records as typed entities, when it records any.
+    typed: Option<typed::TypedKinds>,
 }
 
 impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
@@ -1078,6 +1129,43 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
             provider,
             authority,
             retained: Mutex::new(None),
+            typed: None,
+        }
+    }
+
+    /// A store that records `kinds` as typed entities.
+    pub(crate) fn typed(provider: P, authority: Authority, kinds: typed::TypedKinds) -> Self {
+        Self {
+            provider,
+            authority,
+            retained: Mutex::new(None),
+            typed: Some(kinds),
+        }
+    }
+
+    /// Where a contract entity lives: its kind's typed subject, when this store records the kind
+    /// typed and holds the entity, and its own coordinates otherwise.
+    fn subject_of(&self, entity: &str, id: &str) -> Result<Subject, StoreError> {
+        if let Some(kinds) = self
+            .typed
+            .as_ref()
+            .filter(|_| entity == aep_backend_entity::STORED_AS)
+        {
+            let snapshot = self.snapshot().map_err(read_error)?;
+            if let Some(found) = snapshot.histories.iter().find(|held| {
+                held.history.subject.id == id && kinds.contains(&held.history.subject.entity)
+            }) {
+                return Ok(found.history.subject.clone());
+            }
+        }
+        Subject::new(entity, id).map_err(async_error)
+    }
+
+    /// An instance as the contract layer reads it.
+    fn readable(&self, instance: EntityInstance) -> EntityInstance {
+        match &self.typed {
+            Some(kinds) if kinds.contains(&instance.entity) => typed::as_contract(instance),
+            _ => instance,
         }
     }
 
@@ -1159,10 +1247,10 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
 
 impl<P: RecordedPlanningProvider> StateProvider for EventlogPlanningStore<P> {
     fn load(&self, entity: &str, id: &str) -> Result<Option<EntityInstance>, StoreError> {
-        let subject = Subject::new(entity, id).map_err(async_error)?;
+        let subject = self.subject_of(entity, id)?;
         self.terminal(&subject)
             .map_err(read_error)?
-            .map(unpack)
+            .map(|instance| unpack(self.readable(instance)))
             .transpose()
     }
 
@@ -1171,7 +1259,15 @@ impl<P: RecordedPlanningProvider> StateProvider for EventlogPlanningStore<P> {
         let mut ids: Vec<_> = snapshot
             .histories
             .iter()
-            .filter(|snapshot| snapshot.history.subject.entity == entity)
+            .filter(|snapshot| {
+                let held = &snapshot.history.subject.entity;
+                held == entity
+                    || (entity == aep_backend_entity::STORED_AS
+                        && self
+                            .typed
+                            .as_ref()
+                            .is_some_and(|kinds| kinds.contains(held)))
+            })
             .map(|snapshot| snapshot.history.subject.id.clone())
             .collect();
         ids.sort();
@@ -1196,7 +1292,7 @@ impl<P: RecordedPlanningProvider> HistoryProvider for EventlogPlanningStore<P> {
         entity: &str,
         id: &str,
     ) -> Result<Vec<entity_store::Envelope<entity_core::DecisionRecord>>, StoreError> {
-        let subject = Subject::new(entity, id).map_err(async_error)?;
+        let subject = self.subject_of(entity, id)?;
         let history = self.subject_history(&subject).map_err(read_error)?;
         Ok(history
             .records
@@ -1209,7 +1305,7 @@ impl<P: RecordedPlanningProvider> HistoryProvider for EventlogPlanningStore<P> {
     }
 
     fn observations(&self, entity: &str, id: &str) -> Result<Vec<RecordedObservation>, StoreError> {
-        let subject = Subject::new(entity, id).map_err(async_error)?;
+        let subject = self.subject_of(entity, id)?;
         let history = self.subject_history(&subject).map_err(read_error)?;
         Ok(history
             .records
@@ -1341,12 +1437,32 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
         let mut pending_revisions = BTreeMap::new();
         for member in commits {
             let instance = &member.commit.decision.instance;
-            let subject = Subject::new(&instance.entity, &instance.id).map_err(async_error)?;
             let document = json!({
                 "lifecycle_state": instance.lifecycle_state,
                 "fields": instance.fields,
                 "events": member.commit.decision.record.events,
             });
+            let typed_kind = self
+                .typed
+                .as_ref()
+                .filter(|_| instance.entity == aep_backend_entity::STORED_AS)
+                .and_then(|kinds| {
+                    typed::kind_of(&instance.fields)
+                        .filter(|kind| kinds.contains(kind))
+                        .map(|kind| (kinds, kind))
+                });
+            if let Some((kinds, kind)) = typed_kind {
+                self.typed_actions(
+                    member,
+                    &kind,
+                    kinds,
+                    document,
+                    &mut pending_revisions,
+                    &mut actions,
+                )?;
+                continue;
+            }
+            let subject = Subject::new(&instance.entity, &instance.id).map_err(async_error)?;
             match member.commit.expect {
                 Expect::Absent => {
                     pending_revisions.insert(subject.clone(), (instance.revision, 1));
@@ -1390,6 +1506,287 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
             .batch(context, BatchKey::Named(key), actions)
             .map_err(execution_error)?;
         Ok(outcome.receipt().cloned())
+    }
+}
+
+impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
+    /// One typed artifact's write as Entity Runtime actions: a creation, or an `edit` with the whole
+    /// content followed by the ladder's move when the status changed.
+    fn typed_actions(
+        &self,
+        member: &PlanningCommit,
+        kind: &str,
+        kinds: &typed::TypedKinds,
+        document: Value,
+        pending: &mut BTreeMap<Subject, (u64, u64)>,
+        actions: &mut Vec<BatchAction>,
+    ) -> Result<(), StoreError> {
+        let instance = &member.commit.decision.instance;
+        let subject = Subject::new(kind, &instance.id).map_err(async_error)?;
+        let fields = typed::typed_fields(&instance.fields, document);
+        let status = instance.lifecycle_state.clone();
+        let moved_recording = |recording: &Recording| Recording {
+            record_id: format!("{}/move", recording.record_id),
+            ..recording.clone()
+        };
+        match member.commit.expect {
+            Expect::Absent => {
+                actions.push(BatchAction::Create(CreateRequest {
+                    subject: subject.clone(),
+                    definition_version: 1,
+                    fields: Value::Object(fields),
+                    recording: member.recording.clone(),
+                }));
+                let mut physical = 1;
+                if kinds.initial(kind).as_deref() != Some(status.as_str()) {
+                    actions.push(BatchAction::Execute(ExecuteRequest {
+                        subject: subject.clone(),
+                        expected_revision: physical,
+                        operation: status,
+                        arguments: json!({}),
+                        fulfillments: BTreeMap::new(),
+                        recording: moved_recording(&member.recording),
+                    }));
+                    physical += 1;
+                }
+                pending.insert(subject, (instance.revision, physical));
+            }
+            Expect::Revision(expected_revision) => {
+                let (logical, physical) = match pending.get(&subject) {
+                    Some(revisions) => *revisions,
+                    None => self.revisions_before(&subject, &member.recording.record_id)?,
+                };
+                if logical != expected_revision {
+                    return Err(StoreError::RevisionConflict {
+                        entity: instance.entity.clone(),
+                        id: instance.id.clone(),
+                        expected: member.commit.expect,
+                        found: Some(logical),
+                    });
+                }
+                let before = match pending.get(&subject) {
+                    Some(_) => None,
+                    None => self.terminal(&subject).map_err(read_error)?,
+                };
+                let was = before.map(|held| held.lifecycle_state);
+                actions.push(BatchAction::Execute(ExecuteRequest {
+                    subject: subject.clone(),
+                    expected_revision: physical,
+                    operation: typed::EDIT_OPERATION.to_owned(),
+                    arguments: Value::Object(fields),
+                    fulfillments: BTreeMap::new(),
+                    recording: member.recording.clone(),
+                }));
+                let mut next = physical + 1;
+                if was.as_deref().is_some_and(|was| was != status) {
+                    actions.push(BatchAction::Execute(ExecuteRequest {
+                        subject: subject.clone(),
+                        expected_revision: next,
+                        operation: status,
+                        arguments: json!({}),
+                        fulfillments: BTreeMap::new(),
+                        recording: moved_recording(&member.recording),
+                    }));
+                    next += 1;
+                }
+                pending.insert(subject, (instance.revision, next));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// What `resolve` did to a forked artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolveOutcome {
+    /// The typed subject, as `<kind>:<id>`.
+    pub subject: String,
+    /// Every head the merge decision joined.
+    pub heads: Vec<String>,
+    /// The head whose content the artifact keeps.
+    pub first: String,
+    /// The record ids reachable only from the other heads: decisions the merge did not carry
+    /// over, for the operator to issue again if they are still wanted.
+    pub not_carried: Vec<String>,
+    /// The artifact's revision after the merge.
+    pub revision: u64,
+}
+
+impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
+    /// The heads of a typed artifact's history, with their digests in order.
+    ///
+    /// # Errors
+    /// The store is not typed, or the history cannot be read.
+    pub fn heads_of(&self, entity_id: &str) -> Result<Vec<String>, StoreError> {
+        let subject = self.subject_of(aep_backend_entity::STORED_AS, entity_id)?;
+        let history = self.provider.history(&subject).map_err(read_error)?;
+        let heads = entity_store::asynchronous::branch_heads(&history).map_err(async_error)?;
+        Ok(heads.into_iter().map(|(digest, _)| digest).collect())
+    }
+
+    /// Every typed artifact whose history has forked, with its heads, from one capture.
+    ///
+    /// Asking [`Self::heads_of`] once per artifact captured the whole store once per artifact.
+    ///
+    /// # Errors
+    /// The store cannot be captured, or a history's lineage does not verify.
+    pub fn forked(&self) -> Result<Vec<(String, Vec<String>)>, StoreError> {
+        let Some(kinds) = self.typed.as_ref() else {
+            return Ok(Vec::new());
+        };
+        let snapshot = self.snapshot().map_err(read_error)?;
+        let mut forked = Vec::new();
+        for held in &snapshot.histories {
+            if !kinds.contains(&held.history.subject.entity) {
+                continue;
+            }
+            let heads =
+                entity_store::asynchronous::branch_heads(&held.history).map_err(async_error)?;
+            if heads.len() > 1 {
+                forked.push((
+                    held.history.subject.id.clone(),
+                    heads.into_iter().map(|(digest, _)| digest).collect(),
+                ));
+            }
+        }
+        Ok(forked)
+    }
+
+    /// Join a typed artifact two merged branches both changed.
+    ///
+    /// One merge decision is recorded over every head, keeping the content `first` reached and
+    /// advancing the artifact past every branch. Nothing is deleted: the other heads' decisions
+    /// stay in the history, and their record ids are returned so the operator can issue again
+    /// what is still wanted. Re-deciding them automatically through the ladder is the follow-up
+    /// the design names in § 7 step 3.
+    ///
+    /// # Errors
+    /// The artifact has not forked, `first` is not one of its heads, or the store refuses the
+    /// merge.
+    #[allow(clippy::too_many_lines)] // One merge decision: heads, revisions, the batch, then what it left.
+    pub fn resolve(
+        &self,
+        entity_id: &str,
+        first: &str,
+        recorded_at: &str,
+    ) -> Result<ResolveOutcome, StoreError> {
+        use entity_executor::MergeRequest;
+        self.retire();
+        let subject = self.subject_of(aep_backend_entity::STORED_AS, entity_id)?;
+        let history = self.provider.history(&subject).map_err(read_error)?;
+        let heads = entity_store::asynchronous::branch_heads(&history).map_err(async_error)?;
+        if heads.len() < 2 {
+            return Err(StoreError::Backend(format!(
+                "`{}:{}` has not forked; there is nothing to resolve",
+                subject.entity, subject.id
+            )));
+        }
+        let Some((_, Some(base))) = heads.iter().find(|(digest, _)| digest == first) else {
+            return Err(StoreError::Backend(format!(
+                "`{first}` is not a head of `{}:{}`",
+                subject.entity, subject.id
+            )));
+        };
+        let physical = heads
+            .iter()
+            .filter_map(|(_, state)| state.as_ref().map(|state| state.revision))
+            .max()
+            .unwrap_or(base.revision);
+        // AEP's own revision, carried in each head's contract record, advances past every branch.
+        let logical = heads
+            .iter()
+            .filter_map(|(_, state)| {
+                state
+                    .as_ref()?
+                    .fields
+                    .get(aep_backend_entity::definition::DOCUMENT)?
+                    .get("fields")?
+                    .get(aep_backend_entity::METADATA_KEY)?
+                    .get("metadata")?
+                    .get("revision")?
+                    .as_u64()
+            })
+            .max()
+            .unwrap_or(0)
+            + 1;
+        let mut fields = base.fields.clone();
+        if let Some(document) = fields
+            .get_mut(aep_backend_entity::definition::DOCUMENT)
+            .and_then(Value::as_object_mut)
+        {
+            document.insert("events".to_owned(), Value::Array(Vec::new()));
+            if let Some(revision) = document
+                .get_mut("fields")
+                .and_then(|fields| fields.get_mut(aep_backend_entity::METADATA_KEY))
+                .and_then(|packed| packed.get_mut("metadata"))
+                .and_then(|metadata| metadata.get_mut("revision"))
+            {
+                *revision = Value::from(logical);
+            }
+        }
+        let digests: Vec<String> = heads.iter().map(|(digest, _)| digest.clone()).collect();
+        let key = format!(
+            "resolve:{}:{}",
+            subject.id,
+            digests
+                .iter()
+                .map(|digest| &digest[..12.min(digest.len())])
+                .collect::<Vec<_>>()
+                .join("+")
+        );
+        let recording = Recording {
+            record_id: key.clone(),
+            recorded_at: recorded_at.to_owned(),
+            correlation: None,
+            causation: None,
+            actor: Some("aep".to_owned()),
+        };
+        let context = context_from_recording(&recording);
+        let merge = BatchAction::Merge(MergeRequest {
+            execute: ExecuteRequest {
+                subject: subject.clone(),
+                expected_revision: physical,
+                operation: typed::EDIT_OPERATION.to_owned(),
+                arguments: Value::Object(fields),
+                fulfillments: BTreeMap::new(),
+                recording,
+            },
+            first: first.to_owned(),
+        });
+        let outcome = self
+            .provider
+            .batch(context, BatchKey::Named(key), vec![merge]);
+        self.retire();
+        outcome.map_err(execution_error)?;
+
+        // What only the other heads reached: every record not an ancestor of `first`.
+        let mut parents: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut ids: BTreeMap<String, String> = BTreeMap::new();
+        for record in &history.records {
+            if let Some(lineage) = &record.lineage {
+                parents.insert(lineage.digest.clone(), lineage.parents.clone());
+                ids.insert(lineage.digest.clone(), record.entry.record_id().to_owned());
+            }
+        }
+        let mut reached = BTreeSet::new();
+        let mut stack = vec![first.to_owned()];
+        while let Some(digest) = stack.pop() {
+            if reached.insert(digest.clone()) {
+                stack.extend(parents.get(&digest).cloned().unwrap_or_default());
+            }
+        }
+        let not_carried = ids
+            .iter()
+            .filter(|(digest, _)| !reached.contains(*digest))
+            .map(|(_, id)| id.clone())
+            .collect();
+        Ok(ResolveOutcome {
+            subject: format!("{}:{}", subject.entity, subject.id),
+            heads: digests,
+            first: first.to_owned(),
+            not_carried,
+            revision: logical,
+        })
     }
 }
 
@@ -1467,7 +1864,7 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
             StoreError::Backend("planning revision has no predecessor".to_owned())
         })?;
         let physical = prior.revision;
-        Ok((unpack(prior)?.revision, physical))
+        Ok((unpack(self.readable(prior))?.revision, physical))
     }
 
     /// Original Markdown journal lines for a migrated subject, in their declared source order.
@@ -1580,7 +1977,7 @@ impl<P: RecordedPlanningProvider> EventlogPlanningStore<P> {
         entity: &str,
         id: &str,
     ) -> Result<Vec<(Option<u64>, DomainEvent)>, StoreError> {
-        let subject = Subject::new(entity, id).map_err(async_error)?;
+        let subject = self.subject_of(entity, id)?;
         let history = self.subject_history(&subject).map_err(read_error)?;
         let mut events = Vec::new();
         if let HistoryOrigin::Imported(anchor) = history.origin {
@@ -2000,7 +2397,7 @@ fn validated_legacy_boundary_snapshot(
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PlanningDocument {
+pub(crate) struct PlanningDocument {
     lifecycle_state: String,
     fields: Map<String, Value>,
     events: Vec<DomainEvent>,
@@ -2037,7 +2434,7 @@ fn unpack(instance: EntityInstance) -> Result<EntityInstance, StoreError> {
     })
 }
 
-fn decision_document(commit: &RecordedCommit) -> Option<PlanningDocument> {
+pub(crate) fn decision_document(commit: &RecordedCommit) -> Option<PlanningDocument> {
     let document = match &commit.envelope.record.command {
         entity_core::DecisionCommand::Create { fields, .. } => fields.get("document")?.clone(),
         entity_core::DecisionCommand::Execute { arguments, .. } => {
@@ -2077,7 +2474,7 @@ fn context_from_parts(
     }
 }
 
-fn registry() -> Result<Registry, String> {
+pub(crate) fn registry() -> Result<Registry, String> {
     let mut registry = Registry::new();
     for entity in [
         aep_backend_entity::STORED_AS,

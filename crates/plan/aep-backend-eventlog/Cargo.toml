@@ -14,20 +14,30 @@ test-support = []
 
 [dependencies]
 aep-backend-entity.workspace = true
+# The derived identity an exported artifact is given, the same one a tree store derives.
+aep-backend-memory.workspace = true
 aep-contract.workspace = true
+# The lifecycles a typed store records its kinds under.
+aep-domain.workspace = true
 entity-core.workspace = true
 entity-eventlog.workspace = true
 entity-executor.workspace = true
 entity-store.workspace = true
 eventlog-core.workspace = true
 eventlog-file.workspace = true
+# The store version control merges: typed planning stores live on it.
+eventlog-tree.workspace = true
 serde.workspace = true
+# The digest an exported home path is written as (design § 9.3).
+sha2 = "0.11"
 serde_json.workspace = true
 time = { version = "0.3", features = ["parsing"] }
 tokio = { version = "1", features = ["rt"] }
 
 [dev-dependencies]
-aep-domain.workspace = true
+serde_yaml.workspace = true
+aep-conformance.workspace = true
+tempfile = "3"
 # This crate's own integration tests count what its seams are asked for.
 aep-backend-eventlog = { workspace = true, features = ["test-support"] }
 

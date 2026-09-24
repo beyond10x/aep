@@ -85,6 +85,7 @@
 //! failure therefore leaves both durable and local state unchanged; there is no stale in-memory
 //! prefix to latch.
 
+pub mod definition;
 pub mod kernel;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -457,6 +458,8 @@ pub struct Identity {
     /// The entity the command in flight is an observation about, noted in `before` and written in
     /// `placements`: a relation's source, evidence's target.
     observing: Option<EntityId>,
+    /// Derive identities from what they identify, for a store whose history is merged outside it.
+    natural: bool,
 }
 
 impl Identity {
@@ -467,7 +470,17 @@ impl Identity {
             lifecycles: Some(lifecycles),
             sequence_floor: None,
             observing: None,
+            natural: false,
         }
+    }
+
+    /// The same shape, deriving every identity from what it identifies instead of counting: an
+    /// entity's from its locator, the rest from their command. Two branches of one store then mint
+    /// the same identity for the same thing and different ones for different things.
+    #[must_use]
+    pub fn with_natural_identities(mut self) -> Self {
+        self.natural = true;
+        self
     }
 
     /// Uses identities from a provider-reserved sequence range.
@@ -477,6 +490,7 @@ impl Identity {
             lifecycles: None,
             sequence_floor: Some(sequence_floor),
             observing: None,
+            natural: false,
         }
     }
 
@@ -490,6 +504,7 @@ impl Identity {
             lifecycles: Some(lifecycles),
             sequence_floor: Some(sequence_floor),
             observing: None,
+            natural: false,
         }
     }
 }
@@ -515,6 +530,9 @@ fn observation_of(inner: &MemoryBackend, id: &EntityId) -> Result<Placement, Com
 
 impl<S: Store> Projection<S> for Identity {
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
+        if self.natural {
+            inner.with_store_mut(aep_backend_memory::store::Store::use_natural_identities);
+        }
         hydrate(store, inner)?;
         if let Some(floor) = self.sequence_floor {
             inner.with_store_mut(|memory| memory.advance_sequence_to(floor));

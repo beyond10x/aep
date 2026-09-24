@@ -43,6 +43,8 @@ pub const PROJECT_FILE: &str = "project.yaml";
 pub const PROJECT_VERSION: &str = "aep.project/1";
 /// The opt-in Eventlog planning-authority format.
 pub const PROJECT_VERSION_V2: &str = "aep.project/2";
+/// Planning artifacts as typed Entity Runtime entities on a store version control merges.
+pub const PROJECT_VERSION_V3: &str = "aep.project/3";
 
 /// Which closed project document reader accepted the selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -54,6 +56,9 @@ pub enum ProjectVersion {
     /// Eventlog file authority with a tracked Markdown projection.
     #[serde(rename = "aep.project/2")]
     V2,
+    /// Typed Entity Runtime entities on an `eventlog-tree` authority, with a tracked projection.
+    #[serde(rename = "aep.project/3")]
+    V3,
 }
 
 impl ProjectVersion {
@@ -63,6 +68,7 @@ impl ProjectVersion {
         match self {
             Self::V1 => PROJECT_VERSION,
             Self::V2 => PROJECT_VERSION_V2,
+            Self::V3 => PROJECT_VERSION_V3,
         }
     }
 }
@@ -499,6 +505,18 @@ pub enum StoreConfig {
         /// Exact public adapter authority tuple.
         authority: PlanningAuthority,
     },
+    /// Typed planning entities on an `eventlog-tree` authority and its derived projection.
+    ///
+    /// The authority's files are each written once and never rewritten, so branches that wrote
+    /// planning merge; see `docs/design/planning-on-entity-runtime-v0.1.md`.
+    EventlogTree {
+        /// Authority provider directory.
+        path: PathBuf,
+        /// Derived projection directory.
+        projection: PathBuf,
+        /// Exact public adapter authority tuple.
+        authority: PlanningAuthority,
+    },
 }
 
 /// Exact Eventlog authority identity selected by an `aep.project/2` document.
@@ -531,6 +549,15 @@ impl StoreConfig {
                 policy: policy.clone(),
                 local: Box::new(local.resolved(engineering)),
                 replica: Box::new(replica.resolved(engineering)),
+            },
+            Self::EventlogTree {
+                path,
+                projection,
+                authority,
+            } => Self::EventlogTree {
+                path: engineering.join(path),
+                projection: engineering.join(projection),
+                authority: authority.clone(),
             },
             Self::Eventlog {
                 path,
@@ -715,7 +742,7 @@ fn validate_versioned_store(
                 None => StoreConfig::Markdown,
             }
         }
-        ProjectVersion::V2 => {
+        ProjectVersion::V2 | ProjectVersion::V3 => {
             let authority = PlanningAuthority {
                 logical_scope: required_authority_value("planning_scope", planning_scope, errors),
                 tenant: required_authority_value("planning_tenant", planning_tenant, errors),
@@ -769,10 +796,18 @@ fn validate_versioned_store(
                     ));
                 }
             }
-            StoreConfig::Eventlog {
-                path: eventlog.path,
-                projection: eventlog.projection,
-                authority,
+            if version == ProjectVersion::V3 {
+                StoreConfig::EventlogTree {
+                    path: eventlog.path,
+                    projection: eventlog.projection,
+                    authority,
+                }
+            } else {
+                StoreConfig::Eventlog {
+                    path: eventlog.path,
+                    projection: eventlog.projection,
+                    authority,
+                }
             }
         }
     }
@@ -780,7 +815,7 @@ fn validate_versioned_store(
 
 fn contains_eventlog(store: &StoreConfig) -> bool {
     match store {
-        StoreConfig::Eventlog { .. } => true,
+        StoreConfig::Eventlog { .. } | StoreConfig::EventlogTree { .. } => true,
         StoreConfig::Hybrid { local, replica, .. } => {
             contains_eventlog(local) || contains_eventlog(replica)
         }
@@ -914,13 +949,14 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
         let version = match raw.version.as_str() {
             PROJECT_VERSION => ProjectVersion::V1,
             PROJECT_VERSION_V2 => ProjectVersion::V2,
+            PROJECT_VERSION_V3 => ProjectVersion::V3,
             other => {
                 errors.push(
                     ValidationError::new(
                         ValidationCode::UnsupportedProtocolVersion,
                         "project.version",
                         format!(
-                            "this build reads `{PROJECT_VERSION}` and `{PROJECT_VERSION_V2}`, not `{other}`"
+                            "this build reads `{PROJECT_VERSION}`, `{PROJECT_VERSION_V2}` and `{PROJECT_VERSION_V3}`, not `{other}`"
                         ),
                     )
                     .with_hint("upgrade the tooling rather than reinterpreting the document"),

@@ -9,8 +9,33 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep.project/3` keeps the plan as typed Entity Runtime entities on an `eventlog-tree` store
+  that version control merges:
+  - `aep plan store init-tree` creates one;
+  - each artifact kind is its own entity type with typed fields and its lifecycle's moves, and
+    identities are derived from the artifact's locator, so two branches never mint one id for
+    two artifacts;
+  - `aep plan artifact resolve` joins an artifact both branches changed, keeping one head and
+    printing what the other decided;
+  - `aep plan artifact render` rewrites the projection;
+  - `aep plan artifact validate --strict` adds the tree's own rules: the files verify, against
+    `--against <revision>` too (V1–V5), no artifact has forked (S3), every `.md` is its
+    artifact's render (S5) and no committed file carries a home path (S9).
+- `aep plan store export --engineering <dir> --into <dir> --map <file>` copies an
+  `aep.project/2` store into a new tree store once, for the cutover. Every artifact becomes its
+  kind's typed entity with its history as anchor evidence, counted identities become derived
+  ones, and home paths become `workspace:<path>` or `home-path:sha256:<digest>`. The copy is
+  compared artifact by artifact with the source before it is reported; the map of what was
+  rewritten goes to `--map`, outside the repository. This repository's own store (313
+  artifacts) exported in 91 s and renders byte-identical, except where a home path was
+  rewritten.
+
 ### Changed
 
+- Entity Runtime is pinned at 0.21.0 (`21bfc578`) and Eventlog at 0.4.0 (`70096af8`), the releases
+  that add the tree store, forked subjects and recorded refusals this plan store uses.
 - An Eventlog planning write opens its authority once. The plan, the invocation ledger, the
   post-commit capture and both projection publications now read and write through the one
   session the command opened with its plan, instead of reopening the file authority for every

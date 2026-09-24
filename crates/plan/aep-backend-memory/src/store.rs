@@ -59,6 +59,47 @@ pub struct Store {
     events: Vec<DomainEventEnvelope>,
     applied: BTreeMap<String, AppliedCommand>,
     sequence: u64,
+    /// Set when identities are derived from what they identify instead of counted.
+    natural: Option<Natural>,
+}
+
+/// The command identities are being derived for, and how many it has minted so far.
+///
+/// A counted identity names a different thing in each process that counts: two branches of one
+/// store that each created an artifact would both call it `01MEM…001`, and merging them would put
+/// two artifacts under one identity. A derived one is the same wherever it is minted, so a store
+/// whose history is merged outside it uses these.
+#[derive(Debug, Clone, Default)]
+struct Natural {
+    command: String,
+    minted: u64,
+}
+
+/// The derived identity of the entity at `locator`, as [`Store::next_entity_id_for`] mints it
+/// when identities are derived — for an export that moves a store's entities onto them.
+///
+/// # Panics
+/// Never: a derived identity is always well formed.
+#[must_use]
+pub fn natural_entity_id(locator: &EntityLocator) -> EntityId {
+    EntityId::new(format!("ent-{}", derived(&locator.to_string())))
+        .expect("a derived identifier is well formed")
+}
+
+/// 128 bits of FNV-1a over `seed`, as 32 lower-case hex digits: two 64-bit passes with different
+/// offsets. Not a cryptographic digest; it only has to make two different seeds' identities differ,
+/// and at a planning store's size a collision is not a practical event.
+fn derived(seed: &str) -> String {
+    let pass = |offset: u64| {
+        seed.bytes().fold(offset, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    };
+    format!(
+        "{:016x}{:016x}",
+        pass(0xcbf2_9ce4_8422_2325),
+        pass(0x6c62_272e_07bb_0142)
+    )
 }
 
 impl Store {
@@ -99,6 +140,38 @@ impl Store {
             .is_some_and(|sequence| sequence <= self.sequence)
     }
 
+    /// Derive identities from what they identify from now on, instead of counting them.
+    pub fn use_natural_identities(&mut self) {
+        self.natural = Some(Natural::default());
+    }
+
+    /// Names the command the identities minted next belong to, when they are derived.
+    pub fn begin_command(&mut self, command_id: &str) {
+        if let Some(natural) = &mut self.natural {
+            command_id.clone_into(&mut natural.command);
+            natural.minted = 0;
+        }
+    }
+
+    /// The next derived identity for the current command, when identities are derived.
+    fn natural_seed(&mut self) -> Option<String> {
+        let natural = self.natural.as_mut()?;
+        natural.minted += 1;
+        Some(derived(&format!("{}#{}", natural.command, natural.minted)))
+    }
+
+    /// The identifier for an entity at `locator`: derived from the locator when identities are
+    /// derived, so the same artifact is the same entity on every branch; counted otherwise.
+    pub fn next_entity_id_for(&mut self, locator: &EntityLocator) -> EntityId {
+        if self.natural.is_some() {
+            let id = natural_entity_id(locator);
+            if !self.entities.contains_key(&id) {
+                return id;
+            }
+        }
+        self.next_entity_id()
+    }
+
     /// Generates an opaque entity identifier that no held entity carries.
     pub fn next_entity_id(&mut self) -> EntityId {
         loop {
@@ -113,6 +186,13 @@ impl Store {
 
     /// Generates a relation identifier that no held relation carries.
     pub fn next_relation_id(&mut self) -> RelationId {
+        while let Some(seed) = self.natural_seed() {
+            let id = RelationId::new(format!("rel-{seed}"))
+                .expect("a derived identifier is well formed");
+            if !self.relations.contains_key(&id) {
+                return id;
+            }
+        }
         loop {
             let sequence = self.tick();
             let id = RelationId::new(format!("rel-{sequence:012}"))
@@ -125,6 +205,13 @@ impl Store {
 
     /// Generates an audit identifier that no held record carries.
     pub fn next_audit_id(&mut self) -> AuditId {
+        while let Some(seed) = self.natural_seed() {
+            let id =
+                AuditId::new(format!("aud-{seed}")).expect("a derived identifier is well formed");
+            if !self.audit_ids.contains(&id) {
+                return id;
+            }
+        }
         loop {
             let sequence = self.tick();
             let id = AuditId::new(format!("aud-{sequence:012}"))
@@ -137,6 +224,10 @@ impl Store {
 
     /// Generates an event identifier.
     pub fn next_event_id(&mut self) -> EventId {
+        if let Some(seed) = self.natural_seed() {
+            return EventId::new(format!("evt-{seed}"))
+                .expect("a derived identifier is well formed");
+        }
         let sequence = self.tick();
         EventId::new(format!("evt-{sequence:012}")).expect("a generated identifier is well formed")
     }

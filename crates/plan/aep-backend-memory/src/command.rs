@@ -58,6 +58,7 @@ fn apply(
     envelope: &CommandEnvelope<Command>,
 ) -> Result<CommandResult, CommandError> {
     let key = &envelope.context.idempotency_key;
+    store.begin_command(envelope.command_id.as_str());
 
     // 1. Idempotency. A replay of the same logical command returns what it returned before; the same
     //    key on a *different* command is a client bug, and accepting it would make the key useless.
@@ -125,7 +126,7 @@ fn apply_valid(
                     reason: format!("`{}` already addresses an entity", create.locator),
                 });
             }
-            let id = store.next_entity_id();
+            let id = store.next_entity_id_for(&create.locator);
             let metadata = EntityMetadata::new(
                 id.clone(),
                 create.locator.clone(),

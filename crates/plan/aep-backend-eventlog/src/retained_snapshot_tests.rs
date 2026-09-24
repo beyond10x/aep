@@ -171,7 +171,9 @@ impl RecordedPlanningProvider for CountingProvider {
                     let instance = row(&subject, expected_revision + 1, &arguments);
                     held.terminals.insert(subject, instance);
                 }
-                other @ BatchAction::Observe(_) => panic!("unexpected batch action {other:?}"),
+                other @ (BatchAction::Observe(_) | BatchAction::Merge(_)) => {
+                    panic!("unexpected batch action {other:?}")
+                }
             }
         }
         Ok(AppendOutcome::Empty)
@@ -872,6 +874,7 @@ fn observed(
         },
         expect: Expect::Revision(1),
         request_bytes: Vec::new(),
+        lineage: None,
         record_bytes: Vec::new(),
     }
 }
