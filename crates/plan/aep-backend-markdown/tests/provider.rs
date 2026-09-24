@@ -242,9 +242,12 @@ fn this_repositorys_own_store_loads_and_every_document_round_trips_byte_for_byte
             .load(entity, id)
             .expect("answers")
             .unwrap_or_else(|| panic!("{}: listed and absent", stored.relative_path));
-        let rendered = document_of(&held)
-            .unwrap_or_else(|error| panic!("{}: {error}", stored.relative_path))
-            .render();
+        let mut document =
+            document_of(&held).unwrap_or_else(|error| panic!("{}: {error}", stored.relative_path));
+        // An instance carries no format: the format belongs to the projection, and this
+        // repository's is a tree store's, rendered `aep.planning-md/2`.
+        document.frontmatter.format = stored.document.frontmatter.format;
+        let rendered = document.render();
         assert_eq!(
             rendered,
             stored.document.render(),
