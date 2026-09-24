@@ -16,6 +16,8 @@ belongs in the commit message or in `docs/design/`.
   never match an inventory another renderer wrote, and refused every store rendered by 0.58.0
   as `ProjectionDrift`. It now publishes the current state, as a write does.
 
+## [0.59.0] — 2026-09-24
+
 ### Added
 
 - A tree store (`aep.project/3`) renders its projection as `format: aep.planning-md/2`, which
