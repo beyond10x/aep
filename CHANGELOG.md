@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.59.2] — 2026-09-24
+
 ### Fixed
 
 - `render` over a store an older release published last no longer leaves a
