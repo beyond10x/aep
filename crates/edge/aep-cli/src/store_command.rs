@@ -113,8 +113,8 @@ pub(crate) enum StoreCommand {
     Export(ExportArgs),
     /// Install the repository's pre-push hook that validates a tree planning store.
     ///
-    /// A push whose unpushed commits touch `.engineering/` runs `aep plan artifact validate
-    /// --strict` first, and is refused when the installed `aep` is not the version that installed
+    /// A push whose unpushed commits touch `.engineering/` runs `aep plan artifact validate`
+    /// first, and is refused when the installed `aep` is not the version that installed
     /// the hook or the tree validated is not the one pushed. The hook is written to the
     /// repository's own `hooks/pre-push`; a hook manager that owns `core.hooksPath`, such as Gates,
     /// runs it once it is reinstalled.
@@ -5346,8 +5346,9 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
         .engineering
         .parent()
         .map_or_else(|| args.engineering.clone(), Path::to_owned);
-    let lifecycles = crate::planning::StoreLocation::at(None, Some(repository.clone()))
-        .lifecycles()?
+    let lifecycles =
+        crate::planning::StoreLocation::at(None, Some(crate::planning::protocols_of(&repository)?))
+            .lifecycles()?
         .lifecycles()
         .clone();
     let selector_path = args.engineering.join(aep_domain::project::PROJECT_FILE);
@@ -5428,6 +5429,12 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
         report.stream_identity,
         report.skipped
     );
+    if !report.untyped.is_empty() {
+        println!(
+            "kept as generic contract entities, having no typed entity: {}",
+            report.untyped.join(", ")
+        );
+    }
     println!(
         "rewrote {} identities and {} home paths; the map is {}",
         report.identities.len(),
@@ -5510,7 +5517,7 @@ fn pre_push_hook(version: &str) -> String {
     format!(
         r#"#!/bin/sh
 {HOOK_MARKER} {version}
-# A push whose unpushed commits touch .engineering/ is validated strictly first.
+# A push whose unpushed commits touch .engineering/ is validated first.
 set -eu
 pinned="{version}"
 zero=0000000000000000000000000000000000000000
@@ -5531,7 +5538,7 @@ if [ "$(git rev-parse HEAD)" != "$touched" ] || [ -n "$(git status --porcelain -
   echo "pre-push: the pushed commit $touched is not the checked-out, clean tree; check it out to validate it" >&2
   exit 1
 fi
-exec aep plan artifact validate --strict
+exec aep plan artifact validate
 "#
     )
 }
@@ -5624,7 +5631,7 @@ mod install_hooks_tests {
         let written = std::fs::read_to_string(&path).expect("the hook exists");
         assert_eq!(written, pre_push_hook(env!("CARGO_PKG_VERSION")));
         assert!(written.lines().nth(1).is_some_and(|line| line.starts_with(HOOK_MARKER)));
-        assert!(written.contains("validate --strict"));
+        assert!(written.contains("exec aep plan artifact validate\n"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

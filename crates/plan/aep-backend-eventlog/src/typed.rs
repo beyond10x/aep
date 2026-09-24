@@ -52,19 +52,42 @@ pub struct TypedKinds {
 }
 
 impl TypedKinds {
-    /// Every kind `lifecycles` declares.
+    /// Every kind AEP names and every kind `lifecycles` declares, each held to the ladder the
+    /// registry resolves for it — its own, a parent's, the tree's fallback, or the permissive
+    /// ladder a kind with none is given everywhere else.
+    ///
+    /// A `<type>-blocker` kind is not here: the family is open, and Entity Runtime needs every
+    /// type defined before the store opens. Such an artifact is recorded as the generic contract
+    /// entity, which reads and renders the same.
     #[must_use]
     pub fn of(lifecycles: &LifecycleRegistry) -> Self {
         Self {
-            lifecycles: lifecycles
+            lifecycles: ArtifactKind::NAMED
                 .iter()
-                .map(|(kind, lifecycle)| (kind.as_str().to_owned(), lifecycle.clone()))
+                .chain(lifecycles.iter().map(|(kind, _)| kind))
+                .map(|kind| {
+                    let lifecycle = lifecycles
+                        .for_kind(kind)
+                        .cloned()
+                        .unwrap_or_else(aep_domain::artifact::ArtifactLifecycle::permissive);
+                    (kind.as_str().to_owned(), lifecycle)
+                })
                 .collect(),
         }
     }
 
     pub(crate) fn contains(&self, kind: &str) -> bool {
         self.lifecycles.contains_key(kind)
+    }
+
+    /// Whether `status` is a rung of `kind`'s ladder.
+    pub(crate) fn has_status(&self, kind: &str, status: &str) -> bool {
+        self.lifecycles.get(kind).is_some_and(|lifecycle| {
+            lifecycle
+                .statuses()
+                .iter()
+                .any(|known| known.as_str() == status)
+        })
     }
 
     pub(crate) fn initial(&self, kind: &str) -> Option<String> {

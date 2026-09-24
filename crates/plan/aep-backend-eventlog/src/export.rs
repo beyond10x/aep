@@ -14,7 +14,7 @@
 //! Operational records — invocation reservations and projection watermarks — are not history and
 //! are left behind; the tree keeps neither.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -45,6 +45,9 @@ pub struct ExportReport {
     pub records: usize,
     /// Operational subjects left behind.
     pub skipped: usize,
+    /// The artifact kinds copied as the generic contract entity because no typed entity exists
+    /// for them, such as a `<type>-blocker`.
+    pub untyped: Vec<String>,
     /// Each counted identity and the derived one it became.
     pub identities: BTreeMap<String, String>,
     /// Each home path found and what it was written as. Kept by the operator, never committed.
@@ -229,12 +232,15 @@ pub fn export_to_tree(
 
     // Identities first: every artifact's counted identity and its derived one.
     let mut typed: BTreeMap<String, String> = BTreeMap::new();
+    let mut untyped = BTreeSet::new();
     for held in &snapshot.histories {
         if held.history.subject.entity != STORED_AS {
             continue;
         }
         let fields = document_fields(&held.terminal)?;
         let Some(kind) = kind_of(&fields).filter(|kind| kinds.contains(kind)) else {
+            // Kept as the generic contract entity, and named in the report.
+            untyped.insert(kind_of(&fields).unwrap_or_else(|| "(no type)".to_owned()));
             continue;
         };
         let locator = fields
@@ -252,6 +258,8 @@ pub fn export_to_tree(
             .insert(held.history.subject.id.clone(), natural);
         typed.insert(held.history.subject.id.clone(), kind);
     }
+
+    report.untyped = untyped.into_iter().collect();
 
     let mut rewrite = Rewrite {
         identities: &report.identities.clone(),

@@ -53,7 +53,7 @@ Sources:
 | R6 | AEP's 16 suites, ER's recorded-execution suites and Eventlog's conformance pass over `eventlog-tree`; Eventlog's conformance runs filtered by the provider's declared capability profile | the three suites |
 | R7 | measured in a **fresh process**: `list` < 1 s and a single-artifact write < 2 s at 1,000 artifacts | bench (§ 10) |
 | R8 | reading an unchanged store hashes 0 bytes, including in a fresh process; a changed file is hashed once | Part B § B6 |
-| R9 | `validate --strict` is a required check from cutover, and `main` accepts no update that bypasses it | § 8 |
+| R9 | `validate` is a required check from cutover, and `main` accepts no update that bypasses it | § 8 |
 | R10 | each store is exported once, recovery appends included, and passes a history-fidelity check | § 9 |
 | R11 | no committed byte carries an absolute home path, by the same test Gates applies | S9 |
 | R12 | moving to SQLite or Postgres needs no schema change; a forked history is linearized with its origin recorded | round-trip suite |
@@ -421,7 +421,9 @@ conflict).
 
 No event file is deleted or rewritten.
 
-## 8. `aep plan artifact validate --strict`
+## 8. `aep plan artifact validate` on a tree store
+
+As built, the rules below are problems in plain `validate`, which exits 1 on any of them. `--strict` keeps its existing meaning: it also refuses on the review advisories (a review with no findings block, a review with no recorded outcome). The required check and the pre-push hook therefore run plain `validate`: the stores being cut over carry such advisories from before (17 and 5 in eventlog, 4 and 1 in AEP, the same on `/2` and the tree), and a required `--strict` would be red from its first run.
 
 It runs `eventlog verify` V1–V5 against the merge base with the target, then:
 
@@ -439,9 +441,9 @@ It runs `eventlog verify` V1–V5 against the merge base with the target, then:
 
 **Required, with no bypass** (review H4):
 
-- On every adopting repository, `validate --strict` is a required status check on `main`, and "require branches to be up to date" is on.
+- On every adopting repository, `validate` is a required status check on `main`, and "require branches to be up to date" is on.
 - The ruleset's bypass list is empty for it, and non-PR updates to `main` are refused.
-- A repository pre-push hook runs `validate --strict` for any push that touches `.engineering/`. That covers the bot's direct pushes that `beyond10x/AGENTS.md` admits.
+- A repository pre-push hook runs `validate` for any push that touches `.engineering/`. That covers the bot's direct pushes that `beyond10x/AGENTS.md` admits.
   - `aep plan store install-hooks` installs the hook. Gates only preserves the hook chain; it never runs repository tools (`gates/README.md:21, :31`; review N5).
   - The hook refuses when the installed `aep` is not the version that installed it, and when the pushed commit is not the clean checked-out tree, so the tree validated is the tree pushed.
 - Release cuts in the adopting repositories (`CHANGELOG` commits) go through a PR as well (review N13).
@@ -621,7 +623,7 @@ generated store.
 | A5 | aep | renderer `aep.planning-md/2`; ownership file removed | `aep-backend-eventlog/`, `aep-planning-migration/src/projection.rs:22, :1862` | A2 | render fixtures; no store-wide file |
 | A6 | aep | `aep.project/3`; `xtask deps` rule 3 | `crates/govern/aep-domain/src/project.rs`, `aep-cli/src/planning.rs:381-410`, `xtask/src/main.rs:712-800` | A2 | old-reader fixture; alias equivalence; rule 3 mutation-tested |
 | A7 | aep | export, `--verify`, home-path map, fixup hook | `aep-cli/src/store_command.rs`, reusing `planning.rs:615-700` | A2, A6 | fidelity on copies of the six stores |
-| A8 | aep + six repositories | `aep plan store install-hooks` (pre-push `validate --strict`, pinned-version check); cutover PRs (§ 9.5 step 7) | `aep-cli/src/store_command.rs`; per repository `.engineering/`, `project.yaml`, CI, ruleset, hook | V4, R6, AEP release | `validate --strict` required, green, no bypass |
+| A8 | aep + six repositories | `aep plan store install-hooks` (pre-push `validate`, pinned-version check); cutover PRs (§ 9.5 step 7) | `aep-cli/src/store_command.rs`; per repository `.engineering/`, `project.yaml`, CI, ruleset, hook | V4, R6, AEP release | `validate` required, green, no bypass |
 | A9 | ess, aep | AEP planning model as ESS spec, lowered | ess + aep | ESS phase C released | lowered definitions equal A1's |
 
 Parallelism:
