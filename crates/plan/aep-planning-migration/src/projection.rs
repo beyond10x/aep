@@ -87,6 +87,19 @@ impl StagedProjection {
     }
 }
 
+/// A stage directory beside `projection_root` that no other staging uses: two processes, or two
+/// threads, that stage the same authority snapshot at once each get their own. A path named by the
+/// snapshot alone was shared, and one `validate` deleted the stage another was still reading.
+fn stage_directory(projection_root: &Path, authority_snapshot: &AuthoritySnapshotIdV1) -> PathBuf {
+    static STAGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    projection_root.with_extension(format!(
+        "aep-stage-{}-{}-{}",
+        authority_snapshot.0.as_wire().trim_start_matches("sha256:"),
+        std::process::id(),
+        STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ))
+}
+
 impl FileProjectionPublisher {
     pub fn new(
         authority_path: PathBuf,
@@ -275,10 +288,7 @@ impl FileProjectionPublisher {
             ..EntityQuery::default()
         }))
         .map_err(|_| ProjectionError::NotPublished)?;
-        let stage = self.projection_root.with_extension(format!(
-            "aep-stage-{}",
-            authority_snapshot.0.as_wire().trim_start_matches("sha256:")
-        ));
+        let stage = stage_directory(&self.projection_root, &authority_snapshot);
         if stage.exists() {
             fs::remove_dir_all(&stage).map_err(|_| ProjectionError::Uncertain)?;
         }

@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two `aep plan artifact validate` runs on one tree store at once no longer fail each other. Each
+  staged its render of the projection in a directory named by the authority snapshot alone, so
+  one removed the stage the other was reading and reported every artifact as unrendered, or
+  refused with `NotPublished`. A stage directory now also carries the process and a counter.
+
 ## [0.58.0] — 2026-09-24
 
 ### Added
