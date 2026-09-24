@@ -294,6 +294,17 @@ impl FileProjectionPublisher {
         }
         fs::create_dir_all(&stage).map_err(|_| ProjectionError::NotPublished)?;
         let store = aep_backend_markdown::MarkdownStore::open(&stage);
+        let tree = self
+            .session
+            .as_ref()
+            .is_some_and(aep_backend_eventlog::AuthoritySession::is_tree);
+        // A tree store's projection is `aep.planning-md/2` (design § 3.2); an `aep.project/2`
+        // store keeps rendering the first format, so its committed documents do not change.
+        let format = if tree {
+            aep_backend_markdown::PlanningFormat::V2
+        } else {
+            aep_backend_markdown::PlanningFormat::V1
+        };
         let mut rendered = Vec::new();
         for envelope in &page.items {
             let locator = &envelope.metadata.locator;
@@ -318,7 +329,7 @@ impl FileProjectionPublisher {
                     ));
                 }
             }
-            let Some(document) = aep_backend_markdown::projection::document_from_entity(
+            let Some(mut document) = aep_backend_markdown::projection::document_from_entity(
                 id.clone(),
                 &envelope.data,
                 envelope.metadata.revision.get(),
@@ -326,6 +337,7 @@ impl FileProjectionPublisher {
             ) else {
                 continue;
             };
+            document.frontmatter.format = format;
             rendered.push((store.relative_path_for(&id), document));
         }
         write_staged_documents(&store, &stage, &rendered)?;
@@ -345,10 +357,6 @@ impl FileProjectionPublisher {
                 captured_markdown_files(complete.snapshot())?,
             )
         };
-        let tree = self
-            .session
-            .as_ref()
-            .is_some_and(aep_backend_eventlog::AuthoritySession::is_tree);
         let preserved_foreign_paths = preserve_foreign(
             &self.projection_root,
             &stage,
@@ -1888,6 +1896,37 @@ mod tests {
             published,
             documents(&seeded.projection_root),
             "every published document is byte-identical whichever capture it was rendered from"
+        );
+    }
+
+    #[test]
+    fn a_file_authority_projection_is_rendered_in_the_first_planning_format() {
+        // `aep.planning-md/2` is a tree store's projection format (design § 3.2); an
+        // `aep.project/2` store keeps rendering `/1`, so its documents do not change under it.
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let (snapshot, _) =
+            crate::durable::authority_snapshot_identity(&fixture.authority, &fixture.snapshot())
+                .expect("identity of the authority");
+        FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        )
+        .publish(snapshot)
+        .expect("publication");
+        let document = fs::read_to_string(fixture.projection_root.join("story/projected.md"))
+            .expect("the story is rendered");
+        assert!(
+            document.starts_with("---\nformat: aep.planning-md/1\n"),
+            "a file authority renders the first format:\n{document}"
+        );
+        assert!(
+            fixture
+                .projection_root
+                .join(PROJECTION_OWNERSHIP_FILE)
+                .exists(),
+            "a file authority's projection keeps its ownership file"
         );
     }
 

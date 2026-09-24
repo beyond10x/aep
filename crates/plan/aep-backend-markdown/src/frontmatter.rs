@@ -43,6 +43,44 @@ use aep_domain::node::Node;
 /// format has already moved.
 pub const PLANNING_FORMAT: &str = "aep.planning-md/1";
 
+/// The format a tree store's projection is rendered in (`aep.project/3`, design § 3.2).
+///
+/// The keys are those of [`PLANNING_FORMAT`]. The tag is what differs, so a document says which
+/// renderer produced it and `validate` holds it to that render (S5), and a later renderer change
+/// is a new tag rather than a silent rewrite of every committed document.
+pub const PLANNING_FORMAT_V2: &str = "aep.planning-md/2";
+
+/// Which planning format a document is written in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PlanningFormat {
+    /// [`PLANNING_FORMAT`]: a Markdown store's documents, and an `aep.project/2` projection.
+    #[default]
+    V1,
+    /// [`PLANNING_FORMAT_V2`]: an `aep.project/3` tree store's projection.
+    V2,
+}
+
+impl PlanningFormat {
+    /// The tag written as a document's `format:`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::V1 => PLANNING_FORMAT,
+            Self::V2 => PLANNING_FORMAT_V2,
+        }
+    }
+
+    /// The format a `format:` tag names, or nothing for a tag this build does not read.
+    #[must_use]
+    pub fn from_tag(tag: &str) -> Option<Self> {
+        match tag {
+            PLANNING_FORMAT => Some(Self::V1),
+            PLANNING_FORMAT_V2 => Some(Self::V2),
+            _ => None,
+        }
+    }
+}
+
 /// Serde default for [`RawPlanningFrontmatter::format`].
 fn default_format() -> String {
     PLANNING_FORMAT.to_owned()
@@ -63,7 +101,8 @@ fn default_revision() -> u64 {
 /// reported once with both.
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
 pub struct RawPlanningFrontmatter {
-    /// The format version. Defaults to [`PLANNING_FORMAT`]; any other value is refused.
+    /// The format version. Defaults to [`PLANNING_FORMAT`]; a value other than it or
+    /// [`PLANNING_FORMAT_V2`] is refused.
     #[serde(default = "default_format")]
     pub format: String,
     /// The artifact's identifier, such as `story:passkey-login`.
@@ -125,6 +164,9 @@ pub struct RawPlanningFrontmatter {
 /// and whose revision counts from a real write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanningFrontmatter {
+    /// The format it is written in: the one it was read in, or [`PlanningFormat::V1`] for a new
+    /// one. A tree store's projection sets [`PlanningFormat::V2`].
+    pub format: PlanningFormat,
     /// The artifact's identifier.
     pub id: ArtifactId,
     /// What kind of artifact it is.
@@ -186,17 +228,15 @@ pub struct PlanningFrontmatter {
 }
 
 impl PlanningFrontmatter {
-    /// The format version this frontmatter is written in.
-    ///
-    /// A constant rather than a field: the only value a validated frontmatter can have is the one
-    /// [`TryFrom`] accepted, so storing it would create a second place for it to be wrong.
+    /// The format version this frontmatter is written in, as its tag.
     pub fn format(&self) -> &'static str {
-        PLANNING_FORMAT
+        self.format.as_str()
     }
 
-    /// A minimal frontmatter, at revision 1.
+    /// A minimal frontmatter, at revision 1, in [`PLANNING_FORMAT`].
     pub fn new(id: ArtifactId, kind: ArtifactKind, status: ArtifactStatus) -> Self {
         Self {
+            format: PlanningFormat::V1,
             id,
             kind,
             status,
@@ -308,7 +348,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + self.extra.len();
 
         let mut map = serializer.serialize_map(Some(length))?;
-        map.serialize_entry("format", PLANNING_FORMAT)?;
+        map.serialize_entry("format", self.format.as_str())?;
         map.serialize_entry("id", &self.id)?;
         map.serialize_entry("kind", &self.kind)?;
         map.serialize_entry("status", &self.status)?;
@@ -355,14 +395,15 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
     fn try_from(raw: RawPlanningFrontmatter) -> Result<Self, Self::Error> {
         let mut errors = ValidationErrors::new();
 
-        if raw.format != PLANNING_FORMAT {
+        let format = PlanningFormat::from_tag(&raw.format);
+        if format.is_none() {
             errors.push(
                 ValidationError::new(
                     ValidationCode::UnsupportedFormatVersion,
                     "planning.format",
                     format!(
-                        "this build reads planning documents written as `{PLANNING_FORMAT}`, not \
-                         `{}`",
+                        "this build reads planning documents written as `{PLANNING_FORMAT}` or \
+                         `{PLANNING_FORMAT_V2}`, not `{}`",
                         raw.format
                     ),
                 )
@@ -436,6 +477,7 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
         let model_digest = validated_model_digest(&raw, &mut errors);
 
         errors.into_result(Self {
+            format: format.unwrap_or_default(),
             id: raw.id,
             kind: raw.kind,
             status: raw.status,
@@ -739,9 +781,31 @@ mod tests {
     }
 
     #[test]
+    fn a_document_in_the_tree_projection_format_is_read_and_written_back_in_it() {
+        // `aep.planning-md/2` is what a tree store's projection is rendered in (design § 3.2). A
+        // reader that took it and wrote `/1` back would change every document it round-tripped.
+        let front =
+            PlanningFrontmatter::try_from(raw(&format!("format: aep.planning-md/2\n{MINIMAL}")))
+                .expect("the tree projection format is one this build reads");
+        assert_eq!(front.format(), "aep.planning-md/2");
+        let written = serde_yaml::to_string(&front).expect("serializes");
+        assert!(
+            written.starts_with("format: aep.planning-md/2\n"),
+            "a /2 document is written back as /2:\n{written}"
+        );
+        let first = PlanningFrontmatter::try_from(raw(MINIMAL)).expect("valid");
+        assert!(
+            serde_yaml::to_string(&first)
+                .expect("serializes")
+                .starts_with("format: aep.planning-md/1\n"),
+            "a /1 document stays /1"
+        );
+    }
+
+    #[test]
     fn a_format_version_this_build_does_not_read_is_refused_by_code() {
         let errors =
-            PlanningFrontmatter::try_from(raw(&format!("format: aep.planning-md/2\n{MINIMAL}")))
+            PlanningFrontmatter::try_from(raw(&format!("format: aep.planning-md/99\n{MINIMAL}")))
                 .expect_err("a version this build cannot read is not silently reinterpreted");
         assert_eq!(errors.len(), 1, "{errors}");
         assert!(
@@ -755,7 +819,7 @@ mod tests {
         // Invariant 3: validation accumulates. An exact count, because "is an error" would pass
         // with a validator that returned on the first problem.
         let errors = PlanningFrontmatter::try_from(raw(&format!(
-            "format: aep.planning-md/2\nrevision: 0\n{MINIMAL}"
+            "format: aep.planning-md/99\nrevision: 0\n{MINIMAL}"
         )))
         .expect_err("both problems are problems");
         assert_eq!(errors.len(), 2, "{errors}");

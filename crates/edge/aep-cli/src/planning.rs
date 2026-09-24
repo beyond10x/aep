@@ -6422,7 +6422,9 @@ fn validate(
     let registry = args.lifecycles()?;
     let mut summary = findings(&opened, &registry, &args.repository_root());
     summary.without_an_outcome = reviews_without_an_outcome(&opened, outcome_within);
-    summary.problems.extend(tree_findings(&opened, against)?);
+    let tree = tree_findings(&opened, against)?;
+    summary.problems.extend(tree.problems);
+    summary.skipped = tree.skipped;
 
     match args.format {
         Format::Text => print_validation(&summary, strict),
@@ -6604,6 +6606,7 @@ pub(crate) fn findings(
         without_findings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
+        skipped: Vec::new(),
     }
 }
 
@@ -6744,6 +6747,9 @@ fn print_validation(summary: &Summary, strict: bool) {
                 outln!("  - {note}");
             }
         }
+    }
+    for skipped in &summary.skipped {
+        outln!("{skipped}");
     }
     if summary.problems.is_empty() {
         outln!("valid");
@@ -9005,6 +9011,11 @@ pub(crate) struct Summary {
     /// so rather than pretending the store decided it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_an_outcome: Vec<String>,
+    /// Rules that were asked for and could not apply, each with the reason. Not a problem: a rule
+    /// with nothing to hold the tree to is not a rule the tree broke, but a reader who asked for
+    /// it must see that it did not run rather than read its silence as a pass.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    skipped: Vec<String>,
 }
 
 /// What `findings` compared, and what it found.
@@ -9571,7 +9582,11 @@ fn resolve_fork(args: &StoreArgs, id: &str, first: Option<&str>, onto: &str) -> 
 /// The rules only a tree authority has, as problems: its files (`eventlog verify` V1–V5, and V2
 /// against `against`), an artifact two branches forked (S3), a document that is not its render
 /// (S5) and an absolute home path in any committed planning file (S9).
-fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> {
+///
+/// V2 is skipped, and says so, when `against` holds no tree store: an `aep.project/2` base — the
+/// commit a cutover is measured against — has no committed tree file V2 could hold the head to,
+/// and every file it does hold would otherwise read as deleted.
+fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings> {
     let Plan::Eventlog {
         authority_root,
         projection_root,
@@ -9579,9 +9594,10 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> 
         tree: Some(repository),
     } = &opened.plan
     else {
-        return Ok(Vec::new());
+        return Ok(TreeFindings::default());
     };
     let mut problems = Vec::new();
+    let mut skipped = Vec::new();
 
     let scratch = std::env::temp_dir().join(format!(
         "aep-validate-{}-{}",
@@ -9591,7 +9607,16 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> 
     let base = match against {
         Some(revision) => {
             let relative = authority_root.strip_prefix(repository).unwrap_or(authority_root);
-            Some(materialize(repository, revision, relative, &scratch)?.join(relative))
+            let marker = relative.join(TREE_STORE_MARKER);
+            if holds_file(repository, revision, &marker)? {
+                Some(materialize(repository, revision, relative, &scratch)?.join(relative))
+            } else {
+                skipped.push(format!(
+                    "V2 skipped: {revision} holds no tree store ({})",
+                    marker.display()
+                ));
+                None
+            }
         }
         None => None,
     };
@@ -9606,7 +9631,7 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> 
     let _ = std::fs::remove_dir_all(&scratch);
 
     let Some(PlanBackend::Eventlog(plan)) = opened.plan.open_backend()? else {
-        return Ok(problems);
+        return Ok(TreeFindings { problems, skipped });
     };
     let forked = plan
         .with_store(aep_backend_eventlog::EventlogPlanningStore::forked)
@@ -9646,7 +9671,7 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> 
     let _ = std::fs::remove_dir_all(staged.directory());
     for (path, bytes) in &rendered {
         match written.get(path) {
-            Some(held) if held == bytes => {}
+            Some(held) if held == bytes || is_render_in_its_own_format(held, bytes) => {}
             Some(_) => problems.push(format!("S5: {path} is not the render of its artifact")),
             None => problems.push(format!("S5: {path} is missing from the projection")),
         }
@@ -9664,7 +9689,64 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<Vec<String>> 
             }
         }
     }
-    Ok(problems)
+    Ok(TreeFindings { problems, skipped })
+}
+
+/// Whether `held` is `rendered` written in the format `held`'s own `format:` tag names (S5, design
+/// § 8). A projection rendered before the renderer moved to `aep.planning-md/2` keeps its tag
+/// until it is re-rendered, and is held to the render of that tag rather than refused wholesale.
+fn is_render_in_its_own_format(held: &[u8], rendered: &[u8]) -> bool {
+    let (Ok(held), Ok(rendered)) = (std::str::from_utf8(held), std::str::from_utf8(rendered)) else {
+        return false;
+    };
+    let (Ok(held_document), Ok(mut document)) = (
+        aep_backend_markdown::PlanningDocument::parse(held, None),
+        aep_backend_markdown::PlanningDocument::parse(rendered, None),
+    ) else {
+        return false;
+    };
+    if held_document.frontmatter.format == document.frontmatter.format {
+        return false;
+    }
+    document.frontmatter.format = held_document.frontmatter.format;
+    document.render() == held
+}
+
+/// The file every `eventlog-tree` store holds at its root, written once at creation (design
+/// § 3.2). A revision without it under the authority path holds no tree store.
+const TREE_STORE_MARKER: &str = "store.json";
+
+/// What the tree rules found, and which of them could not run.
+#[derive(Debug, Default)]
+struct TreeFindings {
+    problems: Vec<String>,
+    skipped: Vec<String>,
+}
+
+/// Whether `revision` holds the file `path`. A revision Git cannot resolve is refused, never read
+/// as one that holds nothing: a base that was not fetched must not quietly skip V2.
+fn holds_file(repository: &Path, revision: &str, path: &Path) -> Result<bool> {
+    use std::process::{Command, Stdio};
+    let resolved = Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{revision}^{{commit}}"))
+        .stdout(Stdio::null())
+        .status()
+        .context("running git rev-parse")?;
+    if !resolved.success() {
+        bail!("{revision} could not be read for `--against`; fetch it first");
+    }
+    let held = Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .args(["cat-file", "-e"])
+        .arg(format!("{revision}:{}", path.display()))
+        .stderr(Stdio::null())
+        .status()
+        .context("running git cat-file")?;
+    Ok(held.success())
 }
 
 /// The files of `relative` at `revision`, extracted under `into`.
