@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:structured-findings-on-review-result
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:landing-page-states-what-is-true
 kind: story
 status: implemented

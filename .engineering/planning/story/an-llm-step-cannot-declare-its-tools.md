@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:an-llm-step-cannot-declare-its-tools
 kind: story
 status: draft

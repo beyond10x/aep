@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:resume-names-a-flag-it-does-not-have
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:evidence-is-an-observation-on-a-tree-store
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:native-arm-needs-a-window-that-fits
 kind: story
 status: draft

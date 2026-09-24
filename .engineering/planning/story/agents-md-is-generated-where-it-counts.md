@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:agents-md-is-generated-where-it-counts
 kind: story
 status: implemented

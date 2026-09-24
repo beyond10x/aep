@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: review-result:eventlog-migration-old-reader-source-inspection
 kind: review-result
 status: active

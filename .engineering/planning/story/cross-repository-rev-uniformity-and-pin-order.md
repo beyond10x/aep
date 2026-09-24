@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:cross-repository-rev-uniformity-and-pin-order
 kind: story
 status: draft

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: epic:consumers-use-grouped-spellings
 kind: epic
 status: active

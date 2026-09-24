@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:redaction-removes-the-operator-not-two-variables
 kind: story
 status: implemented

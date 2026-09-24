@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:evidence-verb-refuses-its-own-default-instant
 kind: story
 status: implemented

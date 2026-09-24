@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:fan-out-survives-a-rate-limit
 kind: story
 status: implemented

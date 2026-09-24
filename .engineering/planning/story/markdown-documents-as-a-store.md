@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:markdown-documents-as-a-store
 kind: story
 status: implemented

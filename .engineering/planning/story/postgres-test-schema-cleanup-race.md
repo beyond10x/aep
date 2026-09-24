@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:postgres-test-schema-cleanup-race
 kind: story
 status: implemented

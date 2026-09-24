@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:gate-runs-in-a-worktree
 kind: story
 status: implemented

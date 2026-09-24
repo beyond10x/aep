@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:sqlite-hydrates-on-open
 kind: story
 status: implemented

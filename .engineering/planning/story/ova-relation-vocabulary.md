@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:ova-relation-vocabulary
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:out-of-band-edit-is-drift
 kind: story
 status: implemented

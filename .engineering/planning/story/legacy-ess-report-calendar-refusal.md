@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:legacy-ess-report-calendar-refusal
 kind: story
 status: draft

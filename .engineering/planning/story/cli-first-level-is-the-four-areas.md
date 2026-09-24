@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:cli-first-level-is-the-four-areas
 kind: story
 status: implemented

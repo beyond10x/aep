@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:skill-text-cannot-instruct-a-direct-store-write
 kind: story
 status: archived

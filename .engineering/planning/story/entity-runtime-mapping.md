@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:entity-runtime-mapping
 kind: story
 status: implemented

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:harness-denies-direct-store-writes
 kind: story
 status: draft

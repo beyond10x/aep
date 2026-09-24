@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:unreadable-lock-refuses-its-own-escape-hatch
 kind: story
 status: active

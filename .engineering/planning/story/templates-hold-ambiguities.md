@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:templates-hold-ambiguities
 kind: story
 status: implemented

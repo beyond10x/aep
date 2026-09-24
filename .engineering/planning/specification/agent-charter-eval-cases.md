@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: specification:agent-charter-eval-cases
 kind: specification
 status: draft
