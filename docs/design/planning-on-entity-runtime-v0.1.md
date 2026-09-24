@@ -650,9 +650,9 @@ Parallelism:
 | observation heads | done | Entity Runtime 0.22.0 (entity-runtime#34): only decisions make heads, so evidence on one branch and a move on another do not fork |
 | R2 | done | Entity Runtime 0.22.0 (entity-runtime#34): per-entity reads, R-151 amended; a tenant forgotten between the binding check and `stream_identity` can still be re-minted |
 | A1–A4, A6, A7 | done | AEP 0.58.0 (#18, #20, #21); export fixes #23, the concurrent-stage fix #22 |
-| A5 | done | aep#24: `aep.planning-md/2` is the tag change only; `head` has no defined value and is not written. Each repository re-renders once when its planning check moves to the release that renders `/2` |
+| A5 | done | aep#24, released in 0.59.0: `aep.planning-md/2` is the tag change only; `head` has no defined value and is not written. Each repository re-rendered once and moved its planning check to aep 0.59.2: eventlog #29, entity-runtime #36, aep #28, ess #69, connectors #33, service-sdk #26. 0.59.1 and 0.59.2 fixed `render` over a projection an older release published (aep#27) |
 | A8 | done | cutovers: eventlog #27, entity-runtime #31, aep #22, ess #67, connectors #32, service-sdk #25; `planning validate` required in all six |
-| N7 | done | evidence is an ER observation at the current revision (AEP pinned at Entity Runtime 0.22.0); `resolve` carries observations over, and `explain` joins evidence to moves by lineage |
+| N7 | done | released in AEP 0.59.0 (aep#25): evidence is an ER observation at the current revision (AEP pinned at Entity Runtime 0.22.0); `resolve` carries observations over, and `explain` joins evidence to moves by lineage |
 | A9 | not in this plan | waits for ESS phase C |
 
 Found while cutting over, and fixed in the export (#23): the `/2` migration provenance kept the
@@ -660,6 +660,8 @@ Found while cutting over, and fixed in the export (#23): the `/2` migration prov
 survived inside it. The export now rewrites inside hex text and rebinds the digests over those
 bytes. The eventlog and entity-runtime trees were exported before that fix; their hex holds
 `~/` home paths only (entity-runtime: 428), the same bytes their `/2` history already holds.
+
+Follow-ups filed under `epic:planning-on-entity-runtime`: `story:a-failed-publication-leaves-no-stage-directory` and `story:early-tree-exports-carry-no-home-path-in-legacy-hex`.
 
 ---
 
