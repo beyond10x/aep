@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact render` re-renders a tree store whose last record is the projection
+  watermark an older release published. It re-staged that watermark to replay it, which can
+  never match an inventory another renderer wrote, and refused every store rendered by 0.58.0
+  as `ProjectionDrift`. It now publishes the current state, as a write does.
+
 ### Added
 
 - A tree store (`aep.project/3`) renders its projection as `format: aep.planning-md/2`, which

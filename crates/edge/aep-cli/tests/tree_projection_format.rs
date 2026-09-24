@@ -170,3 +170,71 @@ fn a_projection_still_in_the_first_format_validates_until_it_is_re_rendered() {
     let validated = aep(&project, &["plan", "artifact", "validate"]);
     assert!(validated.status.success(), "{}", text(&validated));
 }
+
+/// Copy `from` into `to`, every file and directory, for a fixture a test may write to.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the copy's directory");
+    for entry in std::fs::read_dir(from).expect("the fixture directory reads") {
+        let entry = entry.expect("a fixture entry");
+        let target = to.join(entry.file_name());
+        if entry.file_type().expect("a fixture entry's type").is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("a fixture file copies");
+        }
+    }
+}
+
+/// A store whose last record is the projection watermark an older release wrote, rendered in
+/// the first format, is re-rendered by `render` in the second. The watermark's inventory is the
+/// older renderer's, so re-staging it can never match; nothing was recorded after it, so the
+/// only difference is the renderer, and `render` publishes the current state instead of refusing
+/// it as drift.
+#[test]
+fn render_upgrades_a_projection_an_older_release_published_last() {
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tree-rendered-by-0-58-0");
+    let project = Path::new(env!("CARGO_TARGET_TMPDIR")).join("tree-format-older-release");
+    let _ = std::fs::remove_dir_all(&project);
+    copy_tree(&fixture, &project);
+    let engineering = project.join(".engineering");
+    let selector = engineering.join("project.yaml");
+    let mut document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&selector).expect("the selector reads"))
+            .expect("the selector is JSON");
+    document["protocols"] =
+        serde_json::Value::String(relative(&engineering, &workspace()).display().to_string());
+    std::fs::write(&selector, document.to_string()).expect("the selector writes");
+    let story = engineering.join("planning/story/rendered-by-an-older-release.md");
+    assert!(
+        std::fs::read_to_string(&story)
+            .expect("the fixture's story")
+            .contains("format: aep.planning-md/1"),
+        "the fixture no longer holds a first-format projection, so this case tests nothing"
+    );
+
+    let render = aep(&project, &["plan", "artifact", "render"]);
+    assert!(
+        render.status.success(),
+        "render refused a projection an older release published: {}",
+        text(&render)
+    );
+    assert!(
+        std::fs::read_to_string(&story)
+            .expect("the re-rendered story")
+            .contains("format: aep.planning-md/2"),
+        "render left the story in the first format"
+    );
+    let validate = aep(&project, &["plan", "artifact", "validate"]);
+    assert!(
+        validate.status.success(),
+        "the re-rendered store does not validate: {}",
+        text(&validate)
+    );
+    let again = aep(&project, &["plan", "artifact", "render"]);
+    assert!(
+        again.status.success(),
+        "a second render refused the projection the first one published: {}",
+        text(&again)
+    );
+}

@@ -1,0 +1,1 @@
+{"planning_identity":"01a0d4c5-e004-70dd-ab29-f8c1b43fd67b","planning_scope":"fixture","planning_tenant":"planning","profile":"development.standard","protocol":"adp/1","protocols":"..","store":{"eventlog":{"path":"state","projection":"planning"}},"version":"aep.project/3"}
