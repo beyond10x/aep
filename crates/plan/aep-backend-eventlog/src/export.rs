@@ -201,6 +201,44 @@ fn rewrite_evidence(
         .collect()
 }
 
+/// Name the typed entity in every evidence object that names the artifact: the source recorded
+/// its events and decisions under the contract entity type, and the tree checks that an imported
+/// event names the subject it is imported into.
+fn retype_evidence(
+    evidence: Vec<LegacyEvidence>,
+    id: &str,
+    kind: &str,
+) -> Result<Vec<LegacyEvidence>, String> {
+    fn walk(value: &mut Value, id: &str, kind: &str) {
+        match value {
+            Value::Object(map) => {
+                let names_it = map.get("entity").and_then(Value::as_str) == Some(STORED_AS)
+                    && map.get("id").and_then(Value::as_str) == Some(id);
+                if names_it {
+                    map.insert("entity".to_owned(), Value::String(kind.to_owned()));
+                }
+                for item in map.values_mut() {
+                    walk(item, id, kind);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    walk(item, id, kind);
+                }
+            }
+            _ => {}
+        }
+    }
+    evidence
+        .into_iter()
+        .map(|item| {
+            let mut value = serde_json::to_value(&item).map_err(|error| error.to_string())?;
+            walk(&mut value, id, kind);
+            serde_json::from_value(value).map_err(|error| error.to_string())
+        })
+        .collect()
+}
+
 fn rewrite_instance(
     rewrite: &mut Rewrite<'_>,
     instance: &EntityInstance,
@@ -280,6 +318,7 @@ pub fn export_to_tree(
             let packed = packed.as_object().cloned().unwrap_or_default();
             let status = document_state(&held.terminal)?;
             let id = report.identities[&subject.id].clone();
+            let evidence = retype_evidence(evidence, &id, kind)?;
             let document = serde_json::json!({
                 "lifecycle_state": status,
                 "fields": packed,
@@ -461,6 +500,34 @@ mod tests {
         assert!(!out.contains(&format!("{}/", "$HOME")), "{out}");
         assert!(!out.contains("Users"), "{out}");
         assert_eq!(found.len(), 3);
+    }
+
+    #[test]
+    fn evidence_naming_the_artifact_takes_its_typed_entity_and_nothing_else_does() {
+        let event = |id: &str| {
+            LegacyEvidence::Event(
+                serde_json::from_value(serde_json::json!({
+                    "entity": STORED_AS, "version": 1, "id": id, "revision": 1, "type": "e", "from_state": null, "to_state": "draft", "changed": {}, "removed": [], "args": {}, "payload": null
+                }))
+                .expect("a domain event"),
+            )
+        };
+        let retyped = retype_evidence(vec![event("ent-a"), event("ent-b")], "ent-a", "story")
+            .expect("retyped");
+        let entities: Vec<String> = retyped
+            .iter()
+            .map(|item| serde_json::to_value(item).expect("json").to_string())
+            .collect();
+        assert!(
+            entities[0].contains("\"entity\":\"story\""),
+            "{}",
+            entities[0]
+        );
+        assert!(
+            entities[1].contains(STORED_AS),
+            "another artifact's event keeps its type: {}",
+            entities[1]
+        );
     }
 
     #[test]
