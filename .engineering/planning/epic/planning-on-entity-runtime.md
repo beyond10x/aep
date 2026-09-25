@@ -2,11 +2,11 @@
 format: aep.planning-md/2
 id: epic:planning-on-entity-runtime
 kind: epic
-status: draft
+status: implemented
 title: Planning stores are typed entities on a tree Git merges
 relations:
 - serves: vision:O2
-revision: 1
+revision: 4
 ---
 ## Outcome
 
