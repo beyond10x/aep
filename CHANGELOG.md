@@ -9,6 +9,12 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact new review-result` refusing an empty `findings` block now names `[]` as the
+  way to record a review with no findings. It previously told the writer to leave the block out,
+  which `validate` then reports as a review stating its findings in prose only.
+
 ## [0.59.2] — 2026-09-24
 
 ### Fixed

@@ -456,8 +456,9 @@ fn parse_block(block: &Block) -> Result<Vec<Finding>, FindingsError> {
     if block.text.trim().is_empty() {
         return Err(FindingsError {
             line: block.first_line,
-            detail: "the block is empty; a review with nothing to report writes no block at all"
-                .to_owned(),
+            // `new` accepts a body with no block, but `validate` then reports the review as prose
+            // only, so `[]` is the spelling to send the writer to.
+            detail: "the block is empty; a review with no findings writes `[]` in it".to_owned(),
         });
     }
     let raw: Vec<RawFinding> =
@@ -611,6 +612,27 @@ mod tests {
     fn a_body_with_no_block_has_no_findings_and_is_not_an_error() {
         assert_eq!(
             parse("# A story\n\nNothing fenced here.\n").expect("no block is not a defect"),
+            Vec::new()
+        );
+    }
+
+    #[test]
+    fn an_empty_block_is_refused_with_the_accepted_spelling_of_no_findings() {
+        let error = parse(&body("")).expect_err("an empty block is a defect");
+        assert!(
+            error.detail.contains("`[]`"),
+            "the refusal names `[]` as the way to record no findings: {error}"
+        );
+        assert!(
+            !error.detail.contains("writes no block at all"),
+            "the refusal does not tell the writer to drop the block: {error}"
+        );
+    }
+
+    #[test]
+    fn an_empty_sequence_is_a_review_with_no_findings() {
+        assert_eq!(
+            parse(&body("[]\n")).expect("`[]` is the accepted spelling of no findings"),
             Vec::new()
         );
     }
