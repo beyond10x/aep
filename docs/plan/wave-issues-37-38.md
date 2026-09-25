@@ -31,9 +31,25 @@ Dispatch types: `aep:implementor`, then `aep:adversary`, per unit.
 
 | unit | managed worktree id | build directory | scratch root | stage |
 |---|---|---|---|---|
-| u37 | `wave-20260925-u37` | `b10x-target/aep-wave-20260925-u37` under the user cache | `aep-wave-20260925/u37-scratch` under the user cache | dispatched |
-| u38 | `wave-20260925-u38` | `b10x-target/aep-wave-20260925-u38` under the user cache | `aep-wave-20260925/u38-scratch` under the user cache | dispatched |
-| integration | `wave-20260925-issues-37-38` | `b10x-target/aep-wave-20260925-int` under the user cache | — | open |
+| u37 | `wave-20260925-u37` | `b10x-target/aep-wave-20260925-u37` under the user cache (deleted) | `aep-wave-20260925/u37-scratch` under the user cache | merged `ff1f8e4ba8` (unit `bd4243711d`) |
+| u38 | `wave-20260925-u38` | `b10x-target/aep-wave-20260925-u38` under the user cache (deleted) | `aep-wave-20260925/u38-scratch` under the user cache | merged `503a5bc82b` (unit `1a6a27f83b`) |
+| integration | `wave-20260925-issues-37-38` | `b10x-target/aep-wave-20260925-int` under the user cache (deleted) | — | gated; awaiting operator review |
+
+## 5. What happened
+
+| unit | adversary pass 1 | correction | second pass |
+|---|---|---|---|
+| u37 | 2 introduced (legacy in-tree fence not contended; read-only `.git` refuses) | legacy names locked when they already exist, never created; read-only case stated | none — coordinator applied the implementor's lint-only patch to the adversary file and re-ran fmt, clippy and the adversary lane (6 passed) |
+| u38 | 4 introduced, 1 pre-existing (control characters, parser positions, escaped values, nested fences) | all five fixed | none — coordinator verified no assertion was dropped; free disk was under the 10G floor |
+
+Gate on the integration branch, one exit status per step: 16 steps, `test` 2274 passed / 0 failed.
+`postgres-check` exit 0 is a skip (`ENTITY_POSTGRES_URL unset`). `audit-check` first exited 201
+because the `protocol` binary on `PATH` was 0.59.2; re-run with the tree's own 0.59.3 binary first
+on `PATH`: 61 pass, 0 fail.
+
+Environment findings, not defects of this wave: `store_writer_control` fails 31/32 under a private
+`TMPDIR` below the user cache (passes under the default one); `planning_cli` scratch names are fixed,
+so two concurrent runs collide.
 
 ## 4. Commits this wave makes
 

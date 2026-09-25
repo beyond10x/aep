@@ -2,7 +2,7 @@
 format: aep.planning-md/2
 id: story:review-findings-accept-prose-and-json
 kind: story
-status: active
+status: implemented
 title: A review-result records findings whose messages are ordinary prose
 relations:
 - decomposes: epic:review-facts
@@ -16,7 +16,7 @@ scope:
   path: crates/plan/aep-backend-markdown/src/findings.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 7
+revision: 8
 ---
 ## Outcome
 

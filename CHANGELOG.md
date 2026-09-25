@@ -9,6 +9,22 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan artifact new review-result … --findings <file|->` takes the findings as a JSON array,
+  validated against the entry schema and written into the body as a JSON `findings` block. A body
+  that also opens a block is refused as ambiguous. (#38)
+
+### Fixed
+
+- Planning writer fence files no longer land in the working tree. Inside a Git repository they live
+  under `<git-common-dir>/aep/`, shared by every linked worktree; outside one they stay beside the
+  store. While an older `aep` may still hold the in-tree names, this build also locks them when they
+  exist, without creating them. (#37)
+- A malformed `findings` block is refused at one body line, with that line quoted and a hint naming
+  JSON as the machine-written form. Whatever `--findings` accepts reads back unchanged, and a
+  `findings` fence quoted inside a longer fence is prose rather than the review's findings. (#38)
+
 ## [0.59.3] — 2026-09-25
 
 ### Fixed
