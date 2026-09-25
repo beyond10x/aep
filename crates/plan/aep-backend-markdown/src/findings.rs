@@ -40,6 +40,7 @@
 //! Where either side wrote no line, the line is not compared: *unknown* is not *far away*.
 
 use std::fmt;
+use std::fmt::Write as _;
 
 /// The info string that marks the block, as it is written after the opening fence.
 pub const FENCE_INFO: &str = "findings";
@@ -335,29 +336,165 @@ pub fn compare(from: &[Finding], to: &[Finding]) -> Ledger {
     ledger
 }
 
-/// Why a block could not be read, and **where**.
+/// What a set of findings was read from, which is what a refusal's line number counts in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FindingsInput {
+    /// The fenced block in an artifact's body; the line counts the body's lines.
+    Body,
+    /// A JSON array given on its own, as `new --findings` takes one; the line counts its lines.
+    Json,
+}
+
+/// Why findings could not be read, **where**, and what the place says.
 ///
 /// A refusal with no position sends the writer back to a document to find a defect this code had
-/// already located, so the line is part of the type rather than part of one message's wording.
+/// already located, so the line is part of the type rather than part of one message's wording. It
+/// is the **one** coordinate a refusal carries: the parser's own position inside the block is
+/// translated into it rather than printed beside it, because a number counted from the fence next
+/// to one counted from the top of the body is two answers to one question (beyond10x/aep#38).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FindingsError {
-    /// The line of the **body** the defect is on, counting the body's first line as 1.
+    /// What the findings were read from, which says what [`FindingsError::line`] counts.
+    pub input: FindingsInput,
+    /// The line the defect is on, counting the input's first line as 1.
     pub line: usize,
+    /// That line as it is written, where the input has one — a parser that ran off the end of the
+    /// input positions a defect on no line, and that is shown as nothing rather than as a blank.
+    pub quoted: Option<String>,
     /// What is wrong with it.
     pub detail: String,
 }
 
+impl FindingsError {
+    /// What to do about it, which is the same advice for every defect in the input.
+    ///
+    /// The advice names JSON because the defect this most often answers is prose breaking a YAML
+    /// scalar — `": "` in a message, then an apostrophe once the message is single-quoted — and a
+    /// serializer's JSON quotes every value, which is also what JSON is for a tool that writes one.
+    #[must_use]
+    pub fn hint(&self) -> &'static str {
+        match self.input {
+            FindingsInput::Body => {
+                "Entries are `{file, line, category, severity, verdict, origin, message}`; `file`, \
+                 `category`, `severity` and `message` are required. A value holding `: ` or a \
+                 quote breaks unquoted YAML: quote the value with a serializer, or write the block \
+                 as JSON — `[{\"file\": \"…\", \"category\": \"…\", \"severity\": \"…\", \
+                 \"message\": \"…\"}]` — which is the machine-written form"
+            }
+            FindingsInput::Json => {
+                "`--findings` takes a JSON array of entries `{file, line, category, severity, \
+                 verdict, origin, message}`; `file`, `category`, `severity` and `message` are \
+                 required"
+            }
+        }
+    }
+}
+
 impl fmt::Display for FindingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let what = match self.input {
+            FindingsInput::Body => "the findings block is not readable at line {} of the body",
+            FindingsInput::Json => "the findings input is not readable at line {}",
+        };
         write!(
             formatter,
-            "the findings block is not readable at line {} of the body: {}",
-            self.line, self.detail
-        )
+            "{}: {}",
+            what.replace("{}", &self.line.to_string()),
+            self.detail
+        )?;
+        if let Some(quoted) = &self.quoted {
+            write!(formatter, "; the line reads `{quoted}`")?;
+        }
+        write!(formatter, ". {}", self.hint())
     }
 }
 
 impl std::error::Error for FindingsError {}
+
+/// A defect before it is told what it was read from and what its line says.
+struct Defect {
+    line: usize,
+    /// Whether [`Defect::line`] is a place in the input at all. A parser that reports a defect with
+    /// no position leaves nothing to quote, and quoting the first line instead would point at a
+    /// line that is not wrong.
+    positioned: bool,
+    detail: String,
+}
+
+impl Defect {
+    /// A defect on `line`.
+    fn at(line: usize, detail: String) -> Self {
+        Self {
+            line,
+            positioned: true,
+            detail,
+        }
+    }
+
+    /// The refusal, with the line quoted out of `text`, which [`Defect::line`] counts in.
+    fn within(self, input: FindingsInput, text: &str) -> FindingsError {
+        FindingsError {
+            input,
+            quoted: self
+                .line
+                .checked_sub(1)
+                .filter(|_| self.positioned)
+                .and_then(|index| text.lines().nth(index))
+                .map(ToOwned::to_owned),
+            line: self.line,
+            detail: self.detail,
+        }
+    }
+}
+
+/// A parser's message with every position it prints taken out.
+///
+/// `serde_yaml` and `serde_json` both append their own position to the message, counted from the
+/// start of what *they* were given — the block, not the body — and `serde_yaml` appends a second one
+/// for the construct it was inside. The line is reported once, translated, by [`FindingsError`];
+/// leaving these in is the two coordinate systems beyond10x/aep#38 reports.
+///
+/// Every form the two parsers print is here, read from their `Display` implementations
+/// (`serde_yaml` 0.9 `libyaml/error.rs` and `error.rs`, `serde_json` 1 `error.rs`): ` at line N
+/// column M`, from both, for the problem and for its context; and ` at position N`, from
+/// `serde_yaml`, for a defect libyaml's *reader* finds — a character YAML does not allow — which it
+/// positions by byte offset because the reader runs before lines are counted.
+fn without_positions(message: &str) -> String {
+    let mut kept = String::with_capacity(message.len());
+    let mut rest = message;
+    while let Some(character) = rest.chars().next() {
+        if let Some(width) = position_width(rest) {
+            rest = &rest[width..];
+        } else {
+            kept.push(character);
+            rest = &rest[character.len_utf8()..];
+        }
+    }
+    kept
+}
+
+/// How many bytes the position `text` starts with spans, when it starts with one.
+fn position_width(text: &str) -> Option<usize> {
+    let digits = |text: &str| text.bytes().take_while(u8::is_ascii_digit).count();
+    if let Some(after) = text.strip_prefix(" at line ") {
+        let line = digits(after);
+        let tail = after[line..].strip_prefix(" column ")?;
+        let column = digits(tail);
+        (line > 0 && column > 0).then(|| text.len() - tail.len() + column)
+    } else if let Some(after) = text.strip_prefix(" at position ") {
+        let offset = digits(after);
+        (offset > 0).then(|| text.len() - after.len() + offset)
+    } else {
+        None
+    }
+}
+
+/// The byte offset a libyaml reader error names, where the message names one.
+fn reader_offset(message: &str) -> Option<usize> {
+    let after = &message[message.find(" at position ")? + " at position ".len()..];
+    let digits = after.bytes().take_while(u8::is_ascii_digit).count();
+    after[..digits].parse().ok()
+}
 
 /// A fenced `findings` block found in a body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -372,58 +509,83 @@ pub struct Block {
 ///
 /// The opening fence is three or more backticks followed by the info string and nothing else, which
 /// is what a markdown renderer reads as one too — a block this finds and a reader's renderer does
-/// not would be a document that says two things.
+/// not would be a document that says two things. For the same reason a `findings` fence *inside*
+/// another fenced block is not one: a review quoting an example block in a ` ````markdown ` fence
+/// is prose a renderer shows as code, and reading the example as the review's findings would record
+/// what it quoted instead of what it found.
 #[must_use]
 pub fn block(body: &str) -> Option<Block> {
+    let (opened, closed) = findings_fence(body)?;
+    // An unterminated fence is deliberately not a block: the rest of the document would be read as
+    // YAML, and a missing closing fence is a defect [`parse`] reports rather than one this guesses
+    // its way around.
+    let closed = closed?;
     let lines: Vec<&str> = body.lines().collect();
-    let mut opened: Option<(usize, usize)> = None;
-    for (index, line) in lines.iter().enumerate() {
+    Some(Block {
+        text: lines[opened + 1..closed].join("\n"),
+        first_line: opened + 2,
+    })
+}
+
+/// A fence line: its character, its length, and its info string.
+///
+/// Backticks or tildes, three or more, as `CommonMark` has them. A backtick run whose info string
+/// holds a backtick is inline code, not a fence.
+fn fence(line: &str) -> Option<(char, usize, &str)> {
+    let character = line.chars().next().filter(|c| *c == '`' || *c == '~')?;
+    let length = line.chars().take_while(|c| *c == character).count();
+    if length < 3 {
+        return None;
+    }
+    let info = line[length..].trim();
+    (character == '~' || !info.contains('`')).then_some((character, length, info))
+}
+
+/// The first `findings` fence at the top level of `body`: the index of its opening line, and of
+/// its closing line where it has one.
+///
+/// Every fence is followed, whatever its info string, because what is inside one is code to a
+/// renderer — a `findings` fence nested in it included — until a run of the same character at
+/// least as long closes it.
+fn findings_fence(body: &str) -> Option<(usize, Option<usize>)> {
+    let mut open: Option<(char, usize, bool, usize)> = None;
+    for (index, line) in body.lines().enumerate() {
         let trimmed = line.trim();
-        match opened {
+        match open {
             None => {
-                if let Some(fence) = opening_fence(trimmed) {
-                    opened = Some((index + 1, fence));
+                if let Some((character, length, info)) = fence(trimmed) {
+                    let findings = character == '`' && info == FENCE_INFO;
+                    open = Some((character, length, findings, index));
                 }
             }
-            Some((first, fence)) => {
-                if trimmed.starts_with(&"`".repeat(fence))
-                    && trimmed.chars().all(|character| character == '`')
-                {
-                    return Some(Block {
-                        text: lines[first..index].join("\n"),
-                        first_line: first + 1,
-                    });
+            Some((character, length, findings, opened)) => {
+                let closes = trimmed.chars().count() >= length
+                    && trimmed.chars().all(|found| found == character);
+                if closes {
+                    if findings {
+                        return Some((opened, Some(index)));
+                    }
+                    open = None;
                 }
             }
         }
     }
-    // An unterminated fence is deliberately not a block: the rest of the document would be read as
-    // YAML, and a missing closing fence is a defect [`parse`] reports rather than one this guesses
-    // its way around.
-    None
-}
-
-/// The length of the opening fence, when `line` opens a `findings` block.
-fn opening_fence(line: &str) -> Option<usize> {
-    let backticks = line
-        .chars()
-        .take_while(|character| *character == '`')
-        .count();
-    if backticks < 3 {
-        return None;
+    match open {
+        Some((_, _, true, opened)) => Some((opened, None)),
+        _ => None,
     }
-    (line[backticks..].trim() == FENCE_INFO).then_some(backticks)
 }
 
 /// Whether `body` opens a `findings` block at all, terminated or not.
 ///
 /// Asked by `validate`, which reports a review that recorded no findings: a review whose block is
 /// there and broken has a *different* defect, and reporting it as *absent* would name the wrong
-/// repair.
+/// repair. Asked by `new --findings` too, which refuses a body that already states findings of its
+/// own — broken or not, it is a second answer to the question `--findings` answers. A `findings`
+/// fence quoted inside another fence states nothing, as [`block`] says.
 #[must_use]
 pub fn opens_a_block(body: &str) -> bool {
-    body.lines()
-        .any(|line| opening_fence(line.trim()).is_some())
+    findings_fence(body).is_some()
 }
 
 /// The findings a body states, or the first defect in the block, positioned.
@@ -431,96 +593,241 @@ pub fn opens_a_block(body: &str) -> bool {
 /// A body with no block has no findings and is not an error — most artifacts are not reviews, and
 /// `validate` is where a review that should have had one is reported.
 ///
+/// The block is read as YAML, and JSON is the spelling of it a tool should write: every JSON array
+/// of entries is a YAML one, and a serializer quotes every message, which is the one thing prose in
+/// an unquoted YAML scalar cannot survive.
+///
 /// # Errors
 ///
 /// A block that is not a YAML sequence of entries, an entry missing a required key, an entry
-/// carrying a key this format does not have, or a value outside the vocabulary.
+/// carrying a key this format does not have, or a value outside the vocabulary — positioned at one
+/// body line, which the error quotes.
 pub fn parse(body: &str) -> Result<Vec<Finding>, FindingsError> {
     let Some(block) = block(body) else {
-        if opens_a_block(body) {
-            return Err(FindingsError {
-                line: body
-                    .lines()
-                    .position(|line| opening_fence(line.trim()).is_some())
-                    .map_or(1, |index| index + 1),
-                detail: "the block is opened and never closed".to_owned(),
-            });
+        if let Some((opened, _)) = findings_fence(body) {
+            return Err(Defect::at(
+                opened + 1,
+                "the block is opened and never closed".to_owned(),
+            )
+            .within(FindingsInput::Body, body));
         }
         return Ok(Vec::new());
     };
-    parse_block(&block)
+    parse_block(&block).map_err(|defect| defect.within(FindingsInput::Body, body))
+}
+
+/// Findings given as a JSON array on their own, read against the entry schema a block is read
+/// against — what `new --findings` takes, so a tool need not embed its findings in markdown.
+///
+/// # Errors
+///
+/// Text that is not JSON, JSON that is not an array of entries, or anything [`parse`] refuses in a
+/// block — positioned at one line of `text`, which the error quotes.
+pub fn parse_json(text: &str) -> Result<Vec<Finding>, FindingsError> {
+    let raw: Vec<RawFinding> = serde_json::from_str(text).map_err(|error| {
+        Defect {
+            // `serde_json` counts from 1 and reports 0 only for a defect with no position at all.
+            line: error.line().max(1),
+            positioned: error.line() > 0,
+            detail: without_positions(&error.to_string()),
+        }
+        .within(FindingsInput::Json, text)
+    })?;
+    let starts = json_entry_starts(text);
+    let lines = text.lines().count();
+    validate(&raw, |index, key, value| {
+        let (start, end) = entry_span(&starts, index, 1, lines + 1);
+        locate(text, 1, start, end, key, value)
+    })
+    .map_err(|defect| defect.within(FindingsInput::Json, text))
+}
+
+/// `findings` as a fenced block, written as JSON, ready to append to a body.
+///
+/// JSON because it is the form a tool writes and the form every message survives in: the block is
+/// read back through [`parse`], and a serializer's quoting is what keeps a `": "` or an apostrophe
+/// in a message from being read as structure. One entry per line, so a refusal's line — should a
+/// later reader ever raise one — points at one finding.
+///
+/// Every character YAML does not take as written is escaped, because the block is read as YAML and
+/// `serde_json` writes most characters raw: a NEXT LINE would be folded to a space, a DELETE or a C1
+/// control refused by the reader, and whatever `parse_json` accepted would not be what `parse` read
+/// back. The set kept raw is YAML 1.1's printable characters less NEXT LINE, LINE SEPARATOR,
+/// PARAGRAPH SEPARATOR and BYTE ORDER MARK; everything outside it is written `\uXXXX`, which JSON
+/// and a YAML double-quoted scalar both decode to the same character.
+#[must_use]
+pub fn render_block(findings: &[Finding]) -> String {
+    let entries: Vec<String> = findings
+        .iter()
+        .map(|finding| yaml_safe(&serde_json::to_string(finding).unwrap_or_default()))
+        .collect();
+    let array = if entries.is_empty() {
+        "[]".to_owned()
+    } else {
+        format!("[\n{}\n]", entries.join(",\n"))
+    };
+    format!("```{FENCE_INFO}\n{array}\n```\n")
+}
+
+/// Compact JSON with every character outside [`yaml_printable`] written as a `\u` escape.
+///
+/// Only inside a string can such a character occur: compact `serde_json` output is otherwise ASCII
+/// punctuation, digits and the literals.
+fn yaml_safe(json: &str) -> String {
+    let mut safe = String::with_capacity(json.len());
+    for character in json.chars() {
+        if yaml_printable(character) {
+            safe.push(character);
+        } else {
+            // Every character outside the set is in the Basic Multilingual Plane, so four digits.
+            let _ = write!(safe, "\\u{:04x}", u32::from(character));
+        }
+    }
+    safe
+}
+
+/// Whether libyaml reads `character` in a double-quoted scalar as itself.
+///
+/// YAML 1.1's printable set (§5.1), which is what libyaml's reader checks, less the three it gives
+/// a meaning of its own: NEXT LINE, LINE SEPARATOR and PARAGRAPH SEPARATOR are line breaks, folded
+/// inside a quoted scalar, and a BYTE ORDER MARK is dropped. A tab and a line feed are outside it
+/// too — `serde_json` already escapes both, and escaping them again would change nothing.
+fn yaml_printable(character: char) -> bool {
+    matches!(u32::from(character),
+        0x20..=0x7E | 0xA0..=0xD7FF | 0xE000..=0xFFFD | 0x1_0000..=0x10_FFFF)
+        && !matches!(character, '\u{2028}' | '\u{2029}' | '\u{FEFF}')
 }
 
 /// [`parse`], with the block already located.
-fn parse_block(block: &Block) -> Result<Vec<Finding>, FindingsError> {
+fn parse_block(block: &Block) -> Result<Vec<Finding>, Defect> {
     if block.text.trim().is_empty() {
-        return Err(FindingsError {
-            line: block.first_line,
+        return Err(Defect::at(
+            block.first_line,
             // `new` accepts a body with no block, but `validate` then reports the review as prose
             // only, so `[]` is the spelling to send the writer to.
-            detail: "the block is empty; a review with no findings writes `[]` in it".to_owned(),
-        });
+            "the block is empty; a review with no findings writes `[]` in it".to_owned(),
+        ));
     }
-    let raw: Vec<RawFinding> =
-        serde_yaml::from_str(&block.text).map_err(|error| FindingsError {
-            line: error
+    let raw: Vec<RawFinding> = serde_yaml::from_str(&block.text).map_err(|error| {
+        let message = error.to_string();
+        // A reader error carries a byte offset and a zero mark; the offset is the place.
+        let line = match reader_offset(&message) {
+            Some(offset) => {
+                let before = &block.text.as_bytes()[..offset.min(block.text.len())];
+                block.first_line + before.split(|byte| *byte == b'\n').count() - 1
+            }
+            None => error
                 .location()
                 .map_or(block.first_line, |at| block.first_line + at.line() - 1),
-            detail: error.to_string(),
-        })?;
+        };
+        Defect::at(line, without_positions(&message))
+    })?;
 
     let starts = entry_starts(block);
+    let end = block.first_line + block.text.lines().count();
+    validate(&raw, |index, key, value| {
+        let (start, end) = entry_span(&starts, index, block.first_line, end);
+        locate(&block.text, block.first_line, start, end, key, value)
+    })
+}
+
+/// The lines entry `index` spans, `start` inclusive and `end` exclusive, from where every entry
+/// starts; `first` and `last` where there is no start to read.
+///
+/// Two entries written on one line share it, so an entry's span is never empty.
+fn entry_span(starts: &[usize], index: usize, first: usize, last: usize) -> (usize, usize) {
+    let start = starts.get(index).copied().unwrap_or(first);
+    let end = starts.get(index + 1).copied().unwrap_or(last);
+    (start, end.max(start + 1))
+}
+
+/// Where a value `validate` refuses is written: its line, and whether that line writes the value
+/// or is only the first line of the entry that holds it.
+struct Place {
+    line: usize,
+    exact: bool,
+}
+
+/// The vocabulary and blank checks every entry passes, wherever it was read from.
+///
+/// `at` answers where entry `index` writes `key` with `value`, in the lines the caller counts.
+fn validate(
+    raw: &[RawFinding],
+    at: impl Fn(usize, &str, &str) -> Place,
+) -> Result<Vec<Finding>, Defect> {
     let mut findings = Vec::with_capacity(raw.len());
     for (index, entry) in raw.iter().enumerate() {
-        let start = starts.get(index).copied().unwrap_or(block.first_line);
-        let end = starts
-            .get(index + 1)
-            .copied()
-            .unwrap_or(block.first_line + block.text.lines().count());
-        let at = |key: &str, value: &str| -> usize { locate(block, start, end, key, value) };
-
-        let severity = Severity::parse(&entry.severity).ok_or_else(|| FindingsError {
-            line: at("severity", &entry.severity),
-            detail: format!(
-                "`{}` is not a severity; write one of {}",
-                entry.severity,
-                spelled(Severity::ALL.iter().map(|value| value.as_str()))
-            ),
+        let refuse = |key: &str, value: &str, detail: String| -> Defect {
+            let place = at(index, key, value);
+            if place.exact {
+                Defect::at(place.line, detail)
+            } else {
+                Defect::at(
+                    place.line,
+                    format!(
+                        "{detail} (entry {} starts on this line; the line writing `{key}` was not \
+                         found)",
+                        index + 1
+                    ),
+                )
+            }
+        };
+        let severity = Severity::parse(&entry.severity).ok_or_else(|| {
+            refuse(
+                "severity",
+                &entry.severity,
+                format!(
+                    "`{}` is not a severity; write one of {}",
+                    entry.severity,
+                    spelled(Severity::ALL.iter().map(|value| value.as_str()))
+                ),
+            )
         })?;
         let verdict = match &entry.verdict {
             None => None,
-            Some(written) => Some(Verdict::parse(written).ok_or_else(|| FindingsError {
-                line: at("verdict", written),
-                detail: format!(
-                    "`{written}` is not a verdict; write one of {}",
-                    spelled(Verdict::ALL.iter().map(|value| value.as_str()))
-                ),
+            Some(written) => Some(Verdict::parse(written).ok_or_else(|| {
+                refuse(
+                    "verdict",
+                    written,
+                    format!(
+                        "`{written}` is not a verdict; write one of {}",
+                        spelled(Verdict::ALL.iter().map(|value| value.as_str()))
+                    ),
+                )
             })?),
         };
         let origin = match &entry.origin {
             None => Origin::Undecided,
-            Some(written) => Origin::parse(written).ok_or_else(|| FindingsError {
-                line: at("origin", written),
-                detail: format!(
-                    "`{written}` is not an origin; write one of {}",
-                    spelled(Origin::ALL.iter().map(|value| value.as_str()))
-                ),
+            Some(written) => Origin::parse(written).ok_or_else(|| {
+                refuse(
+                    "origin",
+                    written,
+                    format!(
+                        "`{written}` is not an origin; write one of {}",
+                        spelled(Origin::ALL.iter().map(|value| value.as_str()))
+                    ),
+                )
             })?,
         };
         if entry.file.trim().is_empty() || entry.category.trim().is_empty() {
-            return Err(FindingsError {
-                line: start,
-                detail: "`file` and `category` are what a finding is compared by, so neither may \
-                         be blank"
+            let (key, value) = if entry.file.trim().is_empty() {
+                ("file", &entry.file)
+            } else {
+                ("category", &entry.category)
+            };
+            return Err(refuse(
+                key,
+                value,
+                "`file` and `category` are what a finding is compared by, so neither may be blank"
                     .to_owned(),
-            });
+            ));
         }
         if entry.message.trim().is_empty() {
-            return Err(FindingsError {
-                line: start,
-                detail: "`message` is what the finding says, and a blank one says nothing"
-                    .to_owned(),
-            });
+            return Err(refuse(
+                "message",
+                &entry.message,
+                "`message` is what the finding says, and a blank one says nothing".to_owned(),
+            ));
         }
         findings.push(Finding {
             file: entry.file.clone(),
@@ -544,8 +851,15 @@ fn spelled<'a>(values: impl Iterator<Item = &'a str>) -> String {
 ///
 /// Read from the text rather than from the parser, because `serde_yaml` reports the position of the
 /// *sequence*, not of the value inside it, once the entry has already deserialized — and the value
-/// inside it is exactly what a vocabulary refusal is about.
+/// inside it is exactly what a vocabulary refusal is about. A block written as JSON — or as any
+/// flow sequence — has no `- ` lines, and its entries are the objects the array holds.
 fn entry_starts(block: &Block) -> Vec<usize> {
+    if block.text.trim_start().starts_with('[') {
+        return json_entry_starts(&block.text)
+            .into_iter()
+            .map(|line| block.first_line + line - 1)
+            .collect();
+    }
     block
         .text
         .lines()
@@ -555,20 +869,99 @@ fn entry_starts(block: &Block) -> Vec<usize> {
         .collect()
 }
 
-/// The body line `<key>: <value>` is written on inside one entry, or the entry's own first line.
-fn locate(block: &Block, start: usize, end: usize, key: &str, value: &str) -> usize {
+/// The line, counting `text`'s first as 1, each object directly inside the top-level array opens
+/// on. Strings are skipped, so a brace inside a message is not an entry.
+fn json_entry_starts(text: &str) -> Vec<usize> {
+    let mut starts = Vec::new();
+    let (mut line, mut depth) = (1, 0_usize);
+    let (mut in_string, mut escaped) = (false, false);
+    for character in text.chars() {
+        if in_string {
+            match (escaped, character) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+        } else {
+            match character {
+                '"' => in_string = true,
+                '{' | '[' => {
+                    if character == '{' && depth == 1 {
+                        starts.push(line);
+                    }
+                    depth += 1;
+                }
+                '}' | ']' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+        }
+        if character == '\n' {
+            line += 1;
+        }
+    }
+    starts
+}
+
+/// Where entry lines `start..end` of `text` write `key` with `value` — lines numbered from `first`.
+///
+/// The YAML spelling `key: value` first; then, since the block may be written as JSON, a line
+/// whose JSON strings **decode** to the key and to the value, so a serializer that escaped the value
+/// — `"blöcker"` — is found as surely as one that did not. Where neither is found the place is
+/// the entry's own first line, and [`Place::exact`] says so rather than letting it pass for the
+/// line that is wrong.
+fn locate(text: &str, first: usize, start: usize, end: usize, key: &str, value: &str) -> Place {
     let wanted = format!("{key}: {value}");
-    block
-        .text
-        .lines()
-        .enumerate()
-        .map(|(index, line)| (block.first_line + index, line))
-        .find(|(line_number, line)| {
-            *line_number >= start
-                && *line_number < end
-                && line.trim().trim_start_matches("- ").trim() == wanted
-        })
-        .map_or(start, |(line_number, _)| line_number)
+    let lines = || {
+        text.lines()
+            .enumerate()
+            .map(|(index, line)| (first + index, line))
+            .filter(|(line_number, _)| *line_number >= start && *line_number < end)
+    };
+    lines()
+        .find(|(_, line)| line.trim().trim_start_matches("- ").trim() == wanted)
+        .or_else(|| lines().find(|(_, line)| writes_as_json(line, key, value)))
+        .map_or(
+            Place {
+                line: start,
+                exact: false,
+            },
+            |(line, _)| Place { line, exact: true },
+        )
+}
+
+/// Whether `line` holds a JSON string decoding to `key` and one decoding to `value`.
+fn writes_as_json(line: &str, key: &str, value: &str) -> bool {
+    let strings = json_strings(line);
+    strings.iter().any(|string| string == key) && strings.iter().any(|string| string == value)
+}
+
+/// Every complete JSON string on `line`, decoded. One that does not decode is left out.
+fn json_strings(line: &str) -> Vec<String> {
+    let mut strings = Vec::new();
+    let mut opened: Option<usize> = None;
+    let mut escaped = false;
+    for (at, character) in line.char_indices() {
+        match opened {
+            None => {
+                if character == '"' {
+                    opened = Some(at);
+                }
+            }
+            Some(from) => match (escaped, character) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => {
+                    if let Ok(decoded) = serde_json::from_str::<String>(&line[from..=at]) {
+                        strings.push(decoded);
+                    }
+                    opened = None;
+                }
+                _ => {}
+            },
+        }
+    }
+    strings
 }
 
 /// One entry as written, before its vocabulary is checked.
@@ -593,7 +986,9 @@ struct RawFinding {
 
 #[cfg(test)]
 mod tests {
-    use super::{compare, normalise, parse, Finding, Origin, Severity, Verdict};
+    use super::{
+        compare, normalise, parse, parse_json, render_block, Finding, Origin, Severity, Verdict,
+    };
 
     /// A body with `entries` as its block.
     fn body(entries: &str) -> String {
@@ -741,6 +1136,258 @@ mod tests {
         assert_eq!(ledger.carried.len(), 1, "{ledger:?}");
         assert_eq!(ledger.resolved.len(), 1, "{ledger:?}");
         assert!(ledger.new.is_empty(), "{ledger:?}");
+    }
+
+    /// The reproduction from beyond10x/aep#38: prose a reviewer writes, unquoted.
+    const PROSE: &str = "the judge reports \"(platform): X\" for an unmeasured step";
+
+    #[test]
+    fn a_block_written_as_json_reads_messages_carrying_colons_quotes_and_apostrophes() {
+        let findings = parse(&body(
+            "[\n  {\"file\": \"src/lib.rs\", \"line\": 12, \"category\": \"acceptance\", \
+             \"severity\": \"warning\", \"verdict\": \"CONFIRMED\", \"origin\": \"introduced\", \
+             \"message\": \"the judge reports \\\"(platform): X\\\" for an unmeasured step\"},\n  \
+             {\"file\": \"src/lib.rs\", \"category\": \"acceptance\", \"severity\": \"note\", \
+             \"message\": \"the caller's wait: never bounded\"}\n]\n",
+        ))
+        .expect("JSON is the machine-written form of the block");
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        assert_eq!(findings[0].message, PROSE);
+        assert_eq!(findings[1].message, "the caller's wait: never bounded");
+    }
+
+    #[test]
+    fn a_block_that_does_not_parse_is_refused_at_one_body_line_quoting_it_with_a_json_hint() {
+        // The fence opens on body line 5; `one` writes `message` as the seventh key, on line 12.
+        let error = parse(&body(&one("src/lib.rs", "12", PROSE))).expect_err("unquoted prose");
+        assert_eq!(error.line, 12, "{error}");
+        assert_eq!(
+            error.quoted.as_deref(),
+            Some(format!("  message: {PROSE}").as_str()),
+            "{error}"
+        );
+        let said = error.to_string();
+        assert!(said.contains("at line 12 of the body"), "{said}");
+        assert_eq!(
+            said.matches("at line").count(),
+            1,
+            "a second coordinate system is reported: {said}"
+        );
+        assert!(!said.contains("column"), "a block-relative column: {said}");
+        assert!(
+            said.contains(PROSE),
+            "the offending line is not quoted: {said}"
+        );
+        assert!(said.contains("JSON"), "the hint does not name JSON: {said}");
+    }
+
+    #[test]
+    fn a_value_outside_the_vocabulary_is_refused_with_its_own_line_quoted() {
+        let error = parse(&body(
+            "- file: a.rs\n  category: correctness\n  severity: catastrophic\n  message: boom\n",
+        ))
+        .expect_err("a severity outside the vocabulary");
+        assert_eq!(error.line, 8, "{error}");
+        assert_eq!(error.quoted.as_deref(), Some("  severity: catastrophic"));
+    }
+
+    #[test]
+    fn findings_given_as_json_are_read_against_the_same_entry_schema() {
+        let findings = parse_json(
+            "[{\"file\": \"a.rs\", \"category\": \"c\", \"severity\": \"note\", \
+             \"message\": \"the caller's wait: never bounded\"}]",
+        )
+        .expect("a JSON array of entries");
+        assert_eq!(findings[0].origin, Origin::Undecided);
+        assert_eq!(findings[0].message, "the caller's wait: never bounded");
+
+        let unknown = parse_json(
+            "[{\"file\": \"a.rs\", \"category\": \"c\", \"severity\": \"note\", \
+             \"message\": \"m\", \"confidence\": 0.9}]",
+        )
+        .expect_err("a key this format does not have");
+        assert!(unknown.detail.contains("confidence"), "{unknown}");
+        assert!(unknown.to_string().contains("findings input"), "{unknown}");
+
+        let vocabulary = parse_json(
+            "[\n  {\n    \"file\": \"a.rs\",\n    \"category\": \"c\",\n    \
+             \"severity\": \"catastrophic\",\n    \"message\": \"m\"\n  }\n]\n",
+        )
+        .expect_err("a severity outside the vocabulary");
+        assert_eq!(vocabulary.line, 5, "{vocabulary}");
+        assert_eq!(
+            vocabulary.quoted.as_deref(),
+            Some("    \"severity\": \"catastrophic\",")
+        );
+    }
+
+    #[test]
+    fn findings_input_that_is_not_json_is_refused_at_its_line_with_the_text_quoted() {
+        let error = parse_json("[\n  {\"file\": \"a.rs\",}\n]\n").expect_err("a trailing comma");
+        assert_eq!(error.line, 2, "{error}");
+        assert_eq!(error.quoted.as_deref(), Some("  {\"file\": \"a.rs\",}"));
+        assert!(!error.to_string().contains("column"), "{error}");
+    }
+
+    #[test]
+    fn rendered_findings_read_back_from_a_body_as_the_same_findings() {
+        let given = parse_json(
+            "[{\"file\": \"a.rs\", \"line\": 3, \"category\": \"c\", \"severity\": \"blocker\", \
+             \"verdict\": \"NEEDS-CHANGE\", \"origin\": \"pre-existing\", \
+             \"message\": \"the judge reports \\\"(platform): X\\\" for the caller's step\\n```\"},\
+             {\"file\": \"b.rs\", \"category\": \"c\", \"severity\": \"note\", \"message\": \"m\"}]",
+        )
+        .expect("a JSON array of entries");
+        let stored = format!("# A review\n\nProse first.\n\n{}", render_block(&given));
+        assert_eq!(parse(&stored).expect("the rendered block reads"), given);
+        assert_eq!(
+            parse(&format!("# A review\n\n{}", render_block(&[])))
+                .expect("no findings renders as `[]`"),
+            Vec::new()
+        );
+    }
+
+    /// The class behind correction round 1, finding 1, checked whole rather than per character: every
+    /// Unicode scalar value a message can hold — which is every one, since JSON can escape any — reads
+    /// back from the block [`render_block`] writes as the character it was.
+    #[test]
+    fn every_character_a_message_can_hold_reads_back_unchanged_from_a_rendered_block() {
+        let every: Vec<char> = (0..=0x10_FFFF).filter_map(char::from_u32).collect();
+        let mut failures = Vec::new();
+        for chunk in every.chunks(4096) {
+            let message: String = chunk.iter().collect();
+            let given = vec![Finding {
+                file: "a.rs".to_owned(),
+                line: None,
+                category: "c".to_owned(),
+                severity: Severity::Note,
+                verdict: None,
+                origin: Origin::Undecided,
+                message,
+            }];
+            let body = format!("# A review\n\n{}", render_block(&given));
+            match parse(&body) {
+                Ok(read) if read == given => {}
+                Ok(read) => {
+                    let wrote: Vec<char> = given[0].message.chars().collect();
+                    let got: Vec<char> = read[0].message.chars().collect();
+                    let first = wrote
+                        .iter()
+                        .zip(&got)
+                        .position(|(a, b)| a != b)
+                        .unwrap_or(wrote.len().min(got.len()));
+                    failures.push(format!(
+                        "U+{:04X}..: changed from character {first}",
+                        u32::from(chunk[0])
+                    ));
+                }
+                Err(error) => {
+                    failures.push(format!("U+{:04X}..: refused: {error}", u32::from(chunk[0])));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn a_position_either_parser_prints_is_taken_out_of_the_detail() {
+        assert_eq!(
+            super::without_positions(
+                "did not find expected key at line 14 column 47, while parsing a block mapping \
+                 at line 9 column 3"
+            ),
+            "did not find expected key, while parsing a block mapping"
+        );
+        assert_eq!(
+            super::without_positions("control characters are not allowed at position 71"),
+            "control characters are not allowed"
+        );
+        assert_eq!(
+            super::without_positions("a message about line 3 at line 2"),
+            "a message about line 3 at line 2",
+            "text that is not a whole position is kept"
+        );
+    }
+
+    #[test]
+    fn a_reader_error_is_positioned_at_the_body_line_holding_its_offset() {
+        let error = parse(
+            "# A review\n\n```findings\n[\n{\"file\": \"a.rs\", \"category\": \"c\", \"severity\": \
+             \"note\",\n \"message\": \"del\u{7f}char\"}\n]\n```\n",
+        )
+        .expect_err("libyaml refuses a DEL");
+        assert_eq!(error.line, 6, "{error}");
+        assert_eq!(
+            error.quoted.as_deref(),
+            Some(" \"message\": \"del\u{7f}char\"}")
+        );
+        assert!(!error.to_string().contains("position"), "{error}");
+    }
+
+    #[test]
+    fn a_value_not_found_on_any_line_is_reported_at_its_entry_and_says_so() {
+        // The severity is split from its key across two lines, so no one line writes the pair.
+        let error = parse_json(
+            "[\n  {\"file\": \"a.rs\", \"category\": \"c\", \"message\": \"m\",\n   \
+             \"severity\":\n   \"catastrophic\"}\n]\n",
+        )
+        .expect_err("a severity outside the vocabulary");
+        assert_eq!(error.line, 2, "{error}");
+        assert!(
+            error.detail.contains("entry 1 starts on this line"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn an_escaped_value_in_a_json_block_is_located_by_what_it_decodes_to() {
+        let error = parse(&body(
+            "[\n{\"file\": \"a.rs\", \"category\": \"c\", \"severity\": \"note\", \"message\": \"m\"},\n\
+             {\"file\": \"b.rs\", \"category\": \"c\", \"severity\": \"bl\\u00f6cker\", \
+             \"message\": \"m\"}\n]\n",
+        ))
+        .expect_err("`blöcker` is not a severity");
+        // The fence opens on body line 5: `[` is 6, the first entry 7, the second 8.
+        assert_eq!(error.line, 8, "{error}");
+        assert!(!error.detail.contains("was not found"), "{error}");
+
+        // Written the way `json.dumps(indent=2)` writes it, where the entry's first line is `{`.
+        let error = parse_json(
+            "[\n  {\n    \"file\": \"a.rs\",\n    \"category\": \"c\",\n    \
+             \"severity\": \"bl\\u00f6cker\",\n    \"message\": \"m\"\n  }\n]\n",
+        )
+        .expect_err("`blöcker` is not a severity");
+        assert_eq!(error.line, 5, "{error}");
+        assert_eq!(
+            error.quoted.as_deref(),
+            Some("    \"severity\": \"bl\\u00f6cker\",")
+        );
+    }
+
+    #[test]
+    fn a_fence_of_either_character_hides_the_findings_fence_it_quotes() {
+        for outer in ["````", "~~~", "```markdown"] {
+            let close = if outer.starts_with('~') {
+                "~~~"
+            } else if outer == "```markdown" {
+                "```"
+            } else {
+                "````"
+            };
+            let quoted = format!("# R\n\n{outer}\n```findings\n[]\n```\n{close}\n");
+            // A ```markdown fence is closed by the example's own ``` line — CommonMark reads it so,
+            // and the `findings` fence then sits inside it.
+            assert!(!super::opens_a_block(&quoted), "{outer}: {quoted}");
+            assert_eq!(super::block(&quoted), None, "{outer}");
+        }
+        assert!(
+            super::opens_a_block("# R\n\n```rust\nlet x = 1;\n```\n\n```findings\n[]\n```\n"),
+            "a closed fence before the block does not hide it"
+        );
+        assert_eq!(
+            parse("# R\n\n````\n```findings\n- nonsense: [\n```\n````\n").expect("prose only"),
+            Vec::new()
+        );
     }
 
     #[test]
