@@ -112,8 +112,8 @@ jobs:
           VERSION: ${{ needs.provenance.outputs.version }}
         run: |
           set -euo pipefail
-          test "$("target/${TARGET}/release/aep" --version)" = "protocol ${VERSION}"
-          test "$("target/${TARGET}/release/protocol" --version)" = "protocol ${VERSION}"
+          test "$("target/${TARGET}/release/aep" --version)" = "aep ${VERSION}"
+          test "$("target/${TARGET}/release/protocol" --version)" = "aep ${VERSION}"
           name="aep-${VERSION}-${TARGET}"
           mkdir -p "dist/${name}"
           cp LICENSE README.md CHANGELOG.md "dist/${name}/"
