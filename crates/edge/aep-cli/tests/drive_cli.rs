@@ -1202,7 +1202,7 @@ fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
 
     // The step ran and printed what only this build prints. A namesake would answer with its own
     // number, and an unresolvable `protocol` would not have produced a log at all.
-    let banner = format!("protocol {}", env!("CARGO_PKG_VERSION"));
+    let banner = format!("aep {}", env!("CARGO_PKG_VERSION"));
     let log = std::fs::read_to_string(run_directory.join("establish_verifiers-1-1.log"))
         .unwrap_or_else(|error| panic!("the step wrote no log: {error}\n{said}"));
     assert!(
@@ -1284,7 +1284,7 @@ fn a_command_step_naming_another_program_is_resolved_as_written() {
         "that step did not run:\n{log}"
     );
     assert!(
-        !log.contains(&format!("protocol {}", env!("CARGO_PKG_VERSION"))),
+        !log.contains(&format!("aep {}", env!("CARGO_PKG_VERSION"))),
         "that step ran this CLI, which is not what it named:\n{log}"
     );
 }

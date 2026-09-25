@@ -9,6 +9,15 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep --version` prints `aep <version>` and `--help` and usage errors print `Usage: aep …`.
+  They printed the alias's name, `protocol`. The `protocol` alias still prints the same bytes as
+  `aep`, so it now identifies as `aep` too.
+- `aep plan artifact new review-result` refusing an empty `findings` block now names `[]` as the
+  way to record a review with no findings. It previously told the writer to leave the block out,
+  which `validate` then reports as a review stating its findings in prose only.
+
 ## [0.59.2] — 2026-09-24
 
 ### Fixed

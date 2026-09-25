@@ -34,7 +34,7 @@ going away; removing one would be a separate decision, announced separately. Onl
 area — it is `drive eval` now, and `aep eval` still reaches it.
 
 One line is deliberately not identical: a usage error and `--help` are printed by clap, and clap
-names the path it was invoked by, so `Usage: protocol validate` and `Usage: protocol govern
+names the path it was invoked by, so `Usage: aep validate` and `Usage: aep govern
 validate` differ on purpose — that line says how the call was spelled, not what it decided. Every
 other line, and every byte of an accepted call, matches between the two spellings.
 
