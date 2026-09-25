@@ -78,7 +78,7 @@ when the artifact has none — so a `jq` shape needs no branch for an artifact w
 
 | Command | Does |
 |---|---|
-| `aep plan artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--ref provider:key] [--relate rel:id] [--from <path\|->] [--withholds <evidence-kind>]` | writes one file, at the path the id determines, with the body from `--from` or else the kind's template; refuses to overwrite an existing one. `--from` is the only way a body reaches an immutable kind such as `review-result`, which refuses `body` — and `--ref` is the only way a reference does, for the same reason, so it is written to the document rather than accepted and dropped. A `findings` block in the body is parsed here and a malformed one is refused with the body line it is wrong on. `--withholds` records the evidence kind this artifact is stopping anybody from producing, and is only meaningful beside `--relate blocks:<id>` |
+| `aep plan artifact new <kind> <name> --title … [--summary …] [--owner …] [--tag …] [--ref provider:key] [--relate rel:id] [--from <path\|->] [--findings <path\|->] [--withholds <evidence-kind>]` | writes one file, at the path the id determines, with the body from `--from` or else the kind's template; refuses to overwrite an existing one. `--from` is the only way a body reaches an immutable kind such as `review-result`, which refuses `body` — and `--ref` is the only way a reference does, for the same reason, so it is written to the document rather than accepted and dropped. A `findings` block in the body is parsed here and a malformed one is refused with the body line it is wrong on, that line quoted, and JSON named as the way to write it. `--findings` takes a `review-result`'s findings as a JSON array of entries instead — `-` reads standard input — reads it against the same entry schema and writes it into the body as a JSON `findings` block; a body that opens a block of its own as well is refused as ambiguous, and nothing is written. `--withholds` records the evidence kind this artifact is stopping anybody from producing, and is only meaningful beside `--relate blocks:<id>` |
 | `aep plan artifact move <id> --to <status> [--via] [--evidence <kind>=<count>] [--at <instant>]` | moves it if the kind's lifecycle permits, and on a refusal names every status it could have moved to instead — or, when the rung is on the ladder but its evidence has not been recorded, says **which kind** is missing and how many. It also runs the graph rules on the store the move *would* leave and refuses one that would add a finding, printing that finding's own text and hint, so `move` and `validate` cannot disagree about one document. `--via` walks the ladder's intermediate rungs, journalling each hop; a rung with a `requires:` or a `when:` stops the walk, evidence or no evidence. See [Lifecycles, decided as data](../concepts/lifecycles.md) |
 | `aep plan artifact relate <id> <relation> <target>` *or* `relate <id> <relation>:<target>` | adds one edge, spelled either way — the second is the form `new --relate` takes, split at the first colon — and journalled identically whichever was typed. `blocks` is the one the listings read: while the artifact declaring it is short of the end of its own ladder, everything it points at is marked `blocked` |
 | `aep plan artifact unrelate <id> <relation> <target>` *or* `unrelate <id> <relation>:<target>` | takes one edge back, in the same two spellings `relate` accepts and through the same command, so an edge asserted in error is not permanent. **Exactly the named `(relation, target)` goes** and every other line of the document's `relations:` stays, including an edge written there by hand that no command ever made. An edge the artifact does not declare is refused **naming the ones it does**, and a refusal writes nothing — not the document, not the journal. The journal records it as its own change rather than as a body rewrite, so `history` reads `no longer <relation> <target>` where the `relate` entry stays exactly where it was. A `reviews` edge that a recorded `review_outcome` names is **refused**, naming the record: an outcome is written on the reviewed artifact and is found through that edge, so taking the edge back would leave what became of the review in the store with nothing reading it and `validate --strict` would then report the answered review as one nobody acted on |
@@ -165,9 +165,31 @@ and `message` fields, where
 `note`; `verdict` is the adversary's `CONFIRMED`, `NEEDS-CHANGE` or `INFEASIBLE` or a critic's
 `approve` or `needs-revision`; `origin` is `introduced`, `pre-existing` or `undecided`, and an
 unwritten one *is* `undecided`. `aep plan artifact new` parses it and refuses a malformed one with the
-body line it is wrong on; `show --format json` returns it as an array; `findings` compares two of
-them; `validate` reports a review that has none. A block is required by nothing — a review written
-as prose is still a review, and the report is what says the next round starts from nowhere.
+body line it is wrong on, that line quoted, and a hint; `show --format json` returns it as an array;
+`findings` compares two of them; `validate` reports a review that has none. A block is required by
+nothing — a review written as prose is still a review, and the report is what says the next round
+starts from nowhere. A ` ```findings ` fence quoted inside another fence — an example in a
+` ````markdown ` block — is prose, as a renderer shows it, and states no findings.
+
+**JSON is the machine-written form of the block.** Every JSON array of entries is a YAML sequence,
+so the block reads it unchanged, and a serializer quotes every value — which is what a message needs
+once it carries `": "` or an apostrophe, both of which break an unquoted YAML scalar. A tool writes
+the block as JSON:
+
+````markdown
+```findings
+[{"file": "src/lib.rs", "line": 12, "category": "acceptance", "severity": "warning", "verdict": "CONFIRMED", "origin": "introduced", "message": "the judge reports \"(platform): X\" for the caller's step"}]
+```
+````
+
+Or it hands the same array over apart from the prose, and `new` writes it into the body as that
+block. `-` reads it from standard input; a body that opens a `findings` block of its own as well is
+refused as ambiguous:
+
+```bash
+aep plan artifact new review-result pass-1 --title "Pass 1" \
+  --relate reviews:story:login --from review.md --findings findings.json
+```
 
 **A hybrid plan has two verbs of its own.** `store: hybrid` in `project.yaml` keeps the plan in
 markdown *and* in a replica under a declared policy. A write one side took and the other did not is
