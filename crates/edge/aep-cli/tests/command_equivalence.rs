@@ -42,6 +42,25 @@ fn the_canonical_command_and_alias_match_on_an_accepted_operation() {
     assert_eq!(output.status.code(), Some(0));
 }
 
+/// The bytes both names print identify the command as `aep`, the canonical name, rather than as
+/// the alias: invariant 10 makes the two print one version line and one usage line, and that line
+/// names the command a reader is told to run.
+#[test]
+fn the_canonical_command_and_alias_both_identify_as_aep() {
+    let version = assert_equivalent(&["--version"]);
+    let version = String::from_utf8(version.stdout).expect("the version is text");
+    assert!(
+        version.starts_with("aep "),
+        "the version line names the canonical command: {version}"
+    );
+    let help = assert_equivalent(&["--help"]);
+    let help = String::from_utf8(help.stdout).expect("the help is text");
+    assert!(
+        help.contains("Usage: aep <COMMAND>"),
+        "the usage line names the canonical command:\n{help}"
+    );
+}
+
 #[test]
 fn the_canonical_command_and_alias_match_on_a_domain_refusal() {
     let output = assert_equivalent(&[

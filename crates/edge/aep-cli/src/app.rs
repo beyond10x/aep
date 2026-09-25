@@ -53,8 +53,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Reference CLI for the Agentic Engineering Protocol.
 #[derive(Debug, Parser)]
 #[command(
-    name = "protocol",
-    bin_name = "protocol",
+    name = "aep",
+    bin_name = "aep",
     about,
     version,
     disable_help_subcommand = true
