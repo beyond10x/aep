@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.59.3] — 2026-09-25
+
 ### Fixed
 
 - `aep --version` prints `aep <version>` and `--help` and usage errors print `Usage: aep …`.
