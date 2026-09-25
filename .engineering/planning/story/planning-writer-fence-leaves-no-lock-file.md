@@ -2,12 +2,14 @@
 format: aep.planning-md/2
 id: story:planning-writer-fence-leaves-no-lock-file
 kind: story
-status: draft
+status: active
 title: A released planning writer fence leaves no lock file behind, or says why it must
+relations:
+- serves: vision:O2
 scope:
 - confidence: cited
   path: crates/edge/aep-cli/src/planning_writer_fence.rs
-revision: 2
+revision: 4
 ---
 ## Outcome
 
