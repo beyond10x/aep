@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.60.0] — 2026-09-26
+
 ### Added
 
 - `aep plan artifact new review-result … --findings <file|->` takes the findings as a JSON array,
