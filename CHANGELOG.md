@@ -13,9 +13,14 @@ belongs in the commit message or in `docs/design/`.
 
 - A `render`, `store rebuild`, write or `validate` refused after staging the projection no longer
   leaves its `.engineering/planning.aep-stage-*` directory beside the projection. 0.59.2 removed
-  the stage on one refusal only; every refusal between staging and publishing now removes it. A
-  stage left by a killed process is not removed, and recovery from its committed watermark still
-  publishes.
+  the stage on one refusal only; every refusal between staging and publishing now removes it.
+  Recovery from a killed process's committed watermark still publishes.
+- A `planning.aep-stage-*` directory left by a process killed during publication is removed by
+  the next publication. A stage is removed only when its lock is free and its pid runs nothing in
+  this pid namespace; a stage a live process holds, in this pid namespace or another, a name that
+  is not exactly a stage's, and a stage whose owner cannot be established are left alone. Staging
+  no longer clears a directory already at its own name, which with two pid namespaces sharing one
+  checkout could be another live process's stage.
 
 ## [0.59.3] — 2026-09-25
 
