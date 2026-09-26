@@ -70,32 +70,215 @@ pub struct FileProjectionPublisher {
 ///
 /// Every refusal between creating the stage and renaming it into place drops the owner, so no
 /// return path has to remember to remove it; 0.59.0's refused `render` left a whole projection
-/// beside the live one. The path carries this process's id and its own staging counter, so the
-/// owner can only ever remove the stage it created. A process killed while staging runs no
-/// destructor and its stage stays: recovery restages from the authority and never reads it.
+/// beside the live one. The path carries this process's id and its own staging counter, and the
+/// owner holds an advisory lock on the directory for as long as it lives.
+///
+/// A process killed while staging runs no destructor and its stage stays, but the kernel releases
+/// its lock. The next staging's [`sweep_abandoned_stages`] removes such a stage once its lock is
+/// free and its pid provably runs nothing. A pid alone is not proof: two pid namespaces sharing
+/// one checkout reuse each other's pids, and the lock is what a live owner in the other namespace
+/// still holds.
 struct StageDirectory {
     path: PathBuf,
     published: bool,
+    /// The stage's advisory lock, released when the owner is dropped, or when its process dies.
+    /// `None` where the platform or filesystem refuses one; the sweep then cannot lock the stage
+    /// either, and leaves it.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "held only so dropping it releases the lock")
+    )]
+    lock: Option<File>,
 }
 
+/// Names a staging tries before it gives up finding one nothing is already at.
+const STAGE_NAME_ATTEMPTS: u32 = 64;
+
 impl StageDirectory {
-    /// Creates the stage at `path`, first removing a stage an earlier staging left at that name.
-    fn create(path: PathBuf) -> Result<Self, ProjectionError> {
-        if path.exists() {
-            fs::remove_dir_all(&path).map_err(|_| ProjectionError::Uncertain)?;
+    /// Creates the stage at the first name from `name` nothing is at, and takes its lock.
+    ///
+    /// An occupied name is skipped, never cleared: with two pid namespaces sharing one checkout a
+    /// pid and counter are not unique, and the directory at the name may be a live stage.
+    fn create(mut name: impl FnMut() -> PathBuf) -> Result<Self, ProjectionError> {
+        for _ in 0..STAGE_NAME_ATTEMPTS {
+            let path = name();
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(|_| ProjectionError::NotPublished)?;
+            }
+            match fs::create_dir(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(_) => return Err(ProjectionError::NotPublished),
+            }
+            let lock = match claim_stage(&path) {
+                Claim::Held(lock) => Some(lock),
+                Claim::Unlockable => None,
+                Claim::Lost => continue,
+            };
+            return Ok(Self {
+                path,
+                published: false,
+                lock,
+            });
         }
-        fs::create_dir_all(&path).map_err(|_| ProjectionError::NotPublished)?;
-        Ok(Self {
-            path,
-            published: false,
-        })
+        Err(ProjectionError::NotPublished)
     }
 
     /// Records that `publish_stage` moved or removed the stage, so dropping it removes nothing.
     fn published(mut self) {
         self.published = true;
     }
+
+    /// What a process killed while staging leaves: no destructor runs, so the directory stays,
+    /// and the kernel closes the lock with the process.
+    #[cfg(test)]
+    fn killed(mut self) -> PathBuf {
+        drop(self.lock.take());
+        let path = self.path.clone();
+        std::mem::forget(self);
+        path
+    }
 }
+
+/// What taking the lock on a just-created stage directory found.
+enum Claim {
+    /// This staging holds the lock.
+    Held(File),
+    /// The platform or filesystem grants no lock.
+    Unlockable,
+    /// The directory was lost between creating and locking it: a sweep holds it, or removed it and
+    /// a namesake from another pid namespace now stands there. The caller tries another name and
+    /// leaves this one to whoever has it.
+    Lost,
+}
+
+/// Takes the lock on the stage directory this staging just created at `path`.
+#[cfg(unix)]
+fn claim_stage(path: &Path) -> Claim {
+    use std::os::unix::fs::MetadataExt;
+    let lock = match File::open(path) {
+        Ok(lock) => lock,
+        // A sweep removed the directory before this staging could open it.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Claim::Lost,
+        Err(_) => return Claim::Unlockable,
+    };
+    match lock.try_lock() {
+        Ok(()) => {}
+        Err(fs::TryLockError::WouldBlock) => return Claim::Lost,
+        Err(fs::TryLockError::Error(_)) => return Claim::Unlockable,
+    }
+    let (Ok(held), Ok(named)) = (lock.metadata(), fs::symlink_metadata(path)) else {
+        return Claim::Lost;
+    };
+    if held.dev() == named.dev() && held.ino() == named.ino() {
+        Claim::Held(lock)
+    } else {
+        Claim::Lost
+    }
+}
+
+#[cfg(not(unix))]
+fn claim_stage(_path: &Path) -> Claim {
+    Claim::Unlockable
+}
+
+/// Removes every stage of `projection_root` whose owner is provably gone.
+///
+/// A stage is a directory named exactly `<projection>.aep-stage-<64 hex>-<pid>-<counter>`; nothing
+/// else beside the projection is looked at. It is removed only when no process in this pid
+/// namespace runs under its pid and no process anywhere holds its lock. Every doubt — a name that
+/// does not parse, a `/proc` that is not this process's, a lock the filesystem refuses — leaves
+/// the stage where it is. A failed removal is not a refusal: the stage is left for the next sweep.
+fn sweep_abandoned_stages(projection_root: &Path) {
+    let prefix = projection_root.with_extension("aep-stage-");
+    let (Some(parent), Some(prefix)) = (
+        projection_root.parent(),
+        prefix.file_name().and_then(|name| name.to_str()),
+    ) else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(prefix))
+            .and_then(stage_owner)
+        else {
+            continue;
+        };
+        if pid_is_gone(pid) {
+            remove_abandoned_stage(&entry.path());
+        }
+    }
+}
+
+/// The owner's pid in a stage name's `<64 hex>-<pid>-<counter>` tail, or `None` when the tail is
+/// not exactly that.
+fn stage_owner(tail: &str) -> Option<u32> {
+    fn digits(part: &str) -> bool {
+        !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+    }
+    let mut parts = tail.split('-');
+    let (Some(hex), Some(pid), Some(counter), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return None;
+    };
+    let hex = hex.len() == 64
+        && hex
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
+    if !hex || !digits(pid) || !digits(counter) || counter.parse::<u64>().is_err() {
+        return None;
+    }
+    pid.parse::<u32>().ok().filter(|pid| *pid != 0)
+}
+
+/// Whether provably no process in this pid namespace runs under `pid`.
+///
+/// Only a `/proc` whose `self` is this process answers that; one mounted from another pid
+/// namespace, or none at all, answers nothing, and nothing is gone.
+fn pid_is_gone(pid: u32) -> bool {
+    let proc = Path::new("/proc");
+    let ours = fs::read_link(proc.join("self"))
+        .is_ok_and(|link| link.as_os_str() == std::process::id().to_string().as_str());
+    ours && matches!(
+        fs::symlink_metadata(proc.join(pid.to_string())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+/// Removes the stage directory at `path` if, and while, it can take the stage's lock.
+///
+/// A live owner holds the lock — in this pid namespace or another — so the stage stays. The lock
+/// must be on the directory at `path` itself, not on what a link there points to or on a
+/// directory since renamed away.
+#[cfg(unix)]
+fn remove_abandoned_stage(path: &Path) {
+    use std::os::unix::fs::MetadataExt;
+    if !fs::symlink_metadata(path).is_ok_and(|named| named.is_dir()) {
+        return;
+    }
+    let Ok(lock) = File::open(path) else {
+        return;
+    };
+    if lock.try_lock().is_err() {
+        return;
+    }
+    let (Ok(held), Ok(named)) = (lock.metadata(), fs::symlink_metadata(path)) else {
+        return;
+    };
+    if named.is_dir() && held.dev() == named.dev() && held.ino() == named.ino() {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+/// Without a lock to prove the owner gone, no stage is removed.
+#[cfg(not(unix))]
+fn remove_abandoned_stage(_path: &Path) {}
 
 impl std::ops::Deref for StageDirectory {
     type Target = Path;
@@ -381,8 +564,9 @@ impl FileProjectionPublisher {
             ..EntityQuery::default()
         }))
         .map_err(|_| ProjectionError::NotPublished)?;
+        sweep_abandoned_stages(&self.projection_root);
         let stage =
-            StageDirectory::create(stage_directory(&self.projection_root, &authority_snapshot))?;
+            StageDirectory::create(|| stage_directory(&self.projection_root, &authority_snapshot))?;
         let store = aep_backend_markdown::MarkdownStore::open(&*stage);
         let tree = self
             .session
@@ -2497,10 +2681,10 @@ mod tests {
     }
 
     /// A process killed between writing its watermark and publishing runs no destructor, so its
-    /// stage stays. Recovery restages from the authority and publishes; the killed process's
-    /// stage is not this publication's, and it is left exactly where it was.
+    /// stage stays. Recovery restages from the authority and publishes, and the killed process's
+    /// stage, whose owner is provably gone, is removed on the way.
     #[test]
-    fn a_stage_a_killed_process_left_does_not_stop_recovery_and_is_not_removed() {
+    fn a_stage_a_killed_process_left_does_not_stop_recovery_and_is_removed() {
         let fixture = Fixture::new();
         fixture.create_story();
         let publisher = FileProjectionPublisher::new(
@@ -2530,9 +2714,18 @@ mod tests {
                 },
             )
             .expect("the watermark the killed process committed");
-        let left = stages_beside(&fixture.projection_root);
-        assert_eq!(left.len(), 1);
-        std::mem::forget(staged);
+        assert_eq!(stages_beside(&fixture.projection_root).len(), 1);
+        // The killed process's pid is gone with it; the stage is renamed to the name a process
+        // that is no longer running would have given it.
+        let left = staged.stage.killed();
+        let dead = stage_named(
+            &fixture.projection_root,
+            STAGE_HEX,
+            &dead_pid().to_string(),
+            "0",
+        );
+        fs::rename(&left, &dead).expect("the stage takes a dead process's name");
+        assert_eq!(stages_beside(&fixture.projection_root).len(), 1);
 
         let recovered = publisher
             .publish_current()
@@ -2541,8 +2734,255 @@ mod tests {
         assert!(fixture.projection_root.join("story/projected.md").is_file());
         assert_eq!(
             stages_beside(&fixture.projection_root),
-            left,
-            "recovery removed or added a stage"
+            Vec::<String>::new(),
+            "recovery left the killed process's stage or one of its own"
         );
+    }
+
+    /// Stage-name hex for a snapshot no fixture ever renders.
+    const STAGE_HEX: &str = "abababababababababababababababababababababababababababababababab";
+
+    /// `<projection>.aep-stage-<hex>-<pid>-<counter>`, spelt from its parts so a case can misspell
+    /// any one of them.
+    fn stage_named(projection_root: &Path, hex: &str, pid: &str, counter: &str) -> PathBuf {
+        projection_root.with_extension(format!("aep-stage-{hex}-{pid}-{counter}"))
+    }
+
+    /// The pid of a process that has exited and been reaped, so nothing in this pid namespace runs
+    /// under it until the kernel wraps round to it again.
+    fn dead_pid() -> u32 {
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn a process that exits at once");
+        let pid = child.id();
+        child.wait().expect("reap it");
+        pid
+    }
+
+    /// A directory at `path` with one file in it, as a stage has.
+    fn leave_stage(path: &Path) {
+        fs::create_dir_all(path.join("story")).expect("the left stage");
+        fs::write(path.join("story/left.md"), "left\n").expect("a file in the left stage");
+    }
+
+    fn publisher_for(fixture: &Fixture) -> FileProjectionPublisher {
+        fixture.create_story();
+        FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        )
+    }
+
+    #[test]
+    fn a_stage_named_for_a_process_that_is_not_running_is_removed_by_the_next_publication() {
+        let fixture = Fixture::new();
+        let publisher = publisher_for(&fixture);
+        let dead = stage_named(
+            &fixture.projection_root,
+            STAGE_HEX,
+            &dead_pid().to_string(),
+            "3",
+        );
+        leave_stage(&dead);
+
+        publisher.publish_current().expect("publication");
+        assert!(
+            !dead.exists(),
+            "a dead process's stage survived the publication"
+        );
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+    }
+
+    /// The stage of a process that is still running — here this one, under a counter no staging
+    /// of its own reaches — may be half-written by that process and is not the sweep's.
+    #[test]
+    fn a_stage_named_for_a_running_process_is_never_removed() {
+        let fixture = Fixture::new();
+        let publisher = publisher_for(&fixture);
+        let live = stage_named(
+            &fixture.projection_root,
+            STAGE_HEX,
+            &std::process::id().to_string(),
+            &u64::MAX.to_string(),
+        );
+        leave_stage(&live);
+
+        publisher.publish_current().expect("publication");
+        assert!(
+            live.join("story/left.md").is_file(),
+            "a running process's stage was removed"
+        );
+    }
+
+    /// Two pid namespaces sharing one checkout: the name says a pid nothing here runs under, but a
+    /// process in the other namespace holds the stage's lock. The lock wins over the name.
+    #[cfg(unix)]
+    #[test]
+    fn a_stage_another_process_holds_is_never_removed_whatever_its_name_says() {
+        let fixture = Fixture::new();
+        let publisher = publisher_for(&fixture);
+        let held = stage_named(
+            &fixture.projection_root,
+            STAGE_HEX,
+            &dead_pid().to_string(),
+            "4",
+        );
+        leave_stage(&held);
+        let holder = File::open(&held).expect("open the stage");
+        holder.try_lock().expect("hold the stage's lock");
+
+        publisher.publish_current().expect("publication");
+        assert!(
+            held.join("story/left.md").is_file(),
+            "a stage another process holds was removed"
+        );
+        drop(holder);
+    }
+
+    /// Only a directory named exactly as a stage of this projection is a stage. Everything else
+    /// beside the projection is left as it is, even when its name says a dead process made it.
+    #[test]
+    fn nothing_but_a_stage_of_this_projection_is_ever_touched() {
+        let fixture = Fixture::new();
+        let publisher = publisher_for(&fixture);
+        let dead = dead_pid().to_string();
+        let root = &fixture.projection_root;
+        let directories = [
+            stage_named(root, STAGE_HEX, &dead, "0.bak"),
+            stage_named(root, STAGE_HEX, &dead, "0-1"),
+            root.with_extension(format!("aep-stage-{STAGE_HEX}-{dead}")),
+            root.with_extension(format!("aep-stage-{}-{dead}-0", "AB".repeat(32))),
+            root.with_extension(format!("aep-stage-{}-{dead}-0", "ab".repeat(31))),
+            root.with_extension(format!("aep-stage-{STAGE_HEX}a-{dead}-0")),
+            root.with_extension(format!("aep-staged-{STAGE_HEX}-{dead}-0")),
+            root.with_file_name(format!("other.aep-stage-{STAGE_HEX}-{dead}-0")),
+        ];
+        for directory in &directories {
+            leave_stage(directory);
+        }
+        let file = stage_named(root, STAGE_HEX, &dead, "1");
+        fs::write(&file, "a file, not a stage\n").expect("a file with a stage's name");
+        #[cfg(unix)]
+        let (link, target) = {
+            let target = fixture.root.join("elsewhere");
+            leave_stage(&target);
+            let link = stage_named(root, STAGE_HEX, &dead, "2");
+            std::os::unix::fs::symlink(&target, &link).expect("a link with a stage's name");
+            (link, target)
+        };
+
+        publisher.publish_current().expect("publication");
+        for directory in &directories {
+            assert!(
+                directory.join("story/left.md").is_file(),
+                "{} is not a stage and was touched",
+                directory.display()
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(&file).expect("the file stays"),
+            "a file, not a stage\n"
+        );
+        #[cfg(unix)]
+        {
+            assert!(fs::symlink_metadata(&link)
+                .expect("the link stays")
+                .file_type()
+                .is_symlink());
+            assert!(
+                target.join("story/left.md").is_file(),
+                "the directory a stage-named link points at was touched"
+            );
+        }
+    }
+
+    /// A stage-shaped name whose pid is no pid at all names no owner whose death can be proved.
+    #[test]
+    fn a_stage_whose_owner_cannot_be_established_is_left_alone() {
+        let fixture = Fixture::new();
+        let publisher = publisher_for(&fixture);
+        let root = &fixture.projection_root;
+        let unowned = [
+            stage_named(root, STAGE_HEX, "notapid", "0"),
+            stage_named(root, STAGE_HEX, "0", "0"),
+            stage_named(root, STAGE_HEX, "+7", "0"),
+            stage_named(root, STAGE_HEX, "", "0"),
+            stage_named(root, STAGE_HEX, &(u64::from(u32::MAX) + 1).to_string(), "0"),
+            stage_named(root, STAGE_HEX, &dead_pid().to_string(), "x"),
+        ];
+        for stage in &unowned {
+            leave_stage(stage);
+        }
+
+        publisher.publish_current().expect("publication");
+        for stage in &unowned {
+            assert!(
+                stage.join("story/left.md").is_file(),
+                "{} names no provable owner and was removed",
+                stage.display()
+            );
+        }
+    }
+
+    /// A sweep that locked a stage between its creation and its owner's lock has it: the owner
+    /// does not claim it and tries another name instead.
+    #[cfg(unix)]
+    #[test]
+    fn a_stage_locked_before_its_creator_locks_it_is_not_claimed() {
+        let fixture = Fixture::new();
+        let stage = stage_named(&fixture.projection_root, STAGE_HEX, "1", "1");
+        fs::create_dir_all(&stage).expect("the created stage");
+        let sweep = File::open(&stage).expect("open the stage");
+        sweep.try_lock().expect("the sweep's lock");
+        assert!(
+            matches!(claim_stage(&stage), Claim::Lost),
+            "the creator claimed a stage the sweep holds"
+        );
+        drop(sweep);
+        assert!(
+            matches!(claim_stage(&stage), Claim::Held(_)),
+            "the creator could not claim its own free stage"
+        );
+    }
+
+    /// A foreign sweep that removed a stage between its creation and its owner's open has it too:
+    /// the owner must not take the stage as unlockable and write into an unheld directory.
+    #[cfg(unix)]
+    #[test]
+    fn a_stage_removed_before_its_creator_opens_it_is_lost() {
+        let fixture = Fixture::new();
+        let stage = stage_named(&fixture.projection_root, STAGE_HEX, "1", "1");
+        fs::create_dir_all(&stage).expect("the created stage");
+        fs::remove_dir(&stage).expect("the foreign sweep's removal");
+        assert!(
+            matches!(claim_stage(&stage), Claim::Lost),
+            "the creator took a stage a sweep removed as its own"
+        );
+    }
+
+    /// With two pid namespaces sharing one checkout, a pid and counter are not unique: the name a
+    /// staging picks may already be another live process's stage. Creating a stage never removes
+    /// what is already at its name.
+    #[test]
+    fn creating_a_stage_never_removes_a_directory_already_at_its_name() {
+        let fixture = Fixture::new();
+        fs::create_dir_all(&fixture.root).expect("the fixture root");
+        let taken = stage_named(&fixture.projection_root, STAGE_HEX, "1", "1");
+        leave_stage(&taken);
+
+        let fresh = stage_named(&fixture.projection_root, STAGE_HEX, "1", "2");
+        let mut names = [taken.clone(), fresh.clone()].into_iter();
+        let stage = StageDirectory::create(|| names.next().expect("a name to try"));
+        assert!(
+            taken.join("story/left.md").is_file(),
+            "creating a stage removed the directory already at its name"
+        );
+        let stage = stage.expect("the next free name is taken");
+        assert_ne!(stage.path, taken, "the stage took an occupied name");
+        assert_eq!(stage.path, fresh);
     }
 }
