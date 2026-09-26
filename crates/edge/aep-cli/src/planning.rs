@@ -2059,6 +2059,15 @@ pub(crate) struct NewArgs {
     /// record or never arrive at all, and this is how it arrives.
     #[arg(long, value_name = "PATH")]
     from: Option<PathBuf>,
+    /// Read a `review-result`'s findings as a JSON array of entries from this UTF-8 file; `-` reads
+    /// standard input.
+    ///
+    /// Each entry is `{file, line, category, severity, verdict, origin, message}`, read against the
+    /// schema a fenced `findings` block is, and the array is written into the body as that block,
+    /// in JSON — so a tool hands over what its serializer wrote and never assembles markdown. A body
+    /// that states findings of its own as well is refused as ambiguous.
+    #[arg(long, value_name = "PATH")]
+    findings: Option<PathBuf>,
     /// The evidence kind this artifact is stopping anybody from producing, such as `test_result`.
     ///
     /// The join between a blocker and an evidence gate: a rung wants a `test_result`, the job that
@@ -2807,17 +2816,17 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
         Some(from) => read_body(from)?,
         None => template(&document_root, &kind).unwrap_or_else(|| format!("# {}\n", args.title)),
     };
+    let body = match &args.findings {
+        Some(findings) => with_findings(&kind, args.from.as_deref(), &body, findings)?,
+        None => body,
+    };
     // **Refused here, before anything is written.** A `review-result` cannot be edited after the
     // fact, so a block that is wrong on the way in is wrong for ever — and a store holding a
     // review whose findings nothing can read is the state `story:structured-findings-on-review-
     // result` exists to prevent. The refusal carries the line, because sending somebody back to a
-    // document to find a defect this code has already located is a refusal that does half its job.
-    aep_backend_markdown::findings::parse(&body).map_err(|error| {
-        anyhow::anyhow!(
-            "{error}. Entries are `{{file, line, category, severity, verdict, origin, message}}`; \
-             `file`, `category`, `severity` and `message` are required"
-        )
-    })?;
+    // document to find a defect this code has already located is a refusal that does half its job;
+    // it quotes that line and says what to write instead, which is `FindingsError`'s own wording.
+    aep_backend_markdown::findings::parse(&body).map_err(|error| anyhow::anyhow!("{error}"))?;
     let document = PlanningDocument::new(frontmatter, body);
 
     // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
@@ -4017,6 +4026,67 @@ fn read_body(from: &Path) -> Result<String> {
         std::fs::read_to_string(from)
             .with_context(|| format!("reading the body from {}", from.display()))
     }
+}
+
+/// `body` with the findings `new --findings` names appended to it as a fenced JSON block.
+///
+/// **Rendered into the body rather than stored beside it.** A `review-result`'s findings are part
+/// of the bytes frozen with it (`aep_backend_markdown::findings`), and `show`, `findings`,
+/// `review-value` and `validate` all read them from there; a second place to keep them would be a
+/// second answer every one of those readers had to reconcile. So `--findings` is only a way for the
+/// block to *arrive* — validated as JSON here, written as JSON by a serializer, and read back by the
+/// same parser as a block somebody typed.
+///
+/// # Errors
+///
+/// `--findings` on a kind that carries no findings, both inputs on standard input, a body that
+/// opens a `findings` block of its own, an unreadable input, or findings the entry schema refuses.
+/// Each is refused before anything is written.
+fn with_findings(
+    kind: &ArtifactKind,
+    from: Option<&Path>,
+    body: &str,
+    findings: &Path,
+) -> Result<String> {
+    use aep_backend_markdown::findings;
+
+    if *kind != ArtifactKind::ReviewResult {
+        anyhow::bail!(
+            "`--findings` records a review's findings, and only a `review-result` carries them; \
+             `{kind}` does not",
+            kind = kind.as_str()
+        );
+    }
+    let stdin = Path::new("-");
+    if findings == stdin && from == Some(stdin) {
+        anyhow::bail!(
+            "`--from -` and `--findings -` both read standard input, which holds one of them; \
+             give one of the two as a file"
+        );
+    }
+    if findings::opens_a_block(body) {
+        anyhow::bail!(
+            "the findings are ambiguous: the body opens a fenced `findings` block and \
+             `--findings` gives them too. Give them once — drop the block from the body, or drop \
+             `--findings`"
+        );
+    }
+    let text = if findings == stdin {
+        let mut text = String::new();
+        std::io::stdin()
+            .read_to_string(&mut text)
+            .context("reading the findings from standard input")?;
+        text
+    } else {
+        std::fs::read_to_string(findings)
+            .with_context(|| format!("reading the findings from {}", findings.display()))?
+    };
+    let parsed = findings::parse_json(&text).map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(format!(
+        "{}\n\n{}",
+        body.trim_end_matches('\n'),
+        findings::render_block(&parsed)
+    ))
 }
 
 /// Which of the three ways `body` was asked to arrive at a new body.

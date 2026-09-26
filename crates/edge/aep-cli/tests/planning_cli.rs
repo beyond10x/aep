@@ -4787,6 +4787,329 @@ fn a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on() {
     );
 }
 
+/// Two finding messages as a reviewer writes them: a `": "` inside quotes, and an apostrophe.
+const PROSE_MESSAGES: [&str; 2] = [
+    "the judge reports \"(platform): X\" for an unmeasured step",
+    "the caller's wait: never bounded",
+];
+
+/// [`PROSE_MESSAGES`] as a JSON array of entries, the way a serializer writes it.
+fn prose_findings_json() -> String {
+    serde_json::json!([
+        {"file": "src/lib.rs", "line": 12, "category": "acceptance", "severity": "warning",
+         "verdict": "CONFIRMED", "origin": "introduced", "message": PROSE_MESSAGES[0]},
+        {"file": "src/wait.rs", "category": "correctness", "severity": "note",
+         "message": PROSE_MESSAGES[1]},
+    ])
+    .to_string()
+}
+
+/// The `message` of every finding `show --format json` prints for `id`.
+fn shown_messages(store: &Path, id: &str) -> Vec<String> {
+    let shown = protocol(&[
+        "plan",
+        "artifact",
+        "show",
+        id,
+        "--format",
+        "json",
+        "--store",
+        printable(store),
+    ]);
+    assert_eq!(code(&shown), 0, "{}", stderr(&shown));
+    let value: serde_json::Value =
+        serde_json::from_str(&stdout(&shown)).expect("show --format json is JSON");
+    value
+        .get("findings")
+        .and_then(serde_json::Value::as_array)
+        .expect("the findings are an array")
+        .iter()
+        .map(|finding| {
+            finding
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .expect("every finding has a message")
+                .to_owned()
+        })
+        .collect()
+}
+
+#[test]
+fn a_findings_block_written_as_json_keeps_messages_with_colons_quotes_and_apostrophes() {
+    let store = scratch("aep-plan-findings-json-block");
+    let drafts = scratch("aep-plan-findings-json-block-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "json-block",
+        "epic:objectives",
+        &findings_body(&format!("{}\n", prose_findings_json())),
+    );
+    assert_eq!(
+        shown_messages(&store, "review-result:json-block"),
+        PROSE_MESSAGES
+    );
+}
+
+#[test]
+fn a_findings_block_that_does_not_parse_is_refused_at_one_body_line_quoting_it_with_a_json_hint() {
+    let store = scratch("aep-plan-findings-prose-refused");
+    let drafts = scratch("aep-plan-findings-prose-refused-drafts");
+    subject_epic(&store);
+
+    // beyond10x/aep#38 as reported. The fence opens on body line 5, so `message` is on line 12.
+    let body = findings_body(&finding("src/lib.rs", 12, PROSE_MESSAGES[0]));
+    let path = drafts.join("prose.md");
+    write(&path, &body);
+    let created = protocol(&[
+        "plan",
+        "artifact",
+        "new",
+        "review-result",
+        "prose",
+        "--title",
+        "Prose",
+        "--relate",
+        "reviews:epic:objectives",
+        "--from",
+        printable(&path),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 1, "unquoted prose was accepted");
+    let said = stderr(&created);
+    assert!(
+        said.contains("at line 12 of the body"),
+        "the refusal does not name the body line: {said}"
+    );
+    assert!(
+        !said.contains("column") && said.matches("at line").count() == 1,
+        "the refusal reports a second coordinate: {said}"
+    );
+    assert!(
+        said.contains(&format!("message: {}", PROSE_MESSAGES[0])),
+        "the refusal does not quote the offending line: {said}"
+    );
+    assert!(
+        said.contains("JSON"),
+        "the refusal does not name JSON as the machine-written form: {said}"
+    );
+    assert!(
+        !store.join("review-result/prose.md").exists(),
+        "a refused `new` wrote the document anyway"
+    );
+}
+
+/// `new review-result <name> --from <prose> --findings <findings>`, optionally with `stdin`.
+fn new_review_with_findings(
+    store: &Path,
+    drafts: &Path,
+    name: &str,
+    prose: &str,
+    findings: &str,
+    stdin: Option<&str>,
+) -> Output {
+    let prose_path = drafts.join(format!("{name}.md"));
+    write(&prose_path, prose);
+    let args = [
+        "plan",
+        "artifact",
+        "new",
+        "review-result",
+        name,
+        "--title",
+        name,
+        "--relate",
+        "reviews:epic:objectives",
+        "--from",
+        printable(&prose_path),
+        "--findings",
+        findings,
+        "--store",
+        printable(store),
+    ];
+    match stdin {
+        Some(input) => protocol_with_stdin(&args, input),
+        None => protocol(&args),
+    }
+}
+
+#[test]
+fn new_review_result_takes_its_findings_as_a_json_array_from_a_file() {
+    let store = scratch("aep-plan-findings-input-file");
+    let drafts = scratch("aep-plan-findings-input-file-drafts");
+    subject_epic(&store);
+    let findings = drafts.join("findings.json");
+    write(&findings, &prose_findings_json());
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "from-file",
+        "# Attack\n\nTwo findings.\n",
+        printable(&findings),
+        None,
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert_eq!(
+        shown_messages(&store, "review-result:from-file"),
+        PROSE_MESSAGES
+    );
+    let stored = std::fs::read_to_string(store.join("review-result/from-file.md"))
+        .expect("the review is written");
+    assert!(
+        stored.contains("Two findings.") && stored.contains("```findings\n["),
+        "the prose and a JSON block are both the stored body: {stored}"
+    );
+}
+
+#[test]
+fn new_review_result_takes_its_findings_as_a_json_array_from_standard_input() {
+    let store = scratch("aep-plan-findings-input-stdin");
+    let drafts = scratch("aep-plan-findings-input-stdin-drafts");
+    subject_epic(&store);
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "from-stdin",
+        "# Attack\n",
+        "-",
+        Some(&prose_findings_json()),
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert_eq!(
+        shown_messages(&store, "review-result:from-stdin"),
+        PROSE_MESSAGES
+    );
+}
+
+#[test]
+fn a_findings_block_in_the_body_and_findings_given_apart_are_refused_as_ambiguous() {
+    let store = scratch("aep-plan-findings-input-ambiguous");
+    let drafts = scratch("aep-plan-findings-input-ambiguous-drafts");
+    subject_epic(&store);
+    let findings = drafts.join("findings.json");
+    write(&findings, &prose_findings_json());
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "both",
+        &findings_body(&finding("src/a.rs", 40, "The loop never advances")),
+        printable(&findings),
+        None,
+    );
+    assert_eq!(code(&created), 1, "two sources of findings were accepted");
+    let said = stderr(&created);
+    assert!(
+        said.contains("--findings") && said.contains("ambiguous"),
+        "the refusal does not name the two sources: {said}"
+    );
+    assert!(
+        !store.join("review-result/both.md").exists(),
+        "a refused `new` wrote the document anyway"
+    );
+}
+
+#[test]
+fn findings_given_apart_are_refused_on_a_kind_that_carries_none() {
+    let store = scratch("aep-plan-findings-input-story");
+    let drafts = scratch("aep-plan-findings-input-story-drafts");
+    let findings = drafts.join("findings.json");
+    write(&findings, &prose_findings_json());
+    let created = protocol(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "not-a-review",
+        "--title",
+        "Not a review",
+        "--findings",
+        printable(&findings),
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 1, "a story took findings");
+    assert!(
+        stderr(&created).contains("only a `review-result` carries them"),
+        "{}",
+        stderr(&created)
+    );
+    assert!(!store.join("story/not-a-review.md").exists());
+}
+
+#[test]
+fn a_body_and_findings_both_on_standard_input_are_refused() {
+    let store = scratch("aep-plan-findings-input-both-stdin");
+    subject_epic(&store);
+    let created = protocol_with_stdin(
+        &[
+            "plan",
+            "artifact",
+            "new",
+            "review-result",
+            "both-stdin",
+            "--title",
+            "Both",
+            "--relate",
+            "reviews:epic:objectives",
+            "--from",
+            "-",
+            "--findings",
+            "-",
+            "--store",
+            printable(&store),
+        ],
+        &prose_findings_json(),
+    );
+    assert_eq!(code(&created), 1, "two inputs were read from one stream");
+    assert!(
+        stderr(&created).contains("both read standard input"),
+        "{}",
+        stderr(&created)
+    );
+    assert!(!store.join("review-result/both-stdin.md").exists());
+}
+
+#[test]
+fn findings_input_outside_the_entry_schema_is_refused_and_nothing_is_written() {
+    let store = scratch("aep-plan-findings-input-invalid");
+    let drafts = scratch("aep-plan-findings-input-invalid-drafts");
+    subject_epic(&store);
+    let findings = drafts.join("findings.json");
+    write(
+        &findings,
+        "[{\"file\": \"a.rs\", \"category\": \"c\", \"severity\": \"catastrophic\", \
+         \"message\": \"m\"}]",
+    );
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "invalid",
+        "# Attack\n",
+        printable(&findings),
+        None,
+    );
+    assert_eq!(
+        code(&created),
+        1,
+        "a severity outside the vocabulary was accepted"
+    );
+    let said = stderr(&created);
+    assert!(
+        said.contains("catastrophic") && said.contains("findings input"),
+        "the refusal does not say what was wrong, or where: {said}"
+    );
+    assert!(
+        !store.join("review-result/invalid.md").exists(),
+        "a refused `new` wrote the document anyway"
+    );
+}
+
 #[test]
 fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
     let store = scratch("aep-plan-findings-absent");
@@ -5956,5 +6279,31 @@ fn a_chain_that_starts_on_a_legacy_journal_seals_the_lines_that_came_before_it()
     assert!(
         text.contains("the journal's older lines were edited after this record froze them"),
         "and it says the prefix changed, not that the sealed record did: {text}"
+    );
+}
+
+/// Adversary (beyond10x/aep#38): review prose that *quotes* an example `findings` block inside a
+/// longer fence — the way `website/docs/reference/cli.md` itself shows one — states no findings of
+/// its own, so `--findings` is the only source and nothing is ambiguous.
+#[test]
+fn adversary_prose_quoting_an_example_block_in_a_longer_fence_is_not_ambiguous_with_findings() {
+    let store = scratch("aep-plan-findings-input-quoted-example");
+    let drafts = scratch("aep-plan-findings-input-quoted-example-drafts");
+    subject_epic(&store);
+    let findings = drafts.join("findings.json");
+    write(&findings, &prose_findings_json());
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "quoted",
+        "# Attack\n\nThe block should look like this:\n\n````markdown\n```findings\n[]\n```\n````\n",
+        printable(&findings),
+        None,
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+    assert_eq!(
+        shown_messages(&store, "review-result:quoted"),
+        PROSE_MESSAGES
     );
 }
