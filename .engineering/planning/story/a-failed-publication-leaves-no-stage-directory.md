@@ -2,12 +2,15 @@
 format: aep.planning-md/2
 id: story:a-failed-publication-leaves-no-stage-directory
 kind: story
-status: draft
+status: implemented
 title: A failed publication leaves no stage directory beside the projection
 relations:
 - serves: vision:O2
 - decomposes: epic:planning-on-entity-runtime
-revision: 1
+scope:
+- confidence: cited
+  path: crates/plan/aep-planning-migration/src/projection.rs
+revision: 5
 ---
 ## Outcome
 

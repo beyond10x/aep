@@ -24,6 +24,11 @@ belongs in the commit message or in `docs/design/`.
 - A malformed `findings` block is refused at one body line, with that line quoted and a hint naming
   JSON as the machine-written form. Whatever `--findings` accepts reads back unchanged, and a
   `findings` fence quoted inside a longer fence is prose rather than the review's findings. (#38)
+- A `render`, `store rebuild`, write or `validate` refused after staging the projection no longer
+  leaves its `.engineering/planning.aep-stage-*` directory beside the projection. 0.59.2 removed
+  the stage on one refusal only; every refusal between staging and publishing now removes it. A
+  stage left by a killed process is not removed, and recovery from its committed watermark still
+  publishes.
 
 ## [0.59.3] — 2026-09-25
 
