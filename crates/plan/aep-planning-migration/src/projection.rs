@@ -66,8 +66,56 @@ pub struct FileProjectionPublisher {
     session: Option<aep_backend_eventlog::AuthoritySession>,
 }
 
+/// A stage directory this staging created, removed when dropped unless it was published.
+///
+/// Every refusal between creating the stage and renaming it into place drops the owner, so no
+/// return path has to remember to remove it; 0.59.0's refused `render` left a whole projection
+/// beside the live one. The path carries this process's id and its own staging counter, so the
+/// owner can only ever remove the stage it created. A process killed while staging runs no
+/// destructor and its stage stays: recovery restages from the authority and never reads it.
+struct StageDirectory {
+    path: PathBuf,
+    published: bool,
+}
+
+impl StageDirectory {
+    /// Creates the stage at `path`, first removing a stage an earlier staging left at that name.
+    fn create(path: PathBuf) -> Result<Self, ProjectionError> {
+        if path.exists() {
+            fs::remove_dir_all(&path).map_err(|_| ProjectionError::Uncertain)?;
+        }
+        fs::create_dir_all(&path).map_err(|_| ProjectionError::NotPublished)?;
+        Ok(Self {
+            path,
+            published: false,
+        })
+    }
+
+    /// Records that `publish_stage` moved or removed the stage, so dropping it removes nothing.
+    fn published(mut self) {
+        self.published = true;
+    }
+}
+
+impl std::ops::Deref for StageDirectory {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for StageDirectory {
+    fn drop(&mut self) {
+        if !self.published {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+/// A rendered projection waiting to be committed; dropping it uncommitted removes its stage.
 pub struct StagedProjection {
-    stage: PathBuf,
+    stage: StageDirectory,
     authority_snapshot: AuthoritySnapshotIdV1,
     inventory_digest: ProjectionInventoryDigestV1,
     watermark: ProjectionWatermarkV1,
@@ -79,7 +127,7 @@ pub struct StagedProjection {
 impl StagedProjection {
     /// The directory the documents were rendered into.
     pub fn directory(&self) -> &Path {
-        &self.stage
+        &self.stage.path
     }
 
     pub fn inventory_digest(&self) -> ProjectionInventoryDigestV1 {
@@ -98,6 +146,51 @@ fn stage_directory(projection_root: &Path, authority_snapshot: &AuthoritySnapsho
         std::process::id(),
         STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ))
+}
+
+/// Each point, after a stage directory exists, at which a publication can be refused.
+///
+/// A test arms one and asserts the refusal it causes leaves no stage beside the projection. Most
+/// of these fail only on an IO error or a concurrent write, which no test can cause on demand;
+/// outside tests nothing is ever armed and [`fault`] is always `Ok`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FaultSite {
+    WriteDocuments,
+    CaptureAuthority,
+    CapturedFiles,
+    PreserveForeign,
+    InventoryDigest,
+    WriteOwnership,
+    WatermarkExists,
+    EncodeWatermark,
+    WriteWatermark,
+    PublishStage,
+    SecondCapture,
+    SecondIdentity,
+    SnapshotChanged,
+}
+
+#[cfg(test)]
+thread_local! {
+    static ARMED_FAULT: std::cell::Cell<Option<FaultSite>> = const { std::cell::Cell::new(None) };
+    static FAULT_FIRED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `Err(error)` when a test armed `site` on this thread, `Ok` otherwise and always outside tests.
+#[cfg(test)]
+fn fault<E>(site: FaultSite, error: E) -> Result<(), E> {
+    if ARMED_FAULT.with(std::cell::Cell::get) == Some(site) {
+        FAULT_FIRED.with(|fired| fired.set(true));
+        return Err(error);
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+#[inline]
+#[allow(clippy::unnecessary_wraps)] // The test build of this function returns the error.
+fn fault<E>(_site: FaultSite, _error: E) -> Result<(), E> {
+    Ok(())
 }
 
 impl FileProjectionPublisher {
@@ -288,12 +381,9 @@ impl FileProjectionPublisher {
             ..EntityQuery::default()
         }))
         .map_err(|_| ProjectionError::NotPublished)?;
-        let stage = stage_directory(&self.projection_root, &authority_snapshot);
-        if stage.exists() {
-            fs::remove_dir_all(&stage).map_err(|_| ProjectionError::Uncertain)?;
-        }
-        fs::create_dir_all(&stage).map_err(|_| ProjectionError::NotPublished)?;
-        let store = aep_backend_markdown::MarkdownStore::open(&stage);
+        let stage =
+            StageDirectory::create(stage_directory(&self.projection_root, &authority_snapshot))?;
+        let store = aep_backend_markdown::MarkdownStore::open(&*stage);
         let tree = self
             .session
             .as_ref()
@@ -341,6 +431,7 @@ impl FileProjectionPublisher {
             rendered.push((store.relative_path_for(&id), document));
         }
         write_staged_documents(&store, &stage, &rendered)?;
+        fault(FaultSite::WriteDocuments, ProjectionError::NotPublished)?;
         let mut owned = rendered
             .into_iter()
             .map(|(relative, document)| (relative, document.render().into_bytes(), OWNED_FILE_MODE))
@@ -349,6 +440,7 @@ impl FileProjectionPublisher {
         let (known_watermarks, captured_owned) = if let Some((known, captured)) = seeded {
             (known, captured?)
         } else {
+            fault(FaultSite::CaptureAuthority, ProjectionError::NotPublished)?;
             let complete = self
                 .capture_held()
                 .map_err(|_| ProjectionError::NotPublished)?;
@@ -357,6 +449,7 @@ impl FileProjectionPublisher {
                 captured_markdown_files(complete.snapshot())?,
             )
         };
+        fault(FaultSite::CapturedFiles, ProjectionError::NotPublished)?;
         let preserved_foreign_paths = preserve_foreign(
             &self.projection_root,
             &stage,
@@ -365,13 +458,16 @@ impl FileProjectionPublisher {
             &captured_owned,
             tree,
         )?;
+        fault(FaultSite::PreserveForeign, ProjectionError::ForeignConflict)?;
         let inventory_digest =
             projection_inventory_digest(&owned).map_err(|_| ProjectionError::NotPublished)?;
+        fault(FaultSite::InventoryDigest, ProjectionError::NotPublished)?;
         // A tree authority's projection keeps no store-wide ownership file: every write would
         // rewrite it, and two branches that both wrote would conflict on it. Every document the
         // projection renders is the projection's, which the render check holds instead.
         if !tree {
             write_projection_ownership(&stage, authority_snapshot, &owned)?;
+            fault(FaultSite::WriteOwnership, ProjectionError::NotPublished)?;
         }
         let watermark = ProjectionWatermarkV1 {
             format: ProjectionWatermarkFormatV1,
@@ -425,10 +521,11 @@ impl FileProjectionPublisher {
                 subject.history.subject.entity == aep_backend_eventlog::PROJECTION_METADATA_AS
                     && subject.history.subject.id == staged.identity
             }),
-            None => self
-                .watermark_exists(&staged.identity)
+            None => fault(FaultSite::WatermarkExists, String::new())
+                .and_then(|()| self.watermark_exists(&staged.identity))
                 .map_err(|_| ProjectionError::Uncertain)?,
         };
+        fault(FaultSite::EncodeWatermark, ProjectionError::NotPublished)?;
         self.write_watermark(
             staged.identity,
             serde_json::to_value(&staged.watermark).map_err(|_| ProjectionError::NotPublished)?,
@@ -443,7 +540,10 @@ impl FileProjectionPublisher {
             },
         )
         .map_err(|_| ProjectionError::Uncertain)?;
+        fault(FaultSite::WriteWatermark, ProjectionError::Uncertain)?;
+        fault(FaultSite::PublishStage, ProjectionError::Uncertain)?;
         publish_stage(&staged.stage, &self.projection_root, recovering)?;
+        staged.stage.published();
         Ok(ProjectionPublication {
             inventory_digest: staged.inventory_digest,
             replaced_owned_paths: staged.replaced_owned_paths,
@@ -568,9 +668,8 @@ impl FileProjectionPublisher {
                 // the ones staged here: an inventory that differs was rendered by another
                 // release of the renderer. Replaying W cannot reproduce it; publish the current
                 // state below instead, which records its own watermark. The stage W was
-                // re-rendered into is not published, so it is removed rather than left beside
-                // the projection.
-                let _ = fs::remove_dir_all(staged.directory());
+                // re-rendered into is not published, so dropping it removes it.
+                drop(staged);
                 break;
             }
             self.commit(staged)
@@ -584,29 +683,34 @@ impl FileProjectionPublisher {
         let staged = self
             .stage_from(current, Some(first))
             .map_err(|error| (current, projection_error(error, &self.projection_root)))?;
-        let second = self.capture_held().map_err(|_| {
-            (
-                current,
-                projection_failure(
-                    CommandRefusalCodeV1::SourceUnreadable,
-                    ProjectionFailureReasonV1::Io,
-                    &self.projection_root,
-                ),
-            )
-        })?;
-        let (second_id, _) =
-            crate::durable::authority_snapshot_identity(&self.authority, second.snapshot())
-                .map_err(|_| {
-                    (
-                        current,
-                        projection_failure(
-                            CommandRefusalCodeV1::VerificationMismatch,
-                            ProjectionFailureReasonV1::InventoryMismatch,
-                            &self.projection_root,
-                        ),
-                    )
-                })?;
-        if second_id != current {
+        let second = fault(FaultSite::SecondCapture, String::new())
+            .and_then(|()| self.capture_held())
+            .map_err(|_| {
+                (
+                    current,
+                    projection_failure(
+                        CommandRefusalCodeV1::SourceUnreadable,
+                        ProjectionFailureReasonV1::Io,
+                        &self.projection_root,
+                    ),
+                )
+            })?;
+        let (second_id, _) = fault(FaultSite::SecondIdentity, ())
+            .and_then(|()| {
+                crate::durable::authority_snapshot_identity(&self.authority, second.snapshot())
+                    .map_err(|_| ())
+            })
+            .map_err(|()| {
+                (
+                    current,
+                    projection_failure(
+                        CommandRefusalCodeV1::VerificationMismatch,
+                        ProjectionFailureReasonV1::InventoryMismatch,
+                        &self.projection_root,
+                    ),
+                )
+            })?;
+        if second_id != current || fault(FaultSite::SnapshotChanged, ()).is_err() {
             return Err((
                 second_id,
                 projection_failure(
@@ -2137,5 +2241,308 @@ mod tests {
             "mode-only drift must prevent recovery equality"
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    /// Every stage directory beside `projection_root`, by name.
+    fn stages_beside(projection_root: &Path) -> Vec<String> {
+        let prefix = format!(
+            "{}.aep-stage-",
+            projection_root
+                .file_name()
+                .expect("the projection has a name")
+                .to_string_lossy()
+        );
+        let mut stages = fs::read_dir(projection_root.parent().expect("the projection's parent"))
+            .expect("the projection's parent reads")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(&prefix))
+            .collect::<Vec<_>>();
+        stages.sort();
+        stages
+    }
+
+    fn arm_fault(site: Option<FaultSite>) {
+        ARMED_FAULT.with(|armed| armed.set(site));
+        FAULT_FIRED.with(|fired| fired.set(false));
+    }
+
+    fn fault_fired() -> bool {
+        FAULT_FIRED.with(std::cell::Cell::get)
+    }
+
+    const FAULT_SITES: [FaultSite; 13] = [
+        FaultSite::WriteDocuments,
+        FaultSite::CaptureAuthority,
+        FaultSite::CapturedFiles,
+        FaultSite::PreserveForeign,
+        FaultSite::InventoryDigest,
+        FaultSite::WriteOwnership,
+        FaultSite::WatermarkExists,
+        FaultSite::EncodeWatermark,
+        FaultSite::WriteWatermark,
+        FaultSite::PublishStage,
+        FaultSite::SecondCapture,
+        FaultSite::SecondIdentity,
+        FaultSite::SnapshotChanged,
+    ];
+
+    /// The three ways into staging and committing.
+    #[derive(Debug, Clone, Copy)]
+    enum Entry {
+        /// `publish_current` on an authority nothing was published from: stages from its first
+        /// capture, and the second capture answers whether the watermark exists.
+        Fresh,
+        /// `publish_current` after a watermark committed and the projection was lost: restages
+        /// from a fresh read and asks the authority whether the watermark exists.
+        Recovering,
+        /// [`ProjectionPublisher::publish`], which `apply` and `store rebuild` stage and commit
+        /// through.
+        Direct,
+    }
+
+    /// The refusal code a fault at `site` causes on `entry`, or `None` where `entry` never
+    /// reaches `site`. The match is exhaustive, so a new site cannot go without an expectation.
+    fn expected_refusal(site: FaultSite, entry: Entry) -> Option<CommandRefusalCodeV1> {
+        use CommandRefusalCodeV1 as Code;
+        match (site, entry) {
+            (FaultSite::CaptureAuthority | FaultSite::WatermarkExists, Entry::Fresh)
+            | (
+                FaultSite::SecondCapture | FaultSite::SecondIdentity | FaultSite::SnapshotChanged,
+                Entry::Recovering | Entry::Direct,
+            ) => None,
+            (
+                FaultSite::WriteDocuments
+                | FaultSite::CaptureAuthority
+                | FaultSite::CapturedFiles
+                | FaultSite::InventoryDigest
+                | FaultSite::WriteOwnership
+                | FaultSite::EncodeWatermark,
+                _,
+            ) => Some(Code::IncompletePublication),
+            (FaultSite::PreserveForeign, _) => Some(Code::ProjectionConflict),
+            (
+                FaultSite::WatermarkExists | FaultSite::WriteWatermark | FaultSite::PublishStage,
+                _,
+            ) => Some(Code::PublishUncertain),
+            (FaultSite::SecondCapture, Entry::Fresh) => Some(Code::SourceUnreadable),
+            (FaultSite::SecondIdentity, Entry::Fresh) => Some(Code::VerificationMismatch),
+            (FaultSite::SnapshotChanged, Entry::Fresh) => Some(Code::AuthoritySnapshotChanged),
+        }
+    }
+
+    /// Runs `entry` over a fresh fixture with `site` armed; answers the refusal code, if any,
+    /// whether the fault fired, and every stage left beside the projection afterwards.
+    fn publish_with_fault(
+        site: FaultSite,
+        entry: Entry,
+    ) -> (Option<CommandRefusalCodeV1>, bool, Vec<String>) {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        if matches!(entry, Entry::Recovering) {
+            publisher.publish_current().expect("initial publication");
+            fs::remove_dir_all(&fixture.projection_root).expect("simulate loss after W committed");
+        }
+        let covered =
+            crate::durable::authority_snapshot_identity(&fixture.authority, &fixture.snapshot())
+                .expect("the current identity")
+                .0;
+        arm_fault(Some(site));
+        let refusal = match entry {
+            Entry::Fresh | Entry::Recovering => publisher
+                .publish_current()
+                .err()
+                .map(|(_, failure)| failure.code),
+            Entry::Direct => ProjectionPublisher::publish(&publisher, covered)
+                .err()
+                .map(|error| projection_error(error, &fixture.projection_root).code),
+        };
+        let fired = fault_fired();
+        arm_fault(None);
+        (refusal, fired, stages_beside(&fixture.projection_root))
+    }
+
+    /// Each refusal after the stage directory exists — in `stage_from`, `commit_knowing`,
+    /// `publish_current`'s restage and its second capture — removes the stage it rendered.
+    fn every_refusal_after_staging_leaves_no_stage(entry: Entry) {
+        for site in FAULT_SITES {
+            let expected = expected_refusal(site, entry);
+            let (refusal, fired, stages) = publish_with_fault(site, entry);
+            assert_eq!(
+                fired,
+                expected.is_some(),
+                "{entry:?} reaching {site:?} is not what the table says"
+            );
+            assert_eq!(refusal, expected, "{entry:?} refused at {site:?}");
+            assert!(
+                stages.is_empty(),
+                "{entry:?} refused at {site:?} left a stage beside the projection: {stages:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_first_publication_refused_after_staging_leaves_no_stage_directory() {
+        every_refusal_after_staging_leaves_no_stage(Entry::Fresh);
+    }
+
+    #[test]
+    fn a_recovering_publication_refused_after_staging_leaves_no_stage_directory() {
+        every_refusal_after_staging_leaves_no_stage(Entry::Recovering);
+    }
+
+    #[test]
+    fn a_staged_commit_refused_after_staging_leaves_no_stage_directory() {
+        every_refusal_after_staging_leaves_no_stage(Entry::Direct);
+    }
+
+    /// The same, for refusals no fault needs to be armed for: a foreign file at an owned path,
+    /// and a backup left by an interrupted swap, which is refused after the watermark is written.
+    #[test]
+    fn a_real_refusal_after_staging_leaves_no_stage_directory() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        let backup = fixture
+            .projection_root
+            .with_extension("aep-projection-backup");
+        fs::create_dir_all(&backup).expect("a backup an interrupted swap left");
+        let (_, failure) = publisher
+            .publish_current()
+            .expect_err("a backup beside an absent projection is uncertain");
+        assert_eq!(failure.code, CommandRefusalCodeV1::PublishUncertain);
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+        fs::remove_dir_all(&backup).expect("remove the backup");
+
+        publisher.publish_current().expect("publication");
+        fs::write(
+            fixture.projection_root.join("story/projected.md"),
+            "---\nformat: aep.planning-md/1\nid: story:projected\nkind: story\nstatus: draft\ntitle: Foreign collision\nrelations: []\nrevision: 2\n---\n",
+        )
+        .expect("valid foreign collision");
+        fixture.update_story_title("Collides");
+        let (_, failure) = publisher
+            .publish_current()
+            .expect_err("a changed file at an owned path is an explicit conflict");
+        assert_eq!(failure.code, CommandRefusalCodeV1::ProjectionConflict);
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+    }
+
+    /// A caller that stages and then returns before committing — `store rebuild`'s rechecks,
+    /// `validate`'s render comparison — leaves nothing once the staged projection is dropped.
+    #[test]
+    fn a_stage_dropped_without_a_commit_is_removed() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        let identity =
+            crate::durable::authority_snapshot_identity(&fixture.authority, &fixture.snapshot())
+                .expect("identity")
+                .0;
+        let staged = publisher.stage(identity).expect("the stage");
+        assert!(staged.directory().join("story/projected.md").is_file());
+        assert_eq!(stages_beside(&fixture.projection_root).len(), 1);
+        drop(staged);
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn a_successful_publication_leaves_the_projection_and_no_stage() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        publisher.publish_current().expect("publication");
+        assert!(fixture.projection_root.join("story/projected.md").is_file());
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+        fixture.update_story_title("Republished");
+        publisher.publish_current().expect("republication");
+        assert!(
+            fs::read_to_string(fixture.projection_root.join("story/projected.md"))
+                .expect("the published story")
+                .contains("title: Republished")
+        );
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            Vec::<String>::new()
+        );
+    }
+
+    /// A process killed between writing its watermark and publishing runs no destructor, so its
+    /// stage stays. Recovery restages from the authority and publishes; the killed process's
+    /// stage is not this publication's, and it is left exactly where it was.
+    #[test]
+    fn a_stage_a_killed_process_left_does_not_stop_recovery_and_is_not_removed() {
+        let fixture = Fixture::new();
+        fixture.create_story();
+        let publisher = FileProjectionPublisher::new(
+            fixture.authority_path.clone(),
+            fixture.authority.clone(),
+            fixture.projection_root.clone(),
+        );
+        let covered =
+            crate::durable::authority_snapshot_identity(&fixture.authority, &fixture.snapshot())
+                .expect("identity")
+                .0;
+        let staged = publisher
+            .stage(covered)
+            .expect("the killed process's stage");
+        publisher
+            .write_watermark(
+                staged.identity.clone(),
+                serde_json::to_value(&staged.watermark).expect("the watermark"),
+                EventlogOperationContext {
+                    subject: "aep-planning-projection".to_owned(),
+                    actor: "aep-planning-projection".to_owned(),
+                    request_id: format!("projection:{}", covered.0.as_wire()),
+                    trace_id: covered.0.as_wire(),
+                    causation_id: None,
+                    causation_depth: 0,
+                    occurred_at: OffsetDateTime::UNIX_EPOCH,
+                },
+            )
+            .expect("the watermark the killed process committed");
+        let left = stages_beside(&fixture.projection_root);
+        assert_eq!(left.len(), 1);
+        std::mem::forget(staged);
+
+        let recovered = publisher
+            .publish_current()
+            .expect("the committed watermark recovers");
+        assert_eq!(recovered.authority_snapshot, covered);
+        assert!(fixture.projection_root.join("story/projected.md").is_file());
+        assert_eq!(
+            stages_beside(&fixture.projection_root),
+            left,
+            "recovery removed or added a stage"
+        );
     }
 }
