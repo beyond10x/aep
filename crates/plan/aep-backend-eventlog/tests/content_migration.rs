@@ -112,7 +112,10 @@ fn a_migrated_store_holds_the_source_history_record_for_record_under_the_same_id
     // entry; a resolved read must pass them as an aep.project/3 read does.
     for held in &after.histories {
         entity_store::asynchronous::branch_heads(&held.history).unwrap_or_else(|error| {
-            panic!("{}:{}: {error:?}", held.history.subject.entity, held.history.subject.id)
+            panic!(
+                "{}:{}: {error:?}",
+                held.history.subject.entity, held.history.subject.id
+            )
         });
     }
 
