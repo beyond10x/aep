@@ -70,6 +70,10 @@ fn repository(name: &str) -> PathBuf {
     git(&root, &["init", "-q", "-b", "main", "."]);
     git(&root, &["config", "user.email", "fixture@example.invalid"]);
     git(&root, &["config", "user.name", "fixture"]);
+    // The missing-object case deletes a loose object. Git's automatic maintenance after a commit
+    // may pack it first: on 2026-09-27 a hosted-runner gate found this object not loose. It is off.
+    git(&root, &["config", "gc.auto", "0"]);
+    git(&root, &["config", "maintenance.auto", "false"]);
     root
 }
 
