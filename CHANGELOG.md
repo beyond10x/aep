@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.61.0] — 2026-09-27
+
 ### Added
 
 - `aep.project/4`: a tree store that keeps every large value once. Each string of 256 bytes or
