@@ -9,6 +9,15 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.61.1] — 2026-09-27
+
+### Changed
+
+- Entity Runtime is pinned at 0.25.0 (`44c14c05`) and Eventlog at 0.6.0 (`0a048463`), the latest
+  releases of both. Eventlog 0.6.0 adds the `eventlog-tree/2` layout and creates new tree stores
+  in it; `eventlog-tree/1` stores open, read and write exactly as before, and
+  `aep plan store migrate content` keeps the layout its source had.
+
 ## [0.61.0] — 2026-09-27
 
 ### Added
