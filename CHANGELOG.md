@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- A command verifies a pinned Git protocol snapshot once instead of once per resolution. One
+  `list` re-read and re-hashed every file of the snapshot about three times; it now opens half as
+  many snapshot files. A failed verification is still repeated on every attempt.
+- Reading an `aep.project/4` store hex-encodes captured byte strings with a lookup table instead of
+  the formatter, which took a fifth of a store validation's CPU.
+
 ## [0.61.1] — 2026-09-27
 
 ### Changed
