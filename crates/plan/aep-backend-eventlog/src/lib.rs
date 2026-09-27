@@ -15,6 +15,8 @@
 /// feature rather than `cfg(test)` because the cases that use it are integration tests — and
 /// because `aep-planning-migration`'s cases count captures charged inside this crate, which
 /// `cfg(test)` cannot reach from another crate at all.
+/// Content blobs: the large values an `aep.project/4` store keeps once, named by digest.
+pub mod content;
 #[cfg(feature = "test-support")]
 pub mod counting;
 #[cfg(test)]
@@ -55,12 +57,15 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// Internal ordinary-authority subject type for invocation reservations and receipt prefixes.
 /// It is deliberately absent from the Markdown planning projection inventory.
 mod export;
+mod migrate;
 mod typed;
 /// The offline check of a tree authority's files, for the planning validation to run.
 pub use eventlog_tree::{verify as verify_tree, Finding as TreeFinding};
 pub use export::{export_to_tree, ExportReport, ExportRewrites};
+pub use migrate::{migrate_to_content, verify_equivalent, ContentMigrationReport, Equivalence};
 pub use typed::{
-    open_tree, prepare_tree, provision_tree, provisioning_context, TreeBackend, TypedKinds,
+    open_tree, open_tree_session, prepare_tree, provision_tree, provisioning_context, TreeBackend,
+    TypedKinds,
 };
 
 pub const INVOCATION_AS: &str = "aep.planning-invocation";
@@ -322,12 +327,13 @@ pub fn read_file_control(
     entity: &str,
     identity: &str,
 ) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
-    read_control_on(&control_bridge(path, authority)?, entity, identity)
+    read_control_on(&control_bridge(path, authority)?, None, entity, identity)
 }
 
 /// [`read_file_control`] over a bridge the caller already holds.
 fn read_control_on(
     bridge: &RecordedEventlogBridge,
+    content: Option<&content::ContentStore>,
     entity: &str,
     identity: &str,
 ) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
@@ -341,6 +347,10 @@ fn read_control_on(
                 instance.fields.get("document").cloned().ok_or_else(|| {
                     "invocation authority subject has no document field".to_owned()
                 })?;
+            let document = match content {
+                Some(content) => content.resolve(document)?,
+                None => document,
+            };
             Ok::<_, String>((instance.revision, document))
         })
         .transpose()?;
@@ -391,6 +401,7 @@ pub fn write_file_control(
 ) -> Result<entity_store::asynchronous::CommitReceipt, String> {
     write_control_on(
         &control_bridge(path, authority)?,
+        None,
         entity,
         identity,
         batch_key,
@@ -401,9 +412,10 @@ pub fn write_file_control(
 }
 
 /// [`write_file_control`] over a bridge the caller already holds.
-#[allow(clippy::needless_pass_by_value)] // The owned identity, key, document and context are moved into the recorded batch.
+#[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)] // The owned identity, key, document and context are moved into the recorded batch; the content store is the one extra coordinate an aep.project/4 write needs.
 fn write_control_on(
     bridge: &RecordedEventlogBridge,
+    blobs: Option<&content::ContentStore>,
     entity: &str,
     identity: String,
     batch_key: String,
@@ -441,6 +453,10 @@ fn write_control_on(
             fulfillments: BTreeMap::new(),
             recording,
         }),
+    };
+    let action = match blobs {
+        Some(blobs) => stored_action(blobs, action)?,
+        None => action,
     };
     let outcome = bridge
         .operation(context)
@@ -701,6 +717,10 @@ pub struct AuthoritySession {
     /// For a tree authority: the kinds recorded typed and the ladders they are held to, so every
     /// backend this session opens reads and writes them as typed entities with derived identities.
     typed: Option<(typed::TypedKinds, aep_domain::artifact::LifecycleRegistry)>,
+    /// For an `aep.project/4` authority: where its large values are kept. Every write through this
+    /// session stores them there and records references; every read resolves the references
+    /// before anything above the provider sees a value.
+    content: Option<Arc<content::ContentStore>>,
 }
 
 impl std::fmt::Debug for AuthoritySession {
@@ -721,12 +741,40 @@ impl AuthoritySession {
         authority: Authority,
         bridge: RecordedEventlogBridge,
         typed: (typed::TypedKinds, aep_domain::artifact::LifecycleRegistry),
+        content: Option<Arc<content::ContentStore>>,
     ) -> Self {
         Self {
             path,
             authority,
             bridge: Arc::new(bridge),
             typed: Some(typed),
+            content,
+        }
+    }
+
+    /// The content blobs of an `aep.project/4` authority, when this session is over one.
+    #[must_use]
+    pub fn content(&self) -> Option<&content::ContentStore> {
+        self.content.as_deref()
+    }
+
+    /// An action as this session records it: large values stored, references in their place.
+    fn stored_action(&self, action: BatchAction) -> Result<BatchAction, SyncExecutionError> {
+        let Some(content) = &self.content else {
+            return Ok(action);
+        };
+        stored_action(content, action).map_err(content_execution_error)
+    }
+
+    /// A read as the layers above this session see it: every reference resolved.
+    fn resolved<T>(
+        &self,
+        value: T,
+        resolve: fn(&content::ContentStore, T) -> Result<T, String>,
+    ) -> Result<T, SyncReadError> {
+        match &self.content {
+            Some(content) => resolve(content, value).map_err(content_read_error),
+            None => Ok(value),
         }
     }
 
@@ -763,6 +811,7 @@ impl AuthoritySession {
             authority,
             bridge,
             typed: None,
+            content: None,
         })
     }
 
@@ -809,7 +858,7 @@ impl AuthoritySession {
     ) -> Result<Option<(u64, Value, entity_store::asynchronous::CommitReceipt)>, String> {
         #[cfg(feature = "test-support")]
         crate::counting::sites::charge_session_read();
-        read_control_on(&self.bridge, entity, identity)
+        read_control_on(&self.bridge, self.content(), entity, identity)
     }
 
     /// [`write_file_control`] without reopening the authority.
@@ -827,6 +876,7 @@ impl AuthoritySession {
     ) -> Result<entity_store::asynchronous::CommitReceipt, String> {
         write_control_on(
             &self.bridge,
+            self.content(),
             entity,
             identity,
             batch_key,
@@ -863,25 +913,44 @@ impl RecordedPlanningProvider for AuthoritySession {
     fn complete_snapshot(&self, scope: &str) -> Result<CompleteStoreSnapshot, SyncReadError> {
         #[cfg(feature = "test-support")]
         crate::counting::sites::charge_session_read();
-        RecordedPlanningProvider::complete_snapshot(&*self.bridge, scope)
+        let snapshot = RecordedPlanningProvider::complete_snapshot(&*self.bridge, scope)?;
+        self.resolved(snapshot, resolve_snapshot)
     }
 
     fn load(&self, subject: &Subject) -> Result<Option<EntityInstance>, SyncReadError> {
         #[cfg(feature = "test-support")]
         crate::counting::sites::charge_session_read();
-        RecordedPlanningProvider::load(&*self.bridge, subject)
+        let instance = RecordedPlanningProvider::load(&*self.bridge, subject)?;
+        self.resolved(instance, |content, instance| {
+            instance
+                .map(|instance| resolve_instance(content, instance))
+                .transpose()
+        })
     }
 
     fn history(&self, subject: &Subject) -> Result<SubjectHistory, SyncReadError> {
         #[cfg(feature = "test-support")]
         crate::counting::sites::charge_session_read();
-        RecordedPlanningProvider::history(&*self.bridge, subject)
+        let history = RecordedPlanningProvider::history(&*self.bridge, subject)?;
+        self.resolved(history, resolve_history)
     }
 
     fn lookup_batch(&self, key: &BatchKey) -> Result<Option<StoredBatch>, SyncReadError> {
         #[cfg(feature = "test-support")]
         crate::counting::sites::charge_session_read();
-        RecordedPlanningProvider::lookup_batch(&*self.bridge, key)
+        let batch = RecordedPlanningProvider::lookup_batch(&*self.bridge, key)?;
+        self.resolved(batch, |content, batch| {
+            batch
+                .map(|mut batch| {
+                    batch.records = batch
+                        .records
+                        .into_iter()
+                        .map(|record| resolve_record(content, record))
+                        .collect::<Result<_, _>>()?;
+                    Ok(batch)
+                })
+                .transpose()
+        })
     }
 
     fn batch(
@@ -890,6 +959,10 @@ impl RecordedPlanningProvider for AuthoritySession {
         key: BatchKey,
         actions: Vec<BatchAction>,
     ) -> Result<AppendOutcome, SyncExecutionError> {
+        let actions = actions
+            .into_iter()
+            .map(|action| self.stored_action(action))
+            .collect::<Result<Vec<_>, _>>()?;
         RecordedPlanningProvider::batch(&*self.bridge, context, key, actions)
     }
 
@@ -898,8 +971,137 @@ impl RecordedPlanningProvider for AuthoritySession {
         context: EventlogOperationContext,
         observation: RecordedObservation,
     ) -> Result<AppendOutcome, SyncExecutionError> {
+        let BatchAction::Observe(observation) =
+            self.stored_action(BatchAction::Observe(observation))?
+        else {
+            unreachable!("an observation is stored as an observation");
+        };
         RecordedPlanningProvider::observe(&*self.bridge, context, observation)
     }
+}
+
+/// An action with its large values stored in `content` and references in their place.
+pub(crate) fn stored_action(
+    content: &content::ContentStore,
+    action: BatchAction,
+) -> Result<BatchAction, String> {
+    Ok(match action {
+        BatchAction::Create(mut request) => {
+            request.fields = content.store_fields(request.fields)?;
+            BatchAction::Create(request)
+        }
+        BatchAction::Execute(mut request) => {
+            request.arguments = content.store_fields(request.arguments)?;
+            BatchAction::Execute(request)
+        }
+        BatchAction::Merge(mut request) => {
+            request.execute.arguments = content.store_fields(request.execute.arguments)?;
+            BatchAction::Merge(request)
+        }
+        BatchAction::Observe(mut observation) => {
+            observation.envelope.record = content.store_value(observation.envelope.record)?;
+            BatchAction::Observe(observation)
+        }
+    })
+}
+
+/// An instance with every reference in its fields resolved.
+pub(crate) fn resolve_instance(
+    content: &content::ContentStore,
+    mut instance: EntityInstance,
+) -> Result<EntityInstance, String> {
+    instance.fields = content.resolve_map(instance.fields)?;
+    Ok(instance)
+}
+
+/// A stored record with every reference in its entry resolved, and its comparison bytes those of
+/// the resolved entry — the bytes an `aep.project/3` store would have held for it, which is what
+/// Entity Runtime's history checks re-derive from the entry. Bytes that did not match the stored
+/// entry are left as they were, so a corrupt record is still reported as one.
+fn resolve_record(
+    content: &content::ContentStore,
+    mut record: entity_store::asynchronous::StoredRecord,
+) -> Result<entity_store::asynchronous::StoredRecord, String> {
+    use entity_store::asynchronous::{original_request_comparison_bytes, record_comparison_bytes};
+    let record_held =
+        record_comparison_bytes(&record.entry).ok() == Some(record.record_bytes.clone());
+    let request_held =
+        original_request_comparison_bytes(&record.entry).ok() == Some(record.request_bytes.clone());
+    record.entry = content.resolve_typed(&record.entry)?;
+    if record_held {
+        record.record_bytes =
+            record_comparison_bytes(&record.entry).map_err(|error| error.to_string())?;
+    }
+    if request_held {
+        record.request_bytes =
+            original_request_comparison_bytes(&record.entry).map_err(|error| error.to_string())?;
+    }
+    Ok(record)
+}
+
+/// A history with its anchor and every record resolved.
+pub(crate) fn resolve_history(
+    content: &content::ContentStore,
+    mut history: SubjectHistory,
+) -> Result<SubjectHistory, String> {
+    if let HistoryOrigin::Imported(anchor) = &mut history.origin {
+        *anchor = content.resolve_typed(&*anchor)?;
+    }
+    history.records = history
+        .records
+        .into_iter()
+        .map(|record| resolve_record(content, record))
+        .collect::<Result<_, _>>()?;
+    Ok(history)
+}
+
+/// A complete capture with every subject resolved.
+pub(crate) fn resolve_snapshot(
+    content: &content::ContentStore,
+    mut snapshot: CompleteStoreSnapshot,
+) -> Result<CompleteStoreSnapshot, String> {
+    snapshot.histories = snapshot
+        .histories
+        .into_iter()
+        .map(|mut held| {
+            held.history = resolve_history(content, held.history)?;
+            held.terminal = resolve_instance(content, held.terminal)?;
+            Ok(held)
+        })
+        .collect::<Result<_, String>>()?;
+    Ok(snapshot)
+}
+
+/// An anchor as an `aep.project/4` authority imports it: large values stored, references kept.
+pub(crate) fn stored_anchor(
+    content: &content::ContentStore,
+    mut anchor: entity_store::asynchronous::LegacyAnchor,
+) -> Result<entity_store::asynchronous::LegacyAnchor, String> {
+    let fields = content.store_fields(Value::Object(anchor.instance.fields))?;
+    anchor.instance.fields = match fields {
+        Value::Object(map) => map,
+        _ => unreachable!("an object is stored as an object"),
+    };
+    anchor.evidence = anchor
+        .evidence
+        .iter()
+        .map(|item| content.store_typed(item))
+        .collect::<Result<_, _>>()?;
+    Ok(anchor)
+}
+
+#[allow(clippy::needless_pass_by_value)] // `map_err` supplies the owned message.
+fn content_execution_error(message: String) -> SyncExecutionError {
+    SyncExecutionError::Execution(entity_executor::ExecutionError::Store(
+        entity_store::asynchronous::AsyncStoreError::Backend(format!("content blobs: {message}")),
+    ))
+}
+
+#[allow(clippy::needless_pass_by_value)] // `map_err` supplies the owned message.
+fn content_read_error(message: String) -> SyncReadError {
+    SyncReadError::Store(entity_store::asynchronous::AsyncStoreError::Backend(
+        format!("content blobs: {message}"),
+    ))
 }
 
 impl EventlogPlanningStore<AuthoritySession> {

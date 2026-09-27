@@ -191,6 +191,19 @@ pub(crate) enum MigrateCommand {
         #[arg(long)]
         migration: String,
     },
+    /// Rewrite an `aep.project/3` tree store as an `aep.project/4` one, whose large values are
+    /// content blobs stored once, after proving the two hold the same history.
+    Content(ContentArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct ContentArgs {
+    /// The project's `.engineering/` directory.
+    #[arg(long)]
+    engineering: PathBuf,
+    /// Keep the replaced `aep.project/3` authority beside the new one instead of removing it.
+    #[arg(long)]
+    keep_source: bool,
 }
 
 pub(crate) fn run(command: StoreCommand) -> Result<ExitCode> {
@@ -220,6 +233,9 @@ where
             emit(&result, common.format)?;
             Ok(crate::exit_code(result.success()))
         }
+        StoreCommand::Migrate {
+            command: MigrateCommand::Content(args),
+        } => migrate_content(&args),
         StoreCommand::Migrate {
             command: MigrateCommand::DryRun { common, authority },
         } => {
@@ -2164,9 +2180,12 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
         aep_domain::project::ProjectVersion::V2 => ProjectVersionV1::V2,
         // A tree authority is where the one-time export writes, not a store these migration
         // verbs read from; the export has its own verb.
-        aep_domain::project::ProjectVersion::V3 => anyhow::bail!(
-            "`aep.project/3` selects a tree authority, which these migration verbs do not read"
-        ),
+        aep_domain::project::ProjectVersion::V3 | aep_domain::project::ProjectVersion::V4 => {
+            anyhow::bail!(
+                "`{}` selects a tree authority, which these migration verbs do not read",
+                config.version.as_str()
+            )
+        }
     };
     Ok(Resolved {
         plan,
@@ -5326,6 +5345,200 @@ fn init_tree(args: &InitTreeArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// `plan store migrate content`: replay an `aep.project/3` tree authority into an `aep.project/4`
+/// one beside it, prove the two equivalent, and only then put the new one in the old one's place.
+///
+/// The old authority is removed after the swap unless `--keep-source` is given; Git history holds
+/// it. A refused or failed migration leaves the project exactly as it was.
+#[allow(clippy::too_many_lines)] // Migrate, verify, swap and report read in one visible order.
+fn migrate_content(args: &ContentArgs) -> Result<ExitCode> {
+    let _fence = crate::planning_writer_fence::PlanningWriterFence::acquire(&args.engineering)
+        .map_err(|error| anyhow::anyhow!("{error:?}"))
+        .context("holding the planning writer fence")?;
+    let crate::planning::Plan::Eventlog {
+        authority_root,
+        authority,
+        tree: Some(repository),
+        blobs: None,
+        ..
+    } = crate::planning::Plan::for_project(&args.engineering)?
+    else {
+        anyhow::bail!(
+            "{} does not select an `{}` tree store; only one is migrated to content blobs",
+            args.engineering.display(),
+            aep_domain::project::PROJECT_VERSION_V3
+        );
+    };
+    let blobs = args.engineering.join(aep_domain::project::DEFAULT_CONTENT_BLOBS);
+    if blobs.exists() {
+        anyhow::bail!("{} exists; the migration writes a new blob directory", blobs.display());
+    }
+    let name = authority_root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .context("the authority path has no directory name")?;
+    let staging = authority_root.with_file_name(format!("{name}.aep-project-4"));
+    let retired = authority_root.with_file_name(format!("{name}.aep-project-3"));
+    for path in [&staging, &retired] {
+        if path.exists() {
+            anyhow::bail!("{} exists; remove it or finish the migration that left it", path.display());
+        }
+    }
+    let lifecycles =
+        crate::planning::StoreLocation::at(None, Some(crate::planning::protocols_of(&repository)?))
+            .lifecycles()?
+            .lifecycles()
+            .clone();
+    let selector_path = args.engineering.join(aep_domain::project::PROJECT_FILE);
+    let selector_text = fs::read_to_string(&selector_path)
+        .with_context(|| format!("reading {}", selector_path.display()))?;
+    let mut selector: serde_json::Value = serde_json::from_str(&selector_text)
+        .with_context(|| format!("{} is not JSON", selector_path.display()))?;
+
+    let open = |root: &Path, blobs: Option<PathBuf>| {
+        aep_backend_eventlog::open_tree_session(
+            root.to_owned(),
+            authority.logical_scope.clone(),
+            authority.tenant.clone(),
+            authority.stream_identity.clone(),
+            lifecycles.clone(),
+            blobs,
+        )
+        .map_err(|e| anyhow::anyhow!(e))
+    };
+    let source = open(&authority_root, None)?;
+    let before = source.complete_snapshot().map_err(|e| anyhow::anyhow!(e))?;
+    let abandon = |why: anyhow::Error| -> anyhow::Error {
+        let _ = fs::remove_dir_all(&staging);
+        let _ = fs::remove_dir_all(&blobs);
+        why
+    };
+    let report = aep_backend_eventlog::migrate_to_content(&source, &staging, &blobs, &lifecycles)
+        .map_err(|e| abandon(anyhow::anyhow!(e)))?;
+    let target = open(&staging, Some(blobs.clone())).map_err(abandon)?;
+    let after = target
+        .complete_snapshot()
+        .map_err(|e| abandon(anyhow::anyhow!(e)))?;
+    let equivalence = aep_backend_eventlog::verify_equivalent(&before, &after);
+    let contract = contract_differences(
+        &source.open_backend().map_err(|e| abandon(anyhow::anyhow!(e)))?,
+        &target.open_backend().map_err(|e| abandon(anyhow::anyhow!(e)))?,
+    )
+    .map_err(abandon)?;
+    drop(target);
+    drop(source);
+    println!(
+        "replayed {} subjects: {} anchors, {} batches ({} decisions, {} observations)",
+        report.subjects, report.anchors, report.batches, report.decisions, report.observations
+    );
+    println!(
+        "verified {} subjects and {} records equal with every reference resolved; {} artifacts \
+         read equal through the planning contract",
+        equivalence.subjects, equivalence.records, contract.compared
+    );
+    let differences: Vec<&String> = equivalence
+        .differences
+        .iter()
+        .chain(&contract.differences)
+        .collect();
+    if !differences.is_empty() {
+        for difference in &differences {
+            println!("  {difference}");
+        }
+        drop(abandon(anyhow::anyhow!("")));
+        anyhow::bail!(
+            "the migrated store differs from the source in {} places; nothing was replaced",
+            differences.len()
+        );
+    }
+
+    fs::rename(&authority_root, &retired)
+        .with_context(|| format!("moving {} aside", authority_root.display()))?;
+    if let Err(error) = fs::rename(&staging, &authority_root) {
+        fs::rename(&retired, &authority_root)
+            .with_context(|| format!("restoring {}", authority_root.display()))?;
+        return Err(error).with_context(|| format!("moving {} into place", staging.display()));
+    }
+    selector["version"] = aep_domain::project::PROJECT_VERSION_V4.into();
+    let mut written = serde_json::to_string(&selector)?;
+    if selector_text.ends_with('\n') {
+        written.push('\n');
+    }
+    fs::write(&selector_path, written)
+        .with_context(|| format!("writing {}", selector_path.display()))?;
+    if args.keep_source {
+        println!("kept the aep.project/3 authority at {}", retired.display());
+    } else {
+        fs::remove_dir_all(&retired)
+            .with_context(|| format!("removing {}", retired.display()))?;
+        println!(
+            "replaced the aep.project/3 authority at {}; Git history holds the old one",
+            authority_root.display()
+        );
+    }
+    println!(
+        "{} now selects `{}` with content blobs in {}",
+        selector_path.display(),
+        aep_domain::project::PROJECT_VERSION_V4,
+        blobs.display()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// What the planning contract reads from two backends, compared artifact by artifact.
+struct ContractComparison {
+    compared: usize,
+    differences: Vec<String>,
+}
+
+/// Every entity each backend lists, with its metadata, data and events, compared by locator.
+fn contract_differences(
+    source: &aep_backend_eventlog::EventlogBackend,
+    target: &aep_backend_eventlog::EventlogBackend,
+) -> Result<ContractComparison> {
+    use aep_contract::query::{EntityQuery, QueryService};
+    use aep_contract::testing::block_on;
+    let all = |backend: &aep_backend_eventlog::EventlogBackend| -> Result<std::collections::BTreeMap<String, serde_json::Value>> {
+        let mut found = std::collections::BTreeMap::new();
+        let mut after = None;
+        loop {
+            let page = block_on(backend.query(&EntityQuery {
+                after: after.take(),
+                ..EntityQuery::default()
+            }))
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+            for entity in page.items {
+                found.insert(entity.metadata.locator.to_string(), serde_json::to_value(&entity)?);
+            }
+            match page.next {
+                Some(next) => after = Some(next),
+                None => return Ok(found),
+            }
+        }
+    };
+    let (before, after) = (all(source)?, all(target)?);
+    let mut differences = Vec::new();
+    for (locator, entity) in &before {
+        match after.get(locator) {
+            None => differences.push(format!("{locator}: missing from the migrated store")),
+            Some(copy) => {
+                if let Some(at) = first_difference(entity, copy, "") {
+                    differences.push(format!("{locator}: differs from the source at {at}"));
+                }
+            }
+        }
+    }
+    for locator in after.keys() {
+        if !before.contains_key(locator) {
+            differences.push(format!("{locator}: held only by the migrated store"));
+        }
+    }
+    Ok(ContractComparison {
+        compared: before.len(),
+        differences,
+    })
+}
+
 #[allow(clippy::too_many_lines)] // Read, export, write the selector, then compare, in that order.
 fn export(args: &ExportArgs) -> Result<ExitCode> {
     let crate::planning::Plan::Eventlog {
@@ -5423,6 +5636,7 @@ fn export(args: &ExportArgs) -> Result<ExitCode> {
         authority.tenant.clone(),
         report.stream_identity.clone(),
         lifecycles,
+        None,
     )
     .map_err(|e| anyhow::anyhow!(e))?;
     let source = source.open_backend().map_err(|e| anyhow::anyhow!(e))?;

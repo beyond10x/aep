@@ -45,6 +45,11 @@ pub const PROJECT_VERSION: &str = "aep.project/1";
 pub const PROJECT_VERSION_V2: &str = "aep.project/2";
 /// Planning artifacts as typed Entity Runtime entities on a store version control merges.
 pub const PROJECT_VERSION_V3: &str = "aep.project/3";
+/// `aep.project/3` with every large value stored once, as a content-addressed blob the recorded
+/// history names by digest.
+pub const PROJECT_VERSION_V4: &str = "aep.project/4";
+/// The directory an `aep.project/4` store keeps its content blobs in when the selector names none.
+pub const DEFAULT_CONTENT_BLOBS: &str = "blobs";
 
 /// Which closed project document reader accepted the selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -59,6 +64,9 @@ pub enum ProjectVersion {
     /// Typed Entity Runtime entities on an `eventlog-tree` authority, with a tracked projection.
     #[serde(rename = "aep.project/3")]
     V3,
+    /// `aep.project/3` whose large values are content-addressed blobs beside the authority.
+    #[serde(rename = "aep.project/4")]
+    V4,
 }
 
 impl ProjectVersion {
@@ -69,6 +77,7 @@ impl ProjectVersion {
             Self::V1 => PROJECT_VERSION,
             Self::V2 => PROJECT_VERSION_V2,
             Self::V3 => PROJECT_VERSION_V3,
+            Self::V4 => PROJECT_VERSION_V4,
         }
     }
 }
@@ -450,6 +459,9 @@ pub struct RawEventlog {
     pub path: PathBuf,
     /// Directory containing the derived tracked Markdown projection.
     pub projection: PathBuf,
+    /// Directory containing the content blobs, admitted only by `aep.project/4`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blobs: Option<PathBuf>,
 }
 
 /// A hybrid store as written: four policy words and two stores, none defaulted.
@@ -516,6 +528,10 @@ pub enum StoreConfig {
         projection: PathBuf,
         /// Exact public adapter authority tuple.
         authority: PlanningAuthority,
+        /// Content-blob directory: `Some` for `aep.project/4`, whose recorded history names each
+        /// large value by digest; `None` for `aep.project/3`, which embeds every value inline.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        blobs: Option<PathBuf>,
     },
 }
 
@@ -554,10 +570,12 @@ impl StoreConfig {
                 path,
                 projection,
                 authority,
+                blobs,
             } => Self::EventlogTree {
                 path: engineering.join(path),
                 projection: engineering.join(projection),
                 authority: authority.clone(),
+                blobs: blobs.as_ref().map(|blobs| engineering.join(blobs)),
             },
             Self::Eventlog {
                 path,
@@ -742,7 +760,7 @@ fn validate_versioned_store(
                 None => StoreConfig::Markdown,
             }
         }
-        ProjectVersion::V2 | ProjectVersion::V3 => {
+        ProjectVersion::V2 | ProjectVersion::V3 | ProjectVersion::V4 => {
             let authority = PlanningAuthority {
                 logical_scope: required_authority_value("planning_scope", planning_scope, errors),
                 tenant: required_authority_value("planning_tenant", planning_tenant, errors),
@@ -756,6 +774,7 @@ fn validate_versioned_store(
                 None => RawEventlog {
                     path: PathBuf::from("state"),
                     projection: PathBuf::from("planning"),
+                    blobs: None,
                 },
                 Some(RawStore::Eventlog { eventlog }) => eventlog,
                 Some(_) => {
@@ -772,23 +791,58 @@ fn validate_versioned_store(
                     RawEventlog {
                         path: PathBuf::from("state"),
                         projection: PathBuf::from("planning"),
+                        blobs: None,
                     }
                 }
             };
+            // Only `aep.project/4` keeps content blobs; an earlier version that names a directory
+            // for them is asking for a format its readers do not have.
+            let blobs = match (version, eventlog.blobs.clone()) {
+                (ProjectVersion::V4, blobs) => {
+                    Some(blobs.unwrap_or_else(|| PathBuf::from(DEFAULT_CONTENT_BLOBS)))
+                }
+                (_, Some(_)) => {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            "project.store.eventlog.blobs",
+                            format!("content blobs belong only to `{PROJECT_VERSION_V4}`"),
+                        )
+                        .with_hint("migrate the store with `aep plan store migrate content`"),
+                    );
+                    None
+                }
+                (_, None) => None,
+            };
             validate_eventlog_path("path", &eventlog.path, errors);
             validate_eventlog_path("projection", &eventlog.projection, errors);
-            if paths_overlap(&eventlog.path, &eventlog.projection) {
-                errors.push(ValidationError::new(
-                    ValidationCode::TypeMismatch,
-                    "project.store.eventlog",
-                    "authority and projection paths must be disjoint",
-                ));
+            if let Some(blobs) = &blobs {
+                validate_eventlog_path("blobs", blobs, errors);
             }
-            for (name, path) in [
+            let mut owned = vec![
                 ("path", &eventlog.path),
                 ("projection", &eventlog.projection),
-            ] {
-                if path == Path::new(PROJECT_FILE) || path.starts_with(PROJECT_FILE) {
+            ];
+            if let Some(blobs) = &blobs {
+                owned.push(("blobs", blobs));
+            }
+            for (index, (_, left)) in owned.iter().enumerate() {
+                for (_, right) in &owned[index + 1..] {
+                    if paths_overlap(left, right) {
+                        errors.push(ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            "project.store.eventlog",
+                            if blobs.is_some() {
+                                "authority, projection and blob paths must be disjoint"
+                            } else {
+                                "authority and projection paths must be disjoint"
+                            },
+                        ));
+                    }
+                }
+            }
+            for (name, path) in &owned {
+                if *path == Path::new(PROJECT_FILE) || path.starts_with(PROJECT_FILE) {
                     errors.push(ValidationError::new(
                         ValidationCode::TypeMismatch,
                         format!("project.store.eventlog.{name}"),
@@ -796,11 +850,12 @@ fn validate_versioned_store(
                     ));
                 }
             }
-            if version == ProjectVersion::V3 {
+            if matches!(version, ProjectVersion::V3 | ProjectVersion::V4) {
                 StoreConfig::EventlogTree {
                     path: eventlog.path,
                     projection: eventlog.projection,
                     authority,
+                    blobs,
                 }
             } else {
                 StoreConfig::Eventlog {
@@ -950,13 +1005,14 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             PROJECT_VERSION => ProjectVersion::V1,
             PROJECT_VERSION_V2 => ProjectVersion::V2,
             PROJECT_VERSION_V3 => ProjectVersion::V3,
+            PROJECT_VERSION_V4 => ProjectVersion::V4,
             other => {
                 errors.push(
                     ValidationError::new(
                         ValidationCode::UnsupportedProtocolVersion,
                         "project.version",
                         format!(
-                            "this build reads `{PROJECT_VERSION}`, `{PROJECT_VERSION_V2}` and `{PROJECT_VERSION_V3}`, not `{other}`"
+                            "this build reads `{PROJECT_VERSION}`, `{PROJECT_VERSION_V2}`, `{PROJECT_VERSION_V3}` and `{PROJECT_VERSION_V4}`, not `{other}`"
                         ),
                     )
                     .with_hint("upgrade the tooling rather than reinterpreting the document"),

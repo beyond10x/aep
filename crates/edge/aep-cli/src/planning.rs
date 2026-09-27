@@ -267,6 +267,8 @@ pub(crate) enum Plan {
         /// Set for an `aep.project/3` tree authority: the repository whose lifecycles give the
         /// kinds it records as typed entities. `None` for an `aep.project/2` file authority.
         tree: Option<PathBuf>,
+        /// Set for an `aep.project/4` tree authority: the directory its content blobs are in.
+        blobs: Option<PathBuf>,
     },
 }
 
@@ -366,11 +368,13 @@ impl Plan {
                 projection_root: projection.clone(),
                 authority: authority.clone(),
                 tree: None,
+                blobs: None,
             },
             StoreConfig::EventlogTree {
                 path,
                 projection,
                 authority,
+                blobs,
             } => Self::Eventlog {
                 authority_root: path.clone(),
                 projection_root: projection.clone(),
@@ -380,6 +384,7 @@ impl Plan {
                         .parent()
                         .map_or_else(|| engineering.to_owned(), Path::to_owned),
                 ),
+                blobs: blobs.clone(),
             },
         })
     }
@@ -433,6 +438,7 @@ impl Plan {
                 authority_root,
                 authority,
                 tree: Some(repository),
+                blobs,
                 ..
             } => {
                 let lifecycles = StoreLocation::at(None, Some(protocols_of(repository)?))
@@ -449,6 +455,7 @@ impl Plan {
                         authority.tenant.clone(),
                         authority.stream_identity.clone(),
                         lifecycles,
+                        blobs.clone(),
                     )
                     .map_err(|error| anyhow::anyhow!("{error}"))?,
                 ))
@@ -6603,6 +6610,7 @@ pub(crate) fn findings(
         projection_root,
         authority,
         tree: None,
+        ..
     } = &opened.plan
     {
         if let Err(disagreement) =
@@ -9655,13 +9663,17 @@ fn resolve_fork(args: &StoreArgs, id: &str, first: Option<&str>, onto: &str) -> 
 ///
 /// V2 is skipped, and says so, when `against` holds no tree store: an `aep.project/2` base — the
 /// commit a cutover is measured against — has no committed tree file V2 could hold the head to,
-/// and every file it does hold would otherwise read as deleted.
+/// and every file it does hold would otherwise read as deleted. On an `aep.project/4` store it is
+/// skipped against a base whose selector is an earlier version, every content blob must hash to its
+/// name (C1), and the blob directory is held to S9 too.
+#[allow(clippy::too_many_lines)] // One pass over every rule a tree has, in the order they report.
 fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings> {
     let Plan::Eventlog {
         authority_root,
         projection_root,
         authority: selected,
         tree: Some(repository),
+        blobs,
     } = &opened.plan
     else {
         return Ok(TreeFindings::default());
@@ -9675,6 +9687,14 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings>
         authority_root.display().to_string().len()
     ));
     let base = match against {
+        Some(revision) if blobs.is_some() && !base_keeps_content_blobs(repository, revision)? => {
+            skipped.push(format!(
+                "V2 skipped: {revision} selects no `{}` store; the content migration wrote every \
+                 authority file anew",
+                aep_domain::project::PROJECT_VERSION_V4
+            ));
+            None
+        }
         Some(revision) => {
             let relative = authority_root.strip_prefix(repository).unwrap_or(authority_root);
             let marker = relative.join(TREE_STORE_MARKER);
@@ -9699,6 +9719,11 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings>
         ));
     }
     let _ = std::fs::remove_dir_all(&scratch);
+    if let Some(blobs) = blobs {
+        for problem in aep_backend_eventlog::content::ContentStore::at(blobs.clone()).verify() {
+            problems.push(format!("C1: {problem}"));
+        }
+    }
 
     let Some(PlanBackend::Eventlog(plan)) = opened.plan.open_backend()? else {
         return Ok(TreeFindings { problems, skipped });
@@ -9752,7 +9777,10 @@ fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings>
         }
     }
 
-    for root in [authority_root, projection_root] {
+    for root in [Some(authority_root), Some(projection_root), blobs.as_ref()]
+        .into_iter()
+        .flatten()
+    {
         for (path, bytes) in all_files(root) {
             if let Some(found) = home_path_in(&String::from_utf8_lossy(&bytes)) {
                 problems.push(format!("S9: {path} carries the home path `{found}`"));
@@ -9780,6 +9808,29 @@ fn is_render_in_its_own_format(held: &[u8], rendered: &[u8]) -> bool {
     }
     document.frontmatter.format = held_document.frontmatter.format;
     document.render() == held
+}
+
+/// Whether `revision`'s project selector is an `aep.project/4` one, whose authority keeps content
+/// blobs. A base before the content migration holds the same tree paths with other bytes, and V2
+/// would read every one of them as rewritten.
+fn base_keeps_content_blobs(repository: &Path, revision: &str) -> Result<bool> {
+    use std::process::{Command, Stdio};
+    let selector = Path::new(aep_project::project::project_directory())
+        .join(aep_domain::project::PROJECT_FILE);
+    let shown = Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .arg("show")
+        .arg(format!("{revision}:./{}", selector.display()))
+        .stderr(Stdio::null())
+        .output()
+        .context("running git show")?;
+    if !shown.status.success() {
+        return Ok(false);
+    }
+    let value: serde_yaml::Value = serde_yaml::from_slice(&shown.stdout).unwrap_or_default();
+    Ok(value.get("version").and_then(serde_yaml::Value::as_str)
+        == Some(aep_domain::project::PROJECT_VERSION_V4))
 }
 
 /// The file every `eventlog-tree` store holds at its root, written once at creation (design
