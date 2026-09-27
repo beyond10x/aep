@@ -251,6 +251,9 @@ pub fn provision_tree(
 
 /// Opens a provisioned tree store, recording `lifecycles`' kinds typed.
 ///
+/// `blobs` is the content-blob directory of an `aep.project/4` store, whose recorded history
+/// names every large value by digest; `None` opens an `aep.project/3` store, which embeds them.
+///
 /// # Errors
 /// A kind's ladder is not one the pinned kernel reads, or the store refuses to open.
 pub fn open_tree(
@@ -259,7 +262,31 @@ pub fn open_tree(
     tenant: String,
     stream_identity: String,
     lifecycles: LifecycleRegistry,
+    blobs: Option<PathBuf>,
 ) -> Result<TreeBackend, String> {
+    open_tree_session(
+        path,
+        logical_scope,
+        tenant,
+        stream_identity,
+        lifecycles,
+        blobs,
+    )?
+    .open_backend()
+}
+
+/// [`open_tree`]'s session, for a caller that reads the authority below the planning contract.
+///
+/// # Errors
+/// As [`open_tree`].
+pub fn open_tree_session(
+    path: PathBuf,
+    logical_scope: String,
+    tenant: String,
+    stream_identity: String,
+    lifecycles: LifecycleRegistry,
+    blobs: Option<PathBuf>,
+) -> Result<crate::AuthoritySession, String> {
     let authority = Authority {
         logical_scope,
         tenant,
@@ -279,8 +306,13 @@ pub fn open_tree(
         },
     )
     .map_err(|error| format!("opening the tree store: {error:?}"))?;
-    crate::AuthoritySession::over_bridge(path_of_tree, authority, bridge, (kinds, lifecycles))
-        .open_backend()
+    Ok(crate::AuthoritySession::over_bridge(
+        path_of_tree,
+        authority,
+        bridge,
+        (kinds, lifecycles),
+        blobs.map(|blobs| Arc::new(crate::content::ContentStore::at(blobs))),
+    ))
 }
 
 /// The operation context a provisioning command records its binding under.

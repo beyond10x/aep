@@ -51,6 +51,22 @@ types:
   - name: aep.migration.ApplyPhase
     kind: enum
     variants: [Prepared, DestinationProvisioned, Imported, Verified, Published, Selected, ProjectionPublished, Complete]
+  # Content blobs of an aep.project/4 store: docs/design/planning-content-blobs-v0.1.md.
+  - name: aep.migration.ContentDigest
+    kind: newtype
+    of: String
+  - name: aep.migration.ContentMigrationId
+    kind: newtype
+    of: String
+  # How a reference's blob reads back: text, a hex byte string, a hex byte string of JSON lines
+  # kept line by line, or the JSON value of a document field.
+  - name: aep.migration.ContentForm
+    kind: enum
+    variants: [Text, Hex, Lines, Json]
+  # Diagnostic outcome vocabulary, as ApplyPhase is: the migration command decides it.
+  - name: aep.migration.ContentMigrationOutcome
+    kind: enum
+    variants: [Selected, KeptSource, Abandoned]
 
 entities:
   - name: aep.migration.AuthorityCoordinate
@@ -347,6 +363,53 @@ entities:
         target: aep.migration.AuthoritySnapshot
         cardinality: one
         via: authority_snapshot_id
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # One blob of an aep.project/4 store: bytes named by their own SHA-256 digest, written once.
+  - name: aep.migration.ContentBlob
+    identity:
+      name: digest
+      type: aep.migration.ContentDigest
+    fields:
+      - name: byte_length
+        type: Integer
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+  # One aep.project/3 tree authority replayed into an aep.project/4 one under the same identities.
+  # It is selected only with zero differences: every subject, anchor, terminal instance and recorded
+  # entry, receipt, position and expectation reads equal with references resolved, and every
+  # artifact reads equal through the planning contract. Any difference abandons it.
+  - name: aep.migration.ContentMigration
+    identity:
+      name: content_migration_id
+      type: aep.migration.ContentMigrationId
+    fields:
+      - name: authority_id
+        type: aep.migration.AuthorityId
+      - name: subjects
+        type: Integer
+      - name: anchors
+        type: Integer
+      - name: batches
+        type: Integer
+      - name: records
+        type: Integer
+      - name: differences
+        type: Integer
+      - name: outcome
+        type: aep.migration.ContentMigrationOutcome
+    relations:
+      - name: authority
+        kind: references
+        target: aep.migration.AuthorityCoordinate
+        cardinality: one
+        via: authority_id
     lifecycle:
       initial: Recorded
       states: [Recorded]

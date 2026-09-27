@@ -21,6 +21,15 @@ fn context() -> EventlogOperationContext {
 }
 
 fn provisioned(root: &Path, lifecycles: LifecycleRegistry) -> TreeBackend {
+    provisioned_with(root, lifecycles, None)
+}
+
+/// A provisioned tree store; with `blobs`, an `aep.project/4` one keeping content blobs there.
+fn provisioned_with(
+    root: &Path,
+    lifecycles: LifecycleRegistry,
+    blobs: Option<std::path::PathBuf>,
+) -> TreeBackend {
     let identity = prepare_tree(root, "planning").expect("a tree store is prepared");
     provision_tree(
         root,
@@ -36,6 +45,7 @@ fn provisioned(root: &Path, lifecycles: LifecycleRegistry) -> TreeBackend {
         "planning".into(),
         identity,
         lifecycles,
+        blobs,
     )
     .expect("it opens")
 }
@@ -44,7 +54,26 @@ fn provisioned(root: &Path, lifecycles: LifecycleRegistry) -> TreeBackend {
 fn the_sixteen_suites_pass_over_a_tree_store() {
     let directory = tempfile::tempdir().expect("directory");
     let backend = provisioned(directory.path(), LifecycleRegistry::new());
-    let report = aep_conformance::run(&backend, Level::Full);
+    assert_the_suites_pass(&backend);
+}
+
+#[test]
+fn the_sixteen_suites_pass_over_a_tree_store_that_keeps_content_blobs() {
+    let directory = tempfile::tempdir().expect("directory");
+    let blobs = directory.path().join("blobs");
+    let root = directory.path().join("state");
+    let backend = provisioned_with(&root, LifecycleRegistry::new(), Some(blobs.clone()));
+    assert_the_suites_pass(&backend);
+    let stored = std::fs::read_dir(&blobs).map_or(0, Iterator::count);
+    assert!(
+        stored > 0,
+        "the suites wrote large values, and none reached {}",
+        blobs.display()
+    );
+}
+
+fn assert_the_suites_pass(backend: &TreeBackend) {
+    let report = aep_conformance::run(backend, Level::Full);
     let failing: Vec<String> = report
         .failing_suites()
         .flat_map(|suite| {
@@ -174,6 +203,7 @@ fn a_story_is_recorded_as_a_typed_entity_and_its_moves_as_the_ladders_operations
         "planning".into(),
         identity["stream_identity"].as_str().unwrap().to_owned(),
         story_lifecycles(),
+        None,
     )
     .expect("the store reopens");
     let entity = block_on(aep_contract::query::QueryService::get(
@@ -269,6 +299,7 @@ fn reopen(root: &Path) -> TreeBackend {
         "planning".into(),
         identity["stream_identity"].as_str().unwrap().to_owned(),
         story_lifecycles(),
+        None,
     )
     .expect("the store opens")
 }

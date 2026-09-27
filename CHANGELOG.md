@@ -9,6 +9,26 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep.project/4`: a tree store that keeps every large value once. Each string of 256 bytes or
+  more, each captured legacy byte string and each record's `document` is written once to a
+  content-addressed blob directory beside the authority (`store.eventlog.blobs`, default
+  `blobs`), and Entity Runtime records its SHA-256 reference in the command, the result, the
+  change and every event instead of the value. Reads resolve every reference before anything above
+  the store sees it, so artifacts, statuses, history, `explain` and the projection read as they did.
+  A captured legacy journal is kept line by line, each line the blob of the legacy record it is.
+  `aep.project/3` stores read and write as before, and a build that predates `aep.project/4`
+  refuses the selector before opening a store. Design: `docs/design/planning-content-blobs-v0.1.md`.
+- `aep plan store migrate content --engineering <dir>` replays an `aep.project/3` store into an
+  `aep.project/4` one under the same store and stream identities, verifies that every subject,
+  anchor, terminal instance and recorded entry, receipt and position reads equal with references
+  resolved and that every artifact reads equal through the planning contract, and only then
+  replaces the old tree and sets the selector. `--keep-source` keeps the old tree beside it.
+- `aep plan artifact validate` on an `aep.project/4` store reports a blob that does not hash to its
+  name (C1), checks the blob directory for home paths (S9), and skips V2 against a base that
+  selects an earlier version, since the migration writes every authority file anew.
+
 ## [0.60.1] — 2026-09-27
 
 ### Changed

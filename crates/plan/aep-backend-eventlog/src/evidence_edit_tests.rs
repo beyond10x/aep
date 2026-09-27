@@ -55,6 +55,7 @@ fn open(root: &Path) -> TreeBackend {
         "planning".into(),
         identity(root),
         story_lifecycles(),
+        None,
     )
     .expect("the store opens")
 }

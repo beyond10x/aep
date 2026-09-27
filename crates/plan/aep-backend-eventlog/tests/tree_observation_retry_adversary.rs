@@ -32,6 +32,7 @@ fn reopen(root: &Path) -> TreeBackend {
         "planning".into(),
         identity["stream_identity"].as_str().unwrap().to_owned(),
         story_lifecycles(),
+        None,
     )
     .expect("the store opens")
 }
