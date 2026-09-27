@@ -159,6 +159,13 @@
         "projection"
       ],
       "properties": {
+        "blobs": {
+          "description": "Directory containing the content blobs, admitted only by `aep.project/4`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "description": "Directory containing the authoritative file Eventlog provider.",
           "type": "string"
