@@ -8,7 +8,7 @@
 //!
 //! | reference | stands for | the blob holds |
 //! |---|---|---|
-//! | `aep-blob:text:sha256:<hex>` | a string of [`INLINE_LIMIT`] bytes or more | its UTF-8 bytes |
+//! | `aep-blob:text:sha256:<hex>` | a string of `INLINE_LIMIT` (256) bytes or more | its UTF-8 bytes |
 //! | `aep-blob:hex:sha256:<hex>` | a canonical `hex:` byte string of that size | the decoded bytes |
 //! | `aep-blob:lines:sha256:<hex>` | such a byte string holding JSON lines | the JSON list of its lines' digests |
 //! | `aep-blob:json:sha256:<hex>` | the value of a top-level `document` field | its JSON, references kept |
@@ -22,7 +22,7 @@
 //! The digest is SHA-256 over the blob's bytes and the file is `<root>/<hex[..2]>/<hex>`, so
 //! `sha256sum` checks a blob and two branches that stored one value wrote one identical file.
 //!
-//! A string that already begins with [`PREFIX`] is always stored as a text blob, whatever its
+//! A string that already begins with `PREFIX` is always stored as a text blob, whatever its
 //! size, so every string a reader finds with that prefix is a reference and none is ambiguous.
 //!
 //! Reading resolves every reference before AEP sees a value, so everything above the provider —
