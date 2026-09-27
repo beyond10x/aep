@@ -28,7 +28,7 @@ members = [
     "xtask",
 ]
 [workspace.package]
-version = "0.60.0"
+version = "0.60.1"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -36,29 +36,29 @@ repository = "https://github.com/beyond10x/aep"
 authors = ["Beyond10x"]
 
 [workspace.dependencies]
-aep-domain = { path = "crates/govern/aep-domain", version = "0.60.0" }
-aep-contract = { path = "crates/plan/aep-contract", version = "0.60.0" }
-aep-client = { path = "crates/plan/aep-client", version = "0.60.0" }
-aep-backend-entity = { path = "crates/plan/aep-backend-entity", version = "0.60.0" }
-aep-backend-hybrid = { path = "crates/plan/aep-backend-hybrid", version = "0.60.0" }
-aep-backend-markdown = { path = "crates/plan/aep-backend-markdown", version = "0.60.0" }
-aep-backend-memory = { path = "crates/plan/aep-backend-memory", version = "0.60.0" }
-aep-backend-postgres = { path = "crates/plan/aep-backend-postgres", version = "0.60.0" }
-aep-backend-sqlite = { path = "crates/plan/aep-backend-sqlite", version = "0.60.0" }
-aep-engine = { path = "crates/govern/aep-engine", version = "0.60.0" }
-aep-ess-evidence = { path = "crates/observe/aep-ess-evidence", version = "0.60.0" }
-aep-project = { path = "crates/edge/aep-project", version = "0.60.0" }
-aep-conformance = { path = "crates/plan/aep-conformance", version = "0.60.0" }
-aep-driver-spec = { path = "crates/drive/aep-driver-spec", version = "0.60.0" }
-aep-driver = { path = "crates/drive/aep-driver", version = "0.60.0" }
-aep-render = { path = "crates/drive/aep-render", version = "0.60.0" }
-trace-domain = { path = "crates/observe/trace-domain", version = "0.60.0" }
-trace-spec = { path = "crates/observe/trace-spec", version = "0.60.0" }
-aep-schema = { path = "crates/edge/aep-schema", version = "0.60.0" }
-aep-profile-development = { path = "crates/profile/aep-profile-development", version = "0.60.0" }
-aep-profile-operations = { path = "crates/profile/aep-profile-operations", version = "0.60.0" }
-aep-backend-eventlog = { path = "crates/plan/aep-backend-eventlog", version = "0.60.0" }
-aep-planning-migration = { path = "crates/plan/aep-planning-migration", version = "0.60.0" }
+aep-domain = { path = "crates/govern/aep-domain", version = "0.60.1" }
+aep-contract = { path = "crates/plan/aep-contract", version = "0.60.1" }
+aep-client = { path = "crates/plan/aep-client", version = "0.60.1" }
+aep-backend-entity = { path = "crates/plan/aep-backend-entity", version = "0.60.1" }
+aep-backend-hybrid = { path = "crates/plan/aep-backend-hybrid", version = "0.60.1" }
+aep-backend-markdown = { path = "crates/plan/aep-backend-markdown", version = "0.60.1" }
+aep-backend-memory = { path = "crates/plan/aep-backend-memory", version = "0.60.1" }
+aep-backend-postgres = { path = "crates/plan/aep-backend-postgres", version = "0.60.1" }
+aep-backend-sqlite = { path = "crates/plan/aep-backend-sqlite", version = "0.60.1" }
+aep-engine = { path = "crates/govern/aep-engine", version = "0.60.1" }
+aep-ess-evidence = { path = "crates/observe/aep-ess-evidence", version = "0.60.1" }
+aep-project = { path = "crates/edge/aep-project", version = "0.60.1" }
+aep-conformance = { path = "crates/plan/aep-conformance", version = "0.60.1" }
+aep-driver-spec = { path = "crates/drive/aep-driver-spec", version = "0.60.1" }
+aep-driver = { path = "crates/drive/aep-driver", version = "0.60.1" }
+aep-render = { path = "crates/drive/aep-render", version = "0.60.1" }
+trace-domain = { path = "crates/observe/trace-domain", version = "0.60.1" }
+trace-spec = { path = "crates/observe/trace-spec", version = "0.60.1" }
+aep-schema = { path = "crates/edge/aep-schema", version = "0.60.1" }
+aep-profile-development = { path = "crates/profile/aep-profile-development", version = "0.60.1" }
+aep-profile-operations = { path = "crates/profile/aep-profile-operations", version = "0.60.1" }
+aep-backend-eventlog = { path = "crates/plan/aep-backend-eventlog", version = "0.60.1" }
+aep-planning-migration = { path = "crates/plan/aep-planning-migration", version = "0.60.1" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -78,17 +78,17 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 # `dep-check`) fails if the lockfile ever says otherwise, for the `eventlog` lines as well.
 # These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
 # reproducible and upgrades reversible across the kernel and every provider.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f", default-features = false }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f", features = ["file", "sync-bridge", "tree"] }
-entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "9ee145e888368c668cdaaaa9fa22b8334149616f" }
-eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
-eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
-eventlog-tree = { git = "https://github.com/beyond10x/eventlog", rev = "70096af8c231fedf6d2206c97ce2940b99aecdb8" }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc", default-features = false }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc", features = ["file", "sync-bridge", "tree"] }
+entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "5075829dea24f1ff26fff91beebb8aa43bf191dc" }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8" }
+eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8" }
+eventlog-tree = { git = "https://github.com/beyond10x/eventlog", rev = "fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
