@@ -5345,7 +5345,6 @@ fn init_tree(args: &InitTreeArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[allow(clippy::too_many_lines)] // Read, export, write the selector, then compare, in that order.
 /// `plan store migrate content`: replay an `aep.project/3` tree authority into an `aep.project/4`
 /// one beside it, prove the two equivalent, and only then put the new one in the old one's place.
 ///
@@ -5540,6 +5539,7 @@ fn contract_differences(
     })
 }
 
+#[allow(clippy::too_many_lines)] // Read, export, write the selector, then compare, in that order.
 fn export(args: &ExportArgs) -> Result<ExitCode> {
     let crate::planning::Plan::Eventlog {
         authority_root,

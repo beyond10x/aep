@@ -119,7 +119,7 @@ pub fn migrate_to_content(
         identity,
         crate::typed::provisioning_context("aep-plan-store-migrate-content"),
     )?;
-    let content = ContentStore::at(blobs.to_owned());
+    let store = ContentStore::at(blobs.to_owned());
 
     let anchors = snapshot
         .histories
@@ -131,7 +131,7 @@ pub fn migrate_to_content(
         .map(|(subject, anchor)| {
             Ok(SubjectHistory {
                 subject,
-                origin: HistoryOrigin::Imported(stored_anchor(&content, anchor)?),
+                origin: HistoryOrigin::Imported(stored_anchor(&store, anchor)?),
                 records: Vec::new(),
             })
         })
@@ -165,7 +165,7 @@ pub fn migrate_to_content(
                 RecordedEntry::Decision(_) => report.decisions += 1,
                 RecordedEntry::Observation(_) => report.observations += 1,
             }
-            actions.push(stored_action(&content, action_of(subject, record)?)?);
+            actions.push(stored_action(&store, action_of(subject, record)?)?);
         }
         bridge
             .operation(context)
@@ -182,7 +182,6 @@ pub fn verify_equivalent(
     source: &CompleteStoreSnapshot,
     target: &CompleteStoreSnapshot,
 ) -> Equivalence {
-    let mut equivalence = Equivalence::default();
     fn index(
         snapshot: &CompleteStoreSnapshot,
     ) -> BTreeMap<Subject, &entity_store::asynchronous::SubjectSnapshot> {
@@ -192,6 +191,7 @@ pub fn verify_equivalent(
             .map(|held| (held.history.subject.clone(), held))
             .collect()
     }
+    let mut equivalence = Equivalence::default();
     let (before, after) = (index(source), index(target));
     let subjects: BTreeSet<&Subject> = before.keys().chain(after.keys()).collect();
     for subject in subjects {
@@ -356,9 +356,7 @@ fn action_of(subject: &Subject, record: &StoredRecord) -> Result<BatchAction, St
         (DecisionCommand::Create { fields, arguments }, Expect::Absent) if arguments.is_empty() => {
             Ok(BatchAction::Create(CreateRequest {
                 subject: subject.clone(),
-                definition_version: u32::try_from(commit.instance.version).map_err(|_| {
-                    format!("{}: definition version out of range", recording.record_id)
-                })?,
+                definition_version: commit.instance.version,
                 fields: Value::Object(fields.clone()),
                 recording,
             }))

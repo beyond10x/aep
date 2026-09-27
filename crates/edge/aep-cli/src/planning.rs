@@ -9663,7 +9663,10 @@ fn resolve_fork(args: &StoreArgs, id: &str, first: Option<&str>, onto: &str) -> 
 ///
 /// V2 is skipped, and says so, when `against` holds no tree store: an `aep.project/2` base — the
 /// commit a cutover is measured against — has no committed tree file V2 could hold the head to,
-/// and every file it does hold would otherwise read as deleted.
+/// and every file it does hold would otherwise read as deleted. On an `aep.project/4` store it is
+/// skipped against a base whose selector is an earlier version, every content blob must hash to its
+/// name (C1), and the blob directory is held to S9 too.
+#[allow(clippy::too_many_lines)] // One pass over every rule a tree has, in the order they report.
 fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings> {
     let Plan::Eventlog {
         authority_root,

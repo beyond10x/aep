@@ -412,10 +412,10 @@ pub fn write_file_control(
 }
 
 /// [`write_file_control`] over a bridge the caller already holds.
-#[allow(clippy::needless_pass_by_value)] // The owned identity, key, document and context are moved into the recorded batch.
+#[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)] // The owned identity, key, document and context are moved into the recorded batch; the content store is the one extra coordinate an aep.project/4 write needs.
 fn write_control_on(
     bridge: &RecordedEventlogBridge,
-    content: Option<&content::ContentStore>,
+    blobs: Option<&content::ContentStore>,
     entity: &str,
     identity: String,
     batch_key: String,
@@ -454,8 +454,8 @@ fn write_control_on(
             recording,
         }),
     };
-    let action = match content {
-        Some(content) => stored_action(content, action)?,
+    let action = match blobs {
+        Some(blobs) => stored_action(blobs, action)?,
         None => action,
     };
     let outcome = bridge
