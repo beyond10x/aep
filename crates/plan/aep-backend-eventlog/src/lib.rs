@@ -1014,13 +1014,28 @@ pub(crate) fn resolve_instance(
     Ok(instance)
 }
 
-/// A stored record with every reference in its entry resolved. Its bytes are left as they were
-/// stored: they are what the provider hashed, and nothing above it parses them.
+/// A stored record with every reference in its entry resolved, and its comparison bytes those of
+/// the resolved entry — the bytes an `aep.project/3` store would have held for it, which is what
+/// Entity Runtime's history checks re-derive from the entry. Bytes that did not match the stored
+/// entry are left as they were, so a corrupt record is still reported as one.
 fn resolve_record(
     content: &content::ContentStore,
     mut record: entity_store::asynchronous::StoredRecord,
 ) -> Result<entity_store::asynchronous::StoredRecord, String> {
+    use entity_store::asynchronous::{original_request_comparison_bytes, record_comparison_bytes};
+    let record_held =
+        record_comparison_bytes(&record.entry).ok() == Some(record.record_bytes.clone());
+    let request_held =
+        original_request_comparison_bytes(&record.entry).ok() == Some(record.request_bytes.clone());
     record.entry = content.resolve_typed(&record.entry)?;
+    if record_held {
+        record.record_bytes =
+            record_comparison_bytes(&record.entry).map_err(|error| error.to_string())?;
+    }
+    if request_held {
+        record.request_bytes =
+            original_request_comparison_bytes(&record.entry).map_err(|error| error.to_string())?;
+    }
     Ok(record)
 }
 

@@ -234,6 +234,8 @@ pub fn verify_equivalent(
                 ("receipt", left.receipt != right.receipt),
                 ("position", left.position != right.position),
                 ("expectation", left.expect != right.expect),
+                ("record bytes", left.record_bytes != right.record_bytes),
+                ("request bytes", left.request_bytes != right.request_bytes),
             ] {
                 if differs {
                     equivalence
