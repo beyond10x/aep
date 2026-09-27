@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.60.1] — 2026-09-27
+
+### Changed
+
+- Entity Runtime is pinned at 0.24.2 (`5075829d`) and Eventlog at 0.5.0 (`fe8a0a7e`), the latest
+  releases of both. Entity Runtime verifies each recorded entry once per handle and commits a
+  guarded write's blobs with its group; Eventlog commits a guarded SQLite group and its blobs at
+  once and resolves an existing PostgreSQL stream identity without writing. Planning stores read
+  and write as they did.
+
 ## [0.60.0] — 2026-09-26
 
 ### Added
