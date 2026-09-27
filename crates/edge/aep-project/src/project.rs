@@ -396,7 +396,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
     refuse_credentials(source.git_url())?;
     let (bare, destination) = git_cache_paths(source)?;
     if destination.exists() {
-        verify_snapshot(&destination, source.revision())?;
+        verify_snapshot_once(&destination, source.revision())?;
         return Ok(destination);
     }
 
@@ -476,7 +476,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
     if let Err(error) = std::fs::rename(&temporary, &destination) {
         if destination.exists() {
             std::fs::remove_dir_all(&temporary).ok();
-            verify_snapshot(&destination, source.revision())?;
+            verify_snapshot_once(&destination, source.revision())?;
             return Ok(destination);
         }
         std::fs::remove_dir_all(&temporary).ok();
@@ -485,7 +485,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
             destination.display()
         ));
     }
-    verify_snapshot(&destination, source.revision())?;
+    verify_snapshot_once(&destination, source.revision())?;
     Ok(destination)
 }
 
@@ -589,6 +589,37 @@ fn git_bare(
         return Err(format!("{operation}: {}", detail.trim()));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+/// Snapshots this process has already verified, by directory and revision.
+fn verified_snapshots() -> &'static std::sync::Mutex<std::collections::BTreeSet<(PathBuf, String)>>
+{
+    static VERIFIED: OnceLock<std::sync::Mutex<std::collections::BTreeSet<(PathBuf, String)>>> =
+        OnceLock::new();
+    VERIFIED.get_or_init(Default::default)
+}
+
+/// [`verify_snapshot`], at most once per snapshot per process.
+///
+/// One command resolves the protocol source several times (configuration, paths, the tree, the
+/// planning store), and each full verification re-reads and re-hashes every file of the pinned
+/// revision — 14,669 files and 162 MB for a revision that carries its own planning store. The
+/// snapshot is read-only and sealed when it is materialized, so re-verifying it within the same
+/// short-lived process only repeats the same reads. A failed verification is not remembered.
+fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> {
+    let key = (directory.to_path_buf(), revision.to_owned());
+    let verified = verified_snapshots();
+    if verified
+        .lock()
+        .is_ok_and(|verified| verified.contains(&key))
+    {
+        return Ok(());
+    }
+    verify_snapshot(directory, revision)?;
+    if let Ok(mut verified) = verified.lock() {
+        verified.insert(key);
+    }
+    Ok(())
 }
 
 /// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one.
@@ -1030,6 +1061,52 @@ mod tests {
         let refusal = refuse_credentials("https://person:secret@example.invalid/repository")
             .expect_err("credentials must not enter Git configuration or process arguments");
         assert!(refusal.contains("credentials"), "{refusal}");
+    }
+
+    /// Seals `root` as a snapshot of `revision`, as materialization does.
+    fn seal(root: &Path, revision: &str) {
+        let manifest = snapshot_manifest(root, revision, false).expect("a sealable tree");
+        std::fs::write(
+            root.join(SNAPSHOT_MANIFEST),
+            serde_json::to_vec_pretty(&manifest).expect("a serializable manifest"),
+        )
+        .expect("the manifest is writable");
+    }
+
+    #[test]
+    fn a_snapshot_verified_once_is_not_re_read_by_the_same_process() {
+        let root = scratch("source-verified-once");
+        let revision = "b".repeat(40);
+        write(&root.join("protocol.yaml"), "sealed\n");
+        seal(&root, &revision);
+        verify_snapshot_once(&root, &revision).expect("the sealed bytes verify");
+
+        write(&root.join("protocol.yaml"), "changed after verification\n");
+        assert!(
+            verify_snapshot(&root, &revision).is_err(),
+            "a full verification still sees the changed bytes"
+        );
+        verify_snapshot_once(&root, &revision)
+            .expect("the process already verified this snapshot and does not re-read it");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_failed_snapshot_verification_is_not_remembered() {
+        let root = scratch("source-verification-failed");
+        let revision = "c".repeat(40);
+        write(&root.join("protocol.yaml"), "sealed\n");
+        seal(&root, &revision);
+        write(&root.join("protocol.yaml"), "changed before verification\n");
+        for attempt in 0..2 {
+            let refusal = verify_snapshot_once(&root, &revision)
+                .expect_err("changed bytes are refused on every attempt");
+            assert!(
+                refusal.contains("does not match"),
+                "attempt {attempt}: {refusal}"
+            );
+        }
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[cfg(unix)]

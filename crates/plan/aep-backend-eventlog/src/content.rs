@@ -30,7 +30,6 @@
 //! `aep.project/3` store.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -113,13 +112,16 @@ fn is_digest(text: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+// A table lookup rather than `write!` per byte: every open hex-encodes each imported legacy
+// evidence blob, and the formatter machinery was a fifth of a store validation's CPU.
 fn lower_hex(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {
-            let _ = write!(out, "{byte:02x}");
-            out
-        })
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        out.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
+    }
+    out
 }
 
 /// The bytes a `hex:` string names, when it is in the one spelling [`lower_hex`] writes back.
@@ -492,6 +494,18 @@ mod tests {
         let directory = tempfile::tempdir().expect("scratch");
         let store = ContentStore::at(directory.path().join("blobs"));
         (directory, store)
+    }
+
+    #[test]
+    fn lower_hex_spells_every_byte_as_two_lowercase_digits() {
+        let bytes: Vec<u8> = (0..=u8::MAX).collect();
+        let expected = bytes.iter().fold(String::new(), |mut out, byte| {
+            use std::fmt::Write as _;
+            write!(out, "{byte:02x}").expect("writing to a String cannot fail");
+            out
+        });
+        assert_eq!(lower_hex(&bytes), expected);
+        assert_eq!(canonical_hex(&format!("hex:{expected}")), Some(bytes));
     }
 
     #[test]
