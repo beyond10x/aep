@@ -9,6 +9,25 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan store migrate texts [--dry-run | --check] [--project …] [--format text|json]` moves an
+  `aep.project/3` tree store to `eventlog-tree/2` (Eventlog 0.6.0), where each long text is
+  stored once under its SHA-256 and a blob keeps a manifest pointing at it. The whole store is
+  verified before anything is written, each blob is read back before its old file goes, and every
+  blob, group and event is then compared with what the store served before; event files, digests
+  and the Markdown projection are untouched. `--dry-run` writes nothing; `--check` also exits 1
+  while anything is left to migrate. A second run changes nothing. On a copy of a 9,682-blob
+  planning store it cut the store from 180,651,308 to 77,406,062 bytes and its largest file from
+  75,332,948 to 5,153,913 bytes, under the 8 MiB per-file limit of the Gates scanner.
+
+### Changed
+
+- Entity Runtime and Eventlog are pinned at releases that read both `eventlog-tree/1` and
+  `eventlog-tree/2`. Every existing tree store reads and writes as before; a store created by
+  `init-tree` is now `eventlog-tree/2`. An `aep` older than this release refuses a new or migrated
+  store by name, so upgrade every tool that opens a store before migrating it.
+
 ## [0.60.1] — 2026-09-27
 
 ### Changed

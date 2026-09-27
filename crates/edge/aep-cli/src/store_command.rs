@@ -191,6 +191,126 @@ pub(crate) enum MigrateCommand {
         #[arg(long)]
         migration: String,
     },
+    /// Keep each long text of a tree store once, under its SHA-256 (`eventlog-tree/2`).
+    ///
+    /// Every blob whose JSON holds a long string literal becomes a manifest pointing at texts
+    /// stored once. The whole store is verified before anything is written, each blob is read back
+    /// before its old file goes, and afterwards every blob, group and event is compared with what
+    /// the store served before. Event files, digests and the Markdown projection are untouched.
+    /// Running it again changes nothing. Readers before this release refuse a migrated store, so
+    /// migrate only once every tool that opens it has been upgraded.
+    Texts(MigrateTextsArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct MigrateTextsArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+    /// Report what the migration would write, and write nothing.
+    #[arg(long, conflicts_with = "check")]
+    dry_run: bool,
+    /// As `--dry-run`, and exit 1 when the store still has something to migrate.
+    #[arg(long)]
+    check: bool,
+}
+
+/// What `aep plan store migrate texts` found and did.
+#[derive(Debug, Serialize)]
+struct TextMigrationResult {
+    format: &'static str,
+    mode: &'static str,
+    store: String,
+    pending: bool,
+    from_format: String,
+    to_format: String,
+    blobs: usize,
+    already_split: usize,
+    blobs_split: usize,
+    texts_added: usize,
+    bytes_before: u64,
+    bytes_after: u64,
+    largest_before: LargestFile,
+    largest_after: LargestFile,
+    verified_blobs: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+struct LargestFile {
+    path: String,
+    bytes: u64,
+}
+
+impl LargestFile {
+    fn of((path, bytes): &(PathBuf, u64)) -> Self {
+        Self {
+            path: path.display().to_string(),
+            bytes: *bytes,
+        }
+    }
+}
+
+fn migrate_texts(args: &MigrateTextsArgs) -> Result<ExitCode> {
+    let selector = if let Some(path) = &args.common.project {
+        path.clone()
+    } else {
+        let here = std::env::current_dir().context("reading current directory")?;
+        aep_project::project::discover(&here)
+            .context("no project found")?
+            .join(aep_project::project::project_directory())
+            .join(aep_domain::project::PROJECT_FILE)
+    };
+    let engineering = selector
+        .parent()
+        .context("project selector has no parent")?
+        .to_path_buf();
+    let plan = crate::planning::Plan::for_project(&engineering)?;
+    let crate::planning::Plan::Eventlog {
+        authority_root,
+        tree: Some(_),
+        ..
+    } = &plan
+    else {
+        anyhow::bail!(
+            "`aep plan store migrate texts` migrates an aep.project/3 tree store, and this \
+             project's store is not one"
+        );
+    };
+    let (mode, label) = if args.dry_run || args.check {
+        (
+            aep_backend_eventlog::TreeMigrationMode::DryRun,
+            if args.check { "check" } else { "dry_run" },
+        )
+    } else {
+        (aep_backend_eventlog::TreeMigrationMode::Apply, "apply")
+    };
+    let report = if mode == aep_backend_eventlog::TreeMigrationMode::Apply {
+        let _fence = crate::planning_writer_fence::PlanningWriterFence::acquire(&engineering)
+                .context("another planning writer holds the store")?;
+        aep_backend_eventlog::migrate_tree(authority_root, mode)
+    } else {
+        aep_backend_eventlog::migrate_tree(authority_root, mode)
+    }
+    .map_err(|error| anyhow::anyhow!("migrating {}: {error}", authority_root.display()))?;
+    let pending = report.pending();
+    let result = TextMigrationResult {
+        format: "aep.store-text-migration/1",
+        mode: label,
+        store: authority_root.display().to_string(),
+        pending,
+        from_format: report.from_format.clone(),
+        to_format: report.to_format.clone(),
+        blobs: report.blobs,
+        already_split: report.already_split,
+        blobs_split: report.blobs_split,
+        texts_added: report.texts_added,
+        bytes_before: report.bytes_before,
+        bytes_after: report.bytes_after,
+        largest_before: LargestFile::of(&report.largest_before),
+        largest_after: LargestFile::of(&report.largest_after),
+        verified_blobs: report.verified_blobs,
+    };
+    emit(&result, args.common.format)?;
+    Ok(crate::exit_code(!(args.check && pending)))
 }
 
 pub(crate) fn run(command: StoreCommand) -> Result<ExitCode> {
@@ -215,6 +335,9 @@ where
         StoreCommand::InitTree(args) => init_tree(&args),
         StoreCommand::Export(args) => export(&args),
         StoreCommand::InstallHooks(args) => install_hooks(&args),
+        StoreCommand::Migrate {
+            command: MigrateCommand::Texts(args),
+        } => migrate_texts(&args),
         StoreCommand::Inspect(common) => {
             let result = inspect(&common);
             emit(&result, common.format)?;

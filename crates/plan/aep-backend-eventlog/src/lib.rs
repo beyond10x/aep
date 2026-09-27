@@ -56,6 +56,12 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// It is deliberately absent from the Markdown planning projection inventory.
 mod export;
 mod typed;
+/// The explicit migration of a tree authority to `eventlog-tree/2`, which keeps each long text
+/// once, for `aep plan store migrate texts`.
+pub use eventlog_tree::{
+    migrate as migrate_tree, MigrationMode as TreeMigrationMode,
+    MigrationReport as TreeMigrationReport,
+};
 /// The offline check of a tree authority's files, for the planning validation to run.
 pub use eventlog_tree::{verify as verify_tree, Finding as TreeFinding};
 pub use export::{export_to_tree, ExportReport, ExportRewrites};
