@@ -394,3 +394,217 @@ fn doctor_reports_a_git_store_as_ok() {
         "{line}"
     );
 }
+
+/// Commits everything in `project`, as a fixed identity and without hooks.
+fn commit(project: &Path, message: &str) {
+    for args in [
+        vec!["add", "--all"],
+        vec![
+            "-c",
+            "user.name=tester",
+            "-c",
+            "user.email=tester@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "--no-verify",
+            "-m",
+            message,
+        ],
+    ] {
+        let status = Command::new("git")
+            .args(&args)
+            .current_dir(project)
+            .status()
+            .expect("git runs");
+        assert!(status.success(), "git {}", args.join(" "));
+    }
+}
+
+/// Runs `validate` and requires it to refuse, returning everything it said.
+fn refused_validate(project: &Path) -> String {
+    let refused = aep(project, &["validate"]);
+    let said = format!("{}{}", stdout(&refused), stderr(&refused));
+    assert!(!refused.status.success(), "validate passed: {said}");
+    said
+}
+
+#[test]
+fn a_hand_edited_status_on_a_never_moved_artifact_fails_validate_naming_it() {
+    let project = project("unmoved-edit");
+    ok(
+        &project,
+        &["new", "story", "untouched", "--title", "Untouched"],
+    );
+    let document = project.join(".engineering/planning/story/untouched.md");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    let edited = text.replace("status: draft", "status: implemented");
+    assert_ne!(text, edited, "the fixture has a status line to edit");
+
+    // Before its first commit, and after it: neither is a history that predates recorded moves.
+    std::fs::write(&document, &edited).expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(
+        said.contains("story:untouched"),
+        "names the artifact: {said}"
+    );
+    assert!(
+        said.contains("initial state `draft`"),
+        "says where a never-moved artifact stands: {said}"
+    );
+
+    std::fs::write(&document, &text).expect("the edit is undone");
+    commit(&project, "create");
+    std::fs::write(&document, &edited).expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(
+        said.contains("story:untouched") && said.contains("initial state `draft`"),
+        "a committed Git-native artifact is held to its initial state too: {said}"
+    );
+}
+
+#[test]
+fn a_new_artifact_validates_before_and_after_its_first_commit() {
+    let project = project("unmoved-new");
+    ok(&project, &["new", "story", "fresh", "--title", "Fresh"]);
+    ok(&project, &["validate"]);
+    commit(&project, "create");
+    ok(&project, &["validate"]);
+}
+
+#[test]
+fn an_artifact_migrated_at_a_later_status_validates_and_keeps_that_status() {
+    let project = project("unmoved-migrated");
+    ok(&project, &["new", "story", "legacy", "--title", "Legacy"]);
+    let document = project.join(".engineering/planning/story/legacy.md");
+    let migrated = std::fs::read_to_string(&document)
+        .expect("the document reads")
+        .replace("status: draft", "status: implemented");
+    // Its history begins in the format of a store that kept moves outside the file.
+    std::fs::write(
+        &document,
+        migrated.replace("format: aep.planning-md/3", "format: aep.planning-md/1"),
+    )
+    .expect("the old version is written");
+    commit(&project, "an older store");
+    std::fs::write(&document, &migrated).expect("the migrated version is written");
+    ok(&project, &["validate"]);
+    commit(&project, "migrate");
+    ok(&project, &["validate"]);
+
+    std::fs::write(
+        &document,
+        migrated.replace("status: implemented", "status: active"),
+    )
+    .expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(
+        said.contains("story:legacy") && said.contains("its history carries `implemented`"),
+        "a migrated status is pinned to what the migration wrote: {said}"
+    );
+}
+
+#[test]
+fn an_edited_committed_evidence_file_fails_validate_naming_it() {
+    let project = project("evidence-edit");
+    ok(&project, &["new", "story", "proven", "--title", "Proven"]);
+    ok(
+        &project,
+        &[
+            "evidence",
+            "story:proven",
+            "--kind",
+            "test_result",
+            "--source",
+            "task check",
+            "--at",
+            "2026-09-28T10:00:00Z",
+        ],
+    );
+    // Uncommitted, a new evidence file is simply new.
+    ok(&project, &["validate"]);
+    commit(&project, "record");
+    ok(&project, &["validate"]);
+
+    let directory = project.join(".engineering/evidence/story/proven");
+    let file = std::fs::read_dir(&directory)
+        .expect("the evidence directory reads")
+        .map(|entry| entry.expect("an entry").path())
+        .next()
+        .expect("one evidence file");
+    let text = std::fs::read_to_string(&file).expect("the evidence reads");
+    let edited = text.replace("task check", "task check --release");
+    assert_ne!(text, edited, "the fixture has a source to edit");
+    std::fs::write(&file, edited).expect("the edit is written");
+    let said = refused_validate(&project);
+    let name = file
+        .file_name()
+        .expect("a file name")
+        .to_string_lossy()
+        .into_owned();
+    assert!(said.contains(&name), "names the file: {said}");
+    assert!(
+        said.contains("differs from its committed blob"),
+        "says why: {said}"
+    );
+}
+
+/// A committed review result, and the path of its document.
+fn committed_review(name: &str) -> (PathBuf, PathBuf) {
+    let project = project(name);
+    let body = project.join("review-body.md");
+    std::fs::write(&body, "## Verdict\n\nApproved as written.\n").expect("the body is written");
+    ok(&project, &["new", "story", "subject", "--title", "Subject"]);
+    ok(
+        &project,
+        &[
+            "new",
+            "review-result",
+            "looked",
+            "--title",
+            "Looked at it",
+            "--relate",
+            "reviews:story:subject",
+            "--from",
+            printable(&body),
+        ],
+    );
+    std::fs::remove_file(&body).expect("the body file is removable");
+    commit(&project, "review");
+    ok(&project, &["validate"]);
+    let document = project.join(".engineering/planning/review-result/looked.md");
+    (project, document)
+}
+
+#[test]
+fn an_edited_committed_review_result_body_fails_validate_naming_it() {
+    let (project, document) = committed_review("review-edit");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    let edited = text.replace("Approved as written.", "Approved, with changes.");
+    assert_ne!(text, edited, "the fixture has a verdict to edit");
+    std::fs::write(&document, edited).expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(said.contains("review-result:looked"), "names it: {said}");
+    assert!(said.contains("immutable"), "says why: {said}");
+
+    // Committing the edit does not launder it: the baseline is the creating commit.
+    commit(&project, "an edit");
+    let said = refused_validate(&project);
+    assert!(
+        said.contains("review-result:looked") && said.contains("body"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_move_on_a_committed_review_result_still_validates() {
+    let (project, _) = committed_review("review-move");
+    ok(
+        &project,
+        &["move", "review-result:looked", "--to", "archived"],
+    );
+    ok(&project, &["validate"]);
+    commit(&project, "retire");
+    ok(&project, &["validate"]);
+}
