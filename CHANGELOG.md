@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.62.0] — 2026-09-28
+
 ### Added
 
 - `aep.project/5`: a Git-native planning store (`store: { git: {} }`). Each artifact file under
