@@ -608,8 +608,8 @@ fn verified_snapshots() -> &'static std::sync::Mutex<std::collections::BTreeSet<
 /// short-lived process only repeats the same reads. A failed verification is not remembered.
 ///
 /// Across processes, a full verification leaves a stamp beside the snapshot (see
-/// [`verify_snapshot_stamped`]); a later process whose stamp still matches every file's metadata
-/// trusts the snapshot without reading its files.
+/// [`verify_snapshot_stamped`]); a later process whose stamp still matches every file's and
+/// directory's metadata trusts the snapshot without reading a file or opening a directory.
 fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> {
     let key = (directory.to_path_buf(), revision.to_owned());
     let verified = verified_snapshots();
@@ -627,9 +627,12 @@ fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> 
 }
 
 /// Format of the stamp a full verification leaves beside a snapshot.
-const SNAPSHOT_STAMP_FORMAT: &str = "aep.snapshot-verified/1";
+///
+/// Format 2 adds every directory's metadata, so the trusted path stats entries instead of
+/// listing directories. A format-1 stamp is ignored and replaced after one full verification.
+const SNAPSHOT_STAMP_FORMAT: &str = "aep.snapshot-verified/2";
 
-/// Stamp key recording the snapshot directory itself.
+/// Stamp key recording the snapshot directory itself, among the directories.
 const SNAPSHOT_DIRECTORY_KEY: &str = ".";
 
 /// A file changed this close to the start of a verification is not stamped (Part B § B3 rule 4).
@@ -659,7 +662,16 @@ struct SnapshotStamp {
     revision: String,
     manifest_sha256: String,
     verifier_version: String,
+    /// Every regular file, the manifest included, by path relative to the snapshot.
     files: std::collections::BTreeMap<String, FileStamp>,
+    /// Every directory, the snapshot itself as `.`, by path relative to the snapshot.
+    directories: std::collections::BTreeMap<String, FileStamp>,
+}
+
+/// The metadata a stamp records: every file and every directory of a snapshot.
+struct SnapshotEntryStamps {
+    files: std::collections::BTreeMap<String, FileStamp>,
+    directories: std::collections::BTreeMap<String, FileStamp>,
 }
 
 /// Where a snapshot's stamp lives: beside it, outside the read-only tree.
@@ -671,9 +683,12 @@ fn snapshot_stamp_path(directory: &Path) -> Option<PathBuf> {
 /// Trusts a matching stamp, or verifies in full and stamps the result.
 ///
 /// A stamp is trusted only when it parses, names this revision and this verifier version, the
-/// manifest's current bytes hash to the digest it recorded, the tree's listing (names only) is
-/// exactly the set it recorded, and every recorded entry's length, times, inode, device and mode
-/// are unchanged. Anything else falls back to [`verify_snapshot`], unchanged as the full check. A
+/// manifest's current bytes hash to the digest it recorded, and a no-follow stat of every recorded
+/// file and directory finds its length, times, inode, device and mode unchanged. No directory is
+/// opened: adding, removing or renaming an entry moves its directory's `mtime` and `ctime`, so
+/// unchanged directory metadata proves an unchanged listing, and the racy window keeps a change in
+/// the clock tick of the stamp from hiding. Anything else falls back to [`verify_snapshot`],
+/// unchanged as the full check. A
 /// failed verification writes no stamp; a failure to write one is not an error, it only means the
 /// next process verifies in full again.
 fn verify_snapshot_stamped(
@@ -713,10 +728,53 @@ fn snapshot_stamp_holds(directory: &Path, revision: &str) -> bool {
     if hex_sha256(&manifest) != stamp.manifest_sha256 {
         return false;
     }
-    let Ok(current) = snapshot_file_stamps(directory) else {
+    recorded_entries_unchanged(directory, &stamp)
+}
+
+/// Whether every entry the stamp records still has the metadata it recorded, by stat alone.
+fn recorded_entries_unchanged(directory: &Path, stamp: &SnapshotStamp) -> bool {
+    if !stamp.directories.contains_key(SNAPSHOT_DIRECTORY_KEY)
+        || !stamp.files.contains_key(SNAPSHOT_MANIFEST)
+    {
         return false;
-    };
-    current == stamp.files
+    }
+    let entries = stamp
+        .directories
+        .iter()
+        .map(|entry| (entry, true))
+        .chain(stamp.files.iter().map(|entry| (entry, false)));
+    for ((relative, recorded), is_directory) in entries {
+        let path = if relative == SNAPSHOT_DIRECTORY_KEY {
+            directory.to_path_buf()
+        } else {
+            let relative = Path::new(relative);
+            if !relative
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)))
+            {
+                return false;
+            }
+            directory.join(relative)
+        };
+        match file_stamp(&path) {
+            Ok(current) if current == *recorded && is_kind(&current, is_directory) => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Whether a stamped entry is a directory (`directory`) or a regular file.
+#[cfg(unix)]
+fn is_kind(stamp: &FileStamp, directory: bool) -> bool {
+    const TYPE_MASK: u32 = 0o170_000;
+    let expected = if directory { 0o040_000 } else { 0o100_000 };
+    stamp.mode & TYPE_MASK == expected
+}
+
+#[cfg(not(unix))]
+fn is_kind(_stamp: &FileStamp, _directory: bool) -> bool {
+    false
 }
 
 /// Records what a successful full verification saw, unless a file is too young to be trusted.
@@ -730,14 +788,18 @@ fn write_snapshot_stamp(
         .ok_or_else(|| format!("snapshot {} has no stamp path", directory.display()))?;
     let manifest = std::fs::read(directory.join(SNAPSHOT_MANIFEST))
         .map_err(|error| format!("reading snapshot manifest: {error}"))?;
-    let files = snapshot_file_stamps(directory)?;
+    let SnapshotEntryStamps { files, directories } = snapshot_entry_stamps(directory)?;
     let cutoff = started
         .checked_sub(racy_window)
         .and_then(|cutoff| cutoff.duration_since(std::time::UNIX_EPOCH).ok())
         .and_then(|cutoff| i64::try_from(cutoff.as_nanos()).ok())
         .ok_or("the racy cutoff is not representable")?;
-    if files.values().any(|file| file.ctime_ns >= cutoff) {
-        return Err("a snapshot file changed too recently to be stamped".to_owned());
+    if files
+        .values()
+        .chain(directories.values())
+        .any(|entry| entry.ctime_ns >= cutoff)
+    {
+        return Err("a snapshot entry changed too recently to be stamped".to_owned());
     }
     let stamp = SnapshotStamp {
         format: SNAPSHOT_STAMP_FORMAT.to_owned(),
@@ -745,6 +807,7 @@ fn write_snapshot_stamp(
         manifest_sha256: hex_sha256(&manifest),
         verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
         files,
+        directories,
     };
     let bytes = serde_json::to_vec_pretty(&stamp)
         .map_err(|error| format!("serializing {}: {error}", path.display()))?;
@@ -771,28 +834,32 @@ fn write_snapshot_stamp(
     Ok(())
 }
 
-/// Metadata of every snapshot file, the manifest and the directory, from a name-only walk.
-fn snapshot_file_stamps(
-    directory: &Path,
-) -> Result<std::collections::BTreeMap<String, FileStamp>, String> {
+/// Metadata of every snapshot file, the manifest and every directory, from a name-only walk.
+fn snapshot_entry_stamps(directory: &Path) -> Result<SnapshotEntryStamps, String> {
     let mut paths = Vec::new();
-    collect_snapshot_files(directory, directory, &mut paths)?;
-    let mut files = std::collections::BTreeMap::new();
-    for path in paths {
-        let relative = path
-            .strip_prefix(directory)
+    let mut directory_paths = Vec::new();
+    walk_snapshot(directory, directory, &mut paths, &mut directory_paths)?;
+    let relative = |path: &Path| {
+        path.strip_prefix(directory)
             .expect("collected paths start below the snapshot")
             .to_str()
-            .ok_or_else(|| format!("snapshot path {} is not UTF-8", path.display()))?
-            .replace('\\', "/");
-        files.insert(relative, file_stamp(&path)?);
+            .ok_or_else(|| format!("snapshot path {} is not UTF-8", path.display()))
+            .map(|relative| relative.replace('\\', "/"))
+    };
+    let mut files = std::collections::BTreeMap::new();
+    for path in paths {
+        files.insert(relative(&path)?, file_stamp(&path)?);
     }
     files.insert(
         SNAPSHOT_MANIFEST.to_owned(),
         file_stamp(&directory.join(SNAPSHOT_MANIFEST))?,
     );
-    files.insert(SNAPSHOT_DIRECTORY_KEY.to_owned(), file_stamp(directory)?);
-    Ok(files)
+    let mut directories = std::collections::BTreeMap::new();
+    for path in directory_paths {
+        directories.insert(relative(&path)?, file_stamp(&path)?);
+    }
+    directories.insert(SNAPSHOT_DIRECTORY_KEY.to_owned(), file_stamp(directory)?);
+    Ok(SnapshotEntryStamps { files, directories })
 }
 
 /// One entry's stamp, without following a symlink.
@@ -841,6 +908,8 @@ fn hex_sha256(bytes: &[u8]) -> String {
 thread_local! {
     /// Snapshot files this thread has read and hashed, so tests can prove a stamp spared them.
     static FILES_HASHED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Snapshot directories this thread has listed, so tests can prove a stamp spared them.
+    static DIRECTORIES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one.
@@ -913,12 +982,24 @@ fn collect_snapshot_files(
     directory: &Path,
     files: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
+    walk_snapshot(root, directory, files, &mut Vec::new())
+}
+
+/// Collects regular files and the directories below `directory`, refusing anything else.
+fn walk_snapshot(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<PathBuf>,
+    directories: &mut Vec<PathBuf>,
+) -> Result<(), String> {
     let entries = std::fs::read_dir(directory).map_err(|error| {
         format!(
             "reading snapshot directory {}: {error}",
             directory.display()
         )
     })?;
+    #[cfg(test)]
+    DIRECTORIES_READ.with(|read| read.set(read.get() + 1));
     for entry in entries {
         let entry = entry.map_err(|error| {
             format!(
@@ -940,7 +1021,8 @@ fn collect_snapshot_files(
             ));
         }
         if kind.is_dir() {
-            collect_snapshot_files(root, &path, files)?;
+            walk_snapshot(root, &path, files, directories)?;
+            directories.push(path);
         } else if kind.is_file() {
             files.push(path);
         } else {
@@ -1339,9 +1421,44 @@ mod tests {
 
     /// Runs the cross-process path with no racy window and returns how many files it hashed.
     fn stamped_verification(root: &Path, revision: &str) -> (Result<(), String>, usize) {
+        let (result, hashed, _) = stamped_verification_counting(root, revision);
+        (result, hashed)
+    }
+
+    /// [`stamped_verification`], also returning how many directories it listed.
+    fn stamped_verification_counting(
+        root: &Path,
+        revision: &str,
+    ) -> (Result<(), String>, usize, usize) {
         FILES_HASHED.with(|hashed| hashed.set(0));
+        DIRECTORIES_READ.with(|read| read.set(0));
         let result = verify_snapshot_stamped(root, revision, std::time::Duration::ZERO);
-        (result, FILES_HASHED.with(std::cell::Cell::get))
+        (
+            result,
+            FILES_HASHED.with(std::cell::Cell::get),
+            DIRECTORIES_READ.with(std::cell::Cell::get),
+        )
+    }
+
+    /// Lets the coarse file clock move past the stamp before a test tampers with the snapshot.
+    fn after_the_stamp() {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    /// Asserts that a tampered snapshot is refused by a full verification that writes no stamp.
+    fn assert_refused_without_restamping(root: &Path, stamp: &Path, revision: &str, before: &[u8]) {
+        let (refused, hashed, listed) = stamped_verification_counting(root, revision);
+        let refusal = refused.expect_err("the tree no longer matches the sealed manifest");
+        assert!(refusal.contains("does not match"), "{refusal}");
+        assert!(
+            hashed > 0 && listed > 0,
+            "the stamp was not trusted, so the tree was listed and re-hashed"
+        );
+        assert_eq!(
+            std::fs::read(stamp).expect("still there"),
+            before,
+            "a failed verification writes no stamp"
+        );
     }
 
     fn cleanup(root: &Path, stamp: &Path) {
@@ -1363,9 +1480,10 @@ mod tests {
             "a successful full verification leaves a stamp"
         );
 
-        let (second, hashed) = stamped_verification(&root, &revision);
+        let (second, hashed, listed) = stamped_verification_counting(&root, &revision);
         second.expect("the stamp still matches");
         assert_eq!(hashed, 0, "a matching stamp spares every file read");
+        assert_eq!(listed, 0, "a matching stamp spares every directory listing");
         cleanup(&root, &stamp);
     }
 
@@ -1407,19 +1525,73 @@ mod tests {
         stamped_verification(&root, &revision).0.expect("verifies");
         let before = std::fs::read(&stamp).expect("stamped");
 
+        after_the_stamp();
         write(&root.join("profiles/extra.yaml"), "smuggled\n");
-        let (refused, hashed) = stamped_verification(&root, &revision);
-        let refusal = refused.expect_err("an extra file is outside the sealed manifest");
-        assert!(refusal.contains("does not match"), "{refusal}");
-        assert!(
-            hashed > 0,
-            "the listing changed, so the stamp was not trusted"
+        assert_refused_without_restamping(&root, &stamp, &revision, &before);
+        cleanup(&root, &stamp);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_removed_after_stamping_is_refused() {
+        let revision = "5".repeat(40);
+        let (root, stamp) = sealed_snapshot("stamp-removed", &revision);
+        stamped_verification(&root, &revision).0.expect("verifies");
+        let before = std::fs::read(&stamp).expect("stamped");
+
+        after_the_stamp();
+        std::fs::remove_file(root.join("profiles/standard.yaml")).expect("removable");
+        assert_refused_without_restamping(&root, &stamp, &revision, &before);
+        cleanup(&root, &stamp);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_renamed_within_its_directory_after_stamping_is_refused() {
+        let revision = "6".repeat(40);
+        let (root, stamp) = sealed_snapshot("stamp-renamed", &revision);
+        stamped_verification(&root, &revision).0.expect("verifies");
+        let before = std::fs::read(&stamp).expect("stamped");
+
+        after_the_stamp();
+        std::fs::rename(
+            root.join("profiles/standard.yaml"),
+            root.join("profiles/renamed.yaml"),
+        )
+        .expect("renamable");
+        assert_refused_without_restamping(&root, &stamp, &revision, &before);
+        cleanup(&root, &stamp);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_format_one_stamp_is_ignored_and_replaced() {
+        let revision = "7".repeat(40);
+        let (root, stamp) = sealed_snapshot("stamp-format-one", &revision);
+        stamped_verification(&root, &revision).0.expect("verifies");
+        let mut current: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&stamp).expect("stamped")).expect("parses");
+        let fields = current.as_object_mut().expect("a stamp is an object");
+        fields.insert("format".to_owned(), "aep.snapshot-verified/1".into());
+        let directories = fields
+            .remove("directories")
+            .expect("format 2 lists directories");
+        fields["files"].as_object_mut().expect("files").insert(
+            SNAPSHOT_DIRECTORY_KEY.to_owned(),
+            directories[SNAPSHOT_DIRECTORY_KEY].clone(),
         );
-        assert_eq!(
-            std::fs::read(&stamp).expect("still there"),
-            before,
-            "a failed verification writes no stamp"
-        );
+        std::fs::write(&stamp, serde_json::to_vec(&current).expect("serializes"))
+            .expect("writable");
+
+        let (result, hashed, listed) = stamped_verification_counting(&root, &revision);
+        result.expect("the snapshot itself is intact");
+        assert_eq!(hashed, 2, "a format-1 stamp is not trusted");
+        assert!(listed > 0, "a format-1 stamp is not trusted");
+        let rewritten: SnapshotStamp =
+            serde_json::from_slice(&std::fs::read(&stamp).expect("rewritten")).expect("parses");
+        assert_eq!(rewritten.format, SNAPSHOT_STAMP_FORMAT);
+        assert!(rewritten.directories.contains_key("profiles"));
+        assert_eq!(stamped_verification_counting(&root, &revision).2, 0);
         cleanup(&root, &stamp);
     }
 
