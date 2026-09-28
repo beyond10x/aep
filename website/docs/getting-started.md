@@ -13,7 +13,10 @@ This page installs `aep` and uses it in an empty Git repository. By the end you 
 3. a refused move, and the evidence record that makes the same move legal;
 4. a plan that `validate` accepts.
 
-Every output below is copied from a real run of `aep 0.63.1`. Absolute paths are shortened to `…`.
+Every output below is copied from a real run of `aep 0.63.1`, so a newer `aep` prints its own
+version where these print `0.63.1`. The install commands and the pinned protocol commit name the
+current release, and so do the lines that echo that commit back. Absolute paths are shortened to
+`…`.
 
 ## 1. Install
 
@@ -21,8 +24,9 @@ Download the archive for your platform from
 [GitHub Releases](https://github.com/beyond10x/aep/releases), check it, and put `aep` on your
 `PATH`:
 
+{/* generated:release-pin:begin version=0.64.0 — kept by `cargo xtask status` */}
 ```bash
-VERSION=0.63.1
+VERSION=0.64.0
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
@@ -35,8 +39,9 @@ Archives exist for `x86_64` and `aarch64`, on Linux (`unknown-linux-gnu`) and ma
 (`apple-darwin`). To build from source instead, with Rust 1.91 or newer:
 
 ```bash
-cargo install --locked --git https://github.com/beyond10x/aep --tag 0.63.1 aep-cli --bin aep
+cargo install --locked --git https://github.com/beyond10x/aep --tag 0.64.0 aep-cli --bin aep
 ```
+{/* generated:release-pin:end */}
 
 ## 2. Adopt a repository
 
@@ -44,28 +49,30 @@ AEP needs two things from a repository: a `.engineering/project.yaml`, and a sou
 governing documents (lifecycles, relations, templates, principles). Pin that source to a commit, so
 the rules cannot change underneath you without a commit in your own repository:
 
+{/* generated:release-pin:begin version=0.64.0 commit=58433bd85a1ccf939566c53d5543df86c3852b19 — kept by `cargo xtask status` */}
 ```shell-session
 $ cd shop            # any Git repository
 $ aep plan reverse init --profile development.standard \
-    --protocols git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e
+    --protocols git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19
 …/shop/.engineering/project.yaml written
-  protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/88836a30f28ab2fddc3ab63d1ac54956973fa25e
+  protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/58433bd85a1ccf939566c53d5543df86c3852b19
   profile development.standard
   store: git (aep.project/5), planning_scope shop
 ```
 
-The commit above is the `0.63.1` release. `reverse init` fetches that revision once into a local
+The commit above is the `0.64.0` release. `reverse init` fetches that revision once into a local
 cache and checks it before writing anything. The file it writes (its explanatory comment omitted):
 
 ```yaml
 version: aep.project/5
 protocol: adp/1
 profile: development.standard
-protocols: git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e
+protocols: git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19
 planning_scope: "shop"
 store:
   git: {}
 ```
+{/* generated:release-pin:end */}
 
 `aep.project/5` is the Git-native store: the artifact files are the plan, and Git is its history.
 [The planning store](./concepts/planning-store.md) explains the layout, and
@@ -193,6 +200,7 @@ transitions:
 
 ## 7. Validate, commit, check the checkout
 
+{/* generated:release-pin:begin commit=58433bd85a1ccf939566c53d5543df86c3852b19 — kept by `cargo xtask status` */}
 ```shell-session
 $ aep plan artifact validate
 2 file(s) in …/.engineering/planning: 2 artifact(s)
@@ -201,11 +209,12 @@ $ git add .engineering && git commit -m "plan: guest checkout"
 $ aep doctor
 ok    binary-version: 0.63.1
 ok    project-file: ./.engineering/project.yaml parses: protocol adp/1, profile development.standard
-ok    protocol-source: the locator `git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e` is well-formed and its snapshot is cached at …
+ok    protocol-source: the locator `git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19` is well-formed and its snapshot is cached at …
 ok    planning-store: ./.engineering/planning (store: git): 2 artifact(s), 1 evidence file(s), no problems
 warn  plugin-directory: none given: pass `--plugin-dir <path>` or set `AEP_DRIVE_PLUGIN_DIR`. AEP ships no plugin sources and guesses no path
 warn  release-tag: no bare-version tag is reachable from HEAD, so there is nothing to compare version 0.63.1 against — `git fetch --tags` first
 ```
+{/* generated:release-pin:end */}
 
 `validate` exits `1` when it finds a problem, so it works as a CI gate as it is. See
 [Validate the plan in CI](./guides/validate-in-ci.md). `doctor` exits `1` on any `fail` line. The two

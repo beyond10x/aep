@@ -16,14 +16,16 @@ Lifecycles come from the project's `protocols:` source. A source pinned to AEP's
 you AEP's lifecycles and nothing else, so to add your own, vendor the tree into your repository.
 Start from a release and keep its layout:
 
+{/* generated:release-pin:begin version=0.64.0 — kept by `cargo xtask status` */}
 ```bash
 mkdir governance
-curl -sL https://github.com/beyond10x/aep/archive/refs/tags/0.63.1.tar.gz \
+curl -sL https://github.com/beyond10x/aep/archive/refs/tags/0.64.0.tar.gz \
   | tar xz --strip-components=1 -C governance \
-      aep-0.63.1/protocols aep-0.63.1/principles aep-0.63.1/workflows \
-      aep-0.63.1/profiles aep-0.63.1/artifacts aep-0.63.1/drivers
+      aep-0.64.0/protocols aep-0.64.0/principles aep-0.64.0/workflows \
+      aep-0.64.0/profiles aep-0.64.0/artifacts aep-0.64.0/drivers
 aep plan reverse init --protocols ../governance --profile development.standard
 ```
+{/* generated:release-pin:end */}
 
 `--protocols` is relative to `.engineering/`, and `project.yaml` now says `protocols: ../governance`.
 If the repository already has a project file, change that one line instead of running `reverse init`.

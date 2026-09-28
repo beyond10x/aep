@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 
+mod release_pins;
+
 /// The index of a generated directory, written from the same list the directory is.
 const INDEX: &str = "README.md";
 
@@ -279,7 +281,8 @@ fn main() -> Result<()> {
             generated_status_region_inventory(&root)?;
             status(&root, check)?;
             agents_gate_steps(&root, check)?;
-            website_currency_from_tags(&root, check)
+            website_currency_from_tags(&root, check)?;
+            release_pins_from_tags(&root, check)
         }
         Command::Version => version_check(&workspace_root()),
         Command::Release => release_check(&workspace_root()),
@@ -1424,6 +1427,7 @@ fn generated_status_region_inventory(root: &Path) -> Result<()> {
     collect_status_region_files(root, root, &mut found)?;
     let expected: BTreeSet<String> = STATUS_REGION_FILES
         .iter()
+        .chain(release_pins::RELEASE_PIN_FILES)
         .map(|path| (*path).to_owned())
         .collect();
     if found != expected {
@@ -1654,6 +1658,23 @@ fn website_currency_from_tags(root: &Path, check: bool) -> Result<()> {
         println!("the website's currency stamps are up to date ({newest})");
     } else {
         println!("{written} website currency stamp(s) rewritten to {newest}");
+    }
+    Ok(())
+}
+
+/// Writes or checks the install tag and protocol commit the README and the website pin.
+fn release_pins_from_tags(root: &Path, check: bool) -> Result<()> {
+    let targets = release_pins::targets(root)?;
+    let written =
+        release_pins::hold_release_pins(root, release_pins::RELEASE_PIN_FILES, &targets, check)?;
+    let named = format!(
+        "{}; commit pins {} at {}",
+        targets.newest.version, targets.commit_pins.version, targets.commit_pins.commit
+    );
+    if check {
+        println!("the release pins are up to date ({named})");
+    } else {
+        println!("{written} file(s) of release pins rewritten ({named})");
     }
     Ok(())
 }
