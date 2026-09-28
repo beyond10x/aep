@@ -1,7 +1,7 @@
-// Shared implementation of the canonical command and its compatibility alias.
+// Implementation of the `aep` command.
 //
 // Every subcommand is a thin shell over the library: the CLI parses arguments, loads documents and
-// renders results. It decides nothing, which is the point — if `protocol evaluate` says a transition
+// renders results. It decides nothing, which is the point — if `aep govern evaluate` says a transition
 // is blocked, a harness calling the same engine gets the same answer.
 //
 // Exit codes: `0` success, `1` the documents or the execution say no, `2` bad usage, `3` nobody
@@ -149,7 +149,7 @@ struct BackendArgs {
     format: Format,
 }
 
-/// Which backend `protocol conformance` holds to the suites.
+/// Which backend `aep plan conformance` holds to the suites.
 ///
 /// Its own enum rather than a free string so an unknown backend is a usage error naming the three
 /// that exist, and so the report can say which one answered in the words the caller typed.
@@ -202,7 +202,7 @@ enum GovernCommand {
         /// Also write what this validation found as a `verification` evidence document.
         ///
         /// The claim is [`DOCUMENT_TREE_VALID`] and the verifier is this tool. It is the same walk
-        /// the report above describes, written in the shape `protocol evaluate --evidence` reads,
+        /// the report above describes, written in the shape `aep govern evaluate --evidence` reads,
         /// so a driven step can declare `kind: verification` with a `record:` and submit what the
         /// validator found rather than a verdict minted from an exit status.
         ///
@@ -302,8 +302,8 @@ enum PlanCommand {
     ///   `story/passkey-login.md`, always;
     /// * they write into whatever directory is passed; these write inside a directory that was
     ///   **opted into**, either by `--store` or by the project's own `.engineering/planning/`;
-    /// * and `protocol artifact new` is not a preview of anything. A plan item you did not want is
-    ///   retired with `protocol artifact move <id> --to archived`, which keeps its record — never
+    /// * and `aep plan artifact new` is not a preview of anything. A plan item you did not want is
+    ///   retired with `aep plan artifact move <id> --to archived`, which keeps its record — never
     ///   with `rm`, which `validate` reports as a deletion no command made. Neither is true of a
     ///   synthesised workspace.
     ///
@@ -462,7 +462,7 @@ enum ObserveCommand {
     /// dependency: no crate crosses that boundary, because this repository is public and that one is
     /// not.
     ///
-    /// Not to be confused with `protocol conformance`, which asks whether a **backend** implements
+    /// Not to be confused with `aep plan conformance`, which asks whether a **backend** implements
     /// `aep-contract` — storage, commands, queries, audit. Neither subsumes the other and the only
     /// thing they share is the word.
     Contract {
@@ -498,7 +498,7 @@ enum ObserveCommand {
     ///
     /// The observation half of evidence horizons. `scan` reads human-written markdown for the
     /// annotation convention a claim is written in; `inspect` reads an evidence file of the kind
-    /// `protocol evaluate --evidence` submits. Neither writes anything, neither resolves a plan and
+    /// `aep govern evaluate --evidence` submits. Neither writes anything, neither resolves a plan and
     /// neither decides a gate: they report what a document says about when somebody last looked.
     Evidence {
         /// Which question to ask.
@@ -524,7 +524,7 @@ enum DriveGroup {
     ///
     /// The evaluation programme's deliverable. Its runs come in three arms — raw instructions, the
     /// shipped plugin, a driven run whose calls an enforcer decides — against more than one
-    /// harness, and each leaves a run manifest beside the record `protocol trace check` wrote about
+    /// harness, and each leaves a run manifest beside the record `aep observe trace check` wrote about
     /// its transcript. This verb counts, per harness × arm × workflow and per expectation, how many
     /// facts held, how many were contradicted and how many nobody could find out.
     ///
@@ -533,7 +533,7 @@ enum DriveGroup {
     /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
     /// recording.
     ///
-    /// Not to be confused with `protocol evaluate`, which asks the engine what one task owes and
+    /// Not to be confused with `aep govern evaluate`, which asks the engine what one task owes and
     /// what it is permitted. This verb decides nothing and reads no protocol document; the only
     /// thing the two share is a stem.
     Eval {
@@ -626,7 +626,7 @@ enum Command {
     ///
     /// The evaluation programme's deliverable. Its runs come in three arms — raw instructions, the
     /// shipped plugin, a driven run whose calls an enforcer decides — against more than one
-    /// harness, and each leaves a run manifest beside the record `protocol trace check` wrote about
+    /// harness, and each leaves a run manifest beside the record `aep observe trace check` wrote about
     /// its transcript. This verb counts, per harness × arm × workflow and per expectation, how many
     /// facts held, how many were contradicted and how many nobody could find out.
     ///
@@ -635,7 +635,7 @@ enum Command {
     /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
     /// recording.
     ///
-    /// Not to be confused with `protocol evaluate`, which asks the engine what one task owes and
+    /// Not to be confused with `aep govern evaluate`, which asks the engine what one task owes and
     /// what it is permitted. This verb decides nothing and reads no protocol document; the only
     /// thing the two share is a stem.
     Eval {
@@ -689,7 +689,7 @@ enum EvidenceCommand {
     },
     /// Read an evidence file and report, per record, when somebody last looked.
     ///
-    /// Reads the same document `protocol evaluate --evidence` submits and puts every record to the
+    /// Reads the same document `aep govern evaluate --evidence` submits and puts every record to the
     /// engine's own future-observation comparison, so the two verbs answer identically about one
     /// file: an observation written as a calendar date is refused only once that day has begun in
     /// no timezone, one written as epoch milliseconds is compared exactly, and either refusal
@@ -707,7 +707,7 @@ enum EvidenceCommand {
         /// It also pins the future-observation check, to the **end** of that day — reading a
         /// record the day it was written is the verb's primary use, and a record stamped 14:07 is
         /// inside its day rather than ahead of its first millisecond. Without it the check runs
-        /// against the wall clock, which is the instant `protocol evaluate` submits against.
+        /// against the wall clock, which is the instant `aep govern evaluate` submits against.
         #[arg(long, value_name = "DATE")]
         at: Option<String>,
         /// A horizon to apply for the report, such as `7d`.
@@ -729,7 +729,7 @@ enum EvidenceCommand {
 /// Every one of them seeds an in-memory backend from `--artifacts` or `--planning` and then reads
 /// it back. Whichever source is given, the artifacts arrive as one [`ArtifactGraph`] and nothing
 /// downstream can tell which it was. Nothing
-/// here is durable: `protocol entity history` shows this run's seeding, and running it again
+/// here is durable: `aep plan entity history` shows this run's seeding, and running it again
 /// produces the same answer rather than a longer history.
 #[derive(Debug, Subcommand)]
 enum EntityCommand {
@@ -785,7 +785,7 @@ enum EntityCommand {
 
 /// Writes to standard output, treating a closed pipe as a normal end rather than a crash.
 ///
-/// Rust's `println!` panics when the reader goes away, so `protocol inspect | head -3` ends in a
+/// Rust's `println!` panics when the reader goes away, so `aep govern inspect | head -3` ends in a
 /// stack trace instead of three lines. A consumer that stopped reading is not an error this program
 /// has anything to say about, so it exits quietly.
 pub fn write_out(text: &str, newline: bool) {
@@ -858,7 +858,7 @@ mod render;
 mod contract;
 
 // The sixth. Its input is a pair of documents per run — a manifest this repository defines and the
-// check report `protocol trace check` writes — its vocabulary is the three arms of the evaluation
+// check report `aep observe trace check` writes — its vocabulary is the three arms of the evaluation
 // programme, and it shares nothing with the rest. It is also where the one rule that programme has
 // about its own output lives: counts of facts, never a score.
 pub mod eval;
@@ -906,7 +906,7 @@ mod property;
 // here that decides a *document* against a run rather than code against a suite.
 mod specification;
 
-/// Execute the canonical AEP command or its compatibility alias.
+/// Execute the `aep` command.
 pub fn main() -> ExitCode {
     match run() {
         Ok(code) => code,
@@ -1088,7 +1088,7 @@ fn drive_group(command: DriveGroup) -> Result<ExitCode> {
     }
 }
 
-/// `protocol conformance`
+/// `aep plan conformance`
 #[allow(clippy::too_many_lines)] // One explicit backend table keeps CLI conformance routing exhaustive.
 fn conformance(
     level: &str,
@@ -1350,7 +1350,7 @@ fn scratch_or(store: Option<&Path>) -> Result<PathBuf> {
 
 /// What is wrong with the `project.yaml` of the project this was run in, when there is one.
 ///
-/// `protocol validate` is where a project's configuration is refused as a whole — a `store: hybrid`
+/// `aep govern validate` is where a project's configuration is refused as a whole — a `store: hybrid`
 /// missing one of its four policy words names the word here (`aep.project/1`, runtime R-106
 /// enforced at our edge), rather than at the first verb that happened to open the plan. No project
 /// found is no problem: the document tree is what was asked about.
@@ -1487,8 +1487,8 @@ pub(crate) fn now_observed() -> aep_domain::time::ObservedAt {
     aep_domain::time::ObservedAt::new(aep_domain::time::Timestamp::from_epoch_millis(millis))
 }
 
-/// `protocol validate`
-/// The claim `protocol validate --evidence` establishes.
+/// `aep govern validate`
+/// The claim `aep govern validate --evidence` establishes.
 ///
 /// A claim of its own rather than one of the eleven the convention lists (AGENTS.md § *Conventions*:
 /// reuse before inventing), and the reason is that reusing `invariant` would be a false claim:
@@ -1500,16 +1500,16 @@ pub(crate) fn now_observed() -> aep_domain::time::ObservedAt {
 /// requires.
 const DOCUMENT_TREE_VALID: &str = "document-tree-valid";
 
-/// The verifier class `protocol validate` signs its record as.
+/// The verifier class `aep govern validate` signs its record as.
 ///
-/// An external tool named `protocol`, the same spelling `drivers/development/checks.yaml` already
+/// An external tool named `aep`, the same spelling `drivers/development/checks.yaml` already
 /// uses for this binary's own verbs. `EvidenceKind::Verification::default_verifiers` names
 /// `policy-engine` and `model-checker`, and this is neither: `default_verifiers` is a table of
 /// defaults rather than of constraints, and claiming to be a model checker would be a stronger
 /// statement about method than a document walk supports.
 fn validator() -> aep_domain::verification::Verifier {
     aep_domain::verification::Verifier::ExternalTool(
-        aep_domain::ids::ToolRef::new("protocol").expect("`protocol` is a tool reference"),
+        aep_domain::ids::ToolRef::new("aep").expect("`aep` is a tool reference"),
     )
 }
 
@@ -1563,7 +1563,7 @@ fn write_validation_evidence(
         now_observed(),
     )
     .obtained_by(format!(
-        "protocol validate --root {} --evidence {}",
+        "aep govern validate --root {} --evidence {}",
         root.display(),
         out.display()
     ))
@@ -1709,7 +1709,7 @@ fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
     })
 }
 
-/// `protocol resolve`
+/// `aep govern resolve`
 fn resolve(args: &ExecutionArgs) -> Result<ExitCode> {
     let Inputs {
         registry,
@@ -1764,7 +1764,7 @@ fn resolve(args: &ExecutionArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol inspect`
+/// `aep govern inspect`
 fn inspect(root: &Path, reference: Option<&str>, format: Format) -> Result<ExitCode> {
     let registry = load(root)?;
 
@@ -1808,7 +1808,7 @@ fn inspect(root: &Path, reference: Option<&str>, format: Format) -> Result<ExitC
     bail!("nothing in {} declares `{reference}`", root.display())
 }
 
-/// `protocol evaluate` and `protocol explain`
+/// `aep govern evaluate` and `aep govern explain`
 fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
     let Inputs {
         registry,
@@ -1942,7 +1942,7 @@ fn report_refusals(refusals: &[String]) {
     }
 }
 
-/// `protocol entity`
+/// `aep plan entity`
 fn entity(command: &EntityCommand) -> Result<ExitCode> {
     match command {
         EntityCommand::List {
@@ -1959,7 +1959,7 @@ fn entity(command: &EntityCommand) -> Result<ExitCode> {
     }
 }
 
-/// `protocol entity list`
+/// `aep plan entity list`
 fn entity_list(args: &BackendArgs, entity_type: Option<&str>) -> Result<ExitCode> {
     let backend = seeded(args)?;
 
@@ -1989,7 +1989,7 @@ fn entity_list(args: &BackendArgs, entity_type: Option<&str>) -> Result<ExitCode
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol entity get`
+/// `aep plan entity get`
 fn entity_get(args: &BackendArgs, reference: &str) -> Result<ExitCode> {
     let backend = seeded(args)?;
     let target = resolve_entity(&backend, reference)?;
@@ -2018,7 +2018,7 @@ fn entity_get(args: &BackendArgs, reference: &str) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol entity history`
+/// `aep plan entity history`
 fn entity_history(args: &BackendArgs, reference: &str) -> Result<ExitCode> {
     let backend = seeded(args)?;
     let target = resolve_entity(&backend, reference)?;
@@ -2046,7 +2046,7 @@ fn entity_history(args: &BackendArgs, reference: &str) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol entity relations`
+/// `aep plan entity relations`
 fn entity_relations(args: &BackendArgs, reference: &str, incoming: bool) -> Result<ExitCode> {
     let backend = seeded(args)?;
     let target = resolve_entity(&backend, reference)?;
@@ -2082,7 +2082,7 @@ fn entity_relations(args: &BackendArgs, reference: &str, incoming: bool) -> Resu
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol audit`
+/// `aep plan audit`
 fn audit(
     args: &BackendArgs,
     correlation: Option<&str>,
@@ -2135,7 +2135,7 @@ fn audit(
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol describe`
+/// `aep govern describe`
 fn describe(args: &BackendArgs, entity_type: &str) -> Result<ExitCode> {
     let backend = seeded(args)?;
     let entity_type = entity_type
@@ -2482,7 +2482,7 @@ fn print_serialised<T: serde::Serialize>(value: &T, format: Format) -> Result<()
 /// comparison — rather than each carrying a rule of its own. What differs is only which instant
 /// they compare against:
 ///
-/// * **no `--at`**: the wall clock, which is exactly what `protocol evaluate` submits against;
+/// * **no `--at`**: the wall clock, which is exactly what `aep govern evaluate` submits against;
 /// * **`--at <day>`**: the last millisecond of that day. A pinned day is a what-if, and the
 ///   permissive end of it is the one that keeps the verb's primary use working — reading a record
 ///   the day it was written, whose instant is somewhere inside the day, not at its first
@@ -2580,7 +2580,7 @@ struct ScanTotals {
     malformed: usize,
 }
 
-/// `protocol evidence scan`
+/// `aep observe evidence scan`
 fn evidence_scan(
     paths: &[PathBuf],
     at: aep_domain::time::CivilDate,
@@ -2756,12 +2756,12 @@ struct InspectedRecord {
     producer: String,
 }
 
-/// `protocol evidence inspect`
+/// `aep observe evidence inspect`
 ///
 /// Two references, and they answer different questions. `at` is the day the report **ages**
 /// against, so a horizon boundary reads in whole days exactly as a document scanner reads it.
 /// `reference` is the instant a **future** observation is refused against, and it is the engine's
-/// own comparison so that this verb and `protocol evaluate` cannot disagree about one file.
+/// own comparison so that this verb and `aep govern evaluate` cannot disagree about one file.
 fn evidence_inspect(
     paths: &[PathBuf],
     at: aep_domain::time::CivilDate,
@@ -3044,7 +3044,7 @@ const AREAS: [&str; 5] = ["govern", "plan", "drive", "observe", "doctor"];
     /// A leaf with required arguments refuses a bare invocation, and that refusal is not the
     /// question: only `InvalidSubcommand` says *there is no such command*.
     fn resolves(path: &[String]) -> bool {
-        let mut argv = vec!["protocol".to_owned()];
+        let mut argv = vec!["aep".to_owned()];
         argv.extend(path.iter().cloned());
         match super::command().try_get_matches_from(argv) {
             Ok(_) => true,

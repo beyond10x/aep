@@ -24,7 +24,7 @@ use aep_project::project::{load_workspace, project_directory, resolve_member};
 
 use crate::Format;
 
-/// Operations supported by `protocol workspace`.
+/// Operations supported by `aep plan workspace`.
 #[derive(Debug, Subcommand)]
 pub(crate) enum WorkspaceCommand {
     /// The plan across every member, one line per artifact.
@@ -85,7 +85,7 @@ pub(crate) enum WorkspaceCommand {
     },
 }
 
-/// Runs one `protocol workspace` subcommand.
+/// Runs one `aep plan workspace` subcommand.
 pub(crate) fn run(command: WorkspaceCommand) -> Result<ExitCode> {
     match command {
         WorkspaceCommand::Members {

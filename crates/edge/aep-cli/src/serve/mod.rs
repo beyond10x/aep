@@ -1,8 +1,8 @@
-//! `protocol serve` — the plan in a browser, and the transitions that move it.
+//! `aep plan serve` — the plan in a browser, and the transitions that move it.
 //!
 //! A board is a shape and a terminal prints lines, so triage is the thing the CLI is worst at. This
-//! answers a browser on loopback with the same facts `protocol artifact board`, `show` and `explain`
-//! print, and takes status moves back through the same decision `protocol artifact move` makes.
+//! answers a browser on loopback with the same facts `aep plan artifact board`, `show` and `explain`
+//! print, and takes status moves back through the same decision `aep plan artifact move` makes.
 //!
 //! # It binds `127.0.0.1` and there is no flag that widens it
 //!
@@ -74,7 +74,7 @@ pub(crate) fn run(location: &StoreLocation, port: u16, read_only: bool) -> Resul
     // stdout directly, not `outln!`: that macro exits the process on a write error, which is right
     // for a verb that has finished and wrong for a server that has not started.
     let mut out = std::io::stdout();
-    writeln!(out, "protocol serve — {}", serialised(&opening))?;
+    writeln!(out, "aep plan serve — {}", serialised(&opening))?;
     writeln!(out, "http://127.0.0.1:{bound}/?t={token}")?;
     if read_only {
         writeln!(out, "read-only: every transition is refused")?;

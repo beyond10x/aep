@@ -26,7 +26,7 @@
 //! document is appended here as the runtime's `DomainEvent` — one JSON object per line, sealed in
 //! its payload with who and when, and carrying under `payload.change` exactly the [`Change`] this
 //! module would have written. [`read`] understands both shapes and answers [`Entry`]s for both, so
-//! `protocol artifact history` prints a move made before the provider and one made after it the
+//! `aep plan artifact history` prints a move made before the provider and one made after it the
 //! same way. The older lines are left exactly as they were: the boundary between the two is the
 //! first event the provider ever wrote.
 //!

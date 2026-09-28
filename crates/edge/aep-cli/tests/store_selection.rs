@@ -3,10 +3,10 @@
 //! `story:store-selection-in-project-yaml` and `story:hybrid-backend`. Three copies of
 //! `examples/planning-passkeys/` — on `project.yaml` (markdown, the default), on
 //! `project.sqlite.yaml`, and on `project.hybrid.yaml` (markdown with a SQLite replica) — each with
-//! the same seven artifacts seeded through the contract, and every `protocol artifact` verb run in
+//! the same seven artifacts seeded through the contract, and every `aep plan artifact` verb run in
 //! all three, each as its own process, with its output compared after the one thing that
 //! legitimately differs (where the store is) is written as `<store>`. A `hybrid` missing a policy
-//! word is refused by name; `protocol conformance --backend project` holds the configured kind of
+//! word is refused by name; `aep plan conformance --backend project` holds the configured kind of
 //! store to the suites without writing into the plan; and a hybrid whose replica refuses a write
 //! records the divergence for the next process to list and catch up.
 
@@ -35,10 +35,10 @@ fn example() -> PathBuf {
     root().join("examples/planning-passkeys")
 }
 
-/// Runs `protocol` from inside `project`, which is how an adopting team runs it: no `--store`, no
+/// Runs `aep` from inside `project`, which is how an adopting team runs it: no `--store`, no
 /// `--root`, everything from `project.yaml`.
-fn protocol_in(project: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+fn aep_in(project: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(project)
         // Only the `aep.project/1` Markdown project gets the upgrade suggestion; this file
@@ -208,7 +208,7 @@ impl Pair {
         assert_eq!(
             markdown.code,
             Some(code),
-            "`protocol {}`: {}{}",
+            "`aep {}`: {}{}",
             args.join(" "),
             markdown.stdout,
             markdown.stderr
@@ -221,14 +221,14 @@ impl Pair {
         assert_eq!(
             markdown,
             sqlite,
-            "`protocol {}` differs between markdown and SQLite",
+            "`aep {}` differs between markdown and SQLite",
             args.join(" ")
         );
         let hybrid = Answer::of(&self.hybrid, args);
         assert_eq!(
             markdown,
             hybrid,
-            "`protocol {}` differs between markdown and the hybrid",
+            "`aep {}` differs between markdown and the hybrid",
             args.join(" ")
         );
         markdown
@@ -245,7 +245,7 @@ struct Answer {
 
 impl Answer {
     fn of(project: &Path, args: &[&str]) -> Self {
-        let output = protocol_in(project, args);
+        let output = aep_in(project, args);
         Self {
             code: output.status.code(),
             stdout: normalise(project, &text(&output.stdout)),
@@ -635,7 +635,7 @@ fn an_edge_is_taken_back_alike_in_every_store() {
 /// verb that "cleaned up" the body would lose, and losing them is the failure this asserts against.
 const SHOWN_BODY: &str = "# Audit trail\n\nEvery ceremony,  verbatim.\n\n";
 
-/// `protocol artifact show <id>` prints one artifact, and the same one in every store.
+/// `aep plan artifact show <id>` prints one artifact, and the same one in every store.
 ///
 /// The gap it closes: with an id in hand there was no verb at all. `list` prints the whole plan,
 /// `explain` answers what made a status happen, `history` prints the event log and `body` *writes* —
@@ -755,7 +755,7 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
         ("sqlite", &pair.sqlite),
         ("hybrid", &pair.hybrid),
     ] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &["plan", "artifact", "show", "story:not-in-this-plan"],
         );
@@ -781,7 +781,7 @@ fn the_sqlite_plan_is_read_from_the_database_and_not_from_files() {
         !pair.sqlite.join(".engineering/planning").exists(),
         "the SQLite project keeps no markdown"
     );
-    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "list"]);
+    let output = aep_in(&pair.sqlite, &["plan", "artifact", "list"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(
         text(&output.stdout).lines().count(),
@@ -816,17 +816,17 @@ fn a_hybrid_missing_a_policy_word_is_refused_naming_the_word() {
             root().to_str().expect("printable"),
         ],
     ] {
-        let output = protocol_in(&project, args);
+        let output = aep_in(&project, args);
         let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
         assert_ne!(
             output.status.code(),
             Some(0),
-            "`protocol {}` accepted a hybrid with no `on_divergence`: {stdout}",
+            "`aep {}` accepted a hybrid with no `on_divergence`: {stdout}",
             args.join(" ")
         );
         assert!(
             format!("{stdout}{stderr}").contains("on_divergence"),
-            "`protocol {}` refused without naming the missing word:\n{stdout}{stderr}",
+            "`aep {}` refused without naming the missing word:\n{stdout}{stderr}",
             args.join(" ")
         );
     }
@@ -840,7 +840,7 @@ fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_sui
         (&pair.sqlite, "sqlite (in-memory database)"),
         (&pair.hybrid, "hybrid ("),
     ] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -863,11 +863,11 @@ fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_sui
         );
     }
     // The plan itself was not written into: the same seven artifacts, no suite entity among them.
-    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "list"]);
+    let output = aep_in(&pair.sqlite, &["plan", "artifact", "list"]);
     assert_eq!(text(&output.stdout).lines().count(), 7);
 
     // `--store` beside `project` is two answers to one question.
-    let output = protocol_in(
+    let output = aep_in(
         &pair.sqlite,
         &[
             "plan",
@@ -891,7 +891,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     let replica = project.join(".engineering/replica.sqlite3");
 
     // Nothing outstanding to begin with, and the verb says so with exit 0.
-    let output = protocol_in(project, &["plan", "artifact", "divergences"]);
+    let output = aep_in(project, &["plan", "artifact", "divergences"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(text(&output.stdout).contains("no divergences recorded; authority: local"));
 
@@ -900,7 +900,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     let mut read_only = writable.clone();
     read_only.set_mode(0o444);
     std::fs::set_permissions(&replica, read_only).expect("read-only");
-    let output = protocol_in(
+    let output = aep_in(
         project,
         &[
             "plan",
@@ -922,7 +922,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     );
 
     // The next process lists what diverged — and says which side is authoritative.
-    let output = protocol_in(
+    let output = aep_in(
         project,
         &["plan", "artifact", "divergences", "--format", "json"],
     );
@@ -941,12 +941,12 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     );
 
     // Every other verb still works over the plan while it is diverged.
-    let output = protocol_in(project, &["plan", "artifact", "list"]);
+    let output = aep_in(project, &["plan", "artifact", "list"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(text(&output.stdout).lines().count(), 8);
 
     // Catch-up replays it at the replica; the replica then holds the story.
-    let output = protocol_in(project, &["plan", "artifact", "catch-up"]);
+    let output = aep_in(project, &["plan", "artifact", "catch-up"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(
         text(&output.stdout).contains("1 divergence(s) found, 1 replayed, 0 outstanding"),
@@ -956,7 +956,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     assert!(!project
         .join(".engineering/planning/divergences.jsonl")
         .exists());
-    let output = protocol_in(project, &["plan", "artifact", "divergences"]);
+    let output = aep_in(project, &["plan", "artifact", "divergences"]);
     assert_eq!(output.status.code(), Some(0));
     let held = {
         use entity_store::StateProvider as _;
@@ -968,7 +968,7 @@ fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_
     assert!(held.is_some(), "the replica now holds the story");
 
     // A plan that is not a hybrid has no divergences to speak of.
-    let output = protocol_in(&pair.sqlite, &["plan", "artifact", "divergences"]);
+    let output = aep_in(&pair.sqlite, &["plan", "artifact", "divergences"]);
     assert_ne!(output.status.code(), Some(0));
     assert!(text(&output.stderr).contains("not a hybrid plan"));
 }
@@ -979,7 +979,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
     // and refused by the reader that only knew a date — every recording had to type `--at`.
     let pair = Pair::new("evidence-now");
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -993,7 +993,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
             ],
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-        let history = protocol_in(
+        let history = aep_in(
             project,
             &["plan", "artifact", "history", "story:passkey-login"],
         );
@@ -1005,7 +1005,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
     }
 
     // And an instant nothing can read is still refused, naming it.
-    let output = protocol_in(
+    let output = aep_in(
         &pair.markdown,
         &[
             "plan",
@@ -1034,7 +1034,7 @@ fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
 /// what they then ask of it, not how it was built.
 fn closed_on_two_records(project: &Path, reference: &str) {
     for (kind, source) in [("test_result", "task check"), ("review", "alice")] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -1053,7 +1053,7 @@ fn closed_on_two_records(project: &Path, reference: &str) {
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     }
-    let output = protocol_in(
+    let output = aep_in(
         project,
         &[
             "plan",
@@ -1079,7 +1079,7 @@ fn what_made_a_story_done_names_the_revision_each_record_was_admitted_at() {
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
         closed_on_two_records(project, "run-4711");
 
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -1159,7 +1159,7 @@ fn a_joined_record_outlives_the_file_its_reference_names() {
     assert!(!log.exists(), "and now names one that does not");
 
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:passkey-login"],
         );
@@ -1178,13 +1178,13 @@ fn a_joined_record_outlives_the_file_its_reference_names() {
 
 #[test]
 fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
-    // Mirroring `protocol artifact validate`: a status reached on somebody's word is legal — a
+    // Mirroring `aep plan artifact validate`: a status reached on somebody's word is legal — a
     // runner is down on the day it matters most — and what it must not be is indistinguishable
     // from one the store holds a record for.
     let pair = Pair::new("explain-assertions");
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
         // A rung that asks for nothing: nothing was recorded about how it was decided.
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -1199,7 +1199,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         // A rung that asks for a test result, answered by a number nobody can go and check.
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &[
                 "plan",
@@ -1216,7 +1216,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
         );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
 
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:passkey-login"],
         );
@@ -1227,7 +1227,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
             "a move on a bare count is marked as one: {said}"
         );
 
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:passkey-recovery"],
         );
@@ -1248,7 +1248,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
 fn explaining_an_artifact_no_store_holds_is_refused_naming_it() {
     let pair = Pair::new("explain-unknown");
     for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
-        let output = protocol_in(
+        let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:no-such-story"],
         );

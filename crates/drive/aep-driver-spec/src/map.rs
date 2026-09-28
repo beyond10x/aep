@@ -582,12 +582,12 @@ impl CommandStep {
     /// document it was started from, and which transcript the `llm` step before this one wrote. A
     /// map is a document in the repository and a run directory is allocated when the run starts,
     /// so a step that has to name one has no way to write it down — which is why
-    /// `protocol trace check` could not be a step of a map before these existed.
+    /// `aep observe trace check` could not be a step of a map before these existed.
     ///
     /// **`{task}` is the third, and it is here because a verb that binds to *this* run's task had
-    /// no way to be told which one.** `protocol specification evidence` selects the specification
+    /// no way to be told which one.** `aep observe specification evidence` selects the specification
     /// of the work the task declares; with no way to name the task in a map, a run driven with
-    /// `protocol drive run --task <a path that is not the project's>` reached that verb through
+    /// `aep drive run --task <a path that is not the project's>` reached that verb through
     /// discovery and bound to the *project's* task instead — writing a record about the wrong
     /// story, or refusing over the wrong one. The driver expands it to the **absolute** path of
     /// the task document the run was started from, because a `command` step runs in the project
@@ -707,8 +707,8 @@ pub struct EvidenceMapping {
     /// [`Self::MINTABLE`] is short: an exit status carries *did it produce a verdict, and was it
     /// yes or no*, and a kind whose record holds digests and counts cannot be built from that
     /// without inventing them. With it the driver mints nothing — it reads the document the
-    /// verifier wrote, exactly as `protocol evaluate --evidence` reads one, and submits what the
-    /// document says. `protocol trace evidence` is the case it was added for: the record carries
+    /// verifier wrote, exactly as `aep govern evaluate --evidence` reads one, and submits what the
+    /// document says. `aep observe trace evidence` is the case it was added for: the record carries
     /// the specification's digest, the transcript's digest and three counts, all of which are
     /// facts about a check this process did not run.
     ///
@@ -1349,7 +1349,7 @@ mod tests {
     fn a_kind_no_exit_status_can_carry_loads_when_the_verifier_writes_the_record() {
         let states = r#"{"implement":{"steps":[
             {"kind":"llm","prompt":"do the work"},
-            {"kind":"command","run":["protocol","trace","evidence","--transcript","{transcript}"],
+            {"kind":"command","run":["aep","observe","trace","evidence","--transcript","{transcript}"],
              "evidence":{"kind":"trace_conformance","verifier":"trace-checker",
                          "record":"{run_directory}/trace.yaml"}}]}}"#;
         let map = read(&map_json("adp/default/1", states)).expect("valid");
@@ -1369,7 +1369,7 @@ mod tests {
         // And without `record:` the same step is refused, because then the driver would have to
         // invent the digests.
         let minted = r#"{"implement":{"steps":[
-            {"kind":"command","run":["protocol","trace","check"],
+            {"kind":"command","run":["aep","observe","trace","check"],
              "evidence":{"kind":"trace_conformance","verifier":"trace-checker"}}]}}"#;
         let errors = read(&map_json("adp/default/1", minted)).expect_err("refused");
         assert!(
@@ -1407,7 +1407,7 @@ mod tests {
     #[test]
     fn the_task_document_can_be_named_and_a_misspelling_is_offered_all_three_names() {
         let states = r#"{"implement":{"steps":[
-            {"kind":"command","run":["protocol","specification","evidence","--task","{task}"]}]}}"#;
+            {"kind":"command","run":["aep","observe","specification","evidence","--task","{task}"]}]}}"#;
         let map = read(&map_json("adp/default/1", states)).expect("`{task}` is expandable");
         let steps = map.steps_for(&StateId::new("implement").unwrap());
         let Step::Command(command) = &steps[0] else {
@@ -1428,7 +1428,7 @@ mod tests {
         );
 
         let misspelled = r#"{"implement":{"steps":[
-            {"kind":"command","run":["protocol","specification","evidence","--task","{tsak}"]}]}}"#;
+            {"kind":"command","run":["aep","observe","specification","evidence","--task","{tsak}"]}]}}"#;
         let errors = read(&map_json("adp/default/1", misspelled)).expect_err("refused");
         assert!(
             errors.contains(ValidationCode::UndeclaredReference),
@@ -1447,7 +1447,7 @@ mod tests {
     #[test]
     fn a_transcript_placeholder_with_no_session_before_it_is_refused() {
         let states = r#"{"implement":{"steps":[
-            {"kind":"command","run":["protocol","trace","check","--transcript","{transcript}"]},
+            {"kind":"command","run":["aep","observe","trace","check","--transcript","{transcript}"]},
             {"kind":"llm","prompt":"too late to help the step above"}]}}"#;
         let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
         assert!(

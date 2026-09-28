@@ -1,4 +1,4 @@
-# Drafted by `protocol reverse openapi` from crates/edge/aep-cli/tests/fixtures/reverse-openapi/order-service.yaml.
+# Drafted by `aep plan reverse openapi` from crates/edge/aep-cli/tests/fixtures/reverse-openapi/order-service.yaml.
 #
 # This is a draft and not a specification. An OpenAPI document says what a service accepts;
 # a specification says what the system is. Every entity, lifecycle, invariant and refusal

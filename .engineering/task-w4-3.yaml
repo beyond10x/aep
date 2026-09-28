@@ -9,7 +9,7 @@
 # real defect and three assertions:
 #
 #   * `--take-lock` builds a `StolenLock`, prints it, and never persists it. The cursor field
-#     `took_lock_from` is assigned `None` in two places and nowhere else, so `protocol drive status`
+#     `took_lock_from` is assigned `None` in two places and nowhere else, so `aep drive status`
 #     has a printer for a field that is always empty and *the theft is not in the record*;
 #   * the lock refusal cannot name the holder's cursor state, because `LockState` has no state field
 #     and `take_lock` bails before reading a cursor;

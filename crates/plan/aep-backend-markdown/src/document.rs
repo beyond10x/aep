@@ -479,7 +479,7 @@ impl fmt::Display for MoveRefusal {
 fn what_to_do(unobserved: &str) -> String {
     if let Some(kind) = unobserved.strip_prefix("$args.evidence.") {
         format!(
-            "no {kind} record is held for this artifact — `protocol artifact evidence <id> --kind \
+            "no {kind} record is held for this artifact — `aep plan artifact evidence <id> --kind \
              {kind} --source <where it came from>` records one"
         )
     } else if unobserved == "$args.now" {
@@ -530,7 +530,7 @@ mod tests {
         };
         let text = refusal.to_string();
         assert!(
-            text.contains("`protocol artifact evidence <id> --kind test_result"),
+            text.contains("`aep plan artifact evidence <id> --kind test_result"),
             "the refusal says what to type: {text}"
         );
         assert!(

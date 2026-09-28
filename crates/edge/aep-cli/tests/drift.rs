@@ -19,8 +19,8 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-fn protocol(store: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+fn aep(store: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .arg("--store")
         .arg(store)
@@ -56,7 +56,7 @@ fn a_plan_with_one_event(name: &str) -> PathBuf {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/golden-plan/expected"),
         &store,
     );
-    let moved = protocol(
+    let moved = aep(
         &store,
         &[
             "plan",
@@ -80,7 +80,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
     let store = a_plan_with_one_event("edited");
     // A second event, so the fold has a field the last event did not write: the move wrote
     // `status`, the edge writes `relations`.
-    let related = protocol(
+    let related = aep(
         &store,
         &[
             "plan",
@@ -110,7 +110,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
     )
     .expect("the edit");
 
-    let output = protocol(&store, &["plan", "artifact", "validate"]);
+    let output = aep(&store, &["plan", "artifact", "validate"]);
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -132,7 +132,7 @@ fn a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event() {
         "and the event: {text}"
     );
 
-    let json = protocol(
+    let json = aep(
         &store,
         &["plan", "artifact", "validate", "--format", "json"],
     );
@@ -147,7 +147,7 @@ fn a_document_removed_with_rm_is_reported_as_deleted() {
     let store = a_plan_with_one_event("removed");
     std::fs::remove_file(store.join("story/golden-one.md")).expect("rm");
 
-    let output = protocol(&store, &["plan", "artifact", "validate"]);
+    let output = aep(&store, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
     let text = stdout(&output);
     assert!(text.contains("story:golden-one was deleted"), "{text}");
@@ -164,7 +164,7 @@ fn a_document_removed_with_rm_is_reported_as_deleted() {
 #[test]
 fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not_either() {
     let store = a_plan_with_one_event("clean");
-    let output = protocol(
+    let output = aep(
         &store,
         &["plan", "artifact", "validate", "--format", "json"],
     );
@@ -182,7 +182,7 @@ fn a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/golden-plan/expected"),
         &untouched,
     );
-    let output = protocol(&untouched, &["plan", "artifact", "validate"]);
+    let output = aep(&untouched, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     assert!(
         stdout(&output).contains("1 document(s) predate the event log"),
@@ -207,7 +207,7 @@ fn a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit() {
     );
     std::fs::write(&path, text.replace("revision: 4", "revision: 99")).expect("the edit");
 
-    let output = protocol(&store, &["plan", "artifact", "validate"]);
+    let output = aep(&store, &["plan", "artifact", "validate"]);
     assert_eq!(
         output.status.code(),
         Some(1),
@@ -236,7 +236,7 @@ fn a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit() {
         "and not a second time in the journal's older words: {text}"
     );
 
-    let json = protocol(
+    let json = aep(
         &store,
         &["plan", "artifact", "validate", "--format", "json"],
     );
@@ -258,7 +258,7 @@ fn a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit() {
 #[test]
 fn a_document_with_more_events_than_its_revision_is_not_forged() {
     let store = a_plan_with_one_event("more-events-than-revision");
-    let recorded = protocol(
+    let recorded = aep(
         &store,
         &[
             "plan",
@@ -282,7 +282,7 @@ fn a_document_with_more_events_than_its_revision_is_not_forged() {
         "an observation writes nothing and moves no revision:\n{text}"
     );
 
-    let output = protocol(
+    let output = aep(
         &store,
         &["plan", "artifact", "validate", "--format", "json"],
     );
@@ -310,7 +310,7 @@ fn a_forged_revision_on_a_document_with_no_events_is_still_only_a_document_preda
     let text = std::fs::read_to_string(&path).expect("the document");
     std::fs::write(&path, text.replace("revision: 3", "revision: 99")).expect("the edit");
 
-    let output = protocol(&store, &["plan", "artifact", "validate"]);
+    let output = aep(&store, &["plan", "artifact", "validate"]);
     assert_eq!(output.status.code(), Some(0), "{}", stdout(&output));
     assert!(
         stdout(&output).contains("4 document(s) predate the event log"),

@@ -19,7 +19,7 @@
 //!
 //! What it deliberately does **not** compare is the **operation names**. There is nothing here to
 //! compare them against: our lifecycle documents declare target statuses only, and
-//! `protocol artifact move --to <TO>` names a status, never a verb. `propose`, `activate`,
+//! `aep plan artifact move --to <TO>` names a status, never a verb. `propose`, `activate`,
 //! `implement` and the eight others in those files are their invention, they are read here only as
 //! the value in an edge map, and this test endorses none of them — which is exactly what the
 //! verdict in `story:entity-runtime-mapping` says. Phase 2 took the same line: the operations

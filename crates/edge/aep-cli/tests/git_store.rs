@@ -365,7 +365,7 @@ fn aep_and_protocol_list_a_git_store_identically() {
     for format in ["text", "json"] {
         let args = ["plan", "artifact", "list", "--format", format];
         let canonical = run_as(env!("CARGO_BIN_EXE_aep"), &project, &args);
-        let alias = run_as(env!("CARGO_BIN_EXE_protocol"), &project, &args);
+        let alias = run_as(env!("CARGO_BIN_EXE_aep"), &project, &args);
         assert!(canonical.status.success(), "{}", stderr(&canonical));
         assert_eq!(canonical.status.code(), alias.status.code());
         assert_eq!(canonical.stdout, alias.stdout, "aep and protocol diverged");

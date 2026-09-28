@@ -767,7 +767,7 @@ fn coverage_planning_pair_dispatch_refuses_before_store_and_aliases_are_identica
         absent.to_str().unwrap(),
     ];
     let output = cli(&args);
-    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
         .current_dir(root())
         .args(args)
         .output()
@@ -1109,7 +1109,7 @@ fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_b
         "json",
     ];
     let first = cli(&args);
-    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
         .current_dir(root())
         .args(args)
         .output()

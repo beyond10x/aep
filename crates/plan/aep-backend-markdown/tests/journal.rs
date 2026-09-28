@@ -368,12 +368,12 @@ fn a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it() {
 
 /// A move made by a driven session reads as the agent's, not as the operator's.
 ///
-/// **This is the end of the chain, and the only place a reader ever sees it.** `protocol drive`
+/// **This is the end of the chain, and the only place a reader ever sees it.** `aep drive`
 /// declares `AEP_ACTOR=agent:<execution id>` on the session it launches, `command_actor()` parses
 /// that into the actor the store is opened with, and the journal is where the answer lands —
-/// `protocol artifact history` and `protocol artifact explain` print this field. Before it, every
+/// `aep plan artifact history` and `aep plan artifact explain` print this field. Before it, every
 /// entry in this store said `human:<$USER>` whoever made the move, so an agent's
-/// `protocol artifact move <spec> approved` was indistinguishable from the operator's own: the
+/// `aep plan artifact move <spec> approved` was indistinguishable from the operator's own: the
 /// *accepts any caller* gap `story:attested-approver` names from the store's side.
 ///
 /// It goes through `MarkdownBackend` rather than appending an entry directly, because appending

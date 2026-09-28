@@ -17,7 +17,7 @@
 //!
 //! # The report is what a later evidence record is minted from
 //!
-//! [`CheckReport`] is the value `protocol trace evidence` consumes: the counts, the id of every
+//! [`CheckReport`] is the value `aep observe trace evidence` consumes: the counts, the id of every
 //! expectation that gapped, and — first-class, never derived at the call site — the **transcript
 //! digest** and the **specification digest**. That pair is what makes an evidence record mean
 //! something later: *"some agent passed some behavioural spec"* is worthless, and *"the run with
@@ -764,7 +764,7 @@ mod tests {
             Severity::Gate,
             Outcome::Ok(Citation::new(
                 vec![11, 13],
-                "Bash(command ~ \"protocol artifact new\") in /home/someone/secret-project",
+                "Bash(command ~ \"aep plan artifact new\") in /srv/checkouts/secret-project",
             )),
         )])
         .redact();

@@ -1,4 +1,4 @@
-# The repositories one `protocol` command answers across.
+# The repositories one `aep` command answers across.
 #
 # A project file (`project.yaml`, beside this one) says what *this* repository runs under. This file
 # says which repositories a question should be answered over — so a story here that is blocked by a

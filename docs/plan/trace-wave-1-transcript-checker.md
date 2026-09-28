@@ -41,7 +41,7 @@ carry an evidence block, and a subsequent deterministic `command` step reading t
 | what a digest covers | the **transcript's raw bytes**, and separately the **validated specification's canonical JSON** | design § 2.9: an adapter upgrade that starts understanding a field must not silently rename the run. A comment or a reordered key, on the other side, is not a different specification. Both are `sha256`, 64 hex characters, the construction `ess-gen` and `infra-compiler` already use |
 | timestamps | a forty-line reader for the one zulu-terminated form transcripts record; no date crate | what is needed is one fixed format with optional fractional seconds. A date library buys formats no harness writes and brings a transitive tree into a crate whose whole claim is that it reads no clock. Anything not in that exact shape parses to `None`, which becomes `unk` rather than a wrong duration |
 | `--format` | `text` and `json`, no `yaml` | the design's § 4 lists three and then says "no third rendering". A report is read by a person as a table or parsed by a program as JSON; a third rendering is a third thing to keep in step. Same reasoning as `GraphFormat` and `DiffFormat` in the same binary |
-| the metrics block | **kept as it is**, and superseded by `protocol trace inspect` | `inspect` prints the same census from the IR — event families, tool traffic, per-step `gen`/`exec`, the time split. Deleting the `jq` in the same wave that introduces its replacement would mean the eval's most-read output changed shape in a wave whose subject is the *verdict*. Named as a follow-up rather than left as duplication nobody noticed |
+| the metrics block | **kept as it is**, and superseded by `aep observe trace inspect` | `inspect` prints the same census from the IR — event families, tool traffic, per-step `gen`/`exec`, the time split. Deleting the `jq` in the same wave that introduces its replacement would mean the eval's most-read output changed shape in a wave whose subject is the *verdict*. Named as a follow-up rather than left as duplication nobody noticed |
 
 ## Shipped kinds, and the ones deliberately not shipped
 
@@ -57,7 +57,7 @@ cutting is allowed, silent cutting is not.
 | a streaming checker | **D5** | batch only, deferred by name. Incremental evaluation, partial verdicts and a halt signal are not designable against a format that is not stable (**D1**) |
 | the `review` attachment slot on the run record | § 6.5 | the adversarial reviewer stays exactly where it is — outside the verdict, in its own file. The slot is a shape the design sketches and does not settle |
 | `--format yaml` | § 4 | see the decisions table |
-| `protocol trace evidence` and `EvidenceKind::TraceConformance` | § 5 | **not deferred — split, and now delivered.** It was part of this wave and was implemented by a parallel workstream in two phases; W1.5 below records what shipped and how each acceptance claim is held |
+| `aep observe trace evidence` and `EvidenceKind::TraceConformance` | § 5 | **not deferred — split, and now delivered.** It was part of this wave and was implemented by a parallel workstream in two phases; W1.5 below records what shipped and how each acceptance claim is held |
 
 Two kinds ship and are documented as weak, because the design documents them as weak and hiding
 that would be worse than the kinds themselves:
@@ -128,7 +128,7 @@ unrepresentable — the shape `infra-spec` uses, for its reason.
 * the same transcript and specification produce a byte-identical report twice over, and two
   transcripts produce different ones.
 
-## W1.3 — `protocol trace check|inspect`, and the published schema
+## W1.3 — `aep observe trace check|inspect`, and the published schema
 
 `crates/edge/aep-cli/src/trace.rs`, the binary's second module split, on the criterion the first
 one set. The report below is quoted from a 2026-08-21 recording, so the skill it names is
@@ -136,11 +136,11 @@ one set. The report below is quoted from a 2026-08-21 recording, so the skill it
 plugin to `aep-plan`. Recorded under this name; the recording is evidence and is not rewritten.
 
 ```console
-$ protocol trace check --spec …/expectations.trace.yaml --transcript "$WORK/result.jsonl"
+$ aep observe trace check --spec …/expectations.trace.yaml --transcript "$WORK/result.jsonl"
 planning-plugin/eval against transcript sha256:53cdb852be82… — 41 ok, 0 gap, 0 unk
   ok        skill-completed          aep-planning:planning completed 1 time(s) with
                                      success=true, at least 1 at events 5, 6
-  ok        created-through-the-cli  Bash(command ~ "protocol artifact new") called 2 time(s),
+  ok        created-through-the-cli  Bash(command ~ "aep plan artifact new") called 2 time(s),
                                      at least 1 at events 13, 15
   ok (adv)  cost-under-a-dollar      cost = $0.2737, at most 1 at event 35
 conformant: the run satisfies every expectation the specification states (exit 0)
@@ -154,7 +154,7 @@ failure and the checker refuses to make that choice on the job's behalf.
 footer naming what it contains (**D3**), so pasting a report somewhere public is a decision rather
 than an accident.
 
-`protocol trace inspect` prints the census: event families, tool traffic in both directions, the
+`aep observe trace inspect` prints the census: event families, tool traffic in both directions, the
 per-step `gen`/`exec` split and the time split. It exits `0` whatever it says — a census is a
 report, not a gate, the position `protocol infra simulate` already takes.
 
@@ -164,7 +164,7 @@ check, one index.
 
 **Acceptance:**
 
-* `protocol trace check` against the two kept transcripts exits 0 with the shipped expectations
+* `aep observe trace check` against the two kept transcripts exits 0 with the shipped expectations
   file, and the demo is captured in this wave's record;
 * `--redact` leaves the event indices and both digests intact and replaces every note with a
   digest of it, verified by asserting that a path in the un-redacted note is absent from the
@@ -216,7 +216,7 @@ carrying the counts, every gapped expectation's id, and — as first-class field
 the call site — the **transcript digest** and the **specification digest**. That pair is what makes
 the record mean something later: *"some agent passed some behavioural spec"* is worthless, and
 *"the run with this digest satisfied the spec with that digest"* is not. The `trace` verb family
-was left extensible for it, and `protocol trace evidence` is the third arm on `TraceCommand` it was
+was left extensible for it, and `aep observe trace evidence` is the third arm on `TraceCommand` it was
 left room for.
 
 **Phase 1 — the vocabulary.** `EvidenceKind::TraceConformance` (wire name `trace_conformance`, no
@@ -228,7 +228,7 @@ submission whose kind the protocol does not declare
 **Phase 2 — the record and the verb.** `Evidence::TraceConformance(TraceConformanceResult)`
 carrying the verdict, the three counts, every gapped expectation's id, the ids downgraded on the
 command line, and the digest pair; `CheckReport::to_evidence` in `crates/observe/trace-spec/src/evidence.rs`
-converting on the producing side; and `protocol trace evidence --spec … --transcript … [--out]
+converting on the producing side; and `aep observe trace evidence --spec … --transcript … [--out]
 [--format] [--advisory]` in `crates/edge/aep-cli/src/trace.rs`.
 
 The record is a **summary and not the report**: an expectation's citation quotes the transcript —
@@ -241,7 +241,7 @@ into pull requests. Counts, ids and two digests survive the handoff; the rows do
 |---|---|
 | the record is minted in the **same process that ran the check**, so no caller can author its own verdict | `mint_evidence` runs `perform` and hands the report straight to `to_evidence`; there is no `--report` input, and `perform` is shared with `trace check` so the record cannot come from a different evaluation than the one a reader was shown |
 | its producer is `Producer::Verifier`, because the checker observed a file and did not ask an agent how it went | `TraceEvidence::PRODUCER` is a constant, not a parameter — `the_record_names_the_trace_checker_and_never_the_caller` |
-| the record the checker writes is one the engine reads | `crates/edge/aep-cli/tests/trace_cli.rs` writes the document with `--out` and feeds the file to `protocol evaluate --evidence`, in both renderings the verb offers |
+| the record the checker writes is one the engine reads | `crates/edge/aep-cli/tests/trace_cli.rs` writes the document with `--out` and feeds the file to `aep govern evaluate --evidence`, in both renderings the verb offers |
 | a run that gapped is written down rather than exited on | `a_run_that_gapped_is_written_down_rather_than_exited_on`: `trace check` exits 1 on the same pair of files, `trace evidence` exits 0 and the record says `status: failed` and names the expectation |
 | a `--advisory` downgrade cannot satisfy a protocol requirement | the record names every downgraded id, and `trace_conformance.passed` counts all gaps — `a_command_line_downgrade_is_recorded_and_does_not_make_the_record_pass` |
 

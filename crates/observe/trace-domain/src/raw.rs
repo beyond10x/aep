@@ -249,7 +249,7 @@ pub struct RawRangeBound {
     pub at_most: Option<f64>,
 }
 
-/// A matcher over one named field as written: `{contains: "protocol artifact new"}`.
+/// A matcher over one named field as written: `{contains: "aep plan artifact new"}`.
 ///
 /// Externally tagged, so a matcher name this build does not know is refused by name rather than
 /// defaulted away — and so a `regex:` whose pattern does not compile is refused with the engine's
@@ -2423,7 +2423,7 @@ expectations:
     expect:
       tool.called:
         tool: Bash
-        args: {command: {contains: "protocol artifact new"}}
+        args: {command: {contains: "aep plan artifact new"}}
         count: {at_least: 1}
 
   - id: no-hand-edited-frontmatter
@@ -2441,7 +2441,7 @@ expectations:
   - id: asked-before-writing
     expect:
       order:
-        first: {tool: Bash, args: {command: {contains: "protocol artifact"}}}
+        first: {tool: Bash, args: {command: {contains: "aep plan artifact"}}}
         before: {tool: Edit}
 
   - id: within-budget
@@ -2487,7 +2487,7 @@ expectations:
                                        "count": { "at_least": 1 } } } },
     { "id": "created-through-the-cli",
       "expect": { "tool.called": { "tool": "Bash",
-                                   "args": { "command": { "contains": "protocol artifact new" } },
+                                   "args": { "command": { "contains": "aep plan artifact new" } },
                                    "count": { "at_least": 1 } } } },
     { "id": "no-hand-edited-frontmatter",
       "expect": { "tool.absent": { "tool": "Edit",
@@ -2497,7 +2497,7 @@ expectations:
                                    "result": { "userModified": { "equals": false } } } } },
     { "id": "asked-before-writing",
       "expect": { "order": { "first": { "tool": "Bash",
-                                        "args": { "command": { "contains": "protocol artifact" } } },
+                                        "args": { "command": { "contains": "aep plan artifact" } } },
                              "before": { "tool": "Edit" } } } },
     { "id": "within-budget",
       "severity": "advisory",
@@ -2706,7 +2706,7 @@ expectations:
                     let mut selector = CallSelector::tool("Bash");
                     selector.args.insert(
                         "command".to_owned(),
-                        FieldMatcher::Contains("protocol artifact new".to_owned()),
+                        FieldMatcher::Contains("aep plan artifact new".to_owned()),
                     );
                     selector
                 },

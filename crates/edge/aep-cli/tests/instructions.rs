@@ -1,7 +1,7 @@
 //! The committed instruction documents are what the verb writes, byte for byte.
 //!
 //! `generated/instructions/` holds one document per workflow this tree declares, rendered by
-//! `protocol govern workflow instruct`. They are committed because they are a **treatment**: an evaluation
+//! `aep govern workflow instruct`. They are committed because they are a **treatment**: an evaluation
 //! of how well a harness follows this methodology hands an agent the rules, and rules typed into a
 //! prompt are a claim about the specification rather than a projection of it. A committed artifact
 //! can be diffed, reviewed and pointed at; a prompt someone wrote once cannot.
@@ -18,7 +18,7 @@
 //! This test, and not a task in `xtask`. The projection task's orphan scan is carved out of it
 //! (`PROJECTION_EXCLUSIONS`), so nothing else writes or deletes here, and the writer is the verb a
 //! person runs rather than a second implementation of it — which is the property `xtask` reaches
-//! for by shelling out to `protocol` instead of linking the generators. Regenerating is one command
+//! for by shelling out to `aep` instead of linking the generators. Regenerating is one command
 //! and the failure below names it.
 
 use std::collections::BTreeMap;
@@ -29,7 +29,7 @@ use std::process::Command;
 const COMMITTED: &str = "generated/instructions";
 
 /// The command that rewrites them, named in every failure here.
-const FIX: &str = "protocol govern workflow instruct --out generated/instructions";
+const FIX: &str = "aep govern workflow instruct --out generated/instructions";
 
 /// The repository root.
 fn root() -> PathBuf {
@@ -47,9 +47,9 @@ fn scratch(name: &str) -> PathBuf {
     directory
 }
 
-/// Runs `protocol govern workflow instruct` over the document tree at `tree`, writing into `out`.
+/// Runs `aep govern workflow instruct` over the document tree at `tree`, writing into `out`.
 fn instruct(tree: &Path, out: &Path) {
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["govern", "workflow", "instruct", "--root"])
         .arg(tree)
         .arg("--out")

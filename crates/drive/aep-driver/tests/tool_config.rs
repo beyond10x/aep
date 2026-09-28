@@ -71,7 +71,7 @@ fn a_capability_that_was_never_granted_is_no_tool_and_a_denied_one_is_not_either
         "this fixture never granted `command.execute`, and `NotGranted` maps to no tool. The \
          reason stated here used to be `no development profile grants command.execute`, which is \
          false: `profiles/development-driven.yaml:78` grants it deliberately so a driven step can \
-         reach the `protocol` CLI. The property is the mechanism — a shell is rendered exactly \
+         reach the `aep` CLI. The property is the mechanism — a shell is rendered exactly \
          when `command.execute` is admitted — and `tests/shell_echo.rs` asserts it both ways"
     );
     assert!(

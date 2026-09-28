@@ -27,7 +27,7 @@
 //! send an agent to fix code nobody ran. A failing suite is [`StepOutcome::Observed`] carrying a
 //! `TestResult` with failures, and the back-edge is then the **workflow's** to take.
 //!
-//! The one exception D5 names is not a fourth variant: `protocol trace check` exit 3 is a *recorded*
+//! The one exception D5 names is not a fourth variant: `aep observe trace check` exit 3 is a *recorded*
 //! absence — `trace evidence` writes `status: inconclusive` — so it arrives as
 //! [`StepOutcome::Observed`] carrying that record. A recorded absence is strictly better than a
 //! silent one, and the requirement stays owed either way.
@@ -77,7 +77,7 @@ pub struct StepContext<'a> {
     /// **The document [`Self::task`] was read from**, when the caller read one.
     ///
     /// The task is *what* the run is driving; this is where somebody wrote it down, and only the
-    /// second is a thing a spawned program can be handed. `protocol specification evidence --task
+    /// second is a thing a spawned program can be handed. `aep observe specification evidence --task
     /// <file>` binds its selection to a task document, and a step map had no way to name one — so
     /// a run driven with `--task <a path that is not the project's>` reached that verb through
     /// discovery and bound to the project's task instead. `{task}` in a `command` step's `run`
@@ -146,7 +146,7 @@ pub struct StepContext<'a> {
     ///
     /// `None` for the first step of a state, for a state with no `llm` step before this one, and
     /// for an `llm` step itself. It exists so that a `command` step can be *about* the session
-    /// before it — running `protocol trace check` over the transcript that session wrote is the
+    /// before it — running `aep observe trace check` over the transcript that session wrote is the
     /// case it was added for — without a step map having to name a path that does not exist until
     /// the run is allocated.
     pub preceding_llm: Option<StepAttempt>,

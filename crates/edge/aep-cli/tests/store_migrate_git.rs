@@ -481,16 +481,6 @@ fn the_upgrade_notice_is_one_stderr_line_for_v1_and_absent_for_v5_or_when_suppre
     serde_json::from_slice::<serde_json::Value>(&json.stdout)
         .expect("`--format json` stdout stays one clean JSON document");
 
-    // `protocol` prints the same bytes as `aep` (invariant 10), notice included.
-    let alias = run_with(
-        env!("CARGO_BIN_EXE_protocol"),
-        &project,
-        &["plan", "artifact", "list"],
-        &[],
-    );
-    assert_eq!(alias.stdout, listed.stdout);
-    assert_eq!(alias.stderr, listed.stderr);
-
     let migrated = aep(&project, &["plan", "store", "migrate", "git"]);
     assert!(migrated.status.success(), "{}", stderr(&migrated));
     assert!(

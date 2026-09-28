@@ -1,7 +1,7 @@
 //! Wave H, story 2: `describe_type` reports the ladder the kernel decides with — D-P5.
 //!
 //! Three backends over one set of ladders answer the same descriptor for every planning kind, and
-//! the descriptor's edges are exactly what `protocol artifact lifecycle <kind>` prints, because both
+//! the descriptor's edges are exactly what `aep plan artifact lifecycle <kind>` prints, because both
 //! come from the same `EntityDefinition` the kernel executes.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,7 +25,7 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// The ladders this repository's document tree declares, loaded as `protocol` loads them.
+/// The ladders this repository's document tree declares, loaded as `aep` loads them.
 fn ladders() -> LifecycleRegistry {
     let outcome = aep_project::load_tree_report(&root());
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
@@ -119,7 +119,7 @@ fn the_descriptor_edges_are_what_protocol_artifact_lifecycle_prints() {
     .expect("opens");
 
     for kind in described_kinds(&ladders) {
-        let printed = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        let printed = Command::new(env!("CARGO_BIN_EXE_aep"))
             .args([
                 "plan",
                 "artifact",

@@ -3,7 +3,7 @@
 //! # Why this is a module and not a fourth copy
 //!
 //! Three verbs already mint an evidence document — `protocol ess conform evidence`,
-//! `protocol trace evidence` and `protocol contract evidence` — and each carries its own private
+//! `aep observe trace evidence` and `aep observe contract evidence` — and each carries its own private
 //! envelope struct and its own `match format { … }`. That was two copies of a small thing and is
 //! defensible; `story:evidence-producers-for-the-driven-map` adds three more producers, and six
 //! copies of *what an evidence document looks like* is how two of them come to disagree about
@@ -17,7 +17,7 @@
 //!
 //! # What the envelope is, and what it is not
 //!
-//! A record on its own states a payload. What `protocol evaluate --evidence` reads is a payload
+//! A record on its own states a payload. What `aep govern evaluate --evidence` reads is a payload
 //! **plus** when somebody looked, what produced it, and how — invariant 7's split, where the
 //! payload is the verifier's and the envelope is the caller's. This module supplies the envelope
 //! and refuses to compute any part of the payload.
@@ -39,7 +39,7 @@ use crate::Format;
 
 /// One evidence record, with the envelope an evidence document needs.
 ///
-/// Serialises as one entry of the list `protocol evaluate --evidence` reads: the payload's own
+/// Serialises as one entry of the list `aep govern evaluate --evidence` reads: the payload's own
 /// fields under its `kind`, beside `observed_at`, `producer` and `provenance`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct MintedEvidence {
@@ -76,7 +76,7 @@ impl MintedEvidence {
 
     /// Records one file the check read.
     ///
-    /// `reading` and not `from_input`: the same builder shape `protocol trace evidence` uses spells
+    /// `reading` and not `from_input`: the same builder shape `aep observe trace evidence` uses spells
     /// it the second way, and clippy's `wrong_self_convention` refuses a `from_*` that takes `self`
     /// — a rule worth keeping, because `Foo::from_x` reading as a constructor everywhere else is
     /// what makes a builder method with that name misread at every call site.
@@ -91,7 +91,7 @@ impl MintedEvidence {
     }
 }
 
-/// Renders the document `protocol evaluate --evidence` reads.
+/// Renders the document `aep govern evaluate --evidence` reads.
 ///
 /// Always a list, even of one: a file holding several records and a file holding one are the same
 /// document, and a bare record would be a second shape to support. `text` gets the document too

@@ -1,4 +1,4 @@
-//! `protocol artifact scope` and `protocol artifact waves`, driven as the binary.
+//! `aep plan artifact scope` and `aep plan artifact waves`, driven as the binary.
 //!
 //! A wave is the claim that N units may be worked at once, and the property it rests on is that
 //! they touch different surfaces. Until `scope` there was nowhere to write a surface down, so the
@@ -27,9 +27,9 @@ fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/wave-plan")
 }
 
-/// Runs `protocol` from the repository root, so the document tree resolves the way it does in use.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` from the repository root, so the document tree resolves the way it does in use.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -67,7 +67,7 @@ fn scratch(name: &str) -> PathBuf {
 
 /// Runs a command that must succeed, and says what it printed when it does not.
 fn make(args: &[&str]) -> String {
-    let output = protocol(args);
+    let output = aep(args);
     assert_eq!(
         code(&output),
         0,
@@ -278,7 +278,7 @@ fn scope_records_an_inferred_entry_apart_from_a_cited_one_and_remove_takes_it_ou
     // And the document still agrees with its own log. Taking the last path out writes `scope: []`
     // into the event; a store that then read the document as carrying no `scope` at all would
     // report the command's own write as an edit made outside a command.
-    let validated = protocol(&["plan", "artifact", "validate", "--store", at]);
+    let validated = aep(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(
         code(&validated),
         0,
@@ -310,7 +310,7 @@ fn scope_is_refused_on_a_kind_that_is_not_a_story() {
         "--store",
         at,
     ]);
-    let refused = protocol(&[
+    let refused = aep(&[
         "plan",
         "artifact",
         "scope",
@@ -417,7 +417,7 @@ fn validate_reports_a_non_draft_story_with_no_scope_and_still_exits_zero() {
         ]);
     }
 
-    let validated = protocol(&["plan", "artifact", "validate", "--store", at]);
+    let validated = aep(&["plan", "artifact", "validate", "--store", at]);
     assert_eq!(
         code(&validated),
         0,
@@ -442,7 +442,7 @@ fn validate_reports_a_non_draft_story_with_no_scope_and_still_exits_zero() {
     make(&[
         "plan", "artifact", "new", "story", "early", "--title", "Early", "--store", drafted_at,
     ]);
-    let validated = protocol(&["plan", "artifact", "validate", "--store", drafted_at]);
+    let validated = aep(&["plan", "artifact", "validate", "--store", drafted_at]);
     assert!(
         !stdout(&validated).contains("story:early"),
         "{}",
@@ -523,7 +523,7 @@ fn a_depends_on_cycle_prints_its_ids_and_exits_two() {
     hand_written(&store, "one", &["crates/one.rs"], Some("story:two"));
     hand_written(&store, "two", &["crates/two.rs"], Some("story:one"));
 
-    let output = protocol(&["plan", "artifact", "waves", "--store", at]);
+    let output = aep(&["plan", "artifact", "waves", "--store", at]);
     assert_eq!(code(&output), 2, "{}{}", stdout(&output), stderr(&output));
     let printed = stdout(&output);
     assert!(printed.contains("cycle:"), "{printed}");
@@ -629,7 +629,7 @@ fn waves_leaves_every_byte_of_the_store_where_it_was() {
     );
     let at = printable(&store);
     let before = bytes_under(&store);
-    let output = protocol(&["plan", "artifact", "waves", "--store", at]);
+    let output = aep(&["plan", "artifact", "waves", "--store", at]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert_eq!(
         bytes_under(&store),
@@ -651,7 +651,7 @@ fn the_fixture_store_prints_the_recorded_answer_byte_for_byte() {
     for (recorded, format) in [("waves.text", "text"), ("waves.json", "json")] {
         let expected = std::fs::read_to_string(fixture().join("reads").join(recorded))
             .expect("the recording is committed");
-        let output = protocol(&[
+        let output = aep(&[
             "plan", "artifact", "waves", "--format", format, "--store", at,
         ]);
         assert_eq!(code(&output), 0, "{}", stderr(&output));

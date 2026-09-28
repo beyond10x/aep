@@ -170,7 +170,7 @@ impl ProtocolSource {
 /// A project file is read on every machine that checks the repository out, and a path rooted at `/`
 /// or at a drive letter is true on exactly one of them. The refusal is here, in the one reader every
 /// command goes through, rather than in the verb that writes the file — a file hand-edited past
-/// `protocol reverse init` has to fail the same way, and it is `resolve`, `evaluate` and `artifact`
+/// `aep plan reverse init` has to fail the same way, and it is `resolve`, `evaluate` and `artifact`
 /// that would otherwise carry a machine-local path into a CI run.
 ///
 /// `~` is refused with the others and for a sharper reason: nothing here expands it, so `~/tree` is

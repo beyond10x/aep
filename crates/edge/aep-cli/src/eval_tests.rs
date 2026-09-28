@@ -703,7 +703,7 @@ use super::*;
 #[test]
     fn a_native_run_is_refused_a_spawn_and_told_what_does_launch_it() {
         // Same position as `driven` and a different reason, which the message has to carry: a
-        // driven run is launched by `protocol drive run` because there must be one policy; a
+        // driven run is launched by `aep drive run` because there must be one policy; a
         // native run is launched by `b10x-harness` because it *is* the loop and there is no vendor
         // harness here to drive.
         let refusal = RunRefusal::NativeIsNotLaunchedHere.to_string();

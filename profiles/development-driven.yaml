@@ -9,7 +9,7 @@
 # every one of those command steps exactly where they are.
 #
 # What the claim did not cost out is that the planning store has **no tool surface other than the
-# `protocol` CLI**. Its whole vocabulary — `artifact new`, `artifact move`, `artifact relate`,
+# `aep` CLI**. Its whole vocabulary — `artifact new`, `artifact move`, `artifact relate`,
 # `artifact validate` — is shell commands, on purpose: the CLI owns the frontmatter precisely so
 # that nothing else writes it. So a driven `llm` step under `development.standard` can be told to
 # write a specification as a planning artifact and has no way to create one. The state's transition
@@ -28,7 +28,7 @@
 # capability grant plus a per-call constraint**:
 #
 #   * this document grants `command.execute`, and says here that the grant exists so that the
-#     `protocol` CLI is reachable and for no other reason;
+#     `aep` CLI is reachable and for no other reason;
 #   * the driver's own per-call policy is the constraint (`decide_tool` in aep-cli's
 #     drive.rs, answering the metaharness seam in ask mode — formerly the plugin's
 #     `driven-surface.sh` hook, retired under `epic:metaharness-migration`). It denies any `Bash`
@@ -49,7 +49,7 @@
 #      integrity row is exhaustive over `Edit`, `Write` and `NotebookEdit` *given* that no
 #      development profile grants a shell; under this profile that premise is gone, and it is
 #      replaced rather than dropped — the surface hook denies every shell command that is not a
-#      `protocol` verb, which is what would otherwise have routed around the write guard by way of
+#      `aep` verb, which is what would otherwise have routed around the write guard by way of
 #      `sed -i`. Both hooks ship together for that reason.
 #
 # ## When to choose it
@@ -61,7 +61,7 @@ id: development.driven
 version: 1
 title: Driven development
 summary: >-
-  Choose this only for a run under `aep drive`, where a model's shell is held to the `protocol`
+  Choose this only for a run under `aep drive`, where a model's shell is held to the `aep`
   CLI by the driver's own enforcement hooks. It is `development.standard` plus `command.execute`,
   granted so that the planning store's verbs are reachable from a driven step and for nothing else.
   Choose `development.standard` for interactive work and for any harness that cannot constrain a

@@ -1,4 +1,4 @@
-//! `protocol drive` integration tests.
+//! `aep drive` integration tests.
 //!
 //! These drive the real binary against a real directory, because that is what the verb family is: a
 //! run is a lock file, a run directory, a program that was spawned and a snapshot on disk. A test
@@ -25,9 +25,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args` from the repository root.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args` from the repository root.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -39,8 +39,8 @@ fn protocol(args: &[&str]) -> Output {
 /// An empty directory rather than `/usr/bin:/bin`: the point is a *guaranteed* absence, and a
 /// machine that happened to install the binary into a system directory would otherwise turn this
 /// test green for the wrong reason.
-fn protocol_without_metaharness(args: &[&str], empty_dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+fn aep_without_metaharness(args: &[&str], empty_dir: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .env("PATH", empty_dir)
@@ -143,7 +143,7 @@ impl Fixture {
         ]
     }
 
-    /// Runs one `protocol drive` verb against this fixture.
+    /// Runs one `aep drive` verb against this fixture.
     ///
     /// A `run` carries `--allow-evidence-gap`, and that is a statement about the fixture rather
     /// than about the flag. This map declares `test_result`, `diff` and `static_analysis` and
@@ -162,7 +162,7 @@ impl Fixture {
         }
         args.extend(extra.iter().map(ToString::to_string));
         let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-        protocol(&borrowed)
+        aep(&borrowed)
     }
 
     /// The `.engineering/runs` directory.
@@ -293,7 +293,7 @@ fn step_map(operator: bool) -> String {
 #[test]
 fn every_verb_can_be_asked_for_help() {
     for verb in ["run", "status", "resume", "transition"] {
-        let output = protocol(&["drive", verb, "--help"]);
+        let output = aep(&["drive", verb, "--help"]);
         assert_eq!(code(&output), 0, "{}", stderr(&output));
         assert!(
             stdout(&output).contains("--project") || stdout(&output).contains("Usage"),
@@ -448,7 +448,7 @@ fn a_run_stopped_by_its_iteration_bound_resumes_where_it_stopped() {
 
 /// The line the driver prints is a line that works, with nothing else on it.
 ///
-/// **F-W4.2-4, answered.** A stopped run printed `resume with: protocol drive resume <run>` and
+/// **F-W4.2-4, answered.** A stopped run printed `resume with: aep drive resume <run>` and
 /// that command re-read none of `--map`, `--task`, `--pause-on-approval` or `--plugin-dir`: an
 /// operator who typed exactly what they were told got a different run, or an error. It was found by
 /// running W4-2 on 2026-08-24 and recorded as *the line as printed does not work*.
@@ -462,14 +462,14 @@ fn the_resume_line_the_driver_prints_works_with_nothing_else_on_it() {
     let first = fixture.drive(&["run"], &["--max-iterations", "2"]);
     let opening = stdout(&first);
     assert!(
-        opening.contains("resume with: protocol drive resume DRIVE-1/1"),
+        opening.contains("resume with: aep drive resume DRIVE-1/1"),
         "the driver printed the line this test is about:\n{opening}"
     );
     let before = fixture.cursor("DRIVE-1/1");
 
     // Exactly the printed line: the verb, the run id, and the project, which is the only thing a
     // person standing in the repository would not have to type.
-    let bare = protocol(&[
+    let bare = aep(&[
         "drive",
         "resume",
         "DRIVE-1/1",
@@ -554,7 +554,7 @@ fn a_headless_start_refuses_what_only_a_person_can_answer_and_the_flag_is_the_ro
         "with the flag, a green exit means finished or waiting:\n{text}"
     );
     assert!(
-        text.contains("resume with: protocol drive resume DRIVE-1/1"),
+        text.contains("resume with: aep drive resume DRIVE-1/1"),
         "a pause ends with the one word that continues it:\n{text}"
     );
 }
@@ -574,7 +574,7 @@ fn status_reports_the_run_and_whether_the_lock_is_free() {
 #[test]
 fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     // The real map, cross-validated against the real workflow by the document loader.
-    let output = protocol(&["govern", "validate", "--root", "."]);
+    let output = aep(&["govern", "validate", "--root", "."]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
         stdout(&output).contains("2 step map(s)"),
@@ -612,7 +612,7 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
          states:\n  polishing:\n    steps: []\n",
     );
 
-    let output = protocol(&["govern", "validate", "--root", printable(&tree)]);
+    let output = aep(&["govern", "validate", "--root", printable(&tree)]);
     let text = stdout(&output);
     assert_eq!(code(&output), 1, "{text}");
     assert!(text.contains("unknown_state"), "{text}");
@@ -629,11 +629,11 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
 /// only map that fitted, and the wave-4 run `W4-1/1` was started that way. The refusal is the
 /// wanted outcome rather than a regression — which map a run is under decides how its evidence is
 /// obtained, and guessing that is the one thing the driver does not do — but it is a change to what
-/// a bare `protocol drive run` does, so it is asserted rather than left to be discovered.
+/// a bare `aep drive run` does, so it is asserted rather than left to be discovered.
 #[test]
 fn two_maps_fit_the_workflow_so_the_driver_refuses_to_choose_and_names_both() {
     let fixture = Fixture::new("two-maps", false);
-    let output = protocol(&[
+    let output = aep(&[
         "drive",
         "run",
         "--project",
@@ -668,7 +668,7 @@ fn a_map_that_cannot_produce_demanded_evidence_is_refused_before_the_first_step(
     let mut args: Vec<String> = vec!["drive".to_owned(), "run".to_owned()];
     args.extend(fixture.location());
     let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = protocol(&borrowed);
+    let output = aep(&borrowed);
     let said = format!("{}{}", stdout(&output), stderr(&output));
 
     assert_eq!(code(&output), 1, "{said}");
@@ -732,7 +732,7 @@ fn the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag() {
     );
 
     let map = root().join("drivers/development/default.yaml");
-    let output = protocol(&[
+    let output = aep(&[
         "drive",
         "run",
         "--project",
@@ -831,7 +831,7 @@ fn a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travel
     args.extend(["--max-iterations".to_owned(), "0".to_owned()]);
     let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
 
-    let refused = protocol_without_metaharness(&borrowed, &nowhere);
+    let refused = aep_without_metaharness(&borrowed, &nowhere);
     let said = format!("{}{}", stdout(&refused), stderr(&refused));
     assert_ne!(
         code(&refused),
@@ -855,7 +855,7 @@ fn a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travel
         .copied()
         .chain(["--allow-evidence-gap"])
         .collect();
-    let machine = protocol_without_metaharness(&waived, &nowhere);
+    let machine = aep_without_metaharness(&waived, &nowhere);
     let complaint = format!("{}{}", stdout(&machine), stderr(&machine));
     assert!(
         complaint.contains("use `metaharness aep drive run`"),
@@ -897,9 +897,9 @@ fn model_start_and_resume_refuse_without_changing_the_project() {
 
 /// A crossing relation the workspace manifest declares is not a reason to refuse the run.
 ///
-/// The two readers of one store used to disagree: `protocol artifact validate` resolved a relation
+/// The two readers of one store used to disagree: `aep plan artifact validate` resolved a relation
 /// into another repository against `.engineering/workspace.yaml` and called it declared, while
-/// `protocol drive` read the graph with no manifest at all and refused to start — *the planning
+/// `aep drive` read the graph with no manifest at all and refused to start — *the planning
 /// store cannot be trusted* — on a store the other verb had just called valid. Both were answering
 /// honestly; only one of them was answering the question a person asked.
 ///
@@ -1024,7 +1024,7 @@ fn the_checks_map_plans_against_the_repositorys_own_task() {
     assert_eq!(record, "{run_directory}/trace-implement.yaml");
 }
 
-/// The fixture map's `establish_verifiers`, rewritten to invoke `protocol` and one other program.
+/// The fixture map's `establish_verifiers`, rewritten to invoke `aep` and one other program.
 ///
 /// `--version` is the argument, because the version string is the one thing only *this* build
 /// prints: a namesake on the operator's `PATH` answers with its own number, and four releases of
@@ -1033,10 +1033,10 @@ fn the_checks_map_plans_against_the_repositorys_own_task() {
 /// the proof machine-independent rather than a fact about this laptop.
 ///
 /// **`/bin/sh` is first on purpose.** A step whose program cannot be spawned produces no verdict
-/// and spends the state's retry budget, so with `protocol` first a driver that had stopped
+/// and spends the state's retry budget, so with `aep` first a driver that had stopped
 /// substituting would stop the run before the other step ever ran — and the test asserting *other
 /// programs are untouched* would fail for the substitution's reason rather than its own.
-fn map_invoking_protocol() -> String {
+fn map_invoking_aep() -> String {
     "format: aep.driver-steps/1\n\
      id: fixture/drive\n\
      workflow: adp/default/2\n\
@@ -1048,7 +1048,7 @@ fn map_invoking_protocol() -> String {
     \x20       run: [/bin/sh, -c, \"echo resolved as written\"]\n\
     \x20     - kind: command\n\
     \x20       description: the build that is driving says which build it is\n\
-    \x20       run: [protocol, --version]\n\
+    \x20       run: [aep, --version]\n\
     \x20       evidence:\n\
     \x20         kind: test_result\n\
     \x20         suite: unit\n\
@@ -1074,7 +1074,7 @@ fn map_invoking_planning_writer() -> String {
     \x20   steps:\n\
     \x20     - kind: command\n\
     \x20       description: a driven planning mutation\n\
-    \x20       run: [protocol, plan, artifact, set, story:passkeys, --title, Racing, --store, .engineering/planning]\n\
+    \x20       run: [aep, plan, artifact, set, story:passkeys, --title, Racing, --store, .engineering/planning]\n\
     \x20       evidence:\n\
     \x20         kind: test_result\n\
     \x20         suite: unit\n\
@@ -1089,7 +1089,7 @@ fn map_invoking_planning_writer() -> String {
         .to_owned()
 }
 
-/// A `protocol` command spawned by the driver is a separate new-build writer and must observe a
+/// A `aep` command spawned by the driver is a separate new-build writer and must observe a
 /// fence held by another process. This exercises the actual driver-to-child route rather than
 /// inferring it from the ordinary command parser.
 #[test]
@@ -1166,24 +1166,21 @@ fn command_record(run_directory: &Path) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// A `command` step that says `protocol` runs the binary the driver **is**, not a namesake.
+/// A `command` step that says `aep` runs the binary the driver **is**, not a namesake.
 ///
-/// **Run `W4-3/1`, 2026-08-28.** `protocol property evidence --out …` was step 4 of `verify`; the
+/// **Run `W4-3/1`, 2026-08-28.** `aep observe property evidence --out …` was step 4 of `verify`; the
 /// first `protocol` on the driver's own `PATH` was a 0.28.0 install that predates the `property`
 /// verb, so the step wrote nothing, the driver correctly reported *nothing was observed*, and the
 /// step burned its whole retry budget three times with the cause invisible in the message.
 ///
-/// The driver is `protocol`, so `current_exe()` is the binary a step asking for `protocol` means.
+/// The driver is `aep`, so `current_exe()` is the binary a step asking for `aep` means.
 /// Spawned here with an **empty** `PATH`, which is what makes this a test of the substitution and
 /// not of this machine: without it the step cannot be run at all, and with it the step prints a
 /// version string only this build prints.
 #[test]
-fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
-    let fixture = Fixture::new("protocol-command", false);
-    write(
-        &fixture.directory.join("steps.yaml"),
-        &map_invoking_protocol(),
-    );
+fn a_command_step_that_says_aep_runs_the_build_that_is_driving_it() {
+    let fixture = Fixture::new("aep-command", false);
+    write(&fixture.directory.join("steps.yaml"), &map_invoking_aep());
     let nowhere = fixture.directory.join("an-empty-path");
     std::fs::create_dir_all(&nowhere).expect("the empty PATH directory is writable");
 
@@ -1195,13 +1192,13 @@ fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
         "8".to_owned(),
     ]);
     let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = protocol_without_metaharness(&borrowed, &nowhere);
+    let output = aep_without_metaharness(&borrowed, &nowhere);
     let said = format!("{}{}", stdout(&output), stderr(&output));
 
     let run_directory = fixture.runs().join("DRIVE-1").join("1");
 
     // The step ran and printed what only this build prints. A namesake would answer with its own
-    // number, and an unresolvable `protocol` would not have produced a log at all.
+    // number, and an unresolvable `aep` would not have produced a log at all.
     let banner = format!("aep {}", env!("CARGO_PKG_VERSION"));
     let log = std::fs::read_to_string(run_directory.join("establish_verifiers-1-1.log"))
         .unwrap_or_else(|error| panic!("the step wrote no log: {error}\n{said}"));
@@ -1213,7 +1210,7 @@ fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
     // Visible, on the step's own note: substituting a binary silently is its own kind of lie.
     let header = log.lines().next().expect("the log opens with its header");
     assert!(
-        header.starts_with("# ran:") && header.contains("/protocol"),
+        header.starts_with("# ran:") && header.contains("/aep"),
         "the step's log does not name the binary that ran:\n{header}"
     );
 
@@ -1222,21 +1219,21 @@ fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
     let substituted = record
         .iter()
         .find(|entry| entry["state"] == "establish_verifiers" && entry["index"] == 1)
-        .expect("the record holds the step that said `protocol`");
-    assert_eq!(substituted["program"], "protocol");
+        .expect("the record holds the step that said `aep`");
+    assert_eq!(substituted["program"], "aep");
     assert_eq!(substituted["resolved"], "driver");
     assert!(
         substituted["ran"]
             .as_str()
             .expect("the record names a path")
-            .ends_with("/protocol"),
+            .ends_with("/aep"),
         "the record does not name the binary that ran: {substituted}"
     );
 }
 
 /// A `command` step naming any other program resolves exactly as it always did.
 ///
-/// The substitution is keyed on the name `protocol` and nothing else — `cargo`, `bash` and `git`
+/// The substitution is keyed on the name `aep` and nothing else — `cargo`, `bash` and `git`
 /// are tools the driver finds the way it always did, and a driver that rewrote one of those would
 /// be a second, undeclared thing to reason about.
 ///
@@ -1246,10 +1243,7 @@ fn a_command_step_that_says_protocol_runs_the_build_that_is_driving_it() {
 #[test]
 fn a_command_step_naming_another_program_is_resolved_as_written() {
     let fixture = Fixture::new("other-program", false);
-    write(
-        &fixture.directory.join("steps.yaml"),
-        &map_invoking_protocol(),
-    );
+    write(&fixture.directory.join("steps.yaml"), &map_invoking_aep());
     let nowhere = fixture.directory.join("an-empty-path");
     std::fs::create_dir_all(&nowhere).expect("the empty PATH directory is writable");
 
@@ -1261,7 +1255,7 @@ fn a_command_step_naming_another_program_is_resolved_as_written() {
         "8".to_owned(),
     ]);
     let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = protocol_without_metaharness(&borrowed, &nowhere);
+    let output = aep_without_metaharness(&borrowed, &nowhere);
     let said = format!("{}{}", stdout(&output), stderr(&output));
 
     let run_directory = fixture.runs().join("DRIVE-1").join("1");
@@ -1416,7 +1410,7 @@ impl TwoTasks {
                  {pause}\
                  \x20     - kind: command\n\
                  \x20       description: which specification is this run held to\n\
-                 \x20       run: [protocol, specification, evidence, {flag}--out, \
+                 \x20       run: [aep, observe, specification, evidence, {flag}--out, \
                  \"{{run_directory}}/specification.yaml\"]\n"
             ),
         );
@@ -1442,7 +1436,7 @@ impl TwoTasks {
         ];
         args.extend(extra.iter().map(ToString::to_string));
         let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-        (protocol(&borrowed), self.run(ordinal))
+        (aep(&borrowed), self.run(ordinal))
     }
 
     /// Drives one run from the **project's own** task (`DRIVE-P`), naming no `--task`.
@@ -1451,7 +1445,7 @@ impl TwoTasks {
     /// `task-billing.yaml`, so the two put runs of two different tasks into one runs directory —
     /// which is the state a per-task run-id floor has to be asserted in.
     fn drive_the_projects_own_task(&self, map: &Path) -> Output {
-        protocol(&[
+        aep(&[
             "drive",
             "run",
             "--project",
@@ -1477,7 +1471,7 @@ impl TwoTasks {
         ];
         args.extend(extra.iter().map(ToString::to_string));
         let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
-        protocol(&borrowed)
+        aep(&borrowed)
     }
 
     /// One run's directory.
@@ -1491,7 +1485,7 @@ impl TwoTasks {
 /// The record a driven step writes is about the task the run was **started from**.
 ///
 /// `story:task-scoped-artifact-requirements` left this open by name: a `command` step's map could
-/// not say `{task}`, so `protocol specification evidence` in a run driven with
+/// not say `{task}`, so `aep observe specification evidence` in a run driven with
 /// `--task <a path that is not the project's>` reached its own discovery and bound to the
 /// project's task instead — writing `specification.satisfied` about somebody else's story, or
 /// refusing over it.
@@ -2239,7 +2233,7 @@ fn adversary_a_run_paused_for_a_person_released_the_lock_and_resumes() {
     let text = stdout(&paused);
     assert_eq!(code(&paused), 0, "{text}{}", stderr(&paused));
     assert!(
-        text.contains("resume with: protocol drive resume DRIVE-1/1"),
+        text.contains("resume with: aep drive resume DRIVE-1/1"),
         "the fixture did not reach the operator step, so this case is about nothing:\n{text}"
     );
     assert!(

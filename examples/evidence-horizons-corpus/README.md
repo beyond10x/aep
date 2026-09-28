@@ -143,10 +143,10 @@ moves a caller's date to its own clock is an engine deciding when the observatio
 the one thing it must never do. Clamping belongs in the exporter, which is where the adopter put it.
 
 ```console
-$ protocol evidence inspect examples/evidence-horizons-corpus/writers-day.yaml --at 2026-09-01
+$ aep observe evidence inspect examples/evidence-horizons-corpus/writers-day.yaml --at 2026-09-01
 ```
 
-exits 1 and names records 3 and 4, by file position and by the date as written. `protocol evaluate
+exits 1 and names records 3 and 4, by file position and by the date as written. `aep govern evaluate
 --evidence` answers identically about the same file, submits the other three, and exits 1.
 
 ## Horizon distribution

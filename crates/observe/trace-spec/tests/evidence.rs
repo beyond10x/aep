@@ -281,7 +281,7 @@ fn the_document_is_one_record_of_the_kind_the_protocol_declares() {
     let record = report(&eval_spec(), &[])
         .to_evidence(OBSERVED)
         .expect("a real report converts");
-    // A list of one, because that is the shape `protocol evaluate --evidence` reads.
+    // A list of one, because that is the shape `aep govern evaluate --evidence` reads.
     let document = serde_json::to_string(&[&record]).expect("serialises");
 
     assert!(

@@ -2,7 +2,7 @@
 //!
 //! There are two adapters now — the Claude Code `stream-json` reader in [`crate::adapter`] and the
 //! metaharness event-stream reader in [`crate::event_stream`] — and a caller should not have to
-//! know which one a file needs. `protocol trace check --transcript x.jsonl` takes the same flags
+//! know which one a file needs. `aep observe trace check --transcript x.jsonl` takes the same flags
 //! for a recorded vendor transcript and for a driven run's event stream, because the alternative is
 //! a `--format` argument that is wrong exactly when somebody is in a hurry: a mislabelled file
 //! either refuses loudly or, worse, reads as an empty run.

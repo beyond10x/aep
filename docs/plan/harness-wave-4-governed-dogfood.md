@@ -8,7 +8,7 @@
 > **Its predecessor has shipped.**
 > Wave 3 — the driver build, W3.0–W3.6 — is **delivered, 2026-08-21**: the acceptance for every item
 > is in [`harness-wave-2-driver-decision.md`](harness-wave-2-driver-decision.md) § *Wave 3 — built,
-> 2026-08-21*, together with a seventh item the review never saw (`protocol workflow render`). Every
+> 2026-08-21*, together with a seventh item the review never saw (`aep govern workflow render`). Every
 > acceptance line below therefore rests on code that exists rather than on a crate being written —
 > which changes what this page is waiting for, and changes nothing about its standing. Nothing here
 > is a work order: [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative* says a proposal
@@ -51,7 +51,7 @@ reports what broke.
 | **dogfood before portability** | W4.1 (one real story, driven) lands **before** W4.4 (a second real harness). Codex is last in this wave, not first | **an adapter proven on toy tasks tells you less than a driver proven on real work.** W3.5 already tests the *seam* with no model, so the marginal information in a second adapter is about the harness, not about the specification. The marginal information in a real story is about everything at once: the step map, the retry budgets, the approval pre-flight, the hook channel and whether an operator can resume. Adding a second harness first would double the surface under test before the first one has ever been run against something that could fail for a real reason |
 | the subject is **this repository's own backlog** | W4.1 drives a story out of the `.engineering/` store W4.0 landed — 33 artifacts under `initiative:the-repo-governs-itself`. `examples/planning-passkeys/` stays a fixture and is not driven | a fixture is a story somebody wrote to be drivable, so it cannot refute the claim under test. The claim is that a real story — with a gate that takes minutes, a diff across crates, and an acceptance line somebody argued about — is drivable |
 | **one small real story, not a representative one** | **named, 2026-08-21: `story:agent-eval-cases`** — 48 lines, and the smallest story in the store that both touches no crate (`integrations/claude-code/**`) and is not parked on somebody else's gate | a large story tests the model's stamina and the wave's patience, not the driver's enforcement, and it fails for reasons this wave cannot fix. The wave is about whether the *mechanism* holds. The disjoint surface is a second, smaller reason: a story whose diff lands where nothing else is being worked on is a story whose *failure* can only have come from the driver |
-| the operator is **in the loop by design**, not as a fallback | ~~W4.1 runs `development.standard`~~ **`development.driven`, with `--pause-on-approval`, taken 2026-08-21** — the choice the inline note in § W4.1 left open. The review is still an `operator` step and the pause is unchanged, because `development.driven` extends `development.standard` | D3: a headless run **refuses to start** when an approval is reachable, and `approval-gates` is reachable under both profiles. The two ways to avoid the pause are both refused — dropping to `development.fast`, which deliberately cannot summon a human (`profiles/development-fast.yaml:25-27`), would test a weaker profile than the work deserves; auto-approving is refused under every flag by D3. What forced the change off `development.standard` is not the pause but the shell: without `command.execute` a driven `llm` step cannot reach a single `protocol artifact` verb, and run `W4-1/1` made **48 allowed calls** through exactly that grant — 47 `protocol artifact`, one `protocol trace` |
+| the operator is **in the loop by design**, not as a fallback | ~~W4.1 runs `development.standard`~~ **`development.driven`, with `--pause-on-approval`, taken 2026-08-21** — the choice the inline note in § W4.1 left open. The review is still an `operator` step and the pause is unchanged, because `development.driven` extends `development.standard` | D3: a headless run **refuses to start** when an approval is reachable, and `approval-gates` is reachable under both profiles. The two ways to avoid the pause are both refused — dropping to `development.fast`, which deliberately cannot summon a human (`profiles/development-fast.yaml:25-27`), would test a weaker profile than the work deserves; auto-approving is refused under every flag by D3. What forced the change off `development.standard` is not the pause but the shell: without `command.execute` a driven `llm` step cannot reach a single `aep plan artifact` verb, and run `W4-1/1` made **48 allowed calls** through exactly that grant — 47 `aep plan artifact`, one `aep observe trace` |
 | ~~**the F13 answer is produced, not scheduled again**~~ **— produced by wave 3, and this row is kept as the record of why it was made an acceptance criterion** | **W3.6 ran the deliberate-denial case on 2026-08-21 and the answer is *yes, one-for-one*:** three hook refusals produced exactly three `permission_denials` entries, each naming its tool. It is written into design § 4.8 (*F13, answered*) and the gap-register row is **closed by code**. W4.2 is no longer the backstop for it | the review named the closing command in one sentence — one `claude -p` run with a denying hook, then read the last line — and a row whose closing command has been written down for two waves and never run is a row nobody intends to close. Making it an acceptance criterion is what got it run one wave earlier than this page expected |
 | **W4.3 produces a decision, not a build** | the design is written proposed-not-accepted; the wave's acceptance is *accepted / accepted-in-part / refused, with the reason recorded* | both shapes it could take are domain changes — a new `ArtifactStatus` variant, or a new mode on a write verb. That is the shape gap-register **D-5** already went through for `EvidenceKind`, and the lesson recorded there is that the decision belongs in the acceptance decision rather than being discovered during implementation |
 | the Codex facts are **an input, not a dependency** | the research was run in parallel and **has landed** — [`2026-08-21-codex-harness-research.md`](../reviews/2026-08-21-codex-harness-research.md), every fact labelled verified / documented / inferred / unknown. W4.4's three acceptance tiers stay, because a wave whose last item blocks on research nobody sequenced is a wave that does not close | it changed two things rather than confirming the plan: the adapter's input is the **session rollout JSONL**, not `codex exec --json` stdout, and the enforcement layer turns out to be **portable rather than Claude-specific** — Codex 0.145 ships a stable `PreToolUse` hook with the same decision contract. Both are recorded in W4.4 below rather than restated |
@@ -74,21 +74,21 @@ store has no artifacts to evaluate a gate against (D2).
 claim:
 
 ```text
-$ protocol artifact validate
+$ aep plan artifact validate
 33 file(s) in …/aep/.engineering/planning: 33 artifact(s)
 valid                                                                  # exit 0
 
-$ cd crates && protocol artifact list --kind epic
+$ cd crates && aep plan artifact list --kind epic
 epic:reference-driver           epic  draft  The reference driver
 epic:cross-harness-portability  epic  draft  Harness-neutral, and tested by a second harness
 epic:evidence-gated-completion  epic  draft  Done is a claim with evidence behind it
 …                                                                      # exit 0, no --store
 ```
 
-* `protocol artifact list` run from a subdirectory, **with no `--store`**, answers from
+* `aep plan artifact list` run from a subdirectory, **with no `--store`**, answers from
   `.engineering/planning/` — the discovery path, not a flag
   (`crates/edge/aep-cli/src/planning.rs:90-106`);
-* `protocol artifact validate` is green over 33 artifacts, exit 0;
+* `aep plan artifact validate` is green over 33 artifacts, exit 0;
 * the store holds **this wave's own stories**, so the first thing the repository governs with it is
   the plan that governs it — see the mapping below;
 * **one decision left, and it is not met by the above: whether `artifact validate` joins the gate.**
@@ -118,18 +118,18 @@ one plan. Making the store the single copy is what W4.1 is for.
 
 The centre of the wave, and the only item the others exist to support.
 
-`protocol drive` over `drivers/development/default.yaml` (W3.2) under `development.standard`: one
+`aep drive` over `drivers/development/default.yaml` (W3.2) under `development.standard`: one
 `claude -p` session per `llm` step (D4), the tool set at each state from
 `tool_config(effective_policy(execution))` on the launch line, the plugin's hooks configured through
 `--settings` and **never** `--bare` (D4/F15), `cargo test` and `clippy` as `command` steps **the
 driver executes** — because this run's profile grants no `command.execute`, so the model holds no
-shell at any point in it (§ 4.8; `development.driven` does grant it, held to the `protocol` CLI by a
+shell at any point in it (§ 4.8; `development.driven` does grant it, held to the `aep` CLI by a
 hook) — and the review as an `operator` step that persists, releases
 the lock and exits 0 (D3).
 
 > **One input this paragraph predates, from wave 3's delivery: `development.standard` is very likely
 > the wrong profile for a driven run, and this page is not the place that decides it.** Building the
-> driven eval found that the planning store has no tool surface other than the `protocol` CLI, so
+> driven eval found that the planning store has no tool surface other than the `aep` CLI, so
 > under `development.standard` a driven `llm` step cannot create an artifact at all — the run does
 > not fail, it never moves. `development.driven` exists for exactly that (design § 4.8, and the
 > profile's own header), and `cargo test` and `clippy` stay `command` steps the driver executes under
@@ -147,12 +147,12 @@ the lock and exits 0 (D3).
 * **the diff lands through the ten-step gate.** `task check` green, exit 0, before the review step
   (`Taskfile.yml:16-25`), and the `test_result` and `static_analysis` records submitted to the engine
   are the ones that run produced — not a summary the model wrote about it;
-* **the transcripts are checked, and the run cannot complete without it.** `protocol trace check`
-  over each `llm` step's transcript against a trace specification, `protocol trace evidence`
+* **the transcripts are checked, and the run cannot complete without it.** `aep observe trace check`
+  over each `llm` step's transcript against a trace specification, `aep observe trace evidence`
   submitting `trace_conformance`, and the completion gate reading it. `trace_conformance` and
   `trace-checker` are declared for development work and nowhere else
   (`protocols/adp/1.yaml:17-33`), which is what makes this admissible at all;
-* **every status move goes through `protocol artifact move` and by no other means** — asserted by
+* **every status move goes through `aep plan artifact move` and by no other means** — asserted by
   inspecting the store afterwards, the way W1.2's eval asserts it, with the
   `.engineering/planning/**` write-guard hook as the enforcement and `artifact validate` as the audit
   (§ 4.8 row 6);
@@ -177,7 +177,7 @@ acceptance line above admits, so this item is closed by it rather than left open
 below is the record the line asks for.
 
 ```text
-$ protocol drive run --project . --plugin-dir integrations/claude-code \
+$ aep drive run --project . --plugin-dir integrations/claude-code \
     --pause-on-approval --max-iterations 40            # no --map: the shipped map is selected by fitting
 run        W4-1/1
 map        step map development/default
@@ -190,7 +190,7 @@ moved      decompose -> establish_verifiers
 blocked because:
   - establish_verifiers -> implement: ? artifact specification (approved) — declared: specification:agent-charter-eval-cases (draft) [principle spec-driven]
   - establish_verifiers -> implement: ✗ test.first_result == failed — test.first_result = passed [principle test-driven]
-resume with: protocol drive resume W4-1/1                                                  # exit 1
+resume with: aep drive resume W4-1/1                                                  # exit 1
 ```
 
 **The subject.** `story:agent-eval-cases` — *"The two planning agents, held to their charters by a
@@ -202,17 +202,17 @@ measured a gate somebody else holds. The
 task document is `.engineering/task.yaml`, `id: W4-1`, `kind: feature`, `derived_from:
 story:agent-eval-cases`, and it declares `profile: development.driven` — which is the decision the
 inline note above left to whoever opened the wave, taken the way that note predicted, and confirmed
-by the run: `protocol resolve` reports `command.execute` allowed, and all 48 CLI invocations the four
-sessions were allowed — 47 `protocol artifact`, one `protocol trace` — went through the shell that
+by the run: `aep govern resolve` reports `command.execute` allowed, and all 48 CLI invocations the four
+sessions were allowed — 47 `aep plan artifact`, one `aep observe trace` — went through the shell that
 grant opens.
 
 **What ran, per state.**
 
 | state | steps | outcome |
 |---|---|---|
-| `receive` | 1 `llm` | created `task:w4-1-agent-eval-cases` through `protocol artifact new`, body written by targeted `Edit`. Moved |
+| `receive` | 1 `llm` | created `task:w4-1-agent-eval-cases` through `aep plan artifact new`, body written by targeted `Edit`. Moved |
 | `specify` | 1 `llm` | created `specification:agent-charter-eval-cases`, status `draft`. Moved on `artifact.specification.exists` |
-| `decompose` | 1 `llm` | created **9** `task` artifacts, each related through `protocol artifact relate`. Moved (unguarded) |
+| `decompose` | 1 `llm` | created **9** `task` artifacts, each related through `aep plan artifact relate`. Moved (unguarded) |
 | `establish_verifiers` | 1 `llm` + 1 `command` | wrote **nine red shell checks — one per decomposed task** — under `integrations/claude-code/eval/checks/`, then the driver ran `cargo test --workspace`: **138 suites `ok`, 0 `FAILED`**. **Blocked** |
 | `implement` … `review` | — | never entered. The `operator` step was never reached |
 
@@ -228,7 +228,7 @@ grant opens.
 | `permission_denials` | **11**, summing the four terminal records: 3 / 3 / 2 / 3 | same four transcripts |
 | evidence submitted | **1** — `test_result`, `suite: unit`, `passed: 1`, `producer: verifier/test-runner`, `command: cargo test --workspace` | `snapshot.json` |
 | audit trail | 11 events: 3 `transition_performed`, 1 `evidence_produced`, 1 `transition_blocked` carrying both unmet reasons | `snapshot.json` |
-| store afterwards | 47 → **58** artifacts, `protocol artifact validate` **exit 0** | the verb |
+| store afterwards | 47 → **58** artifacts, `aep plan artifact validate` **exit 0** | the verb |
 | files outside the intended surface | **0** — no tracked file was modified at all; every write is a new file under `.engineering/**` or `integrations/claude-code/eval/checks/**` | `git status` |
 
 **What held, stated as claims with their evidence.**
@@ -237,7 +237,7 @@ grant opens.
   unmet requirement, all in the snapshot's audit trail rather than in the driver's log.
 * **The guards discriminated.** 69 allows and 11 denies is the shape the driven eval demands of
   itself — a guard that denies everything audits as little as one that denies nothing. Every deny is
-  a `Bash` outside `protocol artifact …`/`protocol trace …` (`ls`, `find`, `cat`, and composed
+  a `Bash` outside `aep plan artifact …`/`aep observe trace …` (`ls`, `find`, `cat`, and composed
   command lines), except one: a `store-integrity` refusal of an `Edit` whose `new_string` rewrote
   the machine-owned `id:` of an artifact's frontmatter.
 * **F13 holds on the shipped map, not only on the eval's.** 11 hook denies, 11 `permission_denials`
@@ -245,10 +245,10 @@ grant opens.
   W3.6 produced, on a different step map and a different model.
 * **The auth was the login.** `apiKeySource: none` in all four sessions, with `ANTHROPIC_API_KEY`
   unexported and `CLAUDE_CONFIG_DIR` pointed at a scratch home holding a copy of the credentials.
-* **`protocol trace check` decides these transcripts.** Run against
+* **`aep observe trace check` decides these transcripts.** Run against
   `eval/expectations.driven-step.trace.yaml` — a document written for the eval's step, not for these
   — `decompose` is **conformant** (9 ok, 2 advisory gaps) and the other three contradict
-  `nothing-was-badly-refused-here`, whose bound is `at most 2` denials. `protocol trace evidence`
+  `nothing-was-badly-refused-here`, whose bound is `at most 2` denials. `aep observe trace evidence`
   minted a `trace_conformance` record from the `decompose` transcript, `status: passed`,
   `producer: verifier/trace-checker`.
 
@@ -271,10 +271,10 @@ in the order they cost the run:
    `Evaluation.transitions[].requirements` and is not passed. So the model was never told that
    `implement` needed a red suite and an approved specification. It was not asked and it did not
    guess, which is the correct order of blame.
-3. **Nothing in the run moves a specification to `approved`.** `protocol artifact new` leaves
+3. **Nothing in the run moves a specification to `approved`.** `aep plan artifact new` leaves
    `draft`, `spec-driven.before_implementation` wants `approved`
    (`principles/development/spec-driven.yaml:20-25`), and the lifecycle is `draft → in_review →
-   approved` — two `protocol artifact move` calls that no prompt asks for and no step performs.
+   approved` — two `aep plan artifact move` calls that no prompt asks for and no step performs.
 4. **`diff.exists` is satisfied by `git diff` exiting zero, not by a diff existing.** Every file this
    run produced is new, so `git --no-pager diff --stat HEAD` would have printed nothing and exited 0,
    and `mint` writes a `ChangeSet` with all-zero counts on any zero exit
@@ -282,8 +282,8 @@ in the order they cost the run:
    reached `implement`, so this one is a reading of the code rather than an observation of the run —
    labelled as such deliberately.
 5. **The driver never checks a transcript, so this item's third acceptance bullet is not met by the
-   run — only by a person typing the verb afterwards.** That bullet asks for `protocol trace check`
-   over each `llm` step's transcript, `protocol trace evidence` submitting `trace_conformance`, and
+   run — only by a person typing the verb afterwards.** That bullet asks for `aep observe trace check`
+   over each `llm` step's transcript, `aep observe trace evidence` submitting `trace_conformance`, and
    the completion gate reading it. `drivers/development/default.yaml` contains **no `trace` step at
    all**, so no `trace_conformance` record was minted by the run and nothing could have gated on one.
    The two invocations quoted above were run by hand against the finished transcripts, which
@@ -304,7 +304,7 @@ this was found by reading a transcript rather than by a gate.
 **no step was retried, no state was re-entered, and no budget was touched** — `visits` is 1 for all
 four states and every `attempts` entry is 1, so the three numbers stay guesses and W4.2's acceptance
 line about them is untouched by this run. And it says nothing about `--pause-on-approval`'s resume
-line, which was printed as `resume with: protocol drive resume W4-1/1` by the **blocked** path
+line, which was printed as `resume with: aep drive resume W4-1/1` by the **blocked** path
 (`crates/edge/aep-cli/src/drive.rs:611-613`) rather than by an `operator` pause, so W4.2's third item
 — *"nobody has read that line"* — is still true of the line it means.
 
@@ -333,8 +333,8 @@ produced anything different, and whether any state hit the visit budget.
 W3.6's deliberate-denial case ran on 2026-08-21 and answered it: a hook's `permissionDecision: deny`
 **does** increment the transcript's `permission_denials` array, one entry per refusal, each carrying
 the tool's name. It is folded into design § 4.8 and the gap-register row is closed by code. The field
-is still a **whole-run count**, so the gating record stays the hook-decision log and `protocol
-artifact validate`, and the transcript row stays advisory — which is a narrower claim than this item
+is still a **whole-run count**, so the gating record stays the hook-decision log and `aep
+plan artifact validate`, and the transcript row stays advisory — which is a narrower claim than this item
 was written expecting, and is the claim the observation supports.
 
 **Operator-step resume UX.** D3 says an owed approval becomes an `operator` step that prints the
@@ -402,7 +402,7 @@ Unlike `W4-1/1`, this one **did** reach a person — at `establish_verifiers`, w
 written to stop at.
 
 ```text
-$ protocol drive resume W4-2/1 --project <worktree> --map development/checks \
+$ aep drive resume W4-2/1 --project <worktree> --map development/checks \
     --task .engineering/task-w4-2.yaml --max-iterations 60 --pause-on-approval
 run        W4-2/1
 map        step map development/checks
@@ -425,10 +425,10 @@ exactly the shape `development/default` could never drive. The task is `.enginee
 |---|---|---|
 | `receive` | 1 `llm`, **3 attempts** | two sessions died before a turn (see *credential*, below); the third created `task:w4-2-open-vocabulary-audit`. Moved |
 | `specify` | 1 `llm` | created `specification:open-vocabulary-audit`. Moved on `artifact.specification.exists` |
-| `decompose` | 1 `llm` | created **2 stories and 13 tasks**, related through `protocol artifact relate`. Moved |
+| `decompose` | 1 `llm` | created **2 stories and 13 tasks**, related through `aep plan artifact relate`. Moved |
 | `establish_verifiers` | 1 `llm` + 1 `command` + **1 `operator`** | wrote **13 check units** under `.engineering/checks/`; the driver ran them **red** — `test_result` `passed: 0, failed: 1`, and the engine recorded `verification_failed`. Then it **paused for a person**, who moved `specification:open-vocabulary-audit` to `approved`; the run was resumed and moved |
 | `implement` | 1 `llm`, **3 attempts** | two sessions died on an expired credential; the third wrote `docs/guide/open-vocabulary.md`, 165 lines, 18 audit rows. `trace_conformance` and `diff` submitted. Moved |
-| `verify` | **3 `command`**, no model | checks green, `protocol validate` green, `protocol artifact validate` green — three records. Moved |
+| `verify` | **3 `command`**, no model | checks green, `aep govern validate` green, `aep plan artifact validate` green — three records. Moved |
 | `adversarial_verify` | 1 `llm` + 1 `command` | the adversary added checks; the suite ran **119 pass, 0 fail, 0 broken, 0 undeclared** across 13 units. **Blocked** |
 | `review` | — | never entered |
 
@@ -442,7 +442,7 @@ exactly the shape `development/default` could never drive. The task is `.enginee
 | evidence submitted | **7** — 4 `test_result`, 1 `trace_conformance`, 1 `diff`, 1 `static_analysis` | `snapshot.json` |
 | audit trail | **25** events: 6 `transition_performed`, 7 `evidence_produced`, 1 `verification_failed`, **2 `transition_blocked`** (the second is the resume) | `snapshot.json` |
 | hook decisions | **0 — there is no `hook-decisions.jsonl`** | the run directory; `W4-1/1` has one with 80 |
-| store afterwards | 59 → **76** artifacts, `protocol artifact validate` **exit 0** | the verb |
+| store afterwards | 59 → **76** artifacts, `aep plan artifact validate` **exit 0** | the verb |
 | the product | `docs/guide/open-vocabulary.md`, 165 lines, 18 rows; 13 check units, 119 checks | the worktree |
 | rate-limit posture at the time | `seven_day`, **0.91 utilization**, `allowed_warning` | `rate_limit_event`, first transcript |
 
@@ -451,7 +451,7 @@ exactly the shape `development/default` could never drive. The task is `.enginee
 | # | finding | evidence |
 |---|---|---|
 | **F-W4.2-3** | **A raw launch leaves hermeticity to the caller, and the two things that fix it fight each other.** The first two `receive` sessions loaded **6 plugins — 5 of them the operator's, nothing to do with this run** (`rust-analyzer-lsp`, `gopls-lsp`, `typescript-lsp`, `track`, `flux-agent`), 26 skills instead of 16, and billed against **`apiKeySource: ANTHROPIC_API_KEY`** rather than the intended subscription: both died on *"Credit balance is too low"*. Pointing `CLAUDE_CONFIG_DIR` at a clean home fixed the leak — and removed the **`aep` plugin too**, so the eight sessions that then succeeded ran with `plugins: 0` and **no enforcement hooks at all**. `development.driven` grants `command.execute` on the stated understanding that `driven-surface.sh` narrows it; for this entire run that hook was absent | `init` events of all ten transcripts; the missing `hook-decisions.jsonl`; `profiles/development-driven.yaml` header |
-| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: protocol drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/edge/aep-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
+| **F-W4.2-4** | **`resume` re-reads none of its four flags — and there is a fifth.** `--map`, `--task`, `--pause-on-approval` and `--plugin-dir` must all be passed again; none is stored. **`--max-iterations` is cumulative over the life of the run and defaults to 25**, so resuming a run that already spent 25 iterations exhausts the budget *before evaluating anything*: the first resume returned `status budget-exhausted`, `steps 0 run`, having done nothing. The printed resume line — `resume with: aep drive resume W4-2/1` — carries none of the five, which is the W4.2 operator-UX item above, answered by observation: **the line as printed does not work** | `crates/edge/aep-cli/src/drive.rs:238-253`; `resume-1` output; cursor `iterations: 26` |
 | **F-W4.2-5** | **A copied OAuth credential expires mid-run and cannot refresh.** Two `implement` sessions returned *"Failed to authenticate: OAuth session expired and could not be refreshed"*. The SDK reported them as `subtype: "success"` with `is_error: true` in the same frame, which is worth knowing before trusting a summary field | `transcripts/implement-0-1.jsonl`, `-0-2.jsonl` |
 | **F-W4.2-6** | **The applicability gap**, above. Closed in part | the design note |
 | **F-W4.2-7** | **A step map is never checked against the plan it will drive, and this is the expensive one.** `StepMap::check_run` validates map → protocol — every evidence kind a step declares is one the protocol declares — and **never the converse** (`crates/drive/aep-driver-spec/src/map.rs:710-750`). `development/checks` submits four kinds; the plan requires `specification` and `verification` as well, and **no step of the map produces either**, for a code task or a documentation one. So the map loads, the run walks six states, and the mismatch surfaces at the guard — **after $31.46 and 76 minutes of model time**. A load-time check had every fact it needed | the map's seven `evidence:` blocks; `evidence.missing = 2` after the fix |
@@ -597,7 +597,7 @@ because no local session ran a prompting mode — one `-a untrusted` run answers
 
 | tier | what lands | what it establishes |
 |---|---|---|
-| **full** | one `llm` step of the same step map runs under Codex; a second `read_transcript` reads the rollout into a `TraceIr`; `protocol trace check` decides it against the same specification file | the specification is portable, and the seam is the IR rather than an accident of one adapter |
+| **full** | one `llm` step of the same step map runs under Codex; a second `read_transcript` reads the rollout into a `TraceIr`; `aep observe trace check` decides it against the same specification file | the specification is portable, and the seam is the IR rather than an accident of one adapter |
 | **partial** | the transcript reader exists and is tested against a **recorded** rollout; no live run | what the shell-echo harness is to the driver, one layer out: the reader is real and the invocation is not |
 | **refused, with a reason** | the reader cannot be version-gated into something stable, or the live run contradicts the hook contract the research documents | a finding about the specification's portability, written up as one. **The research has narrowed what could land here**: the *"the harness cannot deny a tool call"* outcome, which was the one this tier was written for, is now documented not to be the case, so a refusal at this point would be a finding about *format drift* rather than about enforcement |
 

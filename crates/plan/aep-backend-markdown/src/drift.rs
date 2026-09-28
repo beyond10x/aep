@@ -31,7 +31,7 @@
 //! The comparison is against the highest revision **recorded**, and a document at or below it is
 //! not forged however many events sit under it.
 //!
-//! This detects and does **not** enforce. Nothing here refuses a write, and `protocol artifact
+//! This detects and does **not** enforce. Nothing here refuses a write, and `aep plan artifact
 //! validate` grew no refusal: a forged revision is reported after the fact, exactly as an
 //! out-of-band edit is. Enforcement needs to know who wrote a document, which is gap register
 //! **D-3** (attestation by signature) and is still proposed.
@@ -41,8 +41,8 @@
 //! Both deviations close **by detection**. Prevention was considered and refused, on the record: a
 //! `PreToolUse` hook is bypassed by `Bash` (the design's own § 3.3 says so), and a lock on a
 //! directory of markdown files is a lock somebody deletes. A check that runs in the gate cannot be
-//! routed around, and `protocol artifact validate` is that check. Repairing drift is not here
-//! either: a repair is a write, and a write is a command somebody issues — `protocol artifact move`
+//! routed around, and `aep plan artifact validate` is that check. Repairing drift is not here
+//! either: a repair is a write, and a write is a command somebody issues — `aep plan artifact move`
 //! with the ladder consulted, not a verb that copies the file's claim into the log.
 //!
 //! The body is not compared. It is a person's prose, and editing it in an editor is what the format
@@ -132,7 +132,7 @@ impl fmt::Display for Deleted {
             f,
             "{} was deleted: its log ends at event {} and the store holds no document — nothing is \
              physically deleted through a command, so this was `rm`. Restore the document from \
-             version control, then retire it with `protocol artifact move {} --to archived`, which \
+             version control, then retire it with `aep plan artifact move {} --to archived`, which \
              keeps its record",
             self.artifact, self.event, self.artifact
         )
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn a_document_at_the_revision_of_a_write_that_changed_nothing_is_not_drift() {
-        // Seen on a driven run, 2026-08-29: `protocol artifact body` handed an empty body wrote
+        // Seen on a driven run, 2026-08-29: `aep plan artifact body` handed an empty body wrote
         // an `update` event at revision 2 with `changed: {}`, the document stood at revision 2,
         // and `validate` reported the revision as disagreeing with the *create* event at 1 —
         // because the last event that changed something was the create. A revision the log

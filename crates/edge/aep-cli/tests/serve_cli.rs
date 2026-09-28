@@ -1,4 +1,4 @@
-//! `protocol serve` over a real socket.
+//! `aep plan serve` over a real socket.
 //!
 //! The unit tests in `src/serve/` drive the parser and the guards from byte slices, which is where
 //! the shapes are decided. This drives the whole verb: a child process, an ephemeral port, and HTTP
@@ -60,7 +60,7 @@ fn scratch_store(name: &str) -> PathBuf {
         ("story", "second-thought", "Something to move"),
         ("epic", "the-whole-point", "What the stories decompose"),
     ] {
-        let made = Command::new(env!("CARGO_BIN_EXE_protocol"))
+        let made = Command::new(env!("CARGO_BIN_EXE_aep"))
             .args([
                 "plan",
                 "artifact",
@@ -103,7 +103,7 @@ fn serve(store: &Path, extra: &[&str]) -> Served {
     ];
     args.extend(extra.iter().map(|flag| (*flag).to_owned()));
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(&args)
         .stdout(Stdio::piped())
         // Handler panics belong in the test output. Piping stderr without draining it hid the

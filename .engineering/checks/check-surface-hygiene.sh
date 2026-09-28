@@ -11,11 +11,11 @@
 # and an exemption is exactly how a rule stops being one.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-declare_row H1 "protocol validate --root . exits 0, with its output relayed"
-declare_row H2 "protocol artifact validate exits 0, with its output relayed"
+declare_row H1 "aep govern validate --root . exits 0, with its output relayed"
+declare_row H2 "aep plan artifact validate exits 0, with its output relayed"
 declare_row H3 "git status lists changed paths only under docs/ and .engineering/"
 declare_row H4 "the model runner is unchanged: it is read as a model, never edited"
-declare_row H5 "no check names a planning path — protocol artifact list is the only route to the store"
+declare_row H5 "no check names a planning path — aep plan artifact list is the only route to the store"
 declare_row H6 "the suite runs to exit 0 with jq, yq, curl, wget, nc, python, node and cargo stubbed"
 declare_row H7 "no script contains a literal temporary-directory path; scratch derives from TMPDIR"
 declare_row H8 "a run with TMPDIR pointed at an empty directory leaves it empty, red path and green"
@@ -29,10 +29,10 @@ done
 
 # ---- H1 -----------------------------------------------------------------------------------------
 R=0
-if ! protocol_ready; then
-  R=1; why "$(protocol_absence)"
+if ! aep_ready; then
+  R=1; why "$(aep_absence)"
 else
-  OUT="$( ( cd "$REPO" && "$PROTOCOL" validate --root . ) 2>&1 )"
+  OUT="$( ( cd "$REPO" && "$AEP_CLI" govern validate --root . ) 2>&1 )"
   if [ $? -ne 0 ]; then
     R=1
     while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
@@ -44,16 +44,16 @@ row H1 "$R"
 
 # ---- H2 -----------------------------------------------------------------------------------------
 R=0
-if ! protocol_ready; then
-  R=1; why "$(protocol_absence)"
+if ! aep_ready; then
+  R=1; why "$(aep_absence)"
 else
-  OUT="$( ( cd "$REPO" && "$PROTOCOL" artifact validate ) 2>&1 )"
+  OUT="$( ( cd "$REPO" && "$AEP_CLI" plan artifact validate ) 2>&1 )"
   if [ $? -ne 0 ]; then
     R=1
     while IFS= read -r l; do [ -n "$l" ] && why "$l"; done <<< "$OUT"
   else
     note "$(head -1 <<< "$OUT")"
-    note "read by $PROTOCOL ($(workspace_version))"
+    note "read by $AEP_CLI ($(workspace_version))"
   fi
 fi
 row H2 "$R"
@@ -108,7 +108,7 @@ else
   for f in "${SCRIPTS[@]}"; do
     for bad in "${FORBIDDEN[@]}"; do
       if grep -qF "$bad" "$f"; then
-        R=1; why "${f##*/} names $bad — R18 allows only \`protocol artifact list\` for store state"
+        R=1; why "${f##*/} names $bad — R18 allows only \`aep plan artifact list\` for store state"
       fi
     done
   done
@@ -117,7 +117,7 @@ fi
 row H5 "$R"
 
 # ---- H6 -----------------------------------------------------------------------------------------
-# Hermeticity by shadowing. `bash`, `git` and `protocol` are the three programs the map declares; a
+# Hermeticity by shadowing. `bash`, `git` and `aep` are the three programs the map declares; a
 # fourth dependency that crept in exits 127 under its stub, and the suite goes red rather than
 # quietly requiring a tool the driver never promised.
 R=0

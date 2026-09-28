@@ -18,8 +18,8 @@ stopped holding.
 `conformance/` is where this repository keeps the material that decides whether something conforms —
 `fixtures/`, `scenarios/` and `expected/` for a backend, `trace/` for the three shipped trace
 specifications. An eval case is the same class of object one domain further out: a fixture, a
-specification and the verdict they jointly produce. It is not a protocol document kind — `protocol
-validate` does not read this tree — so it does not belong beside `workflows/` or `drivers/`, and it
+specification and the verdict they jointly produce. It is not a protocol document kind — `aep
+govern validate` does not read this tree — so it does not belong beside `workflows/` or `drivers/`, and it
 is not generated, so it does not belong under `generated/` or `suites/`.
 
 ## The verdict a case declares
@@ -89,7 +89,7 @@ whole-file replacement outright and permits a targeted body edit — the skill's
 for exactly that. That half is the step map's `scope:` (`write: denied` or `partial-only` over
 `.engineering/planning/**`), which both arms are held to. Whether a given `Edit` crossed the `---`
 fence is a judgement about `old_string`, not about a path, and no matcher here expresses it; that
-half is `store_integrity` in the driver, and `protocol plan artifact validate` afterwards. Copy the
+half is `store_integrity` in the driver, and `aep plan artifact validate` afterwards. Copy the
 *reasoning*, not the list, when you write a new row.
 
 **Codex observability, stated rather than discovered.** On the seam a Codex write travels as

@@ -262,7 +262,7 @@ fn paused(root: &Path, approver: Option<&str>) -> (RunDirectory, DriverOptions, 
 
 /// Records one granted approval into the paused run's snapshot, as the approver would.
 ///
-/// Through the engine and into the snapshot on disk — `protocol evaluate --evidence` with the
+/// Through the engine and into the snapshot on disk — `aep govern evaluate --evidence` with the
 /// run's snapshot as its state — while the run is stopped. The driver never sees the submission
 /// happen; it sees the record on resume.
 fn approve(run: &RunDirectory, approver: Producer, approval: &str) {

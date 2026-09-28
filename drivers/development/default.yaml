@@ -9,7 +9,7 @@
 #
 #   * every `cargo` line here is a **command step the driver runs**, never a tool the model holds.
 #     This map's `llm` steps run under `development.standard`, which grants no `command.execute`,
-#     so they hold no shell at all. (`development.driven` does grant it, held to the `protocol`
+#     so they hold no shell at all. (`development.driven` does grant it, held to the `aep`
 #     CLI by a hook — `profiles/development-driven.yaml:78`. This map does not use it.)
 #     `tests.execute` is exercised by the driver, and the record it produces carries
 #     `producer: verifier / test-runner` rather than a model's opinion of a test run. That is what
@@ -176,7 +176,7 @@ states:
           it does not, leave it in `draft` and say so: the transition into `implement` is guarded
           on an approved specification, so the run stops here either way and nothing is implemented
           against a specification nobody agreed to. Write each requirement so that a fact decides
-          it — `protocol observe specification evidence` reads a list item under `## Acceptance` and
+          it — `aep observe specification evidence` reads a list item under `## Acceptance` and
           resolves the predicate it names in backticks, so `the suite is green` states nothing and
           `` `tests.unit.failed == 0` `` states a requirement.
 
@@ -253,7 +253,7 @@ states:
       # counts need here. The committed records under
       # `crates/edge/aep-cli/fixtures/metaharness-contract-result-*.json` are deliberately **not**
       # used: they are the provider's captured bytes from 2026-08-23, they describe metaharness's
-      # adapters rather than the change under review, and `protocol observe contract evidence` requires an
+      # adapters rather than the change under review, and `aep observe contract evidence` requires an
       # `--observed-at` that a committed map could only supply as a literal — a map claiming a fresh
       # observation of a run made months ago, every day, for ever, which is exactly what evidence
       # horizons exist to catch.
@@ -278,7 +278,7 @@ states:
       - kind: command
         description: The three-valued core's algebra, over every input there is.
         run:
-          - protocol
+          - aep
           - observe
           - property
           - evidence
@@ -298,7 +298,7 @@ states:
       - kind: command
         description: The document tree still loads and still cross-validates.
         run:
-          - protocol
+          - aep
           - govern
           - validate
           - --root
@@ -307,7 +307,7 @@ states:
           - "{run_directory}/verification.yaml"
         evidence:
           kind: verification
-          verifier: protocol
+          verifier: aep
           record: "{run_directory}/verification.yaml"
 
   adversarial_verify:
@@ -362,7 +362,7 @@ states:
       # by requirement, what is not met. An exit status names none of them, so the checker writes
       # the document and the driver reads it.
       #
-      # What counts as a requirement is `protocol observe specification evidence`'s own decision and its
+      # What counts as a requirement is `aep observe specification evidence`'s own decision and its
       # module documentation states it in full: a list item under a `Requirements` or `Acceptance`
       # heading, satisfied when the predicate it names in backticks is observed `True`. A ticked
       # checkbox is deliberately not the rule — the party that writes the specification is the party
@@ -381,7 +381,7 @@ states:
       - kind: command
         description: Decide the specification's requirements against what this run observed.
         run:
-          - protocol
+          - aep
           - observe
           - specification
           - evidence
@@ -395,11 +395,11 @@ states:
           - "{run_directory}/specification.yaml"
         evidence:
           kind: specification
-          # `protocol`, the external tool, and not `artifact-validator`: the protocol joins
+          # `aep`, the external tool, and not `artifact-validator`: the protocol joins
           # `specification` to `test-runner` and `human-review`, and neither is what this is. A
           # verifier the protocol has never heard of is admitted and checked at run start, which is
           # the honest shape — the record says which tool decided the document.
-          verifier: protocol
+          verifier: aep
           record: "{run_directory}/specification.yaml"
 
   # A person, and there is no route around them. `review → complete` is guarded on

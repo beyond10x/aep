@@ -50,7 +50,7 @@ states evidence the documents themselves do not repeat.
 |---|---|---|
 | V-5 | `docs/VISION.md` § What this is deliberately not | applied as proposed. The narrowing is written *inside* the refusal list rather than as a new section, so the reader who came to that section for the boundary finds the amended boundary and not a cross-reference to it. The argument follows as its own paragraph, and it names what did **not** move — invariant 7, engine-only gate evaluation, and the "external systems do the work" sentence |
 | V-6 | `docs/VISION.md` § Proposed, not accepted | the table's preamble said *"Four design documents"* and now says five, because a count in a preamble is the first thing to go stale. Status is split rather than single-valued: **Phase 1 accepted** as harness wave 1, **driver decided and sketched, build unsequenced** — one word would have hidden the boundary the design document draws inside itself |
-| R-4 | `README.md` § Status, § Documents, § What works today, § Repository layout | three touches, not one. The design doc **and its plan page** get rows, since a plan page is where a reader checks what was actually accepted; the `protocol artifact` verbs and the plugin get one bullet each where the README already lists what works; `integrations/` and the new crate get lines in the layout tree, since a directory nothing mentions is a directory nobody finds; and § Status's count of proposed designs moves four→five, the same stale-count correction V-6 makes in the vision |
+| R-4 | `README.md` § Status, § Documents, § What works today, § Repository layout | three touches, not one. The design doc **and its plan page** get rows, since a plan page is where a reader checks what was actually accepted; the `aep plan artifact` verbs and the plugin get one bullet each where the README already lists what works; `integrations/` and the new crate get lines in the layout tree, since a directory nothing mentions is a directory nobody finds; and § Status's count of proposed designs moves four→five, the same stale-count correction V-6 makes in the vision |
 | A-6 | `AGENTS.md` § Which documents are normative, § Current state | the acceptance row as proposed, **plus** the "Not built yet" line, which said *"any durable backend — the only implementation of the contract is in memory"*. Half of that is now false and half is still true, and the two halves are worth separating: a durable **store** exists; the **contract** still has exactly one implementor until P3 |
 
 ## Applied, 2026-08-21 — second pass, the transcript-conformance proposal
@@ -316,11 +316,11 @@ for:
 * § *Documents* has a row for every design document in `docs/design/` and none for
   `harness-planning-and-driver-design-v0.1.md`. R-1's argument applies unchanged — a design a reader
   cannot find is a design that gets re-proposed.
-* § *What works today* is the list of what a person can actually run, and `protocol artifact` and the
+* § *What works today* is the list of what a person can actually run, and `aep plan artifact` and the
   Claude Code plugin are runnable. A capability list that omits the newest capability is a list
   people stop trusting.
 
-Add: the design-doc row, with its split status; one bullet for the `protocol artifact` verb family
+Add: the design-doc row, with its split status; one bullet for the `aep plan artifact` verb family
 naming the behaviour rather than the flags — lifecycle-validated moves whose refusals name the legal
 set, `validate` accumulating, frontmatter private to the backend; and one bullet for the plugin —
 one skill, two agents, no hooks on purpose. Keep it to a few lines: this is a status list, not the

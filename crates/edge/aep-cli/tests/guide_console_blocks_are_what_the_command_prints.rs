@@ -224,7 +224,7 @@ fn every_quoted_trace_report_on_the_transcript_guide_is_what_the_command_prints(
         let Some(program) = words.next() else {
             continue;
         };
-        if !matches!(program, "$B" | "target/debug/aep" | "target/debug/protocol") {
+        if !matches!(program, "$B" | "target/debug/aep") {
             continue;
         }
         let arguments: Vec<&str> = words.collect();

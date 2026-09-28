@@ -1,4 +1,4 @@
-//! `protocol workflow render` — drawing a workflow, and a run over it.
+//! `aep govern workflow render` — drawing a workflow, and a run over it.
 //!
 //! The fourth module split of `main.rs`, on the criterion the first three set: a verb family with
 //! its own vocabulary and no shared state with the rest of the binary. It brings its own `--format`
@@ -167,7 +167,7 @@ pub(crate) struct InstructArgs {
     root: PathBuf,
     /// A step map, so each state also says what a driver runs in it.
     ///
-    /// A file, or the id of one already in the document tree — the two forms `protocol drive run
+    /// A file, or the id of one already in the document tree — the two forms `aep drive run
     /// --map` takes. Without one the document says what may happen and not what runs, which is the
     /// workflow read on its own: honest, and not enough to act on.
     #[arg(long)]
@@ -200,7 +200,7 @@ pub(crate) fn run(command: WorkflowCommand) -> Result<ExitCode> {
     }
 }
 
-/// `protocol workflow instruct`
+/// `aep govern workflow instruct`
 ///
 /// The principles come from the same tree as the workflow and are never named on the command line:
 /// which rules bind a workflow is a property of the documents, and a flag that let a caller choose
@@ -317,7 +317,7 @@ fn write_tree(instructions: &[Instruction], directory: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `protocol workflow render`
+/// `aep govern workflow render`
 fn render(args: &RenderArgs) -> Result<ExitCode> {
     let workflow = workflow(args)?;
 
@@ -407,7 +407,7 @@ fn run_directory(args: &RenderArgs, run: &str) -> Result<RunDirectory> {
         .join(ordinal);
     if !path.is_dir() {
         bail!(
-            "no run `{run}` at {}; `protocol drive list` says which runs exist",
+            "no run `{run}` at {}; `aep drive list` says which runs exist",
             path.display()
         );
     }

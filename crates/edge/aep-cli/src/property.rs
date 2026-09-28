@@ -1,4 +1,4 @@
-//! `protocol property evidence` — a property checker that runs here and writes down what it
+//! `aep observe property evidence` — a property checker that runs here and writes down what it
 //! measured.
 //!
 //! # The gap this closes
@@ -11,7 +11,7 @@
 //! cannot tell apart from a measured one.
 //!
 //! So the check runs **in this process**, and the record is the checker's own — the shape
-//! `protocol trace evidence` and `protocol contract evidence` already have, and the reason
+//! `aep observe trace evidence` and `aep observe contract evidence` already have, and the reason
 //! `EvidenceMapping::record` exists.
 //!
 //! # Why the property is the protocol's own algebra
@@ -78,18 +78,18 @@ pub(crate) enum PropertyCommand {
     /// Run them and write the `property_test_result` document the run reads.
     ///
     /// Exits `0` whatever the properties said. The verdict is in the record and the engine is what
-    /// decides on it, exactly as `protocol trace evidence` writes down a run that gapped — a caller
+    /// decides on it, exactly as `aep observe trace evidence` writes down a run that gapped — a caller
     /// that wants the verdict as an exit code is asking for a test runner, and `cargo test` is one.
     Evidence(EvidenceArgs),
 }
 
-/// The arguments of `protocol property evidence`.
+/// The arguments of `aep observe property evidence`.
 #[derive(Debug, Args)]
 pub(crate) struct EvidenceArgs {
     /// Where to write the document. Without it, it goes to standard output.
     #[arg(long)]
     out: Option<PathBuf>,
-    /// How to write it. Both are read by `protocol evaluate --evidence`.
+    /// How to write it. Both are read by `aep govern evaluate --evidence`.
     #[arg(long, value_enum, default_value_t = Format::Yaml)]
     format: Format,
 }
@@ -205,7 +205,7 @@ fn check() -> Measured {
     Measured { cases, broken }
 }
 
-/// `protocol property evidence`
+/// `aep observe property evidence`
 fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
     let measured = check();
     let record = PropertyTestResult {
@@ -239,8 +239,8 @@ fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
 /// The command line, as the record's provenance reports it.
 fn invocation(args: &EvidenceArgs) -> String {
     match &args.out {
-        Some(out) => format!("protocol property evidence --out {}", out.display()),
-        None => "protocol property evidence".to_owned(),
+        Some(out) => format!("aep observe property evidence --out {}", out.display()),
+        None => "aep observe property evidence".to_owned(),
     }
 }
 

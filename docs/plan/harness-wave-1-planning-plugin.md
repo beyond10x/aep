@@ -7,7 +7,7 @@
 > here and in [`control-document-updates.md`](control-document-updates.md); the driver build gets a
 > full feasibility review before any build wave opens.
 
-**Goal: an operator and Claude, with the plugin enabled and the `protocol` CLI on `PATH`, plan real
+**Goal: an operator and Claude, with the plugin enabled and the `aep` CLI on `PATH`, plan real
 work in `.engineering/planning/` — and every status move is lifecycle-validated.**
 
 This is the first wave of a new family. `harness` is not ESS and not infra: it is the layer this
@@ -38,7 +38,7 @@ harness wave 3 gets the artifact source it cannot be built without.
 | one skill, not three | exactly one skill, `planning` | a skill is a decision about *when instructions load*, and there is one moment: the operator is planning. Three skills would triple the trigger surface and let a session load the one missing the guardrail it was about to break |
 | discover, do not memorise | the skill inlines **rules only** — `kinds`, `relations`, `lifecycle`, `list` answer every vocabulary question at use time | lifecycles and relations are validated, versioned documents; a prose copy in a skill file is neither. It goes stale the first time a kind gains a status, and the failure is confident and silent. A prose copy of a validated document is drift with a nice font |
 | no hooks | the plugin ships no hooks, on purpose | deterministic interception is the driver's job. A hook layer would be a *second, weaker driver* — one that sees tool calls rather than workflow states and cannot ask the engine anything — and it would have to be deleted or reconciled when the real one lands |
-| no `commands/` | the CLI is the command surface | a slash command wrapping `protocol artifact new` is a second spelling of one verb, and two spellings drift |
+| no `commands/` | the CLI is the command surface | a slash command wrapping `aep plan artifact new` is a second spelling of one verb, and two spellings drift |
 | V-5 lands in this wave | the vision narrowing is applied now, before the driver is built | the decision was taken in session, and a decision recorded three months after it was taken is a decision nobody can audit. The VISION text says plainly that the driver is *designed, not yet built* |
 | the fixture is a contrast, not a copy | `examples/planning-passkeys/` — the same feature `examples/development-passkeys/` governs, planned rather than executed | the two directories side by side are the argument: one shows a task being held to a protocol, the other shows the work being decomposed before there is a task. Reusing the passkey subject means the reader compares mechanisms, not domains |
 
@@ -49,7 +49,7 @@ harness wave 3 gets the artifact source it cannot be built without.
 through `create` and `update` so there is exactly one place inside the crate where validation,
 revision bumping and serialisation happen.
 
-`protocol artifact` in `aep-cli`: `new`, `move`, `relate`, `list`, `board`, `graph`, `validate`,
+`aep plan artifact` in `aep-cli`: `new`, `move`, `relate`, `list`, `board`, `graph`, `validate`,
 `kinds`, `relations`, `lifecycle`. `move` is validated against the kind's lifecycle document; a
 refusal names the legal set. `new` writes its body from `artifacts/templates/` where the kind has a
 template.
@@ -78,13 +78,13 @@ verbatim, a refusal is the answer — and no vocabulary at all.
 **Acceptance** (repeatable, and deliberately outside `task check`):
 
 a fresh Claude Code session with the plugin enabled and the CLI on `PATH` creates one epic and two
-stories derived from it, performs one legal status move **through `protocol artifact move` and by no
+stories derived from it, performs one legal status move **through `aep plan artifact move` and by no
 other means**, and relays an illegal-move refusal to the operator verbatim rather than routing around
 it.
 
 `integrations/claude-code/eval/run.sh` is that check, scripted: a headless `claude -p` run in a
 scratch directory, followed by **mechanical inspection of the store it left behind** — the artifacts
-that exist, their statuses, their edges, and whether `protocol artifact validate` passes. The
+that exist, their statuses, their edges, and whether `aep plan artifact validate` passes. The
 assertions are about files, not about wording, because the behaviour under test is a model's and an
 assertion on its prose would be an assertion on a sentence that is allowed to vary.
 
@@ -100,7 +100,7 @@ recorded with the wave.
 **Acceptance:**
 
 * `decomposer` run against an epic produces **only draft stories, each linked to the epic**, moves
-  nothing, and leaves a store that `protocol artifact validate` passes;
+  nothing, and leaves a store that `aep plan artifact validate` passes;
 * `plan-reviewer` run against the same store **changes zero files** — asserted by `git status` being
   clean after the run, not by reading the agent's definition.
 
@@ -111,10 +111,10 @@ store afterwards. "The decomposer moved nothing" is a statement about statuses i
 ## W1.4 — the install path, the documents, the changelog
 
 The install path written down where a person will find it, and followed once from a clean checkout:
-install the plugin from the marketplace entry, build the CLI, run `protocol artifact new`.
+install the plugin from the marketplace entry, build the CLI, run `aep plan artifact new`.
 
 Documents: the design doc's row in `README.md` § *Documents* and in `AGENTS.md`'s acceptance table;
-the plugin and the `protocol artifact` verbs mentioned where the README lists what works; the vision
+the plugin and the `aep plan artifact` verbs mentioned where the README lists what works; the vision
 narrowing applied; `docs/plan/gap-register.md` carrying the two rows this wave opens;
 `CHANGELOG.md` under `## [Unreleased]`.
 
@@ -156,7 +156,7 @@ that the register has something to point at, and for no other reason.
 
 ## What is deliberately not in this wave
 
-* **The driver**, in any part. No `aep-driver`, no `protocol drive`, no `drivers/` documents, and no
+* **The driver**, in any part. No `aep-driver`, no `aep drive`, no `drivers/` documents, and no
   `.engineering/runs/` writer — the directory name is reserved and nothing writes to it.
 * **Contract conformance for the store.** The sixteen `aep-conformance` suites are not run against
   `aep-backend-markdown`, because it does not implement the contract yet. That is P3, and the
@@ -167,6 +167,6 @@ that the register has something to point at, and for no other reason.
   refuse an unusual pairing. Turning that document's advisory lists into refusals changes the meaning
   of a shared document for every consumer of the artifact graph, and it gets its own decision
   (design open decision **D2**).
-* **A `protocol entity --planning` bridge.** The two surfaces answer different questions until the
+* **A `aep plan entity --planning` bridge.** The two surfaces answer different questions until the
   store implements the contract, and at P3 the bridge is not a bridge — it is the store answering as
   a backend (design open decision **D3**).
