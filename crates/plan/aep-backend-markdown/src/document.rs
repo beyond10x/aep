@@ -97,8 +97,7 @@ impl PlanningDocument {
     /// store whose round trip is lossy corrupts a file on the first status move and nobody notices
     /// until the second.
     pub fn render(&self) -> String {
-        let block = serde_yaml::to_string(&self.frontmatter)
-            .unwrap_or_else(|error| panic!("validated frontmatter serialises: {error}"));
+        let block = self.frontmatter.render_yaml();
         format!("{FENCE}\n{block}{FENCE}\n{}", self.body)
     }
 

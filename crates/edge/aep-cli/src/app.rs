@@ -1272,7 +1272,7 @@ fn conformance_target(
         hybrid_policy: None,
     };
     match planning::Plan::discovered()? {
-        planning::Plan::Markdown { .. } => {}
+        planning::Plan::Markdown { .. } | planning::Plan::Git { .. } => {}
         planning::Plan::Sqlite { .. } => target.backend = ConformanceBackend::Sqlite,
         planning::Plan::Postgres { url } => {
             target.backend = ConformanceBackend::Postgres;

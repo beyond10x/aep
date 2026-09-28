@@ -161,6 +161,11 @@ impl StoreLocation {
     fn plan(&self) -> Result<Plan> {
         if let Some(path) = &self.store {
             refuse_explicit_eventlog_projection(path)?;
+            // `--store` naming a Git-native project's own planning directory opens it as what
+            // it is: read as a journal store, a move would start a journal beside the documents.
+            if let Some(git) = git_plan_at(path) {
+                return Ok(git);
+            }
             return Ok(Plan::Markdown { root: path.clone() });
         }
         Plan::discovered()
@@ -215,6 +220,20 @@ pub(crate) fn protocols_of(repository: &Path) -> Result<PathBuf> {
         })
 }
 
+/// The Git-native plan whose planning directory `path` is, when `path`'s parent is a project
+/// directory whose `project.yaml` selects `store: git`.
+fn git_plan_at(path: &Path) -> Option<Plan> {
+    let absolute = std::path::absolute(path).ok()?;
+    let engineering = absolute.parent()?;
+    if engineering.file_name()? != project_directory() {
+        return None;
+    }
+    match Plan::for_project(engineering).ok()? {
+        Plan::Git { root, evidence } if root == absolute => Some(Plan::Git { root, evidence }),
+        _ => None,
+    }
+}
+
 /// An explicit legacy path cannot promote an Eventlog projection back to authority, even when
 /// empty or deleted. Inspect the selected path's project, rather than the caller's working
 /// directory, and also inspect the canonical target of an existing symbolic link.
@@ -248,6 +267,9 @@ fn refuse_explicit_eventlog_projection(path: &Path) -> Result<()> {
 pub(crate) enum Plan {
     /// Markdown documents under `root`.
     Markdown { root: PathBuf },
+    /// `aep.project/5`: Markdown documents under `root` are the authority, each carrying its own
+    /// transitions, and evidence records are one file each under `evidence`. No journal.
+    Git { root: PathBuf, evidence: PathBuf },
     /// One SQLite file.
     Sqlite { path: PathBuf },
     /// A PostgreSQL database.
@@ -330,6 +352,10 @@ impl Plan {
             StoreConfig::Markdown => Self::Markdown {
                 root: engineering.join(PLANNING_DIRECTORY),
             },
+            StoreConfig::Git { planning, evidence } => Self::Git {
+                root: planning.clone(),
+                evidence: evidence.clone(),
+            },
             StoreConfig::Sqlite { path } => Self::Sqlite { path: path.clone() },
             StoreConfig::Postgres { url } => Self::Postgres { url: url.clone() },
             StoreConfig::Hybrid {
@@ -392,7 +418,7 @@ impl Plan {
     /// Where the plan is, for a message.
     pub(crate) fn describe(&self) -> String {
         match self {
-            Self::Markdown { root } => root.display().to_string(),
+            Self::Markdown { root } | Self::Git { root, .. } => root.display().to_string(),
             Self::Sqlite { path } => format!("the SQLite store {}", path.display()),
             Self::Postgres { url } => format!("the Postgres store {}", redact(url)),
             Self::Hybrid { root, replica, .. } => {
@@ -423,7 +449,7 @@ impl Plan {
     /// not need a backend at all.
     pub(crate) fn open_backend(&self) -> Result<Option<PlanBackend>> {
         Ok(match self {
-            Self::Markdown { .. } | Self::Hybrid { .. } => None,
+            Self::Markdown { .. } | Self::Git { .. } | Self::Hybrid { .. } => None,
             Self::Sqlite { path } => Some(PlanBackend::Sqlite(
                 aep_backend_sqlite::SqliteBackend::open(path)
                     .map_err(|error| anyhow::anyhow!("{error}"))
@@ -508,7 +534,9 @@ impl DrivenPlan {
 impl aep_driver::PlanSource for DrivenPlan {
     fn load(&self) -> StoreReport {
         match &self.plan {
-            Plan::Markdown { root } => MarkdownStore::open(root.clone()).load(),
+            Plan::Markdown { root } | Plan::Git { root, .. } => {
+                MarkdownStore::open(root.clone()).load()
+            }
             Plan::Hybrid {
                 root,
                 replica,
@@ -580,6 +608,7 @@ fn describe_config(store: &aep_domain::project::StoreConfig) -> String {
         StoreConfig::Hybrid { .. } => "hybrid".to_owned(),
         StoreConfig::Eventlog { path, .. } => format!("eventlog: {}", path.display()),
         StoreConfig::EventlogTree { path, .. } => format!("eventlog tree: {}", path.display()),
+        StoreConfig::Git { planning, .. } => format!("git: {}", planning.display()),
     }
 }
 
@@ -664,6 +693,8 @@ fn hybrid_backend_for(
 /// The backend a plan opens: one enum so every verb is written once over the contract.
 pub(crate) enum PlanBackend {
     Markdown(aep_backend_markdown::backend::MarkdownBackend),
+    /// The same backend over the Git-native layout (`aep.project/5`).
+    Git(aep_backend_markdown::backend::MarkdownBackend),
     Sqlite(aep_backend_sqlite::SqliteBackend),
     Postgres(aep_backend_postgres::PostgresBackend),
     HybridSqlite(aep_backend_hybrid::HybridBackend<entity_sqlite::SqliteStore>),
@@ -755,7 +786,7 @@ impl PlanBackend {
     /// Immutable receipt of the most recent recorded command. Legacy providers return none.
     fn last_commit_receipt(&self) -> Option<entity_store::asynchronous::CommitReceipt> {
         match self {
-            Self::Markdown(backend) => backend.as_entity_backend().last_commit_receipt(),
+            Self::Markdown(backend) | Self::Git(backend) => backend.as_entity_backend().last_commit_receipt(),
             Self::Sqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
             Self::Postgres(backend) => backend.as_entity_backend().last_commit_receipt(),
             Self::HybridSqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
@@ -771,7 +802,7 @@ impl PlanBackend {
         id: &aep_domain::entity::EntityId,
     ) -> Result<Vec<entity_core::DomainEvent>> {
         let events = match self {
-            Self::Markdown(backend) => backend.as_entity_backend().events_of(id),
+            Self::Markdown(backend) | Self::Git(backend) => backend.as_entity_backend().events_of(id),
             Self::Sqlite(backend) => backend.as_entity_backend().events_of(id),
             Self::Postgres(backend) => backend.as_entity_backend().events_of(id),
             Self::HybridSqlite(backend) => backend.as_entity_backend().events_of(id),
@@ -790,7 +821,7 @@ impl aep_contract::command::CommandService for PlanBackend {
         envelope: aep_contract::command::CommandEnvelope<Self::Command>,
     ) -> Result<aep_contract::command::CommandResult, aep_contract::error::CommandError> {
         match self {
-            Self::Markdown(backend) => backend.execute(envelope).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.execute(envelope).await,
             Self::Sqlite(backend) => backend.execute(envelope).await,
             Self::Postgres(backend) => backend.execute(envelope).await,
             Self::HybridSqlite(backend) => backend.execute(envelope).await,
@@ -809,7 +840,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         consistency: aep_contract::QueryConsistency,
     ) -> Result<aep_contract::query::EntityEnvelope, aep_contract::error::QueryError> {
         match self {
-            Self::Markdown(backend) => backend.get(reference, consistency).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.get(reference, consistency).await,
             Self::Sqlite(backend) => backend.get(reference, consistency).await,
             Self::Postgres(backend) => backend.get(reference, consistency).await,
             Self::HybridSqlite(backend) => backend.get(reference, consistency).await,
@@ -823,7 +854,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         locator: &aep_domain::entity::EntityLocator,
     ) -> Result<aep_domain::entity::EntityId, aep_contract::error::QueryError> {
         match self {
-            Self::Markdown(backend) => backend.resolve(locator).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.resolve(locator).await,
             Self::Sqlite(backend) => backend.resolve(locator).await,
             Self::Postgres(backend) => backend.resolve(locator).await,
             Self::HybridSqlite(backend) => backend.resolve(locator).await,
@@ -840,7 +871,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         aep_contract::error::QueryError,
     > {
         match self {
-            Self::Markdown(backend) => backend.query(query).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.query(query).await,
             Self::Sqlite(backend) => backend.query(query).await,
             Self::Postgres(backend) => backend.query(query).await,
             Self::HybridSqlite(backend) => backend.query(query).await,
@@ -857,7 +888,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         aep_contract::error::QueryError,
     > {
         match self {
-            Self::Markdown(backend) => backend.relations(query).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.relations(query).await,
             Self::Sqlite(backend) => backend.relations(query).await,
             Self::Postgres(backend) => backend.relations(query).await,
             Self::HybridSqlite(backend) => backend.relations(query).await,
@@ -871,7 +902,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         reference: &aep_domain::entity::EntityRef,
     ) -> Result<Vec<aep_contract::query::RevisionRecord>, aep_contract::error::QueryError> {
         match self {
-            Self::Markdown(backend) => backend.history(reference).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.history(reference).await,
             Self::Sqlite(backend) => backend.history(reference).await,
             Self::Postgres(backend) => backend.history(reference).await,
             Self::HybridSqlite(backend) => backend.history(reference).await,
@@ -885,7 +916,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         query: &aep_contract::query::AuditQuery,
     ) -> Result<aep_contract::query::Page<Self::AuditRecord>, aep_contract::error::QueryError> {
         match self {
-            Self::Markdown(backend) => backend.audit(query).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.audit(query).await,
             Self::Sqlite(backend) => backend.audit(query).await,
             Self::Postgres(backend) => backend.audit(query).await,
             Self::HybridSqlite(backend) => backend.audit(query).await,
@@ -899,7 +930,7 @@ impl aep_contract::query::QueryService for PlanBackend {
         entity_type: &aep_domain::entity::EntityType,
     ) -> Result<aep_contract::registry::TypeDescriptor, aep_contract::error::QueryError> {
         match self {
-            Self::Markdown(backend) => backend.describe_type(entity_type).await,
+            Self::Markdown(backend) | Self::Git(backend) => backend.describe_type(entity_type).await,
             Self::Sqlite(backend) => backend.describe_type(entity_type).await,
             Self::Postgres(backend) => backend.describe_type(entity_type).await,
             Self::HybridSqlite(backend) => backend.describe_type(entity_type).await,
@@ -965,6 +996,11 @@ impl Opened {
         &self,
         id: &ArtifactId,
     ) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
+        if let Plan::Git { root, evidence } = &self.plan {
+            return Ok(aep_backend_markdown::journal::evidence_on_hand_git(
+                root, evidence, id,
+            ));
+        }
         match self.journal() {
             Some(store) => Ok(aep_backend_markdown::journal::evidence_on_hand(
                 store.root(),
@@ -972,6 +1008,17 @@ impl Opened {
             )),
             None => evidence_from_events(self.backend()?, id),
         }
+    }
+
+    /// Everything the plan's own record holds, oldest first, and how many records did not read:
+    /// the journal of a markdown or hybrid plan, the transitions and evidence files of a Git-native
+    /// plan. `None` for a plan whose record is its backend's.
+    fn log(&self) -> Option<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
+        if let Plan::Git { root, evidence } = &self.plan {
+            return Some(aep_backend_markdown::journal::read_git(root, evidence));
+        }
+        self.journal()
+            .map(|store| aep_backend_markdown::journal::read(store.root()))
     }
 
     /// The journal, for a plan whose record it is.
@@ -987,7 +1034,8 @@ impl Opened {
     /// as a SQLite or Postgres plan does: no journal, and the contract answers its history.
     fn journal(&self) -> Option<&MarkdownStore> {
         match &self.plan {
-            Plan::Eventlog { .. } => None,
+            // A Git-native plan has no journal: its record is read through [`Opened::log`].
+            Plan::Eventlog { .. } | Plan::Git { .. } => None,
             Plan::Markdown { .. }
             | Plan::Sqlite { .. }
             | Plan::Postgres { .. }
@@ -1018,11 +1066,11 @@ impl Opened {
         &self,
         ids: impl IntoIterator<Item = &'a ArtifactId>,
     ) -> Vec<(StorePosition, aep_backend_markdown::journal::Entry)> {
-        if let Some(store) = self.journal() {
+        if let Some((entries, _)) = self.log() {
             // A plan whose record the journal is keeps the order the store was written in as the
-            // file's own line order, and that is its store-wide position.
-            return aep_backend_markdown::journal::read(store.root())
-                .0
+            // file's own line order, and that is its store-wide position; a Git-native plan's
+            // record is answered in the order its entries happened.
+            return entries
                 .into_iter()
                 .enumerate()
                 .map(|(line, entry)| (StorePosition::Retained(line as u64), entry))
@@ -1242,6 +1290,25 @@ pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) ->
                 .then(|| markdown_backend_for(args, root))
                 .transpose()?
                 .map(PlanBackend::Markdown);
+            Ok(Opened {
+                plan,
+                backend,
+                report,
+                files: Some(store),
+            })
+        }
+        Plan::Git { root, evidence } => {
+            let store = MarkdownStore::open(root.clone());
+            let report = store.load();
+            if with_backend {
+                require_clean(&store, &report)?;
+            } else {
+                warn_unclean(&report);
+            }
+            let backend = with_backend
+                .then(|| git_backend_for(args, root, evidence))
+                .transpose()?
+                .map(PlanBackend::Git);
             Ok(Opened {
                 plan,
                 backend,
@@ -2565,6 +2632,25 @@ fn markdown_backend_for(
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
     .with_context(|| format!("opening the planning store at {}", root.display()))
+}
+
+/// [`markdown_backend_for`] over a Git-native store (`aep.project/5`): the same workspace, clock,
+/// actor and ladders, with moves written into the documents and evidence into `evidence`.
+fn git_backend_for(
+    args: &StoreLocation,
+    root: &Path,
+    evidence: &Path,
+) -> Result<aep_backend_markdown::backend::MarkdownBackend> {
+    aep_backend_markdown::backend::MarkdownBackend::open_git(
+        root,
+        evidence,
+        declared_membership(&args.repository_root())?,
+        clock_at_the_edge(),
+        command_actor()?,
+        args.lifecycles()?.lifecycles().clone(),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+    .with_context(|| format!("opening the Git-native planning store at {}", root.display()))
 }
 
 /// One command envelope, with identifiers derived from `name` so a replay is recognisable.
@@ -5986,9 +6072,8 @@ fn reviews_of<'a>(
         .values()
         .filter(|stored| reviews(stored, subject))
         .collect();
-    let order: BTreeMap<ArtifactId, Ordinal> = if let Some(store) = opened.journal() {
-        aep_backend_markdown::journal::read(store.root())
-            .0
+    let order: BTreeMap<ArtifactId, Ordinal> = if let Some((entries, _)) = opened.log() {
+        entries
             .into_iter()
             .enumerate()
             .map(|(index, entry)| (entry.artifact, Ordinal::Line(index)))
@@ -6628,15 +6713,18 @@ pub(crate) fn findings(
         }
     }
 
+    // A Git-native plan has no journal to drift from; what it holds instead is each document's own
+    // transitions and one file per evidence record, and both are checked here.
+    if let Plan::Git { root, evidence } = &opened.plan {
+        problems.extend(git_findings(root, evidence, report, registry, &held));
+    }
+
     // Closed on somebody's word, and the store knows the difference. A move whose provenance is
     // `asserted` reached this status because a caller said the evidence existed; one that is
     // `recorded` reached it because the store held a record. Both are legal — refusing an assertion
     // outright would stop anybody closing a story the day a runner is down — and reporting only the
     // second as evidence is what makes the first honest rather than invisible.
-    let entries = opened
-        .journal()
-        .map(|store| aep_backend_markdown::journal::read(store.root()).0)
-        .unwrap_or_default();
+    let entries = opened.log().map(|(entries, _)| entries).unwrap_or_default();
     let mut asserted: Vec<String> = Vec::new();
     for entry in &entries {
         if let aep_backend_markdown::journal::Change::Moved { to, decided_on, .. } = &entry.change {
@@ -6686,6 +6774,155 @@ pub(crate) fn findings(
         unscoped: unscoped_stories(report, registry.lifecycles()),
         skipped: Vec::new(),
     }
+}
+
+/// What a Git-native plan (`aep.project/5`) must hold beyond its documents parsing
+/// (git-native design § 4.3 and § 6).
+///
+/// * Each document's `transitions` is a legal walk of its kind's lifecycle — the registry `move`
+///   decides against — starting at the initial state and ending in `status`, with each entry's
+///   revision above the one before it and not above the document's own. A document with no
+///   transitions predates the record (a migrated store keeps what it had) and is not walked.
+/// * Every file under `<evidence>/<kind>/<name>/` is a JSON evidence record about exactly the
+///   artifact its directory names.
+fn git_findings(
+    root: &Path,
+    evidence: &Path,
+    report: &StoreReport,
+    registry: &aep_engine::Registry,
+    held: &BTreeMap<ArtifactId, (ArtifactStatus, u64)>,
+) -> Vec<String> {
+    let mut problems: Vec<String> = aep_backend_markdown::journal::reconcile_git(root, held)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    for stored in report.documents.values() {
+        let front = &stored.document.frontmatter;
+        if front.transitions.is_empty() {
+            continue;
+        }
+        problems.extend(walk_problems(front, registry.lifecycles().for_kind(&front.kind)));
+    }
+    problems.extend(evidence_problems(evidence));
+    problems
+}
+
+/// Why one document's transitions are not a legal walk of `ladder`, if they are not.
+fn walk_problems(
+    front: &aep_backend_markdown::frontmatter::PlanningFrontmatter,
+    ladder: Option<&ArtifactLifecycle>,
+) -> Vec<String> {
+    let id = &front.id;
+    let mut problems = Vec::new();
+    // An imported first move may start anywhere: the store it came from did not record the status
+    // an artifact was created in.
+    let mut at = match front.transitions.first() {
+        Some(first) if first.imported => None,
+        _ => ladder.map(|ladder| ladder.initial.clone()),
+    };
+    let mut revision = 0;
+    for (index, transition) in front.transitions.iter().enumerate() {
+        let step = index + 1;
+        if let Some(current) = &at {
+            if transition.from != *current {
+                problems.push(format!(
+                    "{id}: transition {step} moves from `{}`, and the walk before it stands at \
+                     `{current}` — the transitions are not a legal walk of the {} lifecycle; \
+                     re-apply the lost move through the CLI",
+                    transition.from, front.kind
+                ));
+            }
+        }
+        // An imported move was decided under the lifecycle of its day; only continuity binds it.
+        if let Some(ladder) = ladder.filter(|_| !transition.imported) {
+            let legal = ladder
+                .transitions
+                .get(&transition.from)
+                .is_some_and(|next| next.contains(&transition.to));
+            if !legal {
+                problems.push(format!(
+                    "{id}: transition {step} moves `{}` -> `{}`, which the {} lifecycle does not \
+                     permit",
+                    transition.from, transition.to, front.kind
+                ));
+            }
+        }
+        if transition.revision <= revision || transition.revision > front.revision {
+            problems.push(format!(
+                "{id}: transition {step} records revision {}, which is not above the one before \
+                 it ({revision}) and at most the document's revision {}",
+                transition.revision, front.revision
+            ));
+        }
+        revision = transition.revision;
+        at = Some(transition.to.clone());
+    }
+    if let Some(end) = &at {
+        if *end != front.status {
+            problems.push(format!(
+                "{id}: `status: {}` is not where its transitions end (`{end}`) — a status is \
+                 changed by a move, not by editing the line",
+                front.status
+            ));
+        }
+    }
+    problems
+}
+
+/// Every evidence file that does not read as a record about the artifact its directory names.
+fn evidence_problems(evidence: &Path) -> Vec<String> {
+    use aep_backend_markdown::journal::{Change, Entry};
+
+    fn children(directory: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return Vec::new();
+        };
+        let mut found: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+            .map(|entry| entry.path())
+            .collect();
+        found.sort();
+        found
+    }
+
+    let mut problems = Vec::new();
+    for kind in children(evidence).into_iter().filter(|path| path.is_dir()) {
+        for name in children(&kind).into_iter().filter(|path| path.is_dir()) {
+            let expected = format!(
+                "{}:{}",
+                kind.file_name().unwrap_or_default().to_string_lossy(),
+                name.file_name().unwrap_or_default().to_string_lossy()
+            );
+            for path in children(&name) {
+                let read = std::fs::read_to_string(&path)
+                    .map_err(|error| error.to_string())
+                    .and_then(|text| {
+                        serde_json::from_str::<Entry>(&text).map_err(|error| error.to_string())
+                    });
+                match read {
+                    Err(error) => problems.push(format!(
+                        "{}: not an evidence record: {error}",
+                        path.display()
+                    )),
+                    Ok(entry) if !matches!(entry.change, Change::Evidence { .. }) => {
+                        problems.push(format!(
+                            "{}: records `{}`, and an evidence file holds evidence only",
+                            path.display(),
+                            entry.change
+                        ));
+                    }
+                    Ok(entry) if entry.artifact.to_string() != expected => problems.push(format!(
+                        "{}: is about {}, and is filed under {expected}",
+                        path.display(),
+                        entry.artifact
+                    )),
+                    Ok(_) => {}
+                }
+            }
+        }
+    }
+    problems
 }
 
 /// Stories a wave could be assembled from that do not say where they land.
@@ -7739,6 +7976,12 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
 fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let plan = args.location.plan()?;
+    if let Plan::Git { root, evidence } = &plan {
+        // The document's own transitions and its evidence files: no backend, no journal.
+        let (entries, unreadable) =
+            aep_backend_markdown::journal::history_git(root, evidence, &id);
+        return print_history(args.format, &id, &entries, unreadable);
+    }
     let Plan::Markdown { root } = &plan else {
         // A SQLite or Postgres plan has no journal; a hybrid has one on its local half, and reads
         // its history through the composite's read path instead, as it reads everything else.
@@ -7931,6 +8174,23 @@ fn positioned_entries_from_the_contract(
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
+
+    // A Git-native plan's record is the document's transitions and its evidence files; its
+    // backend keeps no event log to read them back from.
+    if let Plan::Git { root, evidence } = &opened.plan {
+        if !opened.report.documents.contains_key(id) {
+            bail!("{}", opened.missing(id));
+        }
+        let (entries, unreadable) = aep_backend_markdown::journal::history_git(root, evidence, id);
+        return Ok((
+            entries
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| (StorePosition::Recorded(index as u64), entry))
+                .collect(),
+            unreadable,
+        ));
+    }
 
     let backend = opened.backend()?;
     let locator = EntityLocator::new(

@@ -110,6 +110,28 @@ impl MarkdownBackend {
         Ok(Self(EntityBackend::shaped(provider, projection)?))
     }
 
+    /// Opens a Git-native store (`aep.project/5`) at `root`, with evidence under `evidence`.
+    ///
+    /// The same adapter and projection as [`open`](Self::open) over
+    /// [`MarkdownProvider::open_git`]: a move appends a transition to the document it moved, a
+    /// recorded observation writes one evidence file, and no journal is created or read.
+    ///
+    /// # Errors
+    ///
+    /// As [`open`](Self::open).
+    pub fn open_git(
+        root: impl AsRef<Path>,
+        evidence: impl AsRef<Path>,
+        membership: Membership,
+        at: Timestamp,
+        actor: ActorRef,
+        lifecycles: aep_domain::artifact::LifecycleRegistry,
+    ) -> Result<Self, CommandError> {
+        let provider = MarkdownProvider::open_git(root.as_ref(), evidence.as_ref());
+        let projection = MarkdownProjection::new(membership, at, actor, lifecycles);
+        Ok(Self(EntityBackend::shaped(provider, projection)?))
+    }
+
     /// The fault that made this backend untrustworthy, if one has happened.
     ///
     /// Once set, every call refuses with it. See the module note on the write window.

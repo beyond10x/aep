@@ -50,6 +50,12 @@ pub const PLANNING_FORMAT: &str = "aep.planning-md/1";
 /// is a new tag rather than a silent rewrite of every committed document.
 pub const PLANNING_FORMAT_V2: &str = "aep.planning-md/2";
 
+/// The format of a Git-native store's documents (`aep.project/5`, git-native design § 4).
+///
+/// The keys of [`PLANNING_FORMAT`] plus `transitions`: the document is the authority for its own
+/// status history, because there is no journal beside it.
+pub const PLANNING_FORMAT_V3: &str = "aep.planning-md/3";
+
 /// Which planning format a document is written in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlanningFormat {
@@ -58,6 +64,8 @@ pub enum PlanningFormat {
     V1,
     /// [`PLANNING_FORMAT_V2`]: an `aep.project/3` tree store's projection.
     V2,
+    /// [`PLANNING_FORMAT_V3`]: a Git-native store's documents, carrying their own transitions.
+    V3,
 }
 
 impl PlanningFormat {
@@ -67,6 +75,7 @@ impl PlanningFormat {
         match self {
             Self::V1 => PLANNING_FORMAT,
             Self::V2 => PLANNING_FORMAT_V2,
+            Self::V3 => PLANNING_FORMAT_V3,
         }
     }
 
@@ -76,6 +85,7 @@ impl PlanningFormat {
         match tag {
             PLANNING_FORMAT => Some(Self::V1),
             PLANNING_FORMAT_V2 => Some(Self::V2),
+            PLANNING_FORMAT_V3 => Some(Self::V3),
             _ => None,
         }
     }
@@ -152,6 +162,13 @@ pub struct RawPlanningFrontmatter {
     /// Which revision of this document this is. Bumped by every mutating operation.
     #[serde(default = "default_revision")]
     pub revision: u64,
+    /// The status moves this document has been through, oldest first (`aep.planning-md/3`).
+    ///
+    /// Left out of the published schema: the schema describes the keys every format shares, and
+    /// a Git-native store's transition list is checked by [`PlanningFrontmatter`]'s validation.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub transitions: Vec<crate::journal::Transition>,
     /// Every key this format does not name.
     #[serde(default, flatten)]
     pub extra: BTreeMap<String, Node>,
@@ -218,6 +235,11 @@ pub struct PlanningFrontmatter {
     pub model_digest: Option<SpecDigest>,
     /// Which revision of this document this is.
     pub revision: u64,
+    /// Every status move the document has been through, oldest first.
+    ///
+    /// Written by a Git-native store (`aep.planning-md/3`), where the document is the authority for
+    /// its own history. Empty — and not rendered — for every document a journal store writes.
+    pub transitions: Vec<crate::journal::Transition>,
     /// Every key this format does not name, kept so a round trip loses nothing.
     ///
     /// A planning file is a file people edit. Somebody's board tool will write `sprint: 42` into
@@ -250,8 +272,44 @@ impl PlanningFrontmatter {
             withholds: None,
             model_digest: None,
             revision: default_revision(),
+            transitions: Vec::new(),
             extra: BTreeMap::new(),
         }
+    }
+
+    /// The frontmatter rendered as YAML, with `transitions` one flow mapping per line.
+    ///
+    /// The [`serde::Serialize`] rendering writes every key in block style; this is what a
+    /// document's file carries, so a move's diff is one changed `status:` line, one changed
+    /// `revision:` line and one added transition line (git-native design § 4.2). Without
+    /// transitions it is exactly the `Serialize` rendering, byte for byte.
+    ///
+    /// # Panics
+    ///
+    /// Never for a validated frontmatter: every value it holds serialises.
+    #[must_use]
+    pub fn render_yaml(&self) -> String {
+        fn yaml(value: &impl serde::Serialize) -> String {
+            serde_yaml::to_string(value)
+                .unwrap_or_else(|error| panic!("validated frontmatter serialises: {error}"))
+        }
+        if self.transitions.is_empty() {
+            return yaml(self);
+        }
+        let mut head = self.clone();
+        head.transitions = Vec::new();
+        head.extra = BTreeMap::new();
+        let mut rendered = yaml(&head);
+        rendered.push_str("transitions:\n");
+        for transition in &self.transitions {
+            rendered.push_str("- ");
+            rendered.push_str(&transition.flow());
+            rendered.push('\n');
+        }
+        if !self.extra.is_empty() {
+            rendered.push_str(&yaml(&self.extra));
+        }
+        rendered
     }
 
     /// Sets the title, builder-style.
@@ -345,6 +403,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(!self.scope.is_empty())
             + usize::from(self.withholds.is_some())
             + usize::from(self.model_digest.is_some())
+            + usize::from(!self.transitions.is_empty())
             + self.extra.len();
 
         let mut map = serializer.serialize_map(Some(length))?;
@@ -380,6 +439,9 @@ impl serde::Serialize for PlanningFrontmatter {
             map.serialize_entry("model_digest", digest.as_str())?;
         }
         map.serialize_entry("revision", &self.revision)?;
+        if !self.transitions.is_empty() {
+            map.serialize_entry("transitions", &self.transitions)?;
+        }
         // Last, and in `BTreeMap` order: an unrecognised key keeps its value and loses only its
         // position, which is the most a reader that does not know what it means can promise.
         for (key, value) in &self.extra {
@@ -402,8 +464,8 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
                     ValidationCode::UnsupportedFormatVersion,
                     "planning.format",
                     format!(
-                        "this build reads planning documents written as `{PLANNING_FORMAT}` or \
-                         `{PLANNING_FORMAT_V2}`, not `{}`",
+                        "this build reads planning documents written as `{PLANNING_FORMAT}`, \
+                         `{PLANNING_FORMAT_V2}` or `{PLANNING_FORMAT_V3}`, not `{}`",
                         raw.format
                     ),
                 )
@@ -476,6 +538,8 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
 
         let model_digest = validated_model_digest(&raw, &mut errors);
 
+        validate_transitions(&raw, &mut errors);
+
         errors.into_result(Self {
             format: format.unwrap_or_default(),
             id: raw.id,
@@ -491,8 +555,51 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             withholds,
             model_digest,
             revision: raw.revision,
+            transitions: raw.transitions,
             extra: raw.extra,
         })
+    }
+}
+
+/// Holds a transition list to the document it is in (git-native design § 4.3).
+///
+/// Two rules that need nothing but the document: `status` is the last transition's `to`, and
+/// `revision` counts at least one write per transition beyond the first. That a transition list
+/// is a legal walk of the kind's lifecycle needs the lifecycle, and is not decided here.
+fn validate_transitions(raw: &RawPlanningFrontmatter, errors: &mut ValidationErrors) {
+    let Some(last) = raw.transitions.last() else {
+        return;
+    };
+    if last.to != raw.status {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::TypeMismatch,
+                "planning.transitions",
+                format!(
+                    "`status: {}` and the last transition, which moved to `{}`, disagree",
+                    raw.status, last.to
+                ),
+            )
+            .with_hint(
+                "a status is changed by a move, which appends the transition that says so; \
+                 re-apply the move through the CLI rather than editing either line",
+            ),
+        );
+    }
+    let written = u64::try_from(raw.transitions.len()).unwrap_or(u64::MAX);
+    if raw.revision <= written {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::TypeMismatch,
+                "planning.revision",
+                format!(
+                    "`revision: {}` is below the {written} transition(s) plus the first write \
+                     the document records",
+                    raw.revision
+                ),
+            )
+            .with_hint("every move is a write, so a revision is at least one more than the moves"),
+        );
     }
 }
 
@@ -922,6 +1029,68 @@ mod tests {
             "a named key must not also land in `extra`: {:?}",
             again.extra
         );
+    }
+
+    const V3: &str = "---\nformat: aep.planning-md/3\nid: story:one\nkind: story\nstatus: blocked\n\
+title: One\nrevision: 4\ntransitions:\n\
+- {from: \"draft\", to: \"active\", at: \"2026-09-28T10:04:11Z\", actor: \"human:timo\", revision: 2}\n\
+- {from: \"active\", to: \"blocked\", at: \"2026-09-28T11:00:00Z\", actor: \"human:timo\", revision: 3, decided_on: {\"asserted\":{\"test_result\":1}}}\n\
+board: alpha\n---\n\n# One\n";
+
+    /// A Git-native document is written by the CLI and diffed by people: reading it and writing it
+    /// back must not move a byte, or every command would rewrite lines it did not change.
+    #[test]
+    fn a_v3_document_with_transitions_renders_back_byte_for_byte() {
+        let document =
+            crate::document::PlanningDocument::parse(V3, None).expect("the /3 document parses");
+        assert_eq!(document.frontmatter.format, PlanningFormat::V3);
+        assert_eq!(document.frontmatter.transitions.len(), 2);
+        assert_eq!(
+            document.frontmatter.transitions[1]
+                .decided_on
+                .asserted
+                .get(&EvidenceKind::TestResult),
+            Some(&1)
+        );
+        assert!(
+            !document.frontmatter.extra.contains_key("transitions"),
+            "a named key must not also land in `extra`"
+        );
+        assert_eq!(document.render(), V3);
+    }
+
+    /// A document without transitions renders exactly as the block-style `Serialize` does, which
+    /// is what keeps every `/1` and `/2` document byte-identical to what it was.
+    #[test]
+    fn without_transitions_the_rendering_is_the_serialize_rendering() {
+        let front =
+            PlanningFrontmatter::try_from(raw(&format!("{MINIMAL}sprint: 42\n"))).expect("valid");
+        assert_eq!(
+            front.render_yaml(),
+            serde_yaml::to_string(&front).expect("serializes")
+        );
+        assert!(!front.render_yaml().contains("transitions"));
+    }
+
+    /// `status` is the last transition's `to` (git-native design § 4.3): a hand edit to either
+    /// line alone is a status nothing moved to, and is refused naming the key.
+    #[test]
+    fn a_status_the_last_transition_did_not_move_to_is_refused() {
+        let errors = PlanningFrontmatter::try_from(raw(
+            "id: story:one\nkind: story\nstatus: implemented\nrevision: 2\ntransitions:\n\
+             - {from: draft, to: active, at: \"2026-09-28T10:04:11Z\", actor: x, revision: 2}\n",
+        ))
+        .expect_err("the status and the transition disagree");
+        assert_eq!(errors.len(), 1, "{errors}");
+        assert_eq!(errors.as_slice()[0].location, "planning.transitions");
+        assert!(errors.to_string().contains("implemented"), "{errors}");
+
+        let errors = PlanningFrontmatter::try_from(raw(
+            "id: story:one\nkind: story\nstatus: active\nrevision: 1\ntransitions:\n\
+             - {from: draft, to: active, at: \"2026-09-28T10:04:11Z\", actor: x, revision: 2}\n",
+        ))
+        .expect_err("a move is a write, so revision 1 cannot follow one");
+        assert_eq!(errors.as_slice()[0].location, "planning.revision");
     }
 
     /// Two entries for one path is a document that says two things about the same surface, and a
