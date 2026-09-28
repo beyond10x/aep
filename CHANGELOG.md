@@ -9,6 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.63.0] — 2026-09-28
+
+### Added
+
+- `aep plan store migrate git [--engineering <dir>] [--dry-run | --verify]` for `aep.project/1`
+  Markdown stores, and for a planning directory with no `project.yaml` given `--protocols` and
+  `--profile`: journalled moves become each artifact's imported `transitions`, journalled
+  evidence becomes one file per record under `.engineering/evidence/`, documents become
+  `aep.planning-md/3`, and `project.yaml` becomes `aep.project/5` with `planning_scope` set to the
+  repository directory's name. The journal is removed. It refuses a dirty `.engineering` and any
+  document that disagrees with its journal, writing nothing.
+- Every `aep plan` command that opens an `aep.project/1` store, or a planning directory with no
+  `project.yaml` inside a Git repository, prints one line to stderr naming that migration. Stdout
+  and exit codes are unchanged; `AEP_NO_UPGRADE_NOTICE=1` hides it. `aep doctor` reports such a
+  store as `warn` with the same command.
+
+### Changed
+
+- `aep plan reverse init` writes an `aep.project/5` project (`store: {git: {}}`, `planning_scope`
+  set to the repository directory's name). A `.engineering/planning` that already holds a plan is
+  refused, naming `aep plan store migrate git`.
+
 ## [0.62.0] — 2026-09-28
 
 ### Added

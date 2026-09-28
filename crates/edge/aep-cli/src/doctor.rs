@@ -493,11 +493,30 @@ fn planning_store(
         Plan::Git { evidence, .. } => Some(evidence_files(evidence)),
         _ => None,
     };
+    // An `aep.project/1` Markdown plan works, so it is a `warn`, never a `fail`: the line says the
+    // Git-native store exists and which command moves the plan there.
+    let legacy = config.is_some_and(|config| {
+        config.version == aep_domain::project::ProjectVersion::V1
+            && config.store == aep_domain::project::StoreConfig::Markdown
+    });
     match crate::planning::store_findings(plan, root, document_root) {
         Err(error) => Check::new(
             PLANNING_STORE,
             Status::Fail,
             format!("{describe} could not be read: {error:#}"),
+        ),
+        Ok(summary) if summary.problems.is_empty() && legacy => Check::new(
+            PLANNING_STORE,
+            Status::Warn,
+            format!(
+                "{}: {} artifact(s), no problems; the store is {} — `{}` moves it to {}, the \
+                 Git-native store",
+                summary.store,
+                summary.artifacts,
+                aep_domain::project::PROJECT_VERSION,
+                crate::planning::MIGRATE_GIT_COMMAND,
+                aep_domain::project::PROJECT_VERSION_V5
+            ),
         ),
         Ok(summary) if summary.problems.is_empty() => Check::new(
             PLANNING_STORE,

@@ -470,7 +470,11 @@ fn init_writes_a_project_the_next_command_can_read() {
 
     let written = std::fs::read_to_string(root.join(".engineering/project.yaml"))
         .expect("the project file was written");
-    assert!(written.contains("version: aep.project/1"));
+    assert!(written.contains("version: aep.project/5"), "{written}");
+    assert!(
+        written.contains("planning_scope: \"aep-reverse-init\""),
+        "{written}"
+    );
     assert!(written.contains("profile: development.standard"));
 
     let created = protocol_in(

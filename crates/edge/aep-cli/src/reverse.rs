@@ -49,7 +49,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use serde_yaml::Value as Yaml;
 
-use aep_domain::project::{ProtocolSource, PROJECT_FILE, PROJECT_VERSION};
+use aep_domain::project::{ProtocolSource, PROJECT_FILE, PROJECT_VERSION_V5};
 use aep_project::project::project_directory;
 
 use crate::Format;
@@ -1359,6 +1359,20 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
     let source = ProtocolSource::parse(args.protocols.clone())
         .map_err(|error| anyhow::anyhow!("{error}"))?;
 
+    // A new store is always `aep.project/5`. A planning directory that already holds documents or a
+    // journal is an `aep.project/1` plan, and a `/5` selector over it would stop its journal being
+    // read, so it is refused and the migration that carries it over is named instead.
+    let planning = directory.join(aep_domain::project::GIT_PLANNING_DIRECTORY);
+    if fs::read_dir(&planning).is_ok_and(|mut entries| entries.next().is_some()) {
+        bail!(
+            "{} already holds a plan and there is no project file; `aep plan store migrate git \
+             --protocols <source> --profile <profile> --verify` moves it to {PROJECT_VERSION_V5} \
+             and writes the project file",
+            planning.display()
+        );
+    }
+    let scope = crate::store_command::default_planning_scope(&root)?;
+
     // The directory is created before the source is checked, and not after, because a relative
     // source is resolved *through* it: `../../tree` from a `.engineering` that does not exist yet
     // fails `is_dir` on the missing component rather than on the tree, and reports a path the
@@ -1386,13 +1400,14 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
         }
     }
 
-    if let Err(error) = fs::write(&file, project_file(args, &source)) {
+    if let Err(error) = fs::write(&file, project_file(args, &source, &scope)) {
         undo();
         return Err(anyhow::Error::from(error).context(format!("cannot write {}", file.display())));
     }
 
     if args.no_verify {
         outln!("{} written, unverified", file.display());
+        outln!("  store: git ({PROJECT_VERSION_V5}), planning_scope {scope}");
         outln!("  the protocol source was not resolved; --no-verify was given");
         return Ok(ExitCode::SUCCESS);
     }
@@ -1409,6 +1424,7 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
                 paths.protocols.display()
             );
             outln!("  profile {}", args.profile);
+            outln!("  store: git ({PROJECT_VERSION_V5}), planning_scope {scope}");
             Ok(ExitCode::SUCCESS)
         }
         Err(errors) => {
@@ -1422,10 +1438,10 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
     }
 }
 
-/// The bytes of a new project file.
-fn project_file(args: &InitArgs, source: &ProtocolSource) -> String {
+/// The bytes of a new project file: always `aep.project/5`, the Git-native store.
+fn project_file(args: &InitArgs, source: &ProtocolSource, scope: &str) -> String {
     let mut text = String::new();
-    let _ = writeln!(text, "version: {PROJECT_VERSION}");
+    let _ = writeln!(text, "version: {PROJECT_VERSION_V5}");
     let _ = writeln!(text);
     let _ = writeln!(
         text,
@@ -1442,6 +1458,11 @@ fn project_file(args: &InitArgs, source: &ProtocolSource) -> String {
     let _ = writeln!(text, "protocol: {}", args.protocol);
     let _ = writeln!(text, "profile: {}", args.profile);
     let _ = writeln!(text, "protocols: {source}");
+    // JSON is valid YAML flow syntax, so any directory name reads back as exactly itself.
+    let scope = serde_json::to_string(scope).unwrap_or_else(|_| "\"\"".to_owned());
+    let _ = writeln!(text, "planning_scope: {scope}");
+    let _ = writeln!(text, "store:");
+    let _ = writeln!(text, "  git: {{}}");
     if let Some(summary) = &args.summary {
         let _ = writeln!(text);
         let _ = writeln!(text, "summary: >-");

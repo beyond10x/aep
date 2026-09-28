@@ -298,10 +298,14 @@ fn a_planning_store_that_is_absent_or_invalid_fails_with_the_finding_artifact_va
 
     write(&root.join(".engineering/planning/story/only.md"), ONE_STORY);
     let (status, detail) = check(&doctor(&root, &[]), "planning-store");
-    assert_eq!(status, "ok", "dropping the dangling edge restores the line");
+    assert_eq!(
+        status, "warn",
+        "dropping the dangling edge leaves only the `aep.project/1` warning"
+    );
     assert!(
-        detail.contains("1 artifact(s), no problems"),
-        "the line says how much it read: {detail}"
+        detail.contains("1 artifact(s), no problems")
+            && detail.contains("aep plan store migrate git --verify"),
+        "the line says how much it read and how to reach the Git store: {detail}"
     );
 }
 
