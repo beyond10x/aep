@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-28T02:31:42Z",
+  "actor": "human:timo",
+  "artifact": "epic:planning-on-entity-runtime",
+  "kind": "epic",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "release 0.63.0: tag commit 5bd566248d2953ab5b4bc904a871303b242c63a1, Release run 36369410330; task check exit 0",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/36369410330"
+  }
+}
