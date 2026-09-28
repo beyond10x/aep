@@ -9,6 +9,13 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan artifact move --executor <actor> --correlation <id>`: a Git-native transition records
+  `executor` when it differs from `actor`, and `correlation` when one is named. `history` and
+  `explain`, in text and `--format json`, show both. Documents written by 0.64.0 read, validate
+  and render unchanged.
+
 ### Changed
 
 - The README and the website name the current release in their install commands and pinned

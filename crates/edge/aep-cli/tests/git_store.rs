@@ -608,3 +608,182 @@ fn a_move_on_a_committed_review_result_still_validates() {
     commit(&project, "retire");
     ok(&project, &["validate"]);
 }
+
+#[test]
+fn a_move_with_an_executor_records_it_and_history_and_explain_print_it() {
+    let project = project("executor");
+    ok(
+        &project,
+        &["new", "story", "delegated", "--title", "Delegated"],
+    );
+    ok(
+        &project,
+        &[
+            "move",
+            "story:delegated",
+            "--to",
+            "proposed",
+            "--executor",
+            "agent:x",
+            "--correlation",
+            "wave-7",
+        ],
+    );
+    let document =
+        std::fs::read_to_string(project.join(".engineering/planning/story/delegated.md"))
+            .expect("the document reads");
+    assert!(
+        document.contains(
+            "actor: \"human:tester\", revision: 2, executor: \"agent:x\", correlation: \"wave-7\"}"
+        ),
+        "{document}"
+    );
+
+    let history = ok(&project, &["history", "story:delegated"]);
+    assert!(
+        history.contains(
+            "human:tester  moved draft -> proposed, executed by agent:x, correlation wave-7"
+        ),
+        "{history}"
+    );
+    let history = ok(
+        &project,
+        &["history", "story:delegated", "--format", "json"],
+    );
+    let entries: serde_json::Value = serde_json::from_str(&history).expect("history is JSON");
+    let change = &entries[0]["change"];
+    assert_eq!(change["executor"], "agent:x", "{history}");
+    assert_eq!(change["correlation"], "wave-7", "{history}");
+
+    let explained = ok(&project, &["explain", "story:delegated"]);
+    assert!(
+        explained.contains("(revision 2, executed by agent:x, correlation wave-7)"),
+        "{explained}"
+    );
+    let explained = ok(
+        &project,
+        &["explain", "story:delegated", "--format", "json"],
+    );
+    let explained: serde_json::Value = serde_json::from_str(&explained).expect("explain is JSON");
+    assert_eq!(explained["reached"][0]["executor"], "agent:x");
+    assert_eq!(explained["reached"][0]["correlation"], "wave-7");
+}
+
+#[test]
+fn a_move_by_the_actor_alone_writes_no_executor_key() {
+    let project = project("actor-alone");
+    ok(&project, &["new", "story", "own", "--title", "Own"]);
+    ok(&project, &["move", "story:own", "--to", "proposed"]);
+    ok(
+        &project,
+        &[
+            "move",
+            "story:own",
+            "--to",
+            "active",
+            "--executor",
+            "human:tester",
+        ],
+    );
+    let document = std::fs::read_to_string(project.join(".engineering/planning/story/own.md"))
+        .expect("the document reads");
+    assert!(
+        !document.contains("executor") && !document.contains("correlation"),
+        "neither the actor as its own executor nor the placeholder correlation is written: {document}"
+    );
+    let history = ok(&project, &["history", "story:own", "--format", "json"]);
+    assert!(!history.contains("\"executor\""), "{history}");
+    let explained = ok(&project, &["explain", "story:own", "--format", "json"]);
+    let explained: serde_json::Value = serde_json::from_str(&explained).expect("explain is JSON");
+    for step in explained["reached"].as_array().expect("moves") {
+        assert!(
+            step.get("executor").is_none() && step.get("correlation").is_none(),
+            "{step}"
+        );
+    }
+}
+
+#[test]
+fn a_move_refuses_an_executor_that_is_not_an_actor() {
+    let project = project("bad-executor");
+    ok(&project, &["new", "story", "bad", "--title", "Bad"]);
+    let refused = aep(
+        &project,
+        &[
+            "move",
+            "story:bad",
+            "--to",
+            "proposed",
+            "--executor",
+            "not an actor",
+        ],
+    );
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).contains("--executor"),
+        "{}",
+        stderr(&refused)
+    );
+}
+
+/// A store written by the released 0.64.0 binary validates and reads as it did, and a move with an
+/// executor appends a line without touching the lines 0.64.0 wrote.
+#[test]
+fn a_store_written_by_0_64_0_validates_and_keeps_its_lines_when_moved_again() {
+    let project = project("written-by-0-64-0");
+    let fixture =
+        repository().join("crates/plan/aep-backend-markdown/tests/fixtures/written-by-0.64.0");
+    for (from, to) in [("planning", "planning"), ("evidence", "evidence")] {
+        copy_tree(&fixture.join(from), &project.join(".engineering").join(to));
+    }
+    let path = project.join(".engineering/planning/story/fixture.md");
+    let written = std::fs::read_to_string(&path).expect("the fixture copied");
+
+    let validated = ok(&project, &["validate"]);
+    assert!(validated.contains("1 artifact(s)"), "{validated}");
+    let history = ok(&project, &["history", "story:fixture", "--format", "json"]);
+    assert!(!history.contains("\"executor\""), "{history}");
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("reads"),
+        written,
+        "reading changes no byte"
+    );
+
+    ok(
+        &project,
+        &[
+            "move",
+            "story:fixture",
+            "--to",
+            "archived",
+            "--executor",
+            "agent:x",
+        ],
+    );
+    let moved = std::fs::read_to_string(&path).expect("reads");
+    let old_lines: Vec<&str> = written
+        .lines()
+        .filter(|line| line.starts_with("- {"))
+        .collect();
+    for line in &old_lines {
+        assert!(
+            moved.contains(line),
+            "`{line}` kept byte for byte:\n{moved}"
+        );
+    }
+    assert!(moved.contains("executor: \"agent:x\"}"), "{moved}");
+    ok(&project, &["validate"]);
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("a target directory");
+    for entry in std::fs::read_dir(from).expect("a fixture directory") {
+        let entry = entry.expect("an entry");
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("a fixture file copies");
+        }
+    }
+}
