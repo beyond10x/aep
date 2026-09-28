@@ -9,6 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- A pinned Git protocol snapshot is verified in full once per pin, not once per process. A
+  successful full verification writes `<snapshots>/<revision>.verified.json` beside the read-only
+  snapshot, holding the sealed manifest's digest and every entry's length, times, inode, device
+  and mode; a later process that finds the manifest, listing and metadata unchanged reads no
+  snapshot file. Any mismatch, a corrupt stamp, another revision or another `aep` version verifies
+  in full again. No stamp is written while any file changed within 2 s of the verification. On a
+  revision carrying its own planning store, `aep plan artifact new task` opened 1,464 snapshot
+  files (plus 788 directory opens) under full verification and now opens 123 (and 424
+  directories); `aep plan artifact list` opens 62.
+
 ## [0.63.0] — 2026-09-28
 
 ### Added
