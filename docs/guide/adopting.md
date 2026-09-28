@@ -107,22 +107,30 @@ You can point at somebody else's tree instead of owning one. A project does that
 `.engineering/project.yaml`, which every command finds by walking up from where it is run:
 
 ```yaml
+version: aep.project/5
 protocol: adp/1
 profile: acme.service
 protocols: git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567
-schemas: schemas
+planning_scope: "your-repo"
+store:
+  git: {}
 ```
 
 Write it with `aep plan reverse init` rather than by hand:
 
 ```console
-$ $B reverse init \
+$ $B plan reverse init \
     --protocols git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567 \
     --profile acme.service
-.engineering/project.yaml written
-  protocol source resolves to /home/you/.cache/aep/0123456789ab…
+…/your-repo/.engineering/project.yaml written
+  protocol source resolves to …/.cache/aep/protocol-sources/…/snapshots/0123456789abcdef0123456789abcdef01234567
   profile acme.service
+  store: git (aep.project/5), planning_scope your-repo
 ```
+
+`version: aep.project/5` and `store: { git: {} }` select the Git-native planning store: one Markdown
+file per artifact under `.engineering/planning/`, one evidence file per record under
+`.engineering/evidence/`, and Git as the history.
 
 It refuses an unpinned source before writing anything, resolves the tree so the failure surfaces
 here rather than at the first command that needed it, and leaves no file behind when it does not
@@ -143,7 +151,7 @@ committed, so every other machine that clones the repository reads a path that i
 reads one that has never been there:
 
 ```console
-$ $B resolve
+$ $B govern resolve
 error: [type_mismatch] project.protocols: `/opt/aep` is an absolute path (it is
   rooted at the filesystem root) (hint: use a path relative to the .engineering directory, or a
   pinned git+ssh://, git+https://, or git+file:// locator …)
@@ -158,10 +166,11 @@ verdict everywhere. Every other path in the file — `artifacts`, `task`, `princ
 Two ways to name a tree that is not inside your repository: a relative path that climbs out of it,
 or a pinned locator. Prefer the locator for anything other people will clone.
 
-`store:` names where the plan is kept — `markdown` (the default, one document per artifact under
-`.engineering/planning/`), `sqlite: <file>`, `postgres: <url>`, or `hybrid:` (markdown and a replica,
-under four declared words) — and every `aep plan artifact` verb opens through it; a relative file is
-relative to `.engineering/`. See [`backend.md` § Choosing the store](backend.md#choosing-the-store).
+`store:` names where the plan is kept, and every `aep plan artifact` verb opens through it. Under
+`aep.project/5` the only value is `git: {}`. An older `aep.project/1` file may still name
+`markdown`, `sqlite: <file>`, `postgres: <url>` or `hybrid:`; `aep plan store migrate git` moves a
+Markdown `/1` plan to `/5`. See
+[`backend.md` § Choosing the store](backend.md#choosing-the-store).
 
 `schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
 defaults to `schemas`, so `.engineering/schemas/` needs no explicit entry. The path locates the
@@ -178,7 +187,7 @@ is: a workflow, a protocol, a lifecycle or a driver step map placed under `.engi
 read at all, and the failure surfaces where the workflow is named rather than where the file sits:
 
 ```console
-$ $B resolve
+$ $B govern resolve
 error: 1 document problem(s):
   - [unknown_workflow] workflow knowledge/curation: no workflow document declares
     `knowledge/curation` (hint: available: adp/default, incident/standard,
@@ -220,7 +229,7 @@ The last two lines of that `project.yaml` are load-bearing and easy to miss. `pr
 loaded twice and refused as a duplicate id:
 
 ```console
-$ $B resolve
+$ $B govern resolve
 error: 6 document problem(s):
   - .engineering/profiles/development-standard.yaml: [duplicate_principle] profile
     development.standard: a second profile document declares the id `development.standard`
@@ -237,7 +246,7 @@ roadmap in the README, a suite switched off in CI two quarters ago, a `FIXME` th
 interprets nothing and writes nothing.
 
 ```console
-$ $B reverse scan --format json > bundle.json
+$ $B plan reverse scan --format json > bundle.json
 ```
 
 The split is deliberate. Deciding whether four roadmap stages are one initiative or four is
@@ -256,7 +265,7 @@ reason a module exists. Those are the questions to take to a person, not gaps to
 ### And what the history says
 
 ```console
-$ $B reverse history
+$ $B plan reverse history
 ```
 
 A scan reads the tree as it stands, so it can report that a suite is switched off and never that it
@@ -306,7 +315,7 @@ The last line of `development.critical` is the one that bites. Under it, an appr
 design stops satisfying the review requirement once the design reaches version 7:
 
 ```console
-$ $B evaluate --task /path/to/critical-task.yaml \
+$ $B govern evaluate --task /path/to/critical-task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml | grep -A 1 review
   ✗ review of a design is approved (by a person)                  [completion]
@@ -373,11 +382,11 @@ principles:
 `applies_when` is doing real work. Two tasks, same profile:
 
 ```console
-$ $B resolve --root . --task task.yaml | grep -E '^(task|principles|obligations)'
+$ $B govern resolve --root . --task task.yaml | grep -E '^(task|principles|obligations)'
 task        BILL-88 (feature)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes, migration-has-a-way-back
 obligations 12
-$ $B resolve --root . --task task-rename-a-button.yaml | grep -E '^(task|principles|obligations)'
+$ $B govern resolve --root . --task task-rename-a-button.yaml | grep -E '^(task|principles|obligations)'
 task        BILL-89 (feature)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes
 obligations 10
@@ -391,7 +400,7 @@ BILL-88 into implementation. Delete the plan from the manifest and the same evid
 short:
 
 ```console
-$ $B evaluate --root . --task task.yaml --artifacts artifacts-without-the-plan.yaml \
+$ $B govern evaluate --root . --task task.yaml --artifacts artifacts-without-the-plan.yaml \
     --evidence red-test.yaml --advance | grep -E '^(state|transitions)|migration-plan'
 state       establish_verifiers (Establish verifiers)
 transitions
@@ -418,7 +427,7 @@ submitted it, never stamped by the engine, and refused outright if it is in the 
 what that date is measured against:
 
 ```console
-$ $B evaluate --root . --task task.yaml --artifacts artifacts.yaml --evidence recovery-rehearsal.yaml
+$ $B govern evaluate --root . --task task.yaml --artifacts artifacts.yaml --evidence recovery-rehearsal.yaml
   ? evidence verification (independent) within 90d                [principle migration-has-a-way-back]
       the last observation was on 2023-11-13, the horizon is 90d, and it lapsed on 2024-02-11
 ```
@@ -462,7 +471,7 @@ A predicate may only read facts the protocol declares observable. Suppose the ru
 `migration.rollback_tested`, which reads perfectly well in English:
 
 ```console
-$ $B validate --root .
+$ $B govern validate --root .
 47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
 1 problem(s):
   - [unobservable_fact] principle migration-has-a-way-back.obligations.migration-has-a-way-back/before-completion: `migration.rollback_tested` is not declared observable by protocol adp/1 (hint: declared families: ess_conformance.**, trace_conformance.**, mutation.**, differential.**, invariant.**, clean_room.**, build.**, types.**, task.**, change.**, risk, severity, state.**, workflow.**, principle.**, evidence.**, required_evidence.**, tests.**, test.**, unit_tests.**, contract_tests.**, regression_suite.**, static_analysis.**, contracts.**, property_test.**, coverage.**, specification.**, diff.**, source_diff.**, artifact.**, review.**, verification.**, approval.**, approvals.**, deployment.**, metric.**, service.**)
@@ -478,10 +487,10 @@ There is a second, quieter version of the same mistake. A fact in a declared fam
 nothing projects passes validation and then never becomes true:
 
 ```console
-$ $B validate --root .
+$ $B govern validate --root .
 47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
 valid
-$ $B evaluate --root . --task task.yaml | grep passsed
+$ $B govern evaluate --root . --task task.yaml | grep passsed
   ? verification.recovery.passsed                                 [principle migration-has-a-way-back]
       unobserved: verification.recovery.passsed
 ```

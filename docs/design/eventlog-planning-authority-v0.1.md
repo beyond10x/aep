@@ -1,5 +1,7 @@
 # Eventlog planning authority and explicit legacy migration v0.1
 
+Superseded for the planning store by git-native-planning-store-v0.1.md (2026-09-28).
+
 Status: accepted implementation direction under ESS evolution revision1 and Atlas ADR0050,
 2026-09-15. One owning story: eventlog-planning-authority-migration. Implementation and real
 cutovers remain unproved. This page fixes the required behavior; concrete encoding/API additions

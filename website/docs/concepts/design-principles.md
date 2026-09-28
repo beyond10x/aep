@@ -1,6 +1,6 @@
 ---
 title: Design principles
-sidebar_position: 2
+sidebar_position: 10
 description: See one engineering task fail without explicit rules, then replay it through the AEP boundaries that enforce them.
 ---
 
@@ -78,12 +78,10 @@ invariants and accumulates independent validation problems: references must reso
 read only declared facts, workflow phases must exist, and a task cannot require a capability the
 resolved policy denies. Correct-looking YAML does not bypass those checks.
 
-Build the CLI and resolve the committed task:
+From a checkout of this repository, resolve the committed task:
 
 ```shell-session
-$ cargo build --locked -p aep-cli
-$ AEP=target/debug/aep
-$ "$AEP" resolve --root . --task examples/development-passkeys/task.yaml
+$ aep govern resolve --root . --task examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
 objective   add-passkey-support
 protocol    adp/1
@@ -106,7 +104,7 @@ denial. The base protocol also has an approval floor for production-sensitive ca
 Ask whether the agent may enable passkeys in production:
 
 ```shell-session
-$ "$AEP" explain --root . \
+$ aep govern explain --root . \
     --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --action production.write
@@ -156,7 +154,7 @@ reporting the real observation time and identity, and supplying honest provenanc
 Before any evidence is submitted, the CLI reports an unknown test fact:
 
 ```shell-session
-$ "$AEP" evaluate --root . \
+$ aep govern evaluate --root . \
     --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml
 state       receive (Receive)
@@ -168,7 +166,7 @@ state       receive (Receive)
 Submit the red test and advance as far as the evidence permits:
 
 ```shell-session
-$ "$AEP" evaluate --root . \
+$ aep govern evaluate --root . \
     --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
@@ -192,7 +190,7 @@ Only `Truth::True` satisfies a guard. With the diff, green verification, review,
 records submitted, the same command reaches the terminal state:
 
 ```shell-session
-$ "$AEP" evaluate --root . \
+$ aep govern evaluate --root . \
     --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
@@ -222,7 +220,7 @@ an obligation:
 $ critical_dir="$(mktemp -d)"
 $ sed 's/development.standard/development.critical/' \
     examples/development-passkeys/task.yaml > "$critical_dir/task.yaml"
-$ "$AEP" evaluate --root . \
+$ aep govern evaluate --root . \
     --task "$critical_dir/task.yaml" \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml
@@ -359,8 +357,9 @@ plugin or harness boundary owns plugin selection, installation, credentials, and
 Meaning can drift even when source code still compiles. AEP therefore derives published JSON
 Schemas from the raw Rust input types, checks those schemas against every shipped protocol,
 principle, workflow, profile, lifecycle, step map, and the passkey task and manifest, and tests
-accepted aliases explicitly. The canonical `aep` binary and the `protocol` compatibility alias are
-also tested for identical exit status, stdout, and stderr on successful and refused commands.
+accepted aliases explicitly. The flat command spellings that predate the four areas are tested to
+produce the same exit status, stdout and stderr as their grouped forms, on successful and refused
+commands alike.
 
 That does not freeze every format forever. It makes a schema, alias, digest rule, command name, or
 rendered compatibility surface an explicit migration instead of an accidental reinterpretation.
@@ -411,7 +410,7 @@ Use this list as the concise reference after the walkthrough:
 10. **Public bytes are a contract.** Step 9 tests schemas, aliases, exit codes, and output bytes so
     consumers do not inherit a silent semantic change.
 
-For the broader execution model, continue with [AEP: governing engineering work](./aep.md). For the
+For the broader execution model, continue with [Governed tasks](./governance.md). For the
 evidence vocabulary and trust model, read [Evidence and completion](./evidence.md); for API-level
 harness integration, read [Integrate an agent harness](../guides/integrate-a-harness.md).
 

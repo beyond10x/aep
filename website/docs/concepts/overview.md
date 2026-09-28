@@ -1,68 +1,84 @@
 ---
-title: Architecture overview
+title: How AEP fits together
+sidebar_label: How it fits together
 sidebar_position: 1
-description: AEP's deterministic core, provider edges, profiles, driver, trace checker, and external boundaries.
+description: The two halves of AEP — the governed planning store and the governed-task engine — the documents both read, and the crates behind them.
 ---
 
-# Architecture overview
+# How AEP fits together
 
-AEP is a library and a specification, not a service. The engine holds no credential and observes
-nothing by itself. Inputs enter as validated documents and evidence; decisions leave as values.
+AEP has two halves. Both read the same YAML document tree, and both decide deterministically from
+what they are given.
 
-```text
-protocols + profiles + task + evidence
-                    │
-                    ▼
-             deterministic engine
-                    │
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
-    decision    obligations   explanation
-        │
-        ▼
- named IO edges: backend, CLI, driver, harness
-```
-
-## Layers
-
-Each layer is a directory under `crates/`, so the tree says which crate is which.
-
-| Layer | Directory | Crates | Responsibility |
+| Half | Question it answers | Where the state lives | Commands |
 |---|---|---|---|
-| vocabulary and decision | `crates/govern/` | `aep-domain`, `aep-engine` | typed rules, tasks, evidence and predicates; resolution, evaluation, authorization, and transitions |
-| storage contract and providers | `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | provider-independent commands, queries and black-box suites; memory, markdown, SQLite, PostgreSQL, Entity Runtime, and hybrid edges |
-| driving | `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow caller, and drawing a run |
-| observation | `crates/observe/` | `trace-domain`, `trace-spec`, `aep-ess-evidence` | normalized transcript IR, typed expectations, and the optional ESS report adapter |
-| profiles | `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary over the substrate |
-| shell | `crates/edge/` | `aep-schema`, `aep-project`, `aep-cli` | published document schemas, the filesystem and Git acquisition edge, and the canonical `aep` command with its exact `protocol` alias |
+| **planning store** | what work exists, what status each item is at, and whether a move is legal and earned | `.engineering/planning/` and `.engineering/evidence/` in your repository | `aep plan artifact …`, `aep plan serve`, `aep plan workspace …` |
+| **governed tasks** | on this task, which capabilities are allowed, what is owed, and whether the task is complete | a task file, an artifact manifest and evidence documents you pass in | `aep govern …`, `aep drive …`, `aep observe …` |
 
-A crate depends on its own directory and the ones under it — `edge` → `{profile, drive, observe}` →
-`{govern, plan}` → `aep-domain`. The repository's `AGENTS.md` records the one compiled exception.
+Most adopters start with the planning store. The engine half matters once an agent works on a task
+under a profile and you want its permissions and its completion decided by rules, not by its own
+report.
 
-The document tree is data. A new lifecycle, principle, profile, or workflow normally changes YAML,
-not engine code.
+## The document tree
 
-## External boundaries
+Every rule is a YAML document, validated before it is used. `project.yaml` names where the tree
+comes from (`protocols:`): a directory, or a Git repository pinned to a 40-hex commit.
 
-- Entity Runtime supplies the IO-free entity kernel and providers. AEP depends on one pinned Entity
-  Runtime release; the reverse dependency does not exist.
-- ESS is standalone and shares no modeling crate with AEP. Only `aep-ess-evidence` understands the
-  standalone ESS report at the optional evidence boundary.
-- Agent plugins live in the sibling repository `beyond10x/agentplugins`, which publishes the curated
-  `beyond10x` marketplace; this repository carries no plugin and no marketplace manifest. The driver
-  and evaluation runner accept plugin directories from the operator and guess none.
-- Metaharness owns vendor-specific transcript readers and paid execution. AEP owns the neutral trace
-  vocabulary and deterministic checker.
+| Directory | Holds | Read by |
+|---|---|---|
+| `artifacts/lifecycles/` | one [lifecycle](./lifecycles.md) per artifact kind: statuses, legal moves, rung costs | the planning store |
+| `artifacts/kinds/`, `artifacts/relations/`, `artifacts/templates/` | kind descriptions, the relation vocabulary, body templates | the planning store |
+| `protocols/` | the vocabulary: capabilities, evidence kinds, verifiers, phases, observable facts | both |
+| `principles/`, `profiles/`, `workflows/` | rules, bundles of rules, and state machines guarded by evidence | governed tasks |
+| `drivers/` | step maps: what runs in each workflow state | `aep drive` |
 
-## Properties
+The tree AEP ships covers software development (`adp/1`) and operations (`aop/1`) over a shared base
+(`aep/1`). A project adds its own principles and profiles under `.engineering/principles/` and
+`.engineering/profiles/`, and its own lifecycles in its own document tree.
 
-- Same validated state, evidence, and injected time produce the same decision and bytes.
-- Raw documents deserialize; validated domain values are constructed only after semantic checks.
-- Independent validation defects accumulate with stable codes and paths.
-- Unknown evidence differs from false evidence.
-- Capabilities default to deny.
-- Refusals leave stores unchanged and remain auditable.
-- Generated AEP schemas are committed and checked for changed or orphaned files.
+## Properties both halves keep
 
-See [Design principles](./design-principles.md) for the behavioral consequences and [CLI
-reference](../reference/cli.md) for the executable surface.
+- **Deterministic.** The same documents, evidence and supplied instant give the same answer. The
+  clock is read at the command-line edge and passed in; no decision reads it.
+- **Refusals change nothing.** A refused move or command writes no file.
+- **Unknown is not false.** A fact nobody observed is `Unknown`, which never satisfies a guard and is
+  reported apart from a fact observed to be wrong.
+- **Default deny.** A capability no document grants is not granted, and a denial cannot be granted
+  back by a later document.
+- **Errors accumulate.** Validation reports every problem it finds, each with a stable code, not
+  just the first.
+
+## The crates
+
+| Area | Crates | Responsibility |
+|---|---|---|
+| `crates/govern/` | `aep-domain`, `aep-engine` | the typed vocabulary; resolution, evaluation, authorization and transitions |
+| `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | the storage contract, the suites a backend is held to, and the backends (Markdown/Git, memory, SQLite, PostgreSQL, Entity Runtime, hybrid) |
+| `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference driver, and drawing a workflow or a run |
+| `crates/observe/` | `trace-domain`, `trace-spec`, `aep-ess-evidence` | transcript normalization and checking, and the optional ESS report adapter |
+| `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary |
+| `crates/edge/` | `aep-schema`, `aep-project`, `aep-cli` | published JSON Schemas, project discovery and protocol-source acquisition, and the `aep` command |
+
+A crate depends only on its own area and the areas below it: `edge` → `{profile, drive, observe}` →
+`{govern, plan}` → `aep-domain`. Lifecycle moves are decided by `entity-core` from
+[Entity Runtime](https://github.com/beyond10x/entity-runtime), an IO-free kernel AEP pins as a
+dependency.
+
+## What lives elsewhere
+
+- **Agent plugins** for Claude Code and Codex are in
+  [beyond10x/agentplugins](https://beyond10x.github.io/agentplugins/). This repository ships no
+  plugin, and no AEP command picks one for you.
+- **Model execution** (paid runs, native harness hooks, live evaluation) belongs to
+  `metaharness aep drive`, which uses AEP's libraries. `aep drive` runs command and operator steps,
+  and it refuses a step map with a model step before it starts a run.
+- **Executable system specifications** belong to [ESS](https://github.com/beyond10x/ess), which has
+  no AEP dependency. AEP reads ESS's standalone conformance report as evidence.
+
+## Where to next
+
+- [Artifacts and kinds](./artifacts.md), [lifecycles](./lifecycles.md) and
+  [the planning store](./planning-store.md) cover the planning half.
+- [Governed tasks](./governance.md) and [design principles](./design-principles.md) cover the
+  engine half.
+- [Evidence](./evidence.md) covers both.

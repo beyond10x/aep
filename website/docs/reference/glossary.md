@@ -1,6 +1,6 @@
 ---
 title: Glossary
-sidebar_position: 4
+sidebar_position: 9
 description: AEP terms, defined once.
 ---
 
@@ -16,7 +16,14 @@ description: AEP terms, defined once.
 | **Workflow** | A validated state machine whose transitions are guarded by predicates over evidence. |
 | **Phase** | A label on workflow states that principles use to time obligations across different workflows. |
 | **Task** | Governed work: objective, kind, profile, context facts, and artifact manifest. |
-| **Artifact** | A referenced engineering document with a kind, lifecycle status, provenance, and relations. |
+| **Artifact** | One item of the plan — a story, an epic, a review, a blocker — with a kind, a status, relations and a Markdown body. In the Git-native store it is one file, `.engineering/planning/<kind>/<name>.md`. |
+| **Lifecycle** | The ladder of statuses one artifact kind may hold, and the moves between them, declared in a YAML file. |
+| **Rung** | One status on a lifecycle. A rung may cost evidence (`requires:`) or open on a date (`when:`). |
+| **Transition** | One recorded move, appended to the artifact's `transitions` list by `aep plan artifact move`. |
+| **Evidence file** | One immutable JSON record about an artifact under `.engineering/evidence/`, counted by `move` against a rung's price. |
+| **Scope** | The paths a story lands on, each `cited` or `inferred`; read by `aep plan artifact waves`. |
+| **Wave** | A set of stories that share no scope path and no dependency, so they can be implemented at the same time. |
+| **Workspace** | Several repositories whose plans `aep plan workspace` answers across, named in `.engineering/workspace.yaml`. |
 | **Capability** | A named permission. It defaults to deny; deny outranks approval-required, which outranks allow. |
 | **Approval floor** | A capability that no profile may grant outright; a matching operation always requires approval or remains denied. |
 | **Evidence** | A typed observation with kind, producer, subject, provenance, and observation time. Predicates read facts projected from it. |
@@ -28,7 +35,7 @@ description: AEP terms, defined once.
 | **Execution** | One task's run through a workflow: state, evidence order, events, and audit trail. |
 | **Step map** | An `aep.driver-steps/1` document saying what a harness does in each workflow state. |
 | **Driven run** | A workflow walk by `aep drive`; the driver asks the engine and performs only the steps it permits. |
-| **Planning store** | Markdown artifacts and an append-only journal, written only through `aep plan artifact`. |
+| **Planning store** | The plan of one repository. Since `aep.project/5` it is the Git-native store: one Markdown file per artifact and one JSON file per evidence record, written through `aep plan artifact`, with Git as the history. |
 | **Backend** | An implementation of the AEP storage command and query contracts. |
 | **Contract conformance** | Whether a backend implements the AEP storage contract, checked by `aep plan conformance`. |
 | **ESS conformance report** | A standalone report emitted by ESS and optionally converted into AEP evidence by `aep-ess-evidence`. |

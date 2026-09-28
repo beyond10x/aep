@@ -1,6 +1,6 @@
 ---
 title: Facts, predicates and vocabulary
-sidebar_position: 3
+sidebar_position: 7
 description: The declared capabilities, evidence kinds and verifiers, the fact spellings the engine actually projects, and the predicate syntax.
 ---
 
@@ -61,6 +61,9 @@ ess_conformance     an implementation against an ESS model — imported from a s
 trace_conformance   an agent run against a trace-spec/1 document — aep observe trace evidence
 ```
 
+The opt-in `development.ess-conformance-v2` and `development.ess-conformance-coverage` profiles run
+under protocols that add `ess_conformance_v2` and `ess_conformance_coverage_v1`.
+
 ESS owns the standalone conformance workflow. See
 [Check a transcript](../guides/check-a-transcript.md) for the AEP-side trace workflow.
 
@@ -92,11 +95,10 @@ archived`. Requiring `approved` is satisfied by `accepted`, `active` or `impleme
 **Both vocabularies are open to authors.** Since `0.13.0` a kind and a status may be any name *some
 ladder declares* — the two lists above are the built-ins, not the boundary. Adding a kind of work
 this repository never anticipated is a `<kind>.yaml` in your own document tree, with no change to
-any crate; see [Lifecycles, decided as data](../concepts/lifecycles.md).
+any crate; see [Lifecycles and rungs](../concepts/lifecycles.md).
 
-Open to authors is not open to anything. A status is accepted because a ladder declares it, never
-because it parses, so `drafted` is refused where `draft` was meant — a typo one letter from a
-built-in is not a new rung.
+Open to authors is not open to anything. A status is accepted because the kind's ladder declares
+it, never because it parses, and `aep plan artifact validate` reports any other status.
 
 **`evidence_kinds`, above, is deliberately closed**, and the reason is the general one for closing a
 vocabulary here: an open evidence vocabulary would let a caller invent the kind of proof a gate is

@@ -1,147 +1,103 @@
 # AEP
 
-The Agentic Engineering Protocol is a typed, portable, machine-executable specification for how
-agent-performed engineering work is governed and proven complete.
+AEP (Agentic Engineering Protocol) keeps a repository's engineering plan as Markdown files that a
+program governs. Stories, epics, reviews and blockers sit in `.engineering/planning/`. Each one
+moves along a lifecycle declared in YAML. A move that a lifecycle gates on evidence is refused until
+that evidence is recorded. Git holds the history.
 
-Prose can tell an agent to write tests first, obtain approval before production changes, and verify
-its work. AEP represents those requirements as validated data. The model reasons; a deterministic
-engine decides what the recorded facts permit.
+The same rules apply to people and to coding agents. An agent that says "the tests pass" has not
+moved a story. A `test_result` recorded against the story has.
 
-`aep` is the canonical command. `protocol` is an exact compatibility alias: retained operations
-produce the same standard output, standard error, and exit status through either name.
+AEP also includes a deterministic engine for governed tasks, a reference workflow driver and a
+checker for agent transcripts. The [documentation](https://beyond10x.github.io/docs/aep/) covers
+all of them.
+
+## Why
+
+- **A status is earned, not typed.** A lifecycle can require at least one `test_result` before a
+  story reaches `implemented`. When the record is missing, `move` refuses and says which one.
+- **The plan is plain files.** Each artifact is one Markdown file with YAML front matter, so a
+  status change shows up as a small diff in a pull request. Two branches that touch different
+  artifacts never conflict.
+- **Every refusal lists your options.** An illegal move prints the statuses you can move to.
+  `explain` shows what each earlier move rested on and what the next rung costs.
+- **Rules are data.** Lifecycles, relations, principles and profiles are validated YAML. You can
+  add your own without changing AEP's code.
+
+## Install
+
+Download a release archive for your platform from
+[GitHub Releases](https://github.com/beyond10x/aep/releases). Each archive has an `aep` binary and a
+`SHA256SUMS` entry.
 
 ```console
-$ aep govern explain --task examples/development-passkeys/task.yaml --action production.write
-production.write denied
-  operation: change production state
-  reason:    principle approval-gates rule production-write-requires-approval
-  missing:   approval for capability production.write
-  state:     receive
+$ VERSION=0.63.1
+$ curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+$ curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
+$ sha256sum -c --ignore-missing SHA256SUMS
+$ tar xzf aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+$ install -m 0755 aep-$VERSION-x86_64-unknown-linux-gnu/aep ~/.local/bin/aep
 ```
 
-## What AEP owns
+To build from source instead, use Rust 1.91 or newer:
 
-AEP governs artifacts, planning, workflows, evidence, permissions, approvals, audit, and
-completion. Its generic planning substrate is shared by two profiles:
-
-- ADP applies AEP to software development: specification, decomposition, design, tests,
-  implementation, and review.
-- AOP applies AEP to operational planning, controlled change, verification, rollback, and
-  incidents.
-
-Other workflows remain named profiles until they establish distinct semantics.
-
-The workspace includes:
-
-| Area | Component | Responsibility |
-|---|---|---|
-| `crates/govern/` | `aep-domain`, `aep-engine` | protocol vocabulary, and deterministic resolution, evaluation, and transitions |
-| `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client` | storage-independent commands and queries, the black-box suites a provider is held to, and the official client |
-| `crates/plan/` | `aep-backend-*` | memory, markdown, SQLite, PostgreSQL, entity, and hybrid backends |
-| `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference workflow driver, and workflow rendering |
-| `crates/observe/` | `trace-domain`, `trace-spec` | typed transcript normalization and conformance checking |
-| `crates/observe/` | `aep-ess-evidence` | optional conversion of a standalone ESS report into AEP evidence |
-| `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary over the substrate |
-| `crates/edge/` | `aep-schema`, `aep-project` | standalone schemas for AEP documents, and the filesystem and Git acquisition edge |
-| `crates/edge/` | `aep-cli` | the canonical `aep` command and `protocol` alias |
-
-The directory is the claim: a crate depends on its own area and on the ones below it, `edge` →
-`{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. `AGENTS.md` records the one exception.
-
-The document trees under `protocols/`, `principles/`, `workflows/`, `profiles/`, `artifacts/`, and
-`drivers/` are data. Teams may vendor them and add their own validated definitions.
-
-## Repository boundaries
-
-AEP is intentionally separate from two sibling projects:
-
-- [ESS](https://github.com/beyond10x/ess) specifies, imports, compiles, analyzes, and projects
-  executable system descriptions. ESS has no dependency on AEP. It publishes a standalone
-  conformance report; the optional `aep-ess-evidence` adapter translates that report without core
-  AEP compiling against ESS modeling types.
-- [agentplugins](https://github.com/beyond10x/agentplugins) is the curated `beyond10x`
-  marketplace. AEP does not bundle harness-specific skills or agents. Model execution and live
-  evaluation use `metaharness aep drive` with explicit plugin inputs. See
-  [Agent plugins](#agent-plugins) for how to install them.
-
-The reference driver is not an LLM orchestration framework. It proves the protocol contract has a
-caller. AEP chooses no credentials, model, endpoint, marketplace, or plugin installation.
-
-The workspace depends on [entity-runtime](https://github.com/beyond10x/entity-runtime) for its
-IO-free entity kernel and provider foundations. The dependency arrow points from AEP to Entity
-Runtime, never the reverse.
-
-## Agent plugins
-
-This repository carries no plugin source and no marketplace manifest, so it is not a marketplace
-source. The Claude Code and Codex plugins live in the sibling public repository
-[beyond10x/agentplugins](https://github.com/beyond10x/agentplugins), which publishes the `beyond10x`
-marketplace. Its install page is <https://beyond10x.github.io/agentplugins/>.
-
-In Claude Code, add the marketplace and install a plugin from it:
-
-```text
-/plugin marketplace add beyond10x/agentplugins
-/plugin install aep-plan@beyond10x
+```console
+$ cargo install --locked --git https://github.com/beyond10x/aep --tag 0.63.1 aep-cli --bin aep
 ```
 
-`aep-drive@beyond10x` and `ess-specify@beyond10x` install the same way. In Codex, add the same GitHub
-repository as a marketplace from the Plugins surface and select the plugin there. The install page
-carries the current plugin list and how to pin a release tag.
+## A minute with it
 
-Nothing chooses a plugin for you: `metaharness aep drive eval run --arm plugin` requires an
-explicit plugin directory or marketplace pin. `metaharness aep drive run` accepts repeatable
-`--plugin-dir` values and the `AEP_DRIVE_PLUGIN_DIR` fallback. Neither guesses a path under this
-checkout. AEP retains command/operator runs and offline `aep drive eval run --stream` ingestion;
-it has no runtime prerequisite on Harness or Metaharness.
+In a Git repository, point AEP at a pinned copy of its governing documents. Then plan a story and
+try to finish it:
 
-## Evidence and completion
+```console
+$ aep plan reverse init --profile development.standard \
+    --protocols git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e
+$ aep plan artifact new story pay-by-card --title "Pay by card as a guest"
+created story:pay-by-card (draft) at …/.engineering/planning/story/pay-by-card.md
+$ aep plan artifact move story:pay-by-card --to active --via
+story:pay-by-card moved draft -> proposed (revision 2)
+story:pay-by-card moved proposed -> active (revision 3)
+$ aep plan artifact move story:pay-by-card --to implemented
+story:pay-by-card is active; implemented is on the ladder and not yet earned: reaching implemented needs at least 1 test_result record(s). no test_result record is held for this artifact — `aep plan artifact evidence <id> --kind test_result --source <where it came from>` records one
+$ aep plan artifact evidence story:pay-by-card --kind test_result --source "cargo test -p checkout"
+story:pay-by-card: test_result recorded from cargo test -p checkout
+  on hand: test_result=1
+$ aep plan artifact move story:pay-by-card --to implemented
+story:pay-by-card moved active -> implemented (revision 4)
+$ aep plan artifact validate
+1 file(s) in …/.engineering/planning: 1 artifact(s)
+valid
+```
 
-AEP treats evidence as recorded facts with provenance rather than assertions in prose:
+The [quickstart](https://beyond10x.github.io/docs/aep/getting-started) walks through the same
+steps and shows the files they write.
 
-- Red-before-green can be expressed as an ordering predicate over evidence sequence numbers.
-- Independent verification requires a producer other than the author.
-- Approval binds to the artifact revision that was reviewed.
-- A stale observation becomes unknown again when its horizon expires; it does not become false.
-- Capabilities default to deny, and a denial cannot be granted back by a later document.
-- Refused transitions change nothing and remain in the audit record.
+## Documentation
 
-`aep observe trace check` turns a normalized agent transcript into a typed conformance report. ESS
-conformance can enter the same evidence system only through the optional report adapter.
-
-## Start here
-
-| Goal | Documentation |
+| Goal | Page |
 |---|---|
-| adopt AEP in an existing repository | [`docs/guide/adopting.md`](docs/guide/adopting.md) |
-| integrate an agent harness | [`docs/guide/harness.md`](docs/guide/harness.md) |
+| see what AEP is | [Overview](https://beyond10x.github.io/docs/aep/) |
+| try it in ten minutes | [Quickstart](https://beyond10x.github.io/docs/aep/getting-started) |
+| understand the model | [Concepts](https://beyond10x.github.io/docs/aep/concepts/overview) |
+| look up a command | [CLI reference](https://beyond10x.github.io/docs/aep/reference/cli) |
+| move an older store to the current format | [Migrate an older store](https://beyond10x.github.io/docs/aep/guides/migrate-an-older-store) |
 | install the Claude Code or Codex plugins | [beyond10x/agentplugins](https://beyond10x.github.io/agentplugins/) |
-| choose or implement a backend | [`docs/guide/backend.md`](docs/guide/backend.md) |
-| understand open vocabulary rules | [`docs/guide/open-vocabulary.md`](docs/guide/open-vocabulary.md) |
-| inspect delivered releases | [`docs/status.md`](docs/status.md) |
-| inspect accepted and proposed work | [`.engineering/planning/`](.engineering/planning/) |
-| understand repository constraints | [`AGENTS.md`](AGENTS.md) |
+| see what shipped | [CHANGELOG.md](CHANGELOG.md) and [docs/status.md](docs/status.md) |
+
+If you are contributing to this repository, start with [`AGENTS.md`](AGENTS.md). It covers the
+repository's layout, invariants and gate.
 
 ## Build and verify
 
-The workspace requires Rust 1.85 or newer and [go-task](https://taskfile.dev). The documentation
-site additionally requires Node.
+The gate needs Rust (1.85 for the libraries, 1.91 for the CLI), [go-task](https://taskfile.dev) and
+Node for the documentation site.
 
 ```console
-task check
+$ task check
 ```
 
-The gate performs formatting, generated-status, planning-store, audit, version, dependency,
-duplicate-guard, changelog-claim, Clippy, test, CLI-documentation, PostgreSQL, rustdoc, schema,
-MSRV, and website checks. It invokes no model and spends no money. The named PostgreSQL check uses
-only the server explicitly selected through `ENTITY_POSTGRES_URL`; when none is configured it reports
-that the integration did not run.
-
-Install both command names from this checkout with:
-
-```console
-task install
-```
+The gate never calls a model and never spends money.
 
 ## License
 

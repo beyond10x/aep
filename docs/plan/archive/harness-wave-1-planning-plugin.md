@@ -1,7 +1,7 @@
 # Harness wave 1 — the planning store and the Claude Code plugin
 
 > **Accepted for implementation, 2026-08-21.** Design:
-> [`harness-planning-and-driver-design-v0.1.md`](../design/harness-planning-and-driver-design-v0.1.md),
+> [`harness-planning-and-driver-design-v0.1.md`](../../design/harness-planning-and-driver-design-v0.1.md),
 > **Phase 1 sections only**; the Phase 2 driver is decided (vision item V-5) and explicitly *not*
 > accepted for build by this page. The review is the operator's in-session plan approval, recorded
 > here and in [`control-document-updates.md`](control-document-updates.md); the driver build gets a

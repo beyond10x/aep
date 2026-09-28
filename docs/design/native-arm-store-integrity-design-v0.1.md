@@ -4,7 +4,7 @@
 > **Status:** **proposed, not accepted, 2026-08-29.** Per [`AGENTS.md`](../../AGENTS.md) § *Which
 > documents are normative*, a proposal is not a work order. No plan page or store item proposed this
 > document before it existed; its acceptance surfaces would be
-> [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md), which is itself
+> [`harness-wave-4-governed-dogfood.md`](../plan/archive/harness-wave-4-governed-dogfood.md), which is itself
 > proposed, or a story in `.engineering/planning/`.
 > **Audience:** whoever reads a `native`/`b10x` column of the evaluation table, and whoever would
 > change what that column reports.
@@ -216,7 +216,7 @@ value itself is invisible to the store: `revision` is a plain `u64` with a serde
 `valid`, exit `0`.
 
 There **is** an after-the-fact detector, and it is narrower than it looks:
-[`crates/aep-backend-markdown/src/drift.rs`](../../crates/aep-backend-markdown/src/drift.rs) compares
+[`crates/aep-backend-markdown/src/drift.rs`](../../crates/plan/aep-backend-markdown/src/drift.rs) compares
 each document against its last journal event and reports `revision` disagreement as drift
 (`drift.rs:143-145`), exit 1. It needs the document to *have* events. A document with none is counted
 `pre_provider` and is a normal condition, not a defect (`drift.rs:126-129`, and
@@ -443,7 +443,7 @@ is somebody else's uncommitted work in progress that this note reports rather th
    store item.
    *Decided 2026-08-29: yes — the eval map declares `scope:` with `.engineering/planning/**` =
    `denied` and a `**` catch-all; the plan page carries the owed row
-   (`docs/plan/eval-program-three-arms.md`); the map change is in metaharness
+   (`docs/plan/archive/eval-program-three-arms.md`); the map change is in metaharness
    `evals/aep/driven.steps.yaml`.*
 2. `denied` versus `partial-only` for arms other than the driven one. § 6 argues `denied` for this
    eval; it says nothing about `eval-case/development-default`.

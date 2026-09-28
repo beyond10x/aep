@@ -1,6 +1,6 @@
 ---
 title: AEP document reference
-sidebar_position: 2
+sidebar_position: 6
 description: The syntax of principle, workflow, profile and lifecycle documents, requirement sets, and the identifier rules the validator holds you to.
 ---
 
@@ -242,6 +242,9 @@ transitions:
   superseded: []
 ```
 
+Every key, including evidence-priced rungs (`requires`) and dated rungs (`when`), is in
+[Lifecycle files](./lifecycle-file.md).
+
 An artifact whose status is not in its kind's lifecycle is a validation error. A `superseded`
 artifact must have a successor declaring `supersedes:` it.
 
@@ -264,7 +267,9 @@ nothing matched.
 ## Evidence records
 
 The document `aep govern evaluate --evidence` submits, and `aep observe evidence inspect` reads: a list
-of records, each naming its `kind`, the fields that kind declares, and who produced it.
+of records, each naming its `kind`, the fields that kind declares, and who produced it. This is the
+engine's format. The per-artifact records the planning store counts are a different, smaller format:
+see [the evidence file](./evidence-file.md).
 
 ```yaml
 - kind: test_result
@@ -300,7 +305,7 @@ one. A step map (`aep.driver-steps/1`) is the missing half, and it is what `aep 
 ```yaml
 format: aep.driver-steps/1
 id: development/default
-workflow: adp/default/1          # pinned to a major version, and the pin is mandatory
+workflow: adp/default/2          # pinned to a major version, and the pin is mandatory
 title: Driving adp/default in this repository
 states:
   verify:

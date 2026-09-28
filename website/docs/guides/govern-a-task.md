@@ -1,15 +1,19 @@
 ---
 title: Govern a task
-sidebar_position: 1
+sidebar_position: 7
 description: Put a task of your own under a profile — the task file, the artifact manifest, choosing a profile, and keeping the documents honest in CI.
 ---
 
 # Govern a task
 
 This guide takes a team that already has rules — in a wiki, a `CONTRIBUTING.md`, or one senior
-engineer's head — and puts a real task under the protocol. Commands assume
-`B=target/debug/aep` after `cargo build -p aep-cli`, the convention
-[Getting started](../getting-started.md) sets.
+engineer's head — and puts a real task under the protocol. The commands run from a checkout of the
+AEP repository, where the worked example lives, with `aep` installed as in the
+[quickstart](../getting-started.md):
+
+```bash
+git clone https://github.com/beyond10x/aep && cd aep
+```
 
 ## What you write
 
@@ -32,6 +36,8 @@ kind: feature
 objective: move-invoices-to-partitioned-table
 protocol: adp/1
 profile: development.standard
+derived_from:
+  - story:BILL-87
 manifest: artifacts.yaml
 constraints:
   facts:
@@ -47,11 +53,20 @@ And the manifest it points at:
 version: aep.artifacts/1
 
 artifacts:
+  - id: story:BILL-87
+    kind: story
+    status: active
+    location:
+      provider: linear
+      reference: BILL-87
+
   - id: spec:invoice-partitioning
     kind: specification
     status: approved
     location:
       path: docs/specs/invoice-partitioning.md
+    relations:
+      - specifies: story:BILL-87
 
   - id: plan:invoice-partitioning
     kind: migration-plan
@@ -95,8 +110,8 @@ missing directories are not an error.
 Loading this repository's own tree:
 
 ```shell-session
-$ $B validate --root .
-45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
+$ aep govern validate --root .
+60 file(s): 5 protocol(s), 24 principle(s), 6 workflow(s), 10 profile(s), 13 lifecycle(s), 2 step map(s)
 valid
 ```
 
@@ -107,17 +122,20 @@ for a session. `.engineering/project.yaml` names them once, and every verb that 
 flags discovers them from the working directory upwards:
 
 ```yaml
-version: aep.project/1
+version: aep.project/5
 protocol: adp/1
 profile: development.standard
 protocols: ..          # where the document tree is, relative to `.engineering/`
-schemas: schemas       # project JSON Schema registry; this is also the default
+planning_scope: aep
+store:
+  git: {}
+task: task.yaml        # the default; relative to `.engineering/`
 ```
 
 With `.engineering/project.yaml` and `.engineering/task.yaml` in place, the flags become optional:
 
 ```shell-session
-$ $B resolve
+$ aep govern resolve
 inputs      project …/aep
 task        W4-1 (feature)
 objective   agent-eval-cases
@@ -125,16 +143,14 @@ protocol    adp/1
 profile     development.driven
 workflow    adp/default (initial: receive)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes
-obligations 10
+obligations 11
 ```
 
 The first line says which it used, and carries the project's absolute path — abbreviated here.
 `inputs project` means it discovered one; `inputs . and <task>` means you passed the paths
 yourself.
 
-Project-owned JSON contracts live under the configured schema registry and identify themselves by
-absolute `$id`; the path is location, not identity. `aep govern schema validate <paths>…` discovers
-the registry from this file, while `--schemas` exists for fixtures and non-project invocations.
+Every field of the file is in [`project.yaml`](../reference/project-file.md).
 
 ## Seeing the workflow the profile puts you on
 
@@ -142,13 +158,14 @@ The profile picks a workflow, and the workflow is where the guards live. `aep go
 draws it without running anything:
 
 ```shell-session
-$ $B workflow render --id adp/default --format tui
+$ aep govern workflow render --id adp/default --format tui
 Standard development workflow
-adp/default/1 · 9 states · 9 transitions
+adp/default/2 · 10 states · 13 transitions
 
   · receive              Receive                  intake
   │
   · specify              Specify                  specification
+  ├─▷ declined  specification.declines_the_request
   │  artifact.specification.exists
   · decompose            Decompose                decomposition, planning
   │
@@ -158,16 +175,20 @@ adp/default/1 · 9 states · 9 transitions
   │  diff.exists
   · verify               Verify                   verification
   │  (tests.unit.failed == 0 and tests.contract.failed == 0 and static_analysis.errors == 0)
-  ╰─◀ implement  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
+  ╰─◁ implement  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
   · adversarial_verify   Adversarial verify       adversarial-verification
+  ╰─◁ implement  (tests.unit.failed > 0 or tests.contract.failed > 0 or static_analysis.errors > 0)
   │  evidence.missing == 0
   · review               Review                   review
-  │  review.approved
+  ├─▷ complete  review.approved
+  ╰─◁ implement  review.changes_requested
+  │  review.rejected
+  · declined             Declined                 completion · terminal
   · complete             Complete                 completion · terminal
 ```
 
 (Colour stripped for this page.) The guard sits on the arrow, which is where it acts: `verify` goes
-back to `implement` when a test fails, and forward only when none does. `--format` also takes `svg`,
+back to `implement` when a test fails, and forward only when none does. `--format` also takes `svg`, `mermaid`,
 `html` and `png`; `--run <RUN>` draws a driver run over the same picture.
 
 ## Choosing a profile
@@ -177,12 +198,12 @@ Measured on the repository's worked example — same task, same artifacts, only 
 | | `development.fast` | `development.standard` | `development.critical` | `development.driven` |
 |---|---:|---:|---:|---:|
 | principles in force | 5 | 9 | 15 | 9 |
-| obligations | 6 | 10 | 17 | 10 |
+| obligations | 6 | 11 | 18 | 11 |
 | completion checks | 14 | 24 | 45 | 24 |
 | distinct evidence kinds owed | 5 | 7 | 7 | 7 |
 
-Reproduce any column: `$B resolve` prints the first two rows directly, and
-`$B evaluate --format json` carries the third and fourth — `completion` is the array, and the
+Reproduce any column: `aep govern resolve` prints the first two rows directly, and
+`aep govern evaluate --format json` carries the third and fourth — `completion` is the array, and the
 entries whose `flavour` is `evidence` are the kinds.
 
 The evidence *kinds* barely grow between standard and critical — what grows is the number of runs
@@ -193,7 +214,7 @@ and who has to sign.
 | `development.fast` | blast radius contained, contract surface private: internal tooling, scripts, a spike | a spec, a failing test first, static analysis, provenance. It cannot request a review or an approval — a human is never in the loop |
 | `development.standard` | anything with an external consumer, persisted data, or a customer-visible path — the default | adds contract tests and a property suite, and the ability (with it, the obligation) to ask a human |
 | `development.critical` | a silent defect is worse than a late delivery: auth, money, migrations, crypto | adds a mutation run, a differential run against the implementation being replaced, an invariant check, design-by-contract, adversarial verification, specification conformance, an approved design, and a **fresh human review of that design** |
-| `development.driven` | a model, not a person, is doing the typing | `development.standard` plus `command.execute`, and nothing else. It exists because the planning store has no tool surface other than the `protocol` CLI, so a driven step under `.standard` cannot create an artifact at all — the run does not fail, it never moves |
+| `development.driven` | a model, not a person, is doing the typing | `development.standard` plus `command.execute`, and nothing else. It exists because the planning store has no tool surface other than the `aep` CLI, so a driven step under `.standard` cannot create an artifact at all — the run does not fail, it never moves |
 
 `development.driven`'s grant is the one place in this directory where a profile widens what an agent
 may reach, and the profile's own header says so rather than leaving it to be discovered. The
@@ -209,7 +230,7 @@ the design at version 7 and the review approved version 3, and the evaluation sa
 words:
 
 ```shell-session
-$ $B evaluate --root . --task task-critical.yaml \
+$ aep govern evaluate --root . --task task-critical.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml
 …
@@ -228,7 +249,7 @@ The worked example ships five evidence files. Submitting them in order and askin
 advance shows the whole lifecycle. One file carries the task to `implement` and stops it there:
 
 ```shell-session
-$ $B evaluate --task examples/development-passkeys/task.yaml \
+$ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --advance
@@ -240,23 +261,27 @@ transitions
 Task incomplete in `implement`:
   ✗ (tests.unit.failed == 0 and static_analysis.errors == 0 and evidence.missing == 0)  [completion]
       tests.unit.failed = 1; unobserved: static_analysis.errors; evidence.missing = 7
+  ? (specification.satisfied and contracts.failed == 0)           [completion]
+      unobserved: specification.satisfied; unobserved: contracts.failed
   ? specification.satisfied                                       [principle spec-driven]
       unobserved: specification.satisfied
   ✗ tests.unit.failed == 0                                        [principle test-driven]
       tests.unit.failed = 1
   …
   ✓ evidence test_result from test-runner (independent)           [principle test-driven]
+  ? evidence diff                                                 [principle test-driven]
+      0 of 1 required record(s) submitted
   ✓ test-runner must run                                          [principle test-driven]
   …
 ```
 
-(Twenty-four completion lines; five shown, the `…` marking what was cut.) Each line names what is owed, which document asked for
+(Twenty-four requirement lines; seven shown, the `…` marking what was cut.) Each line names what is owed, which document asked for
 it, and which of the three truth values it holds: `✓` observed and true, `✗` observed and false,
 `?` nobody observed it. The blocked transition names its guard. Submit all five files on one command
 line and the same invocation reaches `complete`:
 
 ```shell-session
-$ $B evaluate --task examples/development-passkeys/task.yaml \
+$ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --evidence examples/development-passkeys/evidence/02-implementation.yaml \
@@ -264,6 +289,7 @@ $ $B evaluate --task examples/development-passkeys/task.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml \
     --evidence examples/development-passkeys/evidence/05-provenance.yaml \
     --advance
+inputs      . and examples/development-passkeys/task.yaml
 state       complete (Complete)
 transitions
   (none: this state is terminal)
@@ -278,55 +304,33 @@ claim they looked just now.
 
 ## Letting the driver walk it
 
-Everything above is a person typing `evaluate`. `aep drive` is the loop that does it — the
-reference driver, shipped 2026-08-21. It makes the engine's calls in order, executes the three kinds
-of step a map declares (`command`, `llm`, `operator`) and records what it did. It evaluates no gate
-itself, which is the point: a driver that could evaluate a gate would be a second protocol
-implementation with none of the conformance suites behind it.
+Everything above is a person typing `evaluate`. `aep drive` is the loop that does it: the reference
+driver. It makes the engine's calls in order, executes the steps a step map declares for each state,
+and records what it did under `.engineering/runs/<run>/`. It evaluates no gate itself. A driver that
+could evaluate a gate would be a second implementation of the protocol, with none of the conformance
+suites behind it.
+
+A step is one of three kinds: `command` (a program), `llm` (a model session) or `operator` (a
+person). `aep drive` runs command and operator steps. A map with an `llm` step is refused before a
+run is allocated:
 
 ```shell-session
-$ $B drive run --project . --plugin-dir /path/to/agentplugins/plugins/aep-plan --map development/default \
-    --pause-on-approval
-$ $B drive status
-$ $B drive resume W4-1/1
+$ aep drive run --map development/default
+error: this map contains model-backed steps; use `metaharness aep drive run` or `metaharness aep drive resume`; AEP allocated no run and launched nothing
 ```
 
-`drive run` needs a model and costs money, so it is not runnable from a checkout alone; `drive
-status` reads the run directory and needs nothing. This repository's own first governed run is
-recorded there:
+Both maps that ship, `development/default` and `development/checks`, contain model steps, so they
+run under `metaharness aep drive`. That host uses the same governor and writes the same run records,
+and `aep drive status` reads them:
 
-```shell-session
-$ $B drive status
-lock       free
-run        W4-1/1
-task       W4-1
-execution  W4-1.1
-workflow   adp/default/1
-map        development/default (989b18fa5e87d0b7b9d4d4d3abe8865fb6c06d7d4759205118e9e19f92b695bc)
-state      establish_verifiers (step 2)
-status     blocked
-iterations 9
-…
-           establish_verifiers -> implement: ? artifact specification (approved) — declared: specification:agent-charter-eval-cases (draft) [principle spec-driven]
-           establish_verifiers -> implement: ✗ test.first_result == failed — test.first_result = passed [principle test-driven]
+```bash
+aep drive status              # the last run, and who holds the lock
+aep drive resume AUTH-142/3   # continue a stopped command/operator run
 ```
 
-(The `…` stands for the per-state visit and attempt counts.)
-
-That output comes from a run on this machine. `.engineering/runs/` is in `.gitignore`, so a fresh
-checkout has no runs and `drive status` will say so — the transcripts name the running account's
-spend and its MCP inventory, which a public tree should not carry.
-
-The run itself is the honest part: it stopped four states short of the person it was meant to stop
-at, for two reasons the engine printed. Neither is a defect in the engine, and both are about the
-step map — `drivers/development/default.yaml` names `cargo` in every state that names a verifier, so
-a story whose acceptance is written in shell cannot satisfy `test-driven` at all. The decision that
-closed it was the first of the two the row offered: that file is a Rust map, it says so in its
-header, and `drivers/development/checks.yaml` is the map for work whose acceptance is a check
-somebody can run. Two maps now fit `adp/default/1`, which is why the command above names one —
-without `--map` the driver refuses to choose and lists both. The row lives in the repository's gap
-register, `docs/plan/gap-register.md`, which is where every open question in this project is written
-down beside what closes it.
+A map of your own that only has `command` and `operator` steps runs under `aep drive run` directly.
+`--pause-on-approval` stops at the first thing a person owes and exits `0`. The resume then walks
+on from the step after it.
 
 [Integrate an agent harness](./integrate-a-harness.md) covers what the driver enforces, what it
 delegates to hooks, and what to do instead if you are writing your own.
@@ -352,13 +356,12 @@ principle is timed against a phase your workflow does not have:
 ```yaml
 - name: Documents
   run: |
-    cargo run -p aep-cli -- validate --root .
-    cargo run -p aep-cli -- resolve --root . --task examples/development-passkeys/task.yaml
+    aep govern validate --root .
+    aep govern resolve --root . --task examples/development-passkeys/task.yaml
 ```
 
-If your repository keeps a planning store as well, `aep plan artifact validate` belongs in the same
-step: it checks every file, every edge and every status in one run, and it is local, clock-free and
-sub-second.
+If your repository keeps a planning store as well, add `aep plan artifact validate` to the same
+step. See [Validate the plan in CI](./validate-in-ci.md).
 
 ## Next
 

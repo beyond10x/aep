@@ -11,14 +11,14 @@
 > 2026-08-21*, together with a seventh item the review never saw (`aep govern workflow render`). Every
 > acceptance line below therefore rests on code that exists rather than on a crate being written —
 > which changes what this page is waiting for, and changes nothing about its standing. Nothing here
-> is a work order: [`AGENTS.md`](../../AGENTS.md) § *Which documents are normative* says a proposal
+> is a work order: [`AGENTS.md`](../../../AGENTS.md) § *Which documents are normative* says a proposal
 > is not one however recent it is.
 >
-> Design: [`harness-planning-and-driver-design-v0.1.md`](../design/harness-planning-and-driver-design-v0.1.md)
+> Design: [`harness-planning-and-driver-design-v0.1.md`](../../design/harness-planning-and-driver-design-v0.1.md)
 > §§ 4.7–4.9 — the corrected wave-2 decisions. Review:
-> [`2026-08-21-driver-feasibility-review.md`](../reviews/2026-08-21-driver-feasibility-review.md).
+> [`2026-08-21-driver-feasibility-review.md`](../../reviews/2026-08-21-driver-feasibility-review.md).
 > W4.3 proposes a second design,
-> [`story-completion-evidence-design-v0.1.md`](../design/story-completion-evidence-design-v0.1.md),
+> [`story-completion-evidence-design-v0.1.md`](../../design/story-completion-evidence-design-v0.1.md),
 > and **accepting or refusing it is one of this wave's acceptance criteria** — not one of its builds.
 
 **Goal: the first actually governed task. One real story in this repository is picked up, worked and
@@ -54,7 +54,7 @@ reports what broke.
 | the operator is **in the loop by design**, not as a fallback | ~~W4.1 runs `development.standard`~~ **`development.driven`, with `--pause-on-approval`, taken 2026-08-21** — the choice the inline note in § W4.1 left open. The review is still an `operator` step and the pause is unchanged, because `development.driven` extends `development.standard` | D3: a headless run **refuses to start** when an approval is reachable, and `approval-gates` is reachable under both profiles. The two ways to avoid the pause are both refused — dropping to `development.fast`, which deliberately cannot summon a human (`profiles/development-fast.yaml:25-27`), would test a weaker profile than the work deserves; auto-approving is refused under every flag by D3. What forced the change off `development.standard` is not the pause but the shell: without `command.execute` a driven `llm` step cannot reach a single `aep plan artifact` verb, and run `W4-1/1` made **48 allowed calls** through exactly that grant — 47 `aep plan artifact`, one `aep observe trace` |
 | ~~**the F13 answer is produced, not scheduled again**~~ **— produced by wave 3, and this row is kept as the record of why it was made an acceptance criterion** | **W3.6 ran the deliberate-denial case on 2026-08-21 and the answer is *yes, one-for-one*:** three hook refusals produced exactly three `permission_denials` entries, each naming its tool. It is written into design § 4.8 (*F13, answered*) and the gap-register row is **closed by code**. W4.2 is no longer the backstop for it | the review named the closing command in one sentence — one `claude -p` run with a denying hook, then read the last line — and a row whose closing command has been written down for two waves and never run is a row nobody intends to close. Making it an acceptance criterion is what got it run one wave earlier than this page expected |
 | **W4.3 produces a decision, not a build** | the design is written proposed-not-accepted; the wave's acceptance is *accepted / accepted-in-part / refused, with the reason recorded* | both shapes it could take are domain changes — a new `ArtifactStatus` variant, or a new mode on a write verb. That is the shape gap-register **D-5** already went through for `EvidenceKind`, and the lesson recorded there is that the decision belongs in the acceptance decision rather than being discovered during implementation |
-| the Codex facts are **an input, not a dependency** | the research was run in parallel and **has landed** — [`2026-08-21-codex-harness-research.md`](../reviews/2026-08-21-codex-harness-research.md), every fact labelled verified / documented / inferred / unknown. W4.4's three acceptance tiers stay, because a wave whose last item blocks on research nobody sequenced is a wave that does not close | it changed two things rather than confirming the plan: the adapter's input is the **session rollout JSONL**, not `codex exec --json` stdout, and the enforcement layer turns out to be **portable rather than Claude-specific** — Codex 0.145 ships a stable `PreToolUse` hook with the same decision contract. Both are recorded in W4.4 below rather than restated |
+| the Codex facts are **an input, not a dependency** | the research was run in parallel and **has landed** — [`2026-08-21-codex-harness-research.md`](../../reviews/2026-08-21-codex-harness-research.md), every fact labelled verified / documented / inferred / unknown. W4.4's three acceptance tiers stay, because a wave whose last item blocks on research nobody sequenced is a wave that does not close | it changed two things rather than confirming the plan: the adapter's input is the **session rollout JSONL**, not `codex exec --json` stdout, and the enforcement layer turns out to be **portable rather than Claude-specific** — Codex 0.145 ships a stable `PreToolUse` hook with the same decision contract. Both are recorded in W4.4 below rather than restated |
 | **no new enforcement mechanism in this wave** | wave 4 runs what wave 3 built. The only new code it authorises is W4.4's adapter; W4.3's build, if accepted, is a later wave | a dogfood wave that also grows the enforcement surface cannot say which half its findings came from. The point of running the thing is to learn what the thing does |
 | a wedged run is a **result**, not a retry loop | W4.1's acceptance admits failure as an outcome, on the record | a dogfood wave that reports only its successes is marketing. The repository's own standard — *a rule nothing checks is a rule that has already drifted somewhere* — has an analogue here: a mechanism nobody was allowed to report a failure of is a mechanism nobody has tested |
 
@@ -369,7 +369,7 @@ from every task the profile governs, including the ones that do change code.
 
 **The fix, and its exact size.** Two `applies_when:` clauses over one declared fact, `change.code`,
 in `constraints.facts` beside the existing `change.public_contract`. It is
-[`fact-scoped-applicability-design-v0.1.md`](../design/fact-scoped-applicability-design-v0.1.md),
+[`fact-scoped-applicability-design-v0.1.md`](../../design/fact-scoped-applicability-design-v0.1.md),
 **proposed, not accepted** — this section is the acceptance surface, and the verdict below is
 *accepted in part*. No engine change, no protocol change, no new grammar and **no new enforcement
 mechanism**, which is what keeps it inside this wave's third *decisions, taken* row: it narrows an
@@ -499,7 +499,7 @@ need to close F-W4.2-7 without re-running from `receive`.
 
 **The deliverable is a document and a verdict on it, not a build.**
 
-[`story-completion-evidence-design-v0.1.md`](../design/story-completion-evidence-design-v0.1.md)
+[`story-completion-evidence-design-v0.1.md`](../../design/story-completion-evidence-design-v0.1.md)
 proposes the rule in one line: **a story reaches `implemented` only when the graph holds evidence
 that it was** — a `trace_conformance` record for the run that did the work, and an independent
 `test_result` for the change it produced — expressed as a principle over facts in the shape
@@ -539,7 +539,7 @@ binding.
 
 **Verdict, 2026-08-28: accepted in part.** Recorded here because this page's acceptance says the
 wave records it here; written out in full as
-[`story-completion-evidence-design-v0.1.md`](../design/story-completion-evidence-design-v0.1.md) § 10,
+[`story-completion-evidence-design-v0.1.md`](../../design/story-completion-evidence-design-v0.1.md) § 10,
 and in the store as `story:completion-needs-evidence`.
 
 * **Accepted and already shipped** — § 4.2's two halves (the engine decides a move against evidence
@@ -556,7 +556,7 @@ and in the store as `story:completion-needs-evidence`.
   `story:evidence-producers-for-the-driven-map`; **D-S4** stays this design's standing limit.
 * § 8's other open decisions take their stated defaults, with S1 carrying the added condition above.
 
-This closes [`gap-register.md`](gap-register.md)'s row *a story's `implemented` is a claim nothing
+This closes [`gap-register.md`](../gap-register.md)'s row *a story's `implemented` is a claim nothing
 checks*, which its own closing condition says a verdict closes whichever way it goes.
 
 ## W4.4 — a second real harness: Codex on the same step map
@@ -573,7 +573,7 @@ prove portability, and trace wave 1 already says the neutrality claim is unteste
 (`trace-wave-1-transcript-checker.md:263-265`).
 
 **The input landed, and it moved two decisions.**
-[`docs/reviews/2026-08-21-codex-harness-research.md`](../reviews/2026-08-21-codex-harness-research.md)
+[`docs/reviews/2026-08-21-codex-harness-research.md`](../../reviews/2026-08-21-codex-harness-research.md)
 is the record — verified against a local codex-cli 0.145.0 install and 2,437 rollout files, with
 every fact labelled by how it is known. It is cited rather than restated; two of its findings change
 what this item is:

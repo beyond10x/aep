@@ -384,7 +384,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
             },
             {
               "confidence": "cited",
-              "path": "docs/plan/harness-wave-4-governed-dogfood.md"
+              "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md"
             },
             {
               "confidence": "inferred",
@@ -567,7 +567,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
             },
             {
               "confidence": "inferred",
-              "path": "docs/plan/eval-program-three-arms.md"
+              "path": "docs/plan/archive/eval-program-three-arms.md"
             },
             {
               "confidence": "cited",
@@ -695,7 +695,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
             },
             {
               "confidence": "cited",
-              "path": "docs/plan/harness-wave-4-governed-dogfood.md"
+              "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md"
             },
             {
               "confidence": "cited",
@@ -841,7 +841,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
             },
             {
               "confidence": "cited",
-              "path": "docs/plan/harness-wave-4-governed-dogfood.md"
+              "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md"
             },
             {
               "confidence": "cited",
@@ -1074,7 +1074,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
             },
             {
               "confidence": "cited",
-              "path": "docs/plan/eval-program-three-arms.md"
+              "path": "docs/plan/archive/eval-program-three-arms.md"
             },
             {
               "confidence": "cited",
@@ -1721,13 +1721,13 @@ All commands exited zero; the initial unsupported global --root argument was ref
     {
       "a": "story:completion-needs-evidence",
       "b": "story:drive-watch-is-a-verb",
-      "path": "docs/plan/harness-wave-4-governed-dogfood.md",
+      "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md",
       "confidence": "cited"
     },
     {
       "a": "story:completion-needs-evidence",
       "b": "story:governed-dogfood-run",
-      "path": "docs/plan/harness-wave-4-governed-dogfood.md",
+      "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md",
       "confidence": "cited"
     },
     {
@@ -1811,7 +1811,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
     {
       "a": "story:drive-watch-is-a-verb",
       "b": "story:governed-dogfood-run",
-      "path": "docs/plan/harness-wave-4-governed-dogfood.md",
+      "path": "docs/plan/archive/harness-wave-4-governed-dogfood.md",
       "confidence": "cited"
     },
     {
@@ -2099,7 +2099,7 @@ All commands exited zero; the initial unsupported global --root argument was ref
     {
       "a": "story:native-arm-needs-a-window-that-fits",
       "b": "story:three-arm-pilot-2",
-      "path": "docs/plan/eval-program-three-arms.md",
+      "path": "docs/plan/archive/eval-program-three-arms.md",
       "confidence": "inferred"
     },
     {

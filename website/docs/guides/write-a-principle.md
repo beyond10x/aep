@@ -1,6 +1,6 @@
 ---
 title: Write a principle
-sidebar_position: 2
+sidebar_position: 8
 description: Encode one of your team's rules as a principle document, put it in force through a profile, and learn the two authoring failures worth meeting early.
 ---
 
@@ -14,10 +14,31 @@ it. This guide encodes a real rule end to end:
 
 For the full syntax, see the [document reference](../reference/documents.md).
 
-Commands assume `B=target/debug/aep` after `cargo build -p aep-cli`. The tree they run
-against is this repository's `protocols/`, `principles/`, `workflows/`, `profiles/` and `artifacts/`
-with the two documents below added to it — which is what every count in the output lines is a count
-of.
+The commands run `aep` against a copy of this repository's `protocols/`, `principles/`,
+`workflows/`, `profiles/`, `artifacts/` and `drivers/` with the two documents below added to it,
+which is what every count in the output is a count of. The task is the one from
+[Govern a task](./govern-a-task.md#what-you-write), under the new profile:
+
+```yaml
+# task.yaml
+id: BILL-88
+kind: feature
+objective: move-invoices-to-partitioned-table
+protocol: adp/1
+profile: acme.service
+derived_from:
+  - story:BILL-87
+manifest: artifacts.yaml
+constraints:
+  facts:
+    change.database_schema: true
+    change.public_contract: false
+```
+
+`task-rename-a-button.yaml` is the same task as `BILL-89` with `change.database_schema: false`.
+`artifacts.yaml` declares the story, an approved specification that `specifies` it, and an approved
+`migration-plan`. `artifacts-without-the-plan.yaml` leaves the plan out. `red-test.yaml` is the
+worked example's failing-test record.
 
 ## Four decisions, in order
 
@@ -78,21 +99,21 @@ principles:
 the other declares it `false`:
 
 ```shell-session
-$ $B resolve --root . --task task.yaml | grep -E '^(task|principles|obligations)'
+$ aep govern resolve --root . --task task.yaml | grep -E '^(task|principles|obligations)'
 task        BILL-88 (feature)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes, migration-has-a-way-back
-obligations 12
-$ $B resolve --root . --task task-rename-a-button.yaml | grep -E '^(task|principles|obligations)'
+obligations 13
+$ aep govern resolve --root . --task task-rename-a-button.yaml | grep -E '^(task|principles|obligations)'
 task        BILL-89 (feature)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes
-obligations 10
+obligations 11
 ```
 
 The rule is **absent** from the second task, not present and vacuously satisfied — so nobody reads a
 green report and wonders which ticks meant anything.
 
 **Saying nothing is not the same as saying no.** Leave `change.database_schema` out of the second
-task entirely and the rule stays in force, all twelve obligations with it. An applicability condition
+task entirely and the rule stays in force, all thirteen obligations with it. An applicability condition
 the engine cannot evaluate resolves to *applies*
 (`crates/govern/aep-domain/src/principle.rs:688`), because a rule that can rule itself out by silence is a
 rule nobody can rely on. Opting out is a declaration a reviewer can see.
@@ -101,7 +122,7 @@ rule nobody can rely on. Opting out is a declaration a reviewer can see.
 implementation. Remove the plan from the manifest and the same evidence stops one state short:
 
 ```shell-session
-$ $B evaluate --root . --task task.yaml --artifacts artifacts-without-the-plan.yaml \
+$ aep govern evaluate --root . --task task.yaml --artifacts artifacts-without-the-plan.yaml \
     --evidence red-test.yaml --advance | grep -E '^(state|transitions)| -> implement|migration-plan'
 state       establish_verifiers (Establish verifiers)
 transitions
@@ -118,8 +139,8 @@ rule — both better outcomes than an agent quietly writing the migration.
 `migration.rollback_tested`, which reads perfectly well in English:
 
 ```shell-session
-$ $B validate --root .
-47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
+$ aep govern validate --root .
+62 file(s): 5 protocol(s), 25 principle(s), 6 workflow(s), 11 profile(s), 13 lifecycle(s), 2 step map(s)
 1 problem(s):
   - [unobservable_fact] principle migration-has-a-way-back.obligations.migration-has-a-way-back/before-completion: `migration.rollback_tested` is not declared observable by protocol adp/1 (hint: declared families: ess_conformance.**, trace_conformance.**, mutation.**, differential.**, invariant.**, clean_room.**, build.**, types.**, task.**, change.**, risk, severity, state.**, workflow.**, principle.**, evidence.**, required_evidence.**, tests.**, test.**, unit_tests.**, contract_tests.**, regression_suite.**, static_analysis.**, contracts.**, property_test.**, coverage.**, specification.**, diff.**, source_diff.**, artifact.**, review.**, verification.**, approval.**, approvals.**, deployment.**, metric.**, service.**)
 $ echo $?
@@ -134,10 +155,10 @@ spelling — here, `verification.recovery.passed`.
 becomes true:
 
 ```shell-session
-$ $B validate --root .
-47 file(s): 3 protocol(s), 23 principle(s), 4 workflow(s), 7 profile(s), 8 lifecycle(s), 2 step map(s)
+$ aep govern validate --root .
+62 file(s): 5 protocol(s), 25 principle(s), 6 workflow(s), 11 profile(s), 13 lifecycle(s), 2 step map(s)
 valid
-$ $B evaluate --root . --task task.yaml | grep passsed
+$ aep govern evaluate --root . --task task.yaml | grep passsed
   ? verification.recovery.passsed                                 [principle migration-has-a-way-back]
       unobserved: verification.recovery.passsed
 ```
