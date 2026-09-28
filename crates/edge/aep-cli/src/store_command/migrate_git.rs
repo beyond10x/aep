@@ -372,6 +372,7 @@ fn transition_of(entry: &Entry) -> Option<Transition> {
             from,
             to,
             decided_on,
+            ..
         } => Some(Transition {
             at: entry.at.clone(),
             actor: entry.actor.clone(),
@@ -380,6 +381,8 @@ fn transition_of(entry: &Entry) -> Option<Transition> {
             to: to.clone(),
             decided_on: decided_on.clone(),
             imported: true,
+            executor: None,
+            correlation: None,
         }),
         _ => None,
     }
@@ -480,6 +483,8 @@ fn compute(planning: &Path, lifecycles: &LifecycleRegistry, carrier: &Carrier) -
                     to: front.status.clone(),
                     decided_on: journal::Provenance::default(),
                     imported: true,
+                    executor: None,
+                    correlation: None,
                 });
                 plan.carried += 1;
             }

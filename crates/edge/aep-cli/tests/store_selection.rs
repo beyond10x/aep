@@ -37,6 +37,12 @@ fn aep_in(project: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(project)
+        // The scratch copy is not a Git repository. Without a ceiling, a target directory inside
+        // this checkout puts it in this repository's work tree, and validate reads that history.
+        .env(
+            "GIT_CEILING_DIRECTORIES",
+            project.parent().expect("the scratch project has a parent"),
+        )
         .output()
         .expect("the protocol binary runs")
 }

@@ -775,6 +775,8 @@ fn change_for(
             from: existing.frontmatter.status.clone(),
             to: updated.frontmatter.status.clone(),
             decided_on,
+            executor: None,
+            correlation: None,
         };
     }
     if let Some(added) = updated
