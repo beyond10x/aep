@@ -9,8 +9,8 @@
 #   * it does not recompute the settled/unsettled partition — it reads the `PARTITION` lines
 #     `check-closed-cells.sh` prints (F8), so the two checks cannot disagree about which rows need a
 #     follow-up;
-#   * it does not open a planning file. Every fact about an artifact comes from `protocol artifact
-#     list` and `protocol artifact graph`. F5 asks that the artifact quote the `Declaration` cell
+#   * it does not open a planning file. Every fact about an artifact comes from `aep plan artifact
+#     list` and `aep plan artifact graph`. F5 asks that the artifact quote the `Declaration` cell
 #     "in its body"; read through the CLI that becomes its **title**, which is the part of the
 #     artifact the store will show without anyone opening it. Recorded here rather than routed
 #     around by grepping the store.
@@ -19,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 STORY="story:open-vocabulary-audit"
 
 declare_row F1 "every unsettled closed row's Follow-up is a story: or architecture-decision-record: id"
-declare_row F2 "each such id appears in protocol artifact list --format json"
+declare_row F2 "each such id appears in aep plan artifact list --format json"
 declare_row F3 "every settled closed row's Follow-up is exactly the em dash"
 declare_row F4 "an id that is not in the store is reported by name — F2 discriminates"
 declare_row F5 "each named artifact's title carries the Declaration cell of the row that produced it"
@@ -28,7 +28,7 @@ declare_row F7 "each named artifact is in its kind's initial status — none was
 declare_row F8 "the partition is read from check-closed-cells.sh, not recomputed here"
 declare_row F9 "rows examined equals the number of closed rows in the table"
 
-protocol_ready || { red_all "$(protocol_absence)"; finish; exit; }
+aep_ready || { red_all "$(aep_absence)"; finish; exit; }
 audit_present || { red_all "no $AUDIT_REL"; finish; exit; }
 
 # ---- F8 -----------------------------------------------------------------------------------------

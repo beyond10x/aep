@@ -323,7 +323,7 @@ enum Act {
     /// The step wrote a planning document into the store, and submitted nothing.
     ///
     /// The named outcome of the step is on the *world*, not on the engine: a `command` step that
-    /// runs `protocol artifact create` returns nothing to submit and leaves the store one document
+    /// runs `aep plan artifact create` returns nothing to submit and leaves the store one document
     /// bigger. Whether the run notices is what
     /// `an_artifact_a_step_created_is_counted_by_the_next_evaluation` asks.
     Creates(&'static str),

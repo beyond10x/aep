@@ -529,7 +529,7 @@ impl RunReport {
 /// Where the artifact graph is rebuilt from at the top of every iteration.
 ///
 /// The driver reads a plan and decides nothing about where it is kept: a markdown store is one, and
-/// `protocol drive` hands it whichever store the project's `project.yaml` names
+/// `aep drive` hands it whichever store the project's `project.yaml` names
 /// (`story:store-selection-in-project-yaml`). One method, because the loop asks one question —
 /// *what does the plan say now* — and `StoreReport` is the answer in every store's terms,
 /// failures included, so a store that stopped reading stops the run the same way a broken file does.
@@ -550,8 +550,8 @@ pub trait PlanSource {
     /// [`Membership::default`] keeps a bare store's behaviour: nothing is declared, so a crossing
     /// edge is dangling, which is what a store with no workspace beside it means.
     ///
-    /// It exists because the two readers disagreed: `protocol artifact validate` called this
-    /// repository's own store valid while `protocol drive` refused to start on it, both correct
+    /// It exists because the two readers disagreed: `aep plan artifact validate` called this
+    /// repository's own store valid while `aep drive` refused to start on it, both correct
     /// about a different question and only one of them told the truth about the store.
     ///
     /// [`Membership::default`]: aep_domain::workspace::Membership::default

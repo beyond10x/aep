@@ -1,4 +1,4 @@
-//! `protocol trace evidence`, and the loop it closes.
+//! `aep observe trace evidence`, and the loop it closes.
 //!
 //! The claim these tests exist for is one sentence: **what the checker writes, the engine reads.**
 //! A verb that minted a record the evidence loader could not parse, or one the protocol did not
@@ -6,7 +6,7 @@
 //! run in different processes and the only thing joining them is a file.
 //!
 //! So the round trip is asserted end to end, through the binary, twice: the document is written to
-//! disk and fed back to `protocol evaluate --evidence`, and both renderings the verb offers are
+//! disk and fed back to `aep govern evaluate --evidence`, and both renderings the verb offers are
 //! shown to be readable by it.
 
 use std::path::{Path, PathBuf};
@@ -20,13 +20,13 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always against the repository's own document tree.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always against the repository's own document tree.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
-        .expect("the protocol binary runs")
+        .expect("the aep binary runs")
 }
 
 /// Standard output as a string.
@@ -85,7 +85,7 @@ fn the_record_the_checker_writes_is_one_the_engine_accepts() {
     // engine never sees the checker.
     let out = scratch("aep-trace-evidence-roundtrip").join("trace.yaml");
 
-    let minted = protocol(&[
+    let minted = aep(&[
         "observe",
         "trace",
         "evidence",
@@ -121,7 +121,7 @@ fn the_record_the_checker_writes_is_one_the_engine_accepts() {
         "the digest pair is what makes the record mean something later: {document}"
     );
 
-    let evaluated = protocol(&[
+    let evaluated = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -150,7 +150,7 @@ fn the_json_rendering_is_read_by_the_same_loader_as_the_yaml_one() {
     // engine refuses is worse than no option.
     let out = scratch("aep-trace-evidence-json").join("trace.json");
 
-    let minted = protocol(&[
+    let minted = aep(&[
         "observe",
         "trace",
         "evidence",
@@ -175,7 +175,7 @@ fn the_json_rendering_is_read_by_the_same_loader_as_the_yaml_one() {
         "the file ends in a newline, as every other document this binary writes does"
     );
 
-    let evaluated = protocol(&[
+    let evaluated = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -211,7 +211,7 @@ fn a_run_that_gapped_is_written_down_rather_than_exited_on() {
     )
     .expect("the fixture is writable");
 
-    let checked = protocol(&[
+    let checked = aep(&[
         "observe",
         "trace",
         "check",
@@ -227,7 +227,7 @@ fn a_run_that_gapped_is_written_down_rather_than_exited_on() {
         stdout(&checked)
     );
 
-    let minted = protocol(&[
+    let minted = aep(&[
         "observe",
         "trace",
         "evidence",
@@ -259,7 +259,7 @@ fn a_driven_event_stream_is_checked_with_the_same_arguments_as_a_recorded_transc
     // to get wrong. Which reader runs is decided from the file's own first line, and the report
     // says which one it was — so a verdict that changed because the *reader* changed stays visible
     // as that rather than as a change in the agent's behaviour.
-    let checked = protocol(&[
+    let checked = aep(&[
         "observe",
         "trace",
         "check",
@@ -283,7 +283,7 @@ fn a_driven_event_stream_is_checked_with_the_same_arguments_as_a_recorded_transc
 
     // And the record it mints is the same kind of record, from the same loop.
     let out = scratch("aep-trace-evidence-event-stream").join("trace.yaml");
-    let minted = protocol(&[
+    let minted = aep(&[
         "observe",
         "trace",
         "evidence",
@@ -313,7 +313,7 @@ fn a_file_that_is_neither_wire_is_refused_with_the_format_it_was_read_as() {
     // mistakes and only one of them is fixed by looking at the file.
     let stray = scratch("aep-trace-not-a-transcript").join("notes.md");
     std::fs::write(&stray, "# notes\n\nnothing here is a transcript\n").expect("the scratch tree");
-    let refused = protocol(&[
+    let refused = aep(&[
         "observe",
         "trace",
         "check",
@@ -336,7 +336,7 @@ fn a_downgrade_the_specification_does_not_declare_is_refused_by_the_evidence_ver
     // that matched nothing would relax nothing while looking as though it had. The verb that mints
     // a record must refuse it for the stronger reason: the record names the downgrades, and one
     // naming an id nobody declared would be a false statement about what the run gated on.
-    let refused = protocol(&[
+    let refused = aep(&[
         "observe",
         "trace",
         "evidence",
@@ -360,15 +360,6 @@ fn a_downgrade_the_specification_does_not_declare_is_refused_by_the_evidence_ver
     );
 }
 
-/// Runs `aep` — the canonical name — with `args`, against the same document tree.
-fn aep(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aep"))
-        .args(args)
-        .current_dir(root())
-        .output()
-        .expect("the aep binary runs")
-}
-
 /// One minting of the committed transcript's record, to a named file.
 ///
 /// Everything about it is pinned — the same spec, the same transcript, the same `--observed-at` —
@@ -389,37 +380,22 @@ fn evidence_arguments(out: &str) -> Vec<&str> {
 }
 
 #[test]
-fn the_provenance_command_is_the_canonical_spelling_whichever_binary_minted_the_record() {
-    // `provenance.command` says *what was asked for*, in this verb's own vocabulary, and the
-    // canonical vocabulary spells the tool `protocol` — the two names are one interface (invariant
-    // 10: identical output bytes and exit status), and a record whose bytes moved with the name on
-    // the caller's `PATH` would make two identical checks produce two different documents. Every
-    // evidence record committed to this repository was minted with that spelling; the guide quotes
-    // it as printed.
-    //
-    // So this is a contract and not an accident, and the test is the contract: both binaries, the
-    // same arguments, and the written record byte-identical.
+fn the_provenance_command_is_the_canonical_grouped_spelling() {
+    // `provenance.command` says *what was asked for*, in this verb's own vocabulary: the one
+    // command name and the grouped path, whichever spelling the caller typed. A record whose bytes
+    // moved with the spelling would make two identical checks produce two different documents.
     let directory = scratch("aep-trace-evidence-provenance");
-    let by_aep = directory.join("by-aep.yaml");
-    let by_protocol = directory.join("by-protocol.yaml");
-    let canonical = aep(&evidence_arguments(printable(&by_aep)));
-    assert_eq!(code(&canonical), 0, "{}", stderr(&canonical));
-    let alias = protocol(&evidence_arguments(printable(&by_protocol)));
-    assert_eq!(code(&alias), 0, "{}", stderr(&alias));
+    let written = directory.join("record.yaml");
+    let minted = aep(&evidence_arguments(printable(&written)));
+    assert_eq!(code(&minted), 0, "{}", stderr(&minted));
 
-    let from_aep = std::fs::read_to_string(&by_aep).expect("`aep` wrote its record");
-    let from_protocol = std::fs::read_to_string(&by_protocol).expect("`protocol` wrote its record");
-    assert_eq!(
-        from_aep, from_protocol,
-        "the same check through the two names is the same document, byte for byte"
-    );
-
-    let command = from_aep
+    let record = std::fs::read_to_string(&written).expect("`aep` wrote its record");
+    let command = record
         .lines()
         .find_map(|line| line.trim().strip_prefix("command: "))
         .expect("the record carries a provenance command");
     assert!(
-        command.starts_with("protocol trace evidence "),
-        "and it is spelled with the canonical `protocol`, whichever binary ran: {command}"
+        command.starts_with("aep observe trace evidence "),
+        "and it is spelled `aep observe trace evidence`: {command}"
     );
 }

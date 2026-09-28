@@ -1,4 +1,4 @@
-//! `protocol eval matrix` — many checked runs become one table of facts, and never a score.
+//! `aep drive eval matrix` — many checked runs become one table of facts, and never a score.
 //!
 //! The sixth module split, on the criterion the first five took: a verb family with its own input,
 //! its own vocabulary and no shared state with the rest of the binary.
@@ -9,7 +9,7 @@
 //! **plugin**, a **driven** run whose tool calls an enforcer decides, and a **native** run whose
 //! published toolset is the policy — against more than one harness. Each run leaves two documents:
 //! a `eval.run-manifest/1` saying what was run and under which arm, and the `trace-report/1` record
-//! `protocol trace check --format json` writes about its transcript. This verb reads those pairs
+//! `aep observe trace check --format json` writes about its transcript. This verb reads those pairs
 //! and reports, per harness × arm × workflow and per expectation, **how many facts held, how many
 //! were contradicted, and how many nobody could find out**.
 //!
@@ -28,7 +28,7 @@
 //! # The record it reads is the check report, not the evidence record
 //!
 //! Both are called `trace_conformance` in conversation and they are not the same document. The
-//! **evidence** record `protocol trace evidence` mints carries three counts and the ids that
+//! **evidence** record `aep observe trace evidence` mints carries three counts and the ids that
 //! gapped, and deliberately drops the rows — their citations quote the transcript, and an evidence
 //! record is a thing people paste into pull requests (`crates/observe/trace-spec/src/evidence.rs`). A
 //! per-expectation matrix cannot be built from counts, so what this verb reads is the **check
@@ -49,7 +49,7 @@
 //! # Exit code
 //!
 //! `0` whenever a matrix was assembled, whatever it says. A matrix is a report, not a gate — the
-//! same position `protocol trace inspect` and `protocol infra simulate` take — and an exit code
+//! same position `aep observe trace inspect` and `protocol infra simulate` take — and an exit code
 //! that moved with the counts would be the scalar this verb refuses to compute. Everything refused
 //! here leaves through the binary's top-level handler as `1`, with the refusals on standard error.
 
@@ -445,7 +445,7 @@ impl fmt::Display for Refusal {
             Self::NotARecord { found } => write!(
                 f,
                 "this is not a `{REPORT_FORMAT}` record{} — the matrix reads the report \
-                 `protocol trace check --format json` writes, which has one row per expectation, \
+                 `aep observe trace check --format json` writes, which has one row per expectation, \
                  and not the evidence record, which carries counts and drops the rows",
                 claimed(found.as_deref())
             ),
@@ -1491,7 +1491,7 @@ pub fn fold(
 /// Finds every manifest under the paths the caller named, in a stable order.
 ///
 /// A directory is read one level deep for `*.manifest.yaml`, which is the convention
-/// `protocol evidence scan` already uses for markdown. A record with no manifest beside it is
+/// `aep observe evidence scan` already uses for markdown. A record with no manifest beside it is
 /// refused rather than skipped: a dropped record is a run that silently left the matrix.
 pub fn collect(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut manifests = BTreeSet::new();
@@ -1621,7 +1621,7 @@ pub enum EvalCommand {
     Run(Box<RunArgs>),
 }
 
-/// The arguments of `protocol eval matrix`.
+/// The arguments of `aep drive eval matrix`.
 #[derive(Debug, Args)]
 pub struct MatrixArgs {
     /// The runs: a directory holding `*.manifest.yaml` beside `*.report.json`, or a manifest
@@ -1644,7 +1644,7 @@ pub fn run(command: EvalCommand) -> Result<ExitCode> {
     }
 }
 
-/// `protocol eval matrix`
+/// `aep drive eval matrix`
 pub fn matrix(args: &MatrixArgs) -> Result<ExitCode> {
     let manifests = collect(&args.runs)?;
     let mut pairs = Vec::new();
@@ -1843,7 +1843,7 @@ pub fn coverage(reporting: usize, runs: usize) -> String {
 
 // --- the runner ---------------------------------------------------------------------------------
 //
-// Everything below is `protocol eval run`: the verb that produces the pairs everything above reads.
+// Everything below is `aep drive eval run`: the verb that produces the pairs everything above reads.
 //
 // # The manifest is assembled runner-side, and the seam grew nothing (decision R3.2)
 //
@@ -2248,18 +2248,18 @@ impl fmt::Display for RunRefusal {
                  a second launcher for a component that already has one.\n\
                  \n\
                  What this verb does with a native run is **read** it: run it with `b10x-harness`, \
-                 then ingest the event stream with `protocol eval run --arm native --stream <file>`."
+                 then ingest the event stream with `aep drive eval run --arm native --stream <file>`."
             ),
             Self::DrivenIsNotLaunchedHere => write!(
                 f,
-                "arm `driven` is not launched by this verb — `protocol drive run` launches it. A \
+                "arm `driven` is not launched by this verb — `aep drive run` launches it. A \
                  driven run is a walk of a step map whose every `llm` step is spawned through the \
                  seam with the engine deciding each call, and a second way to launch one would be a \
                  second policy to forget, which is the mistake `epic:metaharness-migration` \
                  retired.\n\
                  \n\
-                 What this verb does with a driven run is **read** it: drive it with `protocol \
-                 drive run`, then ingest the event stream that run wrote with `protocol eval run \
+                 What this verb does with a driven run is **read** it: drive it with `aep \
+                 drive run`, then ingest the event stream that run wrote with `aep drive eval run \
                  --arm driven --stream <the stream>`"
             ),
             Self::NoWorkingTree => write!(
@@ -2302,7 +2302,7 @@ impl fmt::Display for RunRefusal {
                 f,
                 "arm `raw` gives the agent the committed instructions for `{workflow}` and there \
                  is no document at {expected}. Arm `raw` *is* those instructions — a run of it \
-                 without them is a run of no arm at all. Render them with `protocol workflow \
+                 without them is a run of no arm at all. Render them with `aep govern workflow \
                  instruct --out generated/instructions`"
             ),
             Self::SpawnFailed {
@@ -2786,7 +2786,7 @@ pub struct Session {
     /// # Every session, and the run that made that matter
     ///
     /// A stream is usually one session and the total is that session's figure. A **driven** run is
-    /// not: `protocol drive` starts a fresh session per workflow state, so its transcript is a
+    /// not: `aep drive` starts a fresh session per workflow state, so its transcript is a
     /// concatenation carrying one terminal record per state. This reader took the *last* of them
     /// until 2026-08-23, when the first live driven run reported `$1.135363` for a walk that had
     /// cost `$15.014604` across six sessions — the sixth session's figure, presented as the run's.
@@ -3231,7 +3231,7 @@ pub fn micro_usd_stated(written: &str) -> Result<u64, String> {
 /// The run's tokens, totalled over the four counts a `usage` object carries.
 ///
 /// A key the wire wrote as `null` contributes nothing and does not make the total absent: that is
-/// the same reading `protocol trace check` gives it — a count nobody stated is not a zero, and a
+/// the same reading `aep observe trace check` gives it — a count nobody stated is not a zero, and a
 /// total over the counts that were stated is what the matrix reports.
 pub fn tokens_of(ended: &serde_json::Value) -> Option<u64> {
     let usage = ended.get("usage")?;
@@ -3272,7 +3272,7 @@ pub fn stream_for(events: Vec<u8>, redact: bool, cwd: Option<&Path>) -> Vec<u8> 
 pub struct Products {
     /// The `eval.run-manifest/1` document.
     pub manifest: String,
-    /// The `trace-report/1` record `protocol trace check --format json` writes.
+    /// The `trace-report/1` record `aep observe trace check --format json` writes.
     pub report: String,
     /// What the run cost, for the budget, where its stream stated one.
     pub cost_micro_usd: Option<u64>,
@@ -3320,7 +3320,7 @@ impl Plan {
     }
 }
 
-/// Turns a recorded stream into the pair `protocol eval matrix` reads.
+/// Turns a recorded stream into the pair `aep drive eval matrix` reads.
 ///
 /// **The whole ingest half of the runner, and nothing in it spawns anything.** That is what makes
 /// the pipeline testable end to end for nothing: `--stream` reaches this function with bytes
@@ -3471,7 +3471,7 @@ pub fn manifest_text(
 
 // --- the verb -------------------------------------------------------------------------------------
 
-/// The arguments of `protocol eval run`.
+/// The arguments of `aep drive eval run`.
 #[derive(Debug, Args)]
 pub struct RunArgs {
     /// A case directory — one holding a `case.yaml`. Repeatable.
@@ -3486,7 +3486,7 @@ pub struct RunArgs {
     /// Which arm this run belongs to.
     ///
     /// `driven` and `native` are refused for a spawn and accepted for `--stream`: a driven run is
-    /// launched by `protocol drive run` and a native run by `b10x-harness`, and this verb reads the
+    /// launched by `aep drive run` and a native run by `b10x-harness`, and this verb reads the
     /// stream each of them wrote.
     ///
     /// The word is also the run's enforcement model, because that is the only label a matrix cell
@@ -3512,7 +3512,7 @@ pub struct RunArgs {
     pub stream: Option<PathBuf>,
     /// When the run was observed, as a date or epoch milliseconds.
     ///
-    /// Required, and deliberately not defaulted to now as `protocol trace evidence` does. The
+    /// Required, and deliberately not defaulted to now as `aep observe trace evidence` does. The
     /// difference is what the document is for: an evidence record is minted by the process that
     /// performed the observation, and a manifest is a committed document that must assemble to the
     /// same bytes twice. A clock in it would make every re-ingest a diff.
@@ -3565,14 +3565,14 @@ pub struct RunArgs {
     pub model: Option<String>,
     /// Cite event indices and digests only in the record beside each run.
     ///
-    /// Opt-in, exactly as `protocol trace check --redact` is and for the same reason — a report is
+    /// Opt-in, exactly as `aep observe trace check --redact` is and for the same reason — a report is
     /// most useful with its evidence visible. Every record committed to this repository is written
     /// with it, because a report that quotes a transcript is not a thing to publish.
     #[arg(long)]
     pub redact: bool,
 }
 
-/// `protocol eval run --stream FILE`: the runner minus the spawn.
+/// `aep drive eval run --stream FILE`: the runner minus the spawn.
 ///
 /// Split out of [`run_arm`] because it shares none of that function's machinery — no binary, no
 /// live flag, no cap, no working tree — and because a reader looking for *what happens for free*
@@ -3652,7 +3652,7 @@ pub fn launched_elsewhere(args: &RunArgs) -> Result<()> {
 
 /// Refuses a plugin arm whose treatment was not named explicitly, by either mechanism.
 ///
-/// Invariant 12 unchanged and widened by one word: no repository-local fallback chooses a plugin,
+/// Invariant 11 unchanged and widened by one word: no repository-local fallback chooses a plugin,
 /// and *a plugin* is now either a directory on this machine or a pinned marketplace coordinate.
 /// Both are the operator's explicit authority; neither is guessed from a path under this checkout.
 pub fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Result<()> {

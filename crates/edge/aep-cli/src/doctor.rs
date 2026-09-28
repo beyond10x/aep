@@ -86,7 +86,7 @@ pub(crate) struct DoctorArgs {
     /// A plugin directory to check for a manifest. Repeatable.
     ///
     /// Given directories are the whole list; `AEP_DRIVE_PLUGIN_DIR` supplies one only when none is
-    /// given, which is the rule `aep drive` follows and invariant 12 requires. Nothing here guesses
+    /// given, which is the rule `aep drive` follows and invariant 11 requires. Nothing here guesses
     /// a path under the checkout.
     #[arg(long)]
     plugin_dir: Vec<PathBuf>,
@@ -598,7 +598,7 @@ fn reaches_a_network(plan: &Plan) -> bool {
 
 /// Does each plugin directory the operator named carry a manifest?
 ///
-/// The list is built by exactly the rule `aep drive` uses, and invariant 12 is why: named
+/// The list is built by exactly the rule `aep drive` uses, and invariant 11 is why: named
 /// directories are the whole list, `AEP_DRIVE_PLUGIN_DIR` supplies one only when none is named, and
 /// nothing falls back to a path inside the checkout. A preflight that reported on a plugin
 /// directory the driver would not load would be describing a different run.
@@ -746,7 +746,7 @@ mod tests {
 
     /// The tag list is filtered by shape, and the shape is what decides which tag is *newest*.
     ///
-    /// The mutation invariant 15 asks for is in the second half: a filter that accepted everything
+    /// The mutation invariant 14 asks for is in the second half: a filter that accepted everything
     /// would answer `v0.42.0`, which sorts above `0.41.0` under `-v:refname` and is not a release
     /// tag of this convention at all.
     #[test]

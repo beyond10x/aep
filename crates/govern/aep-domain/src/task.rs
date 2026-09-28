@@ -388,7 +388,7 @@ impl Task {
     /// [`RequirementContext::task_artifacts`](crate::requirement::RequirementContext::task_artifacts)
     /// with it, so a requirement declaring
     /// [`RelationTarget::Task`](crate::requirement::RelationTarget::Task) counts only artifacts
-    /// whose edge lands here; `protocol specification evidence` selects the document it writes a
+    /// whose edge lands here; `aep observe specification evidence` selects the document it writes a
     /// record about with the same set, so the verb cannot decide a specification the guard it
     /// serves would refuse.
     ///

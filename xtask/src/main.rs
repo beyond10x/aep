@@ -293,9 +293,9 @@ fn main() -> Result<()> {
 ///
 /// # The consequence for a person
 ///
-/// `protocol --version` prints `CARGO_PKG_VERSION`, which is the workspace version. If that number
+/// `aep --version` prints `CARGO_PKG_VERSION`, which is the workspace version. If that number
 /// does not move with the releases, every build of this tool reports the same string for ever — and
-/// somebody running an installed `protocol` from three weeks ago has no way to find out. That is
+/// somebody running an installed `aep` from three weeks ago has no way to find out. That is
 /// not hypothetical: on 2026-08-26 an installed binary predating the store journal silently wrote
 /// **no journal entries** for six status moves, while printing the same `0.1.0` the current build
 /// printed. The moves happened, the record did not, and nothing said so.
@@ -354,7 +354,7 @@ fn newest_release_tag(root: &Path) -> Result<String> {
         })
 }
 
-/// The `[workspace.package] version` the manifest declares — what `protocol --version` prints.
+/// The `[workspace.package] version` the manifest declares — what `aep --version` prints.
 fn workspace_version(root: &Path) -> Result<String> {
     let manifest =
         fs::read_to_string(root.join("Cargo.toml")).context("reading the workspace manifest")?;
@@ -373,7 +373,7 @@ fn version_check(root: &Path) -> Result<()> {
     if declared != newest {
         bail!(
             "the workspace version is `{declared}` and the newest release tag is `{newest}`.\n\
-             `protocol --version` prints the workspace version, so while these disagree the binary \
+             `aep --version` prints the workspace version, so while these disagree the binary \
              cannot say which build it is — which is how a stale install writes nothing and looks \
              like it worked.\n\
              Set `[workspace.package] version` to `{newest}`, or cut the tag the version expects."
@@ -617,7 +617,7 @@ fn release_asset_text(release: &str) -> Result<()> {
         "ref: ${{ needs.provenance.outputs.commit }}",
         "cargo build --release --locked -p aep-cli --target ${{ matrix.target }}",
         "target/${TARGET}/release/aep",
-        "target/${TARGET}/release/protocol",
+        "target/${TARGET}/release/aep",
         "actions/upload-artifact@",
         "actions/download-artifact@",
         "SHA256SUMS",
@@ -687,7 +687,7 @@ fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
 ///
 /// Two kernels compiled into one workspace means a story that says *"the runtime does X"* is about
 /// one of them and silent about the other. That was the state on 2026-08-28: `aep-backend-markdown`
-/// pinned `entity-core` at `0.5.2` — the kernel that decides every `protocol artifact move` — and
+/// pinned `entity-core` at `0.5.2` — the kernel that decides every `aep plan artifact move` — and
 /// `aep-backend-sqlite` pinned `0.8.0`, four releases on, with fixes to the store the markdown
 /// side's kernel predated. `cargo tree -i entity-core` answered *"specification is ambiguous"*, and
 /// nothing in the gate noticed for two releases.
@@ -761,7 +761,7 @@ fn deps(root: &Path) -> Result<()> {
     if !duplicated.is_empty() {
         bail!(
             "`entity-runtime` is compiled into this workspace at two versions:\n{}\n\
-             One kernel decides every `protocol artifact move` and another sits under the SQLite \
+             One kernel decides every `aep plan artifact move` and another sits under the SQLite \
              backend, so a claim about \"the runtime\" is about one of them and silent about the \
              other. Every `entity-*` dependency must name the same tag \
              (`crates/plan/aep-backend-markdown/Cargo.toml`, \
@@ -2635,7 +2635,7 @@ mod layout_tests {
 
     /// The guard of the guard: a crate one level deeper than an area is found, and reported.
     ///
-    /// `AGENTS.md` invariant 15 — break the guarded condition, observe the named failure. The
+    /// `AGENTS.md` invariant 14 — break the guarded condition, observe the named failure. The
     /// mutation is a manifest at `crates/<area>/<group>/<crate>`, which is exactly what the
     /// immediate-children scan this replaced could not see.
     #[test]
@@ -2723,10 +2723,9 @@ mod layout_tests {
     /// `story:profile-and-cli-crates-named-after-aep`: the two profile crates were named after the
     /// three-letter acronyms of the protocols they profile, which read as sibling products, and the
     /// CLI crate carried the retired command's name. What the rename does **not** touch is asserted
-    /// here beside it, because that is the half a rename gets wrong: the crate builds two binaries
-    /// called `aep` and `protocol`, and `command_equivalence.rs` (invariant 10) compares them byte
-    /// for byte. The YAML protocol ids `adp/1` and `aop/1` are wire ids and are not crate names, so
-    /// nothing here looks at them.
+    /// here beside it, because that is the half a rename gets wrong: the crate builds one binary,
+    /// `aep`, and the retired `protocol` alias stays retired. The YAML protocol ids `adp/1` and
+    /// `aop/1` are wire ids and are not crate names, so nothing here looks at them.
     ///
     /// The retired names are listed because nothing in a tree can derive what a crate used to be
     /// called. The list is not what enforces the rename, though: the general rules are
@@ -2789,16 +2788,18 @@ mod layout_tests {
             "these name a crate the rename retired: {findings:?}"
         );
 
-        // What the rename must not have changed: the two binaries, at the renamed crate.
+        // What the rename must not have changed: the one binary, at the renamed crate — and the
+        // retired `protocol` alias is not built again.
         let cli = std::fs::read_to_string(root.join("crates/edge/aep-cli/Cargo.toml"))
             .expect("reading the CLI manifest");
-        for binary in ["protocol", "aep"] {
-            assert!(
-                cli.contains(&format!("name = \"{binary}\"")),
-                "`crates/edge/aep-cli` no longer builds `{binary}`, and both binaries are a \
-                 published surface (`AGENTS.md` invariant 10)"
-            );
-        }
+        assert!(
+            cli.contains("name = \"aep\""),
+            "`crates/edge/aep-cli` no longer builds `aep`, which is the published command"
+        );
+        assert!(
+            !cli.contains(concat!("name = \"", "protocol", "\"")),
+            "`crates/edge/aep-cli` builds the retired `protocol` alias again; the command has one name"
+        );
     }
 
     #[test]

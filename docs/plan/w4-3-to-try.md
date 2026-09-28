@@ -15,7 +15,7 @@ that walks `drivers/development/default.yaml` (the cargo map) rather than `devel
 | task document | `.engineering/task-w4-3.yaml` |
 | map | `drivers/development/default.yaml` |
 | profile | `development.driven` |
-| the work | one real defect — `--take-lock` builds a `StolenLock`, prints it and never persists it, so `protocol drive status` has a printer for a field that is always `None` and **the theft is not in the record** — plus the holder's cursor state in the lock refusal, and three assertions |
+| the work | one real defect — `--take-lock` builds a `StolenLock`, prints it and never persists it, so `aep drive status` has a printer for a field that is always `None` and **the theft is not in the record** — plus the holder's cursor state in the lock refusal, and three assertions |
 | blast radius | `crates/drive/aep-driver/` and `crates/edge/aep-cli/src/drive.rs` |
 
 The candidate changed on the day: this plan named `story:retry-budgets`, and the audit found it
@@ -27,7 +27,7 @@ stated default — *mechanical acceptance, blast radius one crate*.
 | was in the way | now |
 |---|---|
 | the coverage pre-flight refused, naming `contract_result`, `property_test_result`, `verification`, `specification` | names **none**; the run starts with no `--allow-evidence-gap` (`story:evidence-producers-for-the-driven-map`) |
-| `protocol drive` refused the store — *cannot be trusted* — over one declared cross-repository edge | the driver reads the workspace manifest the way `validate` does |
+| `aep drive` refused the store — *cannot be trusted* — over one declared cross-repository edge | the driver reads the workspace manifest the way `validate` does |
 | the two previous runs' step maps could not mint what their plans demanded | four producers, each `producer: verifier`, minted by a `command` step the driver ran |
 
 Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked in
@@ -40,7 +40,7 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
    ```console
    cd ~/beyond10x/aep
    cargo build -p aep-cli --bin protocol
-   ./target/debug/protocol drive run \
+   ./target/debug/aep drive run \
      --task .engineering/task-w4-3.yaml \
      --map drivers/development/default.yaml \
      --pause-on-approval --max-iterations 0
@@ -54,7 +54,7 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
    answer — approving the specification, in `establish_verifiers`:
 
    ```console
-   ./target/debug/protocol drive run \
+   ./target/debug/aep drive run \
      --task .engineering/task-w4-3.yaml \
      --map drivers/development/default.yaml \
      --pause-on-approval
@@ -63,8 +63,8 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
 3. Answer the approval, then resume:
 
    ```console
-   ./target/debug/protocol drive status
-   ./target/debug/protocol drive resume
+   ./target/debug/aep drive status
+   ./target/debug/aep drive resume
    ```
 
 4. Whatever happens is the result. **A run that wedges is a recorded result** — where it stopped,
@@ -75,7 +75,7 @@ Both earlier runs are recorded and neither reached `complete`: `W4-1/1` blocked 
 
 ## Known risk, before you spend anything
 
-`protocol specification evidence` discovery: in this store two specifications are approved and
+`aep observe specification evidence` discovery: in this store two specifications are approved and
 neither relates to the task's `derived_from`, so that step refuses and submits nothing rather than
 guessing — correct, and it means the run may block at the specification guard until the run's own
 specification is the one in force. The join is `task.artifacts.derived_from` against the

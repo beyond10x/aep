@@ -1,6 +1,6 @@
 //! Finding and loading a project.
 //!
-//! An adopting team should be able to type `protocol evaluate` in their repository and get an
+//! An adopting team should be able to type `aep govern evaluate` in their repository and get an
 //! answer. Everything needed to do that is in `.engineering/`, and this module is what finds it.
 //!
 //! ```text

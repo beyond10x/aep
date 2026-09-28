@@ -104,7 +104,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             r"rg 'x > y' crates",
             r"grep -n '$(whoami)' file",
             r"grep -n '`date`' file",
-            "protocol artifact list",
+            "aep plan artifact list",
         ] {
             assert_eq!(
                 composes(one_invocation),
@@ -114,8 +114,8 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         }
 
         for composed in [
-            "protocol artifact list && protocol artifact graph",
-            "protocol artifact list | head",
+            "aep plan artifact list && aep plan artifact graph",
+            "aep plan artifact list | head",
             "grep -rn x . > out.txt",
             "cat a; rm b",
             r#"echo "$(whoami)""#,
@@ -137,7 +137,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         std::fs::create_dir_all(&directory).expect("the scratch directory is writable");
         directory
     }
-/// A `trace_conformance` document of the shape `protocol trace evidence` writes.
+/// A `trace_conformance` document of the shape `aep observe trace evidence` writes.
     const TRACE_RECORD: &str = "\
 - kind: trace_conformance
   specification: driven-eval/honest-step
@@ -197,7 +197,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         let outcome = read_record(
             mapping.record.as_deref().expect("a declared record"),
             &mapping,
-            "protocol trace evidence",
+            "aep observe trace evidence",
             &context,
         );
         let StepOutcome::Observed(submission) = outcome else {
@@ -241,7 +241,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
 /// `{task}` is the document **this run** was started from, and a run started from none says so.
     ///
     /// The two halves are the two things the placeholder has to get right. A driven run reaches
-    /// `protocol specification evidence --task {task}` holding the document the operator named —
+    /// `aep observe specification evidence --task {task}` holding the document the operator named —
     /// not the one the project names, which is the discovery this closes: run `W4-3/1` bound that
     /// verb to `task.yaml` while the engine's cursor said something else. And a run whose task was
     /// never read out of a file produces D5's `Unknown`, rather than a command line carrying the
@@ -376,7 +376,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         let directory = scratch("absent-record");
         let mapping = EvidenceMapping {
             kind: EvidenceKind::Specification,
-            verifier: Verifier::ExternalTool("protocol".parse().expect("a tool reference")),
+            verifier: Verifier::ExternalTool("aep".parse().expect("a tool reference")),
             suite: None,
             subject: None,
             tool: None,
@@ -403,7 +403,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             read_record(
                 mapping.record.as_deref().expect("a declared record"),
                 &mapping,
-                "protocol specification evidence",
+                "aep observe specification evidence",
                 &context,
             )
         };
@@ -438,7 +438,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
     ///
     /// **The defect this is about is one variable wide.** `command_actor()` stamped
     /// `human:<$USER>` on every store write, so a driven session running
-    /// `protocol artifact move <spec> approved` was journalled as the operator's own move and
+    /// `aep plan artifact move <spec> approved` was journalled as the operator's own move and
     /// nothing in the record could tell an agent's write from a person's. The launch declares who
     /// the session is instead.
     ///
@@ -535,7 +535,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
              submit nothing"
         );
     }
-/// `RunArgs` as `protocol drive run` parses them, so a refusal here is clap's and not ours.
+/// `RunArgs` as `aep drive run` parses them, so a refusal here is clap's and not ours.
     #[derive(Debug, clap::Parser)]
     struct RunProbe {
         #[command(flatten)]
@@ -608,13 +608,13 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             "only the execution family `<task>.<ordinal>` is the run's own"
         );
     }
-/// A `command` step that says `protocol` is spawned as the binary this process **is**.
+/// A `command` step that says `aep` is spawned as the binary this process **is**.
     ///
     /// The unit half of the rule: keyed on the file name and on nothing else, so a path spelling
     /// of the same request is the same request, and every other program a map can name is left
     /// exactly where it was. The end-to-end half — that the substituted binary really is the one
     /// that answers, proved by a version string only this build prints — is
-    /// `a_command_step_that_says_protocol_runs_the_build_that_is_driving_it` in
+    /// `a_command_step_that_says_aep_runs_the_build_that_is_driving_it` in
     /// `tests/drive_cli.rs`.
     #[test]
     fn a_command_step_naming_this_cli_is_resolved_to_the_binary_this_process_is() {
@@ -622,9 +622,9 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         let expected = executable.display().to_string();
 
         for spelling in [
-            "protocol",
-            "/usr/local/bin/protocol",
-            "./target/debug/protocol",
+            "aep",
+            "/usr/local/bin/aep",
+            "./target/debug/aep",
         ] {
             let resolved = resolve_program(spelling);
             assert_eq!(
@@ -642,7 +642,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             );
         }
 
-        for other in ["cargo", "bash", "git", "/bin/sh", "protocolol", "sh"] {
+        for other in ["cargo", "bash", "git", "/bin/sh", "protocol", "aepa", "sh"] {
             let untouched = resolve_program(other);
             assert_eq!(
                 untouched.resolution,
@@ -663,7 +663,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
     /// also the honest scope of this test, and it is why the `PathFallback` note above exists: on
     /// the machine where this refusal is wrong to fire, the step still says what it did.
     #[test]
-    fn a_driver_that_cannot_name_itself_refuses_a_map_whose_commands_say_protocol() {
+    fn a_driver_that_cannot_name_itself_refuses_a_map_whose_commands_say_aep() {
         let elsewhere = aep_schema::parse::step_map(
             "format: aep.driver-steps/1\nid: test/elsewhere\nworkflow: test/linear/1\n\
              states:\n  implement:\n    steps:\n      - kind: command\n        run: [cargo, test]\n",
@@ -673,15 +673,15 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         assert_eq!(
             protocol_command_steps(&elsewhere),
             0,
-            "a map that names no `protocol` is not this check's business"
+            "a map that names no `aep` is not this check's business"
         );
         assert!(protocol_command_preflight(&elsewhere).is_none());
 
         let ours = aep_schema::parse::step_map(
             "format: aep.driver-steps/1\nid: test/ours\nworkflow: test/linear/1\n\
              states:\n  implement:\n    steps:\n      - kind: command\n        run: [cargo, test]\n\
-             \x20     - kind: command\n        run: [protocol, artifact, validate]\n\
-             \x20     - kind: command\n        run: [/usr/local/bin/protocol, property, evidence]\n",
+             \x20     - kind: command\n        run: [aep, plan, artifact, validate]\n\
+             \x20     - kind: command\n        run: [/usr/local/bin/aep, property, evidence]\n",
             None,
         )
         .expect("the map validates");
@@ -721,7 +721,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         let absent = protocol_command_refusal(1, None)
             .expect("nothing to fall back to is refused for the same reason");
         assert!(
-            absent.contains("no `protocol` on that `PATH` at all"),
+            absent.contains("no `aep` on that `PATH` at all"),
             "and says that is what it found rather than quoting a version it does not have: \
              {absent}"
         );

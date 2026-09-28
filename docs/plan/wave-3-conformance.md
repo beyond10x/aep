@@ -54,9 +54,9 @@ Conformance **levels** (§85): `core` (identity, commands, idempotency, concurre
 `audited` (core plus audit, correlation, causation, provenance), `full` (everything). A backend
 states the level it claims and the suite proves or refutes it.
 
-## W3.3 `protocol conformance`
+## W3.3 `aep plan conformance`
 
-`protocol conformance --level core|audited|full` runs the suites against the in-memory backend, and
+`aep plan conformance --level core|audited|full` runs the suites against the in-memory backend, and
 `--backend <url>` against a remote one once an adapter exists. Output: one line per check, exit 1 on
 any failure.
 

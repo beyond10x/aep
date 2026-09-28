@@ -201,7 +201,7 @@ pub struct PlanningFrontmatter {
     /// Records of the same work in systems AEP does not own, such as `jira:DEV-630`.
     ///
     /// **The join a body paragraph cannot carry.** A team adopting this already has a tracker, and
-    /// a ticket id written into prose is invisible to `protocol artifact list` and unchecked by
+    /// a ticket id written into prose is invisible to `aep plan artifact list` and unchecked by
     /// anything. Here it is a field, so it can be filtered on and refused when it is malformed.
     pub refs: BTreeSet<ExternalRef>,
     /// Its outgoing edges.
@@ -222,7 +222,7 @@ pub struct PlanningFrontmatter {
     /// **The join between a blocker and an evidence gate.** A rung asks for a `test_result`; the
     /// job that would produce one cannot mint a read-scope token; so the record of *why the fact
     /// does not exist* is a `credential-blocker` that `blocks` the work and names `test_result`
-    /// here. `protocol artifact explain` reads it, which is what makes the missing record
+    /// here. `aep plan artifact explain` reads it, which is what makes the missing record
     /// answerable out of the store instead of out of somebody's memory.
     ///
     /// Only meaningful beside a `blocks` edge, and graph validation says so.
@@ -243,7 +243,7 @@ pub struct PlanningFrontmatter {
     /// Every key this format does not name, kept so a round trip loses nothing.
     ///
     /// A planning file is a file people edit. Somebody's board tool will write `sprint: 42` into
-    /// one, and the first time `protocol artifact move` rewrites the file that key has to still be
+    /// one, and the first time `aep plan artifact move` rewrites the file that key has to still be
     /// there — otherwise the tool that wrote it and this one cannot both be used, and this one is
     /// the one that gets deleted.
     pub extra: BTreeMap<String, Node>,

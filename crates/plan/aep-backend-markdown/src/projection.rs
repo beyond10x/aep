@@ -31,7 +31,7 @@
 //!   `MoveStatus` is exempt: it carries a decision the engine already took against the ladder and
 //!   the evidence presented.
 //! * Every placement carries, under the event payload's `change`, the [`journal::Change`] this
-//!   store's journal spells the write as — so `protocol artifact history` reads a move made through
+//!   store's journal spells the write as — so `aep plan artifact history` reads a move made through
 //!   the provider exactly as it reads one made before it.
 
 use aep_backend_entity::{Placement, Projection, Record, Snapshot};
@@ -696,7 +696,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
 
     /// Nothing beside the documents: a plan's relations live in frontmatter, its observations in
     /// the journal as events, and its audit trail is the journal — which is the one this store had
-    /// before there was a contract, and the one `protocol artifact history` reads.
+    /// before there was a contract, and the one `aep plan artifact history` reads.
     fn records(
         &mut self,
         _store: &S,
@@ -710,7 +710,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
 
 /// The document a contract entity stands for, for a store that keeps no documents.
 ///
-/// `protocol artifact list`, `board`, `graph` and `validate` read a plan as documents. A SQLite or
+/// `aep plan artifact list`, `board`, `graph` and `validate` read a plan as documents. A SQLite or
 /// Postgres plan has none, so this builds the document the markdown projection *would* have written
 /// for the entity: the frontmatter fields the entity body carries, its edges, its prose under
 /// [`BODY_KEY`], its revision — the same mapping [`MarkdownProjection`] applies on a write, so the

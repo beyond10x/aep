@@ -7,7 +7,7 @@ live run, and the rest of this file is what that means.
 | file | what it is |
 |---|---|
 | `claude-plugin-attested.jsonl` | arm **b** on Claude Code: an observe-mode session with the injected plugin attested in `session.started`, **source and digest** |
-| `claude-driven-attested.jsonl` | arm **c** on Claude Code: a step walk, the same plugin attested, written by `protocol drive run` rather than by this verb |
+| `claude-driven-attested.jsonl` | arm **c** on Claude Code: a step walk, the same plugin attested, written by `aep drive run` rather than by this verb |
 | `codex-plugin-attested.jsonl` | arm **b** on Codex, on a wire whose terminal event prices nothing |
 | `dry-run.matrix.json`, `dry-run.matrix.txt` | what those three plus one corpus transcript assemble into, asserted byte for byte |
 
@@ -50,7 +50,7 @@ run given*, and only one of the two rows answers it from something that knows.
 `the_digest_is_read_from_the_instruments_row_and_not_from_the_vendors_echo` asserts it by taking the
 vendor echo away entirely and requiring the manifest to be unchanged.
 
-`protocol eval run` writes that digest into the run manifest's `plugin_digest` **verbatim** — it
+`aep drive eval run` writes that digest into the run manifest's `plugin_digest` **verbatim** — it
 does not hash the directory on disk, because a digest computed here would attest bytes the session
 never saw, and an edited plugin would then be indistinguishable from the shipped one.
 `the_plugin_digest_in_the_manifest_is_the_one_the_session_attested_byte_for_byte` reads the expected
@@ -81,7 +81,7 @@ mechanical:
 | stream | derivation |
 |---|---|
 | `claude-plugin-attested.jsonl` | `step.entered` and `step.left` removed and `seq` renumbered from 1 — an observe-mode arm-a/b session is not a step walk and mints no frame — `run` and `session_id` changed, `hermetic.decisions: observe`, and `hermetic.installed_plugins` given one entry mirroring the vendor echo plus a `digest` |
-| `claude-driven-attested.jsonl` | the step events **kept**, `run` and `session_id` changed, `hermetic.decisions: ask` (which is what `protocol drive` passes), and the same instrument row |
+| `claude-driven-attested.jsonl` | the step events **kept**, `run` and `session_id` changed, `hermetic.decisions: ask` (which is what `aep drive` passes), and the same instrument row |
 | `codex-plugin-attested.jsonl` | as `claude-plugin-attested.jsonl`, then `adapter`, `harness_version` and the offered surface changed to Codex's; **`model: null`**, which is what the live pilot run showed Codex's wire actually states; and the a9 keys that wire does not fill written as explicit `null`: `total_cost_usd`, `thinking_tokens`, `iterations`, `speed`, `service_tier`, `cost_usd` |
 
 The two corpus transcripts the runner ingests gained the instrument's row too:
@@ -110,10 +110,10 @@ When a paid sweep produces real streams they replace these **in place** — same
 same flags. `dry-run.matrix.json` is regenerated with
 
 ```console
-protocol eval run --case <case> --arm <arm> --harness <harness> \
+aep drive eval run --case <case> --arm <arm> --harness <harness> \
     --stream <stream> --observed-at 2026-08-23 --out <dir> --redact
-protocol eval matrix <dir> --format json > crates/edge/aep-cli/fixtures/eval-run/dry-run.matrix.json
-protocol eval matrix <dir>                > crates/edge/aep-cli/fixtures/eval-run/dry-run.matrix.txt
+aep drive eval matrix <dir> --format json > crates/edge/aep-cli/fixtures/eval-run/dry-run.matrix.json
+aep drive eval matrix <dir>                > crates/edge/aep-cli/fixtures/eval-run/dry-run.matrix.txt
 ```
 
 once per run, in the order `REPLAYS` declares in `crates/edge/aep-cli/tests/eval_dry_run.rs`.

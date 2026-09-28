@@ -32,7 +32,7 @@
 //!
 //! # The policy this scan feeds is the caller's, and that split is deliberate
 //!
-//! `protocol drive` refuses to start headless when this returns anything, printing every entry with
+//! `aep drive` refuses to start headless when this returns anything, printing every entry with
 //! the document that asked for it; `--pause-on-approval` converts the run to *run until the first
 //! approval, then persist and exit 0*. That flag changes what a green exit **means** — without it
 //! exit 0 is *finished*, with it *finished or waiting* — so a caller has to choose to be told, and

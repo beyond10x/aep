@@ -1,4 +1,4 @@
-//! `protocol specification evidence` — the requirement-by-requirement verdict on a specification,
+//! `aep observe specification evidence` — the requirement-by-requirement verdict on a specification,
 //! decided against the evidence a run has admitted.
 //!
 //! # The gap this closes
@@ -102,7 +102,7 @@ use crate::Format;
 
 /// The verifier class this verb signs as.
 ///
-/// An external tool named `protocol`, the same spelling `drivers/development/checks.yaml` already
+/// An external tool named `aep`, the same spelling `drivers/development/checks.yaml` already
 /// uses for this binary's own verbs. Not `artifact-validator`, however well that describes the
 /// method: `EvidenceKind::Specification::default_verifiers` names `test-runner` and `human-review`,
 /// and `StepMap::check_run` refuses a **named** verifier the protocol does not join to the kind, so
@@ -115,7 +115,7 @@ use crate::Format;
 /// could name itself the verifier would make the record's independence an input to the record.
 fn producer() -> Verifier {
     Verifier::ExternalTool(
-        aep_domain::ids::ToolRef::new("protocol").expect("`protocol` is a tool reference"),
+        aep_domain::ids::ToolRef::new("aep").expect("`aep` is a tool reference"),
     )
 }
 
@@ -133,7 +133,7 @@ pub(crate) enum SpecificationCommand {
     Evidence(EvidenceArgs),
 }
 
-/// The arguments of `protocol specification evidence`.
+/// The arguments of `aep observe specification evidence`.
 #[derive(Debug, Args)]
 pub(crate) struct EvidenceArgs {
     /// The planning store, as a markdown directory.
@@ -164,7 +164,7 @@ pub(crate) struct EvidenceArgs {
     /// Where to write the document. Without it, it goes to standard output.
     #[arg(long)]
     out: Option<PathBuf>,
-    /// How to write it. Both are read by `protocol evaluate --evidence`.
+    /// How to write it. Both are read by `aep govern evaluate --evidence`.
     #[arg(long, value_enum, default_value_t = Format::Yaml)]
     format: Format,
 }
@@ -409,7 +409,7 @@ fn choose(
                      record about work nobody said this run was about. {} (from {}). \
                      `--artifact` names which specification to decide and does not lift the \
                      binding; point `--task` at the task this specification is about, or give it \
-                     the edge — `protocol artifact relate {id} specifies <the artifact the task \
+                     the edge — `aep plan artifact relate {id} specifies <the artifact the task \
                      is derived from>`",
                     rule.relation.as_ref().expect("the rule binds"),
                     binding.work_line(),
@@ -488,7 +488,7 @@ fn nothing_selected(store: &Path, artifacts: &[Artifact], binding: Option<&Bindi
         "no specification in {} is `{}` — declared: {}; {} (from {}). This is the guard's own \
          rule, so a record about any of these would be one `spec-driven.before_implementation` \
          refuses. A specification of this task carries `specifies:` the artifact the task is \
-         derived from; `protocol artifact relate <id> specifies <target>` writes that edge, and an \
+         derived from; `aep plan artifact relate <id> specifies <target>` writes that edge, and an \
          `operator` step is where a person approves the document",
         store.display(),
         specification_of_this_task(),
@@ -747,7 +747,7 @@ fn decide(found: &[Requirement], facts: &FactStore) -> Vec<String> {
     unsatisfied
 }
 
-/// `protocol specification evidence`
+/// `aep observe specification evidence`
 fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
     let document = select(&args.store, args.artifact.as_deref(), args.task.as_deref())?;
     let snapshot = args.snapshot.as_deref().map(read_snapshot).transpose()?;
@@ -789,7 +789,7 @@ fn invocation(args: &EvidenceArgs) -> String {
     use std::fmt::Write as _;
 
     let mut line = format!(
-        "protocol specification evidence --store {}",
+        "aep observe specification evidence --store {}",
         args.store.display()
     );
     if let Some(path) = &args.snapshot {

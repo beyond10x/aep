@@ -209,7 +209,7 @@ pub struct ConformanceReport {
     /// What the suites ran against, when the caller said — `sqlite (/path/plan.sqlite3)`, say.
     ///
     /// A report that does not name what it ran against is a report somebody will attribute to the
-    /// wrong thing: `protocol conformance` was hard-coded to the in-memory backend for two releases
+    /// wrong thing: `aep plan conformance` was hard-coded to the in-memory backend for two releases
     /// while a story ticked "runs against the markdown store" (`story:conformance-verb-takes-a-backend`).
     /// Absent when nobody said, never defaulted to a guess.
     #[serde(default, skip_serializing_if = "Option::is_none")]

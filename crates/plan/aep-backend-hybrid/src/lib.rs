@@ -17,10 +17,10 @@
 //!
 //! # Divergences survive the process
 //!
-//! `protocol artifact` runs one process per verb. A divergence recorded by a write lives in the
+//! `aep plan artifact` runs one process per verb. A divergence recorded by a write lives in the
 //! [`Hybrid`] that saw it, so it is written to [`DIVERGENCES`] beside the plan after every command
-//! and handed back with [`Hybrid::remember`] on the next open — where `protocol artifact
-//! divergences` lists it and `protocol artifact catch-up` ([`catch_up`]) replays it.
+//! and handed back with [`Hybrid::remember`] on the next open — where `aep plan artifact
+//! divergences` lists it and `aep plan artifact catch-up` ([`catch_up`]) replays it.
 //!
 //! # What a hybrid plan reads
 //!

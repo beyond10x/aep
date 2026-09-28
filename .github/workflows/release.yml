@@ -1,5 +1,5 @@
 # Cuts a GitHub Release for every version tag: source checks and native builds run concurrently,
-# then publish `aep` and `protocol` for Linux and macOS with the archives, a SHA256SUMS
+# then publish `aep` for Linux and macOS with the archives, a SHA256SUMS
 # file, and the tag's own CHANGELOG section. Manual dispatch exists only to backfill an already-cut
 # annotated tag; a normal release is always driven by the tag push.
 #
@@ -113,11 +113,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$("target/${TARGET}/release/aep" --version)" = "aep ${VERSION}"
-          test "$("target/${TARGET}/release/protocol" --version)" = "aep ${VERSION}"
           name="aep-${VERSION}-${TARGET}"
           mkdir -p "dist/${name}"
           cp LICENSE README.md CHANGELOG.md "dist/${name}/"
-          cp "target/${TARGET}/release/aep" "target/${TARGET}/release/protocol" "dist/${name}/"
+          cp "target/${TARGET}/release/aep" "dist/${name}/"
           tar -C dist -czf "dist/${name}.tar.gz" "${name}"
           rm -r "dist/${name}"
           test -s "dist/${name}.tar.gz"

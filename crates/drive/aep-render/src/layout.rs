@@ -4,7 +4,7 @@
 //!
 //! Decision 3 of the renderer plan: **no `graphviz`, and no layout crate.** A workflow in this
 //! repository has nine states and ten transitions; the four committed ones are chains with a single
-//! retreat. Shelling out to `dot` would put a system package between `protocol workflow render` and
+//! retreat. Shelling out to `dot` would put a system package between `aep govern workflow render` and
 //! a picture — the same argument that keeps the gate off the network — and a layered-graph crate
 //! would buy an ordering heuristic for a graph small enough to have no crossings to remove. What
 //! this module is instead is sixty lines of longest-path layering, and it is enough because the
@@ -13,7 +13,7 @@
 //!
 //! # Determinism is the acceptance criterion, not a nice property
 //!
-//! `protocol workflow render --format svg` has to produce the same bytes twice, because a figure
+//! `aep govern workflow render --format svg` has to produce the same bytes twice, because a figure
 //! that is committed and then re-rendered must not show up in a diff for having chosen a different
 //! iteration order. Every map here is a [`BTreeMap`], every set a [`BTreeSet`], and every tie is
 //! broken by an explicit rule — discovery order first, then the state id — rather than by whatever

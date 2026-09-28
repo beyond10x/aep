@@ -10,9 +10,6 @@
 //! compare output rather than read it: `metaharness` diffs a recorded transcript, the driver's
 //! `checks` map compares a report, and an evaluation matrix is committed byte for byte. A single
 //! extra line on standard error would be invisible in a manual check and would break all three.
-//!
-//! Run against both binaries, because `aep` and `protocol` are one interface (invariant 10) and a
-//! grouping that reached only one of them would be the first thing to break it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -46,8 +43,8 @@ const RUNS: &str = "crates/edge/aep-cli/fixtures/eval-matrix/runs";
 /// One leaf, spelled both ways, with arguments that make it do its work rather than refuse.
 ///
 /// Every case here has a fixture behind it and exercises the leaf's real output. A usage error is
-/// deliberately not among them: clap prints the path it was invoked by, so `Usage: protocol
-/// validate` and `Usage: protocol govern validate` are *supposed* to differ, and a case asserting
+/// deliberately not among them: clap prints the path it was invoked by, so `Usage: aep
+/// validate` and `Usage: aep govern validate` are *supposed* to differ, and a case asserting
 /// otherwise would be asserting that the grouped spelling lies about itself.
 struct Case {
     /// What it is, for the failure message.
@@ -148,11 +145,6 @@ fn the_grouped_path_and_the_flat_spelling_answer_identically_under_aep() {
     every_case_answers_identically(env!("CARGO_BIN_EXE_aep"), "aep");
 }
 
-#[test]
-fn the_grouped_path_and_the_flat_spelling_answer_identically_under_protocol() {
-    every_case_answers_identically(env!("CARGO_BIN_EXE_protocol"), "protocol");
-}
-
 /// The cases are only evidence while they actually run the verb.
 ///
 /// Without this, a fixture that moved would make every case above compare one usage error with
@@ -182,21 +174,20 @@ fn every_case_reaches_its_verb_rather_than_a_usage_error() {
 /// merely marked hidden in a builder.
 #[test]
 fn the_help_a_reader_sees_offers_the_four_areas_and_doctor_and_no_flat_spelling() {
-    for binary in [env!("CARGO_BIN_EXE_aep"), env!("CARGO_BIN_EXE_protocol")] {
-        let help = run(binary, &["--help"]);
-        assert_eq!(help.status.code(), Some(0));
-        let text = String::from_utf8_lossy(&help.stdout).into_owned();
-        let commands = text
-            .lines()
-            .skip_while(|line| !line.starts_with("Commands:"))
-            .skip(1)
-            .take_while(|line| !line.trim().is_empty())
-            .filter_map(|line| line.split_whitespace().next())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            commands,
-            ["govern", "plan", "drive", "observe", "doctor"],
-            "the first level a reader is shown, in {binary}:\n{text}"
-        );
-    }
+    let binary = env!("CARGO_BIN_EXE_aep");
+    let help = run(binary, &["--help"]);
+    assert_eq!(help.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&help.stdout).into_owned();
+    let commands = text
+        .lines()
+        .skip_while(|line| !line.starts_with("Commands:"))
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter_map(|line| line.split_whitespace().next())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        commands,
+        ["govern", "plan", "drive", "observe", "doctor"],
+        "the first level a reader is shown, in {binary}:\n{text}"
+    );
 }

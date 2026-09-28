@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Follow a `protocol drive` run: every state, as it happens, in one command.
+"""Follow a `aep drive` run: every state, as it happens, in one command.
 
     drive-watch                 # newest run under ./.engineering/runs
     drive-watch <repo-or-run>   # a repo, or one run directory
@@ -30,7 +30,7 @@ W = 100
 
 
 def running_projects():
-    """Where a live `protocol drive` is actually working, asked of the process table.
+    """Where a live `aep drive` is actually working, asked of the process table.
 
     The exact answer, and the cheapest: a driver's own working directory is the project it was
     pointed at. Searching for it was the wrong instinct — run from a home directory, or any
@@ -40,7 +40,7 @@ def running_projects():
     found = []
     try:
         listed = subprocess.run(
-            ["pgrep", "-f", "protocol drive run|protocol drive resume"],
+            ["pgrep", "-f", "aep drive run|aep drive resume"],
             capture_output=True, text=True, timeout=10,
         ).stdout.split()
     except (OSError, subprocess.SubprocessError):

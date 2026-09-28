@@ -34,7 +34,7 @@ pub fn render(scene: &Scene) -> String {
     // edits the block by hand loses the edit on the next render and should be told why here.
     let _ = writeln!(
         out,
-        "%% Rendered from `{}` by `protocol govern workflow render --format mermaid`.",
+        "%% Rendered from `{}` by `aep govern workflow render --format mermaid`.",
         scene.reference
     );
     let _ = writeln!(

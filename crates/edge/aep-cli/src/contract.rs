@@ -1,4 +1,4 @@
-//! `protocol contract evidence` — a contract runner's own record, given the envelope the engine
+//! `aep observe contract evidence` — a contract runner's own record, given the envelope the engine
 //! reads.
 //!
 //! The fifth module split, on the criterion the first four took: a verb family with its own input,
@@ -29,7 +29,7 @@
 //! and it is most of the work.
 //!
 //! What a record on standard output does **not** carry is the *envelope* an evidence document
-//! needs: `observed_at` and `producer`. `protocol evaluate --evidence` reads a list of records that
+//! needs: `observed_at` and `producer`. `aep govern evaluate --evidence` reads a list of records that
 //! each state when somebody looked and what produced them, and the runner's object states neither.
 //! So this verb supplies exactly those two fields and nothing else — it does not compute a verdict,
 //! does not touch a count, and does not add a fact.
@@ -41,7 +41,7 @@
 //! would make the record's independence an input to the record.
 //!
 //! `--observed-at` is **required**, and that is the one place this verb is stricter than
-//! `protocol trace evidence`. That verb defaults to now because the check runs in that process, in
+//! `aep observe trace evidence`. That verb defaults to now because the check runs in that process, in
 //! that second. Here the check ran in another process, on another machine, possibly last week, and
 //! the record carries no time of its own — so a default of *now* would be this binary stamping a
 //! freshness it did not witness, and evidence horizons exist precisely to catch that (invariant 7:
@@ -96,7 +96,7 @@
 //! nobody wrote is not an observation.
 //!
 //! What is **not** refused is bad news. A record with `failed: 3` is minted without complaint and
-//! exits `0`, exactly as `protocol trace evidence` writes down a run that gapped: the verdict belongs
+//! exits `0`, exactly as `aep observe trace evidence` writes down a run that gapped: the verdict belongs
 //! in the record, and the engine is what decides on it. The three refusals are about a record that
 //! *asserts nothing*, a record that *cannot describe any run* and a record that *does not say what
 //! it measured* — never about one that reports a failure.
@@ -139,7 +139,7 @@ const PRODUCER: Producer = Producer::Verifier {
 /// **This `contract` is the consumer/provider kind**, the one
 /// `principles/development/contract-testing.yaml` governs: *does the published interface still
 /// behave as its consumers were told?* It is not `aep-contract`, the storage and interaction
-/// contract a backend implements — that question is `protocol conformance`, and the only thing the
+/// contract a backend implements — that question is `aep plan conformance`, and the only thing the
 /// two share is the word.
 #[derive(Debug, Subcommand)]
 pub(crate) enum ContractCommand {
@@ -148,7 +148,7 @@ pub(crate) enum ContractCommand {
     ///
     /// The join the metaharness adapter contract exists for. The runner prints its record;
     /// redirect it to a file and hand the file here, and what comes back is a document
-    /// `protocol evaluate --evidence` reads directly, carrying the counts the runner measured,
+    /// `aep govern evaluate --evidence` reads directly, carrying the counts the runner measured,
     /// `producer: verifier / contract-runner`, and the digest of the bytes it was given.
     ///
     /// Nothing about the record is computed here. This verb adds an envelope and refuses two kinds
@@ -157,7 +157,7 @@ pub(crate) enum ContractCommand {
     Evidence(EvidenceArgs),
 }
 
-/// The arguments of `protocol contract evidence`.
+/// The arguments of `aep observe contract evidence`.
 #[derive(Debug, Args)]
 pub(crate) struct EvidenceArgs {
     /// The record the contract runner emitted: one JSON object in the `contract_result` shape, or
@@ -166,7 +166,7 @@ pub(crate) struct EvidenceArgs {
     /// A path is the better form and stays the one to reach for, because the bytes the evidence
     /// document's provenance digests then exist somewhere a later reader can go and check:
     /// `metaharness conformance claude --contract > claude.json`. `-` is for the pipe the runner is
-    /// already at the end of — `metaharness conformance claude --contract | protocol contract
+    /// already at the end of — `metaharness conformance claude --contract | aep observe contract
     /// evidence --record - --observed-at 2026-08-23` — and it buys the shorter loop at the cost of
     /// that check: the digest still describes what this process was handed, but nothing else holds
     /// those bytes afterwards. The record says which was used, so the two are told apart by reading
@@ -176,12 +176,12 @@ pub(crate) struct EvidenceArgs {
     /// Where to write the document. Without it, it goes to standard output.
     #[arg(long)]
     out: Option<PathBuf>,
-    /// How to write it. Both are read by `protocol evaluate --evidence`.
+    /// How to write it. Both are read by `aep govern evaluate --evidence`.
     #[arg(long, value_enum, default_value_t = Format::Yaml)]
     format: Format,
     /// When the contract run was made, as a date or epoch milliseconds.
     ///
-    /// Required, unlike `protocol trace evidence`'s. See the module documentation: this process did
+    /// Required, unlike `aep observe trace evidence`'s. See the module documentation: this process did
     /// not watch the run, the record carries no time of its own, and a default of *now* would be a
     /// freshness claim nobody made.
     #[arg(long, value_name = "DATE")]
@@ -190,7 +190,7 @@ pub(crate) struct EvidenceArgs {
 
 /// An evidence record, with the envelope this verb supplies.
 ///
-/// Serialises as one entry of the document `protocol evaluate --evidence` reads: the payload's own
+/// Serialises as one entry of the document `aep govern evaluate --evidence` reads: the payload's own
 /// fields under `kind: contract_result`, beside `observed_at`, `producer` and `provenance`. The
 /// producer is not a field the caller can reach — it is [`PRODUCER`].
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -324,7 +324,7 @@ fn read_input(record: &Path) -> Result<String> {
         .with_context(|| format!("reading the record at {}", record.display()))
 }
 
-/// `protocol contract evidence`
+/// `aep observe contract evidence`
 fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {
     let text = read_input(&args.record)?;
     let result = read_record(&text)
@@ -407,7 +407,7 @@ fn digest(bytes: &[u8]) -> String {
 /// the vocabulary of this verb rather than however the caller's shell spelled it.
 fn invocation(args: &EvidenceArgs) -> String {
     format!(
-        "protocol contract evidence --record {} --observed-at {}",
+        "aep observe contract evidence --record {} --observed-at {}",
         args.record.display(),
         args.observed_at
     )

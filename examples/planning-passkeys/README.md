@@ -34,7 +34,7 @@ whose `project.yaml` names its own protocol tree, neither flag is needed: `--sto
 The entity surface reads this store as readily as it reads a manifest:
 
 ```console
-protocol entity list --planning .engineering/planning
+aep plan entity list --planning .engineering/planning
 ```
 
 ## The same plan, kept in SQLite
@@ -103,7 +103,7 @@ other without the protocol noticing.
 
 `crates/edge/aep-cli/tests/planning_cli.rs` drives the real binary against it: that the store
 validates clean, that `list --format json` is byte-identical across two runs, and that
-`protocol entity list --planning` counts what is here. `crates/edge/aep-cli/tests/store_selection.rs`
+`aep plan entity list --planning` counts what is here. `crates/edge/aep-cli/tests/store_selection.rs`
 seeds the seven artifacts into a markdown copy, into the SQLite variant and into the hybrid variant,
 runs every `aep artifact` verb over all three, each as its own process, asserting the output is
 the same — and makes the hybrid's replica refuse a write, to list the divergence and catch it up.

@@ -1,7 +1,7 @@
 //! CLI integration tests.
 //!
 //! These drive the real binary, because the interface is the product here: a harness shells out to
-//! `protocol` and reads its exit code. Testing the library instead would not catch an argument that
+//! `aep` and reads its exit code. Testing the library instead would not catch an argument that
 //! never reaches it.
 
 use std::path::{Path, PathBuf};
@@ -15,9 +15,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always against the repository's own document tree.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always against the repository's own document tree.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -65,7 +65,7 @@ const ARTIFACTS: &str = "examples/development-passkeys/artifacts.yaml";
 
 #[test]
 fn validate_accepts_the_repositorys_own_documents() {
-    let output = protocol(&["govern", "validate"]);
+    let output = aep(&["govern", "validate"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("valid"), "{text}");
@@ -83,7 +83,7 @@ fn validate_reports_a_broken_document_with_its_path_and_fails() {
     )
     .expect("the fixture is writable");
 
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "validate",
         "--root",
@@ -106,14 +106,14 @@ fn validate_reports_a_broken_document_with_its_path_and_fails() {
 
 #[test]
 fn validate_checks_an_artifact_manifest_against_the_lifecycles() {
-    let output = protocol(&["govern", "validate", "--artifacts", ARTIFACTS]);
+    let output = aep(&["govern", "validate", "--artifacts", ARTIFACTS]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(stdout(&output).contains("valid"));
 }
 
 #[test]
 fn resolve_prints_the_plan() {
-    let output = protocol(&["govern", "resolve", "--task", TASK]);
+    let output = aep(&["govern", "resolve", "--task", TASK]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("development.standard"), "{text}");
@@ -134,7 +134,7 @@ fn resolve_fails_when_the_task_names_a_profile_that_does_not_exist() {
     )
     .expect("the fixture is writable");
 
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "resolve",
         "--task",
@@ -151,7 +151,7 @@ fn resolve_fails_when_the_task_names_a_profile_that_does_not_exist() {
 
 #[test]
 fn evaluate_reports_the_state_and_why_a_transition_is_blocked() {
-    let output = protocol(&["govern", "evaluate", "--task", TASK]);
+    let output = aep(&["govern", "evaluate", "--task", TASK]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("state       receive"), "{text}");
@@ -160,7 +160,7 @@ fn evaluate_reports_the_state_and_why_a_transition_is_blocked() {
 
 #[test]
 fn evaluate_advances_with_the_examples_evidence() {
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -181,7 +181,7 @@ fn evaluate_advances_with_the_examples_evidence() {
 
 #[test]
 fn evaluate_reads_every_evidence_file_in_the_example() {
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -208,7 +208,7 @@ fn evaluate_reads_every_evidence_file_in_the_example() {
 
 #[test]
 fn explain_refuses_a_production_change_and_names_the_rule() {
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "explain",
         "--task",
@@ -230,7 +230,7 @@ fn explain_refuses_a_production_change_and_names_the_rule() {
 
 #[test]
 fn explain_allows_what_the_profile_grants() {
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "explain",
         "--task",
@@ -248,13 +248,13 @@ fn explain_allows_what_the_profile_grants() {
 
 #[test]
 fn inspect_lists_documents_and_shows_one() {
-    let listing = protocol(&["govern", "inspect"]);
+    let listing = aep(&["govern", "inspect"]);
     assert_eq!(code(&listing), 0, "{}", stderr(&listing));
     let text = stdout(&listing);
     assert!(text.contains("principle  test-driven"), "{text}");
     assert!(text.contains("workflow   adp/default"), "{text}");
 
-    let single = protocol(&["govern", "inspect", "test-driven"]);
+    let single = aep(&["govern", "inspect", "test-driven"]);
     assert_eq!(code(&single), 0, "{}", stderr(&single));
     let document = stdout(&single);
     assert!(document.contains("id: test-driven"), "{document}");
@@ -263,7 +263,7 @@ fn inspect_lists_documents_and_shows_one() {
 
 #[test]
 fn schema_lists_and_prints_generated_schemas() {
-    let listing = protocol(&["govern", "schema"]);
+    let listing = aep(&["govern", "schema"]);
     assert_eq!(code(&listing), 0);
     let text = stdout(&listing);
     // One line per published schema, checked against what the library publishes rather than
@@ -281,7 +281,7 @@ fn schema_lists_and_prints_generated_schemas() {
         );
     }
 
-    let single = protocol(&["govern", "schema", "workflow"]);
+    let single = aep(&["govern", "schema", "workflow"]);
     assert_eq!(code(&single), 0);
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout(&single)).expect("the schema is valid JSON");
@@ -290,7 +290,7 @@ fn schema_lists_and_prints_generated_schemas() {
 
 #[test]
 fn json_output_is_machine_readable() {
-    let output = protocol(&["govern", "evaluate", "--task", TASK, "--format", "json"]);
+    let output = aep(&["govern", "evaluate", "--task", TASK, "--format", "json"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout(&output)).expect("the evaluation is valid JSON");
@@ -301,7 +301,7 @@ fn json_output_is_machine_readable() {
 
 #[test]
 fn conformance_runs_the_suites_against_the_reference_backend() {
-    let output = protocol(&["plan", "conformance", "--level", "full"]);
+    let output = aep(&["plan", "conformance", "--level", "full"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("conformance full"), "{text}");
@@ -312,7 +312,7 @@ fn conformance_runs_the_suites_against_the_reference_backend() {
 fn conformance_fails_when_a_property_is_deliberately_broken() {
     // The point of shipping a faulty backend: a suite that passes everything tells you nothing, and
     // this is how a reader checks that for themselves in one command.
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "conformance",
         "--suite",
@@ -368,7 +368,7 @@ fn a_project_is_discovered_so_no_arguments_are_needed() {
     )
     .expect("writable");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .arg("resolve")
         .current_dir(&project)
         .output()
@@ -382,7 +382,7 @@ fn a_project_is_discovered_so_no_arguments_are_needed() {
     // From a subdirectory too: discovery walks up.
     let nested = project.join("src/deep");
     std::fs::create_dir_all(&nested).expect("writable");
-    let nested_output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let nested_output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .arg("resolve")
         .current_dir(&nested)
         .output()
@@ -401,7 +401,7 @@ fn outside_a_project_the_missing_task_is_explained() {
         .join("1/2/3/4/5/6/7/8/9/10/11/12");
     std::fs::create_dir_all(&elsewhere).expect("writable");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .arg("resolve")
         .current_dir(&elsewhere)
         .output()
@@ -417,11 +417,11 @@ fn outside_a_project_the_missing_task_is_explained() {
 
 #[test]
 fn output_survives_a_reader_that_stops_reading() {
-    // `protocol inspect | head -3` must produce three lines, not a stack trace. Rust's `println!`
+    // `aep govern inspect | head -3` must produce three lines, not a stack trace. Rust's `println!`
     // panics on a closed pipe, which turns an ordinary shell idiom into a crash report.
     use std::process::Stdio;
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "conformance", "--level", "full"])
         .current_dir(root())
         .stdout(Stdio::piped())
@@ -454,7 +454,7 @@ fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_whi
     // `story:conformance-verb-takes-a-backend`: the verb was hard-coded to the reference backend
     // while a story ticked "runs against the markdown store". Now the caller names the backend and
     // the first line of the report names it back.
-    let sqlite = protocol(&["plan", "conformance", "--backend", "sqlite"]);
+    let sqlite = aep(&["plan", "conformance", "--backend", "sqlite"]);
     assert_eq!(code(&sqlite), 0, "{}", stderr(&sqlite));
     let text = stdout(&sqlite);
     assert!(
@@ -470,7 +470,7 @@ fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_whi
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch store");
-    let markdown = protocol(&[
+    let markdown = aep(&[
         "plan",
         "conformance",
         "--backend",
@@ -487,7 +487,7 @@ fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_whi
     let _ = std::fs::remove_dir_all(&dir);
 
     // The default did not move, and it says so too.
-    let memory = protocol(&["plan", "conformance", "--level", "core"]);
+    let memory = aep(&["plan", "conformance", "--level", "core"]);
     assert_eq!(code(&memory), 0, "{}", stderr(&memory));
     assert!(
         stdout(&memory).starts_with("ran against: memory\n"),
@@ -496,7 +496,7 @@ fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_whi
     );
 
     // Machine formats carry the same answer as a field.
-    let json = protocol(&[
+    let json = aep(&[
         "plan",
         "conformance",
         "--backend",
@@ -512,7 +512,7 @@ fn conformance_runs_against_the_backend_the_caller_names_and_the_report_says_whi
 #[test]
 fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
     // A flag that does nothing is a lie the next reader believes.
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "conformance",
         "--backend",
@@ -527,7 +527,7 @@ fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
         stderr(&output)
     );
 
-    let unknown = protocol(&["plan", "conformance", "--backend", "oracle"]);
+    let unknown = aep(&["plan", "conformance", "--backend", "oracle"]);
     assert_eq!(code(&unknown), 2, "an unknown backend is a usage error");
     assert!(
         stderr(&unknown).contains("memory") && stderr(&unknown).contains("sqlite"),
@@ -536,7 +536,7 @@ fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
     );
 
     // The one backend with no scratch to invent: a server has to be named.
-    let unaddressed = protocol(&["plan", "conformance", "--backend", "postgres"]);
+    let unaddressed = aep(&["plan", "conformance", "--backend", "postgres"]);
     assert_eq!(code(&unaddressed), 1);
     assert!(
         stderr(&unaddressed).contains("needs `--store <url>`"),
@@ -547,7 +547,7 @@ fn conformance_refuses_a_store_for_the_backend_that_keeps_nothing() {
 
 #[test]
 fn conformance_rejects_an_unknown_level_or_fault() {
-    let level = protocol(&["plan", "conformance", "--level", "thorough"]);
+    let level = aep(&["plan", "conformance", "--level", "thorough"]);
     assert_eq!(code(&level), 1);
     assert!(
         stderr(&level).contains("is not a conformance level"),
@@ -555,7 +555,7 @@ fn conformance_rejects_an_unknown_level_or_fault() {
         stderr(&level)
     );
 
-    let fault = protocol(&["plan", "conformance", "--inject", "nonsense"]);
+    let fault = aep(&["plan", "conformance", "--inject", "nonsense"]);
     assert_eq!(code(&fault), 1);
     assert!(
         stderr(&fault).contains("is not a fault"),
@@ -575,7 +575,7 @@ fn the_scan_finds_every_annotation_the_corpus_holds_and_says_so_in_one_line() {
     // 43 raw occurrences, 43 records, zero unparsed — `expected.json`'s own summary, which is
     // ground truth since the corpus revision of 2026-08-21: the reference implementation was fixed
     // against this corpus and finds all 43, and the fenced example counts for neither side.
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "scan",
@@ -609,7 +609,7 @@ fn a_scan_that_is_blind_to_an_annotation_fails_strict_and_says_which_file() {
         &file,
         "Verify: 2026-08-30 - a hyphen is not an annotation. (horizon: 7d)\n",
     );
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "scan",
@@ -636,7 +636,7 @@ fn an_expired_claim_fails_only_the_flag_that_exists_to_judge_it() {
     // Two flags, two questions: `--strict` asks whether the gate is blind, `--fail-on-expired`
     // whether a claim is stale. The corpus deliberately carries nine expired records, so a verb
     // that conflated them could never be run over it as a pass condition.
-    let strict = protocol(&[
+    let strict = aep(&[
         "observe",
         "evidence",
         "scan",
@@ -649,7 +649,7 @@ fn an_expired_claim_fails_only_the_flag_that_exists_to_judge_it() {
     ]);
     assert_eq!(code(&strict), 0, "coverage is complete");
 
-    let stale = protocol(&[
+    let stale = aep(&[
         "observe",
         "evidence",
         "scan",
@@ -665,7 +665,7 @@ fn an_expired_claim_fails_only_the_flag_that_exists_to_judge_it() {
 
 #[test]
 fn inspect_reports_when_each_submitted_record_was_observed() {
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -700,7 +700,7 @@ fn inspect_refuses_an_observation_that_has_not_happened_yet() {
         &file,
         "- kind: test_result\n  observed_at: 2026-12-24\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -730,7 +730,7 @@ fn inspect_accepts_a_record_observed_on_the_reference_date_itself() {
         &file,
         "- kind: test_result\n  observed_at: 1788271620000\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -771,7 +771,7 @@ fn one_future_record_refuses_itself_by_position_and_the_document_is_still_evalua
     // produced no evaluation at all. The refusal stands — it is invariant 7 and nothing here
     // downgrades it — but it is now about that record, and the rest of the file is submitted.
     let file = mixed_evidence_document("aep-cli-evaluate-future-record");
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -834,7 +834,7 @@ fn a_document_whose_every_record_is_future_dated_still_fails() {
         &file,
         "- kind: test_result\n  observed_at: 2099-01-01\n  suite: unit\n  passed: 1\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n\n- kind: test_result\n  observed_at: 2099-01-02\n  suite: regression\n  passed: 2\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -858,7 +858,7 @@ fn evaluate_and_inspect_answer_identically_about_one_file() {
     // record. Both now put every record to the engine's own comparison and name the same one.
     let file = mixed_evidence_document("aep-cli-two-verbs-one-answer");
 
-    let evaluated = protocol(&[
+    let evaluated = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -868,7 +868,7 @@ fn evaluate_and_inspect_answer_identically_about_one_file() {
         "--evidence",
         printable(&file),
     ]);
-    let inspected = protocol(&["observe", "evidence", "inspect", printable(&file)]);
+    let inspected = aep(&["observe", "evidence", "inspect", printable(&file)]);
 
     assert_eq!(code(&evaluated), 1, "{}", stdout(&evaluated));
     assert_eq!(code(&inspected), 1, "{}", stdout(&inspected));
@@ -894,7 +894,7 @@ fn inspect_admits_a_date_that_is_today_at_utc_plus_fourteen_and_refuses_one_nowh
         &file,
         "- kind: test_result\n  observed_at: 2026-09-02\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let admitted = protocol(&[
+    let admitted = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -914,7 +914,7 @@ fn inspect_admits_a_date_that_is_today_at_utc_plus_fourteen_and_refuses_one_nowh
         &nowhere_yet,
         "- kind: test_result\n  observed_at: 2026-09-03\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let refused = protocol(&[
+    let refused = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -943,7 +943,7 @@ fn the_corpus_case_admits_two_spellings_and_refuses_the_two_it_names() {
     // day and as an epoch value. One is admitted and the other refused, which is the whole rule:
     // the granularity a document was written in survives to the comparison. A fixture where the
     // two spellings agreed would pass whether or not the rule held.
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "evidence",
         "inspect",
@@ -992,7 +992,7 @@ fn an_evidence_document_without_an_observation_time_is_refused_by_name() {
         &file,
         "- kind: test_result\n  suite: unit\n  passed: 12\n  failed: 0\n  producer:\n    producer: verifier\n    verifier: test-runner\n",
     );
-    let output = protocol(&["observe", "evidence", "inspect", printable(&file)]);
+    let output = aep(&["observe", "evidence", "inspect", printable(&file)]);
     assert_eq!(code(&output), 1, "{}", stdout(&output));
     assert!(
         stderr(&output).contains("observed_at"),
@@ -1001,7 +1001,7 @@ fn an_evidence_document_without_an_observation_time_is_refused_by_name() {
     );
 }
 
-/// `protocol workspace members` reports what it found and does not fail on a member nobody has.
+/// `aep plan workspace members` reports what it found and does not fail on a member nobody has.
 ///
 /// The state worth pinning is `absent`: a workspace is read on machines that checked out different
 /// subsets of it, and a command that failed because a colleague's repository is missing from your
@@ -1018,7 +1018,7 @@ fn a_workspace_member_nobody_checked_out_is_reported_rather_than_fatal() {
     )
     .expect("workspace file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "workspace", "members", "--root"])
         .arg(&root)
         .args(["--format", "json"])
@@ -1047,7 +1047,7 @@ fn a_repository_with_no_workspace_file_is_not_an_error() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join(".engineering")).expect("scratch root");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "workspace", "members", "--root"])
         .arg(&root)
         .output()
@@ -1094,7 +1094,7 @@ fn an_unparseable_workspace_file_is_refused_naming_the_file_and_the_reason() {
     )
     .expect("crossing source");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "artifact", "validate", "--store"])
         .arg(root.join(".engineering/planning"))
         .output()
@@ -1160,7 +1160,7 @@ fn a_workspace_list_names_the_member_every_artifact_came_from() {
         ],
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "workspace", "list", "--root"])
         .arg(&root)
         .args(["--format", "json"])
@@ -1193,7 +1193,7 @@ fn a_reference_two_members_both_hold_is_refused_with_both_spellings() {
         ],
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "workspace", "show", "story:passkey-login", "--root"])
         .arg(&root)
         .args(["--format", "json"])
@@ -1219,7 +1219,7 @@ fn a_reference_two_members_both_hold_is_refused_with_both_spellings() {
     );
 
     // And each spelling resolves on its own.
-    let qualified = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let qualified = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args([
             "plan",
             "workspace",
@@ -1266,7 +1266,7 @@ fn workflow_flow_makes_every_state_a_section() {
     for extra in [&[][..], &["--map", "development/default"][..]] {
         let mut args = vec!["govern", "workflow", "flow", "--id", "adp/default"];
         args.extend_from_slice(extra);
-        let output = protocol(&args);
+        let output = aep(&args);
         assert_eq!(code(&output), 0, "{extra:?}: {}", stderr(&output));
         let text = stdout(&output);
         assert!(

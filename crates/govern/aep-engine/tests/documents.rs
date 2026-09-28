@@ -172,7 +172,7 @@ fn a_task_that_declares_no_code_change_owes_no_contract_or_property_evidence() {
     }
     // The other half of the claim, and the reason this is scoping rather than an exemption: seven
     // rules stay, including static analysis — which a documentation change really can satisfy, and
-    // did, from `protocol artifact validate`.
+    // did, from `aep plan artifact validate`.
     for kept in [
         "spec-driven",
         "test-driven",

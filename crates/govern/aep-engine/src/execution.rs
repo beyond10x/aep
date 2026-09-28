@@ -843,7 +843,7 @@ impl RequirementContext for Execution {
     ///
     /// The rule — `derived_from` plus the task's own id as `task:<id>`, and deliberately not
     /// `context` — lives on the task itself because the engine is not its only reader:
-    /// `protocol specification evidence` selects the specification it writes a record about with
+    /// `aep observe specification evidence` selects the specification it writes a record about with
     /// the same call, so the verb and this guard cannot come to disagree about whose specification
     /// a document is.
     fn task_artifacts(&self) -> Vec<ArtifactRef> {

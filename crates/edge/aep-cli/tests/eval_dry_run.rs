@@ -4,8 +4,8 @@
 //!
 //! Four recorded streams go in one end and a matrix comes out the other: the runner assembles a
 //! `eval.run-manifest/1` per run out of what each stream states, judges each transcript with the
-//! case's own `trace-spec/1` document through the same checker `protocol trace check` calls, lays
-//! the pair out where `protocol eval matrix` looks for it, and the matrix is asserted **byte for
+//! case's own `trace-spec/1` document through the same checker `aep observe trace check` calls, lays
+//! the pair out where `aep drive eval matrix` looks for it, and the matrix is asserted **byte for
 //! byte**. Every step of the programme except the spawn is exercised, and the spawn is the only
 //! step that costs money.
 //!
@@ -35,9 +35,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always from the repository root, and never with a live flag.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always from the repository root, and never with a live flag.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         // Nothing in this file may spawn anything, whatever the developer running it exported.
@@ -109,7 +109,7 @@ const REPLAYS: [Replay; 4] = [
         harness: "claude",
         stream: "crates/edge/aep-cli/fixtures/eval-run/claude-plugin-attested.jsonl",
     },
-    // Arm c, which this verb reads and does not launch: `protocol drive run` wrote it.
+    // Arm c, which this verb reads and does not launch: `aep drive run` wrote it.
     Replay {
         case: "conformance/eval/development-honest",
         arm: "driven",
@@ -127,7 +127,7 @@ const REPLAYS: [Replay; 4] = [
 
 /// The exit code the run's own verdict line names, out of its `(exit N)`.
 ///
-/// `0` conformant, `1` contradicted, `3` undecided — the codes `protocol trace check` uses, which a
+/// `0` conformant, `1` contradicted, `3` undecided — the codes `aep observe trace check` uses, which a
 /// `--stream` ingest now answers with. Read back out of the printed sentence rather than written
 /// down here, so a status and a sentence that drifted apart are what fails.
 fn exit_code_the_verdict_line_names(printed: &str) -> i32 {
@@ -151,7 +151,7 @@ fn ingest_every_arm(name: &str) -> PathBuf {
     std::fs::create_dir_all(&out).expect("the temporary tree is writable");
 
     for replay in &REPLAYS {
-        let ingested = protocol(&[
+        let ingested = aep(&[
             "drive",
             "eval",
             "run",
@@ -196,7 +196,7 @@ fn the_whole_pipeline_runs_on_committed_streams_and_assembles_the_matrix_byte_fo
     // with no vendor binary, no credential and no network anywhere in it.
     let out = ingest_every_arm("aep-eval-dry-run-golden");
 
-    let json = protocol(&[
+    let json = aep(&[
         "drive",
         "eval",
         "matrix",
@@ -211,7 +211,7 @@ fn the_whole_pipeline_runs_on_committed_streams_and_assembles_the_matrix_byte_fo
         "the pipeline assembles the committed matrix, byte for byte"
     );
 
-    let text = protocol(&["drive", "eval", "matrix", printable(&out)]);
+    let text = aep(&["drive", "eval", "matrix", printable(&out)]);
     assert_eq!(code(&text), 0, "{}", stderr(&text));
     assert_eq!(stdout(&text), MATRIX_TEXT);
 
@@ -234,7 +234,7 @@ fn the_dry_run_reaches_both_harnesses_all_three_arms_and_a_contradiction() {
     // green against a checker that had stopped checking — the arm-a run is the corpus's declared
     // violation, so two facts are contradicted here on purpose.
     let out = ingest_every_arm("aep-eval-dry-run-coverage");
-    let table = stdout(&protocol(&["drive", "eval", "matrix", printable(&out)]));
+    let table = stdout(&aep(&["drive", "eval", "matrix", printable(&out)]));
 
     for (harness, arm) in [
         ("claude", "raw"),

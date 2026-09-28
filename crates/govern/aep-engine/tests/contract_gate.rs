@@ -1,7 +1,7 @@
 //! The contract runner's record, at the guard it decides.
 //!
 //! `story:contract-result-ingestion` built the road a `contract_result` travels — an outside
-//! runner's bytes become an evidence document `protocol evaluate --evidence` reads — and said in
+//! runner's bytes become an evidence document `aep govern evaluate --evidence` reads — and said in
 //! its own *Out of Scope* that **nothing gated on it**: no workflow, profile or step map asked the
 //! record for anything. This file is the other half. `principles/development/contract-testing.yaml`
 //! now owes `contracts.breaking_changes == 0` **before the review phase**, so the number an outside
@@ -25,7 +25,7 @@
 //!
 //! In `adversarial_verify`, not in `verify`. That is not a convenience: a `contract_result` about a
 //! metaharness adapter is produced in another repository, on another day, and reaches this one as
-//! bytes somebody pipes in — `protocol contract evidence --record -`. Evidence is submitted where
+//! bytes somebody pipes in — `aep observe contract evidence --record -`. Evidence is submitted where
 //! it arrives, and the fact store takes the latest record for a path, so a run already past its own
 //! contract suite is precisely the case this gate exists for.
 
@@ -238,7 +238,7 @@ fn a_run_that_never_heard_from_a_contract_runner_does_not_enter_review_by_saying
     // The fail-closed direction, and invariant 5 in its narrowest form: the gate reads a count, an
     // unobserved count is `Unknown`, and `Unknown` is not `True`. The substitution puts a
     // `test_result` named `contract` in the record's place — which is what
-    // `drivers/development/checks.yaml` actually submits, from `protocol validate` — so
+    // `drivers/development/checks.yaml` actually submits, from `aep govern validate` — so
     // `tests.contract.failed == 0` is satisfied and the run walks to `adversarial_verify` exactly
     // as before. What no test runner can produce is `contracts.breaking_changes`, and that is the
     // whole difference between the two fixtures.

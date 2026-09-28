@@ -449,7 +449,7 @@ pub trait Projection<S: Store> {
 /// evidence changes nothing, so the contract names no affected entity for either — but the entity
 /// the edge starts at, and the entity the evidence is about, each get an event at their current
 /// revision saying so. That is what lets a history read from the entity's log say what a plan's
-/// journal says (`protocol artifact history` over SQLite), and what lets a second process count the
+/// journal says (`aep plan artifact history` over SQLite), and what lets a second process count the
 /// evidence on hand from the log alone.
 #[derive(Debug, Clone, Default)]
 pub struct Identity {
@@ -764,7 +764,7 @@ impl<S: Store> EntityBackend<S, Identity> {
 impl<S: Store, P: Projection<S>> EntityBackend<S, P> {
     /// The event log of one entity, at the coordinates the projection gave it.
     ///
-    /// What `protocol artifact history` reads over a plan without a journal: the same events the
+    /// What `aep plan artifact history` reads over a plan without a journal: the same events the
     /// adapter rebuilds a history from, whichever shape the store holds them in — `aep.entity`
     /// under the contract's id for [`Identity`], the kind and the name for a plan. Empty for an
     /// entity the projection does not write.

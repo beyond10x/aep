@@ -29,7 +29,7 @@ adopter-facing defects that need no decision are gone — before any new capabil
 
 | fact | evidence |
 |---|---|
-| `epic:planning-store-as-backend` is `implemented`: 16/17 stories, one archived as superseded | `.engineering/planning/epic/planning-store-as-backend.md`; `protocol artifact validate` → `valid` |
+| `epic:planning-store-as-backend` is `implemented`: 16/17 stories, one archived as superseded | `.engineering/planning/epic/planning-store-as-backend.md`; `aep plan artifact validate` → `valid` |
 | `epic:reference-driver` is `draft` at 1/12, yet the driver exists | `crates/drive/aep-driver`, `crates/drive/aep-driver-spec`, `crates/edge/aep-cli/src/drive.rs` (90 functions), `drivers/development/`; `story:driver-spec-crate`, `story:protocol-drive-verb`, `story:default-step-map`, `story:own-engineering-store` sit at `active`/`proposed` |
 | `epic:evidence-gated-completion` is 4/7; the three open stories name what the store waves just enabled | `story:completion-audit-join` (join through the journal → the event log exists in every store since G3/H1), `story:completion-needs-evidence` (a verdict, its two mechanism halves marked **Shipped** in its own body), `story:evidence-producers-for-the-driven-map` |
 | `story:governed-dogfood-run` (W4.1) was run once and stopped short | `harness-wave-4-governed-dogfood.md:3` — *"W4.1 has been run once — W4-1/1, 2026-08-21, and it stopped short"* |
@@ -65,9 +65,9 @@ The rest of the paragraph held: nothing in 6–10 changed a printed output that 
 ## 3. Each step, in one paragraph
 
 **1 — The plan tells the truth about the driver.** `epic:reference-driver` reads as barely started
-and is mostly shipped: the router (`aep-driver`), the spec crate, `protocol drive` with its lock,
+and is mostly shipped: the router (`aep-driver`), the spec crate, `aep drive` with its lock,
 run directory and resume, the default step map, the plugin hooks. Each of the eleven open stories is
-read against the code and moved through `protocol artifact move` on a `test_result` naming the
+read against the code and moved through `aep plan artifact move` on a `test_result` naming the
 tests that hold it — or re-scoped in its body to what is genuinely left (`story:retry-budgets`,
 `story:reusable-workflow-nodes`, `story:operator-resume-ux` look real) — or archived as superseded.
 No code. Acceptance: every status in the epic is one a named test or gate stands behind, and
@@ -75,8 +75,8 @@ No code. Acceptance: every status in the epic is one a named test or gate stands
 
 **2 — What made this done.** Since G3 every store's history is an event log, and since H1 the
 evidence record is an event on the artifact at the revision it was recorded against. The join the
-story asks for therefore exists as data; what is missing is the verb. `protocol artifact explain
-<id>` (or `protocol explain` over a planning store — the story says `protocol explain`) answers, per
+story asks for therefore exists as data; what is missing is the verb. `aep plan artifact explain
+<id>` (or `aep govern explain` over a planning store — the story says `aep govern explain`) answers, per
 status the artifact reached: the move, the evidence it rested on, each record's source, reference,
 instant and the **revision the artifact was at** — so an edit made afterwards cannot make an old
 record look like it was about the new text. Reads through the contract, so it answers alike over
@@ -89,7 +89,7 @@ design document's own status block: accepted, accepted in part, or refused, with
 separable `delivers` row for `artifacts/relations/relations.yaml`. Gap-register row *"a story's
 `implemented` is a claim nothing checks"* closes either way, as it says it will. Default in § 4.
 
-**4 — The default map produces its own evidence.** `protocol drive run --map
+**4 — The default map produces its own evidence.** `aep drive run --map
 drivers/development/default.yaml` on a `kind: feature` task starts today only with
 `--allow-evidence-gap`, because no step mints `test_result`, `static_analysis`, `diff` or
 `specification` records with `producer: verifier`. The story's acceptance is specific down to the
@@ -98,7 +98,7 @@ drivers/development/default.yaml` on a `kind: feature` task starts today only wi
 **5 — One real story, driven end to end.** W4.1 again, on a story from this backlog that step 1
 leaves genuinely open — `story:retry-budgets` is the natural candidate: a real gate, a real diff,
 an acceptance line somebody argued about. Every transition through the engine, every status move
-through `protocol artifact move` (the write guard enforces, `validate` audits), every `llm` step's
+through `aep plan artifact move` (the write guard enforces, `validate` audits), every `llm` step's
 transcript checked and submitted as `trace_conformance`. A wedge is a **recorded result**. This
 step needs money and a person at the keyboard — see § 4.
 
@@ -124,7 +124,7 @@ arrow (`adr/0002`) stays one-way in every manifest.
 
 **9 — Harness-neutrality as a gate step.** `story:shell-echo-harness`: a shell-echo
 `LlmStepExecutor` and a reader for its own transcript dialect, so one `llm` step runs inside `task
-check` with no model and no network and is decided by `protocol trace check` against the same
+check` with no model and no network and is decided by `aep observe trace check` against the same
 specification a real harness is. The `partial` Codex tier already landed (gap register row 38);
 this is the tier that makes portability a gate rather than a claim. The live Codex `full` tier
 stays where it is: it costs money and needs a keyboard.
@@ -151,7 +151,7 @@ stopped rewriting files. The proof is `a_version_bump_rewrites_no_generated_file
 | D4 | Step 10: what replaces the build version in a stamp | **taken, and narrower than the default: nothing replaces it.** The specification's content is already `source_digest` and the slice's is `contract_digest`; a digest of the generator's own source answers *by which build* no more actionably than the tag did and moves on every commit to the generator rather than once per release. Recorded as deviation 13 in `docs/design/reconciliation-v0.2.md` §5 |
 | D5 | Two releases or one | ~~two — 0.32.0 after step 5, 0.33.0 after step 10~~ → **one, 0.32.0 (+0.32.1)**: steps 6–10 depended on nothing in 1–5, so holding them behind a paid run bought nothing |
 | D6 | Which story step 5 drives | ~~`story:retry-budgets`~~ → **`story:operator-resume-ux`**. Step 1 did find `retry-budgets` shipped and closed it. The fallback named here was `reusable-workflow-nodes`; `operator-resume-ux` was taken instead because it fits `story:governed-dogfood-run`'s own default better — one real defect, one crate, mechanical acceptance |
-| D7 | Step 2's verb: `protocol artifact explain` or `protocol explain` | `protocol artifact explain <id>` — it is a plan question; `protocol explain` already means a policy evaluation |
+| D7 | Step 2's verb: `aep plan artifact explain` or `aep govern explain` | `aep plan artifact explain <id>` — it is a plan question; `aep govern explain` already means a policy evaluation |
 
 ## 5. Not in these ten, and where each lives
 
@@ -166,6 +166,6 @@ stopped rewriting files. The proof is `a_version_bump_rewrites_no_generated_file
 ## 6. How each step is accepted
 
 The same way the store waves were: the story's own acceptance lines, a `test_result` recorded
-through `protocol artifact evidence` naming the gate run, and the move to `implemented` refused
+through `aep plan artifact evidence` naming the gate run, and the move to `implemented` refused
 until it is there. A step that turns out to be a decision (3) or a re-scoping (1) is accepted on the
 written verdict, and `validate` must not report it as a status reached on an assertion.

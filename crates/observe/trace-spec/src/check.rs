@@ -1098,7 +1098,7 @@ fn order(ir: &TraceIr, first: &CallSelector, before: &CallSelector) -> Outcome {
 /// # Why every session and not the last one
 ///
 /// One transcript is usually one session, and then this is the assertion it always was. A driven
-/// run is not: `protocol drive` starts a fresh session per workflow state, so its transcript is a
+/// run is not: `aep drive` starts a fresh session per workflow state, so its transcript is a
 /// concatenation with one terminal record per state visited. Reading only the last of them answers
 /// *how did the run end* while the row says *the session ended the way a finished session ends* —
 /// and a six-session run judged on its sixth record has had five sessions go unlooked-at. The first
@@ -2172,14 +2172,14 @@ mod tests {
             // --- what the agent did ---------------------------------------------------------
             case(
                 ExpectationKind::ToolCalled {
-                    selector: bash("protocol artifact new"),
+                    selector: bash("protocol artifact new"), // recorded-under-this-name
                     count: CountBound::at_least(1),
                 },
                 Verdict::Ok,
             ),
             case(
                 ExpectationKind::ToolCalled {
-                    selector: bash("protocol artifact new"),
+                    selector: bash("protocol artifact new"), // recorded-under-this-name
                     count: CountBound::at_least(9),
                 },
                 Verdict::Gap,
@@ -2270,7 +2270,7 @@ mod tests {
             ),
             case(
                 ExpectationKind::Order {
-                    first: bash("protocol artifact"),
+                    first: bash("protocol artifact"), // recorded-under-this-name
                     before: CallSelector::tool("Edit"),
                 },
                 Verdict::Ok,
@@ -2278,7 +2278,7 @@ mod tests {
             case(
                 ExpectationKind::Order {
                     first: CallSelector::tool("Edit"),
-                    before: bash("protocol artifact"),
+                    before: bash("protocol artifact"), // recorded-under-this-name
                 },
                 Verdict::Gap,
             ),
@@ -3160,10 +3160,10 @@ mod tests {
             None,
             "a",
             "Bash",
-            r#"{"command":"protocol artifact new"}"#,
+            r#"{"command":"aep plan artifact new"}"#,
         )]);
         let kind = ExpectationKind::Order {
-            first: bash("protocol artifact"),
+            first: bash("aep plan artifact"),
             before: CallSelector::tool("Edit"),
         };
         assert_eq!(
@@ -3179,7 +3179,7 @@ mod tests {
                 None,
                 "a",
                 "Bash",
-                r#"{"command":"protocol artifact new"}"#,
+                r#"{"command":"aep plan artifact new"}"#,
             ),
             call_event(2, None, "b", "Edit", r#"{"file_path":"/x"}"#),
         ]);
@@ -3192,7 +3192,7 @@ mod tests {
                 None,
                 "a",
                 "Bash",
-                r#"{"command":"protocol artifact new"}"#,
+                r#"{"command":"aep plan artifact new"}"#,
             ),
         ]);
         assert_eq!(evaluate(&kind, &wrong_way).verdict(), Verdict::Gap);
@@ -3241,7 +3241,7 @@ mod tests {
 
     #[test]
     fn every_session_is_read_because_a_driven_run_is_a_concatenation_of_them() {
-        // `protocol drive` starts a session per workflow state, so its transcript carries one
+        // `aep drive` starts a session per workflow state, so its transcript carries one
         // terminal record per state visited. A checker that read the last one would call this run
         // clean on the strength of its sixth session.
         let five_clean_one_not = ir(vec![
@@ -3411,7 +3411,7 @@ mod tests {
                 None,
                 "a",
                 "Bash",
-                r#"{"command":"protocol artifact new"}"#,
+                r#"{"command":"aep plan artifact new"}"#,
             ),
             result_event(2, None, "a", Some(false), "{}"),
         ]);
@@ -3445,7 +3445,7 @@ mod tests {
                 Some("2026-08-21T12:00:00.000Z"),
                 "a",
                 "Bash",
-                r#"{"command":"protocol artifact new"}"#,
+                r#"{"command":"aep plan artifact new"}"#,
             ),
             result_event(2, Some("2026-08-21T12:00:00.187Z"), "a", Some(false), "{}"),
         ]);

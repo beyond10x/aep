@@ -2,7 +2,7 @@
 //!
 //! Every read here is the compute half of a verb the terminal already has, reached through
 //! `planning`'s served surface and through nothing else — so the board in a browser and
-//! `protocol artifact board` are the same facts, not two renderings that can drift.
+//! `aep plan artifact board` are the same facts, not two renderings that can drift.
 //!
 //! # The guards run before the handlers, in this order
 //!

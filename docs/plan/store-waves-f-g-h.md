@@ -30,16 +30,16 @@ lifecycle document itself.
 | `AGENTS.md` says there is one `entity-runtime` dependency | `AGENTS.md:528` — *"the eleventh is `entity-core` in `aep-backend-markdown`, the only dependency"*. There are three crates from that repository in two of ours |
 | `SqliteBackend` writes **no events** into the store | `crates/plan/aep-backend-sqlite/src/lib.rs:189-192` — `Decision { instance, events: Vec::new() }`. `entity-sqlite` writes instance and events in one transaction (R-83); we hand it nothing to write |
 | `SqliteBackend` cannot read a database back | `lib.rs:60-76` — `written` set; *"Hydration is P5; point this at an empty database until then"*. Relations, audit and history live only in the per-process `MemoryBackend` |
-| `SqliteBackend` has no CLI surface | `crates/edge/aep-cli/src/planning.rs:501-503` opens `MarkdownBackend` only; `BackendArgs` (`main.rs:200-219`) has no backend selector; `protocol conformance` is hard-coded to `MemoryBackend` (`story:conformance-verb-takes-a-backend`) |
+| `SqliteBackend` has no CLI surface | `crates/edge/aep-cli/src/planning.rs:501-503` opens `MarkdownBackend` only; `BackendArgs` (`main.rs:200-219`) has no backend selector; `aep plan conformance` is hard-coded to `MemoryBackend` (`story:conformance-verb-takes-a-backend`) |
 | `MarkdownBackend` is a second hand-written durability layer | `crates/plan/aep-backend-markdown/src/backend.rs` — its own `persist`, latch, `journal::append`; 883 lines beside `store.rs` 706 and `journal.rs` 404. Both it and `SqliteBackend` wrap `MemoryBackend` and add durability separately |
-| `history`, `audit`, `describe_type` are answered by the in-memory backend in both durable backends | `backend.rs:870-882`, `lib.rs:311-335`. `protocol artifact history` reads `journal.jsonl` by a separate path |
+| `history`, `audit`, `describe_type` are answered by the in-memory backend in both durable backends | `backend.rs:870-882`, `lib.rs:311-335`. `aep plan artifact history` reads `journal.jsonl` by a separate path |
 | D-P5 open: `TypeDescriptor::lifecycle` is `None` everywhere | `crates/plan/aep-contract/src/registry.rs:78`; `journal-backed-store` acceptance line struck through |
 | The markdown write path is fixed | `store.rs:271` pid+counter temp name, `store.rs:289` `sync_all` — the defect P3 found is closed; G1 keeps this shape |
 | `entity-store`'s `Store` has no enumeration | `entity-runtime/crates/entity-store/src/lib.rs:147-190` — `load`, `revision_of`, `events`, `commit`. Nothing lists what a store holds, so nothing can hydrate from one |
 | `entity-remote`'s `Hybrid` composes **any two** stores | `crates/entity-remote/src/hybrid.rs:168,175,411` — `Hybrid<L: Store, R: Store>`. A hybrid of two local stores needs no network |
 | `DomainEvent` records what changed and not what it was decided on | `entity-runtime/crates/entity-core/src/runtime.rs:51-78` — `entity, version, id, revision, type, from_state, to_state, changed`. The evidence a move rested on has no field |
 | `entity-runtime` opens no socket and its gate reaches no network | `crates/entity-remote/src/lib.rs:6-16`; `Taskfile.yml:5-16` |
-| The planning store validates, and four implemented stories reached their rung on an **asserted** provenance | `protocol artifact validate` (0.27.3) → *valid*, with `guard-tests`, `journal-reconciliation`, `changelog-claims-are-checked`, `sqlite-backend-adapter` listed as *closed on an assertion*. A 0.26.0 build reports one `undeclared_reference` instead — the cross-repository edge from `story:assemble-across-sources` — which is the tool, not the store; ER's `plan-check` pins the minimum for this reason |
+| The planning store validates, and four implemented stories reached their rung on an **asserted** provenance | `aep plan artifact validate` (0.27.3) → *valid*, with `guard-tests`, `journal-reconciliation`, `changelog-claims-are-checked`, `sqlite-backend-adapter` listed as *closed on an assertion*. A 0.26.0 build reports one `undeclared_reference` instead — the cross-repository edge from `story:assemble-across-sources` — which is the tool, not the store; ER's `plan-check` pins the minimum for this reason |
 
 ## 2. The end state, in six lines
 
@@ -51,7 +51,7 @@ lifecycle document itself.
    provider suite and the `Broken` check, then our sixteen suites through the adapter.
 3. **Events cross the seam.** Every accepted command becomes `DomainEvent`s in an `Envelope`, written
    with the instance in one `commit`. A refused command writes nothing (R-84).
-4. **History is the event log.** `history`, `audit`, `protocol artifact history` and
+4. **History is the event log.** `history`, `audit`, `aep plan artifact history` and
    journal-reconciliation read `EventProvider::events`. D-P3 closes in full.
 5. **`project.yaml` names the store.** `store: markdown | sqlite: <path> | hybrid: {…}`; every verb
    opens through it; a hybrid's four policy words are typed there with no default (R-106).
@@ -65,8 +65,8 @@ is the existing traits over a provider.
 
 | wave | name | stories | what a person gets |
 |---|---|---|---|
-| **F** | one adapter, one pin | F1–F5 | a SQLite plan you can close and reopen; one `entity-runtime` version; `protocol conformance --backend sqlite` from the command line |
-| **G** | the plan's own store is a provider | G1–G4 | `protocol artifact history` answered from an event log; a hand-edited or deleted document reported as drift; ~1 500 lines of hand-written durability gone |
+| **F** | one adapter, one pin | F1–F5 | a SQLite plan you can close and reopen; one `entity-runtime` version; `aep plan conformance --backend sqlite` from the command line |
+| **G** | the plan's own store is a provider | G1–G4 | `aep plan artifact history` answered from an event log; a hand-edited or deleted document reported as drift; ~1 500 lines of hand-written durability gone |
 | **H** | every store the runtime has, and the ladder the store reports | H1–H4 | `store:` in `project.yaml`; Postgres and a markdown+SQLite hybrid as types; a harness can ask which statuses a story may hold |
 
 Each wave is one release here and, where it has an `entity-runtime` story, one release there first —
@@ -105,7 +105,7 @@ accepted command and zero for a refused one.
 counter, which is why the foreign-row refusal exists. Hydration installs the **stored** identity, and
 the refusal retires because it no longer protects anything. Acceptance: a second process against a
 populated file sees every entity, relation and audit record the first wrote, with the same ids;
-`protocol artifact history` over a SQLite store equals the same command over the markdown store of
+`aep plan artifact history` over a SQLite store equals the same command over the markdown store of
 the same plan.
 
 **F5** is the existing story, unchanged: `--backend memory|markdown|sqlite --store <path>`, default
@@ -140,7 +140,7 @@ hooks the plan shape needs: the kind's template body on create, relations into f
 byte-identical before and after, because the point of the wave is that nobody can tell.
 
 **G3** closes D-P3 in full. `history()` and `audit()` in the adapter read `EventProvider::events`,
-so they answer the same from a fresh process; `protocol artifact history` and
+so they answer the same from a fresh process; `aep plan artifact history` and
 `journal-reconciliation` read the same log. The provenance a move rested on —
 `{"recorded": {"test_result": 1}}` today — needs a field on the event; that is the runtime story
 beside it, and until it ships the provenance travels in the envelope's `causation` and the story
@@ -148,7 +148,7 @@ says so.
 
 **G4** spends what G1 and G3 bought. R-89 says an event records the state before and after and the
 fields written, so a document whose frontmatter does not match its own last event is **drift**, and a
-document with events and no file is a **deletion**. `protocol artifact validate` reports both, per
+document with events and no file is a **deletion**. `aep plan artifact validate` reports both, per
 document, without preventing either — D-P2 and D-P4 close *by detection*, and this page records that
 prevention was considered and refused: a hook can be bypassed by `Bash`, and a check that runs in the
 gate cannot.
@@ -165,13 +165,13 @@ gate cannot.
 
 **H1** adds `store:` to `aep.project/1`. `markdown` (the default, so no existing project changes
 meaning), `sqlite: <path>`, `hybrid: {authority, read, on_unreachable, on_divergence, local, replica}`.
-Every `protocol artifact` verb opens through it; `--store` remains the path override. A hybrid block
+Every `aep plan artifact` verb opens through it; `--store` remains the path override. A hybrid block
 missing any of its four words is refused at validation — the runtime's R-106, enforced at our edge.
 
 **H2** fills `TypeDescriptor::lifecycle` from the same `EntityDefinition` that
 `aep-backend-markdown::kernel` builds to decide a move, in the adapter, so all backends report it.
 Acceptance: `describe_type(story)` lists exactly the states and transitions
-`protocol artifact lifecycle story` prints, pinned by an equivalence test over every kind in the
+`aep plan artifact lifecycle story` prints, pinned by an equivalence test over every kind in the
 store. D-P5 closes.
 
 **H3** becomes `EntityBackend<PostgresStore>` — a few lines here once the runtime has the provider.
@@ -185,7 +185,7 @@ SQLite for tooling, both local, no network. The atomicity guarantee is **not** c
 the runtime's declared policy (`store-v0.1.md` § 10 — authority, read path, unreachable, divergence,
 recorded rather than swallowed, `catch_up` merges nothing), and the story's first acceptance line
 (*"written down first, as a decision with its rejected alternatives"*) is met by citing it. Two
-verbs are ours: `protocol artifact divergences` and `protocol artifact catch-up`, over
+verbs are ours: `aep plan artifact divergences` and `aep plan artifact catch-up`, over
 `Hybrid::divergences()` and `Hybrid::catch_up()`.
 
 ## 4. Decisions this plan takes
@@ -198,7 +198,7 @@ Each with the default taken if nobody answers. Silence does not block the work.
 | D-F2 | Which `entity-runtime` tag does F1 pin? | The newest release on the day F1 lands — `0.9.1` today. Not a floating `main`: the pin is the reversible half of ADR 0002 |
 | D-G1 | Does `MarkdownProvider` live here or in `entity-runtime`? | **Here.** A frontmatter-document provider is generic enough for the runtime, but ADR 0002 says nothing of ours appears there, and a provider shaped by one adopter's files is exactly the thing the arrow rule exists to keep out. Revisit only if a second adopter asks |
 | D-G2 | Where does a move's evidence provenance live on the event? | An `args` (or `decided_on`) map on `DomainEvent`, added by the runtime (`story:events-carry-what-they-were-decided-on`). Until then, in the envelope's `causation`, labelled |
-| D-G3 | Prevent out-of-band edits, or detect them? | **Detect.** `protocol artifact validate` reports drift per document; no hook, no lock |
+| D-G3 | Prevent out-of-band edits, or detect them? | **Detect.** `aep plan artifact validate` reports drift per document; no hook, no lock |
 | D-H1 | Does the runtime's gate reach a Postgres? | **Opt-in.** `entity-postgres` tests run when `ENTITY_POSTGRES_URL` is set, in a CI job with a service container; `task check` without it stays green and **prints that the step was skipped** — no silent cap |
 | D-H2 | Which two stores does the first hybrid compose? | `MarkdownProvider` + `SqliteStore`, both local. A remote replica waits for a `Transport` somebody ships, which the runtime has decided not to |
 | D-H3 | `story:postgres-backend` carries `depends_on: story:sqlite-backend` (superseded) and `story:hybrid-backend` carries `depends_on: story:postgres-backend` (no longer true) | The store has `relate` and no `unrelate`. The correct edges are added beside the stale ones and each story body names which is which; a `supersedes` edge from `sqlite-backend-adapter` to `sqlite-backend` records the replacement |
@@ -227,6 +227,6 @@ Each with the default taken if nobody answers. Silence does not block the work.
 ## 7. How each wave is accepted
 
 The same way D and E were, with the page added: the stories reach `implemented` through
-`protocol artifact move` on **recorded** evidence; the wave's release carries the changelog section;
+`aep plan artifact move` on **recorded** evidence; the wave's release carries the changelog section;
 two independent reviewers read the released commit; findings are fixed in the next patch release
 with the corrections named. `docs/status.md` grows one row per wave via `cargo xtask status`.

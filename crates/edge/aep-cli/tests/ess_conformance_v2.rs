@@ -915,7 +915,7 @@ fn cli_inspect_evaluate_aliases_and_pair_flag_refusals_use_the_actual_reader() {
     ];
     let observed = cli(&args);
     success(&observed);
-    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
