@@ -1,6 +1,6 @@
 ---
 title: Check what an agent run did
-sidebar_position: 9
+sidebar_position: 10
 description: Normalize a harness transcript into a typed event IR, judge it against a trace specification, and mint the verdict as evidence the protocol admits.
 ---
 
@@ -243,7 +243,7 @@ $B observe trace evidence --spec conformance/trace/expectations.trace.yaml \
     producer: verifier
     verifier: trace-checker
   provenance:
-    command: protocol trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
+    command: aep observe trace evidence --spec conformance/trace/expectations.trace.yaml --transcript crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
     inputs:
     - conformance/trace/expectations.trace.yaml
     - crates/observe/trace-spec/tests/fixtures/plugin-eval-7hTYjT.jsonl
@@ -275,35 +275,22 @@ against them, each verdict citing event indices; the passing check minting a tra
 evidence record with its digest pair; and a workflow transition that stays Blocked until exactly
 that record is submitted, then moves.](/img/trace-evidence-gate.svg)
 
-The drawing is of the mechanism, not a screenshot of any one run — and its last panel is still
-labelled *soon*, because it was drawn before the driver shipped. **The driver ships today.**
-`aep drive run` and `aep drive resume` walk command/operator workflows. Model-backed workflows
-use `metaharness aep drive run` and `metaharness aep drive resume`; `aep drive status` still reads
-their retained run records. The hosts make the engine's calls in order and record what they did.
-The driver evaluates no gate itself. A driver that could
-evaluate a gate would be a second protocol implementation with none of the conformance suites,
-and the first time the two disagreed the one nobody tested would win.
+The drawing shows the mechanism, not a screenshot of any one run. Its last panel is labelled *soon*
+because it was drawn before the driver shipped. The driver has shipped since: `aep drive run` and
+`aep drive resume` walk command/operator workflows, and model-backed workflows run under
+`metaharness aep drive run` over the same governor. `aep drive status` reads the run records of
+both. The driver evaluates no gate itself; it asks the engine before every transition.
 
-Running one needs a harness and a model, so there is no reproducible command for it on this page.
-There is a record instead, and it is not a success story. The first governed run of this
-repository's own backlog — `W4-1/1`, 2026-08-21 — **blocked**, in `establish_verifiers`, four
-states short of the person it was meant to stop at, on two requirements the engine printed: a
-specification artifact still in `draft`, and `test.first_result == failed` reading `passed`. Four
-model sessions, 80 hook decisions of which 11 were denials, and 11 `permission_denials` entries in
-the transcripts — one for one, each naming its tool. `aep observe trace check` decided those four
-transcripts, and `aep observe trace evidence` minted a `trace_conformance` record from one of them.
-What the run found was about the step map, not about the enforcement. The full record, including
-what it cost and what broke, is `docs/plan/harness-wave-4-governed-dogfood.md` § *The first run*.
+Running a driven workflow needs a harness and a model, so this page has no reproducible command for
+it. The shipped `development/checks` step map closes the loop in its `implement` state: a `command`
+step runs `aep observe trace evidence` over the session's own transcript and submits the record.
 
 ## Sources
 
 The checker and IR live in `crates/observe/trace-domain` and `crates/observe/trace-spec`; the specification
 format is published as `schemas/generated/trace-spec.schema.json`; the worked specification is
 `conformance/trace/expectations.trace.yaml`, whose forty-three expectations are checked
-against two committed transcripts by the ordinary test suite. Design and acceptance:
-`docs/design/transcript-conformance-design-v0.1.md`, `docs/plan/trace-wave-1-transcript-checker.md`.
-The driver is `crates/drive/aep-driver` behind `aep drive`, its enforcement arm is the plugin's
-hooks (`/path/to/agentplugins/plugins/aep-plan/README.md` § *The hooks, and what changed about "no hooks"*), and
-the governed-run record is `docs/plan/harness-wave-4-governed-dogfood.md`. For building a driver of
-your own against the same engine calls, see [Integrate an agent
-harness](./integrate-a-harness.md).
+against two committed transcripts by the ordinary test suite. The design is
+[transcript-conformance-design-v0.1.md](https://github.com/beyond10x/aep/blob/main/docs/design/transcript-conformance-design-v0.1.md).
+The driver is `crates/drive/aep-driver` behind `aep drive`. For building a driver of your own
+against the same engine calls, see [Integrate an agent harness](./integrate-a-harness.md).

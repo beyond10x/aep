@@ -349,7 +349,9 @@ are **one shape**: the adapter
 `entity_sqlite::SqliteStore`: whatever the contract holds, in one file, no server.
 [`aep-backend-markdown`](../../crates/plan/aep-backend-markdown/) is the same adapter over the plan's
 own provider — the markdown files under `.engineering/planning/` as a `Store`, one artifact per
-file, `journal.jsonl` as the event log — with a *projection* that keeps what a plan keeps and an
+file; in an `aep.project/5` store each move is a `transitions` entry in the artifact's front matter
+and each evidence record a file under `.engineering/evidence/`, and an older `aep.project/1` store
+keeps `journal.jsonl` as its event log — with a *projection* that keeps what a plan keeps and an
 entity does not carry: the prose, the edges in frontmatter, the ladder a status is checked against.
 This repository plans its own work in it. [`aep-backend-postgres`](../../crates/plan/aep-backend-postgres/)
 is the adapter over `entity_postgres::PostgresStore` — the store an organisation actually runs, two
@@ -381,6 +383,10 @@ plan is not theirs to write into.
 
 ## Choosing the store
 
+An `aep.project/5` project — what `aep plan reverse init` writes and `aep plan store migrate git`
+produces — keeps its plan in the Git-native store and accepts only `store: { git: {} }`. The
+selectors below are `aep.project/1` ones, kept for projects that have not migrated.
+
 One line in `.engineering/project.yaml` says where the plan is kept, and every `aep plan artifact`
 verb, `aep drive` and `aep plan conformance --backend project` open through it
 (`story:store-selection-in-project-yaml`):
@@ -398,7 +404,7 @@ runs every one of them, each as its own process, over `examples/planning-passkey
 
 | What | Markdown | SQLite, Postgres | Where it is written down |
 |---|---|---|---|
-| `validate` | also reconciles the documents against the event log: drift, a forged revision (a `revision:` above anything the log records — reported, never refused), deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
+| `validate` | on `/1`, also reconciles the documents against the journal (on `/5`, checks each artifact's `transitions` instead): drift, a forged revision (a `revision:` above anything the log records — reported, never refused), deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
 
 An edge used to be a second difference — a markdown document's revision moved when a relation was
 written into its frontmatter, an entity's did not — until every store counted it the contract's way:
@@ -541,7 +547,7 @@ manifest and answers against it:
 
 ```console
 $ B=target/debug/aep
-$ $B entity list --artifacts examples/development-passkeys/artifacts.yaml
+$ $B plan entity list --artifacts examples/development-passkeys/artifacts.yaml
 01MEM0000000000000001  aep.architecture-decision-record/v1  ep://local/manifest/architecture-decision-record/0042   r1
 01MEM0000000000000004  aep.design/v1                        ep://local/manifest/design/passkeys-auth                r1
 01MEM0000000000000007  aep.product-requirements/v1          ep://local/manifest/product-requirements/passkeys       r1
@@ -557,7 +563,7 @@ implementing it.
 And `describe_type` is what stops a harness hard-coding what a design is:
 
 ```console
-$ $B describe --artifacts examples/development-passkeys/artifacts.yaml aep.review-result/v1
+$ $B govern describe --artifacts examples/development-passkeys/artifacts.yaml aep.review-result/v1
 type       aep.review-result/v1
 summary    An artifact of kind `review-result`.
 mutable    no
@@ -567,7 +573,7 @@ commands
 ```
 
 ```console
-$ $B describe --artifacts examples/development-passkeys/artifacts.yaml aep.design/v1
+$ $B govern describe --artifacts examples/development-passkeys/artifacts.yaml aep.design/v1
 type       aep.design/v1
 summary    An artifact of kind `design`.
 mutable    yes

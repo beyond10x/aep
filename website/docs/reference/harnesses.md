@@ -1,5 +1,6 @@
 ---
 title: Harnesses and confinement
+sidebar_position: 8
 description: How Claude Code, Codex, and the b10x native loop are launched, governed, confined, and evidenced.
 ---
 

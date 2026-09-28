@@ -22,7 +22,7 @@ Four surfaces, no two on one file, merged onto one branch and closed by one gate
 | **9.0 G of build directories standing from another repository's waves** | `~/.cache/harness-wave3/target` 6.2 G, `~/.cache/harness-wt-gate-target` 2.3 G, `~/.cache/harness-wt-install-target` 479 M — all three contain `b10x-harness` artefacts, not this workspace's. Left standing: they are not this repository's to delete |
 | **eight merged branches standing** — six `impl/*`, two `wave/*` | `git merge-base --is-ancestor <b> main` succeeds for all eight. Both previous waves predate the cleanup step |
 | `sccache` at `/usr/bin/sccache`, wired at `~/.cargo/config.toml:60` | `RUSTC_WRAPPER` unset in the shell; the cargo config carries it |
-| a package-scoped build in a fresh worktree: **30 s wall, 1.6 G target** | measured 2026-08-30 for the previous wave on this tree at `a8b139b` — `docs/plan/wave-the-driver-owes-only-tests.md:26`. **Re-measured in stage 2 before N is fixed** |
+| a package-scoped build in a fresh worktree: **30 s wall, 1.6 G target** | measured 2026-08-30 for the previous wave on this tree at `a8b139b` — `docs/plan/archive/wave-the-driver-owes-only-tests.md:26`. **Re-measured in stage 2 before N is fixed** |
 | **so N = 4 costs ~6.4 G** | 4 × 1.6 G against 74 G free |
 | build directory placement: **inside the worktree** | `AGENTS.md:493-502`. The skill's own reference still says *"usually outside it"* — see § 6 |
 

@@ -21,7 +21,7 @@ executes the three kinds of step that touch the world, and records what happened
 | It supplies | You supply |
 |---|---|
 | the loop: initialize, ask, act, submit, transition | the model, the shell and the person |
-| `aep drive transition` — the engine as a program a *native* flow consults at each section boundary, so a `b10x-harness workflow run` is governed without walking here | the loop that walks, and a hooks file naming the verb |
+| the governor a *native* flow consults at each section boundary — now `metaharness aep drive transition`; `aep drive transition` refuses and names it | the loop that walks, and a hooks file naming the verb |
 | a **step map** — what a harness *does* in each state — as the fifth document kind, under `drivers/` | a step map for your repository, or the shipped `drivers/development/default.yaml` |
 | a run directory under `.engineering/runs/<run-id>/`, and a store lock with a liveness probe | nothing; `resume` re-takes it |
 | three step kinds: `llm` (a model session), `command` (a program) and `operator` (a person) | which of them each state needs |
@@ -55,8 +55,8 @@ make the step submit nothing and say why — D5's `Unknown`, never a failing ver
 
 * the document is missing or does not parse;
 * it holds more than one record, because a step establishes one thing;
-* it is an approval, or anything a person is recorded as having produced (invariant 7 at the layer a
-  file path opens).
+* it is an approval, or anything a person is recorded as having produced (the engine never
+  manufactures evidence, applied at the layer a file path opens).
 
 `drivers/development/default.yaml` uses both. Its suite, diff, static-analysis and contract steps are
 minted from an exit status; three of its steps read a record a verb wrote, and a fourth verb does the
@@ -114,6 +114,10 @@ with `--approver`, whose recorded approval the resume counts unless it is the ru
 `regression_suite.result == passed`, which is not written as an evidence requirement — so a map can
 pass this check and still block at completion, and the shipped cargo map carries a
 `suite: regression` step for exactly that reason.
+
+A map with an `llm` step is now run by `metaharness aep drive run`: `aep drive run` refuses it
+before allocating a run and names that command. A map with no `llm` step still runs under
+`aep drive run`.
 
 Enforcement is one policy with one enforcer, since `epic:metaharness-migration` (2026-08-22):
 every `llm` step is spawned through `metaharness run claude` in ask mode, and the driver's own
@@ -396,7 +400,7 @@ per requirement, each naming the document that asked for it, and it is already w
 Summarising it into "some checks failed" throws away the only part that tells anyone what to do.
 
 ```console
-$ $B evaluate --task examples/development-passkeys/task.yaml \
+$ $B govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --evidence examples/development-passkeys/evidence/02-implementation.yaml \

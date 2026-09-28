@@ -200,7 +200,7 @@ policy language meant to replace OPA."*
 
 On 2026-08-21 the operator decided that the repository ships a reference driver: the first in-repo
 implementation of the harness contract, designed in
-[`harness-planning-and-driver-design-v0.1.md`](../design/harness-planning-and-driver-design-v0.1.md)
+[`harness-planning-and-driver-design-v0.1.md`](../../design/harness-planning-and-driver-design-v0.1.md)
 § 4. The refusal as written forbids it, and an agent reading that line is right to refuse the work.
 The refusal is not deleted — it is **narrowed**, and the narrowing is marked as one, so a reader can
 see that a boundary moved rather than finding a boundary that quietly differs from last month's.
@@ -219,7 +219,7 @@ And the argument, which is the part that has to be written down, because a narro
 reason beside it is indistinguishable from a refusal somebody forgot:
 
 > The harness contract — seven calls, three rules — is published in
-> [`docs/guide/harness.md`](../guide/harness.md) and mandated by the normative consolidated design,
+> [`docs/guide/harness.md`](../../guide/harness.md) and mandated by the normative consolidated design,
 > and it is implemented by no program in this repository. A contract with zero implementations is the
 > same defect as an invariant enforced by nothing. The driver is that implementation, and the line it
 > does not move is the one that mattered: the engine still evaluates and never acts (invariant 7
@@ -418,7 +418,7 @@ needs a row:
 
 | proposed design | status |
 |---|---|
-| `harness-planning-and-driver-design-v0.1.md` | **Phase 1 accepted** by `docs/plan/harness-wave-1-planning-plugin.md` (harness wave 1); its Phase 2 reference driver is **decided** (vision V-5) and **not accepted for build** — a feasibility review comes first |
+| `harness-planning-and-driver-design-v0.1.md` | **Phase 1 accepted** by `docs/plan/archive/harness-wave-1-planning-plugin.md` (harness wave 1); its Phase 2 reference driver is **decided** (vision V-5) and **not accepted for build** — a feasibility review comes first |
 
 **§ Current state, "Not built yet".** It says: *"any durable backend — the only implementation of the
 contract is in memory."* After this wave that sentence is half false, and the false half is the half

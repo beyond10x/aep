@@ -34,8 +34,8 @@ export default function NotFoundContent({className}: {className?: string}): Reac
             <span>what this is, and how to run it</span>
           </li>
           <li>
-            <Link to="/docs/getting-started">Getting started</Link>
-            <span>the CLI, on a real document tree</span>
+            <Link to="/docs/getting-started">Quickstart</Link>
+            <span>install aep and plan a first story</span>
           </li>
           <li>
             <Link to="/docs/examples/governed-task">See it work</Link>

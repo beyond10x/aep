@@ -1,155 +1,115 @@
 # AGENTS.md — AEP
 
-The contract for changing this repository. Read it before changing anything.
+The contract for changing this repository. Read it before changing anything. What AEP is and how
+to use it is in [`README.md`](README.md) and the [documentation](https://beyond10x.github.io/docs/aep/).
+Organization-wide rules live in `atlas/AGENTS.md`; a change to bytes another repository verifies is
+a coordinated migration with an Atlas ADR.
 
-Organization-wide repository, language, history, provenance, and coordinated-migration rules live
-in `atlas/AGENTS.md`. A change to bytes another repository verifies is a coordinated migration with
-an Atlas ADR.
-
-## Serves
-
-This repository advances these objectives from `atlas/ROADMAP.md`:
-
-- **O2 — decisions as data, with evidence.** Artifact state, lifecycle, legal moves, rules,
-  evidence, and completion are data a deterministic engine decides.
-- **O3 — any harness, observed and compared.** AEP supplies the governor, trace vocabulary,
-  reference driver, and evaluation substrate; harness-specific readers and paid runs stay outside
-  this repository.
-
-A change that advances neither objective is a question for the operator, not an inferred task.
-
-## What this repository is
-
-A Rust library collection, a typed document tree, and one command, `aep`. Every crate lives under
-the area that says what it is for; `xtask` is the build tool and has no area:
-
-- `crates/govern/` — `aep-domain` and `aep-engine`: the protocol vocabulary and the deterministic
-  decisions taken over it.
-- `crates/plan/` — `aep-contract`, `aep-conformance`, `aep-client` and the `aep-backend-*` crates:
-  the storage contract, the suites that hold a provider to it, the official client, and the
-  backends.
-- `crates/drive/` — `aep-driver-spec`, `aep-driver` and `aep-render`: reference step maps,
-  deterministic driving, and drawing a workflow and a run over it.
-- `crates/observe/` — `trace-domain`, `trace-spec` and `aep-ess-evidence`: normalizing and checking
-  recorded harness activity, and the optional ESS report adapter at the AEP boundary.
-- `crates/profile/` — `aep-profile-development` and `aep-profile-operations`: development and
-  operations vocabulary over the substrate.
-- `crates/edge/` — `aep-schema`, `aep-project` and `aep-cli`: the published document schemas,
-  the filesystem and Git acquisition edge, and the `aep` command.
-
-It is not an LLM orchestration framework, hosted database, CI system, deployment platform,
-marketplace, system-modeling toolchain, or credential holder. The engine decides from caller-supplied
-documents and evidence; named edge crates own IO.
+This repository serves `atlas/ROADMAP.md` objectives **O2** (decisions as data, with evidence) and
+**O3** (any harness, observed and compared). A change that advances neither is a question for the
+operator, not an inferred task.
 
 ## Normative documents
 
 | Subject | Authority |
 |---|---|
-| protocol semantics | `docs/design/consolidated-design-v0.2.md` and accepted reconciliation |
-| artifact completion evidence | accepted portions of `docs/design/story-completion-evidence-design-v0.1.md` |
+| protocol semantics | `docs/design/consolidated-design-v0.2.md` and `docs/design/reconciliation-v0.2.md` |
+| planning store (`aep.project/5`) | `docs/design/git-native-planning-store-v0.1.md` |
+| artifact completion evidence | § 10.1 of `docs/design/story-completion-evidence-design-v0.1.md` |
 | transcript checking | `docs/design/transcript-conformance-design-v0.1.md` |
 | driver and harness boundary | `docs/design/harness-planning-and-driver-design-v0.1.md` |
-| open work and acceptance | `.engineering/planning/` plus accepted pages under `docs/plan/` |
-| delivered releases | `docs/status.md`, generated from reachable annotated tags |
+| open work and acceptance | `.engineering/planning/`, plus the live pages listed in `docs/plan/README.md` |
+| delivered releases | `docs/status.md`, generated from annotated tags by `cargo xtask status` |
 
-A design is proposed until a plan or planning artifact accepts it. Historical prose does not
-override a later accepted decision.
+Every design's status is in `docs/design/README.md`. A design is proposed until a plan or planning
+artifact accepts it; a later accepted decision overrides earlier prose. Pages under
+`docs/plan/archive/`, `docs/design/archive/` and `docs/reviews/` are dated records: do not rewrite
+them.
 
 ## Repository boundaries
 
 ### Areas
 
-`crates/<area>/<crate>` is a dependency claim, not filing. A crate compiles against its own area and
-the ones under it: `edge` → `{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. One
-compiled dependency crosses it the other way — `aep-engine` uses `aep_contract::command`
-(`crates/govern/aep-engine/src/trail.rs:15`) so a decision can carry the command context that caused
-it — and it is left in place rather than papered over. Test-only dependencies are outside the rule
-and two of them point at `edge`: `aep-engine` and `aep-driver` are tested against `aep-project` and
-`aep-schema`. The layout itself is checked by `xtask`'s `layout_tests`, which refuse a member
-outside an area and a crate the workspace does not build.
+Every crate lives at `crates/<area>/<crate>`: `govern` (domain, engine), `plan` (contract,
+conformance, client, backends), `drive` (driver, step maps, rendering), `observe` (trace checking,
+ESS evidence adapter), `profile` (development and operations vocabulary), `edge` (schemas,
+filesystem and Git acquisition, the `aep` CLI). `xtask` is the build tool and has no area.
+
+A crate compiles against its own area and the ones under it: `edge` → `{profile, drive, observe}` →
+`{govern, plan}` → `aep-domain`. The one compiled exception is `aep-engine` → `aep_contract::command`
+(`crates/govern/aep-engine/src/trail.rs`). Test-only dependencies are outside the rule. Enforced by
+`xtask`'s `layout_tests` (run by `test`) and `xtask/tests/crate_paths_are_area_qualified.rs`.
+
+The engine decides from caller-supplied documents and evidence; only `edge` crates do IO.
 
 ### Entity Runtime
 
-The dependency arrow points from AEP to `entity-runtime`. Its IO-free kernel and providers are
-pinned as one release. No Entity Runtime manifest names an AEP crate. Changing that direction or
-changing verified bytes is a coordinated migration.
-
-`cargo xtask deps` refuses more than one Entity Runtime version or pin, refuses any compiled
-`ess-*` modeling crate, and refuses any event-log crate (`eventlog-*`, `entity-eventlog`): AEP
-reads no event-log store.
+AEP depends on `entity-runtime` (`entity-core` decides every lifecycle move); no Entity Runtime
+manifest names an AEP crate. Every `entity-*` crate is pinned once, at one revision, in the root
+`Cargo.toml`. `dep-check` (`cargo xtask deps`) refuses two versions or two pins of an `entity-*`
+crate, any compiled `ess-*` modeling crate, and any event-log crate (`eventlog-*`,
+`entity-eventlog`). Changing the dependency direction is a coordinated migration.
 
 ### ESS
 
-ESS is a standalone sibling repository. It owns executable system descriptions, compilation,
-generation, synthesis, infrastructure import and projection, and its own conformance report. ESS
-has no AEP dependency.
+ESS is a sibling repository with no AEP dependency. Core AEP must not compile against ESS modeling
+types (`dep-check`). Only `aep-ess-evidence` reads the standalone ESS conformance report, and it
+refuses unknown fields and contradictory totals (its tests, under `test`).
 
-Core AEP must not compile against ESS modeling types. The optional `aep-ess-evidence` crate may read
-the closed standalone report format and convert it into AEP `ess_conformance` evidence. That adapter
-must refuse unknown fields and contradictory totals.
+### Agent plugins, Harness and Metaharness
 
-### Agent plugins
+Skills, agents and marketplace manifests live in the sibling `agentplugins` repository; this
+repository carries none. AEP has no dependency on Metaharness or Harness. Model execution, native
+hooks and live plugin evaluation belong to `metaharness aep drive`; an `aep` invocation of a
+model-backed step map refuses before allocating a run and names that command. `aep drive eval run
+--stream` spends nothing. Plugin inputs are explicit directories or exact marketplace pins; never
+install a plugin or guess a path under this checkout.
 
-Harness-specific skills, agents, and marketplace manifests live in the sibling `agentplugins`
-repository. This repository carries no plugin source and no marketplace manifest.
+### Public source
 
-`metaharness aep drive` owns model execution and live plugin evaluation. Plugin inputs remain
-explicit: directories or exact marketplace pins. AEP's offline ingestion records the treatment
-the stream attests and never installs a plugin or guesses a path under this checkout.
-
-### Metaharness
-
-Metaharness depends on AEP's neutral libraries; AEP has no runtime or Cargo dependency on
-Metaharness or Harness. Concrete execution, native hooks and live evaluation live in
-`metaharness aep drive`. This repository retains governor decisions, run storage, command/operator
-execution, language-neutral trace fixtures, evaluation definitions and offline ingestion.
-
-An AEP invocation of a model-backed map refuses before run allocation and names the replacement
-command. Metaharness preserves explicit live authorization, exact spend caps and compatible
-paused runs. `aep drive eval run --stream` spends nothing.
-
-### Public-source provenance
-
-Public repositories carry product source and public technical history only. Public Gates owns
-generic security/privacy checks and bot delivery under Atlas ADR 0048. Credentials, signing keys
-and actual private policy values stay protected outside public source. Do not add private paths,
-private identities or a public denylist here. Superseded brand-exemption categories do not authorize
-new public associations.
+Public source and public technical history only. No private paths, private identities,
+credentials, signing keys, private policy values or a public denylist. Enforced by the Gates hooks
+(see *Releases and commits*).
 
 ## Invariants
 
 Each invariant names what enforces it. A rule without a check is not an invariant.
 
-1. **Rust types are the source of truth.** Generated schemas under `schemas/generated/` are written
-   only by `cargo xtask schema`; `schema-check` detects changed and orphaned files.
-2. **Parse, then validate.** Raw document types may deserialize; validated domain types are created
-   only through validation. Unknown fields on closed formats are refused.
+1. **Rust types are the source of truth.** `schemas/generated/` is written only by
+   `cargo xtask schema`; `schema-check` refuses changed and orphaned files.
+2. **Parse, then validate.** Raw document types deserialize; validated types are built only by
+   validation, and closed formats refuse unknown fields. `tests/invariants.rs` in `aep-domain` and
+   `aep-driver-spec` (`test`).
 3. **Validation accumulates.** Independent defects are reported together with stable codes and
-   paths. Tests assert variants or codes, never only `is_err()`.
-4. **Decisions are deterministic.** Domain and engine code use ordered collections and caller-
-   supplied time. No ambient clock, random source, filesystem, environment, or network belongs in
-   deterministic cores.
+   paths; tests assert variants or codes, never only `is_err()` (`test`).
+4. **Decisions are deterministic.** Ordered collections, caller-supplied time; no ambient clock,
+   randomness, filesystem, environment or network in deterministic cores. `tests/determinism.rs`
+   banned-token scans in `aep-domain`, `aep-client`, `aep-driver-spec`, `aep-driver`, `aep-render`
+   (`test`).
 5. **Unknown differs from false.** A missing observation cannot satisfy a predicate and is not
-   rewritten as a contradiction.
-6. **Capability decisions default to deny.** A denial cannot be granted back by a later layer.
-   Resolution and explain tests cover conflicts and provenance.
-7. **Refusals change nothing.** Failed commands and transitions do not partially mutate stores;
-   backend conformance suites cover rollback and idempotency.
-8. **Audit is append-only.** Actor, executor, correlation, causation, and idempotency metadata cross
-   the command boundary. Archive and supersede are the lifecycle vocabulary; deletion is not.
-9. **Planning status is decided as data.** `entity-core` evaluates validated lifecycle definitions;
-   no generic status setter exists in AEP.
-10. **The ESS adapter is optional and narrow.** No AEP core manifest depends on an ESS crate;
-    dependency scans and adapter tests hold this boundary.
-11. **Plugin authority is explicit.** No repository-local fallback chooses a plugin. Launch records
-    preserve the operator-supplied directories.
-12. **Public APIs are documented and unsafe is forbidden.** Workspace lints are raised to errors by
-    Clippy and rustdoc gate steps; every member opts into workspace lints.
+   rewritten as a contradiction (`test`).
+6. **Capability decisions default to deny.** A denial cannot be granted back by a later layer;
+   resolution and explain tests cover conflicts and provenance (`test`).
+7. **Refusals change nothing.** A failed command or move writes nothing. The `aep-conformance`
+   suites, `aep-backend-entity/tests/atomic_commands.rs` and
+   `aep-backend-memory/tests/failure_atomicity.rs` (`test`).
+8. **Audit is append-only.** A move appends one entry to the artifact's `transitions`; archive and
+   supersede replace deletion. `aep plan artifact validate` refuses transitions that are not
+   continuous, do not end in the artifact's status or, for moves made in this layout, do not follow
+   its lifecycle (`plan-check`); the conformance `audit` and `immutability` suites (`test`).
+9. **Planning status is decided as data.** `entity-core` evaluates validated lifecycles; AEP has no
+   generic status setter and one write path. `aep-contract/tests/write_surface.rs` (`test`).
+10. **The ESS adapter is optional and narrow.** No core manifest depends on an ESS crate
+    (`dep-check`, adapter tests).
+11. **Plugin authority is explicit.** No repository-local fallback chooses a plugin; launch records
+    keep the operator-supplied directories (`aep-cli` drive tests, `test`).
+12. **Public APIs are documented and unsafe is forbidden.** Workspace lints, raised to errors by
+    `clippy` and `doc-check`; every member opts into workspace lints.
 13. **The gate is offline except by an opted-in name.** No check calls a model or spends money.
-    `postgres-check` reaches only `ENTITY_POSTGRES_URL` when it is set and prints that it skipped
-    otherwise. Cargo and the website package manager may populate their caches on a cold machine.
+    `postgres-check` reaches only `ENTITY_POSTGRES_URL` when set and prints that it skipped
+    otherwise. Cargo and npm may fill their caches on a cold machine.
 14. **A guard is mutation-tested before it is trusted.** Break the guarded condition, observe the
-    named failure, restore it, and run the passing test.
+    named failure, restore it, and run the passing test. Reviewed, not automated.
 
 ## Gate
 
@@ -157,99 +117,91 @@ Each invariant names what enforces it. A rule without a check is not an invarian
 task check
 ```
 
-Read the command's own exit status. Do not pipe the authoritative run through a command whose exit
-status replaces it.
+Read the command's own exit status; never pipe the authoritative run through a command whose exit
+status replaces it. CI and the release workflow delegate to `task check` (`status-check` refuses
+drift). A change under `website/` is exercised by the `website` step.
 
 <!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->
 `task check` runs **16 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `msrv`, `website`.
 <!-- generated:gate-steps:end -->
 
-The list above is generated from `Taskfile.yml`; do not edit it by hand. Prose states no count of
-test suites or test cases. The gate output is the only place that count belongs.
+What the other steps refuse: `status-check` a stale generated region (this list, `docs/status.md`,
+the website's currency line); `version-check` a workspace version that differs from the newest
+tag; `guard-check` a test body duplicated across crates; `claim-check` a released `### Fixed`
+entry naming something absent at the previous release; `docs-check` a CLI verb missing from
+`website/docs/reference/cli.md`. Prose states no count of tests; the gate output is the only place
+that count belongs.
 
-`task check` is authoritative. A change under `website/` must also be exercised through the same
-website task the gate calls. CI delegates to the Taskfile rather than restating its steps.
+`audit-check` and `plan-check` run the `.engineering/checks` suite and the planning validator
+through `aep`; the checks use `AEP_BIN` when it is set and executable. Set it to a build of this
+tree (`AEP_BIN=<target>/release/aep task check`) so an older installed `aep` is never what runs.
 
-## Planning artifacts
+## Planning store
 
-The planning store is `.engineering/planning/`. Use the installed AEP planning skill and this
-checkout's CLI vocabulary before any store write; planning mutations go through the CLI.
+The plan is `.engineering/planning/`, an `aep.project/5` store: one Markdown file per artifact
+(`aep.planning-md/3`) is the authority, moves are recorded in its `transitions` front matter, each
+evidence record is one immutable file under `.engineering/evidence/`, and Git is the history.
 
-Before the first planning-store write in a session, run:
-
-```console
-aep plan artifact list
-```
-
-Rules:
-
-1. Never edit a planning artifact or journal directly.
-2. Create with `aep plan artifact new`, relate with `relate`, write prose with `body`, and change
-   status only with `move`.
-3. A status move is a claim about project state. Propose it unless the operator requested that
+1. Write only through the CLI: `aep plan artifact new | relate | unrelate | body | set | scope |
+   move | evidence`. Each write changes one artifact file, plus one evidence file for `evidence`.
+2. Never hand-edit machine-owned front matter (`format`, `id`, `kind`, `status`, `revision`,
+   `relations`, `transitions`) and never edit or delete an evidence file. Retire an artifact with
+   `move --to archived`, never `rm`.
+3. A status move is a claim about project state. Propose it unless the operator asked for that
    exact move.
-4. A refusal is an answer. Relay the legal moves the command prints; do not route around it.
-5. After a batch, run `aep plan artifact validate` and relay its output verbatim.
-6. An already-satisfied or invalid request still gets an artifact recording the finding when the
-   operator asked for planning work.
+4. A refusal is an answer: relay the legal moves it prints; do not route around it.
+5. After a batch of writes, run `aep plan artifact validate` and relay its output verbatim.
+   `plan-check` runs the same validator.
+6. When the operator asked for planning work, an already-satisfied or invalid request still gets an
+   artifact recording the finding.
 
-Do not improvise machine-owned frontmatter if the command is absent.
+## Conventions
 
-## Change conventions
-
-- Use `rg` and `rg --files` for discovery.
-- Preserve unrelated work in dirty worktrees.
-- Use `apply_patch` for source edits. Bulk mechanical rewrites and formatter output may use their
-  dedicated tools.
-- Anything executable added or replaced here is Rust unless Atlas records an accepted exception.
-  Existing shell and Python checkers are legacy; touching their behavior triggers replacement,
-  not extension.
-- Rust CLIs use `clap` derive.
-- Tests are named for behavior and assert the reason for failure.
+- Anything executable added here is Rust, with `clap` derive for command lines. Existing shell
+  checkers are legacy: changing their behaviour means replacing them.
+- Tests are named for behaviour and assert the reason for failure.
 - Comments explain why; public docs explain what a type is for.
-- Prefer no new dependency. Explain every necessary dependency beside its manifest entry.
-- `CHANGELOG.md` gains an Unreleased entry for every user-visible change.
-
-The direct dependency policy is recorded in the workspace manifests and enforced by the lockfile,
-Clippy, tests, and dependency guard. The AEP domain must not acquire IO dependencies.
-
-## Worktrees and concurrency
-
-Use a dedicated worktree for coordinated work. Before editing, inspect `git status`, active
-worktrees, and overlapping changes. A shared Cargo target directory is acceptable for builds but
-never for generated source. Run generators only from the worktree whose files they own.
-
-When another agent is integrating the same repository, stop at a clean handoff boundary. Do not
-merge, rebase, publish, or rewrite shared state without explicit authority.
+- Prefer no new dependency; justify each one beside its manifest entry. `aep-domain` takes no IO
+  dependency.
+- `CHANGELOG.md` gains an Unreleased entry for every user-visible change. Rationale goes in the
+  commit message or `docs/design/`, not the changelog.
+- Preserve unrelated work in dirty trees. Use a dedicated worktree; a shared Cargo target is fine
+  for builds, never for generated source — run generators (`cargo xtask status`, `cargo xtask
+  schema`) only in the worktree that owns their output.
+- When another agent is integrating this repository, stop at a clean handoff. Do not merge,
+  rebase, publish or rewrite shared state without explicit authority.
 
 ## Releases and commits
 
-Bare semantic-version tags are the organization convention. The full gate passes before the
-changelog is cut and the annotated tag is created. Tag, workspace version, and dated changelog
-heading must agree.
+Every commit, push, tag and GitHub write is `b10x-bot[bot]`'s: `b10x-gates bot -- <git command>`
+for Git, `b10x-gates api` for REST writes. Install the hooks with
+`b10x-gates --repository beyond10x/aep install`; they scan the index, names, messages, metadata,
+tags and every outgoing commit, and the shared Gates check is required before a merge. Private
+policies and signing keys stay outside this repository. Commit titles use `feat:`, `fix:`, `docs:`, `refactor:`, `test:` or
+`chore:`, then a blank line and a body; ticket references go in a trailing `Refs:` line.
 
-**The tag goes on a commit that is on `origin/main`** — merge the branch first, then tag. Every
-other release check is computed from `HEAD`, so a tag on a feature branch passes all of them while
-naming a line nobody builds on. `0.48.0` was cut that way and read complete; `0.49.0` was then cut
-from a `main` that had never seen it, and the newer version shipped without the older one's
-lifecycle. `cargo xtask release` checks this now.
+Tags are bare semantic versions (`0.64.0`). A release:
 
-Install coordinated local hooks with `b10x-gates --repository beyond10x/aep install`. Use
-`b10x-gates bot` for direct commits, tags and pushes, retaining `b10x-bot[bot]`, and Gates `check`,
-`verify` and `publish` for signed common evidence. The hooks scan the index, names, messages,
-metadata, tags and every outgoing commit. Require the shared GitHub check before integration.
-Private policies and enrolled signing keys stay outside this repository; candidate suppression
-files carry no authority. Historical exceptions identify an exact rule, location and content
-digest at an explicit baseline, without rewriting history.
-
-Common receipt reuse preserves every AEP correctness and release requirement. Source changes,
-rebases, policy changes and scanner upgrades invalidate it. Ordinary commit/publish paths need no
-Atlas checkout, current Atlas main or organization-wide admission. Atlas owns documentation
-validation and Website coordination; documentation failures affect documentation delivery only.
-
-Conventional commit prefixes are `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
-Commit messages have a title, a blank line, and a body explaining what changed and why. Ticket
-references belong in a trailing `Refs:` line, never the title.
+1. On a `release/<version>` branch from current `origin/main`: set the workspace version in
+   `Cargo.toml` (and `Cargo.lock`), and turn `## [Unreleased]` into `## [<version>] — <date>`.
+2. Commit `chore: release <version>` and create the annotated tag locally:
+   `b10x-gates bot -- tag -a <version> -m "aep <version>"`.
+3. Run `cargo xtask status` (it derives `docs/status.md` and the website currency from the tag),
+   fold its output into the release commit, and re-create the tag on that commit.
+4. Full gate on that tree: `AEP_BIN=<target>/release/aep task check`, exit 0.
+5. Push the branch and the tag, open the release PR through `b10x-gates api`, and merge it through
+   the bot with a merge commit (never a squash) once the required checks are green, so the tagged
+   commit is on `origin/main`. If a fix lands on the branch first, move the tag to the branch
+   head.
+6. Verify the `Release` workflow run for the tag succeeded and the GitHub Release carries the four
+   `aep-<version>-<target>.tar.gz` archives and `SHA256SUMS`.
+7. Record the release on a `plan/release-<version>-record` branch:
+   `aep plan artifact evidence epic:planning-on-entity-runtime --kind test_result --source "release
+   <version>: tag commit <sha>, Release run <id>; task check exit 0" --ref <Release run URL>`,
+   merged the same way.
+8. `cargo xtask release` (`task release-check`) prints 6/6 `ok`: version, tag on `origin/main`,
+   changelog heading, pushed tag, GitHub Release, and a planning-store `test_result` naming the
+   tag's commit. Only then is the release done; see *Release completion* below.
 
 <!-- b10x-docs-operations:start -->
 ## Public documentation operations

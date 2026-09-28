@@ -1,6 +1,6 @@
 ---
 title: Integrate an agent harness
-sidebar_position: 3
+sidebar_position: 9
 description: The engine's seven calls, the three rules a harness must get right, and how to persist and replay an execution.
 ---
 
@@ -64,7 +64,7 @@ This map needs a model and costs money. For a map with an `llm` step the host ne
 environment opt-in `METAHARNESS_LIVE=1`, an outer `--budget-usd`, and a conservative
 `--assume-usd-per-run` charge that it reserves before every launch. `drive status` reads the run
 directory and needs nothing. `--map` is not optional in this tree: two step maps are written
-against `adp/default/1`, so a `drive run` given neither is refused, naming both ids rather than picking the first
+against `adp/default/2`, so a `drive run` given neither is refused, naming both ids rather than picking the first
 as shown by the current command's `--help` and project map discovery.
 
 It evaluates no gate itself. A driver that could evaluate a gate would be a second protocol

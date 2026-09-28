@@ -175,8 +175,8 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          to: '/docs/examples/governed-task',
-          label: 'See it work',
+          to: '/docs/getting-started',
+          label: 'Quickstart',
           position: 'left',
         },
         {
@@ -207,10 +207,11 @@ const config: Config = {
         {
           title: 'Documentation',
           items: [
-            {label: 'Introduction', to: '/docs'},
-            {label: 'Getting started', to: '/docs/getting-started'},
-            {label: 'Architecture overview', to: '/docs/concepts/overview'},
-            {label: 'Design principles', to: '/docs/concepts/design-principles'},
+            {label: 'Overview', to: '/docs'},
+            {label: 'Quickstart', to: '/docs/getting-started'},
+            {label: 'How AEP fits together', to: '/docs/concepts/overview'},
+            {label: 'The planning store', to: '/docs/concepts/planning-store'},
+            {label: 'Migrate an older store', to: '/docs/guides/migrate-an-older-store'},
             {label: 'CLI reference', to: '/docs/reference/cli'},
           ],
         },

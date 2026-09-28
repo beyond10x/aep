@@ -2,14 +2,14 @@
 
 > **Repository:** `beyond10x/aep`
 > **Status:** **Phase 1 accepted for implementation** by
-> [`docs/plan/harness-wave-1-planning-plugin.md`](../plan/harness-wave-1-planning-plugin.md), 2026-08-21.
+> [`docs/plan/archive/harness-wave-1-planning-plugin.md`](../plan/archive/harness-wave-1-planning-plugin.md), 2026-08-21.
 > **Phase 2 is decided and designed, and is not accepted for build** by that page or by any other:
 > the vision narrowing it depends on is recorded (V-5 in
-> [`control-document-updates.md`](../plan/control-document-updates.md)), and the build waits behind
+> [`control-document-updates.md`](../plan/archive/control-document-updates.md)), and the build waits behind
 > its own feasibility review.
 > **Wave-2 update, 2026-08-21:** § 4.7 takes the six decisions § 4.5 named, § 4.8 adds the
 > enforcement mapping and § 4.9 the adapter surface, driven by
-> [`harness-wave-2-driver-decision.md`](../plan/harness-wave-2-driver-decision.md). §§ 4.1–4.6 are
+> [`harness-wave-2-driver-decision.md`](../plan/archive/harness-wave-2-driver-decision.md). §§ 4.1–4.6 are
 > unchanged, deliberately: the corrections the update makes to them are recorded *in* the update, so
 > that a reader sees what was found rather than a document that was always right. **Still not
 > accepted for build.**
@@ -723,7 +723,7 @@ leaves standing:
 
 ### 4.7 Wave-2 update — the six decisions, taken
 
-> **Added 2026-08-21 by [`harness-wave-2-driver-decision.md`](../plan/harness-wave-2-driver-decision.md).**
+> **Added 2026-08-21 by [`harness-wave-2-driver-decision.md`](../plan/archive/harness-wave-2-driver-decision.md).**
 > Sections 4.1–4.6 are unchanged; this section, § 4.8 and § 4.9 are the wave-2 addition. Nothing
 > here is accepted for build either: it is what the feasibility review has to attack, and its job is
 > to leave that review with claims specific enough to be wrong.
@@ -1162,7 +1162,7 @@ document a person wrote, and anything the driver mints for itself carries
 **Rejected.** *Queue* — a queued approval is a run that is neither finished nor failed and whose
 state lives in a process. *Auto-approve behind a flag* — a gate a caller's own flag can satisfy is
 not a gate, the same argument trace wave 1 makes about `--advisory`
-(`docs/plan/trace-wave-1-transcript-checker.md:39`). *Refuse on a non-empty `approval_required`* —
+(`docs/plan/archive/trace-wave-1-transcript-checker.md:39`). *Refuse on a non-empty `approval_required`* —
 refuses every run, as above; named because it is the obvious answer and it is wrong.
 
 **Wave 3 must test.** A headless run under `development.standard` with no production path **starts** —
@@ -1219,7 +1219,7 @@ in a file or in that prompt, which is the property that makes the next point tru
 **The honest cost, and where it is measured.** Per-step means re-sending the preamble, so a state
 with four `llm` steps pays four of them. That cost is *observable* rather than arguable: the trace
 family already measures the per-step `gen`/`exec` split and the token census
-(`docs/plan/trace-wave-1-transcript-checker.md:78-79`, `:117-119`). If it dominates, the fix is
+(`docs/plan/archive/trace-wave-1-transcript-checker.md:78-79`, `:117-119`). If it dominates, the fix is
 fewer and larger `llm` steps in the map — a document change, reviewable in a diff — not a stateful
 session that trades the replay claim for tokens.
 
@@ -1289,7 +1289,7 @@ fix code nobody ran, which is the guide's own named failure (`docs/guide/harness
 | OOM, killed process, missing binary | no | Unknown |
 | network error inside a step that reaches the network | no | Unknown |
 | suite ran to completion and reported failures | yes | False |
-| `protocol trace check` exit 3 — nobody found out (`docs/plan/trace-wave-1-transcript-checker.md:147-149`) | no verdict, **but a record exists** | Unknown, *and* the record is submitted |
+| `protocol trace check` exit 3 — nobody found out (`docs/plan/archive/trace-wave-1-transcript-checker.md:147-149`) | no verdict, **but a record exists** | Unknown, *and* the record is submitted |
 
 The last row is the one exception and it is deliberate. `trace evidence` writes a record whose own
 status is `inconclusive` and whose `trace_conformance.passed` is false
@@ -1777,7 +1777,7 @@ never heard of Claude Code: `check` (`crates/trace-spec/src/check.rs:58`), `Chec
 So the seam is real and load-bearing — it is spelled as a **format** rather than as a trait. Trace
 wave 1 says so plainly and says the claim is untested: *"No second adapter. One harness format,
 versioned and declared… until there is one the claim is untested"*
-(`docs/plan/trace-wave-1-transcript-checker.md:263-265`).
+(`docs/plan/archive/trace-wave-1-transcript-checker.md:263-265`).
 
 **Decision: do not add a trait to `trace-spec` speculatively.** A second adapter is a second free
 function returning `TraceIr`, selected by the driver from the step's harness name. A trait buys
@@ -1799,7 +1799,7 @@ adapter surface is a **second, fake harness** rather than a second real one:
 It proves all three points at once: the executor trait has two implementations, the tool-config
 function is consumed by both, and `check` / `to_evidence` mint a `trace_conformance` record from a
 transcript that no Claude Code wrote. And it does it **with no model, no network and no credential**,
-so unlike the paid eval (`docs/plan/harness-wave-1-planning-plugin.md:91-94`) it can be a step of
+so unlike the paid eval (`docs/plan/archive/harness-wave-1-planning-plugin.md:91-94`) it can be a step of
 `task check`. That is the whole value: *"this is harness-neutral"* stops being a sentence in a design
 document and becomes a gate that goes red.
 
@@ -1823,7 +1823,7 @@ because otherwise the allowlist ships with nothing that can audit it and § 4.8'
 
 `docs/VISION.md` § *What this is deliberately not* refuses, among other things, *a workflow engine*.
 **That refusal is narrowed by this design, and the narrowing is recorded as V-5 in
-[`control-document-updates.md`](../plan/control-document-updates.md).**
+[`control-document-updates.md`](../plan/archive/control-document-updates.md).**
 
 What the narrowing says: this is still not a workflow engine in the sense refused before — a
 general-purpose orchestrator that other systems are built on top of. What the repository now ships

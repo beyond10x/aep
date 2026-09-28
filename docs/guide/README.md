@@ -14,8 +14,8 @@ read the [planning store](../../.engineering/planning/).
 
 | Missing | Consequence for you |
 |---|---|
-| A durable backend of your own | Three exist and all are one adapter — [`aep-backend-entity`](../../crates/plan/aep-backend-entity/) over a provider from `entity-runtime`: markdown files, SQLite, PostgreSQL — and `store:` in `project.yaml` picks one. The next is the same adapter over the next provider; [`backend.md`](backend.md) is about writing one and proving it. |
-| A remote conformance runner | `aep plan conformance --backend memory\|markdown\|sqlite\|postgres\|project` runs the suites from the command line; proving a backend the CLI does not know means calling `aep_conformance::run` from your own test suite. |
+| A durable backend of your own | Three exist and all are one adapter — [`aep-backend-entity`](../../crates/plan/aep-backend-entity/) over a provider from `entity-runtime`: markdown files, SQLite, PostgreSQL. A project's plan is always the Git-native markdown store (`aep.project/5`, `store: { git: {} }`); SQLite and PostgreSQL are libraries held to the same suites, not a `project.yaml` choice. The next is the same adapter over the next provider; [`backend.md`](backend.md) is about writing one and proving it. |
+| A remote conformance runner | `aep plan conformance --backend memory\|markdown\|sqlite\|postgres\|hybrid\|project` runs the suites from the command line; proving a backend the CLI does not know means calling `aep_conformance::run` from your own test suite. |
 | Federated artifact graphs | An artifact manifest describes one project. Cross-repository architecture ([`consolidated-design-v0.2.md`](../design/consolidated-design-v0.2.md) §92) resolves references by hand today. |
 | An attestation behind `independent: true` | The engine checks that the producer is not the agent under review. Nothing signs the record, so which producers you let write one is your harness's decision, not the protocol's. |
 
@@ -26,7 +26,7 @@ read the [planning store](../../.engineering/planning/).
 | [`adopting.md`](adopting.md) | You have engineering rules you want enforced, and a repository to put them in |
 | [`harness.md`](harness.md) | You are building an agent harness and want the protocol to decide what it may do |
 | [`backend.md`](backend.md) | You are storing engineering entities — designs, reviews, approvals — and want them to survive an audit |
-| [`specification.md`](specification.md) | You want a system's contracts, tests and documentation derived from one document instead of maintained beside it |
+| [ESS: write a specification](https://github.com/beyond10x/ess/blob/main/website/docs/guides/write-a-specification.md) | You want a system's contracts, tests and documentation derived from one document instead of maintained beside it |
 | [`open-vocabulary.md`](open-vocabulary.md) | You are about to declare something of your own and want to know, before you write it, whether the vocabulary is open or fixed in the engine |
 
 For the full document vocabulary — every capability, evidence kind, fact path and predicate operator —
@@ -40,8 +40,8 @@ Build the CLI, check the documents, watch a refusal.
 ```console
 $ cargo build -p aep-cli
 $ B=target/debug/aep
-$ $B validate
-45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
+$ $B govern validate
+60 file(s): 5 protocol(s), 24 principle(s), 6 workflow(s), 10 profile(s), 13 lifecycle(s), 2 step map(s)
 valid
 ```
 
@@ -53,7 +53,7 @@ Now resolve the [worked example](../../examples/development-passkeys/) — one t
 nothing else stated:
 
 ```console
-$ $B resolve --task examples/development-passkeys/task.yaml
+$ $B govern resolve --task examples/development-passkeys/task.yaml
 inputs      . and examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
 objective   add-passkey-support
@@ -61,7 +61,7 @@ protocol    adp/1
 profile     development.standard
 workflow    adp/default (initial: receive)
 principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes
-obligations 10
+obligations 11
 capabilities
   allowed            approval.request
   allowed            artifact.read
@@ -83,7 +83,7 @@ derived, so none of them can drift out of step with the profile.
 Ask whether the agent may change production:
 
 ```console
-$ $B explain --task examples/development-passkeys/task.yaml \
+$ $B govern explain --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --action production.write
 production.write denied
@@ -102,10 +102,11 @@ write that denial into the task or the profile: `approval-gates` is in force bec
 Then walk the task on its evidence:
 
 ```console
-$ $B evaluate --task examples/development-passkeys/task.yaml \
+$ $B govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --advance
+inputs      . and examples/development-passkeys/task.yaml
 state       implement (Implement)
 transitions
   implement -> verify [blocked]
@@ -113,6 +114,8 @@ transitions
 Task incomplete in `implement`:
   ✗ (tests.unit.failed == 0 and static_analysis.errors == 0 and evidence.missing == 0)  [completion]
       tests.unit.failed = 1; unobserved: static_analysis.errors; evidence.missing = 7
+  ? (specification.satisfied and contracts.failed == 0)           [completion]
+      unobserved: specification.satisfied; unobserved: contracts.failed
   ? specification.satisfied                                       [principle spec-driven]
       unobserved: specification.satisfied
   ...

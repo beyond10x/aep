@@ -1,5 +1,7 @@
 # Planning content blobs v0.1
 
+Superseded for the planning store by git-native-planning-store-v0.1.md (2026-09-28).
+
 Status: implemented. `aep.project/4` and `aep plan store migrate content` ship in the release that
 carries this page; `aep.project/3` stores read and write exactly as before. Recorded as Atlas ADR
 0065. It builds on [`planning-on-entity-runtime-v0.1.md`](planning-on-entity-runtime-v0.1.md),

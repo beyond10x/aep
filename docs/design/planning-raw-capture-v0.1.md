@@ -1,5 +1,7 @@
 # Planning migration raw capture and digest contract v0.1
 
+Superseded for the planning store by git-native-planning-store-v0.1.md (2026-09-28).
+
 Status: accepted by the initiative coordinator for bounded pure implementation under
 story:eventlog-planning-authority-migration and Atlas ADR0050. Two independent technical design
 rounds completed: the final verdict remains needs-revision; its one new hybrid-policy omission was

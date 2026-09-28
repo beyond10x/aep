@@ -3,7 +3,7 @@
 > **Repository:** `beyond10x/aep`
 > **Status:** **proposed, not accepted.** Per [`AGENTS.md`](../../AGENTS.md) § *Which documents are
 > normative*, a proposal is not a work order. Its acceptance surface is
-> [`harness-wave-4-governed-dogfood.md`](../plan/harness-wave-4-governed-dogfood.md) § W4.2, which
+> [`harness-wave-4-governed-dogfood.md`](../plan/archive/harness-wave-4-governed-dogfood.md) § W4.2, which
 > this wave extends to carry it; **no plan page or store item proposed it before this document
 > existed**, and the header of an earlier draft claimed otherwise.
 > **Audience:** whoever maintains `principles/`, and whoever writes the next task document.
@@ -11,7 +11,7 @@
 > No engine change, no protocol change, no new grammar, **no new enforcement mechanism** — it
 > narrows an existing one with grammar three shipped documents already use, which is what keeps it
 > inside wave 4's *"no new enforcement mechanism in this wave"* constraint
-> ([plan page](../plan/harness-wave-4-governed-dogfood.md), *Decisions, taken*, row 3).
+> ([plan page](../plan/archive/harness-wave-4-governed-dogfood.md), *Decisions, taken*, row 3).
 > **Cross-reference:** `principles/development/contract-testing.yaml`, whose header argues against
 > the narrow form of this idea and which § 5 answers rather than eliding;
 > `principles/verification/mutation-testing.yaml:8-11`, which states the repository's doctrine

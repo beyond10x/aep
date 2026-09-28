@@ -13,41 +13,41 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'AEP',
-    governs: 'the shared substrate',
-    question: 'What do the recorded facts permit?',
+    title: 'Plan',
+    governs: 'the planning store',
+    question: 'Is this move legal, and is it earned?',
     description: (
       <>
-        Typed artifacts, lifecycles, evidence, permissions, approvals, audit and completion. A
-        harness asks what is owed and what is permitted; the deterministic answer can always say
-        why.
+        Epics, stories, reviews and blockers as Markdown files in your repository. Each moves along
+        a lifecycle declared in YAML, and a rung that costs evidence is refused until the evidence
+        is recorded.
       </>
     ),
-    href: '/docs/concepts/aep',
+    href: '/docs/concepts/planning-store',
   },
   {
-    title: 'ADP',
-    governs: 'development work',
-    question: 'Was this software change built properly?',
+    title: 'Govern',
+    governs: 'governed tasks',
+    question: 'What may this agent do, and is the task done?',
     description: (
       <>
-        Specification, decomposition, design, tests, implementation and review expressed as a
-        profile over the generic protocol rather than a second planning system.
+        Principles and profiles resolve into capabilities and obligations. The engine answers
+        allowed, denied or needs approval, names the rule, and decides completion from evidence.
       </>
     ),
-    href: '/docs/examples/governed-task',
+    href: '/docs/concepts/governance',
   },
   {
-    title: 'AOP',
-    governs: 'operational work',
-    question: 'May this controlled change proceed?',
+    title: 'Observe',
+    governs: 'recorded runs',
+    question: 'What did the agent actually do?',
     description: (
       <>
-        Operational planning, approvals, verification, rollback and incidents use the same evidence
-        and audit substrate with operations-specific vocabulary.
+        A transcript is checked against a typed specification of what the run should have done,
+        and the verdict becomes evidence the engine accepts.
       </>
     ),
-    href: '/docs/concepts/lifecycles',
+    href: '/docs/guides/check-a-transcript',
   },
 ];
 
@@ -82,7 +82,7 @@ export default function HomepageFeatures(): ReactNode {
           </div>
         </div>
         <Heading as="h2" className={styles.title}>
-          One substrate, two profiles
+          Three questions, one set of rules
         </Heading>
         <div className={styles.grid}>
           {FeatureList.map((props) => (

@@ -1,7 +1,7 @@
 # Trace wave 1 — the transcript-conformance checker
 
 > **Accepted for implementation, 2026-08-21. Design:
-> [`transcript-conformance-design-v0.1.md`](../design/transcript-conformance-design-v0.1.md);
+> [`transcript-conformance-design-v0.1.md`](../../design/transcript-conformance-design-v0.1.md);
 > decided by the operator in session.** The design's § 9 milestones T1, T2 and T3 are taken up
 > whole by this page, which sequences them and sets their acceptance criteria — the design does
 > not. Its six open decisions D1–D6 are taken at their stated defaults, with one narrowing recorded

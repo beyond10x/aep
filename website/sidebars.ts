@@ -1,9 +1,9 @@
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
 /**
- * One hand-written sidebar, ordered the way an engineer adopts the tool: what it is and how to run
- * it, the model behind it, task-oriented guides, the reference tables, worked examples with real
- * output, and an honest account of what is and is not built.
+ * One hand-written sidebar, ordered the way a first-time reader adopts the tool: what it is and a
+ * first run, the model behind it, task-oriented guides, the reference, a worked example, and where
+ * the project stands.
  */
 const sidebars: SidebarsConfig = {
   docsSidebar: [
@@ -19,9 +19,14 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'concepts/overview',
-        'concepts/aep',
+        'concepts/artifacts',
         'concepts/lifecycles',
         'concepts/evidence',
+        'concepts/planning-store',
+        'concepts/reviews',
+        'concepts/waves',
+        'concepts/workspaces',
+        'concepts/governance',
         'concepts/design-principles',
       ],
     },
@@ -30,6 +35,12 @@ const sidebars: SidebarsConfig = {
       label: 'Guides',
       collapsed: false,
       items: [
+        'guides/plan-work',
+        'guides/gate-a-move-on-evidence',
+        'guides/review-with-findings',
+        'guides/run-waves',
+        'guides/migrate-an-older-store',
+        'guides/validate-in-ci',
         'guides/govern-a-task',
         'guides/write-a-principle',
         'guides/integrate-a-harness',
@@ -42,9 +53,13 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'reference/cli',
-        'reference/harnesses',
+        'reference/project-file',
+        'reference/artifact-file',
+        'reference/evidence-file',
+        'reference/lifecycle-file',
         'reference/documents',
         'reference/vocabulary',
+        'reference/harnesses',
         'reference/glossary',
       ],
     },
