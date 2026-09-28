@@ -1,7 +1,7 @@
 version: aep.project/1
 
 # The same project, keeping its plan in SQLite instead of under `planning/`. Copy this file over
-# `project.yaml` and every `protocol artifact` verb opens the database — one line decides the
+# `project.yaml` and every `aep plan artifact` verb opens the database — one line decides the
 # store, and nothing else about the project changes (`story:store-selection-in-project-yaml`).
 #
 # The protocol tree is this repository itself, three levels up from `.engineering`, exactly as in

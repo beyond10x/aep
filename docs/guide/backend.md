@@ -540,7 +540,7 @@ You can watch it work without writing any code — the CLI seeds an in-memory ba
 manifest and answers against it:
 
 ```console
-$ B=target/debug/protocol
+$ B=target/debug/aep
 $ $B entity list --artifacts examples/development-passkeys/artifacts.yaml
 01MEM0000000000000001  aep.architecture-decision-record/v1  ep://local/manifest/architecture-decision-record/0042   r1
 01MEM0000000000000004  aep.design/v1                        ep://local/manifest/design/passkeys-auth                r1

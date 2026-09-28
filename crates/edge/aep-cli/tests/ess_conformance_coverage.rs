@@ -744,7 +744,7 @@ fn coverage_actual_driver_reads_typed_record_and_re_admits_on_status_and_resume(
 }
 
 #[test]
-fn coverage_planning_pair_dispatch_refuses_before_store_and_aliases_are_identical() {
+fn coverage_planning_pair_dispatch_refuses_deterministically_before_store() {
     let directory = scratch("planning-boundaries");
     let report_path = directory.join("report.json");
     let input_path = directory.join("input.json");
@@ -767,7 +767,7 @@ fn coverage_planning_pair_dispatch_refuses_before_store_and_aliases_are_identica
         absent.to_str().unwrap(),
     ];
     let output = cli(&args);
-    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
         .current_dir(root())
         .args(args)
         .output()
@@ -1391,7 +1391,7 @@ fn adversary_coverage_engine_re_admits_clones_and_preserves_both_reader_orders()
 }
 
 #[test]
-fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_both_aliases() {
+fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_deterministically() {
     let directory =
         root().join("target/ess-conformance-coverage/adversary-pass-1/inspection-fixture");
     std::fs::create_dir_all(&directory).unwrap();
@@ -1415,7 +1415,7 @@ fn adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_b
         "json",
     ];
     let first = cli(&args);
-    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let alias = std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
         .current_dir(root())
         .args(args)
         .output()

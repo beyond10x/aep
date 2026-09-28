@@ -3,7 +3,7 @@
 //! # The gap this closes
 //!
 //! `docs/plan/gap-register.md:108` records the measurement: a driven run wrote `revision: 99`
-//! straight into a planning document with an ordinary file write, and `protocol artifact validate`
+//! straight into a planning document with an ordinary file write, and `aep plan artifact validate`
 //! exited **0** on the well-formed result. [`crate::drift`] closed half of that — a document
 //! claiming a revision higher than any event records is a [`crate::drift::ForgedRevision`] and
 //! fails the gate. It closed only half, because it reconciles the document

@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use anyhow::{bail, Context, Result};
 use clap::Subcommand;
 
-/// Operations supported by `protocol schema`.
+/// Operations supported by `aep govern schema`.
 #[derive(Debug, Subcommand)]
 pub(crate) enum SchemaCommand {
     /// Print one of AEP's generated schemas by its short name.

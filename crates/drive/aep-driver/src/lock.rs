@@ -95,7 +95,7 @@ impl LockState {
     /// The line to print when this lock stands in the way, naming both routes out.
     ///
     /// `taking` says whether the caller offered `--take-lock`. Refusing while naming what to do
-    /// instead is the same choice `protocol artifact move` makes for an illegal transition: the
+    /// instead is the same choice `aep plan artifact move` makes for an illegal transition: the
     /// refusal **is** the answer, and a refusal that does not name the answer is a puzzle.
     ///
     /// The one combination in which this lock does not refuse — stale, with `--take-lock` given —

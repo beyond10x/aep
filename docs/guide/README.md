@@ -39,7 +39,7 @@ Build the CLI, check the documents, watch a refusal.
 
 ```console
 $ cargo build -p aep-cli
-$ B=target/debug/protocol
+$ B=target/debug/aep
 $ $B validate
 45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
 valid

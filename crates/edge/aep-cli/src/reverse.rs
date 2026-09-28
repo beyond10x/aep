@@ -1,4 +1,4 @@
-//! `protocol reverse` — reading a repository that already exists into the protocol's own terms.
+//! `aep plan reverse` — reading a repository that already exists into the protocol's own terms.
 //!
 //! Every other verb in this binary starts from a document somebody wrote. These three start from a
 //! repository somebody built, which is the state almost every adopter is actually in: the rules
@@ -13,7 +13,7 @@
 //!
 //! So `reverse scan` reads and does not interpret. It emits a bundle of located facts — every entry
 //! carries the path and line it was read from — and writes nothing. An agent then decides what those
-//! facts mean and records the decision through `protocol artifact`, citing entries it did not
+//! facts mean and records the decision through `aep plan artifact`, citing entries it did not
 //! author. That is the same asymmetry `independent: true` draws on an evidence requirement, one
 //! layer up: the thing being judged did not produce the record it is judged against.
 //!
@@ -189,7 +189,7 @@ const LANGUAGES: &[(&str, &str)] = &[
     ("zig", "Zig"),
 ];
 
-/// Operations supported by `protocol reverse`.
+/// Operations supported by `aep plan reverse`.
 #[derive(Debug, Subcommand)]
 pub(crate) enum ReverseCommand {
     /// Read a repository and report what it says about itself, without writing anything.
@@ -275,7 +275,7 @@ pub(crate) struct OpenapiArgs {
     out: Option<PathBuf>,
 }
 
-/// Runs one `protocol reverse` operation.
+/// Runs one `aep plan reverse` operation.
 pub(crate) fn run(command: ReverseCommand) -> Result<ExitCode> {
     match command {
         ReverseCommand::Scan(args) => scan(&args),
@@ -600,7 +600,7 @@ struct RootDoc {
 }
 
 // ---------------------------------------------------------------------------------------------
-// `protocol reverse scan`
+// `aep plan reverse scan`
 // ---------------------------------------------------------------------------------------------
 
 /// Reads a repository and prints what it says about itself.
@@ -1332,7 +1332,7 @@ fn count_openapi_operations(document: &Yaml) -> usize {
 }
 
 // ---------------------------------------------------------------------------------------------
-// `protocol reverse init`
+// `aep plan reverse init`
 // ---------------------------------------------------------------------------------------------
 
 /// Writes the project file that makes a repository an adopting project.
@@ -1445,7 +1445,7 @@ fn project_file(args: &InitArgs, source: &ProtocolSource, scope: &str) -> String
     let _ = writeln!(text);
     let _ = writeln!(
         text,
-        "# Written by `protocol reverse init`. It points; it does not duplicate — a rule restated"
+        "# Written by `aep plan reverse init`. It points; it does not duplicate — a rule restated"
     );
     let _ = writeln!(
         text,
@@ -1496,7 +1496,7 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// `protocol reverse openapi`
+// `aep plan reverse openapi`
 // ---------------------------------------------------------------------------------------------
 
 /// Drafts an `ess/1` domain from an `OpenAPI` document.
@@ -1560,7 +1560,7 @@ fn draft_domain(domain: &str, document: &Yaml, source: &Path) -> String {
 
     let _ = writeln!(
         text,
-        "# Drafted by `protocol reverse openapi` from {}.",
+        "# Drafted by `aep plan reverse openapi` from {}.",
         source.display()
     );
     let _ = writeln!(text, "#");
@@ -2149,7 +2149,7 @@ mod tests {
 }
 
 // ---------------------------------------------------------------------------------------------
-// `protocol reverse history`
+// `aep plan reverse history`
 // ---------------------------------------------------------------------------------------------
 
 /// The bundle format `reverse history` emits.
@@ -2872,7 +2872,7 @@ struct TicketReport {
     unclaimed: Vec<Ticket>,
 }
 
-/// `protocol reverse tickets`
+/// `aep plan reverse tickets`
 ///
 /// **Proposes, never writes.** The join is a text match — a key spelled in a title, a summary or a
 /// body — and a text match is a good enough reason to show somebody a command and not a good enough
@@ -2924,7 +2924,7 @@ fn tickets_report(args: &TicketsArgs) -> Result<ExitCode> {
                     artifact: id.clone(),
                     key: key.clone(),
                     read_from,
-                    command: format!("protocol artifact set {id} --ref {provider}:{key}"),
+                    command: format!("aep plan artifact set {id} --ref {provider}:{key}"),
                 });
             }
         }

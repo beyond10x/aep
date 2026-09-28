@@ -11,7 +11,7 @@
 //! over a committed transcript, minted with
 //!
 //! ```console
-//! protocol trace check --spec crates/edge/aep-cli/fixtures/eval-matrix/expectations.development-story.trace.yaml \
+//! aep observe trace check --spec crates/edge/aep-cli/fixtures/eval-matrix/expectations.development-story.trace.yaml \
 //!     --transcript <the transcript> --format json --redact
 //! ```
 //!
@@ -39,9 +39,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always from the repository root.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always from the repository root.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -103,7 +103,7 @@ fn write_pair(directory: &Path, name: &str, manifest: &str, record: &str) {
 
 /// Assembles the matrix over a directory, as JSON.
 fn assemble(directory: &Path) -> Output {
-    protocol(&[
+    aep(&[
         "drive",
         "eval",
         "matrix",
@@ -119,7 +119,7 @@ fn the_committed_pairs_assemble_into_the_matrix_byte_for_byte() {
     // this story *is* a document somebody commits and diffs between waves: a matrix whose key
     // order, row order or column set moved would produce a diff nobody chose, and a test that
     // compared values would not see it.
-    let json = protocol(&["drive", "eval", "matrix", RUNS, "--format", "json"]);
+    let json = aep(&["drive", "eval", "matrix", RUNS, "--format", "json"]);
     assert_eq!(code(&json), 0, "{}", stderr(&json));
     assert_eq!(
         stdout(&json),
@@ -127,7 +127,7 @@ fn the_committed_pairs_assemble_into_the_matrix_byte_for_byte() {
         "the assembled matrix is the committed one, byte for byte"
     );
 
-    let text = protocol(&["drive", "eval", "matrix", RUNS, "--format", "text"]);
+    let text = aep(&["drive", "eval", "matrix", RUNS, "--format", "text"]);
     assert_eq!(code(&text), 0, "{}", stderr(&text));
     assert_eq!(stdout(&text), MATRIX_TEXT);
 
@@ -148,7 +148,7 @@ fn the_committed_pairs_assemble_into_the_matrix_byte_for_byte() {
 fn the_matrix_reports_every_arm_of_every_harness_and_all_three_answers() {
     // What makes the golden above worth having: the fixture set reaches every state the assembler
     // has a column for. Asserted through the text rendering, which is what a person reads.
-    let text = protocol(&["drive", "eval", "matrix", RUNS]);
+    let text = aep(&["drive", "eval", "matrix", RUNS]);
     assert_eq!(code(&text), 0, "{}", stderr(&text));
     let table = stdout(&text);
 
@@ -256,7 +256,7 @@ fn an_incomplete_manifest_is_refused_by_name_and_no_matrix_is_written() {
     write_pair(&directory, "incomplete", &stripped, CLAUDE_PLUGIN_RECORD);
     let out = directory.join("never-written.json");
 
-    let refused = protocol(&[
+    let refused = aep(&[
         "drive",
         "eval",
         "matrix",
@@ -407,7 +407,7 @@ fn a_directory_with_no_runs_in_it_is_refused_rather_than_rendered_as_a_clean_she
 fn the_matrix_is_a_report_and_not_a_gate() {
     // Exit 0 over a fixture set holding nine contradicted facts. An exit code that moved with the
     // counts would be the scalar this programme refuses to compute, wearing a different name.
-    let assembled = protocol(&["drive", "eval", "matrix", RUNS]);
+    let assembled = aep(&["drive", "eval", "matrix", RUNS]);
     assert_eq!(code(&assembled), 0);
     assert!(
         stdout(&assembled).contains("9 contradicted"),

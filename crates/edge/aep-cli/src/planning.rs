@@ -1,4 +1,4 @@
-//! `protocol artifact` — planning in the markdown store.
+//! `aep plan artifact` — planning in the markdown store.
 //!
 //! The verb family an agent uses to plan work: create an epic, decompose it into stories, move one
 //! to `active`, ask what the board looks like. Everything it touches is a markdown file in
@@ -52,13 +52,13 @@ const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
 
 /// Where the plan is and which documents govern it.
 ///
-/// Split from the rendering choice because one verb needs a different one: `protocol artifact
+/// Split from the rendering choice because one verb needs a different one: `aep plan artifact
 /// graph` renders `dot` or `json`, which are not values the shared [`Format`] has, and a verb
 /// carrying two `--format` flags is not a verb. The same reasoning that gave `protocol ess graph`
 /// its own `GraphFormat` — a value a verb cannot honour is worse than one it does not offer.
 ///
-/// `--store` is resolved **lazily**, and that is deliberate: `protocol artifact kinds` and
-/// `protocol artifact relations` answer from the vocabulary alone, and a command that refused to
+/// `--store` is resolved **lazily**, and that is deliberate: `aep plan artifact kinds` and
+/// `aep plan artifact relations` answer from the vocabulary alone, and a command that refused to
 /// list the relation names because the working directory is not a project would be refusing for a
 /// reason that has nothing to do with the question.
 #[derive(Debug, Clone, Args)]
@@ -187,7 +187,7 @@ impl StoreLocation {
             })
     }
 
-    /// The lifecycles in force, loaded exactly as `protocol validate` loads them.
+    /// The lifecycles in force, loaded exactly as `aep govern validate` loads them.
     ///
     /// A tree with no `artifacts/lifecycles/` is not an error — it yields an empty registry, and
     /// every kind then gets [`ArtifactLifecycle::permissive`]. That is what makes the store usable
@@ -437,9 +437,9 @@ impl Plan {
     }
 }
 
-/// The plan `protocol drive` rebuilds its artifact graph from, in whichever store the project names.
+/// The plan `aep drive` rebuilds its artifact graph from, in whichever store the project names.
 ///
-/// `--store <dir>` is the markdown override, as it is for every `protocol artifact` verb. A store
+/// `--store <dir>` is the markdown override, as it is for every `aep plan artifact` verb. A store
 /// that cannot be read answers a report whose failures say so, which is what stops the run —
 /// the driver treats a plan it cannot trust as `StoreBroken`, not as *blocked*.
 pub struct DrivenPlan {
@@ -494,7 +494,7 @@ impl aep_driver::PlanSource for DrivenPlan {
     }
 
     /// What `<project>/.engineering/workspace.yaml` declares, so a relation into another
-    /// repository is judged the same way `protocol artifact validate` judges it.
+    /// repository is judged the same way `aep plan artifact validate` judges it.
     ///
     /// A declaration that does not parse cannot be refused here: [`aep_driver::PlanSource`]
     /// answers with a member list and has nowhere to put a reason. The driver therefore still
@@ -943,7 +943,7 @@ fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
 /// [`open`], for a caller that has already decided which plan it means.
 ///
 /// `aep doctor` is that caller, and the distinction is the whole reason this split exists: every
-/// `protocol artifact` verb asks about the plan the **working directory** discovers, and `doctor`
+/// `aep plan artifact` verb asks about the plan the **working directory** discovers, and `doctor`
 /// asks about the plan a `--root` names. Routing the second through the first would have `doctor`
 /// report on one repository while its other five checks report on another.
 ///
@@ -1151,7 +1151,7 @@ pub(crate) enum ArtifactCommand {
         /// no test, no run and no artifact, and nothing can go and check it — so a move that uses it
         /// says so on the way out and the journal records the move as resting on an assertion.
         ///
-        /// `protocol artifact evidence` is the alternative and the better one: it records an
+        /// `aep plan artifact evidence` is the alternative and the better one: it records an
         /// observation *about* an artifact with a source and an instant, `move` finds it without
         /// being told, and evidence about one story is worth nothing to another. This flag stays for
         /// evidence that lives outside the store — a CI run nobody recorded is still real, and
@@ -1191,7 +1191,7 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// The artifact the edge starts at.
         id: String,
-        /// What the edge means, such as `decomposes`. `protocol artifact relations` lists them.
+        /// What the edge means, such as `decomposes`. `aep plan artifact relations` lists them.
         ///
         /// May carry the target after a colon — `decomposes:epic:passwordless` — in which case
         /// the third positional is left off.
@@ -1216,7 +1216,7 @@ pub(crate) enum ArtifactCommand {
         store: StoreArgs,
         /// The artifact the edge starts at.
         id: String,
-        /// What the edge means, such as `depends_on`. `protocol artifact show <id>` lists the ones
+        /// What the edge means, such as `depends_on`. `aep plan artifact show <id>` lists the ones
         /// an artifact declares.
         ///
         /// May carry the target after a colon — `depends_on:task:webauthn-ceremony` — in which case
@@ -1420,7 +1420,7 @@ pub(crate) enum ArtifactCommand {
     /// somebody has to start individually.
     ///
     /// A `blocks` edge counts until the artifact declaring it reaches the end of its own
-    /// lifecycle, so `protocol artifact move <blocker> --to cleared` is how something is
+    /// lifecycle, so `aep plan artifact move <blocker> --to cleared` is how something is
     /// unblocked, and the journal keeps the record that it was ever stuck.
     ///
     /// Always exits 0. This is a report: an exit code that moved with the count would make every
@@ -1485,10 +1485,10 @@ pub(crate) enum ArtifactCommand {
     /// old record look like it was about the new text.
     ///
     /// A status reached with no record is marked rather than left blank, in the words
-    /// `protocol artifact validate` uses: a move on somebody's assertion is legal, and what it must
+    /// `aep plan artifact validate` uses: a move on somebody's assertion is legal, and what it must
     /// not be is indistinguishable from one the store holds a record for.
     ///
-    /// `protocol explain` is a different question — how a policy decided — and this is deliberately
+    /// `aep govern explain` is a different question — how a policy decided — and this is deliberately
     /// not it.
     Explain {
         /// Where the plan is and how to render.
@@ -1638,7 +1638,7 @@ pub(crate) enum ArtifactCommand {
     /// nobody wrote down are different facts.
     ///
     /// **No score, no ranking and no percentage**, and that is a rule rather than an omission —
-    /// the same position `protocol eval matrix` takes and for the same reason. A scalar would have
+    /// the same position `aep drive eval matrix` takes and for the same reason. A scalar would have
     /// to fold *nobody recorded an outcome* into either *it changed something* or *it changed
     /// nothing*, and each of those is a claim the store does not hold. Which lenses stay is the
     /// operator's decision; this is the table it is made on.
@@ -1711,7 +1711,7 @@ pub(crate) enum ArtifactCommand {
     },
 }
 
-/// What `protocol artifact new` needs.
+/// What `aep plan artifact new` needs.
 ///
 /// Its own struct rather than nine fields on the variant, because the verb's handler would
 /// otherwise take nine arguments and say nothing more than the struct does.
@@ -1776,7 +1776,7 @@ pub(crate) struct NewArgs {
     /// The join between a blocker and an evidence gate: a rung wants a `test_result`, the job that
     /// would produce one cannot mint a token, and this is where the store records *which* fact is
     /// missing and why. Only meaningful together with `--relate blocks:<id>`, and
-    /// `protocol artifact validate` says so.
+    /// `aep plan artifact validate` says so.
     #[arg(long, value_name = "EVIDENCE-KIND")]
     withholds: Option<String>,
 }
@@ -1831,7 +1831,7 @@ pub(crate) enum PlanningBoardFormat {
     Markdown,
 }
 
-/// `protocol artifact`
+/// `aep plan artifact`
 ///
 /// One arm per verb, and **exhaustive on purpose**: this table is the only thing that says every
 /// verb the family declares is answered, so a variant added without a handler must fail to compile
@@ -2135,7 +2135,7 @@ pub(crate) fn clock_at_the_edge() -> aep_domain::time::Timestamp {
 /// The environment variable a caller declares its actor in.
 ///
 /// Named the way `AEP_DRIVE_PLUGIN_DIR` is: the `AEP_` prefix is this CLI's, and the rest says
-/// what the value is. Written by `protocol drive` onto every session it launches
+/// what the value is. Written by `aep drive` onto every session it launches
 /// (`crate::drive::session_env`) and read here on every store write, so the two ends of the
 /// declaration are one constant rather than two string literals.
 pub(crate) const ACTOR_ENV: &str = "AEP_ACTOR";
@@ -2157,7 +2157,7 @@ pub(crate) fn command_actor() -> Result<aep_domain::entity::ActorRef> {
 /// **Three answers, and the middle one is the point.**
 ///
 /// * `declared` is `Some` and parses — that is the actor, whatever it says. A driven session is
-///   handed `agent:<execution id>`, so `protocol artifact move` run from inside a run is
+///   handed `agent:<execution id>`, so `aep plan artifact move` run from inside a run is
 ///   journalled as the run's act; before this, every write in the store said `human:<$USER>` and
 ///   the journal could not tell an agent's move from the operator's own.
 /// * `declared` is `Some` and does **not** parse — including the empty string, which is what a
@@ -2311,7 +2311,7 @@ fn entity_body(
     // The same shape `set --ref` writes, and it was missing here: every reference given at `new`
     // was accepted, echoed and dropped. On a `review-result` that is the only door — `set` is
     // refused on an immutable kind — so a review could never carry the run manifest
-    // `protocol artifact review-value` reads its cost out of, and every cost it printed was
+    // `aep plan artifact review-value` reads its cost out of, and every cost it printed was
     // `unknown` for a reason that had nothing to do with the manifest.
     if !front.refs.is_empty() {
         data.insert(
@@ -2429,7 +2429,7 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
     }
 
     let (path, _) = create_through_a_command(opened, document)?;
-    // The edges, each its own command — the same one `protocol artifact relate` issues, because
+    // The edges, each its own command — the same one `aep plan artifact relate` issues, because
     // an edge created at birth and an edge added later are the same act.
     for relation in &front.relations {
         relate_through_a_command(
@@ -2441,7 +2441,7 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
     Ok(path)
 }
 
-/// `protocol artifact new`
+/// `aep plan artifact new`
 #[allow(clippy::too_many_lines)] // One closed command assembles, validates and writes the document.
 fn create(args: &NewArgs) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(&args.kind).map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2626,7 +2626,7 @@ fn lifecycle_findings(
         .unwrap_or_default()
 }
 
-/// `protocol artifact move`
+/// `aep plan artifact move`
 /// What a caller is asking a move to do.
 ///
 /// Bundled rather than passed as six arguments, so a caller cannot silently swap `to` for `now` —
@@ -3048,7 +3048,7 @@ fn report_moves(
                     "  decided partly on asserted evidence nothing checks: {}",
                     asserted.join(", ")
                 );
-                outln!("  `protocol artifact evidence {id} --kind <kind> --source <where>` records it instead");
+                outln!("  `aep plan artifact evidence {id} --kind <kind> --source <where>` records it instead");
             }
         }
         // One move is one object, as it has always been; a walk is the list it actually was.
@@ -3126,7 +3126,7 @@ fn relate_through_a_command(
     Ok(())
 }
 
-/// `protocol artifact relate`
+/// `aep plan artifact relate`
 ///
 /// `target` is absent when the caller wrote the edge as one word — `<relation>:<target>` — which is
 /// the spelling `new --relate` takes, and is split here by the very same [`parse_relation`], so the
@@ -3285,7 +3285,7 @@ fn unrelate_through_a_command(
     Ok(())
 }
 
-/// `protocol artifact unrelate`
+/// `aep plan artifact unrelate`
 ///
 /// The other direction of [`relate`], and deliberately its mirror: the same two spellings, split by
 /// the same [`parse_relation`], the same command path, the same line printed.
@@ -3614,7 +3614,7 @@ fn section_written(existing: &str, heading: &str, arriving: &str) -> String {
     out
 }
 
-/// `protocol artifact body`
+/// `aep plan artifact body`
 fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let arriving = read_body(from)?;
@@ -3722,18 +3722,18 @@ impl Fields {
 fn not_a_field_set_changes(name: &str) -> String {
     match name {
         "status" => "`status` is not a field `set` changes: a status is a decision taken against \
-                     the kind's lifecycle, and `protocol artifact move <id> --to <status>` is what \
+                     the kind's lifecycle, and `aep plan artifact move <id> --to <status>` is what \
                      takes it and records what it rested on"
             .to_owned(),
         "revision" => {
             "`revision` is not a field `set` changes: it is the store's own count of the \
                        writes it made, and a document claiming one no write produced is what \
-                       `protocol artifact validate` reports as a forged revision"
+                       `aep plan artifact validate` reports as a forged revision"
                 .to_owned()
         }
         other => format!(
             "`{other}` is not a field `set` changes: an artifact's id and kind are its identity, \
-             fixed at `protocol artifact new` — create the artifact the new name calls for and \
+             fixed at `aep plan artifact new` — create the artifact the new name calls for and \
              relate this one to it"
         ),
     }
@@ -3794,7 +3794,7 @@ fn model_digest_change(
     )))
 }
 
-/// `protocol artifact set`
+/// `aep plan artifact set`
 ///
 /// Frontmatter through the same door as prose. `refused` carries the flags this verb accepts only
 /// in order to say why it will not honour them; each is `None` on every call that meant anything.
@@ -3931,7 +3931,7 @@ fn scope_node(entries: &[aep_domain::artifact::ScopeEntry]) -> aep_domain::node:
     )
 }
 
-/// `protocol artifact scope`
+/// `aep plan artifact scope`
 ///
 /// The verb `story:a-story-records-where-it-lands` put out of its own scope for want of a door:
 /// `artifact` had `new`, `move`, `relate` and `body`, and nothing that edited one frontmatter key,
@@ -4047,7 +4047,7 @@ fn scope(
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol artifact waves`
+/// `aep plan artifact waves`
 ///
 /// Selects the candidates, hands them to the derivation and renders what came back. The exit code
 /// is `2` on a `depends_on` cycle and `0` otherwise — including when every pair collides, because
@@ -4155,7 +4155,7 @@ fn print_waves(derived: &waves::Derivation) {
     );
 }
 
-/// `protocol artifact show`
+/// `aep plan artifact show`
 ///
 /// One artifact, printed: the frontmatter fields a reader asks about, then the body as the store
 /// holds it. Read through [`open`] like every other read, so markdown, SQLite, Postgres and a
@@ -4376,7 +4376,7 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol artifact list`
+/// `aep plan artifact list`
 fn list(
     args: &StoreArgs,
     kind: Option<&str>,
@@ -4424,7 +4424,7 @@ fn ladders_or_none(args: &StoreArgs) -> aep_engine::Registry {
     args.lifecycles().unwrap_or_default()
 }
 
-/// `protocol artifact board`
+/// `aep plan artifact board`
 fn board(
     location: &StoreLocation,
     format: PlanningBoardFormat,
@@ -4488,7 +4488,7 @@ fn board_markdown(
     let total: usize = columns.iter().map(|column| column.artifacts.len()).sum();
     let mut page = format!(
         "{total} artifact(s) in the planning store, one column per status.\n\nGenerated by \
-         `protocol artifact board --format markdown`; nothing on this page is written by hand.\n"
+         `aep plan artifact board --format markdown`; nothing on this page is written by hand.\n"
     );
 
     for column in columns {
@@ -4726,7 +4726,7 @@ fn ladder_order(ladder: &ArtifactLifecycle) -> Vec<String> {
 /// The rungs on the board, in the order the ladders themselves put them in.
 ///
 /// Every ladder present is compiled to its own order by [`ladder_order`] — the order
-/// `protocol artifact lifecycle <kind>` describes — and those orders are then **merged**: a ladder
+/// `aep plan artifact lifecycle <kind>` describes — and those orders are then **merged**: a ladder
 /// is honoured in full unless honouring it would contradict one merged before it. Merging rather
 /// than concatenating is what keeps a ladder's own columns where they were when something unrelated
 /// is filed; appending one order per kind instead made the answer depend on which kind sorted
@@ -4865,7 +4865,7 @@ fn columns_for(
         .collect()
 }
 
-/// `protocol artifact blocked`
+/// `aep plan artifact blocked`
 /// Whether any ladder in force governs a blocker, which is what makes `blocked` a question at all.
 ///
 /// The bare `blocker` and every `<type>-blocker` count, because the family is open and a store may
@@ -4936,7 +4936,7 @@ fn blocked(args: &StoreArgs, category: Option<&str>) -> Result<ExitCode> {
                     outln!("nothing is blocked");
                 } else {
                     outln!(
-                        "this store's lifecycles declare no blocker kind; `protocol artifact kinds` lists what can be created"
+                        "this store's lifecycles declare no blocker kind; `aep plan artifact kinds` lists what can be created"
                     );
                 }
             }
@@ -4971,7 +4971,7 @@ fn blocked(args: &StoreArgs, category: Option<&str>) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol artifact graph`
+/// `aep plan artifact graph`
 fn graph(args: &StoreLocation, format: PlanningGraphFormat) -> Result<ExitCode> {
     let opened = open(args, false)?;
     let graph = match opened
@@ -5266,14 +5266,14 @@ fn review_named<'a>(
         bail!(
             "`{review}` does not review `{subject}` — it declares no `reviews` edge to it, so \
              comparing the two would be comparing findings about different work. \
-             `protocol artifact relate {review} reviews:{subject}` is the edge it is missing, if \
+             `aep plan artifact relate {review} reviews:{subject}` is the edge it is missing, if \
              that is what it is"
         );
     }
     Ok(stored)
 }
 
-/// `protocol artifact findings`
+/// `aep plan artifact findings`
 fn findings_ledger(
     args: &StoreArgs,
     id: &str,
@@ -5450,7 +5450,7 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
         if age >= days {
             overdue.push(format!(
                 "{id} was recorded {age} day(s) ago and nothing says what became of it — \
-                 `protocol artifact evidence <reviewed-id> --kind review_outcome --review {id} \
+                 `aep plan artifact evidence <reviewed-id> --kind review_outcome --review {id} \
                  --outcome no-op|fixed|escalated` is the record it is missing"
             ));
         }
@@ -5461,7 +5461,7 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
 /// What one reviewer's reviews came to, and what they cost.
 ///
 /// **No column here is a ratio, a ranking or a percentage**, and that is a rule rather than an
-/// omission — see [`ArtifactCommand::ReviewValue`] for the argument, which is `protocol eval
+/// omission — see [`ArtifactCommand::ReviewValue`] for the argument, which is `aep drive eval
 /// matrix`'s own. The columns are counts and one amount of money.
 #[derive(Debug, serde::Serialize)]
 struct ReviewValueRow {
@@ -5560,7 +5560,7 @@ fn cost_of(repository: &Path, stored: &aep_backend_markdown::StoredDocument) -> 
     total
 }
 
-/// `protocol artifact review-value`
+/// `aep plan artifact review-value`
 fn review_value(args: &StoreArgs, since: Option<&str>) -> Result<ExitCode> {
     use aep_domain::review::ReviewOutcome;
 
@@ -5695,7 +5695,7 @@ fn print_review_value(table: &ReviewValueTable) {
     );
 }
 
-/// `protocol artifact validate`
+/// `aep plan artifact validate`
 ///
 /// `strict` turns each *reported* class into an exit code, and changes nothing else: the same lines
 /// are printed, in the same order, whether or not it is set. That split is deliberate and is
@@ -6079,7 +6079,7 @@ fn at_the_end_of(ladder: &ArtifactLifecycle, status: &ArtifactStatus) -> bool {
     terminal(status) || ladder.transitions[status].iter().all(terminal)
 }
 
-/// What `protocol artifact validate` would report about the plan `root` names.
+/// What `aep plan artifact validate` would report about the plan `root` names.
 ///
 /// The entry point `aep doctor` uses, and deliberately the *only* one: it locates the plan the way
 /// the verbs do ([`Plan::for_project`]), reads it the way they do ([`open_plan`]) and accumulates
@@ -6229,11 +6229,11 @@ fn kind_row(kind: &ArtifactKind, note: Option<String>) -> KindRow {
     }
 }
 
-/// `protocol artifact kinds`
+/// `aep plan artifact kinds`
 ///
 /// **The compiled vocabulary is not the whole answer, and used to be printed as though it were.**
 /// `ArtifactKind::NAMED` is what this binary knows; a store's `artifacts/lifecycles/*.yaml` may
-/// declare kinds beside it — `protocol artifact lifecycle third-party-blocker` answered while
+/// declare kinds beside it — `aep plan artifact lifecycle third-party-blocker` answered while
 /// `kinds | grep -i block` returned nothing at all (`fcf5873a#361`) — and the blocker family is
 /// **open**: any `<type>-blocker` is a kind, so no list can enumerate it and a row that says so is
 /// the only honest way to put it in a table.
@@ -6289,7 +6289,7 @@ fn kinds(args: &StoreArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol artifact relations`
+/// `aep plan artifact relations`
 fn relations(args: &StoreArgs) -> Result<ExitCode> {
     let listed: Vec<RelationRow> = RelationKind::ALL
         .iter()
@@ -6312,7 +6312,7 @@ fn relations(args: &StoreArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// `protocol artifact lifecycle`
+/// `aep plan artifact lifecycle`
 fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(kind).map_err(|error| anyhow::anyhow!("{error}"))?;
     let registry = args.lifecycles()?;
@@ -6377,7 +6377,7 @@ fn require_clean(store: &MarkdownStore, report: &StoreReport) -> Result<()> {
     for failure in &report.failures {
         let _ = write!(detail, "\n  - {failure}");
     }
-    detail.push_str("\nfix them, or run `protocol artifact validate` for the whole list");
+    detail.push_str("\nfix them, or run `aep plan artifact validate` for the whole list");
     bail!("{detail}")
 }
 
@@ -6389,7 +6389,7 @@ fn warn_unclean(report: &StoreReport) {
     if !report.is_clean() {
         eprintln!(
             "warning: {} planning document(s) could not be read and are missing from this \
-             answer; run `protocol artifact validate`",
+             answer; run `aep plan artifact validate`",
             report.failures.len()
         );
     }
@@ -6409,7 +6409,7 @@ fn artifact_id(value: &str) -> Result<ArtifactId> {
     ArtifactId::new(value).map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-/// `protocol artifact evidence`
+/// `aep plan artifact evidence`
 ///
 /// Records rather than decides. Nothing is gated here, no status moves, and a rung's `requires:` is
 /// not consulted — recording evidence and acting on it are separate acts on purpose, because a
@@ -6436,7 +6436,7 @@ fn instant(text: &str) -> Result<aep_domain::time::Timestamp> {
 /// `YYYY-MM-DDTHH:MM:SSZ` — the form `now_at_the_edge` writes — as a timestamp.
 ///
 /// `story:evidence-verb-refuses-its-own-default-instant`: the edge produced an instant to the
-/// second and every reader accepted a date or epoch milliseconds, so `protocol artifact evidence`
+/// second and every reader accepted a date or epoch milliseconds, so `aep plan artifact evidence`
 /// without `--at` refused the very value it had just defaulted to.
 fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
     let (date, time) = text.split_once('T')?;
@@ -6458,7 +6458,7 @@ fn second_instant(text: &str) -> Option<aep_domain::time::Timestamp> {
     ))
 }
 
-/// What `protocol artifact evidence` was asked to record.
+/// What `aep plan artifact evidence` was asked to record.
 ///
 /// Its own struct rather than seven arguments on one function, for the reason [`NewArgs`] is one:
 /// four of them are `Option<&str>` and a caller could transpose two without the compiler having
@@ -6994,7 +6994,7 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     Ok(crate::exit_code(true))
 }
 
-/// `protocol artifact history`
+/// `aep plan artifact history`
 fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let plan = args.location.plan()?;
@@ -7059,7 +7059,7 @@ fn hybrid_plan(
     }
 }
 
-/// `protocol artifact divergences`: what a hybrid plan has recorded and not yet caught up.
+/// `aep plan artifact divergences`: what a hybrid plan has recorded and not yet caught up.
 fn divergences(args: &StoreArgs) -> Result<ExitCode> {
     let (root, replica, policy) = hybrid_plan(&args.location)?;
     let recorded =
@@ -7079,7 +7079,7 @@ fn divergences(args: &StoreArgs) -> Result<ExitCode> {
                 outln!("no divergences recorded; authority: {}", report.authority);
             } else {
                 outln!(
-                    "{} divergence(s) recorded; authority: {} — `protocol artifact catch-up` replays \
+                    "{} divergence(s) recorded; authority: {} — `aep plan artifact catch-up` replays \
                      them",
                     report.divergences.len(),
                     report.authority
@@ -7110,7 +7110,7 @@ struct CatchUpReport {
     outstanding: Vec<DivergenceLine>,
 }
 
-/// `protocol artifact catch-up`: replays a hybrid plan's divergences at the side that missed them.
+/// `aep plan artifact catch-up`: replays a hybrid plan's divergences at the side that missed them.
 fn catch_up(args: &StoreArgs) -> Result<ExitCode> {
     let (root, replica, policy) = hybrid_plan(&args.location)?;
     let runtime_policy =
@@ -7167,7 +7167,7 @@ fn catch_up(args: &StoreArgs) -> Result<ExitCode> {
     Ok(crate::exit_code(report.outstanding.is_empty()))
 }
 
-/// `protocol artifact history` over a plan with no journal: the event log, read as journal entries.
+/// `aep plan artifact history` over a plan with no journal: the event log, read as journal entries.
 ///
 /// A SQLite or Postgres plan keeps what the journal keeps — who, when, which revision, what changed
 /// — as the runtime's events (`entity-runtime` R-110: the command's payload travels as the event's
@@ -7216,7 +7216,7 @@ pub(crate) fn entries_from_the_contract(
     backend.entries_of(&entity, id)
 }
 
-/// `protocol artifact explain`
+/// `aep plan artifact explain`
 ///
 /// The question a reviewer asks three months later — *what made this done* — answered by the store
 /// rather than by commit archaeology (`story:completion-audit-join`). Every store answers it the
@@ -7593,7 +7593,7 @@ fn print_history(
 ///
 /// They do not. Every verb issues a command and `MarkdownBackend` writes the file **and** journals
 /// it as one act, so a write that records nothing is not something a verb can forget — it is not
-/// something a verb does. The last holdout was `protocol artifact evidence`, which appended to the
+/// something a verb does. The last holdout was `aep plan artifact evidence`, which appended to the
 /// journal directly; an evidence record is the input to the evidence-gated move decision, so a verb
 /// writing one behind the contract was writing the thing the decision reads. It goes through
 /// `aep.evidence.record/v1` now.
@@ -7752,7 +7752,7 @@ fn parse_relation(value: &str) -> Result<(RelationKind, ArtifactRef)> {
 /// a blocker that is `cleared`, because `artifacts/lifecycles/blocker.yaml` gives that rung no
 /// successor — or is `archived`, this vocabulary's retirement and the only answer available in a
 /// tree that declares no ladders at all. That is what makes unblocking *a move like any other*:
-/// `protocol artifact move <blocker> --to cleared` lifts it, the journal keeps the record that
+/// `aep plan artifact move <blocker> --to cleared` lifts it, the journal keeps the record that
 /// something was ever stuck, and nothing had to be edited out of a file.
 pub(crate) fn blockers_by_target(
     report: &StoreReport,
@@ -7921,7 +7921,7 @@ fn template(root: &Path, kind: &ArtifactKind) -> Option<String> {
 /// Duplicated from that document rather than read out of it, and the duplication is deliberate:
 /// this verb answers about the vocabulary the *binary* implements, which is
 /// [`RelationKind`], and a tree without an `artifacts/` directory would otherwise make
-/// `protocol artifact relations` print nothing. `delivers` has no entry in that file — the sentence
+/// `aep plan artifact relations` print nothing. `delivers` has no entry in that file — the sentence
 /// here matches its declaration in `aep-domain`.
 fn meaning(relation: RelationKind) -> &'static str {
     match relation {
@@ -8513,7 +8513,7 @@ mod tests {
 // ---------------------------------------------------------------------------------------------
 // What another surface may ask this one
 //
-// `protocol serve` answers a browser with the same facts the terminal prints, and it reaches them
+// `aep plan serve` answers a browser with the same facts the terminal prints, and it reaches them
 // through the functions below and through nothing else. Each is the compute half of a verb whose
 // other half is printing: `board_of` is `board` without the lines, `shown_of` is `show` without
 // them, and `moved_by` is `move` without them. Keeping the seam here rather than widening a dozen

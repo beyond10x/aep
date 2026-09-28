@@ -7,7 +7,7 @@ title: Golden epic
 summary: The fixture wave G is held to.
 revision: 1
 ---
-<!-- Starting point for an `epic` artifact, seeded by `protocol artifact new epic <name>`.
+<!-- Starting point for an `epic` artifact, seeded by `aep plan artifact new epic <name>`.
      No frontmatter here on purpose: the `---` block is written by the CLI from the id, kind, status
      and relations you gave it, and a second copy in this file would be the one that went stale.
      Delete the italic guidance as you fill each section. -->

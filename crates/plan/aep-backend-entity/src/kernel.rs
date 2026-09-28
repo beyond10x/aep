@@ -19,7 +19,7 @@
 //! # Operations are named for the target status, not for a verb
 //!
 //! `entity-core` moves an instance by *operation*, and our lifecycle documents declare target
-//! states only — `protocol artifact move --to <TO> <ID>` never names a verb. So the definition
+//! states only — `aep plan artifact move --to <TO> <ID>` never names a verb. So the definition
 //! built here carries one operation per reachable status, named for that status. A verb vocabulary
 //! is a published surface and would need its own decision; `story:entity-runtime-mapping` asks for
 //! one, and until it has an answer this bridge introduces no name that is not already ours.
@@ -300,7 +300,7 @@ pub fn describe(
         .map(|state| status(state))
         .collect();
     // Every state is a source — a terminal one with no targets — so a reader sees `archived -> []`
-    // rather than wondering whether `archived` was forgotten; `protocol artifact lifecycle` prints
+    // rather than wondering whether `archived` was forgotten; `aep plan artifact lifecycle` prints
     // the same. Operations are named for the status they reach, and each carries the states it
     // leaves from.
     let mut edges: BTreeMap<ArtifactStatus, BTreeSet<ArtifactStatus>> = statuses

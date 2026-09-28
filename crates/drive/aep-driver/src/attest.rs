@@ -33,7 +33,7 @@
 //!
 //! `crates/drive/aep-driver/tests/evidence_scan.rs` refuses any construction of an `Evidence::Approval`
 //! or a `Producer::Human` in this crate's shipped code. Everything below **reads** a record that
-//! somebody else wrote and submitted while the run was stopped — `protocol evaluate --evidence`
+//! somebody else wrote and submitted while the run was stopped — `aep govern evaluate --evidence`
 //! against the run's snapshot — and decides whether the step the run stopped at may count it as
 //! its answer. There is no flag that answers an operator step; there is a flag that says whose
 //! answer counts.
@@ -47,7 +47,7 @@ use aep_domain::ids::ExecutionId;
 /// **One spelling, in one place, because two readers need the same answer.** [`crate::run`] puts
 /// it in the set of actors an approval may not come from — a run cannot approve what it produced —
 /// and `aep-cli` hands the same string to every `llm` step's session in `AEP_ACTOR`, so a
-/// `protocol artifact move` made from inside the run is journalled as the run's own act rather
+/// `aep plan artifact move` made from inside the run is journalled as the run's own act rather
 /// than as the operator's. If the two spellings could drift, a run would be able to approve its
 /// own work under a name its own refusal did not recognise, which is the one failure this module
 /// exists to prevent.

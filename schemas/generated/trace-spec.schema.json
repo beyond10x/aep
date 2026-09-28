@@ -980,7 +980,7 @@
       ]
     },
     "RawFieldMatcher": {
-      "description": "A matcher over one named field as written: `{contains: \"protocol artifact new\"}`.\n\nExternally tagged, so a matcher name this build does not know is refused by name rather than defaulted away — and so a `regex:` whose pattern does not compile is refused with the engine's own complaint, which an unknown-field refusal could not carry.",
+      "description": "A matcher over one named field as written: `{contains: \"aep plan artifact new\"}`.\n\nExternally tagged, so a matcher name this build does not know is refused by name rather than defaulted away — and so a `regex:` whose pattern does not compile is refused with the engine's own complaint, which an unknown-field refusal could not carry.",
       "oneOf": [
         {
           "description": "`{exact: \"…\"}` — the whole field, character for character.",

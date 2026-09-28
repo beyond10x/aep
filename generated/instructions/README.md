@@ -1,4 +1,4 @@
-<!-- Rendered by `protocol govern workflow instruct`. Do not edit. -->
+<!-- Rendered by `aep govern workflow instruct`. Do not edit. -->
 
 # Workflows, as instructions
 
@@ -10,7 +10,7 @@ with the specification without the gate going red.
 Regenerate with:
 
 ```console
-protocol govern workflow instruct --out generated/instructions
+aep govern workflow instruct --out generated/instructions
 ```
 
 * [`adp/default.md`](adp/default.md) — Standard development workflow (`adp/default/2`)

@@ -205,7 +205,7 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
 #[test]
 fn a_created_entity_becomes_a_document_this_store_holds() {
     // The first of the two projections `persist` was missing, and the one that blocks
-    // `protocol artifact new` from routing through a command. Before it, an entity created through
+    // `aep plan artifact new` from routing through a command. Before it, an entity created through
     // the contract lived only in this process: correct by the suites, and gone on restart.
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::testing::block_on;
@@ -299,7 +299,7 @@ fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
 
 #[test]
 fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
-    // The second projection, and the one `protocol artifact relate` has no command path without.
+    // The second projection, and the one `aep plan artifact relate` has no command path without.
     // The contract models an edge as a `Relation` record, not as a field on an entity, so nothing
     // about updating a body brings it along.
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
@@ -448,7 +448,7 @@ fn a_status_off_the_ladder_is_refused_however_it_arrives() {
 
 #[test]
 fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
-    // The decision that lets `protocol artifact new` route through a command: prose is data under a
+    // The decision that lets `aep plan artifact new` route through a command: prose is data under a
     // reserved key, exactly as `status` and `title` already are.
     //
     // The half that matters more is the second assertion. An entity that does **not** carry the key

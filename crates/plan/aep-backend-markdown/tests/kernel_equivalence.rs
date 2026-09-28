@@ -211,7 +211,7 @@ fn every_ladder_this_repository_ships_is_named_by_the_fixture() {
 
 /// The shrug. A kind with no ladder anywhere in its lineage is handed
 /// `ArtifactLifecycle::permissive`, which permits every move — including the ones a real ladder
-/// forbids. The kernel has to shrug identically, or `protocol artifact move` starts refusing
+/// forbids. The kernel has to shrug identically, or `aep plan artifact move` starts refusing
 /// `runbook` for a ladder nobody wrote.
 #[test]
 fn the_permissive_fallback_still_permits_every_move() {

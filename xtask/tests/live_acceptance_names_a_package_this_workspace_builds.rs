@@ -150,7 +150,7 @@ fn planning_documents(store: &Path) -> Vec<PathBuf> {
 
 /// The predicate decides both directions, on strings rather than on what the store happens to hold.
 ///
-/// `AGENTS.md` invariant 15: break the guarded condition and observe the named failure. Without
+/// `AGENTS.md` invariant 14: break the guarded condition and observe the named failure. Without
 /// this, the rule below would pass identically if `package_references` returned nothing at all.
 #[test]
 fn a_cargo_package_reference_is_read_out_of_an_acceptance_line_and_prose_is_not() {

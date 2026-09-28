@@ -1,6 +1,6 @@
 //! `aep doctor`: one test per check, each naming the condition that makes it say what it says.
 //!
-//! Every check here is asserted the way AGENTS.md invariant 15 asks a guard to be: the condition is
+//! Every check here is asserted the way AGENTS.md invariant 14 asks a guard to be: the condition is
 //! **broken**, the named failure is observed, the condition is **restored**, and the passing line is
 //! observed too. A test that only sees the red half cannot tell a working check from one that is
 //! stuck on `fail`, and a test that only sees the green half cannot tell a working check from one
@@ -312,7 +312,7 @@ fn a_planning_store_that_is_absent_or_invalid_fails_with_the_finding_artifact_va
 /// A plugin directory is checked for a manifest, and no directory at all is not a defect.
 ///
 /// The `warn` half is the load-bearing one: AEP bundles no plugin sources and guesses no path
-/// (invariant 12), so *no plugin directory* is the ordinary state of every checkout and a preflight
+/// (invariant 11), so *no plugin directory* is the ordinary state of every checkout and a preflight
 /// that failed on it would be a preflight nobody could pass.
 #[test]
 fn a_plugin_directory_without_a_manifest_fails_and_no_directory_at_all_only_warns() {

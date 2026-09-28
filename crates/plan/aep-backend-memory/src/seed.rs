@@ -9,7 +9,7 @@
 //! * a manifest that seeds is a manifest that is expressible through the contract, which is a
 //!   claim worth checking rather than assuming;
 //! * everything it creates gets history, events and audit records exactly like anything else, so
-//!   `protocol entity history` and `protocol audit` have something real to show.
+//!   `aep plan entity history` and `aep plan audit` have something real to show.
 //!
 //! Command ids and idempotency keys are derived from the artifact id, so seeding the same manifest
 //! into the same backend twice is a replay rather than a second set of entities.
@@ -38,7 +38,7 @@ use crate::command::STATUS_KEY;
 
 /// The activity every seeding command belongs to.
 ///
-/// Fixed rather than generated: `protocol audit --correlation seed-manifest` is how a reader asks
+/// Fixed rather than generated: `aep plan audit --correlation seed-manifest` is how a reader asks
 /// for "everything this run did", and a correlation id nobody can predict cannot be typed.
 pub const SEED_CORRELATION: &str = "seed-manifest";
 
@@ -94,7 +94,7 @@ pub fn from_manifest<B: CommandService<Command = Command>>(
             // another store by construction; seeding one repository cannot resolve it, and failing
             // here made every verb that opens a backend refuse on a store holding a legitimate
             // cross-repository relation — which is what a workspace is for. The edge stays in the
-            // document, where `protocol workspace crossings` resolves it against the assembly.
+            // document, where `aep plan workspace crossings` resolves it against the assembly.
             if target_id.member().is_some() {
                 continue;
             }

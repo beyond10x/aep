@@ -29,7 +29,7 @@
 //! floating point: `sprint: 42` reads as `42.0`.
 //!
 //! A document is read and written through [`PlanningDocument`], the same parser and renderer every
-//! `protocol artifact` verb uses, so what this provider writes is byte for byte what the store would
+//! `aep plan artifact` verb uses, so what this provider writes is byte for byte what the store would
 //! have written — which is what lets story 2 prove that nobody can tell. The frontmatter's own
 //! validation applies: a `kind` and a `status` are kebab-case words from an open vocabulary, so a
 //! conformance suite's `conformance-ticket` in state `open` is as valid a document as a `story`
@@ -39,7 +39,7 @@
 //!
 //! `journal.jsonl` already holds this store's history in its 0.19.0 shape — one `Entry` per line:
 //! who, when, artifact, revision, what changed, provenance. Those lines are left exactly as they
-//! are and are read by `protocol artifact history` as before. This provider appends
+//! are and are read by `aep plan artifact history` as before. This provider appends
 //! [`DomainEvent`]s, one per line, and reads back only those; the boundary between the two shapes
 //! is the first event this provider ever wrote. A document a person wrote by hand, with no journal
 //! line at all, loads with an empty log — a plan that predates the provider is a normal condition,

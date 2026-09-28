@@ -505,8 +505,8 @@ pub enum ExpectationKind {
     },
     /// How many selected calls came back flagged as errors stays within a bound.
     ///
-    /// Scoped on purpose. A refusal this project designed is correct behaviour: `protocol
-    /// artifact move` exits 1 when the move is illegal, and a run that asked, was refused and
+    /// Scoped on purpose. A refusal this project designed is correct behaviour: `aep
+    /// plan artifact move` exits 1 when the move is illegal, and a run that asked, was refused and
     /// relayed the refusal behaved exactly right — and contains a failed tool call.
     ///
     /// `unk` when a selected call has no correlated result, or when nothing is in scope.
@@ -925,7 +925,7 @@ pub enum ExpectationKind {
     ///
     /// The one that is a real guard on this repository's own CLI: a verb that got slow shows up
     /// as a step, not as a percentage of a total that is dominated by inference. Every
-    /// `protocol artifact` call in the observed run returned in ≤ 187 ms.
+    /// `aep plan artifact` call in the observed run returned in ≤ 187 ms.
     ///
     /// `unk` when a selected step's result carries no timestamp, or when nothing is in scope.
     #[serde(rename = "step.exec_time")]

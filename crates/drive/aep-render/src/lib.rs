@@ -56,7 +56,7 @@
 //!
 //! | candidate | what it would have bought | why not |
 //! |---|---|---|
-//! | `graphviz` / `dot` | graph layout | A system binary between `protocol workflow render` and a picture, for a graph of nine nodes. [`layout`] is sixty lines instead. |
+//! | `graphviz` / `dot` | graph layout | A system binary between `aep govern workflow render` and a picture, for a graph of nine nodes. [`layout`] is sixty lines instead. |
 //! | `ratatui` | a terminal UI | A backend, an event loop and a widget tree — plus `crossterm` — for one screen that is a list. [`ansi`] is that list. |
 //! | `resvg` / `usvg` | PNG without a system tool | A rasteriser, a font stack and a colour pipeline compiled into the CLI for a format nothing in the gate reads. The CLI shells out to `rsvg-convert` and says so by name when it is absent. |
 //!

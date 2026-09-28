@@ -1,7 +1,7 @@
 //! CLI integration tests for the entity and audit surface.
 //!
 //! These drive the real binary for the same reason the rest of the CLI tests do: a harness shells
-//! out to `protocol` and reads its exit code, so an argument that never reaches the library is a
+//! out to `aep` and reads its exit code, so an argument that never reaches the library is a
 //! failure the library's own tests cannot see.
 //!
 //! Everything here goes through the in-memory backend, seeded from the example manifest on each
@@ -19,9 +19,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always against the repository's own document tree.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always against the repository's own document tree.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -49,7 +49,7 @@ const SPECIFICATION: &str = "ep://local/manifest/specification/passkeys-auth";
 
 #[test]
 fn entity_list_shows_one_line_per_artifact_in_the_manifest() {
-    let output = protocol(&["plan", "entity", "list", "--artifacts", ARTIFACTS]);
+    let output = aep(&["plan", "entity", "list", "--artifacts", ARTIFACTS]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -68,7 +68,7 @@ fn entity_list_shows_one_line_per_artifact_in_the_manifest() {
 
 #[test]
 fn entity_list_narrows_to_one_type() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "list",
@@ -85,7 +85,7 @@ fn entity_list_narrows_to_one_type() {
 
 #[test]
 fn entity_get_by_locator_prints_the_design_the_manifest_declares() {
-    let output = protocol(&["plan", "entity", "get", "--artifacts", ARTIFACTS, DESIGN]);
+    let output = aep(&["plan", "entity", "get", "--artifacts", ARTIFACTS, DESIGN]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -104,7 +104,7 @@ fn entity_get_by_locator_prints_the_design_the_manifest_declares() {
 
 #[test]
 fn entity_get_by_an_unknown_locator_refuses_rather_than_printing_nothing() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "get",
@@ -126,7 +126,7 @@ fn entity_get_by_an_unknown_locator_refuses_rather_than_printing_nothing() {
 
 #[test]
 fn entity_history_shows_the_seeding_and_nothing_else() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "history",
@@ -152,7 +152,7 @@ fn entity_history_shows_the_seeding_and_nothing_else() {
 
 #[test]
 fn entity_relations_shows_what_the_design_designs() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "relations",
@@ -173,7 +173,7 @@ fn entity_relations_shows_what_the_design_designs() {
 
 #[test]
 fn entity_relations_incoming_answers_what_points_at_this() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "relations",
@@ -201,7 +201,7 @@ fn entity_relations_incoming_answers_what_points_at_this() {
 
 #[test]
 fn audit_lists_the_commands_that_seeded_the_manifest() {
-    let output = protocol(&["plan", "audit", "--artifacts", ARTIFACTS]);
+    let output = aep(&["plan", "audit", "--artifacts", ARTIFACTS]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
 
@@ -220,7 +220,7 @@ fn audit_lists_the_commands_that_seeded_the_manifest() {
 
 #[test]
 fn audit_rejected_is_empty_when_nothing_was_refused() {
-    let output = protocol(&["plan", "audit", "--artifacts", ARTIFACTS, "--rejected"]);
+    let output = aep(&["plan", "audit", "--artifacts", ARTIFACTS, "--rejected"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
         stdout(&output).trim().is_empty(),
@@ -231,7 +231,7 @@ fn audit_rejected_is_empty_when_nothing_was_refused() {
 
 #[test]
 fn describe_says_a_design_accepts_an_approval() {
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "describe",
         "--artifacts",
@@ -251,7 +251,7 @@ fn describe_says_a_design_accepts_an_approval() {
 
 #[test]
 fn json_output_is_machine_readable() {
-    let output = protocol(&[
+    let output = aep(&[
         "plan",
         "entity",
         "list",

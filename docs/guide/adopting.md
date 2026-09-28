@@ -6,7 +6,7 @@ For a team that already has rules — in a wiki, a `CONTRIBUTING.md`, or in one 
 (every capability, evidence kind, fact path, predicate operator) and this page holds the order to do
 things in.
 
-Every command below assumes `B=target/debug/protocol` after `cargo build -p aep-cli`, run from
+Every command below assumes `B=target/debug/aep` after `cargo build -p aep-cli`, run from
 the root of the tree being checked.
 
 ## What you bring

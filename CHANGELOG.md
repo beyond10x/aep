@@ -21,6 +21,14 @@ belongs in the commit message or in `docs/design/`.
   all-origin, nonempty and entirely passing selection earns eligibility. The coverage record
   keeps its kind; the move records the derived eligibility separately from legacy evidence.
 
+### Removed
+
+- The `protocol` alias binary. The CLI has one name: use `aep`. Release archives, `task install`
+  and `aep drive` step maps name only `aep`; a `command` step whose program is `protocol` is no
+  longer resolved to the driving build, and the driven-step shell admits only `aep`. Evidence the
+  CLI mints names its verifier tool `aep` and records the grouped command path
+  (`aep observe trace evidence …`, `aep govern validate …`).
+
 ## [0.63.1] — 2026-09-28
 
 ### Fixed

@@ -1,4 +1,4 @@
-//! `protocol drive` — walking a workflow by asking the engine, and doing only what the answers
+//! `aep drive` — walking a workflow by asking the engine, and doing only what the answers
 //! permit.
 //!
 //! The third module split of `main.rs`, on the criterion the first two set: a verb family with its
@@ -173,7 +173,7 @@ pub fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
 }
 
 
-/// The one environment variable that may name a plugin directory (AGENTS.md invariant 12).
+/// The one environment variable that may name a plugin directory (AGENTS.md invariant 11).
 ///
 /// `pub(crate)` because `aep doctor` reports on the same directories this drives with, and a second
 /// spelling of the name is how a rename leaves the preflight checking a variable nothing reads.
@@ -206,7 +206,7 @@ pub enum DriveCommand {
     /// Answer one `transition` hook consultation from the native loop, on stdin — the governor.
     ///
     /// **The engine, reachable as a program at a section boundary.** `b10x-harness workflow run`
-    /// walks a flow `protocol workflow flow` projected from a workflow, and that projection is an
+    /// walks a flow `aep govern workflow flow` projected from a workflow, and that projection is an
     /// ordering and not a government: no guard travels. The loop asks a `transition` hook before
     /// a section is entered and after it leaves, and this verb is what answers it from the engine
     /// — `evaluate` for entering, `transition` for leaving — so a native walk is governed by the
@@ -220,7 +220,7 @@ pub enum DriveCommand {
 }
 
 
-/// The arguments of `protocol drive transition`.
+/// The arguments of `aep drive transition`.
 #[derive(Debug, Args)]
 pub struct TransitionArgs {
     /// Where the documents, the task and the store are.
@@ -268,7 +268,7 @@ pub struct DriveLocation {
 }
 
 
-/// The arguments of `protocol drive run`.
+/// The arguments of `aep drive run`.
 #[derive(Debug, Args)]
 pub struct RunArgs {
     /// Where the run's inputs are.
@@ -317,7 +317,7 @@ pub struct RunArgs {
 }
 
 
-/// The arguments of `protocol drive status`.
+/// The arguments of `aep drive status`.
 #[derive(Debug, Args)]
 pub struct StatusArgs {
     /// Where the run's inputs are.
@@ -329,7 +329,7 @@ pub struct StatusArgs {
 }
 
 
-/// The arguments of `protocol drive resume`.
+/// The arguments of `aep drive resume`.
 #[derive(Debug, Args)]
 pub struct ResumeArgs {
     /// The run to continue, such as `AUTH-142/3`.
@@ -371,7 +371,7 @@ pub struct ResumeArgs {
 }
 
 
-/// Runs one `protocol drive` verb.
+/// Runs one `aep drive` verb.
 pub fn run(command: DriveCommand) -> Result<ExitCode> {
     match command {
         DriveCommand::Run(args) => start_with_host(&args, &CommandOnlyHost),
@@ -566,7 +566,7 @@ impl DriveLocation {
 
         // No `--map`: the map is the one written against the workflow this task resolves to. More
         // than one is a choice the driver refuses to make on the caller's behalf — the same
-        // position `protocol artifact move` takes for an illegal transition, and for the same
+        // position `aep plan artifact move` takes for an illegal transition, and for the same
         // reason: the refusal names what to do instead.
         let plan = aep_engine::resolve(task, registry)
             .map_err(|errors| anyhow::anyhow!("{errors}"))
@@ -601,7 +601,7 @@ impl DriveLocation {
 }
 
 
-/// `protocol drive run`
+/// `aep drive run`
 pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitCode> {
     let inputs = args.location.inputs()?;
     let runs = runs_directory(&inputs.project)?;
@@ -742,10 +742,10 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
 }
 
 
-/// `protocol drive resume`
+/// `aep drive resume`
 pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<ExitCode> {
     // The run directory is found before the inputs are resolved, because the inputs are what the
-    // run directory remembers: `protocol drive resume <run>` with no other flag is the line this
+    // run directory remembers: `aep drive resume <run>` with no other flag is the line this
     // command prints, and until 2026-08-29 that line did not work.
     let project = match &args.location.project {
         Some(named) => named.clone(),
@@ -868,7 +868,7 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
 }
 
 
-/// `protocol drive status`
+/// `aep drive status`
 pub fn status(args: &StatusArgs) -> Result<ExitCode> {
     let project = match &args.location.project {
         Some(path) => path.clone(),
@@ -1008,7 +1008,7 @@ pub fn finish(
     run: &RunId,
     map_origin: &str,
 ) -> Result<ExitCode> {
-    finish_with_command(report, run, map_origin, "protocol drive resume")
+    finish_with_command(report, run, map_origin, "aep drive resume")
 }
 
 /// Render the continuation command owned by the execution host.
@@ -1347,7 +1347,7 @@ impl HeldLock {
 /// The lock is released when the value goes out of scope, however it goes out of scope.
 ///
 /// [`HeldLock::release`] is called on every exit path the driver *chose*, and the leak was in the
-/// paths it did not: between `take_lock` and the release, `protocol drive run` has four fallible
+/// paths it did not: between `take_lock` and the release, `aep drive run` has four fallible
 /// steps of its own — `allocate_run`, [`HeldLock::record_run`], `create_dir_all` of the run
 /// directory and the write of `current` — and `resume` has two early returns as well. Any of them
 /// left `lock.json` on disk naming a pid that had already exited, so the operator's next `drive`
@@ -1530,7 +1530,7 @@ pub fn host() -> String {
 
 
 /// This CLI's own name, which is what a `command` step writes when it means *this build*.
-pub const PROTOCOL_BINARY: &str = "protocol";
+pub const AEP_BINARY: &str = "aep";
 
 
 /// The run's record of which binary each `command` step attempt actually spawned.
@@ -1548,9 +1548,9 @@ pub const COMMANDS_FILE: &str = "commands.jsonl";
 pub enum Resolution {
     /// Spawned exactly as the map wrote it — every program that is not this CLI.
     AsWritten,
-    /// `protocol`, spawned as the binary this driver **is**.
+    /// `aep`, spawned as the binary this driver **is**.
     Driver,
-    /// `protocol`, and this process could not name its own binary, so `PATH` decided.
+    /// `aep`, and this process could not name its own binary, so `PATH` decided.
     PathFallback,
 }
 
@@ -1584,10 +1584,10 @@ pub struct Resolved {
 }
 
 
-/// Resolves a `command` step's program: `protocol` is the binary this driver **is**.
+/// Resolves a `command` step's program: `aep` is the binary this driver **is**.
 ///
 /// **Run `W4-3/1`, 2026-08-28, is why.** Step 4 of `verify` was
-/// `protocol property evidence --out …/property.yaml`. A `command` step is spawned by the driver
+/// `aep observe property evidence --out …/property.yaml`. A `command` step is spawned by the driver
 /// with the *driver's* environment, so the name resolved against the operator's own `PATH`, where
 /// the first `protocol` was a 0.28.0 install predating the `property` verb. The step ran a binary
 /// older than the map executing it, wrote no record, and the driver correctly reported *nothing
@@ -1596,7 +1596,7 @@ pub struct Resolved {
 /// [`std::env::current_exe`] removes the failure rather than reporting it, and it buys the
 /// agreement the run's whole evidence trail is recorded against: a record produced by a binary
 /// nobody can name is the defect `version-check` exists for. It is keyed on the **file name**, so
-/// `/usr/local/bin/protocol` is the same request written longer, and on nothing else — `cargo`,
+/// `/usr/local/bin/aep` is the same request written longer, and on nothing else — `cargo`,
 /// `bash` and `git` are tools the driver finds the way it always did.
 ///
 /// A process that cannot name its own binary falls back to the old behaviour and says so rather
@@ -1606,7 +1606,7 @@ pub struct Resolved {
 pub fn resolve_program(written: &str) -> Resolved {
     let names_this_cli = Path::new(written)
         .file_name()
-        .is_some_and(|name| name == PROTOCOL_BINARY);
+        .is_some_and(|name| name == AEP_BINARY);
     if !names_this_cli {
         return Resolved {
             program: written.to_owned(),
@@ -1678,17 +1678,17 @@ impl CommandStepExecutor for CliExecutors {
             Ok(words) => words,
             Err(reason) => return StepOutcome::NoVerdict { reason },
         };
-        let resolved = self.protocol_binary.as_ref().filter(|_| Path::new(&words[0]).file_name().is_some_and(|name| name == "aep" || name == "protocol")).map_or_else(|| resolve_program(&words[0]), |binary| Resolved { program: binary.display().to_string(), resolution: Resolution::Driver, note: Some("the host's selected AEP planning executable".to_owned()) });
+        let resolved = self.protocol_binary.as_ref().filter(|_| Path::new(&words[0]).file_name().is_some_and(|name| name == "aep")).map_or_else(|| resolve_program(&words[0]), |binary| Resolved { program: binary.display().to_string(), resolution: Resolution::Driver, note: Some("the host's selected AEP planning executable".to_owned()) });
         // The argv as **spawned**, not as written, because every message below quotes it and the
-        // whole defect this closes was a message that named `protocol` while a namesake ran.
+        // whole defect this closes was a message that named `aep` while a namesake ran.
         let rendered = std::iter::once(resolved.program.as_str())
             .chain(words[1..].iter().map(String::as_str))
             .collect::<Vec<_>>()
             .join(" ");
         self.record_command(context, &words[0], &resolved);
         // A `command` step is this process's own child, so the declared actor genuinely arrives:
-        // a step map whose `run:` is a `protocol artifact …` writes to the store as the run, not
-        // as whoever typed `protocol drive run`.
+        // a step map whose `run:` is a `aep plan artifact …` writes to the store as the run, not
+        // as whoever typed `aep drive run`.
         let outcome = Process::new(&resolved.program)
             .args(&words[1..])
             .current_dir(&self.working_directory)
@@ -1733,7 +1733,7 @@ impl CommandStepExecutor for CliExecutors {
         };
 
         // A verifier that wrote its own record: read what it wrote. The exit status is not
-        // consulted at all — `protocol trace evidence` exits 0 on a run that gapped, because the
+        // consulted at all — `aep observe trace evidence` exits 0 on a run that gapped, because the
         // verdict is in the document and the engine is what decides on it.
         if let Some(mapping) = &step.evidence {
             if let Some(record) = &mapping.record {
@@ -1783,8 +1783,8 @@ impl OperatorStepExecutor for CliExecutors {
         }
         outln!();
         outln!(
-            "who may answer: {}. Record the approval against this run's snapshot with `protocol \
-             evaluate --evidence <file> --state <run>/snapshot.json`, or do what the prompt says, \
+            "who may answer: {}. Record the approval against this run's snapshot with `aep \
+             govern evaluate --evidence <file> --state <run>/snapshot.json`, or do what the prompt says, \
              then resume.",
             aep_driver::attest::admissible(self.approver.as_ref())
         );
@@ -1851,7 +1851,7 @@ pub fn composes(command: &str) -> Option<char> {
 /// * `xargs`, `env`, `sh`, `bash` — each runs a program this list did not admit.
 ///
 /// It is not a general shell and this does not make it one. The rule is unchanged: a driven step's
-/// shell reaches the `protocol` CLI, and now also reads what the state already permits it to read.
+/// shell reaches the `aep` CLI, and now also reads what the state already permits it to read.
 pub const READ_ONLY_PROGRAMS: &[&str] = &["grep", "rg", "ls", "cat", "head", "tail", "wc"];
 
 
@@ -1947,7 +1947,7 @@ pub fn declared_write(
         WriteScope::Denied => Err(format!(
             "`{tool}` cannot write `{subject}`: this step's declared write scope answers `denied` \
              for it, on the rule `{matched}`. This step may write {}. Everything else is changed \
-             through the verb that owns it — a planning artifact through `protocol plan \
+             through the verb that owns it — a planning artifact through `aep plan \
              artifact` (`new`, `body`, `move`, `relate`), which is why a file writer is denied \
              there.",
             writable(surface.scope)
@@ -2121,7 +2121,7 @@ pub fn answer(args: &TransitionArgs, path: &str, moment: Moment) -> Result<Answe
 
 /// The state a flow node path stands for at this moment.
 ///
-/// `protocol workflow flow` emits every state as a group named for it and a retreat as a group
+/// `aep govern workflow flow` emits every state as a group named for it and a retreat as a group
 /// `<first>-to-<last>` (or `<state>-again` for a one-state retreat) holding them; the root is
 /// `root`. The loop asks at group boundaries only, so the leaf of a path here is a state, a
 /// retreat or the root. Entering a retreat is entering its first state, leaving it is leaving its
@@ -2261,7 +2261,7 @@ pub fn store_integrity_at(target: &str, edits: &[(&str, &str)]) -> Result<(), St
         if text.lines().any(|line| line.trim() == "---") {
             return Err(format!(
                 "the edit's `{field}` crosses the `---` frontmatter fence of {target}. Edit only \
-                 below the closing fence; the frontmatter is the CLI's — `protocol plan \
+                 below the closing fence; the frontmatter is the CLI's — `aep plan \
                  artifact move` for status, `artifact relate` for relations, `artifact new` for \
                  creation, and `artifact body <id> --from <path|->` for the prose underneath."
             ));
@@ -2271,8 +2271,8 @@ pub fn store_integrity_at(target: &str, edits: &[(&str, &str)]) -> Result<(), St
 }
 
 
-/// The per-state shell surface: one simple invocation of `protocol artifact …` or
-/// `protocol trace …`, exactly what the retired `driven-surface.sh` held the grant to.
+/// The per-state shell surface: one simple invocation of `aep plan artifact …` or
+/// `aep observe trace …`, exactly what the retired `driven-surface.sh` held the grant to.
 ///
 /// The surface lives here and not in any document the run can reach, deliberately: a run that
 /// could name its own allowed surface could widen it. Pattern-based and best-effort, as § 4.8
@@ -2299,10 +2299,10 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
     let program = words.next().unwrap_or_default();
     let mut verb = words.next().unwrap_or_default();
     // The CLI's first level is the four area names, and every verb under them keeps its flat
-    // spelling as a hidden alias — so `protocol plan artifact new` and `protocol artifact new` are
+    // spelling as a hidden alias — so `aep plan artifact new` and `aep artifact new` are
     // one command and this surface has to admit both. Skipping the area word rather than listing
     // the grouped spellings keeps the rule about *which verb*, which is what it was always about:
-    // `protocol drive run` is still refused, because after the area word the verb is `run`.
+    // `aep drive run` is still refused, because after the area word the verb is `run`.
     if crate::AREAS.contains(&verb) {
         verb = words.next().unwrap_or_default();
     }
@@ -2318,10 +2318,10 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
             context.state
         ));
     }
-    if leaf != "protocol" {
+    if leaf != "aep" {
         return Err(format!(
             "`{}` is outside the surface this state admits. A driven step's shell exists so the \
-             `protocol` CLI is reachable; it is not a general shell. Build, test and inspection \
+             `aep` CLI is reachable; it is not a general shell. Build, test and inspection \
              commands are `command` steps the driver runs, and their records carry a verifier's \
              provenance rather than yours.",
             if program.is_empty() {
@@ -2333,8 +2333,8 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
     }
     if verb != "artifact" && verb != "trace" {
         return Err(format!(
-            "`protocol {}` is outside the surface this state admits: `protocol plan artifact …` \
-             and `protocol observe trace …`, by either spelling. Driving a run from inside a \
+            "`aep {}` is outside the surface this state admits: `aep plan artifact …` \
+             and `aep observe trace …`, by either spelling. Driving a run from inside a \
              driven step, or moving the store's own governing documents, is not this step's \
              business.",
             if verb.is_empty() { "(no verb)" } else { verb }
@@ -2377,7 +2377,7 @@ pub fn llm_step_count(map: &StepMap) -> usize {
 /// What a run was started with, written beside its cursor so `resume` does not have to be told again.
 ///
 /// **The printed resume line did not work, and that is the whole reason this exists.** A stopped
-/// run prints `resume with: protocol drive resume <run>`; that command re-read none of `--map`,
+/// run prints `resume with: aep drive resume <run>`; that command re-read none of `--map`,
 /// `--task`, `--pause-on-approval` or `--plugin-dir`, so an operator who typed exactly what the
 /// driver told them to type got a different run — a different map, no pause, no plugin — or an
 /// error. It was recorded as F-W4.2-4 on 2026-08-24 and answered by observation: *the line as
@@ -2467,7 +2467,7 @@ impl Launch {
 ///
 /// **One variable: who the step is, when it writes to the planning store.** `command_actor()`
 /// stamped `human:<$USER>` on every `artifact new`, `move`, `body`, `relate` and `evidence`,
-/// whoever made it — so a driven session that ran `protocol artifact move <spec> approved` was
+/// whoever made it — so a driven session that ran `aep plan artifact move <spec> approved` was
 /// journalled as the operator's own move and the store could not tell an agent's write from a
 /// person's. It is [`aep_driver::attest::session_actor`] and not a second spelling of
 /// `agent:<execution>`, because the same value is what
@@ -2479,13 +2479,13 @@ impl Launch {
 ///
 /// # What this reaches, and what it does not
 ///
-/// A `command` step is spawned by this process, so it inherits the variable and a `protocol`
+/// A `command` step is spawned by this process, so it inherits the variable and a `aep`
 /// invocation in a step map is attributed to the run. An **`llm` step's session is not**:
 /// `metaharness run` is spawned here and receives it, but metaharness constructs its child's
 /// environment rather than inheriting one — `env_clear()` and a fixed allowlist (`INHERITED_KEYS`,
 /// seven names, in `metaharness-claude`'s launch; `PATH` plus a credential in the `b10x` adapter's)
 /// — and it publishes no flag that admits another variable. So the model's own
-/// `protocol artifact move` is still journalled as `human:<$USER>`, and closing that is a flag on
+/// `aep plan artifact move` is still journalled as `human:<$USER>`, and closing that is a flag on
 /// that side of the boundary, not an edit on this one (`story:the-store-knows-who-wrote-it`,
 /// § *Out of Scope*).
 pub fn session_env(execution: &ExecutionId) -> Vec<(String, String)> {
@@ -2496,7 +2496,7 @@ pub fn session_env(execution: &ExecutionId) -> Vec<(String, String)> {
 }
 
 
-/// Refuses a run whose `command` steps say `protocol` when this driver cannot guarantee they get it.
+/// Refuses a run whose `command` steps say `aep` when this driver cannot guarantee they get it.
 ///
 /// The third pre-flight, and it answers a question the other two do not.
 /// The execution host separately checks the **session's** `PATH` — the one Metaharness
@@ -2504,10 +2504,10 @@ pub fn session_env(execution: &ExecutionId) -> Vec<(String, String)> {
 /// environment, and that difference is exactly why run `W4-3/1`'s failure got past a guard that
 /// looked like it covered this: two `PATH`s, one of them checked.
 ///
-/// [`resolve_program`] normally removes the question — a step that says `protocol` gets
+/// [`resolve_program`] normally removes the question — a step that says `aep` gets
 /// `current_exe()`. This fires only on the branch where that is unavailable, because then the
 /// fallback is the very lookup that produced the defect, and whether it is safe is decidable here:
-/// if the `PATH` `protocol` *is* this build, nothing is at stake and the run proceeds.
+/// if the `PATH` `aep` *is* this build, nothing is at stake and the run proceeds.
 pub fn protocol_command_preflight(map: &StepMap) -> Option<String> {
     let steps = protocol_command_steps(map);
     if steps == 0 || std::env::current_exe().is_ok() {
@@ -2525,34 +2525,34 @@ pub fn protocol_command_steps(map: &StepMap) -> usize {
         .filter(|step| match step {
             Step::Command(command) => Path::new(command.program())
                 .file_name()
-                .is_some_and(|name| name == PROTOCOL_BINARY),
+                .is_some_and(|name| name == AEP_BINARY),
             _ => false,
         })
         .count()
 }
 
 
-/// The refusal itself, given what this process could learn about the `protocol` it would fall back to.
+/// The refusal itself, given what this process could learn about the `aep` it would fall back to.
 ///
 /// Separated from the two lookups because neither is reachable from a test: `current_exe()` does
 /// not fail on a machine a test suite runs on, so the *message* — which is the whole product of a
 /// pre-flight — would otherwise be checked by nobody. `installed` is `None` when there is no
-/// `protocol` on the driver's `PATH` at all, which is the same finding with no version to quote.
+/// `aep` on the driver's `PATH` at all, which is the same finding with no version to quote.
 pub fn protocol_command_refusal(steps: usize, installed: Option<&str>) -> Option<String> {
     let ours = env!("CARGO_PKG_VERSION");
     let disagreement = match installed {
         // Agreement is not a finding: the fallback would spawn this very build.
         Some(version) if version == ours => return None,
         Some(version) => format!("that one reports `{version}` and this build is `{ours}`"),
-        None => format!("there is no `protocol` on that `PATH` at all, and this build is `{ours}`"),
+        None => format!("there is no `aep` on that `PATH` at all, and this build is `{ours}`"),
     };
     Some(format!(
-        "this map has {steps} `command` step(s) that invoke `protocol`, and this driver cannot \n\
+        "this map has {steps} `command` step(s) that invoke `aep`, and this driver cannot \n\
          name its own binary: `current_exe()` is unavailable here, so such a step falls back to \n\
-         the first `protocol` on the driver's `PATH` — and {disagreement}.\n\
+         the first `aep` on the driver's `PATH` — and {disagreement}.\n\
          \n\
          A `command` step is spawned **by the driver, with the driver's environment**, so the \n\
-         `PATH` that decides is the shell you typed `protocol drive` in — *not* the session \n\
+         `PATH` that decides is the shell you typed `aep drive` in — *not* the session \n\
          `PATH` metaharness constructs for an `llm` step. \n\
          `cargo install --path crates/edge/aep-cli --root ~/.local` is the fix for that other \n\
          `PATH`, which looks in `$HOME/.local/bin`; it fixes this one only if that directory \n\
@@ -2568,12 +2568,12 @@ pub fn protocol_command_refusal(steps: usize, installed: Option<&str>) -> Option
              cargo install --path crates/edge/aep-cli --root ~/.local\n\
              export PATH=\"$HOME/.local/bin:$PATH\"\n\
          \n\
-         or drive a map whose `command` steps name no `protocol`."
+         or drive a map whose `command` steps name no `aep`."
     ))
 }
 
 
-/// What the first `protocol` on the driver's own `PATH` says it is, when there is one.
+/// What the first `aep` on the driver's own `PATH` says it is, when there is one.
 ///
 /// A spawn, where [`on_path`] is deliberately only a lookup — because the question is different.
 /// *Does a file exist* is decidable without running it; *which build is it* is not, and
@@ -2583,11 +2583,11 @@ pub fn protocol_command_refusal(steps: usize, installed: Option<&str>) -> Option
 pub fn protocol_version_on_path() -> Option<String> {
     let paths = std::env::var_os("PATH")?;
     let candidate = std::env::split_paths(&paths)
-        .map(|directory| directory.join(PROTOCOL_BINARY))
+        .map(|directory| directory.join(AEP_BINARY))
         .find(|candidate| candidate.is_file())?;
     let output = Process::new(candidate).arg("--version").output().ok()?;
     let printed = String::from_utf8_lossy(&output.stdout);
-    // `clap`'s `--version` is `protocol <semver>`; the last word is the number, and a line that
+    // `clap`'s `--version` is `aep <semver>`; the last word is the number, and a line that
     // has no words at all is a binary that answered nothing rather than a version.
     printed
         .lines()
@@ -2655,7 +2655,7 @@ pub fn observed_now() -> ObservedAt {
 /// which is honest for a suite and impossible for a check whose record carries digests and counts:
 /// a `trace_conformance` minted from `exit 0` would state a specification digest nobody computed.
 /// So a verifier that can write its own record does, and the driver's whole job here is to read it
-/// — which is the same thing `protocol evaluate --evidence` does with a file a person points at.
+/// — which is the same thing `aep govern evaluate --evidence` does with a file a person points at.
 ///
 /// Three refusals, each of them D5's `Unknown` rather than a failing verdict:
 ///
@@ -2664,7 +2664,7 @@ pub fn observed_now() -> ObservedAt {
 ///   the driver choosing what the run is about;
 /// * **an approval, or anything a person is recorded as having produced** — invariant 7 at this
 ///   layer. A run's own step must not be able to hand the engine a human's approval read out of a
-///   file; that record enters through a person and `protocol evaluate --evidence`, never here.
+///   file; that record enters through a person and `aep govern evaluate --evidence`, never here.
 pub fn read_record(
     declared: &str,
     mapping: &EvidenceMapping,
@@ -2715,7 +2715,7 @@ pub fn read_record(
         return no_verdict(format!(
             "the record at {} is an approval or is recorded as a person's, and a driven step \
              cannot submit one: an approval reaches an execution through a person running \
-             `protocol evaluate --evidence`",
+             `aep govern evaluate --evidence`",
             path.display()
         ));
     }
@@ -2820,7 +2820,7 @@ pub struct ExecutorContext {
 pub trait ExecutionHost {
     /// The continuation command for a run this host starts or resumes.
     fn resume_command(&self) -> &'static str {
-        "protocol drive resume"
+        "aep drive resume"
     }
 
     /// Validate this invocation before the lock or run id exists.

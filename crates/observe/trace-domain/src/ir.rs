@@ -632,7 +632,7 @@ pub struct ToolTraffic {
     pub result_bytes: usize,
 }
 
-/// The census of a run: what `protocol trace inspect` prints.
+/// The census of a run: what `aep observe trace inspect` prints.
 ///
 /// The eval's informational metrics block, as a value rather than as sixty-five lines of `jq`.
 /// It states quantities and no opinions; the opinions are [`crate::spec`]'s job.
@@ -881,7 +881,7 @@ impl TraceIr {
     /// Every terminal record in the transcript, in the order they were written.
     ///
     /// One transcript is usually one session and this answers a list of one. A **driven** run is
-    /// the case it exists for: `protocol drive` starts a fresh session per workflow state, so the
+    /// the case it exists for: `aep drive` starts a fresh session per workflow state, so the
     /// run's transcript is a concatenation and carries as many terminal records as it visited
     /// states. [`Self::run_outcome`] answers the last of them, which is the right answer for *how
     /// did this end* and the wrong one for *did every session end cleanly* — a reader asking the
@@ -1168,7 +1168,7 @@ impl TraceIr {
         seen.values().filter(|count| **count > 1).count()
     }
 
-    /// The whole census, for `protocol trace inspect`.
+    /// The whole census, for `aep observe trace inspect`.
     pub fn census(&self) -> Census {
         let mut events_by_family: BTreeMap<String, usize> = BTreeMap::new();
         for event in &self.events {

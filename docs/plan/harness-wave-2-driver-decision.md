@@ -1,9 +1,9 @@
 # Harness wave 2 — the driver decisions, and wave 3's record
 
 > **Wave 3 is delivered, 2026-08-21.** The decisions below became `aep-driver-spec`, `aep-driver`,
-> `drivers/development/default.yaml`, `protocol drive`, the plugin's enforcement hooks, a
+> `drivers/development/default.yaml`, `aep drive`, the plugin's enforcement hooks, a
 > second harness with no model in it, a driven eval that ran for real, and — operator-added, outside
-> the reviewed breakdown — `protocol workflow render`. **The acceptance for every item is at the
+> the reviewed breakdown — `aep govern workflow render`. **The acceptance for every item is at the
 > foot of this page**, under *Wave 3 — built, 2026-08-21*, with the evidence beside each line.
 > This page carries both halves because wave 3 has no page of its own:
 > the breakdown a reviewer judged and the record of what it became belong in one place, where they
@@ -73,9 +73,9 @@ three adapter points — invoke-the-agent, capabilities-to-tool-config, and a tr
 | D6, invariant 16 | **F17, overturned in our favour:** a removable lockfile is **not** a breach; two adjacent rules adopted anyway | invariant 16's subject is the entity command vocabulary (`AGENTS.md:239-242`), not the filesystem. Adopted regardless: a run directory is never deleted or reused, and `--take-lock` **supersedes** — the stolen lock's contents go into the new run's cursor, so *"this run took the lock from pid 4711"* is in the record |
 | D6, the run id | the run id is the **driver's**, allocated after taking the lock; the engine's `ExecutionId` goes *inside* the cursor | `ExecutionId` is `<task>.<ordinal>` where the counter starts at zero **in each `Engine` value** — **F10** sharpens this: it is a field (`engine.rs:173`, `:186-190`, `:210-213`), so two `Engine`s in **one** process collide too, which is the shape a test harness builds. The hazard is confined to `initialize`; `Execution::restore` preserves the id (`execution.rs:277`) |
 | D6, stale locks | liveness, **never age**: pid alive ⇒ held; same host and dead ⇒ stale but still refused without `--take-lock`; another host ⇒ never stale | any age threshold must exceed the longest legitimate step, and that is *an operator step waiting for a person*, which has no bound. A two-hour timeout would break exactly the runs that paused correctly |
-| D6, a second invocation | refuses, printing the holder's run id, pid, host and cursor state, and names both routes out | the same choice `protocol artifact move` makes for an illegal transition: the refusal is the answer |
+| D6, a second invocation | refuses, printing the holder's run id, pid, host and cursor state, and names both routes out | the same choice `aep plan artifact move` makes for an illegal transition: the refusal is the answer |
 | **enforcement mapping** | § 4.8 — one row per rule class, each naming the mechanism, the layer and what audits it. **All three open cells are filled**; three audit columns were wrong and are corrected | *a rule nothing checks is a rule that has already drifted somewhere* — applied to the section itself, which is what produced F12, F13 and F14 |
-| the shell property | **the model never holds a shell in a development run.** `Bash` is offered only when `decide(command.execute) == Allowed`, and no development profile grants it (`profiles/development-fast.yaml:30-35`, `development-standard.yaml:28-30`). **Corrected by the build, W3.6 below: `development.driven` grants it, held to the `protocol` CLI by a hook. The two profiles named here are unchanged** | `Bash` is the one tool that is not a function of a capability: one call can be `tests.execute`, `repository.write`, `network.write` or `secret.read`. Rather than gate it by pattern — best-effort, and now stated as such — the property does the work: `cargo test` runs as a **`command` step the driver executes**, not as a tool the model holds. It is also what makes § 4.8's write-guard matcher exhaustive |
+| the shell property | **the model never holds a shell in a development run.** `Bash` is offered only when `decide(command.execute) == Allowed`, and no development profile grants it (`profiles/development-fast.yaml:30-35`, `development-standard.yaml:28-30`). **Corrected by the build, W3.6 below: `development.driven` grants it, held to the `aep` CLI by a hook. The two profiles named here are unchanged** | `Bash` is the one tool that is not a function of a capability: one call can be `tests.execute`, `repository.write`, `network.write` or `secret.read`. Rather than gate it by pattern — best-effort, and now stated as such — the property does the work: `cargo test` runs as a **`command` step the driver executes**, not as a tool the model holds. It is also what makes § 4.8's write-guard matcher exhaustive |
 | `Skill` and `Task` | `Skill` is a **named exemption** (it loads instructions and takes no action); `Task` and the agent-spawning family are **never offered**, audited by `subagent.spawned: at_most 0` | a tool with no `Action` cannot be governed (`docs/guide/harness.md:144-146`), and a subagent's tool set is derived by nothing in D1–D6 — so it would be a route around the per-state allowlist. The audit kind already ships (`crates/observe/trace-domain/src/spec.rs:797`) |
 | **F12 — the missing audit** | a **50th expectation kind, `env.tool_available`**, becomes a named wave-3 build item in the trace crates, sequenced **before** the hooks | the per-state tool set had no audit: `SessionStart.tools` is in the IR (`crates/observe/trace-domain/src/ir.rs:222-223`) and no expectation kind reads it (49 names, `spec.rs:777-830`). `tool.absent` is not a substitute — it asserts a tool was never *called*, and an allowlist bug offers a tool nobody calls |
 | **F14 — the hook↔engine channel** | the hook appends to `.engineering/runs/<run-id>/hook-decisions.jsonl`; the driver folds each line in through `Engine::authorize` after the step exits | a hook is a separate process and `authorize` takes `&mut Execution` (`engine.rs:285`), so the audit column named a trail the hook cannot reach. Folding late is safe because `transition()` is not called until the step's process has exited (D4) — the same reason the TOCTOU window is zero. A socket adds a hang to a batch program; hook-enforces-without-asking would mean rewriting rows 1 and 2 to say *the transcript* |
@@ -169,10 +169,10 @@ the record against.
 | **W3.1b** | **`crates/drive/aep-driver`** — the three-valued router, `LlmStepExecutor`, `tool_config` over `CapabilityPolicy::decide` | **F1, F3.** Depends on `aep-domain`, `aep-engine`, `aep-driver-spec` |
 | **W3.1c** | both manifests carry `[lints] workspace = true`; `crates/drive/aep-driver/tests/determinism.rs` ships with them, and invariant 9's list in `AGENTS.md` gains its row in the same change | **F19.** `AGENTS.md:213-214` — a crate that omits the lints line is outside every lint here; `AGENTS.md:141-144` — do not write an enforcement you cannot point at, and § 4.1 makes a purity claim for this crate stronger than `aep-engine`'s |
 | **W3.2** | `drivers/development/default.yaml` — the first step map over `adp/default/1`, plus `schemas/generated/driver-steps.schema.json`; `drivers/` added as the **last** row of `load.rs`'s `TREE` | D1, design D4, **F1** |
-| **W3.3** | `protocol drive` — the executors that touch the world (`command`, `llm`, `operator`), the run directory, the **store lock at `.engineering/runs/lock.json`**, the pid-liveness probe, `--resume` (which re-takes the lock), `--restart`, `--take-lock`, `--pause-on-approval` | D3, D6, **F2, F19** |
+| **W3.3** | `aep drive` — the executors that touch the world (`command`, `llm`, `operator`), the run directory, the **store lock at `.engineering/runs/lock.json`**, the pid-liveness probe, `--resume` (which re-takes the lock), `--restart`, `--take-lock`, `--pause-on-approval` | D3, D6, **F2, F19** |
 | **W3.4** | the plugin's hooks, **Phase 2**: `PreToolUse` deny from the per-state set, the `.engineering/planning/**` write guard with `matcher: "Edit\|Write\|NotebookEdit"`, and the `hook-decisions.jsonl` channel the driver folds in | § 4.8; **F14, F15, F16**; **needs W3.0**. The driver's `claude -p` line carries `--settings` and never `--bare` |
 | **W3.5** | the **shell-echo harness** — a second `LlmStepExecutor` and a second transcript reader, proving the three adapter points with no model, no network and no credential, inside `task check` | § 4.9. Confirmed buildable as sequenced; nothing changed |
-| **W3.6** | driven-eval acceptance: one real task driven end to end under `adp/default`, transcripts checked by `protocol trace check`, `trace_conformance` records submitted to the engine — outside `task check`, like `eval/run.sh` — **plus a deliberate-denial case**, so `permission.denied` audits something rather than reporting an ambiguous `0` | everything above; **F13** |
+| **W3.6** | driven-eval acceptance: one real task driven end to end under `adp/default`, transcripts checked by `aep observe trace check`, `trace_conformance` records submitted to the engine — outside `task check`, like `eval/run.sh` — **plus a deliberate-denial case**, so `permission.denied` audits something rather than reporting an ambiguous `0` | everything above; **F13** |
 
 The load-bearing items are W3.1 and W3.5. W3.1 is where the decisions either compile or do not, and
 it is the item the review moved. W3.5 is where the neutrality claim stops being a sentence: today
@@ -182,7 +182,7 @@ one adapter exists, and *"harness-neutral"* is a property nothing has ever teste
 
 Wave 3's own exclusions are in its section below; this list is wave 2's and is left as written.
 
-* **Any code at all.** No `aep-driver`, no `protocol drive`, no `drivers/` document, no hook, no
+* **Any code at all.** No `aep-driver`, no `aep drive`, no `drivers/` document, no hook, no
   `.engineering/runs/` writer. The directory name stays reserved and nothing writes to it.
   **All five landed in wave 3.**
 * **A second real harness.** Codex, or any other, is not a prerequisite and is not sequenced. W3.5's
@@ -211,7 +211,7 @@ closed by wave 3 and the row says so rather than disappearing:**
 | unknown | why it cannot be closed here | what it costs if it goes the wrong way |
 |---|---|---|
 | the **trust model for plugin-supplied hooks** — whether an installed plugin's hooks run without a per-invocation consent step | **not documented anywhere**, so no amount of reading closes it. **Still open after wave 3:** a hook that ran successfully in one install does not establish that it runs without consent in somebody else's | the hook layer of § 4.8 degrades to advisory and `--allowedTools` carries enforcement alone. Named as an assumption in § 4.8 rather than assumed silently |
-| whether a hook's `permissionDecision: deny` increments the transcript's `permission_denials` array | needed one `claude -p` run with a denying hook, then read the last line — *this wave* ran no model. **Closed by W3.6, 2026-08-21: yes, one-for-one.** The denial session's three hook refusals — `Bash`, `Edit`, `Write` — produced exactly three `permission_denials` entries, each carrying the tool's name, and the honest session's single refusal produced exactly one | it decided whether § 4.8 row 1's transcript-side audit works at all, and it does. The row is kept **advisory** even so: it asserts a model behaviour on top of an undocumented harness detail, and the gating evidence is the hook-decision log and `protocol artifact validate` |
+| whether a hook's `permissionDecision: deny` increments the transcript's `permission_denials` array | needed one `claude -p` run with a denying hook, then read the last line — *this wave* ran no model. **Closed by W3.6, 2026-08-21: yes, one-for-one.** The denial session's three hook refusals — `Bash`, `Edit`, `Write` — produced exactly three `permission_denials` entries, each carrying the tool's name, and the honest session's single refusal produced exactly one | it decided whether § 4.8 row 1's transcript-side audit works at all, and it does. The row is kept **advisory** even so: it asserts a model behaviour on top of an undocumented harness detail, and the gating evidence is the hook-decision log and `aep plan artifact validate` |
 ## Wave 3 — built, 2026-08-21
 
 **The breakdown above is the sketch a reviewer was given. This section is what it became**, in the
@@ -277,9 +277,9 @@ the gate's `schema-check`.
 * every `cargo` line in it is a `command` step **the driver runs**, and no `llm` step has an
   `evidence:` key, because the `Llm` variant has no field for one.
 
-### W3.3 — `protocol drive`
+### W3.3 — `aep drive`
 
-`protocol drive run | status | resume` (`crates/edge/aep-cli/src/drive.rs`, wired at
+`aep drive run | status | resume` (`crates/edge/aep-cli/src/drive.rs`, wired at
 `crates/edge/aep-cli/src/app.rs:327` and `:565`), with the three executors that touch the world,
 the run directory under `.engineering/runs/<task>/<ordinal>/`, the store lock at the one fixed path
 `.engineering/runs/lock.json`, and the pid-liveness probe — all in `aep-cli`, per F19.
@@ -367,19 +367,19 @@ transcripts survive under `$TMPDIR/driven-eval.KQzq6g`):
 
 | what was asserted | what the run said |
 |---|---|
-| `protocol drive run` exits 0 | **exit 0** |
+| `aep drive run` exits 0 | **exit 0** |
 | the run stops where a person is owed something | cursor `status: awaiting_operator`, `state: decompose` |
 | the whole verdict table | **28 pass · 0 fail · 8 advisory** |
 | the hooks discriminated rather than refusing everything | **10 decisions — 6 allow, 4 deny**: one `driven-surface` deny in `receive`, and in `specify` one `driven-surface` plus two `store-integrity` |
-| the store survived the denial step | `protocol artifact validate` exit 0; **0** artifacts carry the `revision: 99` the step was told to write |
-| both transcripts, as documents | honest **11 ok / 0 gap / 0 unk**, denial **9 ok / 0 gap / 0 unk**, `protocol trace check` exit 0 on each |
-| a record the engine would accept | `protocol trace evidence` minted a `trace_conformance` document from the honest transcript |
+| the store survived the denial step | `aep plan artifact validate` exit 0; **0** artifacts carry the `revision: 99` the step was told to write |
+| both transcripts, as documents | honest **11 ok / 0 gap / 0 unk**, denial **9 ok / 0 gap / 0 unk**, `aep observe trace check` exit 0 on each |
+| a record the engine would accept | `aep observe trace evidence` minted a `trace_conformance` document from the honest transcript |
 | cost | **$0.6976** for the two sessions |
 
 **The profile the run needed, and why it is not a relaxation.** `profiles/development-driven.yaml`
 (`development.driven`) is `development.standard` **plus `command.execute`**, and it exists because
 of a consequence § 4.8's strongest property did not cost out: the planning store has no tool surface
-other than the `protocol` CLI, so under `development.standard` a driven `llm` step can be told to
+other than the `aep` CLI, so under `development.standard` a driven `llm` step can be told to
 write a specification as an artifact and has no way to create one — the guard on
 `artifact.specification.exists` never fails, it simply never moves. The narrow fix does not exist:
 `command.execute:protocol` is a **parse error**, because scoping is for `Environment` on
@@ -393,7 +393,7 @@ and hold in the tree:
 * **the store's write guard no longer depends on the shell being absent.** § 4.8 row 6's matcher was
   exhaustive *given* that no development profile granted a shell; under this profile that premise is
   gone and it is **replaced rather than dropped** — `driven-surface.sh` denies every `Bash` that is
-  not one simple invocation of `protocol artifact …` or `protocol trace …`, which is what would
+  not one simple invocation of `aep plan artifact …` or `aep observe trace …`, which is what would
   otherwise have routed around the write guard by way of `sed -i`. Both hooks ship together for that
   reason.
 
@@ -406,7 +406,7 @@ The document tree now holds **six** profiles, asserted at
 operator asked for it after W3.6 landed; it is recorded here because a wave whose delivered set
 quietly exceeds its reviewed set is a wave nobody can check.
 
-`crates/drive/aep-render` — 2,933 source lines — plus `protocol workflow render`
+`crates/drive/aep-render` — 2,933 source lines — plus `aep govern workflow render`
 (`crates/edge/aep-cli/src/render.rs`). One `Scene` resolves the layout, the overlay and every piece
 of text exactly once; `svg`, `html` and `ansi` answer only *how do I write this out*, and PNG is the
 SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
@@ -451,7 +451,7 @@ identical a month later.
 | finding | disposition |
 |---|---|
 | **(1) `tool_config` admits what `authorize`'s floor later refuses.** `aep_engine::policy::authorize` re-applies the protocol's approval floor on top of the policy's answer, and this function is specified as *admits iff `decide(..) == Allowed`*. So a floor-gated capability that a profile allows outright is offered as a tool and then refused at `authorize` | **documented, not changed.** The refusal still happens, so nothing ungoverned occurs; what the model sees is a tool it cannot successfully use. Closing it means handing the function the `Protocol` as well, which changes the **published adapter surface** (§ 4.9 point 2) — not a thing to take unilaterally inside a build wave. Recorded where somebody will meet it: `crates/drive/aep-driver/src/tool.rs:25-34` |
-| **(2) a driven `llm` step under `development.standard` cannot reach the planning store at all.** Every verb of the store's vocabulary is a shell command, and no development profile granted `command.execute` | **resolved, in the shape § 4.8 already uses for this class**: the `development.driven` profile grants the capability as its outer bound, `hooks/driven-surface.sh` is the inner one, and the profile's header says the grant exists so the `protocol` CLI is reachable and for no other reason. Pattern-based and best-effort, and both documents say so |
+| **(2) a driven `llm` step under `development.standard` cannot reach the planning store at all.** Every verb of the store's vocabulary is a shell command, and no development profile granted `command.execute` | **resolved, in the shape § 4.8 already uses for this class**: the `development.driven` profile grants the capability as its outer bound, `hooks/driven-surface.sh` is the inner one, and the profile's header says the grant exists so the `aep` CLI is reachable and for no other reason. Pattern-based and best-effort, and both documents say so |
 | **(3) the loop transitions when a state's steps are done, not after every step.** § 4.4's diagram put `transition` after every step, which is not what a step map means: a state's steps are an ordered list and the transition is attempted when the list is exhausted (`crates/drive/aep-driver/src/route.rs:30-35`, `next_step` at `:50-63`) | **the semantic is the code's; § 4.4 is corrected** in the design, with the diagram left standing beside the correction rather than redrawn — the rule this page already applies to § 4.2's `@1` |
 
 ### What wave 3 deliberately did not do

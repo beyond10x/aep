@@ -1,4 +1,4 @@
-//! `protocol eval run` — the gates before a cent is spent, and what the manifest is read out of.
+//! `aep drive eval run` — the gates before a cent is spent, and what the manifest is read out of.
 //!
 //! # The binary is a tool, and a machine without it is not a red gate
 //!
@@ -26,14 +26,14 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always from the repository root.
-fn protocol(args: &[&str]) -> Output {
-    protocol_with(args, &[])
+/// Runs `aep` with `args`, always from the repository root.
+fn aep(args: &[&str]) -> Output {
+    aep_with(args, &[])
 }
 
-/// Runs `protocol` with `args` and the environment given.
-fn protocol_with(args: &[&str], env: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_protocol"));
+/// Runs `aep` with `args` and the environment given.
+fn aep_with(args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_aep"));
     command.args(args).current_dir(root());
     // Removed rather than left alone: a developer who exported it for a paid sweep must not turn
     // this suite into one, and a test that asserts the *absence* of the flag has to control it.
@@ -102,7 +102,7 @@ const CODEX_STREAM: &str = "crates/edge/aep-cli/fixtures/eval-run/codex-plugin-a
 
 /// Ingests one recorded stream as one arm of one case, spending nothing.
 fn ingest(out: &Path, case: &str, arm: &str, harness: &str, stream: &str) -> Output {
-    protocol(&[
+    aep(&[
         "drive",
         "eval",
         "run",
@@ -436,7 +436,7 @@ fn a_cost_the_wire_writes_as_null_leaves_the_manifest_silent_and_never_says_zero
 
 #[test]
 fn a_run_of_arm_driven_is_read_even_though_it_is_not_launched_here() {
-    // The split this verb makes: `protocol drive run` launches a driven run, and this reads the
+    // The split this verb makes: `aep drive run` launches a driven run, and this reads the
     // stream it wrote. Arm `driven` may carry a plugin digest or not — what enforces it is the
     // driver at the seam — so the manifest is written either way.
     let out = scratch("aep-eval-run-driven-ingest");
@@ -454,7 +454,7 @@ fn a_run_of_arm_driven_is_read_even_though_it_is_not_launched_here() {
 #[test]
 fn one_recorded_stream_is_one_run_and_naming_two_cases_is_refused() {
     let out = scratch("aep-eval-run-two-cases-one-stream");
-    let refused = protocol(&[
+    let refused = aep(&[
         "drive",
         "eval",
         "run",
@@ -484,7 +484,7 @@ fn one_recorded_stream_is_one_run_and_naming_two_cases_is_refused() {
 #[test]
 fn naming_neither_a_case_nor_a_workflow_is_refused_rather_than_running_the_whole_corpus() {
     let out = scratch("aep-eval-run-no-case");
-    let refused = protocol(&[
+    let refused = aep(&[
         "drive",
         "eval",
         "run",
@@ -511,7 +511,7 @@ fn naming_neither_a_case_nor_a_workflow_is_refused_rather_than_running_the_whole
 fn live_evaluation_names_the_new_host_before_creating_output() {
     let parent = scratch("aep-live-boundary");
     let out = parent.join("not-created");
-    let output = protocol(&[
+    let output = aep(&[
         "drive",
         "eval",
         "run",
@@ -617,7 +617,7 @@ fn a_declared_plugin_the_attestation_does_not_list_is_refused_rather_than_writte
         "directory-only.jsonl",
         serde_json::json!([directory_entry()]),
     );
-    let refused = protocol(&[
+    let refused = aep(&[
         "drive",
         "eval",
         "run",
@@ -657,7 +657,7 @@ fn arm_plugin_may_be_a_marketplace_plugin_alone_and_the_manifest_says_so() {
         "marketplace-only.jsonl",
         serde_json::json!([marketplace_entry(DEV_TEAM, "bdfinst", &digest)]),
     );
-    let ingested = protocol(&[
+    let ingested = aep(&[
         "drive",
         "eval",
         "run",
@@ -721,7 +721,7 @@ fn redact_takes_the_operators_home_and_name_out_of_the_stream_it_writes() {
     let out = scratch("aep-eval-run-redact-stream");
     let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
 
-    let ingested = protocol_with(
+    let ingested = aep_with(
         &[
             "drive",
             "eval",
@@ -781,7 +781,7 @@ fn the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays
     // from there.
     let out = scratch("aep-eval-run-redact-replays");
     let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
-    let first = protocol_with(
+    let first = aep_with(
         &[
             "drive",
             "eval",
@@ -818,7 +818,7 @@ fn the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays
     );
 
     let replay = scratch("aep-eval-run-redact-replays-again");
-    let second = protocol_with(
+    let second = aep_with(
         &[
             "drive",
             "eval",
@@ -859,7 +859,7 @@ fn without_redact_the_operators_own_stream_is_left_exactly_as_it_was() {
     // the same flag rather than acquiring a second one.
     let out = scratch("aep-eval-run-no-redaction");
     let dirty = stream_naming_the_operator(&out, "/home/ada", "ada");
-    let ingested = protocol_with(
+    let ingested = aep_with(
         &[
             "drive",
             "eval",
@@ -901,7 +901,7 @@ fn a_model_is_refused_by_name_on_the_harnesses_whose_adapters_take_none() {
     // run that silently used the default model would enter the matrix as a run that pinned one.
     for harness in ["codex", "b10x"] {
         let out = scratch(&format!("aep-eval-run-model-{harness}"));
-        let refused = protocol(&[
+        let refused = aep(&[
             "drive",
             "eval",
             "run",
@@ -942,7 +942,7 @@ fn the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported(
     // model checks it by reading both — and a manifest that folded them into one would have thrown
     // away the only evidence that the pin was honoured.
     let out = scratch("aep-eval-run-model-requested");
-    let ingested = protocol(&[
+    let ingested = aep(&[
         "drive",
         "eval",
         "run",
@@ -970,14 +970,14 @@ fn the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported(
     );
 
     // And the matrix reads that manifest without gaining a column for it.
-    let table = protocol(&["drive", "eval", "matrix", printable(&out)]);
+    let table = aep(&["drive", "eval", "matrix", printable(&out)]);
     assert_eq!(code(&table), 0, "{}", stderr(&table));
     assert!(
         !stdout(&table).contains("model_requested"),
         "no column is added by accident: {}",
         stdout(&table)
     );
-    let json = protocol(&[
+    let json = aep(&[
         "drive",
         "eval",
         "matrix",

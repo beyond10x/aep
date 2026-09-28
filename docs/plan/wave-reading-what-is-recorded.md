@@ -20,7 +20,7 @@ implemented at once and merged onto one branch closed by one gate run.**
 
 | fact | evidence |
 |---|---|
-| 40 draft stories, 36 dependency-ready | `protocol artifact graph --format json`, `depends_on` closure over `implemented`/`archived` |
+| 40 draft stories, 36 dependency-ready | `aep plan artifact graph --format json`, `depends_on` closure over `implemented`/`archived` |
 | so `depends_on` prunes 4 of 40 | selection is judgement, not a query — which is why this page exists to be approved |
 | 24 of 40 draft stories cite no source path | grep for `crates/…` over each body |
 | of the 16 that do, 9 name `aep-domain`, 8 name `aep-cli` | same scan — the two crates a naive wave would collide on |

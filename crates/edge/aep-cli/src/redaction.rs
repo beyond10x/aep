@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn redaction_is_idempotent_so_a_stream_can_be_cleaned_twice() {
-        // `protocol trace redact` exists to finish a stream an older `--redact` wrote. Applying the
+        // `aep observe trace redact` exists to finish a stream an older `--redact` wrote. Applying the
         // removal to its own output must be a no-op, or the verb would eat placeholders.
         let operator = Operator::new(vec!["/home/ada".to_owned()], vec!["ada".to_owned()]);
         let once = operator.scrub(r#"{"cwd":"/home/ada/work","who":"ada"}"#.as_bytes());

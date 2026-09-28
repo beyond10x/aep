@@ -7,8 +7,7 @@ Prose can tell an agent to write tests first, obtain approval before production 
 its work. AEP represents those requirements as validated data. The model reasons; a deterministic
 engine decides what the recorded facts permit.
 
-`aep` is the canonical command. `protocol` is an exact compatibility alias: retained operations
-produce the same standard output, standard error, and exit status through either name.
+`aep` is the command-line interface.
 
 ```console
 $ aep govern explain --task examples/development-passkeys/task.yaml --action production.write
@@ -43,7 +42,7 @@ The workspace includes:
 | `crates/observe/` | `aep-ess-evidence` | optional conversion of a standalone ESS report into AEP evidence |
 | `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary over the substrate |
 | `crates/edge/` | `aep-schema`, `aep-project` | standalone schemas for AEP documents, and the filesystem and Git acquisition edge |
-| `crates/edge/` | `aep-cli` | the canonical `aep` command and `protocol` alias |
+| `crates/edge/` | `aep-cli` | the `aep` command |
 
 The directory is the claim: a crate depends on its own area and on the ones below it, `edge` →
 `{profile, drive, observe}` → `{govern, plan}` → `aep-domain`. `AGENTS.md` records the one exception.

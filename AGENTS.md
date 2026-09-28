@@ -20,8 +20,8 @@ A change that advances neither objective is a question for the operator, not an 
 
 ## What this repository is
 
-A Rust library collection, a typed document tree, and one command with two names. Every crate lives
-under the area that says what it is for; `xtask` is the build tool and has no area:
+A Rust library collection, a typed document tree, and one command, `aep`. Every crate lives under
+the area that says what it is for; `xtask` is the build tool and has no area:
 
 - `crates/govern/` — `aep-domain` and `aep-engine`: the protocol vocabulary and the deterministic
   decisions taken over it.
@@ -35,8 +35,7 @@ under the area that says what it is for; `xtask` is the build tool and has no ar
 - `crates/profile/` — `aep-profile-development` and `aep-profile-operations`: development and
   operations vocabulary over the substrate.
 - `crates/edge/` — `aep-schema`, `aep-project` and `aep-cli`: the published document schemas,
-  the filesystem and Git acquisition edge, and canonical `aep` with the exact `protocol`
-  compatibility alias.
+  the filesystem and Git acquisition edge, and the `aep` command.
 
 It is not an LLM orchestration framework, hosted database, CI system, deployment platform,
 marketplace, system-modeling toolchain, or credential holder. The engine decides from caller-supplied
@@ -140,18 +139,16 @@ Each invariant names what enforces it. A rule without a check is not an invarian
    the command boundary. Archive and supersede are the lifecycle vocabulary; deletion is not.
 9. **Planning status is decided as data.** `entity-core` evaluates validated lifecycle definitions;
    no generic status setter exists in AEP.
-10. **Command aliases are exact.** For retained operations, `aep` and `protocol` have identical
-    output bytes and exit status. `command_equivalence.rs` holds accepted and refused paths.
-11. **The ESS adapter is optional and narrow.** No AEP core manifest depends on an ESS crate;
+10. **The ESS adapter is optional and narrow.** No AEP core manifest depends on an ESS crate;
     dependency scans and adapter tests hold this boundary.
-12. **Plugin authority is explicit.** No repository-local fallback chooses a plugin. Launch records
+11. **Plugin authority is explicit.** No repository-local fallback chooses a plugin. Launch records
     preserve the operator-supplied directories.
-13. **Public APIs are documented and unsafe is forbidden.** Workspace lints are raised to errors by
+12. **Public APIs are documented and unsafe is forbidden.** Workspace lints are raised to errors by
     Clippy and rustdoc gate steps; every member opts into workspace lints.
-14. **The gate is offline except by an opted-in name.** No check calls a model or spends money.
+13. **The gate is offline except by an opted-in name.** No check calls a model or spends money.
     `postgres-check` reaches only `ENTITY_POSTGRES_URL` when it is set and prints that it skipped
     otherwise. Cargo and the website package manager may populate their caches on a cold machine.
-15. **A guard is mutation-tested before it is trusted.** Break the guarded condition, observe the
+14. **A guard is mutation-tested before it is trusted.** Break the guarded condition, observe the
     named failure, restore it, and run the passing test.
 
 ## Gate

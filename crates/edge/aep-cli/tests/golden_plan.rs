@@ -71,8 +71,8 @@ fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/golden-plan")
 }
 
-fn protocol(store: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+fn aep(store: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .arg("--store")
         .arg(store)
@@ -184,7 +184,7 @@ fn the_write_verbs_leave_exactly_the_documents_recorded() {
         ],
     ];
     for step in steps {
-        let output = protocol(&store, step);
+        let output = aep(&store, step);
         assert!(
             output.status.success(),
             "{step:?} failed:\n{}{}",
@@ -274,7 +274,7 @@ fn the_read_verbs_print_exactly_what_was_recorded() {
         ),
     ];
     for (args, recorded) in reads {
-        let output = protocol(&expected, args);
+        let output = aep(&expected, args);
         let printed = format!(
             "{}{}",
             stdout(&output),
@@ -286,14 +286,14 @@ fn the_read_verbs_print_exactly_what_was_recorded() {
         assert_eq!(
             printed,
             wanted,
-            "`protocol {}` differs from the recording",
+            "`aep {}` differs from the recording",
             args.join(" ")
         );
     }
 
     // `history` carries the instant and the user of each write, which no two runs share; what is
     // compared is everything else.
-    let output = protocol(
+    let output = aep(
         &expected,
         &[
             "plan",

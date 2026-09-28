@@ -64,7 +64,7 @@ use crate::report::{CheckReport, Verdict};
 
 /// An evidence record, with the producer that produced it.
 ///
-/// Serialises as one entry of the evidence document `protocol evaluate --evidence` reads: the
+/// Serialises as one entry of the evidence document `aep govern evaluate --evidence` reads: the
 /// evidence's own fields under `kind: trace_conformance`, beside `producer` and `provenance`. That
 /// is the whole interface between the checker and the engine, and it is a file rather than a
 /// function call on purpose — the two halves run in different processes, and often on different

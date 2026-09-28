@@ -1,4 +1,4 @@
-//! `protocol reverse` integration tests.
+//! `aep plan reverse` integration tests.
 //!
 //! Every fixture here is written by the test that reads it. That is deliberate and it is the one
 //! rule this file has: the verb's whole job is to read somebody else's repository, so a fixture
@@ -11,9 +11,9 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
-/// Runs `protocol` with `args` from `directory`.
-fn protocol_in(directory: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args` from `directory`.
+fn aep_in(directory: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(directory)
         .output()
@@ -194,7 +194,7 @@ fn fixture(name: &str) -> PathBuf {
 
 /// The bundle a scan of `root` produces, as JSON.
 fn bundle(root: &Path) -> Value {
-    let output = protocol_in(root, &["plan", "reverse", "scan", ".", "--format", "json"]);
+    let output = aep_in(root, &["plan", "reverse", "scan", ".", "--format", "json"]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     serde_json::from_str(&stdout(&output)).expect("the bundle is JSON")
 }
@@ -210,7 +210,7 @@ fn section<'a>(bundle: &'a Value, name: &str) -> &'a Vec<Value> {
 fn every_verb_can_be_built_and_asked_for_help() {
     let root = repository_root();
     for verb in ["scan", "init", "openapi", "history"] {
-        let output = protocol_in(&root, &["plan", "reverse", verb, "--help"]);
+        let output = aep_in(&root, &["plan", "reverse", verb, "--help"]);
         assert_eq!(
             code(&output),
             0,
@@ -225,11 +225,11 @@ fn one_tree_scans_to_the_same_bytes_twice() {
     // The property a committed bundle rests on. A `read_dir` order that leaked into the output
     // would make this pass on the machine that wrote the bundle and fail on the one reviewing it.
     let root = fixture("aep-reverse-determinism");
-    let first = protocol_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
-    let second = protocol_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
+    let first = aep_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
+    let second = aep_in(&root, &["plan", "reverse", "scan", ".", "--format", "json"]);
     assert_eq!(stdout(&first), stdout(&second));
-    let text_first = protocol_in(&root, &["plan", "reverse", "scan", "."]);
-    let text_second = protocol_in(&root, &["plan", "reverse", "scan", "."]);
+    let text_first = aep_in(&root, &["plan", "reverse", "scan", "."]);
+    let text_second = aep_in(&root, &["plan", "reverse", "scan", "."]);
     assert_eq!(stdout(&text_first), stdout(&text_second));
 }
 
@@ -402,7 +402,7 @@ fn an_unpinned_git_source_is_refused_and_nothing_is_written() {
     // here rather than at first use: a project file naming a branch means a different tree on a
     // different day, and the run that discovers it is the one that was relying on the old one.
     let root = scratch("aep-reverse-unpinned");
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -429,7 +429,7 @@ fn an_unpinned_git_source_is_refused_and_nothing_is_written() {
 #[test]
 fn an_unsupported_source_scheme_is_refused() {
     let root = scratch("aep-reverse-scheme");
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -452,7 +452,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     // succeeding is the end-to-end assertion.
     let root = scratch("aep-reverse-init");
     let tree = relative_from_engineering(&root, &repository_root());
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -477,7 +477,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     );
     assert!(written.contains("profile: development.standard"));
 
-    let created = protocol_in(
+    let created = aep_in(
         &root,
         &[
             "plan",
@@ -491,7 +491,7 @@ fn init_writes_a_project_the_next_command_can_read() {
     );
     assert_eq!(code(&created), 0, "{}", stderr(&created));
 
-    let again = protocol_in(
+    let again = aep_in(
         &root,
         &[
             "plan",
@@ -517,7 +517,7 @@ fn an_absolute_protocol_source_is_refused_and_the_repository_is_left_as_it_was()
     // every later command reads as "not a project", which is right, but it is also litter that the
     // next `reverse init` has to be told is safe to write into.
     let root = scratch("aep-reverse-absolute");
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -554,7 +554,7 @@ fn a_relative_source_resolves_through_a_directory_that_did_not_exist_yet() {
         tree.starts_with(".."),
         "the fixture must exercise a climb: {tree}"
     );
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -577,7 +577,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     // implemented: the work under it is.
     let root = scratch("aep-reverse-vision");
     let tree = relative_from_engineering(&root, &repository_root());
-    let adopted = protocol_in(
+    let adopted = aep_in(
         &root,
         &[
             "plan",
@@ -591,7 +591,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     );
     assert_eq!(code(&adopted), 0, "{}", stderr(&adopted));
 
-    let created = protocol_in(
+    let created = aep_in(
         &root,
         &[
             "plan",
@@ -605,7 +605,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     );
     assert_eq!(code(&created), 0, "{}", stderr(&created));
 
-    let refused = protocol_in(
+    let refused = aep_in(
         &root,
         &[
             "plan",
@@ -618,7 +618,7 @@ fn a_vision_cannot_be_implemented_and_a_story_can() {
     );
     assert_eq!(code(&refused), 1, "a vision is not a unit of work");
 
-    let permitted = protocol_in(
+    let permitted = aep_in(
         &root,
         &[
             "plan",
@@ -638,7 +638,7 @@ fn a_draft_names_every_decision_it_could_not_take() {
     // decision about one, so a draft that silently omitted what it could not read would be a draft
     // that looks finished.
     let root = fixture("aep-reverse-openapi");
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -677,7 +677,7 @@ fn a_draft_names_every_decision_it_could_not_take() {
 #[test]
 fn a_document_that_is_not_openapi_is_refused() {
     let root = fixture("aep-reverse-not-openapi");
-    let output = protocol_in(
+    let output = aep_in(
         &root,
         &[
             "plan",
@@ -780,7 +780,7 @@ fn history_fixture(name: &str) -> PathBuf {
 
 /// The history bundle for `root`, as JSON.
 fn history(root: &Path) -> Value {
-    let output = protocol_in(
+    let output = aep_in(
         root,
         &["plan", "reverse", "history", ".", "--format", "json"],
     );
@@ -863,11 +863,11 @@ fn a_marked_line_is_dated_from_the_commit_that_wrote_it_and_not_from_today() {
 #[test]
 fn a_history_of_one_tree_is_the_same_bytes_twice() {
     let root = history_fixture("aep-reverse-history-determinism");
-    let first = protocol_in(
+    let first = aep_in(
         &root,
         &["plan", "reverse", "history", ".", "--format", "json"],
     );
-    let second = protocol_in(
+    let second = aep_in(
         &root,
         &["plan", "reverse", "history", ".", "--format", "json"],
     );
@@ -880,7 +880,7 @@ fn a_directory_with_no_history_says_so_in_one_sentence() {
     // tarball, has no history and that is an ordinary state — but it is not the same state as a
     // repository whose history happens to hold nothing, and the two must not print alike.
     let root = fixture("aep-reverse-no-history");
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["plan", "reverse", "history", "."])
         .current_dir(&root)
         .env("GIT_CEILING_DIRECTORIES", root.parent().unwrap())
@@ -894,7 +894,7 @@ fn a_directory_with_no_history_says_so_in_one_sentence() {
     );
 
     // And the verb that needs no history still works on the same directory.
-    let scanned = protocol_in(&root, &["plan", "reverse", "scan", "."]);
+    let scanned = aep_in(&root, &["plan", "reverse", "scan", "."]);
     assert_eq!(code(&scanned), 0, "{}", stderr(&scanned));
 }
 

@@ -31,25 +31,25 @@ SCAN="$CHECKS_DIR/scan-declarations.sh"
 # model is gone*, which are different facts and only one of them is a defect.
 MODEL_RUNNER_REL=""
 
-# The `protocol` a check must use is the one this tree builds, never whatever a shell happens to
+# The `aep` a check must use is the one this tree builds, never whatever a shell happens to
 # have on PATH. On 2026-08-28 the PATH binary here was **0.28.0** against a 0.31.0 store, and H2
 # read five stories as drifted that had not drifted — a stale install cannot be told from a current
 # one by looking at it, which is the defect `version-check` exists for one layer up.
-# `PROTOCOL_BIN` wins when it is set, and the reason is the suite's own inner runs: `mutation-proof`
+# `AEP_BIN` wins when it is set, and the reason is the suite's own inner runs: `mutation-proof`
 # copies the tree without `target/`, so a copy resolves no build of its own and would fall back to
 # whatever is on PATH — which is exactly the stale binary this function exists to refuse. An inner
 # run must read the store with the **same** binary the outer run did, so the outer one exports it.
-protocol_bin() {
+aep_bin() {
   local built
-  if [ -n "${PROTOCOL_BIN:-}" ] && [ -x "${PROTOCOL_BIN}" ]; then
-    printf '%s' "$PROTOCOL_BIN"
+  if [ -n "${AEP_BIN:-}" ] && [ -x "${AEP_BIN}" ]; then
+    printf '%s' "$AEP_BIN"
     return 0
   fi
-  for built in "$REPO/target/debug/protocol" "$REPO/target/release/protocol"; do
+  for built in "$REPO/target/debug/aep" "$REPO/target/release/aep"; do
     [ -x "$built" ] && { printf '%s' "$built"; return 0; }
   done
-  command -v protocol >/dev/null 2>&1 || return 1
-  printf '%s' "$(command -v protocol)"
+  command -v aep >/dev/null 2>&1 || return 1
+  printf '%s' "$(command -v aep)"
 }
 
 # The workspace version, so a check can say which build answered it.
@@ -58,26 +58,26 @@ workspace_version() {
 }
 
 # Resolved once, at load, so every helper and every check reads the store with the **same** binary.
-# Empty when there is none; `protocol_ready` is what a check asks before using it.
-PROTOCOL="$(protocol_bin || true)"
+# Empty when there is none; `aep_ready` is what a check asks before using it.
+AEP_CLI="$(aep_bin || true)"
 # Exported so an inner run of the suite — on a copy with no `target/` — reads with this same build.
-export PROTOCOL_BIN="$PROTOCOL"
+export AEP_BIN="$AEP_CLI"
 
-# protocol_ready — the binary exists and its version is this tree's. Prints nothing; the caller
+# aep_ready — the binary exists and its version is this tree's. Prints nothing; the caller
 # reports. Two failure modes and they are different facts: absent, and present-but-not-this-tree.
-protocol_ready() {
-  [ -n "$PROTOCOL" ] || return 1
-  [ "$("$PROTOCOL" --version 2>/dev/null | awk '{print $2}')" = "$(workspace_version)" ]
+aep_ready() {
+  [ -n "$AEP_CLI" ] || return 1
+  [ "$("$AEP_CLI" --version 2>/dev/null | awk '{print $2}')" = "$(workspace_version)" ]
 }
 
-# Why `protocol_ready` said no, in the words the failing row prints. Said once, because three units
+# Why `aep_ready` said no, in the words the failing row prints. Said once, because three units
 # ask the same question and three different wordings of it is how two of them go stale.
-protocol_absence() {
-  if [ -z "$PROTOCOL" ]; then
-    printf 'no protocol binary: neither target/debug, target/release, nor PATH. R18 allows no other route to the store'
+aep_absence() {
+  if [ -z "$AEP_CLI" ]; then
+    printf 'no aep binary: neither target/debug, target/release, nor PATH. R18 allows no other route to the store'
   else
     printf '%s is %s and this tree is %s — build it before reading the store, or every answer is that binary'"'"'s opinion of a store it predates' \
-      "$PROTOCOL" "$("$PROTOCOL" --version 2>/dev/null | awk '{print $2}')" "$(workspace_version)"
+      "$AEP_CLI" "$("$AEP_CLI" --version 2>/dev/null | awk '{print $2}')" "$(workspace_version)"
   fi
 }
 
@@ -305,7 +305,7 @@ has_section() { [ -n "$(section_by_heading "$1" "$2")" ]; }
 # mode this audit exists to remove.
 
 artifact_ids() {
-  "$PROTOCOL" artifact list --format json 2>/dev/null \
+  "$AEP_CLI" plan artifact list --format json 2>/dev/null \
     | sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 
@@ -325,7 +325,7 @@ artifact_exists() {
 # artifact_field <id> <field>  — id, kind, status or title, out of the same JSON. A hand-rolled
 # reader and not `jq`, because the map declares three programs on PATH and `jq` is not one of them.
 artifact_field() {
-  "$PROTOCOL" artifact list --format json 2>/dev/null | awk -v want="$1" -v field="$2" '
+  "$AEP_CLI" plan artifact list --format json 2>/dev/null | awk -v want="$1" -v field="$2" '
     /"id"[[:space:]]*:/ {
       id = $0; sub(/.*"id"[[:space:]]*:[[:space:]]*"/, "", id); sub(/".*/, "", id)
       here = (id == want)
@@ -351,15 +351,15 @@ artifact_field() {
 # *does* relate, which is the one answer it must never give.
 artifact_relates() {
   local edges from
-  edges="$("$PROTOCOL" artifact graph 2>/dev/null | grep -- '->')"
+  edges="$("$AEP_CLI" plan artifact graph 2>/dev/null | grep -- '->')"
   grep -Fq "\"$1\"" <<< "$edges" || return 1
   from="$(grep -F "\"$1\"" <<< "$edges")"
   grep -Fq "\"$2\"" <<< "$from"
 }
 
-# kind_initial_status <kind>  — `protocol artifact lifecycle <kind>` opens with "<kind> starts at X".
+# kind_initial_status <kind>  — `aep plan artifact lifecycle <kind>` opens with "<kind> starts at X".
 kind_initial_status() {
-  "$PROTOCOL" artifact lifecycle "$1" 2>/dev/null | sed -n 's/^.* starts at \([a-z_]*\).*/\1/p' | head -1
+  "$AEP_CLI" plan artifact lifecycle "$1" 2>/dev/null | sed -n 's/^.* starts at \([a-z_]*\).*/\1/p' | head -1
 }
 
 # ---- running the suite from inside a check ------------------------------------------------------

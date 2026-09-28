@@ -128,7 +128,7 @@ Acceptance: ~10 tests; the existing engine tests keep passing.
 
 ## W2.7 CLI
 
-`protocol entity get|resolve|history`, `protocol audit --correlation <id>`, and `protocol command`
+`aep plan entity get|resolve|history`, `aep plan audit --correlation <id>`, and `protocol command`
 for the generic commands, all against the in-memory backend loaded from a manifest.
 
 Acceptance: ~8 integration tests.

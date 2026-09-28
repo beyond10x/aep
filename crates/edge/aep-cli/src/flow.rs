@@ -1,4 +1,4 @@
-//! `protocol workflow flow` — a workflow, written as a document the b10x harness runs natively.
+//! `aep govern workflow flow` — a workflow, written as a document the b10x harness runs natively.
 //!
 //! # Two shapes, and the one thing that does not translate
 //!
@@ -68,7 +68,7 @@
 //! What the map cannot do is change the shape: the states, the layering and the retreat are the
 //! workflow's, and a map that named a state the workflow does not declare — or that is pinned to a
 //! version other than the one being projected — is refused before anything is written, in the
-//! words [`protocol drive run`](crate::drive) refuses it in.
+//! words [`aep drive run`](crate::drive) refuses it in.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -143,7 +143,7 @@ struct Run<'a> {
     step: Option<&'a Step>,
 }
 
-/// `protocol workflow flow`
+/// `aep govern workflow flow`
 pub(crate) fn flow(args: &FlowArgs) -> Result<String> {
     let documents = crate::load_documents(&args.root)?;
     let registry = documents.registry;
@@ -158,7 +158,7 @@ pub(crate) fn flow(args: &FlowArgs) -> Result<String> {
 
 /// The map `--map` names: a file, or the id of one already in the document tree.
 ///
-/// The same two forms `protocol drive run --map` takes, read the same way, so one word means one
+/// The same two forms `aep drive run --map` takes, read the same way, so one word means one
 /// thing across the two verbs that accept it.
 pub(crate) fn step_map(
     named: &Path,
@@ -413,7 +413,7 @@ fn render(
         .count();
 
     let _ = write!(out,
-        "# Projected from `{}/{}` by `protocol workflow flow`. Do not edit.\n\
+        "# Projected from `{}/{}` by `aep govern workflow flow`. Do not edit.\n\
          #\n\
          # **An ordering, not a government.** {guards} guard(s) in the source decide whether a run\n\
          # may move; a flow node has no `when`, so none of them is here. What this document\n\
@@ -695,7 +695,7 @@ mod tests {
     /// `harness-flow/fixtures/adp-default.projected.yaml` and walks in its own suite. A golden
     /// rather than a property, because *these bytes* are what the other repository holds: when
     /// this changes, that fixture is refreshed from this verb, not edited by hand.
-    const NO_MAP: &str = r#"# Projected from `adp/default/2` by `protocol workflow flow`. Do not edit.
+    const NO_MAP: &str = r#"# Projected from `adp/default/2` by `aep govern workflow flow`. Do not edit.
 #
 # **An ordering, not a government.** 11 guard(s) in the source decide whether a run
 # may move; a flow node has no `when`, so none of them is here. What this document
@@ -1138,8 +1138,8 @@ root:
     }
 
     /// The refusal is the driver's, and it is the driver's on purpose: `cross_validate` is the one
-    /// place that decides whether a map applies, so `protocol workflow flow` and
-    /// `protocol drive run` cannot come to different answers about the same two documents.
+    /// place that decides whether a map applies, so `aep govern workflow flow` and
+    /// `aep drive run` cannot come to different answers about the same two documents.
     #[test]
     fn a_map_pinned_to_another_version_is_refused_in_the_words_the_driver_refuses_it_in() {
         let refusal = checked(one_state("adp/default/1"), &workflow())

@@ -17,7 +17,7 @@ required_sections:
 #
 # The type is the *kind* — `credential-blocker`, `decision-blocker` — because
 # `ArtifactKind::parent` reads the last hyphen segment, so every one of these resolves to the one
-# `blocker` ladder. `protocol artifact blocked` reads the type back off the kind and groups by it.
+# `blocker` ladder. `aep plan artifact blocked` reads the type back off the kind and groups by it.
 #
 # This list is **open**. Nothing in `crates/` checks a type against it: `procurement-blocker` is
 # accepted by the same rule that accepts the six below, with no document, no enum and no release.

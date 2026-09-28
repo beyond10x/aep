@@ -22,7 +22,7 @@
 # metaharness repository):
 # nine checks, one row each, an honest exit code, and a table a person can read when it is red.
 #
-# Three programs have to be on `PATH` for a run under this map: `bash`, `git` and `protocol` — the
+# Three programs have to be on `PATH` for a run under this map: `bash`, `git` and `aep` — the
 # last one because two of the three `verify` steps are this repository's own verbs.
 # the migrated driven eval (metaharness `evals/aep/run-driven.sh`) is how a
 # driven run gets it: build
@@ -211,7 +211,7 @@ states:
       - kind: command
         description: Check the session's own transcript and record what the checker found.
         run:
-          - protocol
+          - aep
           - observe
           - trace
           - evidence
@@ -250,20 +250,20 @@ states:
       # workflow's guard reads, and this is the suite that answers it here.
       - kind: command
         description: The document tree still loads and still cross-validates.
-        run: [protocol, govern, validate, --root, .]
+        run: [aep, govern, validate, --root, .]
         evidence:
           kind: test_result
           suite: contract
-          verifier: protocol
+          verifier: aep
       # Static analysis without a compiler: every artifact parses, every edge resolves, every status
       # is one its kind's lifecycle has. That is the analysis this repository can run over a change
       # whose product is documents, and `static_analysis.errors == 0` is what the guard reads.
       - kind: command
         description: The planning store is internally consistent.
-        run: [protocol, plan, artifact, validate]
+        run: [aep, plan, artifact, validate]
         evidence:
           kind: static_analysis
-          verifier: protocol
+          verifier: aep
 
   adversarial_verify:
     steps:

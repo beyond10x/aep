@@ -9,7 +9,7 @@
 //! this crate depends on `aep-domain` alone.
 //!
 //! The practical gain is that a run is not the only thing that can be drawn. A test builds a
-//! `RunView` by hand in four lines; `protocol workflow render --state` builds one from a snapshot
+//! `RunView` by hand in four lines; `aep govern workflow render --state` builds one from a snapshot
 //! with no driver anywhere; `--run` builds one from a snapshot *and* a cursor, which is the only
 //! combination that knows why a run stopped. None of the three needs a different renderer.
 //!
@@ -86,7 +86,7 @@ impl std::fmt::Display for RunStatus {
 
 /// One run, as much of it as a picture can show.
 ///
-/// Built by the caller. `protocol workflow render` fills it from the engine's snapshot and the
+/// Built by the caller. `aep govern workflow render` fills it from the engine's snapshot and the
 /// driver's cursor; a test fills it by hand.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RunView {

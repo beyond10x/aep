@@ -3,8 +3,8 @@
 //! `drivers/development/default.yaml` declares four evidence kinds it could not produce before this
 //! story, and arm c of the three-arm pilot was refused at launch for exactly that
 //! (`docs/reviews/2026-08-23-three-arm-pilot-1.md`). Three of the four are produced by a verb that
-//! writes its own record — `protocol validate --evidence`, `protocol property evidence` and
-//! `protocol specification evidence` — and the fourth is minted from an exit status by a contract
+//! writes its own record — `aep govern validate --evidence`, `aep observe property evidence` and
+//! `aep observe specification evidence` — and the fourth is minted from an exit status by a contract
 //! runner the map names.
 //!
 //! # Why these run through the binary rather than beside the code
@@ -34,18 +34,18 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args` from the repository root.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args` from the repository root.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
-        .expect("the protocol binary runs")
+        .expect("the aep binary runs")
 }
 
 /// A scratch directory of this test's own, emptied first so a rerun is a fresh run.
 fn scratch(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!("protocol-producers-{name}"));
+    let directory = std::env::temp_dir().join(format!("aep-producers-{name}"));
     std::fs::remove_dir_all(&directory).ok();
     std::fs::create_dir_all(&directory).expect("the temporary tree is writable");
     directory
@@ -66,7 +66,7 @@ fn printable(path: &Path) -> &str {
 
 /// The one record a producer wrote, read the way the driver's `read_record` reads it.
 ///
-/// Through `aep_schema::parse::evidence_list`, which is the same reader `protocol evaluate
+/// Through `aep_schema::parse::evidence_list`, which is the same reader `aep govern evaluate
 /// --evidence` and the driver both use — so a document this function accepts is one a driven step
 /// can submit, and the assertion is about the seam rather than about a struct.
 fn only_record(path: &Path) -> aep_schema::parse::EvidenceInput {
@@ -95,11 +95,11 @@ fn verifier_of(record: &aep_schema::parse::EvidenceInput) -> &Verifier {
 }
 
 #[test]
-fn protocol_validate_writes_a_verification_record_the_driver_can_submit() {
+fn aep_validate_writes_a_verification_record_the_driver_can_submit() {
     let directory = scratch("validate");
     let out = directory.join("verification.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "validate",
         "--root",
@@ -122,7 +122,7 @@ fn protocol_validate_writes_a_verification_record_the_driver_can_submit() {
     );
     assert_eq!(
         verifier_of(&record),
-        &Verifier::ExternalTool("protocol".parse().expect("a tool reference")),
+        &Verifier::ExternalTool("aep".parse().expect("a tool reference")),
         "the verifier the map names, so the record and the declaration agree"
     );
     let Evidence::Verification(payload) = &record.evidence else {
@@ -151,7 +151,7 @@ fn a_tree_that_does_not_validate_still_produces_a_record_and_it_says_failed() {
     );
     let out = directory.join("verification.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "govern",
         "validate",
         "--root",
@@ -189,11 +189,11 @@ fn a_tree_that_does_not_validate_still_produces_a_record_and_it_says_failed() {
 }
 
 #[test]
-fn protocol_property_evidence_writes_a_property_record_with_the_case_count_it_measured() {
+fn aep_property_evidence_writes_a_property_record_with_the_case_count_it_measured() {
     let directory = scratch("property");
     let out = directory.join("property.yaml");
 
-    let output = protocol(&["observe", "property", "evidence", "--out", printable(&out)]);
+    let output = aep(&["observe", "property", "evidence", "--out", printable(&out)]);
     assert_eq!(
         output.status.code(),
         Some(0),
@@ -259,13 +259,13 @@ const TASK: &str = "id: PASSKEYS-1\n\
      derived_from:\n  - story:passkeys\n";
 
 #[test]
-fn protocol_specification_evidence_writes_the_requirement_by_requirement_verdict() {
+fn aep_specification_evidence_writes_the_requirement_by_requirement_verdict() {
     let directory = scratch("specification");
     specification_store(&directory);
     let out = directory.join("specification.yaml");
     let task = directory.join("task.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "specification",
         "evidence",
@@ -287,7 +287,7 @@ fn protocol_specification_evidence_writes_the_requirement_by_requirement_verdict
     assert_eq!(record.evidence.kind(), EvidenceKind::Specification);
     assert_eq!(
         verifier_of(&record),
-        &Verifier::ExternalTool("protocol".parse().expect("a tool reference")),
+        &Verifier::ExternalTool("aep".parse().expect("a tool reference")),
         "the verifier the map names for this step"
     );
     let Evidence::Specification(payload) = &record.evidence else {
@@ -333,7 +333,7 @@ fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_
     let out = directory.join("specification.yaml");
     let task = directory.join("task.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "specification",
         "evidence",
@@ -367,7 +367,7 @@ fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_
     // And the way through, which is what makes this a refusal rather than a wall. It is a way
     // through the ambiguity and not through the binding: `--artifact` names one of the two
     // documents that already specify this task's work.
-    let named = protocol(&[
+    let named = aep(&[
         "observe",
         "specification",
         "evidence",
@@ -436,7 +436,7 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
         let mut args = verb.clone();
         args.push(flag);
         args.push(printable(&out));
-        let output = protocol(&args);
+        let output = aep(&args);
         assert_eq!(
             output.status.code(),
             Some(0),
@@ -453,7 +453,7 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
         assert!(
             !matches!(record.evidence, Evidence::Approval(_)),
             "{name} is an approval, which reaches an execution through a person running \
-             `protocol evaluate --evidence` and never through a step"
+             `aep govern evaluate --evidence` and never through a step"
         );
         assert!(
             matches!(record.producer, Producer::Verifier { .. }),
@@ -463,16 +463,7 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
     }
 }
 
-// --- one interface, one record --------------------------------------------------------------
-
-/// Runs `aep` — the canonical name — with `args` from the repository root.
-fn aep(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aep"))
-        .args(args)
-        .current_dir(root())
-        .output()
-        .expect("the aep binary runs")
-}
+// --- one command, one record --------------------------------------------------------------
 
 /// A committed `contract_result` a contract runner emitted, which the fourth producer reads.
 const CONTRACT_RECORD: &str =
@@ -507,22 +498,22 @@ fn without_the_clock(document: &str) -> String {
 }
 
 #[test]
-fn every_evidence_producer_writes_the_same_record_through_either_binary_name() {
+fn every_evidence_producer_writes_its_canonical_command() {
     // **The class, not one instance.** `story:trace-evidence-provenance-command` was reported
-    // against `trace evidence`, whose `provenance.command` is the literal `protocol trace evidence`
-    // whatever binary ran. It is one of five verbs that mint a record with a reconstructed command
-    // line — `aep-cli/src/{trace,specification,contract,property}.rs`'s `invocation` and
-    // `app.rs`'s `protocol validate --root …` — and the question is the same for each.
+    // against `trace evidence`, whose `provenance.command` is the literal `aep observe trace evidence`
+    // whatever spelling was typed. It is one of five verbs that mint a record with a reconstructed
+    // command line — `aep-cli/src/{trace,specification,contract,property}.rs`'s `invocation` and
+    // `app.rs`'s `aep govern validate --root …` — and the question is the same for each.
     //
-    // The answer is one answer for all five, and it is invariant 10: `aep` and `protocol` are one
-    // interface, so a record is the same document through either name, including the line saying
-    // which command produced it. A `command` taken from `current_exe` would make one check produce
-    // two documents and every committed record diff against a rerun of itself.
+    // The answer is one answer for all five: a record is the same document through the flat and the
+    // grouped spelling, including the line saying which command produced it, and that line is the
+    // grouped path under `aep`. A `command` taken from `current_exe` or from the typed spelling
+    // would make one check produce two documents and every committed record diff against a rerun.
     //
     // Four are checked here; `trace evidence` is checked in `trace_cli.rs`, beside the rest of that
     // verb. Both runs write to the **same** path, because two of these four write their own `--out`
     // into the provenance and a differing path would be a difference this test created.
-    let directory = scratch("either-name");
+    let directory = scratch("either-spelling");
     let store = directory.join("store");
     specification_store(&store);
     let task = store.join("task.yaml");
@@ -532,14 +523,16 @@ fn every_evidence_producer_writes_the_same_record_through_either_binary_name() {
         "id: broken\nversion: nine\n",
     );
 
-    let cases: Vec<(&str, Vec<&str>)> = vec![
+    let cases: Vec<(&str, &str, Vec<&str>)> = vec![
         (
             "validate",
+            "govern",
             vec!["validate", "--root", printable(&broken), "--evidence"],
         ),
-        ("property", vec!["property", "evidence", "--out"]),
+        ("property", "observe", vec!["property", "evidence", "--out"]),
         (
             "specification",
+            "observe",
             vec![
                 "specification",
                 "evidence",
@@ -552,6 +545,7 @@ fn every_evidence_producer_writes_the_same_record_through_either_binary_name() {
         ),
         (
             "contract",
+            "observe",
             vec![
                 "contract",
                 "evidence",
@@ -564,32 +558,34 @@ fn every_evidence_producer_writes_the_same_record_through_either_binary_name() {
         ),
     ];
 
-    for (name, arguments) in cases {
+    for (name, area, arguments) in cases {
         let out = directory.join(format!("{name}.yaml"));
-        let mut invocation = arguments;
-        invocation.push(printable(&out));
+        let mut flat = arguments;
+        flat.push(printable(&out));
+        let grouped: Vec<&str> = std::iter::once(area).chain(flat.iter().copied()).collect();
 
-        aep(&invocation);
-        let from_aep = std::fs::read_to_string(&out)
+        aep(&flat);
+        let from_flat = std::fs::read_to_string(&out)
             .unwrap_or_else(|error| panic!("`aep {name}` wrote a record: {error}"));
-        protocol(&invocation);
-        let from_protocol = std::fs::read_to_string(&out)
-            .unwrap_or_else(|error| panic!("`protocol {name}` wrote a record: {error}"));
+        aep(&grouped);
+        let from_grouped = std::fs::read_to_string(&out)
+            .unwrap_or_else(|error| panic!("`aep {area} {name}` wrote a record: {error}"));
 
         assert_eq!(
-            without_the_clock(&from_aep),
-            without_the_clock(&from_protocol),
-            "`{name}` writes one document through either name (invariant 10)"
+            without_the_clock(&from_flat),
+            without_the_clock(&from_grouped),
+            "`{name}` writes one document through either spelling"
         );
         assert_eq!(
-            provenance_command(&from_aep),
-            provenance_command(&from_protocol),
+            provenance_command(&from_flat),
+            provenance_command(&from_grouped),
             "including the command line it says produced it"
         );
+        let canonical = format!("aep {area} {name} ");
         assert!(
-            provenance_command(&from_aep).starts_with("protocol "),
-            "and that line names the tool in the canonical spelling: {}",
-            provenance_command(&from_aep)
+            provenance_command(&from_flat).starts_with(&canonical),
+            "and that line names the command in the canonical spelling `{canonical}…`: {}",
+            provenance_command(&from_flat)
         );
     }
 }

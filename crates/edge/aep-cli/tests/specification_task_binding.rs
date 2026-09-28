@@ -1,4 +1,4 @@
-//! `protocol specification evidence` decides **this task's** specification, in a store that holds
+//! `aep observe specification evidence` decides **this task's** specification, in a store that holds
 //! somebody else's.
 //!
 //! The defect, measured: run `NATIVE-1/1` (2026-08-29) satisfied
@@ -31,9 +31,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args` from the repository root.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args` from the repository root.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -109,7 +109,7 @@ fn store(name: &str) -> PathBuf {
 
 /// The specification a written record is about, or a panic saying what the document was instead.
 ///
-/// Read through `aep_schema::parse::evidence_list`, the reader `protocol evaluate --evidence` and
+/// Read through `aep_schema::parse::evidence_list`, the reader `aep govern evaluate --evidence` and
 /// the driver both use, so a document this accepts is one a driven step can submit.
 fn subject_of(path: &Path) -> String {
     let text = std::fs::read_to_string(path)
@@ -143,7 +143,7 @@ fn one_store_decides_two_tasks_differently_and_each_record_names_its_own_specifi
     ] {
         let out = directory.join("specification.yaml");
         std::fs::remove_file(&out).ok();
-        let output = protocol(&[
+        let output = aep(&[
             "observe",
             "specification",
             "evidence",
@@ -177,7 +177,7 @@ fn a_task_no_specification_in_the_store_is_about_is_refused_and_nothing_is_writt
     let unrelated = task(&directory, "BILLING-1", "billing");
     let out = directory.join("specification.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "specification",
         "evidence",
@@ -219,7 +219,7 @@ fn an_artifact_named_on_the_command_line_does_not_lift_the_binding() {
     let passkeys = task(&directory, "PASSKEYS-1", "passkeys");
     let out = directory.join("specification.yaml");
 
-    let output = protocol(&[
+    let output = aep(&[
         "observe",
         "specification",
         "evidence",

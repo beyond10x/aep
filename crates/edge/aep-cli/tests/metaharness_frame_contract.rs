@@ -1,6 +1,6 @@
 //! The frame this repository mints, read by the rules the other side refuses it with.
 //!
-//! `protocol drive` hands every `llm` step a sealed `metaharness.frame/1` document, and metaharness
+//! `aep drive` hands every `llm` step a sealed `metaharness.frame/1` document, and metaharness
 //! refuses one **by name** when it is not JSON, carries no tag it knows, does not have a frame's
 //! shape, or states a digest that does not describe its contents
 //! (`crates/metaharness-protocol/src/frame.rs`, `Frame::parse_document` and `FrameDocError`, read

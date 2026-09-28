@@ -28,7 +28,7 @@
 //!
 //! `crates/edge/aep-cli/src/contract.rs` tests the reading rules directly. What only a test through
 //! the binary can show is the loop closing: the runner's bytes become a document, and
-//! `protocol evaluate --evidence` reads that document and moves a principle's predicates. The two
+//! `aep govern evaluate --evidence` reads that document and moves a principle's predicates. The two
 //! halves run in different processes and the only thing joining them is a file.
 //!
 //! Both ways in are exercised here, because they are different code paths and only one of them can
@@ -48,9 +48,9 @@ fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
-/// Runs `protocol` with `args`, always against the repository's own document tree.
-fn protocol(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_protocol"))
+/// Runs `aep` with `args`, always against the repository's own document tree.
+fn aep(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .output()
@@ -62,8 +62,8 @@ fn protocol(args: &[&str]) -> Output {
 /// Spawned rather than run, because the bytes have to be written after the child exists and its
 /// standard input closed after they are: a verb reading to end of file on a pipe nobody closes waits
 /// forever, and that failure would show up as a hung gate rather than as a red test.
-fn protocol_with_stdin(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_protocol"))
+fn aep_with_stdin(args: &[&str], input: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(root())
         .stdin(Stdio::piped())
@@ -134,7 +134,7 @@ const CAPTURED: &str = "2026-08-23";
 
 /// Mints the evidence document for a record, and returns where it was written.
 fn mint(record: &str, into: &Path, format: &str) -> Output {
-    protocol(&[
+    aep(&[
         "observe",
         "contract",
         "evidence",
@@ -151,7 +151,7 @@ fn mint(record: &str, into: &Path, format: &str) -> Output {
 
 /// Evaluates the billing task with one evidence document, and returns what the engine printed.
 fn evaluate_with(evidence: &Path) -> String {
-    let evaluated = protocol(&[
+    let evaluated = aep(&[
         "govern",
         "evaluate",
         "--task",
@@ -280,13 +280,13 @@ fn a_breaking_change_is_the_number_the_evaluation_turns_on() {
 #[test]
 fn the_record_can_arrive_on_a_pipe_and_the_loop_still_closes() {
     // `--record -`, the whole way through: the runner's bytes never touch a file on the way in, and
-    // what comes back is still a document `protocol evaluate --evidence` reads. This is the form
-    // `metaharness conformance claude --contract | protocol contract evidence --record -` takes,
+    // what comes back is still a document `aep govern evaluate --evidence` reads. This is the form
+    // `metaharness conformance claude --contract | aep observe contract evidence --record -` takes,
     // and it is the one thing the file form could not be made to prove.
     let directory = scratch("aep-contract-evidence-stdin");
     let out = directory.join("piped.yaml");
 
-    let minted = protocol_with_stdin(
+    let minted = aep_with_stdin(
         &[
             "observe",
             "contract",
@@ -415,11 +415,11 @@ fn a_record_whose_breaking_changes_exceed_its_failures_is_refused_before_a_docum
 
 #[test]
 fn the_observation_time_is_required_because_this_process_did_not_watch_the_run() {
-    // The one place this verb is stricter than `protocol trace evidence`, which defaults to now
+    // The one place this verb is stricter than `aep observe trace evidence`, which defaults to now
     // because the check runs in its own process. The contract run happened elsewhere and the record
     // carries no time of its own, so a default would be a freshness claim nobody made — and a stale
     // record reading as fresh is precisely what evidence horizons exist to catch.
-    let refused = protocol(&["observe", "contract", "evidence", "--record", CLAUDE_RECORD]);
+    let refused = aep(&["observe", "contract", "evidence", "--record", CLAUDE_RECORD]);
     assert_eq!(
         code(&refused),
         2,

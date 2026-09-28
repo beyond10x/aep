@@ -203,11 +203,7 @@ fn actual_inspect_aliases_keep_full_u64_and_refuse_malformed_batch_without_parti
             .unwrap()
     };
     let output = run(env!("CARGO_BIN_EXE_aep"));
-    let alias = run(env!("CARGO_BIN_EXE_protocol"));
     assert_eq!(output.status.code(), Some(1));
-    assert_eq!(alias.status.code(), output.status.code());
-    assert_eq!(alias.stdout, output.stdout);
-    assert_eq!(alias.stderr, output.stderr);
     let inspected: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(inspected[0]["completed_at"], u64::MAX.to_string());
     let refusal = String::from_utf8_lossy(&output.stderr);

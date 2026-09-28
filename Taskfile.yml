@@ -125,7 +125,7 @@ tasks:
       does not fail on them, deliberately: refusing those would stop anybody closing a story on the
       day a runner is down, which is the day it matters most.
     cmds:
-      - cargo run -q -p aep-cli --bin protocol -- plan artifact validate
+      - cargo run -q -p aep-cli --bin aep -- plan artifact validate
 
   guard-check:
     desc: >-
@@ -145,8 +145,7 @@ tasks:
 
   install:
     desc: >-
-      Install this tree's canonical `aep` command and its `protocol` compatibility alias over the
-      ambient ones. The last step of a release: six sessions
+      Install this tree's `aep` command over the ambient one. The last step of a release: six sessions
       got a wrong `validate` or `history` answer from a binary older than the store it read, and the
       install that would have prevented it was nowhere in the procedure.
     cmds:
@@ -157,14 +156,11 @@ tasks:
       # copy beside a 0.44.0 cargo install made the golden path stop at `unrecognized subcommand
       # 'doctor'`. Refresh a real file; leave a symlink alone, it already points at the install.
       - |
-        for name in aep protocol; do
-          ambient="$HOME/.local/bin/$name"
-          if [ -e "$ambient" ] && [ ! -L "$ambient" ]; then
-            install -m 0755 "$HOME/.cargo/bin/$name" "$ambient" && echo "refreshed $ambient"
-          fi
-        done
+        ambient="$HOME/.local/bin/aep"
+        if [ -e "$ambient" ] && [ ! -L "$ambient" ]; then
+          install -m 0755 "$HOME/.cargo/bin/aep" "$ambient" && echo "refreshed $ambient"
+        fi
       - aep --version
-      - protocol --version
       - PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" aep --version
 
   release-check:
@@ -177,7 +173,7 @@ tasks:
 
   version-check:
     desc: >-
-      Fail if the workspace version no longer matches the newest release tag. `protocol --version`
+      Fail if the workspace version no longer matches the newest release tag. `aep --version`
       prints the workspace version, so while these disagree the binary cannot say which build it
       is — which is how a stale install writes nothing and looks like it worked.
     cmds:
@@ -197,7 +193,7 @@ tasks:
       Fail when a verb the CLI answers has no entry in the website's CLI reference. The gate's
       website step is `npm run build`, and Docusaurus resolves links rather than claims — so a page
       describing a CLI that moved underneath it builds green for ever. Seven of seventy-seven verbs
-      had no entry on 2026-08-30, the whole `protocol workspace` family among them, eight releases
+      had no entry on 2026-08-30, the whole `aep plan workspace` family among them, eight releases
       after the site's own roadmap page told readers it had shipped.
     # A named step as well as a test, for the reason every other drift check is one: `2883 tests, 1
     # failed` reads as "the gate failed", and `docs-check` reads as "the CLI reference is stale".

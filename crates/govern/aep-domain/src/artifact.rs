@@ -1496,7 +1496,7 @@ pub enum FreshnessPolicy {
 ///
 /// Almost every team adopting this already has a tracker, and the story in the store and the ticket
 /// in Jira are one piece of work with two records. Without somewhere to write that down the join
-/// lives in a body paragraph, where `protocol artifact list` cannot reach it and a rename in either
+/// lives in a body paragraph, where `aep plan artifact list` cannot reach it and a rename in either
 /// system breaks it silently.
 ///
 /// **It is a reference, not an identity.** [`ArtifactId`] stays the name of the artifact; a key such
@@ -2843,7 +2843,7 @@ impl ArtifactGraph {
                             ),
                         )
                         .with_hint(
-                            "`protocol artifact relate <id> serves vision:<objective>` — or ask \
+                            "`aep plan artifact relate <id> serves vision:<objective>` — or ask \
                              the operator which objective this work is for",
                         ),
                     );
@@ -3255,7 +3255,7 @@ mod tests {
     fn a_relation_naming_another_member_is_external_rather_than_dangling() {
         // The point of a workspace: this manifest genuinely does not declare the target, and that
         // is correct rather than broken. Whether the member holds it is a question only an assembly
-        // of every member can answer, and `protocol workspace crossings` is where it is answered.
+        // of every member can answer, and `aep plan workspace crossings` is where it is answered.
         //
         // Only for a member the workspace **declares** — see the two tests below, which are the
         // hole this one used to leave open.

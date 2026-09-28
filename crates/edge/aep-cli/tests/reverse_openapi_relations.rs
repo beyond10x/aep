@@ -1,4 +1,4 @@
-//! `protocol reverse openapi` drafts a `relations:` block, and the draft is compared byte for byte.
+//! `aep plan reverse openapi` drafts a `relations:` block, and the draft is compared byte for byte.
 //!
 //! `story:reverse-openapi-emits-relations`. Every other fixture under `reverse_cli.rs` is written by
 //! the test that reads it, for a reason that file states: a scanner is the tool that would carry a
@@ -33,7 +33,7 @@ const RECORDED: &str = "crates/edge/aep-cli/tests/fixtures/reverse-openapi/expec
 #[test]
 fn the_drafted_domain_is_the_recorded_bytes() {
     let root = root();
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args([
             "plan",
             "reverse",
@@ -81,7 +81,7 @@ fn a_schema_with_no_relation_signal_carries_no_relations_block() {
     // The half of the contract that is an absence. `Customer`, `Warehouse` and `Reference` hold
     // nothing but scalars, so a `relations:` key on any of them would be a guess.
     let root = root();
-    let output = Command::new(env!("CARGO_BIN_EXE_protocol"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args([
             "plan",
             "reverse",

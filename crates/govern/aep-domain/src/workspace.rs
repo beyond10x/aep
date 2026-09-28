@@ -409,7 +409,7 @@ fn checked_store(store: &Path) -> Result<PathBuf, ValidationError> {
 /// A story in one repository writing `story:passkey-login` means **its own**. That is never
 /// ambiguous, however many members hold a story of that name, because the reference was written
 /// somewhere and that somewhere is the answer. Ambiguity is a property of a *question asked of the
-/// workspace* — `protocol workspace show story:passkey-login` — and [`Resolution::Ambiguous`] is
+/// workspace* — `aep plan workspace show story:passkey-login` — and [`Resolution::Ambiguous`] is
 /// what that gets, listing the members rather than picking one.
 ///
 /// # Why the separator is `/`

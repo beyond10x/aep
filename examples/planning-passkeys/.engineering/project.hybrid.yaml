@@ -2,8 +2,8 @@ version: aep.project/1
 
 # The same project, keeping its plan twice: the markdown under `planning/` for pull requests, and a
 # SQLite replica for tooling — under four words nobody may leave out. Copy this file over
-# `project.yaml`; every `protocol artifact` verb opens both, `protocol artifact divergences` says
-# when one side took a write the other did not, and `protocol artifact catch-up` replays it
+# `project.yaml`; every `aep plan artifact` verb opens both, `aep plan artifact divergences` says
+# when one side took a write the other did not, and `aep plan artifact catch-up` replays it
 # (`story:hybrid-backend`).
 protocol: adp/1
 profile: development.standard

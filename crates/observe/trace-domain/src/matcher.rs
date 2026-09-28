@@ -306,7 +306,7 @@ impl Serialize for Pattern {
 
 /// How one named field is compared.
 ///
-/// Externally tagged — `{"contains": "protocol artifact new"}` — which is both the shape a
+/// Externally tagged — `{"contains": "aep plan artifact new"}` — which is both the shape a
 /// document writes and a shape serde can serialize a newtype variant into. An internally tagged
 /// form would refuse a variant holding a bare string at run time rather than at compile time,
 /// which is a failure a digest would only meet in production.
@@ -437,7 +437,7 @@ pub fn glob_matches(pattern: &str, subject: &str) -> bool {
 ///
 /// The scope half of every tool-family kind. It is deliberately *scoped* rather than global,
 /// because the design's error family has a nuance that must not be papered over: **a refusal this
-/// project designed is correct behaviour, not a failure.** `protocol artifact move` exits 1 when
+/// project designed is correct behaviour, not a failure.** `aep plan artifact move` exits 1 when
 /// the move is illegal, so a run in which the model asked for an illegal move, received the
 /// refusal and relayed it behaved exactly right — and contains a failed tool call. A blanket
 /// `tool.error_rate: 0` would forbid the plugin's own intended behaviour; a selector lets a

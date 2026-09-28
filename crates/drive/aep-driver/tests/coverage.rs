@@ -163,7 +163,7 @@ fn the_cargo_map_can_produce_every_kind_a_feature_tasks_plan_demands() {
         missing_kinds(&report),
         Vec::<&str>::new(),
         "every kind a `kind: feature` task's plan demands has a step of `development/default` \
-         that produces it, so `protocol drive run --map drivers/development/default.yaml` starts \
+         that produces it, so `aep drive run --map drivers/development/default.yaml` starts \
          without `--allow-evidence-gap`: {report:#?}"
     );
     assert!(report.is_covered(), "{report:#?}");
@@ -175,7 +175,7 @@ fn the_checks_map_still_reports_the_gap_the_governed_run_measured_and_nothing_mo
     // cannot finish a run under `adp/default`: `W4-2/1`'s `evidence.missing = 2` with the fact
     // declared, and `= 4` without it. Closing *its* gap means adding steps to that map, which is a
     // documents change and a decision, not this check's job — and a different decision from the one
-    // its cargo sibling took, because `protocol property evidence` and `cargo test` are not things
+    // its cargo sibling took, because `aep observe property evidence` and `cargo test` are not things
     // a map written for documents-and-shell work is entitled to run.
     assert_eq!(
         missing_kinds(&evidence_coverage(

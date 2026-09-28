@@ -2,7 +2,7 @@
 //! process, and answering the same history the markdown backend answers.
 //!
 //! `story:sqlite-hydrates-on-open`'s last two acceptance lines. Through the contract rather than the
-//! `protocol artifact` verbs, because every verb opening through a `store:` in `project.yaml` is
+//! `aep plan artifact` verbs, because every verb opening through a `store:` in `project.yaml` is
 //! wave H, story 1 — what this pins is that the two backends hold one plan the same way.
 
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ fn repository_root() -> PathBuf {
 }
 
 /// Where this repository's store stands in the workspace it declares: who it is, and who else it
-/// names — the same value `protocol artifact` reads.
+/// names — the same value `aep plan artifact` reads.
 ///
 /// `own` matters here and not only in principle: this repository's own declaration names itself
 /// (`engineering-protocols`, `source: ..`), so without it an edge written

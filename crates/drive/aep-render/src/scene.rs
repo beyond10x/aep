@@ -261,7 +261,7 @@ impl Scene {
     /// Lays a workflow out, with an optional run drawn over it.
     ///
     /// Passing `None` is the bare topology: every box idle, every arrow dim. That is what
-    /// `protocol workflow render` without `--run` or `--state` emits, and it is a document about
+    /// `aep govern workflow render` without `--run` or `--state` emits, and it is a document about
     /// the workflow rather than about any work.
     pub fn build(workflow: &Workflow, run: Option<&RunView>) -> Self {
         let layout = Layout::of(workflow);
