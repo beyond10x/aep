@@ -180,6 +180,14 @@ tags and every outgoing commit, and the shared Gates check is required before a 
 policies and signing keys stay outside this repository. Commit titles use `feat:`, `fix:`, `docs:`, `refactor:`, `test:` or
 `chore:`, then a blank line and a body; ticket references go in a trailing `Refs:` line.
 
+Never update a pull request's branch through GitHub (`PUT …/pulls/<n>/update-branch` or the
+"Update branch" button). It writes a GitHub-committed "Merge branch 'main'" commit that is not the
+merge commit of any pull request, and once it reaches `main` Gates refuses every later bot push
+with `merged pull request missing or ambiguous` until the repository's baseline in the private
+policy is advanced (done for 412a2f2 and 938320e). To bring a branch up to date, create a new
+branch from `origin/main` and replay its changes as a new bot commit (`git cherry-pick
+--no-commit`, then `b10x-gates bot -- commit`); the bot runs only commit, tag, push and fetch.
+
 Tags are bare semantic versions (`0.64.0`). A release:
 
 1. On a `release/<version>` branch from current `origin/main`: set the workspace version in
