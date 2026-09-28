@@ -267,23 +267,40 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
 }
 
 #[test]
-fn an_explicit_v2_projection_is_never_reopened_as_markdown_authority() {
-    let project = scratch("aep-plan-explicit-v2-projection");
-    let engineering = project.join(".engineering");
-    let projection = engineering.join("planning");
-    std::fs::create_dir_all(&projection).expect("empty projection");
-    write(
-        &engineering.join("project.yaml"),
-        "version: aep.project/2\nprotocol: adp/1\nprofile: development.standard\n\
-         planning_scope: aep.planning\nplanning_tenant: planning-main\n\
-         planning_identity: stream-01\n",
-    );
+fn an_event_log_store_is_refused_naming_how_to_migrate_it() {
+    for version in ["aep.project/2", "aep.project/3", "aep.project/4"] {
+        let project = scratch(&format!(
+            "aep-plan-event-log-{}",
+            version.trim_start_matches("aep.project/")
+        ));
+        let engineering = project.join(".engineering");
+        let planning = engineering.join("planning");
+        std::fs::create_dir_all(&planning).expect("a projection directory");
+        write(
+            &engineering.join("project.yaml"),
+            &format!(
+                "version: {version}\nprotocol: adp/1\nprofile: development.standard\n\
+                 planning_scope: aep.planning\nplanning_tenant: planning-main\n\
+                 planning_identity: stream-01\n\
+                 store:\n  eventlog:\n    path: state\n    projection: planning\n"
+            ),
+        );
 
-    // Both an empty and a deleted projection remain derived, even when selected from elsewhere.
-    for deleted in [false, true] {
-        if deleted {
-            std::fs::remove_dir(&projection).expect("delete the empty projection");
-        }
+        let listed = protocol_in(&project, &["plan", "artifact", "list"]);
+        assert_ne!(code(&listed), 0, "{}", stdout(&listed));
+        let refusal = stderr(&listed);
+        assert!(
+            refusal.contains(&format!(
+                "this store is an event-log store ({version}); AEP no longer reads it"
+            )),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("aep plan store migrate git --verify"),
+            "{refusal}"
+        );
+
+        // Nor does an explicit `--store` naming its projection open it as a Markdown store.
         let created = protocol(&[
             "plan",
             "artifact",
@@ -293,39 +310,15 @@ fn an_explicit_v2_projection_is_never_reopened_as_markdown_authority() {
             "--title",
             "Must refuse",
             "--store",
-            printable(&projection),
+            printable(&planning),
         ]);
         assert_ne!(code(&created), 0, "{}", stdout(&created));
         assert!(
-            stderr(&created).contains("cannot open an Eventlog projection as Markdown authority"),
+            stderr(&created).contains("this store is an event-log store"),
             "{}",
             stderr(&created)
         );
-        assert!(!projection.join("story/must-refuse.md").exists());
-    }
-    #[cfg(unix)]
-    {
-        let alias = project.join("metadata-alias");
-        std::os::unix::fs::symlink(&engineering, &alias).expect("metadata directory alias");
-        let aliased_projection = alias.join("planning");
-        let refused = protocol(&[
-            "plan",
-            "artifact",
-            "new",
-            "story",
-            "must-refuse",
-            "--title",
-            "Must refuse",
-            "--store",
-            printable(&aliased_projection),
-        ]);
-        assert_ne!(code(&refused), 0);
-        assert!(
-            stderr(&refused).contains("cannot open an Eventlog projection as Markdown authority"),
-            "{}",
-            stderr(&refused)
-        );
-        assert!(!projection.exists());
+        assert!(!planning.join("story/must-refuse.md").exists());
     }
 }
 
@@ -445,7 +438,7 @@ fn a_paused_explicit_store_writer_excludes_a_second_cli_process() {
     );
     assert_ne!(code(&racing), 0, "a second process must not enter");
     assert!(
-        stderr(&racing).contains("another admitted planning writer or migration holds"),
+        stderr(&racing).contains("another admitted planning writer holds"),
         "{}",
         stderr(&racing)
     );

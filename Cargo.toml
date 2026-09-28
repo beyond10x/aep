@@ -7,8 +7,6 @@ members = [
     "crates/plan/aep-conformance",
     "crates/plan/aep-client",
     "crates/plan/aep-backend-entity",
-    "crates/plan/aep-backend-eventlog",
-    "crates/plan/aep-planning-migration",
     "crates/plan/aep-backend-hybrid",
     "crates/plan/aep-backend-markdown",
     "crates/plan/aep-backend-memory",
@@ -57,8 +55,6 @@ trace-spec = { path = "crates/observe/trace-spec", version = "0.61.1" }
 aep-schema = { path = "crates/edge/aep-schema", version = "0.61.1" }
 aep-profile-development = { path = "crates/profile/aep-profile-development", version = "0.61.1" }
 aep-profile-operations = { path = "crates/profile/aep-profile-operations", version = "0.61.1" }
-aep-backend-eventlog = { path = "crates/plan/aep-backend-eventlog", version = "0.61.1" }
-aep-planning-migration = { path = "crates/plan/aep-planning-migration", version = "0.61.1" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -71,24 +67,20 @@ fs2 = "0.4"
 postgres = { version = "0.19", default-features = false }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 
-# `entity-runtime` and `eventlog`, by exact revision — see AGENTS.md § *Dependencies*. Declared
-# **once**, here, because two manifests each naming their own pin is how two kernels came to be
-# compiled into this workspace (0.5.2 under the markdown backend, 0.8.0 under the SQLite one) for
-# two releases. One line per crate, one pin for every runtime crate; `cargo xtask deps` (the gate's
-# `dep-check`) fails if the lockfile ever says otherwise, for the `eventlog` lines as well.
-# These crates are not on crates.io. One exact verified source revision keeps lifecycle verdicts
-# reproducible and upgrades reversible across the kernel and every provider.
+# `entity-runtime`, by exact revision — see AGENTS.md § *Entity Runtime*. Declared **once**, here,
+# because two manifests each naming their own pin is how two kernels came to be compiled into this
+# workspace (0.5.2 under the markdown backend, 0.8.0 under the SQLite one) for two releases. One
+# line per crate, one pin for every runtime crate; `cargo xtask deps` (the gate's `dep-check`) fails
+# if the lockfile ever says otherwise, and fails if it holds any event-log crate at all. These crates
+# are not on crates.io. One exact verified source revision keeps lifecycle verdicts reproducible and
+# upgrades reversible across the kernel and every provider.
 entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e", default-features = false }
 entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e", features = ["file", "sync-bridge", "tree"] }
 entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
-eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "0a0484634e8c640be29d6b6541d6cc1c1aaef7d3" }
-eventlog-file = { git = "https://github.com/beyond10x/eventlog", rev = "0a0484634e8c640be29d6b6541d6cc1c1aaef7d3" }
-eventlog-tree = { git = "https://github.com/beyond10x/eventlog", rev = "0a0484634e8c640be29d6b6541d6cc1c1aaef7d3" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

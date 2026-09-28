@@ -36,11 +36,8 @@ aep-backend-hybrid.workspace = true
 # adapter (`story:store-selection-in-project-yaml`): the runtime's event type, and the provider
 # trait its `events` sits on. Same tag as every `entity-*` crate, declared once in the workspace.
 aep-backend-entity.workspace = true
-aep-backend-eventlog.workspace = true
-aep-planning-migration.workspace = true
 entity-core.workspace = true
 entity-store.workspace = true
-entity-eventlog.workspace = true
 # A hybrid plan's replica is one of the runtime's providers, opened here from what `project.yaml`
 # names (`replica: { sqlite: … }` or `replica: { postgres: … }`).
 entity-sqlite.workspace = true

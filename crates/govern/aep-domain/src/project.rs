@@ -41,14 +41,10 @@ pub const PROJECT_DIRECTORY: &str = ".engineering";
 pub const PROJECT_FILE: &str = "project.yaml";
 /// The format version this build reads.
 pub const PROJECT_VERSION: &str = "aep.project/1";
-/// The opt-in Eventlog planning-authority format.
-pub const PROJECT_VERSION_V2: &str = "aep.project/2";
-/// Planning artifacts as typed Entity Runtime entities on a store version control merges.
-pub const PROJECT_VERSION_V3: &str = "aep.project/3";
-/// `aep.project/3` with every large value stored once, as a content-addressed blob the recorded
-/// history names by digest.
-pub const PROJECT_VERSION_V4: &str = "aep.project/4";
-/// Planning authority as plain Markdown files version control merges, with no Eventlog beneath.
+/// The event-log store versions this build recognises only to refuse.
+pub const EVENT_LOG_PROJECT_VERSIONS: [&str; 3] =
+    ["aep.project/2", "aep.project/3", "aep.project/4"];
+/// Planning authority as plain Markdown files version control merges.
 ///
 /// See `docs/design/git-native-planning-store-v0.1.md`.
 pub const PROJECT_VERSION_V5: &str = "aep.project/5";
@@ -56,8 +52,16 @@ pub const PROJECT_VERSION_V5: &str = "aep.project/5";
 pub const GIT_PLANNING_DIRECTORY: &str = "planning";
 /// The directory, relative to `.engineering`, an `aep.project/5` store keeps its evidence in.
 pub const GIT_EVIDENCE_DIRECTORY: &str = "evidence";
-/// The directory an `aep.project/4` store keeps its content blobs in when the selector names none.
-pub const DEFAULT_CONTENT_BLOBS: &str = "blobs";
+
+/// The refusal for an event-log store (`aep.project/2`–`/4`), naming how to migrate it.
+#[must_use]
+pub fn event_log_store_refusal(version: &str) -> String {
+    format!(
+        "this store is an event-log store ({version}); AEP no longer reads it — migrate it with \
+         `cargo install --git https://github.com/beyond10x/aep --rev 9c0f1da44429ff935fa0b2d743457945d51e1c51 aep-cli` \
+         then `aep plan store migrate git --verify`"
+    )
+}
 
 /// Which closed project document reader accepted the selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
@@ -66,16 +70,7 @@ pub enum ProjectVersion {
     /// The legacy Markdown, `SQLite`, `PostgreSQL` and hybrid selector.
     #[serde(rename = "aep.project/1")]
     V1,
-    /// Eventlog file authority with a tracked Markdown projection.
-    #[serde(rename = "aep.project/2")]
-    V2,
-    /// Typed Entity Runtime entities on an `eventlog-tree` authority, with a tracked projection.
-    #[serde(rename = "aep.project/3")]
-    V3,
-    /// `aep.project/3` whose large values are content-addressed blobs beside the authority.
-    #[serde(rename = "aep.project/4")]
-    V4,
-    /// Markdown files under `.engineering/planning` are the authority; no Eventlog.
+    /// Markdown files under `.engineering/planning` are the authority, merged by version control.
     #[serde(rename = "aep.project/5")]
     V5,
 }
@@ -86,9 +81,6 @@ impl ProjectVersion {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::V1 => PROJECT_VERSION,
-            Self::V2 => PROJECT_VERSION_V2,
-            Self::V3 => PROJECT_VERSION_V3,
-            Self::V4 => PROJECT_VERSION_V4,
             Self::V5 => PROJECT_VERSION_V5,
         }
     }
@@ -416,10 +408,11 @@ pub enum RawStore {
         /// The composite's policy and its two halves.
         hybrid: Box<RawHybrid>,
     },
-    /// `eventlog: { path, projection }`, admitted only by `aep.project/2`.
+    /// `eventlog: {…}`, an event-log store selector. Read only so the document reaches its
+    /// refusal, which names how to migrate it; its contents are not interpreted.
     Eventlog {
-        /// The authority and projection paths.
-        eventlog: RawEventlog,
+        /// The selector as written.
+        eventlog: serde_json::Value,
     },
     /// `git: {}`, admitted only by `aep.project/5`.
     Git {
@@ -456,37 +449,22 @@ impl<'de> serde::Deserialize<'de> for RawStore {
                             hybrid: Box::new(hybrid),
                         })
                         .map_err(|error| D::Error::custom(format!("store.hybrid: {error}"))),
-                    "eventlog" => serde_json::from_value::<RawEventlog>(inner)
-                        .map(|eventlog| Self::Eventlog { eventlog })
-                        .map_err(|error| D::Error::custom(format!("store.eventlog: {error}"))),
+                    "eventlog" => Ok(Self::Eventlog { eventlog: inner }),
                     "git" => serde_json::from_value::<RawGit>(inner)
                         .map(|git| Self::Git { git })
                         .map_err(|error| D::Error::custom(format!("store.git: {error}"))),
                     other => Err(D::Error::custom(format!(
                         "`{other}` is not a store form; write `markdown`, `sqlite: <path>`, \
-                         `postgres: <url>`, `hybrid: {{…}}`, `eventlog: {{…}}` or `git: {{}}`"
+                         `postgres: <url>`, `hybrid: {{…}}` or `git: {{}}`"
                     ))),
                 }
             }
             other => Err(D::Error::custom(format!(
-                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>`, `hybrid: {{…}}`, \
-                 `eventlog: {{…}}` or `git: {{}}`, not {other}"
+                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>`, `hybrid: {{…}}` \
+                 or `git: {{}}`, not {other}"
             ))),
         }
     }
-}
-
-/// The two project-relative paths owned by an Eventlog planning selection.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct RawEventlog {
-    /// Directory containing the authoritative file Eventlog provider.
-    pub path: PathBuf,
-    /// Directory containing the derived tracked Markdown projection.
-    pub projection: PathBuf,
-    /// Directory containing the content blobs, admitted only by `aep.project/4`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blobs: Option<PathBuf>,
 }
 
 /// A hybrid store as written: four policy words and two stores, none defaulted.
@@ -533,51 +511,14 @@ pub enum StoreConfig {
         /// The replica.
         replica: Box<StoreConfig>,
     },
-    /// Eventlog file authority and its derived Markdown projection.
-    Eventlog {
-        /// Authority provider directory.
-        path: PathBuf,
-        /// Derived projection directory.
-        projection: PathBuf,
-        /// Exact public adapter authority tuple.
-        authority: PlanningAuthority,
-    },
-    /// Typed planning entities on an `eventlog-tree` authority and its derived projection.
-    ///
-    /// The authority's files are each written once and never rewritten, so branches that wrote
-    /// planning merge; see `docs/design/planning-on-entity-runtime-v0.1.md`.
-    EventlogTree {
-        /// Authority provider directory.
-        path: PathBuf,
-        /// Derived projection directory.
-        projection: PathBuf,
-        /// Exact public adapter authority tuple.
-        authority: PlanningAuthority,
-        /// Content-blob directory: `Some` for `aep.project/4`, whose recorded history names each
-        /// large value by digest; `None` for `aep.project/3`, which embeds every value inline.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        blobs: Option<PathBuf>,
-    },
     /// `aep.project/5`: the Markdown files under `planning` are the authority and evidence
-    /// records live under `evidence`; version control merges both, and no Eventlog is involved.
+    /// records live under `evidence`; version control merges both.
     Git {
         /// Artifact directory, relative to `.engineering` until resolved.
         planning: PathBuf,
         /// Evidence directory, relative to `.engineering` until resolved.
         evidence: PathBuf,
     },
-}
-
-/// Exact Eventlog authority identity selected by an `aep.project/2` document.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct PlanningAuthority {
-    /// Provider-complete logical scope.
-    pub logical_scope: String,
-    /// Eventlog tenant identity.
-    pub tenant: String,
-    /// Immutable provider stream identity.
-    pub stream_identity: String,
 }
 
 impl StoreConfig {
@@ -598,26 +539,6 @@ impl StoreConfig {
                 policy: policy.clone(),
                 local: Box::new(local.resolved(engineering)),
                 replica: Box::new(replica.resolved(engineering)),
-            },
-            Self::EventlogTree {
-                path,
-                projection,
-                authority,
-                blobs,
-            } => Self::EventlogTree {
-                path: engineering.join(path),
-                projection: engineering.join(projection),
-                authority: authority.clone(),
-                blobs: blobs.as_ref().map(|blobs| engineering.join(blobs)),
-            },
-            Self::Eventlog {
-                path,
-                projection,
-                authority,
-            } => Self::Eventlog {
-                path: engineering.join(path),
-                projection: engineering.join(projection),
-                authority: authority.clone(),
             },
             Self::Git { planning, evidence } => Self::Git {
                 planning: engineering.join(planning),
@@ -735,15 +656,19 @@ impl RawStore {
                     replica: Box::new(replica.validate(&format!("{at}.hybrid.replica"), errors)),
                 }
             }
-            Self::Eventlog { eventlog } => StoreConfig::Eventlog {
-                path: eventlog.path,
-                projection: eventlog.projection,
-                authority: PlanningAuthority {
-                    logical_scope: String::new(),
-                    tenant: String::new(),
-                    stream_identity: String::new(),
-                },
-            },
+            Self::Eventlog { .. } => {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("{at}.eventlog"),
+                        "`eventlog` selects an event-log store, which AEP no longer reads",
+                    )
+                    .with_hint(
+                        "migrate the store to `aep.project/5` with the release that still reads it",
+                    ),
+                );
+                StoreConfig::Markdown
+            }
             Self::Git { .. } => {
                 errors.push(ValidationError::new(
                     ValidationCode::TypeMismatch,
@@ -756,186 +681,52 @@ impl RawStore {
     }
 }
 
-#[allow(clippy::too_many_lines)] // Keeps the two closed project-version field catalogs together.
 fn validate_versioned_store(
     version: ProjectVersion,
     raw_store: Option<RawStore>,
-    planning_scope: Option<String>,
-    planning_tenant: Option<String>,
-    planning_identity: Option<String>,
+    planning_scope: Option<&str>,
+    planning_tenant: Option<&str>,
+    planning_identity: Option<&str>,
     errors: &mut ValidationErrors,
 ) -> StoreConfig {
     match version {
         ProjectVersion::V1 => {
             for (field, value) in [
-                ("planning_scope", planning_scope.as_ref()),
-                ("planning_tenant", planning_tenant.as_ref()),
-                ("planning_identity", planning_identity.as_ref()),
+                ("planning_scope", planning_scope),
+                ("planning_tenant", planning_tenant),
+                ("planning_identity", planning_identity),
             ] {
                 if value.is_some() {
                     errors.push(ValidationError::new(
                         ValidationCode::TypeMismatch,
                         format!("project.{field}"),
-                        format!("`{field}` belongs only to `{PROJECT_VERSION_V2}`"),
+                        if field == "planning_scope" {
+                            format!("`{field}` belongs only to `{PROJECT_VERSION_V5}`")
+                        } else {
+                            format!(
+                                "`{field}` names an event-log authority, which AEP no longer reads"
+                            )
+                        },
                     ));
                 }
             }
             match raw_store {
-                Some(RawStore::Eventlog { .. }) => {
-                    errors.push(
-                        ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            "project.store.eventlog",
-                            format!("an Eventlog planning authority requires `{PROJECT_VERSION_V2}`"),
-                        )
-                        .with_hint("change the version and provide all three planning authority identities"),
-                    );
-                    StoreConfig::Markdown
-                }
-                Some(store) => {
-                    let validated = store.validate("project.store", errors);
-                    if contains_eventlog(&validated) {
-                        errors.push(ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            "project.store",
-                            "an Eventlog store cannot be nested in a legacy hybrid",
-                        ));
-                    }
-                    validated
-                }
+                Some(store) => store.validate("project.store", errors),
                 None => StoreConfig::Markdown,
             }
         }
         ProjectVersion::V5 => validate_git_store(
             raw_store.as_ref(),
-            planning_scope.as_deref(),
-            planning_tenant.as_deref(),
-            planning_identity.as_deref(),
+            planning_scope,
+            planning_tenant,
+            planning_identity,
             errors,
         ),
-        ProjectVersion::V2 | ProjectVersion::V3 | ProjectVersion::V4 => {
-            let authority = PlanningAuthority {
-                logical_scope: required_authority_value("planning_scope", planning_scope, errors),
-                tenant: required_authority_value("planning_tenant", planning_tenant, errors),
-                stream_identity: required_authority_value(
-                    "planning_identity",
-                    planning_identity,
-                    errors,
-                ),
-            };
-            let eventlog = match raw_store {
-                None => RawEventlog {
-                    path: PathBuf::from("state"),
-                    projection: PathBuf::from("planning"),
-                    blobs: None,
-                },
-                Some(RawStore::Eventlog { eventlog }) => eventlog,
-                Some(_) => {
-                    errors.push(
-                        ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            "project.store",
-                            format!(
-                                "`{PROJECT_VERSION_V2}` supports only `eventlog: {{ path, projection }}`"
-                            ),
-                        )
-                        .with_hint("legacy stores remain readable only through an aep.project/1 selector"),
-                    );
-                    RawEventlog {
-                        path: PathBuf::from("state"),
-                        projection: PathBuf::from("planning"),
-                        blobs: None,
-                    }
-                }
-            };
-            // Only `aep.project/4` keeps content blobs; an earlier version that names a directory
-            // for them is asking for a format its readers do not have.
-            let blobs = match (version, eventlog.blobs.clone()) {
-                (ProjectVersion::V4, blobs) => {
-                    Some(blobs.unwrap_or_else(|| PathBuf::from(DEFAULT_CONTENT_BLOBS)))
-                }
-                (_, Some(_)) => {
-                    errors.push(
-                        ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            "project.store.eventlog.blobs",
-                            format!("content blobs belong only to `{PROJECT_VERSION_V4}`"),
-                        )
-                        .with_hint("migrate the store with `aep plan store migrate content`"),
-                    );
-                    None
-                }
-                (_, None) => None,
-            };
-            validate_eventlog_path("path", &eventlog.path, errors);
-            validate_eventlog_path("projection", &eventlog.projection, errors);
-            if let Some(blobs) = &blobs {
-                validate_eventlog_path("blobs", blobs, errors);
-            }
-            let mut owned = vec![
-                ("path", &eventlog.path),
-                ("projection", &eventlog.projection),
-            ];
-            if let Some(blobs) = &blobs {
-                owned.push(("blobs", blobs));
-            }
-            for (index, (_, left)) in owned.iter().enumerate() {
-                for (_, right) in &owned[index + 1..] {
-                    if paths_overlap(left, right) {
-                        errors.push(ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            "project.store.eventlog",
-                            if blobs.is_some() {
-                                "authority, projection and blob paths must be disjoint"
-                            } else {
-                                "authority and projection paths must be disjoint"
-                            },
-                        ));
-                    }
-                }
-            }
-            for (name, path) in &owned {
-                if *path == Path::new(PROJECT_FILE) || path.starts_with(PROJECT_FILE) {
-                    errors.push(ValidationError::new(
-                        ValidationCode::TypeMismatch,
-                        format!("project.store.eventlog.{name}"),
-                        "an Eventlog-owned path cannot contain the project selector",
-                    ));
-                }
-            }
-            if matches!(version, ProjectVersion::V3 | ProjectVersion::V4) {
-                StoreConfig::EventlogTree {
-                    path: eventlog.path,
-                    projection: eventlog.projection,
-                    authority,
-                    blobs,
-                }
-            } else {
-                StoreConfig::Eventlog {
-                    path: eventlog.path,
-                    projection: eventlog.projection,
-                    authority,
-                }
-            }
-        }
     }
 }
 
-fn contains_eventlog(store: &StoreConfig) -> bool {
-    match store {
-        StoreConfig::Eventlog { .. } | StoreConfig::EventlogTree { .. } => true,
-        StoreConfig::Hybrid { local, replica, .. } => {
-            contains_eventlog(local) || contains_eventlog(replica)
-        }
-        StoreConfig::Markdown
-        | StoreConfig::Sqlite { .. }
-        | StoreConfig::Postgres { .. }
-        | StoreConfig::Git { .. } => false,
-    }
-}
-
-/// `aep.project/5`: `planning_scope` stays required; the two Eventlog identities are refused,
-/// because they name an Eventlog tenant and stream this store does not have.
+/// `aep.project/5`: `planning_scope` stays required; the two event-log identities are refused,
+/// because they name an event-log tenant and stream this store does not have.
 fn validate_git_store(
     raw_store: Option<&RawStore>,
     planning_scope: Option<&str>,
@@ -966,7 +757,7 @@ fn validate_git_store(
                     ValidationCode::TypeMismatch,
                     format!("project.{field}"),
                     format!(
-                        "`{field}` names an Eventlog authority, which `{PROJECT_VERSION_V5}` does not have"
+                        "`{field}` names an event-log authority, which `{PROJECT_VERSION_V5}` does not have"
                     ),
                 )
                 .with_hint("remove the field; a Git-native store is identified by `planning_scope` alone"),
@@ -981,71 +772,13 @@ fn validate_git_store(
                 "project.store",
                 format!("`{PROJECT_VERSION_V5}` supports only `store: {{ git: {{}} }}`"),
             )
-            .with_hint(
-                "an Eventlog or legacy store remains readable only through the version that selects it",
-            ),
+            .with_hint("a legacy store remains readable only through `aep.project/1`"),
         ),
     }
     StoreConfig::Git {
         planning: PathBuf::from(GIT_PLANNING_DIRECTORY),
         evidence: PathBuf::from(GIT_EVIDENCE_DIRECTORY),
     }
-}
-
-fn required_authority_value(
-    field: &str,
-    value: Option<String>,
-    errors: &mut ValidationErrors,
-) -> String {
-    match value {
-        Some(value) if !value.trim().is_empty() && value.len() <= 255 => value,
-        Some(_) => {
-            errors.push(ValidationError::new(
-                ValidationCode::TypeMismatch,
-                format!("project.{field}"),
-                format!(
-                    "`{field}` must contain 1..=255 UTF-8 bytes including a non-whitespace byte"
-                ),
-            ));
-            String::new()
-        }
-        None => {
-            errors.push(ValidationError::new(
-                ValidationCode::TypeMismatch,
-                format!("project.{field}"),
-                format!("`{PROJECT_VERSION_V2}` requires `{field}`"),
-            ));
-            String::new()
-        }
-    }
-}
-
-fn validate_eventlog_path(field: &str, path: &Path, errors: &mut ValidationErrors) {
-    use std::path::Component;
-
-    let invalid_component = path.components().any(|component| {
-        matches!(
-            component,
-            Component::ParentDir | Component::RootDir | Component::Prefix(_)
-        )
-    });
-    if path.as_os_str().is_empty() || path == Path::new(".") || invalid_component {
-        errors.push(
-            ValidationError::new(
-                ValidationCode::TypeMismatch,
-                format!("project.store.eventlog.{field}"),
-                format!(
-                    "`{}` is not a contained nonempty project-relative path",
-                    path.display()
-                ),
-            )
-            .with_hint("use a relative child path without `..` components"),
-        );
-    }
-}
-
-fn paths_overlap(left: &Path, right: &Path) -> bool {
-    left == right || left.starts_with(right) || right.starts_with(left)
 }
 
 /// A project configuration document, as parsed.
@@ -1086,13 +819,13 @@ pub struct RawProjectConfig {
     /// Where the plan is kept. Absent means `markdown`.
     #[serde(default)]
     pub store: Option<RawStore>,
-    /// Provider-complete logical scope, required by `aep.project/2`.
+    /// Provider-complete logical scope, required by `aep.project/5`.
     #[serde(default)]
     pub planning_scope: Option<String>,
-    /// Eventlog tenant identity, required by `aep.project/2`.
+    /// An event-log tenant identity. Refused: no store this build reads has one.
     #[serde(default)]
     pub planning_tenant: Option<String>,
-    /// Immutable provider stream identity, required by `aep.project/2`.
+    /// An event-log stream identity. Refused: no store this build reads has one.
     #[serde(default)]
     pub planning_identity: Option<String>,
     /// A URL pattern per external system, each carrying `{key}`.
@@ -1115,11 +848,22 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
     fn try_from(raw: RawProjectConfig) -> Result<Self, Self::Error> {
         let mut errors = ValidationErrors::new();
 
+        // An event-log store is refused alone: its other fields describe a store this build does
+        // not read, so a refusal of each of them would only bury the one that says what to do.
+        if EVENT_LOG_PROJECT_VERSIONS.contains(&raw.version.as_str()) {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedProtocolVersion,
+                    "project.version",
+                    event_log_store_refusal(&raw.version),
+                )
+                .with_hint("the migration writes an `aep.project/5` store this build reads"),
+            );
+            return Err(errors);
+        }
+
         let version = match raw.version.as_str() {
             PROJECT_VERSION => ProjectVersion::V1,
-            PROJECT_VERSION_V2 => ProjectVersion::V2,
-            PROJECT_VERSION_V3 => ProjectVersion::V3,
-            PROJECT_VERSION_V4 => ProjectVersion::V4,
             PROJECT_VERSION_V5 => ProjectVersion::V5,
             other => {
                 errors.push(
@@ -1127,7 +871,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
                         ValidationCode::UnsupportedProtocolVersion,
                         "project.version",
                         format!(
-                            "this build reads `{PROJECT_VERSION}`, `{PROJECT_VERSION_V2}`, `{PROJECT_VERSION_V3}`, `{PROJECT_VERSION_V4}` and `{PROJECT_VERSION_V5}`, not `{other}`"
+                            "this build reads `{PROJECT_VERSION}` and `{PROJECT_VERSION_V5}`, not `{other}`"
                         ),
                     )
                     .with_hint("upgrade the tooling rather than reinterpreting the document"),
@@ -1224,9 +968,9 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
         let store = validate_versioned_store(
             version,
             raw.store,
-            raw.planning_scope,
-            raw.planning_tenant,
-            raw.planning_identity,
+            raw.planning_scope.as_deref(),
+            raw.planning_tenant.as_deref(),
+            raw.planning_identity.as_deref(),
             &mut errors,
         );
 
@@ -1246,7 +990,6 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
 
     use super::*;
 
@@ -1260,47 +1003,70 @@ mod tests {
     }
 
     #[test]
-    fn a_v2_project_selects_only_an_exact_eventlog_authority() {
-        let parsed = config(&format!(
-            "version: aep.project/2\n{BASE}planning_scope: aep.planning\n\
-             planning_tenant: planning-main\nplanning_identity: stream-01\n"
-        ))
-        .expect("valid v2 defaults");
-        assert_eq!(parsed.version, ProjectVersion::V2);
-        assert_eq!(
-            parsed.store.resolved(Path::new("/repo/.engineering")),
-            StoreConfig::Eventlog {
-                path: PathBuf::from("/repo/.engineering/state"),
-                projection: PathBuf::from("/repo/.engineering/planning"),
-                authority: PlanningAuthority {
-                    logical_scope: "aep.planning".to_owned(),
-                    tenant: "planning-main".to_owned(),
-                    stream_identity: "stream-01".to_owned(),
-                },
-            }
-        );
+    fn an_event_log_store_is_refused_alone_naming_how_to_migrate_it() {
+        for (version, rest) in [
+            (
+                "aep.project/2",
+                "planning_scope: aep.planning\nplanning_tenant: planning-main\n\
+                 planning_identity: stream-01\n",
+            ),
+            (
+                "aep.project/3",
+                "planning_scope: aep.planning\nplanning_tenant: planning-main\n\
+                 planning_identity: stream-01\n\
+                 store:\n  eventlog:\n    path: state\n    projection: planning\n",
+            ),
+            (
+                "aep.project/4",
+                "planning_scope: ' '\nstore:\n  eventlog:\n    path: state\n    \
+                 projection: planning\n    blobs: blobs\n",
+            ),
+        ] {
+            let errors = config(&format!("version: {version}\n{BASE}{rest}"))
+                .expect_err("an event-log store is refused");
+            let [error] = errors.as_slice() else {
+                panic!("one refusal, not {errors:?}");
+            };
+            assert_eq!(error.code, ValidationCode::UnsupportedProtocolVersion);
+            assert_eq!(error.location, "project.version");
+            assert!(
+                error.message.starts_with(&format!(
+                    "this store is an event-log store ({version}); AEP no longer reads it"
+                )),
+                "{}",
+                error.message
+            );
+            assert!(
+                error
+                    .message
+                    .contains("aep plan store migrate git --verify"),
+                "{}",
+                error.message
+            );
+        }
     }
 
     #[test]
-    fn project_versions_do_not_borrow_each_others_store_vocabulary() {
+    fn an_eventlog_selector_under_v1_is_refused_rather_than_read() {
         let v1 = config(&format!(
             "{BASE}store:\n  eventlog:\n    path: state\n    projection: planning\n"
         ))
-        .expect_err("v1 cannot silently select Eventlog");
+        .expect_err("v1 cannot select an event-log store");
         assert!(v1
             .as_slice()
             .iter()
             .any(|error| error.location == "project.store.eventlog"));
 
-        let v2 = config(&format!(
-            "version: aep.project/2\n{BASE}planning_scope: aep.planning\n\
-             planning_tenant: planning-main\nplanning_identity: stream-01\nstore: markdown\n"
+        let nested = config(&format!(
+            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
+             on_unreachable: refuse\n    on_divergence: record\n    local: markdown\n    \
+             replica:\n      eventlog:\n        path: state\n"
         ))
-        .expect_err("v2 cannot reinterpret a legacy store");
-        assert!(v2
+        .expect_err("a hybrid cannot hold an event-log store");
+        assert!(nested
             .as_slice()
             .iter()
-            .any(|error| error.location == "project.store"));
+            .any(|error| error.location == "project.store.hybrid.replica.eventlog"));
     }
 
     #[test]
@@ -1368,16 +1134,6 @@ mod tests {
 
     #[test]
     fn a_git_store_is_refused_before_v5() {
-        let v4 = config(&format!(
-            "version: aep.project/4\n{BASE}planning_scope: aep.planning\n\
-             planning_tenant: planning-main\nplanning_identity: stream-01\nstore:\n  git: {{}}\n"
-        ))
-        .expect_err("v4 cannot select the Git-native store");
-        assert!(v4
-            .as_slice()
-            .iter()
-            .any(|error| error.location == "project.store"));
-
         let v1 = config(&format!("{BASE}store:\n  git: {{}}\n"))
             .expect_err("v1 cannot select the Git-native store");
         assert!(v1
@@ -1395,23 +1151,6 @@ mod tests {
         let error = serde_yaml::from_str::<RawProjectConfig>(&text)
             .expect_err("store.git carries no fields in v5");
         assert!(error.to_string().contains("store.git"), "{error}");
-    }
-
-    #[test]
-    fn v2_requires_authority_identity_and_disjoint_contained_paths() {
-        let errors = config(&format!(
-            "version: aep.project/2\n{BASE}planning_scope: ' '\nplanning_tenant: tenant\n\
-             store:\n  eventlog:\n    path: planning/state\n    projection: planning\n"
-        ))
-        .expect_err("identity and path failures accumulate");
-        let locations: BTreeSet<&str> = errors
-            .as_slice()
-            .iter()
-            .map(|error| error.location.as_str())
-            .collect();
-        assert!(locations.contains("project.planning_scope"));
-        assert!(locations.contains("project.planning_identity"));
-        assert!(locations.contains("project.store.eventlog"));
     }
 
     #[test]

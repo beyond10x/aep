@@ -17,7 +17,7 @@
       ]
     },
     "planning_identity": {
-      "description": "Immutable provider stream identity, required by `aep.project/2`.",
+      "description": "An event-log stream identity. Refused: no store this build reads has one.",
       "default": null,
       "type": [
         "string",
@@ -25,7 +25,7 @@
       ]
     },
     "planning_scope": {
-      "description": "Provider-complete logical scope, required by `aep.project/2`.",
+      "description": "Provider-complete logical scope, required by `aep.project/5`.",
       "default": null,
       "type": [
         "string",
@@ -33,7 +33,7 @@
       ]
     },
     "planning_tenant": {
-      "description": "Eventlog tenant identity, required by `aep.project/2`.",
+      "description": "An event-log tenant identity. Refused: no store this build reads has one.",
       "default": null,
       "type": [
         "string",
@@ -151,32 +151,6 @@
       "maxLength": 220,
       "pattern": "^(protocol:)?[a-z][a-z0-9]*(-[a-z0-9]+)*/[1-9][0-9]*$"
     },
-    "RawEventlog": {
-      "description": "The two project-relative paths owned by an Eventlog planning selection.",
-      "type": "object",
-      "required": [
-        "path",
-        "projection"
-      ],
-      "properties": {
-        "blobs": {
-          "description": "Directory containing the content blobs, admitted only by `aep.project/4`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "path": {
-          "description": "Directory containing the authoritative file Eventlog provider.",
-          "type": "string"
-        },
-        "projection": {
-          "description": "Directory containing the derived tracked Markdown projection.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
     "RawGit": {
       "description": "The `git` store selector: empty in `aep.project/5`, and any key is refused.",
       "type": "object",
@@ -280,19 +254,14 @@
           }
         },
         {
-          "description": "`eventlog: { path, projection }`, admitted only by `aep.project/2`.",
+          "description": "`eventlog: {…}`, an event-log store selector. Read only so the document reaches its refusal, which names how to migrate it; its contents are not interpreted.",
           "type": "object",
           "required": [
             "eventlog"
           ],
           "properties": {
             "eventlog": {
-              "description": "The authority and projection paths.",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/RawEventlog"
-                }
-              ]
+              "description": "The selector as written."
             }
           }
         },

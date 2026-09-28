@@ -18,10 +18,6 @@ belongs in the commit message or in `docs/design/`.
   move writes one file. `validate` checks that each artifact's transitions are continuous, end in
   its status and, for moves made in this layout, follow its lifecycle. Design:
   `docs/design/git-native-planning-store-v0.1.md`.
-- `aep plan store migrate git [--dry-run | --verify]` turns an `aep.project/2`–`/4` event-log
-  store into an `aep.project/5` one. Recorded moves become `transitions` marked `imported`,
-  recorded evidence becomes evidence files, and `--verify` compares every artifact with what the
-  old store answered. This repository's own store is migrated.
 
 ### Changed
 
@@ -31,13 +27,31 @@ belongs in the commit message or in `docs/design/`.
 - The `planning validate` workflow builds `aep` from the checked-out tree when it runs in this
   repository, and `cargo xtask release` finds a release's `test_result` in evidence files.
 
+### Removed
+
+- Event-log stores. A project whose `project.yaml` says `aep.project/2`, `/3` or `/4` is refused
+  by every planning verb: "this store is an event-log store (aep.project/N); AEP no longer reads
+  it — migrate it with `cargo install --git https://github.com/beyond10x/aep --rev
+  9c0f1da44429ff935fa0b2d743457945d51e1c51 aep-cli` then `aep plan store migrate git --verify`". That build's
+  `migrate git` turns the store into an `aep.project/5` one: recorded moves become `transitions`
+  marked `imported`, recorded evidence becomes evidence files, and `--verify` compares every
+  artifact with what the old store answered. This repository's own store is migrated.
+- Every `aep plan store` verb (`inspect`, `migrate`, `verify`, `rebuild`, `writer-control`,
+  `init-tree`, `export`, `install-hooks`), `aep plan artifact resolve`, `aep plan artifact render`,
+  `aep plan artifact validate --against`, `--command-identity`, the served move's
+  `command_identity` and `mutation` fields, and `conformance --backend eventlog`. Each operated on
+  an event-log store.
+- The planning-migration, projection, ownership, verification, inspection, mutation and raw-capture
+  schemas under `schemas/generated/`.
+- AEP no longer depends on `entity-eventlog` or any `eventlog-*` crate; the `aep-backend-eventlog`
+  and `aep-planning-migration` crates are gone, and `cargo xtask deps` refuses a lockfile that
+  holds an event-log crate.
+
 ### Fixed
 
 - A command verifies a pinned Git protocol snapshot once instead of once per resolution. One
   `list` re-read and re-hashed every file of the snapshot about three times; it now opens half as
   many snapshot files. A failed verification is still repeated on every attempt.
-- Reading an `aep.project/4` store hex-encodes captured byte strings with a lookup table instead of
-  the formatter, which took a fifth of a store validation's CPU.
 
 ## [0.61.1] — 2026-09-27
 

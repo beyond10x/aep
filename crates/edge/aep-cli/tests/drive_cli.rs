@@ -1134,7 +1134,7 @@ fn a_driven_planning_mutation_observes_the_shared_writer_fence() {
             )
         });
     assert!(
-        log.contains("another admitted planning writer or migration holds"),
+        log.contains("another admitted planning writer holds"),
         "the driven child did not observe the paused writer:\n{log}\n{}",
         said(&output)
     );

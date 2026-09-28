@@ -171,8 +171,6 @@ enum ConformanceBackend {
     /// directory — with an in-memory SQLite replica, the markdown side the authority, divergences
     /// recorded. The composite held to the same sixteen suites (`story:hybrid-backend`).
     Hybrid,
-    /// The recorded file Eventlog backend. Its fixture is provisioned explicitly.
-    Eventlog,
     /// The kind of store the project this is run in configured (`store:` in `project.yaml`), held
     /// to the suites on a scratch instance of it: a scratch directory for `markdown`, an in-memory
     /// database for `sqlite`, a schema of its own on the configured server for `postgres`, a
@@ -278,12 +276,6 @@ enum GovernCommand {
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)] // Clap owns this closed command tree; boxing changes its API.
 enum PlanCommand {
-    /// Inspect, migrate, verify, or rebuild the selected planning store.
-    Store {
-        /// Which store operation to perform.
-        #[command(subcommand)]
-        command: store_command::StoreCommand,
-    },
     /// Plan work in the markdown planning store: epics, stories, tasks and how they relate.
     ///
     /// The store is a directory of markdown files — one artifact per file, YAML frontmatter, free
@@ -830,7 +822,6 @@ macro_rules! out {
 // with its own store, its own vocabulary and no shared state with the rest.
 mod planning;
 mod planning_writer_fence;
-mod store_command;
 mod serve;
 
 // The second module split, on the same criterion: a verb family with its own observation
@@ -993,7 +984,6 @@ fn govern(command: GovernCommand) -> Result<ExitCode> {
 /// `aep plan` — and every one of its verbs by its flat spelling.
 fn plan(command: PlanCommand) -> Result<ExitCode> {
     match command {
-        PlanCommand::Store { command } => store_command::run(command),
         PlanCommand::Artifact { command } => planning::run(command),
         PlanCommand::Serve {
             location,
@@ -1176,11 +1166,6 @@ fn conformance(
                 root.display()
             ))
         }
-        ConformanceBackend::Eventlog => {
-            anyhow::bail!(
-                "Eventlog conformance requires an explicitly provisioned disposable authority"
-            )
-        }
         ConformanceBackend::Project => {
             unreachable!("`project` was resolved to the store the project names above")
         }
@@ -1283,7 +1268,6 @@ fn conformance_target(
             target.backend = ConformanceBackend::Hybrid;
             target.hybrid_policy = Some(policy);
         }
-        planning::Plan::Eventlog { .. } => target.backend = ConformanceBackend::Eventlog,
     }
     Ok(target)
 }

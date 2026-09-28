@@ -145,7 +145,7 @@ const RECORDED: &str = "recorded";
 /// The lifecycle state a relation instance moves to when the relation is removed.
 const REMOVED: &str = "removed";
 
-/// One provider commit with the immutable recording metadata the Eventlog authority requires.
+/// One provider commit with the immutable recording metadata a recording provider requires.
 #[derive(Debug, Clone)]
 pub struct PlanningCommit {
     /// State, events, and optimistic predecessor.

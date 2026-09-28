@@ -339,8 +339,8 @@ replaced, and the new one does not exist until step A6.
 | A3 | the Markdown backend's Git layout: moves into `transitions`, evidence into files, no journal; hydration made linear (an undo record instead of a store copy per command) | done |
 | A4 | `aep plan store migrate git [--verify]`, reading the `/3`–`/4` store once; imported moves carry `imported: true` | done |
 | A5 | `planning validate` CI builds from the tree; `xtask` release check reads evidence files | done |
-| A6 | AEP's own store migrated to `/5`: 333 artifacts, 530 transitions, 254 evidence files, `--verify` equal | done 2026-09-28 |
-| B1 | Eventlog removed from AEP: `aep-backend-eventlog`, `aep-planning-migration`, the `plan store` verbs, the eventlog dependencies. The Eventlog and Entity Runtime repositories are not changed | pending |
+| A6 | AEP's own store migrated to `/5`: 333 artifacts, 530 transitions, 254 evidence files, `--verify` equal | done 2026-09-28; merged in aep#52 as `9c0f1da4`, the migration commit for other adopters |
+| B1 | Eventlog removed from AEP: `aep-backend-eventlog`, `aep-planning-migration`, the `plan store` verbs, the eventlog dependencies. The Eventlog and Entity Runtime repositories are not changed | done 2026-09-28: 72,044 lines removed; no event-log crate in `Cargo.lock` |
 | R1 | release 0.62.0, after A6 and B1 | pending |
 | R2 | other adopters (eventlog, entity-runtime, ess, connectors, service-sdk, epistemic-knowledge-runtime) migrate with the commit that merged A, then install 0.62.0 | pending, theirs |
 
