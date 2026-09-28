@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.63.1] — 2026-09-28
+
 ### Fixed
 
 - A pinned Git protocol snapshot is verified in full once per pin, not once per process. A
